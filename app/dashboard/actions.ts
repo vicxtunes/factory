@@ -1,12 +1,14 @@
 "use server";
 
+import { randomBytes } from "crypto";
+
 import { revalidatePath } from "next/cache";
 
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth/session";
 import { hashPin, isValidPinFormat } from "@/lib/auth/pin";
-import type { ProductionStatus } from "@/lib/types";
+import type { AppRole, ProductionStatus } from "@/lib/types";
 
 type Result = { ok: true } | { ok: false; error: string };
 
@@ -167,6 +169,51 @@ export async function deleteStation(id: string): Promise<Result> {
   revalidatePath("/dashboard/workers");
   revalidatePath("/dashboard");
   return { ok: true };
+}
+
+function generatePassword(): string {
+  return randomBytes(9).toString("base64").replace(/[+/=]/g, "").slice(0, 12);
+}
+
+export async function createAdminUser(input: {
+  email: string;
+  fullName: string;
+  role: AppRole;
+}): Promise<{ ok: true; password: string } | { ok: false; error: string }> {
+  await requireRole("boss");
+
+  const email = input.email.trim().toLowerCase();
+  const fullName = input.fullName.trim();
+  if (!email) return { ok: false, error: "Email is required." };
+  if (input.role !== "supervisor" && input.role !== "boss") {
+    return { ok: false, error: "Invalid role." };
+  }
+
+  const admin = createAdminClient();
+  const password = generatePassword();
+  const { data, error } = await admin.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,
+  });
+  if (error || !data.user) {
+    return { ok: false, error: error?.message ?? "Could not create user." };
+  }
+
+  const { error: profileError } = await admin.from("profiles").insert({
+    id: data.user.id,
+    role: input.role,
+    full_name: fullName || null,
+  });
+  if (profileError) {
+    // Roll back the auth user so a failed profile insert doesn't leave an
+    // orphaned account with no role.
+    await admin.auth.admin.deleteUser(data.user.id);
+    return { ok: false, error: profileError.message };
+  }
+
+  revalidatePath("/dashboard/admins");
+  return { ok: true, password };
 }
 
 export async function assignItem(

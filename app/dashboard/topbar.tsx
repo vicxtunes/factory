@@ -19,6 +19,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/dashboard": "Dashboard",
   "/dashboard/orders": "Orders & items",
   "/dashboard/workers": "Workers & stations",
+  "/dashboard/admins": "Dashboard admins",
 };
 
 export function DashboardTopbar({

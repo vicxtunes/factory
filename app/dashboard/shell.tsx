@@ -2,21 +2,19 @@
 
 import { useState } from "react";
 
-import type { NotificationRow } from "@/lib/types";
+import type { AppRole, NotificationRow } from "@/lib/types";
 
 import { DashboardSidebar } from "./sidebar";
 import { DashboardTopbar } from "./topbar";
 
 export function DashboardShell({
-  isSupervisor,
   email,
   role,
   notifications,
   children,
 }: {
-  isSupervisor: boolean;
   email: string | null;
-  role: string;
+  role: AppRole;
   notifications: NotificationRow[];
   children: React.ReactNode;
 }) {
@@ -25,7 +23,7 @@ export function DashboardShell({
   return (
     <div className="min-h-screen">
       <DashboardSidebar
-        isSupervisor={isSupervisor}
+        role={role}
         mobileOpen={mobileOpen}
         onNavigate={() => setMobileOpen(false)}
       />
