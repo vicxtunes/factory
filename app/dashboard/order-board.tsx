@@ -1,0 +1,204 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
+import { Drawer } from "@/components/ui/Drawer";
+import { Select } from "@/components/ui/Field";
+import { createClient } from "@/lib/supabase/browser";
+import {
+  PRODUCTION_STATUSES,
+  STATUS_LABELS,
+  URGENCY_LABELS,
+  type OrderItemWithOrder,
+  type ProductionStatus,
+  type Urgency,
+  type Worker,
+} from "@/lib/types";
+
+import { OrderCard } from "./order-card";
+import { OrderDetail } from "./order-detail";
+
+const ITEM_SELECT = `
+  id, order_id, product, product_type, qty, size, cover_type, lamination_type,
+  box_type, urgency, item_notes, production_status, is_delayed, delay_reason,
+  assigned_worker_id, media_link, updated_by_worker_id, created_at, updated_at,
+  order:orders!inner (
+    order_no, client_name, delivery_date, status, media_link, media_notes
+  )
+`;
+
+type WorkerLite = Omit<Worker, "pin_hash">;
+
+export function OrderBoard({
+  items: initialItems,
+  workers,
+  canManage,
+}: {
+  items: OrderItemWithOrder[];
+  workers: WorkerLite[];
+  canManage: boolean;
+}) {
+  const [items, setItems] = useState(initialItems);
+  const [status, setStatus] = useState<"" | ProductionStatus>("");
+  const [urgency, setUrgency] = useState<"" | Urgency>("");
+  const [delayed, setDelayed] = useState(false);
+  const [workerId, setWorkerId] = useState("");
+  const [station, setStation] = useState("");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const supabaseRef = useRef(createClient());
+
+  const workerById = useMemo(
+    () => new Map(workers.map((w) => [w.id, w])),
+    [workers],
+  );
+  const stations = useMemo(
+    () =>
+      Array.from(
+        new Set(workers.map((w) => w.station).filter((s): s is string => !!s)),
+      ).sort(),
+    [workers],
+  );
+
+  const refetch = useCallback(async () => {
+    const { data } = await supabaseRef.current
+      .from("order_items")
+      .select(ITEM_SELECT)
+      .order("created_at", { ascending: false });
+    if (data) setItems(data as unknown as OrderItemWithOrder[]);
+  }, []);
+
+  useEffect(() => {
+    const supabase = supabaseRef.current;
+    const channel = supabase
+      .channel("dashboard-items")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "order_items" },
+        () => refetch(),
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [refetch]);
+
+  const filtered = items.filter((i) => {
+    if (status && i.production_status !== status) return false;
+    if (urgency && i.urgency !== urgency) return false;
+    if (delayed && !i.is_delayed) return false;
+    if (workerId && i.assigned_worker_id !== workerId) return false;
+    if (station) {
+      const w = i.assigned_worker_id
+        ? workerById.get(i.assigned_worker_id)
+        : undefined;
+      if (w?.station !== station) return false;
+    }
+    return true;
+  });
+
+  const selectedItem = items.find((i) => i.id === selectedId) ?? null;
+  const selectedAssignedName = selectedItem?.assigned_worker_id
+    ? (workerById.get(selectedItem.assigned_worker_id)?.name ?? null)
+    : null;
+
+  return (
+    <div>
+      <div className="mb-3 flex flex-wrap gap-2">
+        <Select
+          className="max-w-40"
+          value={status}
+          onChange={(e) => setStatus(e.target.value as ProductionStatus | "")}
+        >
+          <option value="">All statuses</option>
+          {PRODUCTION_STATUSES.map((s) => (
+            <option key={s} value={s}>
+              {STATUS_LABELS[s]}
+            </option>
+          ))}
+        </Select>
+        <Select
+          className="max-w-36"
+          value={urgency}
+          onChange={(e) => setUrgency(e.target.value as Urgency | "")}
+        >
+          <option value="">All urgency</option>
+          {(Object.keys(URGENCY_LABELS) as Urgency[]).map((u) => (
+            <option key={u} value={u}>
+              {URGENCY_LABELS[u]}
+            </option>
+          ))}
+        </Select>
+        <Select
+          className="max-w-44"
+          value={workerId}
+          onChange={(e) => setWorkerId(e.target.value)}
+        >
+          <option value="">Any worker</option>
+          {workers.map((w) => (
+            <option key={w.id} value={w.id}>
+              {w.name}
+            </option>
+          ))}
+        </Select>
+        {stations.length > 0 ? (
+          <Select
+            className="max-w-40"
+            value={station}
+            onChange={(e) => setStation(e.target.value)}
+          >
+            <option value="">Any station</option>
+            {stations.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </Select>
+        ) : null}
+        <label className="inline-flex min-h-11 items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={delayed}
+            onChange={(e) => setDelayed(e.target.checked)}
+          />
+          Delayed only
+        </label>
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        {filtered.map((i) => (
+          <OrderCard
+            key={i.id}
+            item={i}
+            assignedName={
+              i.assigned_worker_id
+                ? (workerById.get(i.assigned_worker_id)?.name ?? null)
+                : null
+            }
+            onOpen={() => setSelectedId(i.id)}
+          />
+        ))}
+        {filtered.length === 0 ? (
+          <p className="rounded-[var(--radius)] border border-dashed border-border p-3 text-xs text-muted md:col-span-2 xl:col-span-3">
+            No items match these filters.
+          </p>
+        ) : null}
+      </div>
+
+      <Drawer
+        open={!!selectedItem}
+        onClose={() => setSelectedId(null)}
+        title={selectedItem ? selectedItem.product : undefined}
+      >
+        {selectedItem ? (
+          <OrderDetail
+            item={selectedItem}
+            workers={workers}
+            assignedName={selectedAssignedName}
+            canManage={canManage}
+            onChanged={refetch}
+          />
+        ) : null}
+      </Drawer>
+    </div>
+  );
+}

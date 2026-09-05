@@ -1,0 +1,143 @@
+@import "tailwindcss";
+
+:root {
+  /* Legacy semantic tokens — kept so existing bg-surface / border-border /
+     rounded-[var(--radius)] call sites repaint automatically. */
+  --background: #f9fafb;
+  --surface: #ffffff;
+  --foreground: #101828;
+  --muted: #667085;
+  --border: #e4e7ec;
+
+  /* Brand = orange (TailAdmin brand-500/600), drives the header strip and
+     primary buttons. */
+  --navy-900: #ea580c;
+  --navy-700: #c2410c;
+  --amber-500: #f79009;
+  --amber-600: #dc6803;
+
+  --rush: #d92d20;
+  --urgent: #f79009;
+  --normal: #667085;
+
+  --radius: 0.625rem;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-navy-900: var(--navy-900);
+  --color-navy-700: var(--navy-700);
+  --color-amber-500: var(--amber-500);
+  --color-amber-600: var(--amber-600);
+  --font-sans: var(--font-outfit), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --radius-base: var(--radius);
+}
+
+/* TailAdmin design-system scale (github.com/themewagon/tailadmin-vuejs),
+   brand re-pointed to orange per the requested theme color. Static across
+   light/dark, so it lives in its own @theme block rather than the swappable
+   one above. */
+@theme {
+  --color-brand-25: #fff7ed;
+  --color-brand-50: #ffedd5;
+  --color-brand-100: #fed7aa;
+  --color-brand-200: #fdba74;
+  --color-brand-300: #fb923c;
+  --color-brand-400: #f97316;
+  --color-brand-500: #ea580c;
+  --color-brand-600: #c2410c;
+  --color-brand-700: #9a3412;
+  --color-brand-800: #7c2d12;
+  --color-brand-900: #431407;
+  --color-brand-950: #2a0d05;
+
+  --color-gray-25: #fcfcfd;
+  --color-gray-50: #f9fafb;
+  --color-gray-100: #f2f4f7;
+  --color-gray-200: #e4e7ec;
+  --color-gray-300: #d0d5dd;
+  --color-gray-400: #98a2b3;
+  --color-gray-500: #667085;
+  --color-gray-600: #475467;
+  --color-gray-700: #344054;
+  --color-gray-800: #1d2939;
+  --color-gray-900: #101828;
+  --color-gray-950: #0c111d;
+
+  --color-success-25: #f6fef9;
+  --color-success-50: #ecfdf3;
+  --color-success-100: #d1fadf;
+  --color-success-500: #12b76a;
+  --color-success-600: #039855;
+  --color-success-700: #027a48;
+
+  --color-error-25: #fffbfa;
+  --color-error-50: #fef3f2;
+  --color-error-100: #fee4e2;
+  --color-error-500: #f04438;
+  --color-error-600: #d92d20;
+  --color-error-700: #b42318;
+
+  --color-warning-25: #fffcf5;
+  --color-warning-50: #fffaeb;
+  --color-warning-100: #fef0c7;
+  --color-warning-500: #f79009;
+  --color-warning-600: #dc6803;
+  --color-warning-700: #b54708;
+
+  --shadow-theme-xs: 0px 1px 2px 0px rgba(16, 24, 40, 0.05);
+  --shadow-theme-sm:
+    0px 1px 3px 0px rgba(16, 24, 40, 0.1), 0px 1px 2px 0px rgba(16, 24, 40, 0.06);
+  --shadow-theme-md:
+    0px 4px 8px -2px rgba(16, 24, 40, 0.1), 0px 2px 4px -2px rgba(16, 24, 40, 0.06);
+  --shadow-theme-lg:
+    0px 12px 16px -4px rgba(16, 24, 40, 0.08), 0px 4px 6px -2px rgba(16, 24, 40, 0.03);
+  --shadow-theme-xl:
+    0px 20px 24px -4px rgba(16, 24, 40, 0.08), 0px 8px 8px -4px rgba(16, 24, 40, 0.03);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0c111d;
+    --surface: #101828;
+    --foreground: #f9fafb;
+    --muted: #98a2b3;
+    --border: #1d2939;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+}
+
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+.header-strip {
+  background: linear-gradient(90deg, var(--navy-900) 0%, var(--navy-700) 100%);
+}
+
+/* Sidebar nav item states, ported from TailAdmin's menu-item utilities. */
+@utility menu-item {
+  @apply relative flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors;
+}
+@utility menu-item-active {
+  @apply bg-brand-50 text-brand-600 dark:bg-brand-500/15 dark:text-brand-400;
+}
+@utility menu-item-inactive {
+  @apply text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-white/5;
+}
+@utility menu-item-icon-active {
+  @apply text-brand-600 dark:text-brand-400;
+}
+@utility menu-item-icon-inactive {
+  @apply text-gray-500 dark:text-gray-400;
+}
