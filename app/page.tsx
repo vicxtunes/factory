@@ -22,15 +22,21 @@ const SURFACES = [
     who: "Supervisor & boss",
     desc: "Full visibility, worker management, live notification feed.",
   },
+  {
+    href: "/display",
+    title: "Display screen",
+    who: "Factory TV",
+    desc: "Big-screen production board, colored by status. No login needed.",
+  },
 ];
 
 export default function Home() {
   return (
     <>
       <Header surface="Home" />
-      <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-10">
+      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-10">
         <SectionLabel>Choose a screen</SectionLabel>
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {SURFACES.map((s) => (
             <Link
               key={s.href}

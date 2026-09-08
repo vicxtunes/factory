@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Drawer } from "@/components/ui/Drawer";
 import { Select } from "@/components/ui/Field";
 import { createClient } from "@/lib/supabase/browser";
+import { ORDER_ITEM_SELECT } from "@/lib/item-select";
 import {
   PRODUCTION_STATUSES,
   STATUS_LABELS,
@@ -17,15 +18,6 @@ import {
 
 import { OrderCard } from "./order-card";
 import { OrderDetail } from "./order-detail";
-
-const ITEM_SELECT = `
-  id, order_id, product, product_type, qty, size, cover_type, lamination_type,
-  box_type, urgency, item_notes, production_status, is_delayed, delay_reason,
-  assigned_worker_id, media_link, updated_by_worker_id, created_at, updated_at,
-  order:orders!inner (
-    order_no, client_name, delivery_date, status, media_link, media_notes
-  )
-`;
 
 type WorkerLite = Omit<Worker, "pin_hash">;
 
@@ -62,7 +54,7 @@ export function OrderBoard({
   const refetch = useCallback(async () => {
     const { data } = await supabaseRef.current
       .from("order_items")
-      .select(ITEM_SELECT)
+      .select(ORDER_ITEM_SELECT)
       .order("created_at", { ascending: false });
     if (data) setItems(data as unknown as OrderItemWithOrder[]);
   }, []);

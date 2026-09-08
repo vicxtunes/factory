@@ -54,3 +54,16 @@ update order_items
 set is_delayed = true, delay_reason = 'Leather cover stock out of stock — reorder placed'
 where order_id = 'aaaaaaaa-0000-0000-0000-000000000001'
   and product = 'Photo Books';
+
+-- ---------------------------------------------------------------------------
+-- Agents + clients — for exercising the intake wizard's pickers. The
+-- product catalog (Photo Books/Prints + attributes) is seeded by the
+-- 20260908120000_clients_agents_products.sql migration itself, not here.
+-- ---------------------------------------------------------------------------
+insert into agents (name) values
+  ('Jeff Adeyemi'), ('Grace Owusu');
+
+insert into clients (name, email, phone) values
+  ('Okafor Wedding', 'okafor@example.com', '+234 800 000 0001'),
+  ('Adeleke Studios', 'studio@example.com', '+234 800 000 0002'),
+  ('Mensah Family', null, '+234 800 000 0003');

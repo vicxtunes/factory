@@ -2,13 +2,14 @@
 
 import { randomBytes } from "crypto";
 
+import Papa from "papaparse";
 import { revalidatePath } from "next/cache";
 
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth/session";
 import { hashPin, isValidPinFormat } from "@/lib/auth/pin";
-import type { AppRole, ProductionStatus } from "@/lib/types";
+import type { AppRole, AttributeType, ProductionStatus } from "@/lib/types";
 
 type Result = { ok: true } | { ok: false; error: string };
 
@@ -243,5 +244,341 @@ export async function overrideStatus(
     .eq("id", itemId);
   if (error) return { ok: false, error: error.message };
   revalidatePath("/dashboard");
+  return { ok: true };
+}
+
+// ---------------------------------------------------------------------------
+// Agents — sales/referral agents, distinct from production workers.
+// ---------------------------------------------------------------------------
+
+export async function addAgent(name: string): Promise<Result> {
+  await requireRole("supervisor");
+  const trimmed = name.trim();
+  if (!trimmed) return { ok: false, error: "Name is required." };
+
+  const admin = createAdminClient();
+  const { error } = await admin.from("agents").insert({ name: trimmed });
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/dashboard/agents");
+  return { ok: true };
+}
+
+export async function deactivateAgent(id: string): Promise<Result> {
+  await requireRole("supervisor");
+  const admin = createAdminClient();
+  const { error } = await admin.from("agents").update({ active: false }).eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/dashboard/agents");
+  return { ok: true };
+}
+
+export async function reactivateAgent(id: string): Promise<Result> {
+  await requireRole("supervisor");
+  const admin = createAdminClient();
+  const { error } = await admin.from("agents").update({ active: true }).eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/dashboard/agents");
+  return { ok: true };
+}
+
+// ---------------------------------------------------------------------------
+// Clients — single add/edit/deactivate, plus CSV bulk import.
+// ---------------------------------------------------------------------------
+
+export async function addClient(input: {
+  name: string;
+  email: string;
+  phone: string;
+}): Promise<Result> {
+  await requireRole("supervisor");
+  const name = input.name.trim();
+  if (!name) return { ok: false, error: "Name is required." };
+
+  const admin = createAdminClient();
+  const { error } = await admin.from("clients").insert({
+    name,
+    email: input.email.trim() || null,
+    phone: input.phone.trim() || null,
+  });
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/dashboard/clients");
+  return { ok: true };
+}
+
+export async function updateClient(input: {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+}): Promise<Result> {
+  await requireRole("supervisor");
+  const name = input.name.trim();
+  if (!name) return { ok: false, error: "Name is required." };
+
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("clients")
+    .update({
+      name,
+      email: input.email.trim() || null,
+      phone: input.phone.trim() || null,
+    })
+    .eq("id", input.id);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/dashboard/clients");
+  return { ok: true };
+}
+
+export async function deactivateClient(id: string): Promise<Result> {
+  await requireRole("supervisor");
+  const admin = createAdminClient();
+  const { error } = await admin.from("clients").update({ active: false }).eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/dashboard/clients");
+  return { ok: true };
+}
+
+export async function reactivateClient(id: string): Promise<Result> {
+  await requireRole("supervisor");
+  const admin = createAdminClient();
+  const { error } = await admin.from("clients").update({ active: true }).eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/dashboard/clients");
+  return { ok: true };
+}
+
+export interface BulkImportRowError {
+  row: number;
+  message: string;
+}
+
+// Expects a CSV with headers name, email, phone (case-insensitive). Inserts
+// row by row so a bad row doesn't sink the whole batch — bulk insert isn't
+// used because we want per-row error attribution back to the sheet's line
+// numbers.
+export async function bulkImportClients(
+  csvText: string,
+): Promise<
+  | { ok: true; inserted: number; errors: BulkImportRowError[] }
+  | { ok: false; error: string }
+> {
+  await requireRole("supervisor");
+
+  const parsed = Papa.parse<Record<string, string>>(csvText, {
+    header: true,
+    skipEmptyLines: true,
+    transformHeader: (h) => h.trim().toLowerCase(),
+  });
+  if (parsed.errors.length > 0) {
+    return { ok: false, error: `Could not parse CSV: ${parsed.errors[0].message}` };
+  }
+
+  const rows = parsed.data
+    .map((row, idx) => ({
+      sheetRow: idx + 2, // header row + 1-indexing
+      name: (row.name ?? "").trim(),
+      email: (row.email ?? "").trim(),
+      phone: (row.phone ?? "").trim(),
+    }))
+    .filter((r) => r.name || r.email || r.phone);
+
+  if (rows.length === 0) {
+    return { ok: false, error: "No rows found. Expected columns: name, email, phone." };
+  }
+
+  const admin = createAdminClient();
+  const errors: BulkImportRowError[] = [];
+  let inserted = 0;
+
+  for (const row of rows) {
+    if (!row.name) {
+      errors.push({ row: row.sheetRow, message: "Name is required." });
+      continue;
+    }
+    const { error } = await admin.from("clients").insert({
+      name: row.name,
+      email: row.email || null,
+      phone: row.phone || null,
+    });
+    if (error) errors.push({ row: row.sheetRow, message: error.message });
+    else inserted += 1;
+  }
+
+  revalidatePath("/dashboard/clients");
+  return { ok: true, inserted, errors };
+}
+
+// ---------------------------------------------------------------------------
+// Product catalog — categories, products, variants (soft-deactivated: order
+// items hold a real FK to these) and per-category custom attributes (hard-
+// deleted: values are snapshotted by name onto order items, not by id).
+// ---------------------------------------------------------------------------
+
+function uniqueViolation(error: { code?: string }, message: string): Result {
+  return { ok: false, error: error.code === "23505" ? message : (error as { message: string }).message };
+}
+
+export async function createCategory(name: string): Promise<Result> {
+  await requireRole("supervisor");
+  const trimmed = name.trim();
+  if (!trimmed) return { ok: false, error: "Name is required." };
+
+  const admin = createAdminClient();
+  const { error } = await admin.from("product_categories").insert({ name: trimmed });
+  if (error) return uniqueViolation(error, "A category with that name already exists.");
+  revalidatePath("/dashboard/products");
+  return { ok: true };
+}
+
+export async function renameCategory(id: string, name: string): Promise<Result> {
+  await requireRole("supervisor");
+  const trimmed = name.trim();
+  if (!trimmed) return { ok: false, error: "Name is required." };
+
+  const admin = createAdminClient();
+  const { error } = await admin.from("product_categories").update({ name: trimmed }).eq("id", id);
+  if (error) return uniqueViolation(error, "A category with that name already exists.");
+  revalidatePath("/dashboard/products");
+  return { ok: true };
+}
+
+export async function setCategoryActive(id: string, active: boolean): Promise<Result> {
+  await requireRole("supervisor");
+  const admin = createAdminClient();
+  const { error } = await admin.from("product_categories").update({ active }).eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/dashboard/products");
+  return { ok: true };
+}
+
+export async function createProduct(categoryId: string, name: string): Promise<Result> {
+  await requireRole("supervisor");
+  const trimmed = name.trim();
+  if (!trimmed) return { ok: false, error: "Name is required." };
+
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("products")
+    .insert({ category_id: categoryId, name: trimmed });
+  if (error) return uniqueViolation(error, "A product with that name already exists in this category.");
+  revalidatePath("/dashboard/products");
+  return { ok: true };
+}
+
+export async function renameProduct(id: string, name: string): Promise<Result> {
+  await requireRole("supervisor");
+  const trimmed = name.trim();
+  if (!trimmed) return { ok: false, error: "Name is required." };
+
+  const admin = createAdminClient();
+  const { error } = await admin.from("products").update({ name: trimmed }).eq("id", id);
+  if (error) return uniqueViolation(error, "A product with that name already exists in this category.");
+  revalidatePath("/dashboard/products");
+  return { ok: true };
+}
+
+export async function setProductActive(id: string, active: boolean): Promise<Result> {
+  await requireRole("supervisor");
+  const admin = createAdminClient();
+  const { error } = await admin.from("products").update({ active }).eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/dashboard/products");
+  return { ok: true };
+}
+
+export async function createVariant(productId: string, name: string): Promise<Result> {
+  await requireRole("supervisor");
+  const trimmed = name.trim();
+  if (!trimmed) return { ok: false, error: "Name is required." };
+
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("product_variants")
+    .insert({ product_id: productId, name: trimmed });
+  if (error) return uniqueViolation(error, "A variant with that name already exists for this product.");
+  revalidatePath("/dashboard/products");
+  return { ok: true };
+}
+
+export async function renameVariant(id: string, name: string): Promise<Result> {
+  await requireRole("supervisor");
+  const trimmed = name.trim();
+  if (!trimmed) return { ok: false, error: "Name is required." };
+
+  const admin = createAdminClient();
+  const { error } = await admin.from("product_variants").update({ name: trimmed }).eq("id", id);
+  if (error) return uniqueViolation(error, "A variant with that name already exists for this product.");
+  revalidatePath("/dashboard/products");
+  return { ok: true };
+}
+
+export async function setVariantActive(id: string, active: boolean): Promise<Result> {
+  await requireRole("supervisor");
+  const admin = createAdminClient();
+  const { error } = await admin.from("product_variants").update({ active }).eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/dashboard/products");
+  return { ok: true };
+}
+
+export interface AttributeInput {
+  name: string;
+  type: AttributeType;
+  options: string[];
+  required: boolean;
+  sortOrder: number;
+}
+
+function normalizeAttributeInput(input: AttributeInput) {
+  return {
+    name: input.name.trim(),
+    type: input.type,
+    options:
+      input.type === "select"
+        ? input.options.map((o) => o.trim()).filter(Boolean)
+        : null,
+    required: input.required,
+    sort_order: input.sortOrder,
+  };
+}
+
+export async function createAttribute(categoryId: string, input: AttributeInput): Promise<Result> {
+  await requireRole("supervisor");
+  const normalized = normalizeAttributeInput(input);
+  if (!normalized.name) return { ok: false, error: "Name is required." };
+  if (normalized.type === "select" && (!normalized.options || normalized.options.length === 0)) {
+    return { ok: false, error: "Select fields need at least one option." };
+  }
+
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("category_attributes")
+    .insert({ category_id: categoryId, ...normalized });
+  if (error) return uniqueViolation(error, "A field with that name already exists in this category.");
+  revalidatePath("/dashboard/products");
+  return { ok: true };
+}
+
+export async function updateAttribute(id: string, input: AttributeInput): Promise<Result> {
+  await requireRole("supervisor");
+  const normalized = normalizeAttributeInput(input);
+  if (!normalized.name) return { ok: false, error: "Name is required." };
+  if (normalized.type === "select" && (!normalized.options || normalized.options.length === 0)) {
+    return { ok: false, error: "Select fields need at least one option." };
+  }
+
+  const admin = createAdminClient();
+  const { error } = await admin.from("category_attributes").update(normalized).eq("id", id);
+  if (error) return uniqueViolation(error, "A field with that name already exists in this category.");
+  revalidatePath("/dashboard/products");
+  return { ok: true };
+}
+
+export async function deleteAttribute(id: string): Promise<Result> {
+  await requireRole("supervisor");
+  const admin = createAdminClient();
+  const { error } = await admin.from("category_attributes").delete().eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/dashboard/products");
   return { ok: true };
 }

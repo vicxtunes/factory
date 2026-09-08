@@ -4,6 +4,10 @@
 
 export type Urgency = "normal" | "urgent" | "rush";
 
+export type OrderType = "normal" | "express";
+
+export type AttributeType = "text" | "number" | "select";
+
 export type ProductionStatus =
   | "not_started"
   | "in_production"
@@ -19,7 +23,14 @@ export interface Order {
   id: string;
   order_no: string;
   client_name: string;
+  client_id: string | null;
+  client_email: string | null;
+  client_phone: string | null;
+  agent_id: string | null;
+  agent_name: string | null;
+  order_type: OrderType;
   delivery_date: string | null;
+  deadline_at: string | null;
   status: string;
   order_notes: string | null;
   media_link: string | null;
@@ -33,6 +44,10 @@ export interface OrderItem {
   order_id: string;
   product: string;
   product_type: string | null;
+  category_id: string | null;
+  product_id: string | null;
+  variant_id: string | null;
+  attributes: Record<string, string | number>;
   qty: number;
   size: string | null;
   cover_type: string | null;
@@ -48,6 +63,71 @@ export interface OrderItem {
   updated_by_worker_id: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface OrderItemMedia {
+  id: string;
+  order_item_id: string;
+  file_name: string;
+  mime_type: string | null;
+  drive_file_id: string;
+  web_view_link: string;
+  uploaded_at: string;
+}
+
+export interface Client {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Agent {
+  id: string;
+  name: string;
+  active: boolean;
+  created_at: string;
+}
+
+export interface CategoryAttribute {
+  id: string;
+  category_id: string;
+  name: string;
+  type: AttributeType;
+  options: string[] | null;
+  required: boolean;
+  sort_order: number;
+  created_at: string;
+}
+
+export interface ProductVariant {
+  id: string;
+  product_id: string;
+  name: string;
+  active: boolean;
+  created_at: string;
+}
+
+export interface Product {
+  id: string;
+  category_id: string;
+  name: string;
+  active: boolean;
+  created_at: string;
+  variants: ProductVariant[];
+}
+
+export interface ProductCategory {
+  id: string;
+  name: string;
+  sort_order: number;
+  active: boolean;
+  created_at: string;
+  attributes: CategoryAttribute[];
+  products: Product[];
 }
 
 export interface WorkerPublic {
@@ -85,9 +165,18 @@ export interface Profile {
 
 // Joined shape used by the factory board and dashboard list.
 export interface OrderItemWithOrder extends OrderItem {
+  media: OrderItemMedia[];
   order: Pick<
     Order,
-    "order_no" | "client_name" | "delivery_date" | "status" | "media_link" | "media_notes"
+    | "order_no"
+    | "client_name"
+    | "delivery_date"
+    | "status"
+    | "media_link"
+    | "media_notes"
+    | "order_type"
+    | "deadline_at"
+    | "agent_name"
   >;
 }
 

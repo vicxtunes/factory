@@ -80,3 +80,11 @@ export async function requireRole(role: AppRole): Promise<DashboardSession> {
   }
   return session;
 }
+
+// Media upload/session actions are called from both /intake (PIN cookie) and
+// the dashboard (Supabase Auth) — any signed-in surface may attach photos.
+export async function requireMediaUploadAccess(): Promise<void> {
+  if (await getIntakeSession()) return;
+  if (await getDashboardSession()) return;
+  throw new Error("Not signed in.");
+}

@@ -54,12 +54,70 @@ function AdminsIcon({ className }: { className?: string }) {
   );
 }
 
+function ClientsIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className={className}>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M17.982 18.725A7.488 7.488 0 0 0 12 15.75a7.488 7.488 0 0 0-5.982 2.975m11.964 0a9 9 0 1 0-11.964 0m11.964 0A8.966 8.966 0 0 1 12 21a8.966 8.966 0 0 1-5.982-2.275M15 9.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"
+      />
+    </svg>
+  );
+}
+
+function AgentsIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className={className}>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M8.25 6.75a3.75 3.75 0 1 1 7.5 0 3.75 3.75 0 0 1-7.5 0ZM3.75 20.25a8.25 8.25 0 0 1 16.5 0"
+      />
+    </svg>
+  );
+}
+
+function ProductsIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className={className}>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="m21 7.5-9-5.25L3 7.5m18 0-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9"
+      />
+    </svg>
+  );
+}
+
+function DisplayIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className={className}>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M3.75 5.25h16.5v10.5H3.75V5.25ZM8.25 20.25h7.5M12 15.75v4.5"
+      />
+    </svg>
+  );
+}
+
 const TABS = [
-  { href: "/dashboard", label: "Dashboard", icon: DashboardIcon, role: null },
-  { href: "/dashboard/orders", label: "Orders", icon: OrdersIcon, role: null },
-  { href: "/dashboard/workers", label: "Workers", icon: WorkersIcon, role: "supervisor" },
-  { href: "/dashboard/admins", label: "Admins", icon: AdminsIcon, role: "boss" },
-] as const satisfies { href: string; label: string; icon: typeof DashboardIcon; role: AppRole | null }[];
+  { href: "/dashboard", label: "Dashboard", icon: DashboardIcon, role: null, newTab: false },
+  { href: "/dashboard/orders", label: "Orders", icon: OrdersIcon, role: null, newTab: false },
+  { href: "/dashboard/clients", label: "Clients", icon: ClientsIcon, role: "supervisor", newTab: false },
+  { href: "/dashboard/agents", label: "Agents", icon: AgentsIcon, role: "supervisor", newTab: false },
+  { href: "/dashboard/products", label: "Products", icon: ProductsIcon, role: "supervisor", newTab: false },
+  { href: "/dashboard/workers", label: "Workers", icon: WorkersIcon, role: "supervisor", newTab: false },
+  { href: "/dashboard/admins", label: "Admins", icon: AdminsIcon, role: "boss", newTab: false },
+  { href: "/display", label: "Display screen", icon: DisplayIcon, role: null, newTab: true },
+] as const satisfies {
+  href: string;
+  label: string;
+  icon: typeof DashboardIcon;
+  role: AppRole | null;
+  newTab: boolean;
+}[];
 
 export function DashboardSidebar({
   role,
@@ -96,6 +154,8 @@ export function DashboardSidebar({
                 <Link
                   href={tab.href}
                   onClick={onNavigate}
+                  target={tab.newTab ? "_blank" : undefined}
+                  rel={tab.newTab ? "noopener noreferrer" : undefined}
                   className={`menu-item ${active ? "menu-item-active" : "menu-item-inactive"}`}
                 >
                   <Icon

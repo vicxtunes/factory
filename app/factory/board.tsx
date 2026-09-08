@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Drawer } from "@/components/ui/Drawer";
 import { SectionLabel } from "@/components/ui/SectionLabel";
 import { createClient } from "@/lib/supabase/browser";
+import { ORDER_ITEM_SELECT } from "@/lib/item-select";
 import { sortItems } from "@/lib/sorting";
 import {
   BOARD_COLUMNS,
@@ -16,15 +17,6 @@ import {
 
 import { ItemCard } from "./card";
 import { ItemDetail } from "./item-detail";
-
-const ITEM_SELECT = `
-  id, order_id, product, product_type, qty, size, cover_type, lamination_type,
-  box_type, urgency, item_notes, production_status, is_delayed, delay_reason,
-  assigned_worker_id, media_link, updated_by_worker_id, created_at, updated_at,
-  order:orders!inner (
-    order_no, client_name, delivery_date, status, media_link, media_notes
-  )
-`;
 
 function isToday(iso: string): boolean {
   const d = new Date(iso);
@@ -56,7 +48,7 @@ export function Board({
   const refetch = useCallback(async () => {
     const { data } = await supabaseRef.current
       .from("order_items")
-      .select(ITEM_SELECT)
+      .select(ORDER_ITEM_SELECT)
       .eq("order.status", FACTORY_ORDER_STATUS);
     if (data) setItems(data as unknown as OrderItemWithOrder[]);
   }, []);

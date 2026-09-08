@@ -4,6 +4,9 @@ import { useState, useTransition } from "react";
 
 import { Button } from "@/components/ui/Button";
 import { UrgencyBadge } from "@/components/ui/UrgencyBadge";
+import { AddMediaButton } from "@/components/media/AddMediaButton";
+import { MediaLinks } from "@/components/media/MediaLinks";
+import { ItemAttributes } from "@/components/order/ItemAttributes";
 import { STATUS_LABELS, type OrderItemWithOrder } from "@/lib/types";
 
 import { advanceStatus, clearDelay, flagDelay } from "./actions";
@@ -51,6 +54,11 @@ export function ItemDetail({
         <div>
           <p className="text-lg font-semibold tnum">{item.order.order_no}</p>
           <p className="text-muted">{item.order.client_name}</p>
+          {item.order.order_type === "express" && item.order.deadline_at ? (
+            <p className="text-xs text-[var(--rush)]">
+              Express · Deadline {new Date(item.order.deadline_at).toLocaleString()}
+            </p>
+          ) : null}
         </div>
         <UrgencyBadge urgency={item.urgency} />
       </div>
@@ -68,10 +76,6 @@ export function ItemDetail({
           <dd className="tnum text-foreground">{item.qty}</dd>
         </div>
         <div>
-          <dt className="uppercase tracking-wide">Size</dt>
-          <dd className="text-foreground">{item.size ?? "—"}</dd>
-        </div>
-        <div>
           <dt className="uppercase tracking-wide">Due</dt>
           <dd className="tnum text-foreground">
             {formatDate(item.order.delivery_date)}
@@ -83,19 +87,9 @@ export function ItemDetail({
             {STATUS_LABELS[item.production_status]}
           </dd>
         </div>
-        <div>
-          <dt className="uppercase tracking-wide">Cover</dt>
-          <dd className="text-foreground">{item.cover_type ?? "—"}</dd>
-        </div>
-        <div>
-          <dt className="uppercase tracking-wide">Lamination</dt>
-          <dd className="text-foreground">{item.lamination_type ?? "—"}</dd>
-        </div>
-        <div>
-          <dt className="uppercase tracking-wide">Box</dt>
-          <dd className="text-foreground">{item.box_type ?? "—"}</dd>
-        </div>
       </dl>
+
+      <ItemAttributes item={item} />
 
       {item.is_delayed ? (
         <p className="rounded bg-[var(--rush)]/10 px-2 py-1 text-xs text-[var(--rush)]">
@@ -119,18 +113,13 @@ export function ItemDetail({
 
       {error ? <p className="text-xs text-[var(--rush)]">{error}</p> : null}
 
-      <div className="flex flex-wrap gap-2 border-t border-border pt-3">
-        {photoLink ? (
-          <a
-            href={photoLink}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex min-h-11 items-center rounded-[var(--radius)] border border-border px-3 text-xs"
-          >
-            View photos
-          </a>
-        ) : null}
+      <div className="space-y-2">
+        <p className="text-xs uppercase tracking-wide text-muted">Photos</p>
+        <MediaLinks media={item.media} legacyLink={photoLink} />
+        <AddMediaButton orderItemId={item.id} onUploaded={onChanged} />
+      </div>
 
+      <div className="flex flex-wrap gap-2 border-t border-border pt-3">
         {nextLabel ? (
           <Button
             variant="primary"
