@@ -49,10 +49,11 @@ export async function logoutDesigner(): Promise<void> {
 }
 
 // Once every item on an order has moved to the factory, flip the order's
-// own stage too — that's what makes the whole order disappear from this
-// designer's board (see fetchDesignerItems in lib/queries.ts), whether the
-// last item got there by an individual advanceItemToFactory or by
-// completeDesignerWork below.
+// own stage too — bookkeeping only (used by
+// unassign_orders_on_designer_deactivate), not something that hides the
+// order from the designer's board; see fetchDesignerItems in
+// lib/queries.ts for why the order keeps showing until every item is
+// actually completed, so a late mistake can still be caught and fixed.
 async function syncOrderStageIfDone(
   admin: ReturnType<typeof createAdminClient>,
   orderId: string,
@@ -109,7 +110,8 @@ export async function advanceItemToFactory(itemId: string): Promise<ActionResult
 
 // Designer says they're fully done with the order — releases whatever
 // items they haven't already sent individually, all at once. Only the
-// assigned designer may do this.
+// assigned designer may do this. A no-op (not an error) if every item was
+// already sent one at a time.
 export async function completeDesignerWork(orderId: string): Promise<ActionResult> {
   const session = await getDesignerSession();
   if (!session) return { ok: false, error: "Not signed in." };
@@ -117,15 +119,12 @@ export async function completeDesignerWork(orderId: string): Promise<ActionResul
   const admin = createAdminClient();
   const { data: order } = await admin
     .from("orders")
-    .select("id, assigned_designer_id, stage")
+    .select("id, assigned_designer_id")
     .eq("id", orderId)
     .maybeSingle();
   if (!order) return { ok: false, error: "Order not found." };
   if (order.assigned_designer_id !== session.designer_id) {
     return { ok: false, error: "This order isn't assigned to you." };
-  }
-  if (order.stage !== "with_designer") {
-    return { ok: false, error: "This order has already moved on." };
   }
 
   const { error: itemsError } = await admin
@@ -145,10 +144,12 @@ export async function completeDesignerWork(orderId: string): Promise<ActionResul
 }
 
 // ---------------------------------------------------------------------------
-// Designer edits — quantities, specs, and notes can still change while an
-// order sits with the designer, same fields a manager sets at intake.
-// Restricted to items still at the with_designer stage; once an item has
-// been individually sent to the factory it's out of the designer's hands.
+// Designer edits — quantities, specs, and notes can still change on an
+// assigned order, same fields a manager sets at intake. Sending an item to
+// the factory only means "start producing this" — it doesn't lock the
+// designer out, since a mistake might not surface until later. The only
+// hard line is an item the factory has actually finished (`completed`):
+// past that point editing it here would misrepresent already-delivered work.
 // ---------------------------------------------------------------------------
 
 export interface DesignerItemEditInput {
@@ -176,15 +177,12 @@ export async function updateDesignerOrder(input: DesignerOrderEditInput): Promis
   const admin = createAdminClient();
   const { data: order } = await admin
     .from("orders")
-    .select("id, assigned_designer_id, stage, order_type")
+    .select("id, assigned_designer_id, order_type")
     .eq("id", input.orderId)
     .maybeSingle();
   if (!order) return { ok: false, error: "Order not found." };
   if (order.assigned_designer_id !== session.designer_id) {
     return { ok: false, error: "This order isn't assigned to you." };
-  }
-  if (order.stage !== "with_designer") {
-    return { ok: false, error: "This order has already moved on." };
   }
   if (!input.delivery_date) return { ok: false, error: "Delivery date is required." };
   if (order.order_type === "express" && !input.deadline_at) {
@@ -195,7 +193,7 @@ export async function updateDesignerOrder(input: DesignerOrderEditInput): Promis
   const itemIds = input.items.map((i) => i.id);
   const { data: existingItems } = await admin
     .from("order_items")
-    .select("id, order_id, stage")
+    .select("id, order_id, production_status")
     .in("id", itemIds);
   if (
     !existingItems ||
@@ -204,10 +202,10 @@ export async function updateDesignerOrder(input: DesignerOrderEditInput): Promis
   ) {
     return { ok: false, error: "One or more items don't belong to this order." };
   }
-  if (existingItems.some((i) => i.stage !== "with_designer")) {
+  if (existingItems.some((i) => i.production_status === "completed")) {
     return {
       ok: false,
-      error: "An item has already been sent to the factory and can no longer be edited here.",
+      error: "An item has already been completed by the factory and can no longer be edited here.",
     };
   }
 

@@ -48,6 +48,19 @@ export async function logoutWorker(): Promise<void> {
   store.delete(WORKER_COOKIE);
 }
 
+// Only the worker a supervisor assigned to an item may move it through the
+// queues — otherwise anyone signed in to /factory could advance/flag/clear
+// work that isn't theirs.
+function assertAssignedToWorker(
+  item: { assigned_worker_id: string | null },
+  workerId: string,
+): ActionResult | null {
+  if (item.assigned_worker_id !== workerId) {
+    return { ok: false, error: "This item isn't assigned to you — ask a supervisor to assign it first." };
+  }
+  return null;
+}
+
 // Advance to the next production status (Not Started -> ... -> Ready -> Completed).
 export async function advanceStatus(itemId: string): Promise<ActionResult> {
   const session = await getWorkerSession();
@@ -56,10 +69,12 @@ export async function advanceStatus(itemId: string): Promise<ActionResult> {
   const admin = createAdminClient();
   const { data: item } = await admin
     .from("order_items")
-    .select("id, production_status")
+    .select("id, production_status, assigned_worker_id")
     .eq("id", itemId)
     .maybeSingle();
   if (!item) return { ok: false, error: "Item not found." };
+  const forbidden = assertAssignedToWorker(item, session.worker_id);
+  if (forbidden) return forbidden;
 
   const flow: ProductionStatus[] = [...BOARD_COLUMNS, "completed"];
   const nextIdx = flow.indexOf(item.production_status as ProductionStatus) + 1;
@@ -86,6 +101,15 @@ export async function flagDelay(
   if (!reason.trim()) return { ok: false, error: "A delay reason is required." };
 
   const admin = createAdminClient();
+  const { data: item } = await admin
+    .from("order_items")
+    .select("id, assigned_worker_id")
+    .eq("id", itemId)
+    .maybeSingle();
+  if (!item) return { ok: false, error: "Item not found." };
+  const forbidden = assertAssignedToWorker(item, session.worker_id);
+  if (forbidden) return forbidden;
+
   const { error } = await admin
     .from("order_items")
     .update({
@@ -102,6 +126,15 @@ export async function clearDelay(itemId: string): Promise<ActionResult> {
   if (!session) return { ok: false, error: "Not signed in." };
 
   const admin = createAdminClient();
+  const { data: item } = await admin
+    .from("order_items")
+    .select("id, assigned_worker_id")
+    .eq("id", itemId)
+    .maybeSingle();
+  if (!item) return { ok: false, error: "Item not found." };
+  const forbidden = assertAssignedToWorker(item, session.worker_id);
+  if (forbidden) return forbidden;
+
   const { error } = await admin
     .from("order_items")
     .update({

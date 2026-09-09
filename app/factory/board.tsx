@@ -170,7 +170,7 @@ export function Board({
         title={selectedItem ? selectedItem.product : undefined}
       >
         {selectedItem ? (
-          <ItemDetail item={selectedItem} onChanged={refetch} />
+          <ItemDetail item={selectedItem} workerId={workerId} onChanged={refetch} />
         ) : null}
       </Drawer>
     </div>
