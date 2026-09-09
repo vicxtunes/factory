@@ -2,12 +2,12 @@
 
 import { useRef, useState, useTransition } from "react";
 
-import { uploadFileToDrive } from "@/lib/google/upload-client";
+import { uploadFileToCloudinary } from "@/lib/cloudinary/upload-client";
 
-// Lets a signed-in user (intake, worker, or dashboard) attach more photos to
-// an existing order item after the fact — reuses the same direct-to-Drive
-// upload path as the intake wizard, so a failed upload there isn't a dead
-// end.
+// Lets a signed-in user (dashboard order entry, worker, or designer) attach
+// more photos to an existing order item after the fact — reuses the same
+// direct-to-Cloudinary upload path as order entry, so a failed upload there
+// isn't a dead end.
 export function AddMediaButton({
   orderItemId,
   onUploaded,
@@ -26,7 +26,7 @@ export function AddMediaButton({
     startTransition(async () => {
       let failed = 0;
       for (const file of list) {
-        const res = await uploadFileToDrive(orderItemId, file);
+        const res = await uploadFileToCloudinary(orderItemId, file);
         if (!res.ok) {
           failed += 1;
           setStatus(res.error);

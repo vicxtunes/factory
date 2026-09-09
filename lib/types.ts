@@ -6,6 +6,8 @@ export type Urgency = "normal" | "urgent" | "rush";
 
 export type OrderType = "normal" | "express";
 
+export type OrderStage = "with_designer" | "factory";
+
 export type AttributeType = "text" | "number" | "select";
 
 export type ProductionStatus =
@@ -17,7 +19,14 @@ export type ProductionStatus =
 
 export type NotificationEvent = "completed" | "delayed";
 
-export type AppRole = "supervisor" | "boss";
+export type AppRole = "supervisor" | "boss" | "receptionist";
+
+// Receptionist and supervisor share full CRUD access across the dashboard;
+// boss stays read-only except for the admins panel (creating dashboard
+// accounts).
+export function isManagerRole(role: AppRole): boolean {
+  return role === "supervisor" || role === "receptionist";
+}
 
 export interface Order {
   id: string;
@@ -32,6 +41,10 @@ export interface Order {
   delivery_date: string | null;
   deadline_at: string | null;
   status: string;
+  stage: OrderStage;
+  assigned_designer_id: string | null;
+  designer_name: string | null;
+  designer_brief: string | null;
   order_notes: string | null;
   media_link: string | null;
   media_notes: string | null;
@@ -70,8 +83,8 @@ export interface OrderItemMedia {
   order_item_id: string;
   file_name: string;
   mime_type: string | null;
-  drive_file_id: string;
-  web_view_link: string;
+  cloudinary_public_id: string;
+  secure_url: string;
   uploaded_at: string;
 }
 
@@ -142,6 +155,17 @@ export interface Worker extends WorkerPublic {
   created_at: string;
 }
 
+export interface DesignerPublic {
+  id: string;
+  name: string;
+  active: boolean;
+}
+
+export interface Designer extends DesignerPublic {
+  pin_hash: string;
+  created_at: string;
+}
+
 export interface NotificationRow {
   id: string;
   order_item_id: string;
@@ -172,6 +196,10 @@ export interface OrderItemWithOrder extends OrderItem {
     | "client_name"
     | "delivery_date"
     | "status"
+    | "stage"
+    | "assigned_designer_id"
+    | "designer_name"
+    | "designer_brief"
     | "media_link"
     | "media_notes"
     | "order_type"
@@ -209,6 +237,3 @@ export const URGENCY_LABELS: Record<Urgency, string> = {
   urgent: "Urgent",
   rush: "Rush",
 };
-
-// Order-at-factory status that gates what appears on the production board.
-export const FACTORY_ORDER_STATUS = "At Factory";

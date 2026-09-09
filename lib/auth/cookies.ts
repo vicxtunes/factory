@@ -61,5 +61,5 @@ export async function verifyPayload<T>(token: string | undefined): Promise<T | n
   }
 }
 
-export const INTAKE_COOKIE = "intake_session";
 export const WORKER_COOKIE = "worker_session";
+export const DESIGNER_COOKIE = "designer_session";

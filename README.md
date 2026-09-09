@@ -6,14 +6,22 @@ the main company system — fed by manual entry at reception. See
 
 ## Surfaces
 
-| Route         | Who              | Auth                         |
-| ------------- | ---------------- | ---------------------------- |
-| `/intake`     | Receptionist     | Shared PIN (`INTAKE_PIN`)    |
-| `/factory`    | Production floor | Worker name + personal PIN   |
-| `/dashboard`  | Supervisor / Boss| Supabase Auth (email + pass) |
+| Route         | Who                              | Auth                           |
+| ------------- | --------------------------------- | ------------------------------- |
+| `/dashboard`  | Receptionist / Supervisor / Boss  | Supabase Auth (email + pass)   |
+| `/factory`    | Production floor                  | Worker name + personal PIN     |
+| `/graphics`   | Graphic designers                 | Designer name + personal PIN   |
 
-Supervisor has full write access (worker management, assignment, status
-overrides). Boss sees the same views read-only.
+Order intake lives in the dashboard (`/dashboard/orders/new`): the initiator
+picks whether an order goes straight to the factory or to a specific graphics
+designer first (with an optional brief) — the designer attaches their files
+from `/graphics` and marks it done, which auto-forwards the order to the
+factory board.
+
+Receptionist and supervisor share full write access (client/agent/product
+catalog, worker + designer management, item assignment, status overrides).
+Boss sees the same views read-only, plus is the only role that can create new
+dashboard accounts (`/dashboard/admins`).
 
 ## Stack
 
@@ -26,7 +34,6 @@ Docker.
 2. Copy `.env.example` to `.env.local` and fill in:
    - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`,
      `SUPABASE_SERVICE_ROLE_KEY` — from the Supabase project API settings
-   - `INTAKE_PIN` — any 4–8 digit code for the receptionist
    - `APP_SECRET` — `openssl rand -hex 32`
 3. Apply the schema:
    ```bash
@@ -37,12 +44,14 @@ Docker.
    (or paste `supabase/migrations/*.sql` into the Supabase SQL editor in order)
 4. Create dashboard users in Supabase Auth, then insert their roles:
    ```sql
+   insert into profiles (id, role, full_name) values ('<uuid>', 'receptionist', 'Name');
    insert into profiles (id, role, full_name) values ('<uuid>', 'supervisor', 'Name');
    insert into profiles (id, role, full_name) values ('<uuid>', 'boss', 'Name');
    ```
 5. `npm run dev` → http://localhost:3000
 
 Seeded worker PINs (dev only): Amina `1111`, Kofi `2222`, Lucia `3333`, Sam `4444`.
+Seeded designer PINs (dev only): Tola `5555`, Priya `6666`.
 
 ## Data model
 

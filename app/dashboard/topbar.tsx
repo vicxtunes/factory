@@ -18,7 +18,9 @@ function MenuIcon({ className }: { className?: string }) {
 const PAGE_TITLES: Record<string, string> = {
   "/dashboard": "Dashboard",
   "/dashboard/orders": "Orders & items",
+  "/dashboard/orders/new": "New order",
   "/dashboard/workers": "Workers & stations",
+  "/dashboard/designers": "Graphics designers",
   "/dashboard/admins": "Dashboard admins",
 };
 

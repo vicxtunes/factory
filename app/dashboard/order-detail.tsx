@@ -50,7 +50,11 @@ export function OrderDetail({
           <p className="text-lg font-semibold tnum">{item.order.order_no}</p>
           <p className="text-muted">{item.order.client_name}</p>
           <p className="text-xs text-muted">
-            {item.order.order_type === "express" ? "Express" : "Normal"}
+            {item.order.order_type === "express" ? (
+              <span className="font-semibold text-error-600 dark:text-error-400">Express</span>
+            ) : (
+              "Normal"
+            )}
             {item.order.deadline_at
               ? ` · Deadline ${new Date(item.order.deadline_at).toLocaleString()}`
               : ""}
@@ -99,6 +103,17 @@ export function OrderDetail({
         <div>
           <p className="text-xs uppercase tracking-wide text-muted">Photos</p>
           <p className="mt-1 text-xs">{item.order.media_notes}</p>
+        </div>
+      ) : null}
+
+      {item.order.stage === "with_designer" ? (
+        <div className="rounded-[var(--radius)] border border-brand-500/30 bg-brand-500/5 p-3">
+          <p className="text-xs uppercase tracking-wide text-brand-600">
+            With designer{item.order.designer_name ? `: ${item.order.designer_name}` : ""}
+          </p>
+          {item.order.designer_brief ? (
+            <p className="mt-1 text-xs">{item.order.designer_brief}</p>
+          ) : null}
         </div>
       ) : null}
 

@@ -4,8 +4,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Drawer } from "@/components/ui/Drawer";
 import { Select } from "@/components/ui/Field";
+import { SectionLabel } from "@/components/ui/SectionLabel";
 import { createClient } from "@/lib/supabase/browser";
 import { ORDER_ITEM_SELECT } from "@/lib/item-select";
+import { sortOrderListItems } from "@/lib/sorting";
 import {
   PRODUCTION_STATUSES,
   STATUS_LABELS,
@@ -21,13 +23,17 @@ import { OrderDetail } from "./order-detail";
 
 type WorkerLite = Omit<Worker, "pin_hash">;
 
+const UNCATEGORIZED = "Uncategorized";
+
 export function OrderBoard({
   items: initialItems,
   workers,
+  categories,
   canManage,
 }: {
   items: OrderItemWithOrder[];
   workers: WorkerLite[];
+  categories: { id: string; name: string }[];
   canManage: boolean;
 }) {
   const [items, setItems] = useState(initialItems);
@@ -42,6 +48,10 @@ export function OrderBoard({
   const workerById = useMemo(
     () => new Map(workers.map((w) => [w.id, w])),
     [workers],
+  );
+  const categoryById = useMemo(
+    () => new Map(categories.map((c) => [c.id, c.name])),
+    [categories],
   );
   const stations = useMemo(
     () =>
@@ -92,6 +102,25 @@ export function OrderBoard({
   const selectedAssignedName = selectedItem?.assigned_worker_id
     ? (workerById.get(selectedItem.assigned_worker_id)?.name ?? null)
     : null;
+
+  // Grouped by category so items from different product lines don't blur
+  // together, each group internally sorted by urgency -> date -> order type.
+  const groups = useMemo(() => {
+    const byCategory = new Map<string, OrderItemWithOrder[]>();
+    for (const item of filtered) {
+      const name = (item.category_id && categoryById.get(item.category_id)) || UNCATEGORIZED;
+      const bucket = byCategory.get(name) ?? [];
+      bucket.push(item);
+      byCategory.set(name, bucket);
+    }
+    return Array.from(byCategory.entries())
+      .map(([name, groupItems]) => ({ name, items: sortOrderListItems(groupItems) }))
+      .sort((a, b) => {
+        if (a.name === UNCATEGORIZED) return 1;
+        if (b.name === UNCATEGORIZED) return -1;
+        return a.name.localeCompare(b.name);
+      });
+  }, [filtered, categoryById]);
 
   return (
     <div>
@@ -156,25 +185,35 @@ export function OrderBoard({
         </label>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        {filtered.map((i) => (
-          <OrderCard
-            key={i.id}
-            item={i}
-            assignedName={
-              i.assigned_worker_id
-                ? (workerById.get(i.assigned_worker_id)?.name ?? null)
-                : null
-            }
-            onOpen={() => setSelectedId(i.id)}
-          />
-        ))}
-        {filtered.length === 0 ? (
-          <p className="rounded-[var(--radius)] border border-dashed border-border p-3 text-xs text-muted md:col-span-2 xl:col-span-3">
-            No items match these filters.
-          </p>
-        ) : null}
-      </div>
+      {filtered.length === 0 ? (
+        <p className="rounded-[var(--radius)] border border-dashed border-border p-3 text-xs text-muted">
+          No items match these filters.
+        </p>
+      ) : (
+        <div className="space-y-6">
+          {groups.map((group) => (
+            <section key={group.name}>
+              <SectionLabel>
+                {group.name} <span className="tnum text-muted/70">({group.items.length})</span>
+              </SectionLabel>
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                {group.items.map((i) => (
+                  <OrderCard
+                    key={i.id}
+                    item={i}
+                    assignedName={
+                      i.assigned_worker_id
+                        ? (workerById.get(i.assigned_worker_id)?.name ?? null)
+                        : null
+                    }
+                    onOpen={() => setSelectedId(i.id)}
+                  />
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
+      )}
 
       <Drawer
         open={!!selectedItem}

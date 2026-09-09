@@ -24,7 +24,7 @@ export function LoginForm() {
 
   return (
     <div className="rounded-[var(--radius)] border border-border bg-surface p-6 shadow-theme-sm">
-      <SectionLabel>Supervisor &amp; boss</SectionLabel>
+      <SectionLabel>Receptionist, supervisor &amp; boss</SectionLabel>
       <form action={action} className="space-y-4">
         <Field label="Email">
           <TextInput name="email" type="email" autoComplete="email" required />

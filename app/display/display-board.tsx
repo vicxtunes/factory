@@ -1,13 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { ORDER_ITEM_SELECT } from "@/lib/item-select";
 import { sortItems } from "@/lib/sorting";
 import { createClient } from "@/lib/supabase/browser";
 import {
   BOARD_COLUMNS,
-  FACTORY_ORDER_STATUS,
   STATUS_LABELS,
   type OrderItemWithOrder,
   type ProductionStatus,
@@ -24,6 +23,8 @@ const COLUMN_HEADER_STYLES: Record<ProductionStatus, string> = {
 };
 
 const DELAYED_HEADER_STYLE = "text-error-600 dark:text-error-500";
+const DELAYED_KEY = "delayed" as const;
+type ColumnKey = ProductionStatus | typeof DELAYED_KEY;
 
 function useClock() {
   const [now, setNow] = useState(() => new Date());
@@ -36,6 +37,7 @@ function useClock() {
 
 export function DisplayBoard({ initialItems }: { initialItems: OrderItemWithOrder[] }) {
   const [items, setItems] = useState(initialItems);
+  const [activeTab, setActiveTab] = useState<ColumnKey>(DELAYED_KEY);
   const supabaseRef = useRef(createClient());
   const now = useClock();
 
@@ -43,7 +45,7 @@ export function DisplayBoard({ initialItems }: { initialItems: OrderItemWithOrde
     const { data } = await supabaseRef.current
       .from("order_items")
       .select(ORDER_ITEM_SELECT)
-      .eq("order.status", FACTORY_ORDER_STATUS);
+      .eq("order.stage", "factory");
     if (data) setItems(data as unknown as OrderItemWithOrder[]);
   }, []);
 
@@ -62,52 +64,75 @@ export function DisplayBoard({ initialItems }: { initialItems: OrderItemWithOrde
   // Delayed is its own category, not a color layered onto whatever status
   // column an item happens to sit in — so a delayed-but-ready item shows up
   // under Delayed, not under Ready, until someone clears the delay flag.
-  const delayedItems = sortItems(items.filter((i) => i.is_delayed));
-  const byColumn = (status: ProductionStatus) =>
-    sortItems(items.filter((i) => i.production_status === status && !i.is_delayed));
+  const columns = useMemo(() => {
+    const delayedItems = sortItems(items.filter((i) => i.is_delayed));
+    const byColumn = (status: ProductionStatus) =>
+      sortItems(items.filter((i) => i.production_status === status && !i.is_delayed));
+
+    return [
+      { key: DELAYED_KEY as ColumnKey, label: "Delayed", headerStyle: DELAYED_HEADER_STYLE, items: delayedItems },
+      ...BOARD_COLUMNS.map((status) => ({
+        key: status as ColumnKey,
+        label: STATUS_LABELS[status],
+        headerStyle: COLUMN_HEADER_STYLES[status],
+        items: byColumn(status),
+      })),
+    ];
+  }, [items]);
+
+  const activeColumn = columns.find((c) => c.key === activeTab) ?? columns[0];
 
   return (
-    <div className="flex h-screen w-full flex-col bg-background p-6">
-      <div className="mb-4 flex shrink-0 items-center justify-between">
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">Production Board</h1>
-        <span className="tnum text-lg font-semibold text-muted" suppressHydrationWarning>
+    <div className="flex h-screen w-full flex-col bg-background p-3 sm:p-6">
+      <div className="mb-3 flex shrink-0 items-center justify-between sm:mb-4">
+        <h1 className="text-lg font-bold tracking-tight text-foreground sm:text-2xl">Production Board</h1>
+        <span className="tnum text-base font-semibold text-muted sm:text-lg" suppressHydrationWarning>
           {now.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}
         </span>
       </div>
 
-      <div className="grid flex-1 grid-cols-5 gap-6 overflow-hidden">
-        <section className="flex min-h-0 flex-col">
-          <h2 className={`mb-3 shrink-0 text-base font-bold uppercase tracking-wide ${DELAYED_HEADER_STYLE}`}>
-            Delayed <span className="tnum text-muted">({delayedItems.length})</span>
-          </h2>
-          <div className="flex flex-1 flex-col gap-3 overflow-y-auto pr-1">
-            {delayedItems.map((item) => (
-              <DisplayCard key={item.id} item={item} />
-            ))}
-            {delayedItems.length === 0 ? <p className="text-sm text-muted">Nothing here.</p> : null}
-          </div>
-        </section>
-
-        {BOARD_COLUMNS.map((status) => {
-          const columnItems = byColumn(status);
-          return (
-            <section key={status} className="flex min-h-0 flex-col">
-              <h2
-                className={`mb-3 shrink-0 text-base font-bold uppercase tracking-wide ${COLUMN_HEADER_STYLES[status]}`}
+      {/* Phone/tablet: one division at a time, picked via tabs — five columns
+          side by side has no room to breathe below desktop width. */}
+      <div className="flex min-h-0 flex-1 flex-col lg:hidden">
+        <div className="mb-3 flex shrink-0 gap-1.5 overflow-x-auto pb-1">
+          {columns.map((col) => {
+            const active = activeTab === col.key;
+            return (
+              <button
+                key={col.key}
+                onClick={() => setActiveTab(col.key)}
+                className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-bold uppercase tracking-wide ${
+                  active ? "border-transparent bg-navy-900 text-white" : `border-border bg-surface ${col.headerStyle}`
+                }`}
               >
-                {STATUS_LABELS[status]} <span className="tnum text-muted">({columnItems.length})</span>
-              </h2>
-              <div className="flex flex-1 flex-col gap-3 overflow-y-auto pr-1">
-                {columnItems.map((item) => (
-                  <DisplayCard key={item.id} item={item} />
-                ))}
-                {columnItems.length === 0 ? (
-                  <p className="text-sm text-muted">Nothing here.</p>
-                ) : null}
-              </div>
-            </section>
-          );
-        })}
+                {col.label} <span className="tnum">({col.items.length})</span>
+              </button>
+            );
+          })}
+        </div>
+        <div className="flex flex-1 flex-col gap-3 overflow-y-auto pr-1">
+          {activeColumn.items.map((item) => (
+            <DisplayCard key={item.id} item={item} />
+          ))}
+          {activeColumn.items.length === 0 ? <p className="text-sm text-muted">Nothing here.</p> : null}
+        </div>
+      </div>
+
+      {/* Desktop / wall-mounted TV: every division visible at once. */}
+      <div className="hidden flex-1 grid-cols-5 gap-6 overflow-hidden lg:grid">
+        {columns.map((col) => (
+          <section key={col.key} className="flex min-h-0 flex-col">
+            <h2 className={`mb-3 shrink-0 text-base font-bold uppercase tracking-wide ${col.headerStyle}`}>
+              {col.label} <span className="tnum text-muted">({col.items.length})</span>
+            </h2>
+            <div className="flex flex-1 flex-col gap-3 overflow-y-auto pr-1">
+              {col.items.map((item) => (
+                <DisplayCard key={item.id} item={item} />
+              ))}
+              {col.items.length === 0 ? <p className="text-sm text-muted">Nothing here.</p> : null}
+            </div>
+          </section>
+        ))}
       </div>
     </div>
   );

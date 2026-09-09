@@ -5,10 +5,14 @@ import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/Button";
 import { Field, Select, TextArea, TextInput } from "@/components/ui/Field";
 import { SectionLabel } from "@/components/ui/SectionLabel";
-import { uploadFileToDrive } from "@/lib/google/upload-client";
-import type { Agent, Client, OrderType, ProductCategory } from "@/lib/types";
+import { uploadFileToCloudinary } from "@/lib/cloudinary/upload-client";
+import type { Agent, Client, DesignerPublic, OrderType, ProductCategory } from "@/lib/types";
 
-import { createOrder, type CreateOrderInput, type IntakeItemInput } from "./actions";
+import {
+  createOrder,
+  type CreateOrderInput,
+  type OrderItemInput,
+} from "../../../actions";
 
 interface GeneralInfo {
   customerType: "new" | "existing";
@@ -19,9 +23,12 @@ interface GeneralInfo {
   deliveryDate: string;
   deadlineAt: string;
   orderNotes: string;
+  route: "factory" | "designer";
+  designerId: string;
+  designerBrief: string;
 }
 
-interface ItemFormState extends IntakeItemInput {
+interface ItemFormState extends OrderItemInput {
   files: File[];
 }
 
@@ -35,6 +42,9 @@ function emptyGeneral(): GeneralInfo {
     deliveryDate: "",
     deadlineAt: "",
     orderNotes: "",
+    route: "factory",
+    designerId: "",
+    designerBrief: "",
   };
 }
 
@@ -61,23 +71,33 @@ function validateGeneral(general: GeneralInfo): string | null {
   if (general.orderType === "express" && !general.deadlineAt) {
     return "Express orders need a deadline date & time.";
   }
+  if (general.route === "designer" && !general.designerId) {
+    return "Select which designer this order goes to.";
+  }
   return null;
 }
 
-export function IntakeForm({
+export function OrderForm({
   clients,
   agents,
   catalog,
+  designers,
 }: {
   clients: Client[];
   agents: Agent[];
   catalog: ProductCategory[];
+  designers: DesignerPublic[];
 }) {
   const [step, setStep] = useState<1 | 2>(1);
   const [general, setGeneral] = useState<GeneralInfo>(emptyGeneral());
   const [items, setItems] = useState<ItemFormState[]>([emptyItem()]);
   const [error, setError] = useState<string | null>(null);
-  const [confirmed, setConfirmed] = useState<{ orderNo: string; warnings: string[] } | null>(null);
+  const [confirmed, setConfirmed] = useState<{
+    orderNo: string;
+    route: "factory" | "designer";
+    designerName: string | null;
+    warnings: string[];
+  } | null>(null);
   const [pending, startTransition] = useTransition();
   const [uploadStatus, setUploadStatus] = useState<string | null>(null);
 
@@ -120,6 +140,9 @@ export function IntakeForm({
         delivery_date: general.deliveryDate,
         deadline_at: general.deadlineAt,
         order_notes: general.orderNotes,
+        route: general.route,
+        designer_id: general.designerId,
+        designer_brief: general.designerBrief,
         items: items.map(({ category_id, product_id, variant_id, qty, attributes, item_notes }) => ({
           category_id,
           product_id,
@@ -141,13 +164,16 @@ export function IntakeForm({
         const files = items[formIndex]?.files ?? [];
         for (const file of files) {
           setUploadStatus(`Uploading "${file.name}"…`);
-          const uploadRes = await uploadFileToDrive(itemId, file);
+          const uploadRes = await uploadFileToCloudinary(itemId, file);
           if (!uploadRes.ok) warnings.push(uploadRes.error);
         }
       }
       setUploadStatus(null);
 
-      setConfirmed({ orderNo: res.orderNo, warnings });
+      const designerName = general.route === "designer"
+        ? (designers.find((d) => d.id === general.designerId)?.name ?? null)
+        : null;
+      setConfirmed({ orderNo: res.orderNo, route: general.route, designerName, warnings });
       setGeneral(emptyGeneral());
       setItems([emptyItem()]);
       setStep(1);
@@ -159,12 +185,15 @@ export function IntakeForm({
       {confirmed ? (
         <div className="rounded-[var(--radius)] border border-[var(--normal)]/40 bg-[var(--normal)]/10 p-3 text-sm">
           <p>
-            Order <span className="font-semibold tnum">{confirmed.orderNo}</span> created.
+            Order <span className="font-semibold tnum">{confirmed.orderNo}</span> created
+            {confirmed.route === "designer"
+              ? ` — routed to ${confirmed.designerName ?? "the designer"} for design work.`
+              : " — sent straight to the factory."}
           </p>
           {confirmed.warnings.length > 0 ? (
             <ul className="mt-2 list-disc space-y-0.5 pl-4 text-xs text-[var(--rush)]">
               {confirmed.warnings.map((w, i) => (
-                <li key={i}>{w} — you can retry this from the order&apos;s page on the dashboard.</li>
+                <li key={i}>{w} — you can retry this from the order&apos;s page.</li>
               ))}
             </ul>
           ) : null}
@@ -178,7 +207,13 @@ export function IntakeForm({
       </div>
 
       {step === 1 ? (
-        <GeneralStep general={general} setGeneral={setGeneral} clients={clients} agents={agents} />
+        <GeneralStep
+          general={general}
+          setGeneral={setGeneral}
+          clients={clients}
+          agents={agents}
+          designers={designers}
+        />
       ) : (
         <ItemsStep items={items} setItems={setItems} patchItem={patchItem} catalog={catalog} />
       )}
@@ -213,11 +248,13 @@ function GeneralStep({
   setGeneral,
   clients,
   agents,
+  designers,
 }: {
   general: GeneralInfo;
   setGeneral: (g: GeneralInfo) => void;
   clients: Client[];
   agents: Agent[];
+  designers: DesignerPublic[];
 }) {
   return (
     <section className="space-y-4">
@@ -332,6 +369,59 @@ function GeneralStep({
             />
           </Field>
         </div>
+      </div>
+
+      <SectionLabel>Routing</SectionLabel>
+      <div className="rounded-[var(--radius)] border border-border bg-surface p-4 shadow-theme-xs">
+        <div className="mb-3 flex gap-2">
+          <button
+            type="button"
+            className={`rounded-[var(--radius)] px-3 py-1.5 text-xs font-medium ${
+              general.route === "factory" ? "bg-brand-500 text-white" : "border border-border"
+            }`}
+            onClick={() => setGeneral({ ...general, route: "factory" })}
+          >
+            Send to factory
+          </button>
+          <button
+            type="button"
+            className={`rounded-[var(--radius)] px-3 py-1.5 text-xs font-medium ${
+              general.route === "designer" ? "bg-brand-500 text-white" : "border border-border"
+            }`}
+            onClick={() => setGeneral({ ...general, route: "designer" })}
+          >
+            Send to graphics designer
+          </button>
+        </div>
+
+        {general.route === "designer" ? (
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Designer">
+              <Select
+                value={general.designerId}
+                onChange={(e) => setGeneral({ ...general, designerId: e.target.value })}
+                required
+              >
+                <option value="">Select a designer…</option>
+                {designers.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <div className="sm:col-span-2">
+              <Field label="Brief (optional)" hint="What the designer should do before this reaches the factory">
+                <TextArea
+                  value={general.designerBrief}
+                  onChange={(e) => setGeneral({ ...general, designerBrief: e.target.value })}
+                />
+              </Field>
+            </div>
+          </div>
+        ) : (
+          <p className="text-xs text-muted">This order will appear on the factory board immediately.</p>
+        )}
       </div>
     </section>
   );
@@ -566,7 +656,7 @@ function ItemRow({
       ) : null}
 
       <div className="mt-4 grid gap-4 border-t border-border pt-4 sm:grid-cols-2">
-        <Field label="Photos" hint="Uploaded to Google Drive once the order is created">
+        <Field label="Photos" hint="Uploaded to Cloudinary once the order is created">
           <input
             type="file"
             multiple

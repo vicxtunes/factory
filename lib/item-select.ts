@@ -9,9 +9,10 @@ export const ORDER_ITEM_SELECT = `
   attributes, qty, size, cover_type, lamination_type,
   box_type, urgency, item_notes, production_status, is_delayed, delay_reason,
   assigned_worker_id, media_link, updated_by_worker_id, created_at, updated_at,
-  media:order_item_media (id, file_name, mime_type, drive_file_id, web_view_link, uploaded_at),
+  media:order_item_media (id, file_name, mime_type, cloudinary_public_id, secure_url, uploaded_at),
   order:orders!inner (
-    order_no, client_name, delivery_date, status, media_link, media_notes,
+    order_no, client_name, delivery_date, status, stage, assigned_designer_id,
+    designer_name, designer_brief, media_link, media_notes,
     order_type, deadline_at, agent_name
   )
 `;
