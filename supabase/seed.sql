@@ -7,8 +7,15 @@
 --   Lucia Romano   station Lamination   PIN 3333
 --   Sam Okoro      station Finishing    PIN 4444
 --
--- Supervisor / boss accounts are Supabase Auth users — create them in the
--- dashboard (Authentication > Users), then insert matching profiles rows:
+-- Designer PINs:
+--   Tola Bankole   PIN 5555
+--   Priya Nair     PIN 6666
+--
+-- Receptionist / supervisor / boss accounts are Supabase Auth users — create
+-- them in the dashboard (Authentication > Users), then insert matching
+-- profiles rows:
+--   insert into profiles (id, role, full_name)
+--   values ('<auth-user-uuid>', 'receptionist', 'Receptionist Name');
 --   insert into profiles (id, role, full_name)
 --   values ('<auth-user-uuid>', 'supervisor', 'Supervisor Name');
 --   insert into profiles (id, role, full_name)
@@ -32,13 +39,20 @@ insert into workers (id, name, pin_hash, station, active) values
   ('44444444-4444-4444-4444-444444444444', 'Sam Okoro',    crypt('4444', gen_salt('bf', 10)), 'Finishing',  true);
 
 -- ---------------------------------------------------------------------------
+-- Designers
+-- ---------------------------------------------------------------------------
+insert into designers (id, name, pin_hash, active) values
+  ('55555555-5555-5555-5555-555555555555', 'Tola Bankole', crypt('5555', gen_salt('bf', 10)), true),
+  ('66666666-6666-6666-6666-666666666666', 'Priya Nair',   crypt('6666', gen_salt('bf', 10)), true);
+
+-- ---------------------------------------------------------------------------
 -- Orders + items
 -- ---------------------------------------------------------------------------
-insert into orders (id, order_no, client_name, delivery_date, status, order_notes, media_link, media_notes) values
-  ('aaaaaaaa-0000-0000-0000-000000000001', '2026-3956', 'Okafor Wedding',   current_date + 5, 'At Factory', 'Handle with care — client is a repeat VIP.', 'https://drive.google.com/drive/folders/example-3956', 'Ask Agent Jeff for folder access.'),
-  ('aaaaaaaa-0000-0000-0000-000000000002', '2026-3971', 'Adeleke Studios',  current_date + 2, 'At Factory', null, 'https://www.dropbox.com/sh/example-3971', 'Password: studio2026'),
-  ('aaaaaaaa-0000-0000-0000-000000000003', '2026-3980', 'Mensah Family',    current_date + 9, 'At Factory', 'Reprint of a damaged 2025 book.', 'https://drive.google.com/drive/folders/example-3980', null),
-  ('aaaaaaaa-0000-0000-0000-000000000004', '2026-3990', 'City Hall Event',  current_date + 1, 'Quote', null, null, null);
+insert into orders (id, order_no, client_name, delivery_date, status, order_notes, media_link, media_notes, stage, assigned_designer_id, designer_name, designer_brief) values
+  ('aaaaaaaa-0000-0000-0000-000000000001', '2026-3956', 'Okafor Wedding',   current_date + 5, 'At Factory', 'Handle with care — client is a repeat VIP.', 'https://drive.google.com/drive/folders/example-3956', 'Ask Agent Jeff for folder access.', 'factory', null, null, null),
+  ('aaaaaaaa-0000-0000-0000-000000000002', '2026-3971', 'Adeleke Studios',  current_date + 2, 'At Factory', null, 'https://www.dropbox.com/sh/example-3971', 'Password: studio2026', 'factory', null, null, null),
+  ('aaaaaaaa-0000-0000-0000-000000000003', '2026-3980', 'Mensah Family',    current_date + 9, 'At Factory', 'Reprint of a damaged 2025 book.', 'https://drive.google.com/drive/folders/example-3980', null, 'factory', null, null, null),
+  ('aaaaaaaa-0000-0000-0000-000000000004', '2026-3990', 'City Hall Event',  current_date + 1, 'Quote', null, null, null, 'with_designer', '55555555-5555-5555-5555-555555555555', 'Tola Bankole', 'Please clean up the event photos and add the client''s logo to the cover before this goes to print.');
 
 insert into order_items
   (order_id, product, product_type, qty, size, cover_type, lamination_type, box_type, urgency, item_notes, production_status, assigned_worker_id) values

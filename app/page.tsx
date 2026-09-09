@@ -5,22 +5,22 @@ import { SectionLabel } from "@/components/ui/SectionLabel";
 
 const SURFACES = [
   {
-    href: "/intake",
-    title: "Intake",
-    who: "Receptionist",
-    desc: "Log new orders and their line items.",
-  },
-  {
     href: "/factory",
     title: "Factory",
     who: "Production workers",
     desc: "Mobile production queue — update status, flag delays, mark complete.",
   },
   {
+    href: "/graphics",
+    title: "Graphics",
+    who: "Graphic designers",
+    desc: "Orders routed for design work — attach files, then send to the factory.",
+  },
+  {
     href: "/dashboard",
     title: "Dashboard",
-    who: "Supervisor & boss",
-    desc: "Full visibility, worker management, live notification feed.",
+    who: "Receptionist, supervisor & boss",
+    desc: "Order intake, full visibility, worker/designer management, live notifications.",
   },
   {
     href: "/display",

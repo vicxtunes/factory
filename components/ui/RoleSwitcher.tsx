@@ -1,9 +1,9 @@
 import Link from "next/link";
 
 const ROLES = [
-  { href: "/intake", label: "Intake", who: "Receptionist" },
   { href: "/factory", label: "Factory", who: "Workers" },
-  { href: "/dashboard/login", label: "Dashboard", who: "Supervisor & boss" },
+  { href: "/graphics", label: "Graphics", who: "Graphic designers" },
+  { href: "/dashboard/login", label: "Dashboard", who: "Receptionist, supervisor & boss" },
 ] as const;
 
 export function RoleSwitcher({ current }: { current: (typeof ROLES)[number]["href"] }) {

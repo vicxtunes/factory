@@ -9,7 +9,6 @@ import { ORDER_ITEM_SELECT } from "@/lib/item-select";
 import { sortItems } from "@/lib/sorting";
 import {
   BOARD_COLUMNS,
-  FACTORY_ORDER_STATUS,
   STATUS_LABELS,
   type OrderItemWithOrder,
   type ProductionStatus,
@@ -49,7 +48,7 @@ export function Board({
     const { data } = await supabaseRef.current
       .from("order_items")
       .select(ORDER_ITEM_SELECT)
-      .eq("order.status", FACTORY_ORDER_STATUS);
+      .eq("order.stage", "factory");
     if (data) setItems(data as unknown as OrderItemWithOrder[]);
   }, []);
 

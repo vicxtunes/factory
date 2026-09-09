@@ -5,9 +5,9 @@ import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import type { AppRole, Profile } from "@/lib/types";
+import { isManagerRole, type AppRole, type Profile } from "@/lib/types";
 import {
-  INTAKE_COOKIE,
+  DESIGNER_COOKIE,
   WORKER_COOKIE,
   verifyPayload,
 } from "@/lib/auth/cookies";
@@ -15,12 +15,6 @@ import {
 export interface WorkerSession {
   worker_id: string;
   name: string;
-}
-
-export async function getIntakeSession(): Promise<boolean> {
-  const store = await cookies();
-  const payload = await verifyPayload<{ ok: true }>(store.get(INTAKE_COOKIE)?.value);
-  return payload?.ok === true;
 }
 
 export async function getWorkerSession(): Promise<WorkerSession | null> {
@@ -34,6 +28,27 @@ export async function getWorkerSession(): Promise<WorkerSession | null> {
     .from("workers")
     .select("id, active")
     .eq("id", session.worker_id)
+    .maybeSingle();
+  if (!data || data.active === false) return null;
+  return session;
+}
+
+export interface DesignerSession {
+  designer_id: string;
+  name: string;
+}
+
+export async function getDesignerSession(): Promise<DesignerSession | null> {
+  const store = await cookies();
+  const session = await verifyPayload<DesignerSession>(store.get(DESIGNER_COOKIE)?.value);
+  if (!session?.designer_id) return null;
+
+  // Confirm the designer still exists and is active.
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("designers")
+    .select("id, active")
+    .eq("id", session.designer_id)
     .maybeSingle();
   if (!data || data.active === false) return null;
   return session;
@@ -81,10 +96,21 @@ export async function requireRole(role: AppRole): Promise<DashboardSession> {
   return session;
 }
 
-// Media upload/session actions are called from both /intake (PIN cookie) and
-// the dashboard (Supabase Auth) — any signed-in surface may attach photos.
+// Receptionist and supervisor share full CRUD access; boss is read-only
+// (except the admins panel, gated separately via requireRole("boss")).
+export async function requireManager(): Promise<DashboardSession> {
+  const session = await requireDashboard();
+  if (!isManagerRole(session.role)) {
+    throw new Error("Forbidden: requires manager access");
+  }
+  return session;
+}
+
+// Media upload/session actions are called from the dashboard (Supabase Auth,
+// order intake + "add more photos") and from /graphics (designer PIN
+// session, attaching design files) — any signed-in surface may attach photos.
 export async function requireMediaUploadAccess(): Promise<void> {
-  if (await getIntakeSession()) return;
   if (await getDashboardSession()) return;
+  if (await getDesignerSession()) return;
   throw new Error("Not signed in.");
 }

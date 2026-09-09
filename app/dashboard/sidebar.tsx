@@ -90,6 +90,26 @@ function ProductsIcon({ className }: { className?: string }) {
   );
 }
 
+function NewOrderIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className={className}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v6m3-3H9m10.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+    </svg>
+  );
+}
+
+function DesignersIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className={className}>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10"
+      />
+    </svg>
+  );
+}
+
 function DisplayIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className={className}>
@@ -102,20 +122,24 @@ function DisplayIcon({ className }: { className?: string }) {
   );
 }
 
+const MANAGER_ROLES = ["supervisor", "receptionist"] as const;
+
 const TABS = [
   { href: "/dashboard", label: "Dashboard", icon: DashboardIcon, role: null, newTab: false },
+  { href: "/dashboard/orders/new", label: "New order", icon: NewOrderIcon, role: MANAGER_ROLES, newTab: false },
   { href: "/dashboard/orders", label: "Orders", icon: OrdersIcon, role: null, newTab: false },
-  { href: "/dashboard/clients", label: "Clients", icon: ClientsIcon, role: "supervisor", newTab: false },
-  { href: "/dashboard/agents", label: "Agents", icon: AgentsIcon, role: "supervisor", newTab: false },
-  { href: "/dashboard/products", label: "Products", icon: ProductsIcon, role: "supervisor", newTab: false },
-  { href: "/dashboard/workers", label: "Workers", icon: WorkersIcon, role: "supervisor", newTab: false },
-  { href: "/dashboard/admins", label: "Admins", icon: AdminsIcon, role: "boss", newTab: false },
+  { href: "/dashboard/clients", label: "Clients", icon: ClientsIcon, role: MANAGER_ROLES, newTab: false },
+  { href: "/dashboard/agents", label: "Agents", icon: AgentsIcon, role: MANAGER_ROLES, newTab: false },
+  { href: "/dashboard/products", label: "Products", icon: ProductsIcon, role: MANAGER_ROLES, newTab: false },
+  { href: "/dashboard/workers", label: "Workers", icon: WorkersIcon, role: MANAGER_ROLES, newTab: false },
+  { href: "/dashboard/designers", label: "Designers", icon: DesignersIcon, role: MANAGER_ROLES, newTab: false },
+  { href: "/dashboard/admins", label: "Admins", icon: AdminsIcon, role: ["boss"], newTab: false },
   { href: "/display", label: "Display screen", icon: DisplayIcon, role: null, newTab: true },
 ] as const satisfies {
   href: string;
   label: string;
   icon: typeof DashboardIcon;
-  role: AppRole | null;
+  role: readonly AppRole[] | null;
   newTab: boolean;
 }[];
 
@@ -129,7 +153,7 @@ export function DashboardSidebar({
   onNavigate: () => void;
 }) {
   const pathname = usePathname();
-  const tabs = TABS.filter((t) => t.role === null || t.role === role);
+  const tabs = TABS.filter((t) => t.role === null || (t.role as readonly AppRole[]).includes(role));
 
   return (
     <aside

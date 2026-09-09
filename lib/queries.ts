@@ -1,23 +1,45 @@
 import { createClient } from "@/lib/supabase/server";
 import { ORDER_ITEM_SELECT as ITEM_SELECT } from "@/lib/item-select";
 import {
-  FACTORY_ORDER_STATUS,
   type Agent,
   type Client,
+  type DesignerPublic,
   type NotificationRow,
   type OrderItemWithOrder,
   type ProductCategory,
 } from "@/lib/types";
 
-// Items visible on the factory board: their order is "At Factory".
+// Items visible on the factory board: their order has reached the factory
+// stage (not still sitting with a graphics designer).
 export async function fetchBoardItems(): Promise<OrderItemWithOrder[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("order_items")
     .select(ITEM_SELECT)
-    .eq("order.status", FACTORY_ORDER_STATUS);
+    .eq("order.stage", "factory");
   if (error) throw new Error(error.message);
   return (data ?? []) as unknown as OrderItemWithOrder[];
+}
+
+// Items belonging to orders currently routed to this designer.
+export async function fetchDesignerItems(designerId: string): Promise<OrderItemWithOrder[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("order_items")
+    .select(ITEM_SELECT)
+    .eq("order.assigned_designer_id", designerId)
+    .eq("order.stage", "with_designer");
+  if (error) throw new Error(error.message);
+  return (data ?? []) as unknown as OrderItemWithOrder[];
+}
+
+export async function fetchDesigners(activeOnly = false): Promise<DesignerPublic[]> {
+  const supabase = await createClient();
+  let query = supabase.from("designers_public").select("id, name, active").order("name");
+  if (activeOnly) query = query.eq("active", true);
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+  return data ?? [];
 }
 
 // Every item, for the dashboard list (all order statuses).
@@ -38,6 +60,18 @@ export async function fetchNotifications(limit = 50): Promise<NotificationRow[]>
     .select("id, order_item_id, event_type, message, created_at")
     .order("created_at", { ascending: false })
     .limit(limit);
+  if (error) throw new Error(error.message);
+  return data ?? [];
+}
+
+// Lightweight id -> name lookup for grouping the dashboard order list by
+// category, without pulling the full nested products/attributes catalog.
+export async function fetchCategoryNames(): Promise<{ id: string; name: string }[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("product_categories")
+    .select("id, name")
+    .order("sort_order", { ascending: true });
   if (error) throw new Error(error.message);
   return data ?? [];
 }

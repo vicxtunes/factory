@@ -1,0 +1,117 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
+import { Drawer } from "@/components/ui/Drawer";
+import { SectionLabel } from "@/components/ui/SectionLabel";
+import { createClient } from "@/lib/supabase/browser";
+import { ORDER_ITEM_SELECT } from "@/lib/item-select";
+import type { OrderItemWithOrder } from "@/lib/types";
+
+import { OrderCard, type DesignerOrder } from "./order-card";
+import { OrderDetail } from "./order-detail";
+
+function groupByOrder(items: OrderItemWithOrder[]): DesignerOrder[] {
+  const byOrder = new Map<string, DesignerOrder>();
+  for (const item of items) {
+    const existing = byOrder.get(item.order_id);
+    if (existing) {
+      existing.items.push(item);
+      continue;
+    }
+    byOrder.set(item.order_id, {
+      orderId: item.order_id,
+      orderNo: item.order.order_no,
+      clientName: item.order.client_name,
+      orderType: item.order.order_type,
+      deadlineAt: item.order.deadline_at,
+      deliveryDate: item.order.delivery_date,
+      brief: item.order.designer_brief,
+      items: [item],
+    });
+  }
+  return Array.from(byOrder.values());
+}
+
+export function Board({
+  initialItems,
+  designerId,
+  designerName,
+}: {
+  initialItems: OrderItemWithOrder[];
+  designerId: string;
+  designerName: string;
+}) {
+  const [items, setItems] = useState(initialItems);
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const supabaseRef = useRef(createClient());
+
+  const orders = useMemo(() => groupByOrder(items), [items]);
+  const selectedOrder = orders.find((o) => o.orderId === selectedOrderId) ?? null;
+
+  const refetch = useCallback(async () => {
+    const { data } = await supabaseRef.current
+      .from("order_items")
+      .select(ORDER_ITEM_SELECT)
+      .eq("order.assigned_designer_id", designerId)
+      .eq("order.stage", "with_designer");
+    if (data) setItems(data as unknown as OrderItemWithOrder[]);
+  }, [designerId]);
+
+  useEffect(() => {
+    const supabase = supabaseRef.current;
+    const channel = supabase
+      .channel("graphics-board")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "order_items" },
+        () => refetch(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "orders" },
+        () => refetch(),
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [refetch]);
+
+  return (
+    <div>
+      <div className="mb-4">
+        <span className="text-xs text-muted">Signed in as {designerName}</span>
+      </div>
+
+      <div className="mb-2 flex items-baseline justify-between">
+        <SectionLabel>Orders needing design work</SectionLabel>
+        <span className="text-xs text-muted tnum">{orders.length}</span>
+      </div>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {orders.map((order) => (
+          <OrderCard key={order.orderId} order={order} onOpen={() => setSelectedOrderId(order.orderId)} />
+        ))}
+        {orders.length === 0 ? (
+          <p className="rounded-[var(--radius)] border border-dashed border-border p-3 text-xs text-muted md:col-span-2 xl:col-span-3">
+            Nothing routed to you right now.
+          </p>
+        ) : null}
+      </div>
+
+      <Drawer
+        open={!!selectedOrder}
+        onClose={() => setSelectedOrderId(null)}
+        title={selectedOrder ? selectedOrder.orderNo : undefined}
+      >
+        {selectedOrder ? (
+          <OrderDetail
+            order={selectedOrder}
+            onChanged={refetch}
+            onSent={() => setSelectedOrderId(null)}
+          />
+        ) : null}
+      </Drawer>
+    </div>
+  );
+}

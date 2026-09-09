@@ -63,6 +63,7 @@ export function AdminPanel({ admins, ownId }: { admins: AdminRow[]; ownId: strin
           </Field>
           <Field label="Role">
             <Select value={role} onChange={(e) => setRole(e.target.value as AppRole)}>
+              <option value="receptionist">Receptionist</option>
               <option value="supervisor">Supervisor</option>
               <option value="boss">Boss</option>
             </Select>
