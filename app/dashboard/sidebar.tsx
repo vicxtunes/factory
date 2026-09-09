@@ -122,7 +122,7 @@ function DisplayIcon({ className }: { className?: string }) {
   );
 }
 
-const MANAGER_ROLES = ["supervisor", "receptionist"] as const;
+const MANAGER_ROLES = ["supervisor", "receptionist", "boss"] as const;
 
 const TABS = [
   { href: "/dashboard", label: "Dashboard", icon: DashboardIcon, role: null, newTab: false },

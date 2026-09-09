@@ -21,11 +21,11 @@ export type NotificationEvent = "completed" | "delayed";
 
 export type AppRole = "supervisor" | "boss" | "receptionist";
 
-// Receptionist and supervisor share full CRUD access across the dashboard;
-// boss stays read-only except for the admins panel (creating dashboard
-// accounts).
+// Receptionist and supervisor share full CRUD access across the dashboard.
+// Boss is the super-admin: full CRUD everywhere PLUS the admins panel
+// (create users, reset passwords, change roles) — gated via requireRole("boss").
 export function isManagerRole(role: AppRole): boolean {
-  return role === "supervisor" || role === "receptionist";
+  return role === "supervisor" || role === "receptionist" || role === "boss";
 }
 
 export interface Order {

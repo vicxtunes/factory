@@ -7,11 +7,23 @@ import { Button } from "@/components/ui/Button";
 import { Field, TextInput } from "@/components/ui/Field";
 import type { Designer } from "@/lib/types";
 
-import { addDesigner, deactivateDesigner, reactivateDesigner } from "./actions";
+import { PinReset } from "./pin-reset";
+import {
+  addDesigner,
+  deactivateDesigner,
+  reactivateDesigner,
+  resetDesignerPin,
+} from "./actions";
 
 type DesignerLite = Omit<Designer, "pin_hash">;
 
-export function DesignerPanel({ designers }: { designers: DesignerLite[] }) {
+export function DesignerPanel({
+  designers,
+  canManage = true,
+}: {
+  designers: DesignerLite[];
+  canManage?: boolean;
+}) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -30,40 +42,42 @@ export function DesignerPanel({ designers }: { designers: DesignerLite[] }) {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl border border-border bg-surface p-5 shadow-theme-xs">
-        <form
-          className="grid gap-3 sm:grid-cols-[1fr_1fr_auto]"
-          onSubmit={(e) => {
-            e.preventDefault();
-            run(async () => {
-              const res = await addDesigner({ name, pin });
-              if (res.ok) {
-                setName("");
-                setPin("");
-              }
-              return res;
-            });
-          }}
-        >
-          <Field label="Name">
-            <TextInput value={name} onChange={(e) => setName(e.target.value)} required />
-          </Field>
-          <Field label="PIN (4–8 digits)">
-            <TextInput
-              value={pin}
-              onChange={(e) => setPin(e.target.value)}
-              inputMode="numeric"
-              required
-            />
-          </Field>
-          <div className="flex items-end">
-            <Button variant="primary" type="submit" disabled={pending}>
-              Add designer
-            </Button>
-          </div>
-        </form>
-        {error ? <p className="mt-3 text-sm text-error-600">{error}</p> : null}
-      </div>
+      {canManage ? (
+        <div className="rounded-2xl border border-border bg-surface p-5 shadow-theme-xs">
+          <form
+            className="grid gap-3 sm:grid-cols-[1fr_1fr_auto]"
+            onSubmit={(e) => {
+              e.preventDefault();
+              run(async () => {
+                const res = await addDesigner({ name, pin });
+                if (res.ok) {
+                  setName("");
+                  setPin("");
+                }
+                return res;
+              });
+            }}
+          >
+            <Field label="Name">
+              <TextInput value={name} onChange={(e) => setName(e.target.value)} required />
+            </Field>
+            <Field label="PIN (4–8 digits)">
+              <TextInput
+                value={pin}
+                onChange={(e) => setPin(e.target.value)}
+                inputMode="numeric"
+                required
+              />
+            </Field>
+            <div className="flex items-end">
+              <Button variant="primary" type="submit" disabled={pending}>
+                Add designer
+              </Button>
+            </div>
+          </form>
+          {error ? <p className="mt-3 text-sm text-error-600">{error}</p> : null}
+        </div>
+      ) : null}
 
       <div className="overflow-hidden rounded-2xl border border-border bg-surface shadow-theme-xs">
         <div className="max-w-full overflow-x-auto">
@@ -76,9 +90,11 @@ export function DesignerPanel({ designers }: { designers: DesignerLite[] }) {
                 <th className="px-5 py-3 font-medium text-muted">
                   <p className="text-xs uppercase tracking-wide">Status</p>
                 </th>
-                <th className="px-5 py-3 font-medium text-muted">
-                  <p className="text-xs uppercase tracking-wide">Actions</p>
-                </th>
+                {canManage ? (
+                  <th className="px-5 py-3 font-medium text-muted">
+                    <p className="text-xs uppercase tracking-wide">Actions</p>
+                  </th>
+                ) : null}
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -105,27 +121,35 @@ export function DesignerPanel({ designers }: { designers: DesignerLite[] }) {
                       {d.active ? "Active" : "Inactive"}
                     </span>
                   </td>
-                  <td className="px-5 py-3">
-                    {d.active ? (
-                      <Button
-                        variant="danger"
-                        className="min-h-9 text-xs"
-                        disabled={pending}
-                        onClick={() => run(() => deactivateDesigner(d.id))}
-                      >
-                        Deactivate
-                      </Button>
-                    ) : (
-                      <Button
-                        variant="secondary"
-                        className="min-h-9 text-xs"
-                        disabled={pending}
-                        onClick={() => run(() => reactivateDesigner(d.id))}
-                      >
-                        Reactivate
-                      </Button>
-                    )}
-                  </td>
+                  {canManage ? (
+                    <td className="px-5 py-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        {d.active ? (
+                          <Button
+                            variant="danger"
+                            className="min-h-9 text-xs"
+                            disabled={pending}
+                            onClick={() => run(() => deactivateDesigner(d.id))}
+                          >
+                            Deactivate
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="secondary"
+                            className="min-h-9 text-xs"
+                            disabled={pending}
+                            onClick={() => run(() => reactivateDesigner(d.id))}
+                          >
+                            Reactivate
+                          </Button>
+                        )}
+                        <PinReset
+                          pending={pending}
+                          onSave={(pin) => run(() => resetDesignerPin({ id: d.id, pin }))}
+                        />
+                      </div>
+                    </td>
+                  ) : null}
                 </tr>
               ))}
               {designers.length === 0 ? (
@@ -139,9 +163,11 @@ export function DesignerPanel({ designers }: { designers: DesignerLite[] }) {
           </table>
         </div>
       </div>
-      <p className="text-xs text-muted">
-        Deactivating a designer unassigns any order still waiting on their design work.
-      </p>
+      {canManage ? (
+        <p className="text-xs text-muted">
+          Deactivating a designer unassigns any order still waiting on their design work.
+        </p>
+      ) : null}
     </div>
   );
 }

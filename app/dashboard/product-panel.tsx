@@ -28,7 +28,13 @@ type MutationResult = { ok: boolean; error?: string };
 
 const ATTRIBUTE_TYPES: AttributeType[] = ["text", "number", "select"];
 
-export function ProductPanel({ categories }: { categories: ProductCategory[] }) {
+export function ProductPanel({
+  categories,
+  canManage = true,
+}: {
+  categories: ProductCategory[];
+  canManage?: boolean;
+}) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -49,30 +55,32 @@ export function ProductPanel({ categories }: { categories: ProductCategory[] }) 
 
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl border border-border bg-surface p-5 shadow-theme-xs">
-        <form
-          className="flex gap-2"
-          onSubmit={(e) => {
-            e.preventDefault();
-            run(async () => {
-              const res = await createCategory(newCategoryName);
-              if (res.ok) setNewCategoryName("");
-              return res;
-            });
-          }}
-        >
-          <TextInput
-            value={newCategoryName}
-            onChange={(e) => setNewCategoryName(e.target.value)}
-            placeholder="New category name"
-            required
-          />
-          <Button variant="primary" type="submit" disabled={pending}>
-            Add category
-          </Button>
-        </form>
-        {error ? <p className="mt-3 text-sm text-error-600">{error}</p> : null}
-      </div>
+      {canManage ? (
+        <div className="rounded-2xl border border-border bg-surface p-5 shadow-theme-xs">
+          <form
+            className="flex gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              run(async () => {
+                const res = await createCategory(newCategoryName);
+                if (res.ok) setNewCategoryName("");
+                return res;
+              });
+            }}
+          >
+            <TextInput
+              value={newCategoryName}
+              onChange={(e) => setNewCategoryName(e.target.value)}
+              placeholder="New category name"
+              required
+            />
+            <Button variant="primary" type="submit" disabled={pending}>
+              Add category
+            </Button>
+          </form>
+          {error ? <p className="mt-3 text-sm text-error-600">{error}</p> : null}
+        </div>
+      ) : null}
 
       <div className="overflow-hidden rounded-2xl border border-border bg-surface shadow-theme-xs">
         <div className="max-w-full overflow-x-auto">
@@ -145,34 +153,38 @@ export function ProductPanel({ categories }: { categories: ProductCategory[] }) 
                         className="min-h-9 text-xs"
                         onClick={() => setOpenCategoryId(c.id)}
                       >
-                        Manage
+                        {canManage ? "Manage" : "View"}
                       </Button>
-                      <Button
-                        variant="secondary"
-                        className="min-h-9 text-xs"
-                        onClick={() => setRenamingId(c.id)}
-                      >
-                        Rename
-                      </Button>
-                      {c.active ? (
-                        <Button
-                          variant="danger"
-                          className="min-h-9 text-xs"
-                          disabled={pending}
-                          onClick={() => run(() => setCategoryActive(c.id, false))}
-                        >
-                          Deactivate
-                        </Button>
-                      ) : (
-                        <Button
-                          variant="secondary"
-                          className="min-h-9 text-xs"
-                          disabled={pending}
-                          onClick={() => run(() => setCategoryActive(c.id, true))}
-                        >
-                          Reactivate
-                        </Button>
-                      )}
+                      {canManage ? (
+                        <>
+                          <Button
+                            variant="secondary"
+                            className="min-h-9 text-xs"
+                            onClick={() => setRenamingId(c.id)}
+                          >
+                            Rename
+                          </Button>
+                          {c.active ? (
+                            <Button
+                              variant="danger"
+                              className="min-h-9 text-xs"
+                              disabled={pending}
+                              onClick={() => run(() => setCategoryActive(c.id, false))}
+                            >
+                              Deactivate
+                            </Button>
+                          ) : (
+                            <Button
+                              variant="secondary"
+                              className="min-h-9 text-xs"
+                              disabled={pending}
+                              onClick={() => run(() => setCategoryActive(c.id, true))}
+                            >
+                              Reactivate
+                            </Button>
+                          )}
+                        </>
+                      ) : null}
                     </div>
                   </td>
                 </tr>
@@ -190,7 +202,9 @@ export function ProductPanel({ categories }: { categories: ProductCategory[] }) 
       </div>
 
       <Drawer open={openCategory != null} onClose={() => setOpenCategoryId(null)} title={openCategory?.name}>
-        {openCategory ? <CategoryDetail category={openCategory} run={run} pending={pending} /> : null}
+        {openCategory ? (
+          <CategoryDetail category={openCategory} run={run} pending={pending} canManage={canManage} />
+        ) : null}
       </Drawer>
     </div>
   );
@@ -200,10 +214,12 @@ function CategoryDetail({
   category,
   run,
   pending,
+  canManage,
 }: {
   category: ProductCategory;
   run: (fn: () => Promise<MutationResult>) => void;
   pending: boolean;
+  canManage: boolean;
 }) {
   const [tab, setTab] = useState<"products" | "fields">("products");
 
@@ -229,9 +245,9 @@ function CategoryDetail({
       </div>
 
       {tab === "products" ? (
-        <ProductsTab category={category} run={run} pending={pending} />
+        <ProductsTab category={category} run={run} pending={pending} canManage={canManage} />
       ) : (
-        <AttributesTab category={category} run={run} pending={pending} />
+        <AttributesTab category={category} run={run} pending={pending} canManage={canManage} />
       )}
     </div>
   );
@@ -241,40 +257,44 @@ function ProductsTab({
   category,
   run,
   pending,
+  canManage,
 }: {
   category: ProductCategory;
   run: (fn: () => Promise<MutationResult>) => void;
   pending: boolean;
+  canManage: boolean;
 }) {
   const [newName, setNewName] = useState("");
 
   return (
     <div className="space-y-3">
-      <form
-        className="flex gap-2"
-        onSubmit={(e) => {
-          e.preventDefault();
-          run(async () => {
-            const res = await createProduct(category.id, newName);
-            if (res.ok) setNewName("");
-            return res;
-          });
-        }}
-      >
-        <TextInput
-          value={newName}
-          onChange={(e) => setNewName(e.target.value)}
-          placeholder="New product name"
-          required
-        />
-        <Button variant="primary" type="submit" disabled={pending}>
-          Add
-        </Button>
-      </form>
+      {canManage ? (
+        <form
+          className="flex gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            run(async () => {
+              const res = await createProduct(category.id, newName);
+              if (res.ok) setNewName("");
+              return res;
+            });
+          }}
+        >
+          <TextInput
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            placeholder="New product name"
+            required
+          />
+          <Button variant="primary" type="submit" disabled={pending}>
+            Add
+          </Button>
+        </form>
+      ) : null}
 
       <div className="space-y-3">
         {category.products.map((p) => (
-          <ProductCard key={p.id} product={p} run={run} pending={pending} />
+          <ProductCard key={p.id} product={p} run={run} pending={pending} canManage={canManage} />
         ))}
         {category.products.length === 0 ? (
           <p className="text-sm text-muted">No products in this category yet.</p>
@@ -288,10 +308,12 @@ function ProductCard({
   product,
   run,
   pending,
+  canManage,
 }: {
   product: Product;
   run: (fn: () => Promise<MutationResult>) => void;
   pending: boolean;
+  canManage: boolean;
 }) {
   const [renaming, setRenaming] = useState(false);
   const [newVariant, setNewVariant] = useState("");
@@ -320,89 +342,98 @@ function ProductCard({
             {product.name}
           </span>
         )}
-        <div className="flex shrink-0 items-center gap-1.5">
-          <Button variant="secondary" className="min-h-8 text-xs" onClick={() => setRenaming(true)}>
-            Rename
-          </Button>
-          {product.active ? (
-            <Button
-              variant="danger"
-              className="min-h-8 text-xs"
-              disabled={pending}
-              onClick={() => run(() => setProductActive(product.id, false))}
-            >
-              Deactivate
+        {canManage ? (
+          <div className="flex shrink-0 items-center gap-1.5">
+            <Button variant="secondary" className="min-h-8 text-xs" onClick={() => setRenaming(true)}>
+              Rename
             </Button>
-          ) : (
-            <Button
-              variant="secondary"
-              className="min-h-8 text-xs"
-              disabled={pending}
-              onClick={() => run(() => setProductActive(product.id, true))}
-            >
-              Reactivate
-            </Button>
-          )}
-        </div>
+            {product.active ? (
+              <Button
+                variant="danger"
+                className="min-h-8 text-xs"
+                disabled={pending}
+                onClick={() => run(() => setProductActive(product.id, false))}
+              >
+                Deactivate
+              </Button>
+            ) : (
+              <Button
+                variant="secondary"
+                className="min-h-8 text-xs"
+                disabled={pending}
+                onClick={() => run(() => setProductActive(product.id, true))}
+              >
+                Reactivate
+              </Button>
+            )}
+          </div>
+        ) : null}
       </div>
 
       <div className="mt-2 space-y-1.5 border-t border-border pt-2">
+        {product.variants.length === 0 && !canManage ? (
+          <p className="text-xs text-muted">No variants.</p>
+        ) : null}
         {product.variants.map((v) => (
           <div key={v.id} className="flex items-center justify-between gap-2 text-sm">
             <span className={v.active ? "" : "text-muted line-through"}>{v.name}</span>
-            <div className="flex shrink-0 items-center gap-1.5">
-              <button
-                className="text-xs text-muted underline-offset-2 hover:underline"
-                onClick={() => {
-                  const next = window.prompt("Rename variant", v.name);
-                  if (next && next.trim() && next !== v.name) {
-                    run(() => renameVariant(v.id, next));
-                  }
-                }}
-              >
-                Rename
-              </button>
-              {v.active ? (
+            {canManage ? (
+              <div className="flex shrink-0 items-center gap-1.5">
                 <button
-                  className="text-xs text-[var(--rush)]"
-                  disabled={pending}
-                  onClick={() => run(() => setVariantActive(v.id, false))}
+                  className="text-xs text-muted underline-offset-2 hover:underline"
+                  onClick={() => {
+                    const next = window.prompt("Rename variant", v.name);
+                    if (next && next.trim() && next !== v.name) {
+                      run(() => renameVariant(v.id, next));
+                    }
+                  }}
                 >
-                  Deactivate
+                  Rename
                 </button>
-              ) : (
-                <button
-                  className="text-xs text-muted"
-                  disabled={pending}
-                  onClick={() => run(() => setVariantActive(v.id, true))}
-                >
-                  Reactivate
-                </button>
-              )}
-            </div>
+                {v.active ? (
+                  <button
+                    className="text-xs text-[var(--rush)]"
+                    disabled={pending}
+                    onClick={() => run(() => setVariantActive(v.id, false))}
+                  >
+                    Deactivate
+                  </button>
+                ) : (
+                  <button
+                    className="text-xs text-muted"
+                    disabled={pending}
+                    onClick={() => run(() => setVariantActive(v.id, true))}
+                  >
+                    Reactivate
+                  </button>
+                )}
+              </div>
+            ) : null}
           </div>
         ))}
-        <form
-          className="flex gap-1.5 pt-1"
-          onSubmit={(e) => {
-            e.preventDefault();
-            run(async () => {
-              const res = await createVariant(product.id, newVariant);
-              if (res.ok) setNewVariant("");
-              return res;
-            });
-          }}
-        >
-          <input
-            value={newVariant}
-            onChange={(e) => setNewVariant(e.target.value)}
-            placeholder="New variant"
-            className="min-h-8 flex-1 rounded-[var(--radius)] border border-border bg-surface px-2 text-xs"
-          />
-          <button type="submit" className="text-xs text-brand-600" disabled={pending}>
-            Add
-          </button>
-        </form>
+        {canManage ? (
+          <form
+            className="flex gap-1.5 pt-1"
+            onSubmit={(e) => {
+              e.preventDefault();
+              run(async () => {
+                const res = await createVariant(product.id, newVariant);
+                if (res.ok) setNewVariant("");
+                return res;
+              });
+            }}
+          >
+            <input
+              value={newVariant}
+              onChange={(e) => setNewVariant(e.target.value)}
+              placeholder="New variant"
+              className="min-h-8 flex-1 rounded-[var(--radius)] border border-border bg-surface px-2 text-xs"
+            />
+            <button type="submit" className="text-xs text-brand-600" disabled={pending}>
+              Add
+            </button>
+          </form>
+        ) : null}
       </div>
     </div>
   );
@@ -416,10 +447,12 @@ function AttributesTab({
   category,
   run,
   pending,
+  canManage,
 }: {
   category: ProductCategory;
   run: (fn: () => Promise<MutationResult>) => void;
   pending: boolean;
+  canManage: boolean;
 }) {
   const [form, setForm] = useState<AttributeInput>(emptyAttributeForm());
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -444,8 +477,8 @@ function AttributesTab({
     <div className="space-y-4">
       <p className="text-xs text-muted">
         These fields appear on intake when this category is picked for an item — e.g. Photo
-        Books&apos; Size/Lamination/Cover Type/Packaging. Add, edit, or remove fields here with no
-        code change needed.
+        Books&apos; Size/Lamination/Cover Type/Packaging.
+        {canManage ? " Add, edit, or remove fields here with no code change needed." : ""}
       </p>
 
       <div className="space-y-2">
@@ -462,19 +495,21 @@ function AttributesTab({
                 {attr.required ? "" : ", optional"})
               </span>
             </div>
-            <div className="flex shrink-0 items-center gap-2">
-              <Button variant="secondary" className="min-h-8 text-xs" onClick={() => startEdit(attr)}>
-                Edit
-              </Button>
-              <Button
-                variant="danger"
-                className="min-h-8 text-xs"
-                disabled={pending}
-                onClick={() => run(() => deleteAttribute(attr.id))}
-              >
-                Delete
-              </Button>
-            </div>
+            {canManage ? (
+              <div className="flex shrink-0 items-center gap-2">
+                <Button variant="secondary" className="min-h-8 text-xs" onClick={() => startEdit(attr)}>
+                  Edit
+                </Button>
+                <Button
+                  variant="danger"
+                  className="min-h-8 text-xs"
+                  disabled={pending}
+                  onClick={() => run(() => deleteAttribute(attr.id))}
+                >
+                  Delete
+                </Button>
+              </div>
+            ) : null}
           </div>
         ))}
         {category.attributes.length === 0 ? (
@@ -482,6 +517,7 @@ function AttributesTab({
         ) : null}
       </div>
 
+      {canManage ? (
       <form
         className="space-y-3 rounded-[var(--radius)] border border-border p-3"
         onSubmit={(e) => {
@@ -560,6 +596,7 @@ function AttributesTab({
           ) : null}
         </div>
       </form>
+      ) : null}
     </div>
   );
 }

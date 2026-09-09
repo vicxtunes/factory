@@ -67,6 +67,21 @@ export async function updateWorker(input: {
   return { ok: true };
 }
 
+export async function resetWorkerPin(input: { id: string; pin: string }): Promise<Result> {
+  await requireManager();
+  if (!isValidPinFormat(input.pin)) {
+    return { ok: false, error: "PIN must be 4–8 digits." };
+  }
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("workers")
+    .update({ pin_hash: await hashPin(input.pin) })
+    .eq("id", input.id);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/dashboard/workers");
+  return { ok: true };
+}
+
 export async function deactivateWorker(id: string): Promise<Result> {
   await requireManager();
   const admin = createAdminClient();
@@ -93,7 +108,7 @@ export async function reactivateWorker(id: string): Promise<Result> {
 }
 
 export async function createStation(name: string): Promise<Result> {
-  await requireManager();
+  await requireRole("boss");
   const trimmed = name.trim();
   if (!trimmed) return { ok: false, error: "Name is required." };
 
@@ -110,7 +125,7 @@ export async function createStation(name: string): Promise<Result> {
 }
 
 export async function renameStation(id: string, name: string): Promise<Result> {
-  await requireManager();
+  await requireRole("boss");
   const trimmed = name.trim();
   if (!trimmed) return { ok: false, error: "Name is required." };
 
@@ -147,7 +162,7 @@ export async function renameStation(id: string, name: string): Promise<Result> {
 }
 
 export async function deleteStation(id: string): Promise<Result> {
-  await requireManager();
+  await requireRole("boss");
   const admin = createAdminClient();
 
   const { data: existing, error: fetchError } = await admin
@@ -215,6 +230,66 @@ export async function createAdminUser(input: {
 
   revalidatePath("/dashboard/admins");
   return { ok: true, password };
+}
+
+const MIN_PASSWORD_LENGTH = 8;
+
+// Reset another dashboard user's password. Boss-only. Pass an explicit
+// password, or omit it to have one generated and returned.
+export async function setUserPassword(input: {
+  id: string;
+  password?: string;
+}): Promise<{ ok: true; password: string } | { ok: false; error: string }> {
+  await requireRole("boss");
+
+  const password = input.password?.trim() ? input.password.trim() : generatePassword();
+  if (password.length < MIN_PASSWORD_LENGTH) {
+    return { ok: false, error: `Password must be at least ${MIN_PASSWORD_LENGTH} characters.` };
+  }
+
+  const admin = createAdminClient();
+  const { error } = await admin.auth.admin.updateUserById(input.id, { password });
+  if (error) return { ok: false, error: error.message };
+
+  return { ok: true, password };
+}
+
+// Change a dashboard user's role. Boss-only. A boss cannot demote themselves —
+// that could lock the last super-admin out of user management.
+export async function updateUserRole(input: {
+  id: string;
+  role: AppRole;
+}): Promise<Result> {
+  const session = await requireRole("boss");
+  if (input.id === session.userId && input.role !== "boss") {
+    return { ok: false, error: "You can't change your own role." };
+  }
+  if (!["supervisor", "boss", "receptionist"].includes(input.role)) {
+    return { ok: false, error: "Invalid role." };
+  }
+
+  const admin = createAdminClient();
+  const { error } = await admin.from("profiles").update({ role: input.role }).eq("id", input.id);
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/dashboard/admins");
+  return { ok: true };
+}
+
+// Remove a dashboard user entirely (auth user + profile via FK cascade).
+// Boss-only, and you can't delete yourself.
+export async function deleteAdminUser(id: string): Promise<Result> {
+  const session = await requireRole("boss");
+  if (id === session.userId) {
+    return { ok: false, error: "You can't remove your own account." };
+  }
+
+  const admin = createAdminClient();
+  const { error } = await admin.auth.admin.deleteUser(id);
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/dashboard/admins");
+  return { ok: true };
 }
 
 export async function assignItem(
@@ -419,7 +494,7 @@ function uniqueViolation(error: { code?: string }, message: string): Result {
 }
 
 export async function createCategory(name: string): Promise<Result> {
-  await requireManager();
+  await requireRole("boss");
   const trimmed = name.trim();
   if (!trimmed) return { ok: false, error: "Name is required." };
 
@@ -431,7 +506,7 @@ export async function createCategory(name: string): Promise<Result> {
 }
 
 export async function renameCategory(id: string, name: string): Promise<Result> {
-  await requireManager();
+  await requireRole("boss");
   const trimmed = name.trim();
   if (!trimmed) return { ok: false, error: "Name is required." };
 
@@ -443,7 +518,7 @@ export async function renameCategory(id: string, name: string): Promise<Result> 
 }
 
 export async function setCategoryActive(id: string, active: boolean): Promise<Result> {
-  await requireManager();
+  await requireRole("boss");
   const admin = createAdminClient();
   const { error } = await admin.from("product_categories").update({ active }).eq("id", id);
   if (error) return { ok: false, error: error.message };
@@ -452,7 +527,7 @@ export async function setCategoryActive(id: string, active: boolean): Promise<Re
 }
 
 export async function createProduct(categoryId: string, name: string): Promise<Result> {
-  await requireManager();
+  await requireRole("boss");
   const trimmed = name.trim();
   if (!trimmed) return { ok: false, error: "Name is required." };
 
@@ -466,7 +541,7 @@ export async function createProduct(categoryId: string, name: string): Promise<R
 }
 
 export async function renameProduct(id: string, name: string): Promise<Result> {
-  await requireManager();
+  await requireRole("boss");
   const trimmed = name.trim();
   if (!trimmed) return { ok: false, error: "Name is required." };
 
@@ -478,7 +553,7 @@ export async function renameProduct(id: string, name: string): Promise<Result> {
 }
 
 export async function setProductActive(id: string, active: boolean): Promise<Result> {
-  await requireManager();
+  await requireRole("boss");
   const admin = createAdminClient();
   const { error } = await admin.from("products").update({ active }).eq("id", id);
   if (error) return { ok: false, error: error.message };
@@ -487,7 +562,7 @@ export async function setProductActive(id: string, active: boolean): Promise<Res
 }
 
 export async function createVariant(productId: string, name: string): Promise<Result> {
-  await requireManager();
+  await requireRole("boss");
   const trimmed = name.trim();
   if (!trimmed) return { ok: false, error: "Name is required." };
 
@@ -501,7 +576,7 @@ export async function createVariant(productId: string, name: string): Promise<Re
 }
 
 export async function renameVariant(id: string, name: string): Promise<Result> {
-  await requireManager();
+  await requireRole("boss");
   const trimmed = name.trim();
   if (!trimmed) return { ok: false, error: "Name is required." };
 
@@ -513,7 +588,7 @@ export async function renameVariant(id: string, name: string): Promise<Result> {
 }
 
 export async function setVariantActive(id: string, active: boolean): Promise<Result> {
-  await requireManager();
+  await requireRole("boss");
   const admin = createAdminClient();
   const { error } = await admin.from("product_variants").update({ active }).eq("id", id);
   if (error) return { ok: false, error: error.message };
@@ -543,7 +618,7 @@ function normalizeAttributeInput(input: AttributeInput) {
 }
 
 export async function createAttribute(categoryId: string, input: AttributeInput): Promise<Result> {
-  await requireManager();
+  await requireRole("boss");
   const normalized = normalizeAttributeInput(input);
   if (!normalized.name) return { ok: false, error: "Name is required." };
   if (normalized.type === "select" && (!normalized.options || normalized.options.length === 0)) {
@@ -560,7 +635,7 @@ export async function createAttribute(categoryId: string, input: AttributeInput)
 }
 
 export async function updateAttribute(id: string, input: AttributeInput): Promise<Result> {
-  await requireManager();
+  await requireRole("boss");
   const normalized = normalizeAttributeInput(input);
   if (!normalized.name) return { ok: false, error: "Name is required." };
   if (normalized.type === "select" && (!normalized.options || normalized.options.length === 0)) {
@@ -575,7 +650,7 @@ export async function updateAttribute(id: string, input: AttributeInput): Promis
 }
 
 export async function deleteAttribute(id: string): Promise<Result> {
-  await requireManager();
+  await requireRole("boss");
   const admin = createAdminClient();
   const { error } = await admin.from("category_attributes").delete().eq("id", id);
   if (error) return { ok: false, error: error.message };
@@ -589,7 +664,7 @@ export async function deleteAttribute(id: string): Promise<Result> {
 // ---------------------------------------------------------------------------
 
 export async function addDesigner(input: { name: string; pin: string }): Promise<Result> {
-  await requireManager();
+  await requireRole("boss");
   if (!input.name.trim()) return { ok: false, error: "Name is required." };
   if (!isValidPinFormat(input.pin)) {
     return { ok: false, error: "PIN must be 4–8 digits." };
@@ -605,8 +680,23 @@ export async function addDesigner(input: { name: string; pin: string }): Promise
   return { ok: true };
 }
 
+export async function resetDesignerPin(input: { id: string; pin: string }): Promise<Result> {
+  await requireRole("boss");
+  if (!isValidPinFormat(input.pin)) {
+    return { ok: false, error: "PIN must be 4–8 digits." };
+  }
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("designers")
+    .update({ pin_hash: await hashPin(input.pin) })
+    .eq("id", input.id);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/dashboard/designers");
+  return { ok: true };
+}
+
 export async function deactivateDesigner(id: string): Promise<Result> {
-  await requireManager();
+  await requireRole("boss");
   const admin = createAdminClient();
   // Trigger unassign_orders_on_designer_deactivate() clears in-progress orders.
   const { error } = await admin.from("designers").update({ active: false }).eq("id", id);
@@ -616,7 +706,7 @@ export async function deactivateDesigner(id: string): Promise<Result> {
 }
 
 export async function reactivateDesigner(id: string): Promise<Result> {
-  await requireManager();
+  await requireRole("boss");
   const admin = createAdminClient();
   const { error } = await admin.from("designers").update({ active: true }).eq("id", id);
   if (error) return { ok: false, error: error.message };

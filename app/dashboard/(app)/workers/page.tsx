@@ -25,12 +25,18 @@ export default async function WorkersPage() {
 
   const workers = (workersRes.data ?? []) as Omit<Worker, "pin_hash">[];
   const stations = (stationsRes.data ?? []) as Station[];
+  const canManageStations = session.role === "boss";
 
   return (
     <div className="space-y-8">
       <section>
         <SectionLabel>Stations</SectionLabel>
-        <StationPanel stations={stations} />
+        {!canManageStations ? (
+          <p className="mb-3 text-sm text-muted">
+            View only — stations are managed by the boss.
+          </p>
+        ) : null}
+        <StationPanel stations={stations} canManage={canManageStations} />
       </section>
 
       <section>
