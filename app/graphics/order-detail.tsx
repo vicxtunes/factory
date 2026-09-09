@@ -8,7 +8,7 @@ import { Linkify } from "@/components/ui/Linkify";
 import { AddMediaButton } from "@/components/media/AddMediaButton";
 import { MediaLinks } from "@/components/media/MediaLinks";
 import { ItemAttributes } from "@/components/order/ItemAttributes";
-import type { OrderItemWithOrder, ProductCategory } from "@/lib/types";
+import { STATUS_LABELS, type OrderItemWithOrder, type ProductCategory } from "@/lib/types";
 
 import {
   advanceItemToFactory,
@@ -59,12 +59,10 @@ export function OrderDetail({
   order,
   catalog,
   onChanged,
-  onSent,
 }: {
   order: DesignerOrder;
   catalog: ProductCategory[];
   onChanged: () => void;
-  onSent: () => void;
 }) {
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -75,8 +73,12 @@ export function OrderDetail({
   const [orderNotes, setOrderNotes] = useState("");
   const [itemEdits, setItemEdits] = useState<Record<string, ItemEditState>>({});
 
-  const editableItems = order.items.filter((i) => i.stage === "with_designer");
-  const allSent = editableItems.length === 0;
+  // A mistake can surface after an item's already in production, so editing
+  // stays open until the factory has actually finished it — only "sending"
+  // (still with_designer -> factory) is a one-way door.
+  const editableItems = order.items.filter((i) => i.production_status !== "completed");
+  const canEditAnything = editableItems.length > 0;
+  const hasPendingSend = order.items.some((i) => i.stage === "with_designer");
 
   function startEditing() {
     setError(null);
@@ -139,7 +141,7 @@ export function OrderDetail({
     start(async () => {
       const res = await completeDesignerWork(order.orderId);
       if (!res.ok) setError(res.error);
-      else onSent();
+      else onChanged();
     });
   }
 
@@ -159,7 +161,7 @@ export function OrderDetail({
             {order.deadlineAt ? ` · Deadline ${new Date(order.deadlineAt).toLocaleString()}` : ""}
           </p>
         </div>
-        {!editing && !allSent ? (
+        {!editing && canEditAnything ? (
           <Button variant="secondary" className="text-xs" disabled={pending} onClick={startEditing}>
             Edit order
           </Button>
@@ -334,7 +336,7 @@ export function OrderDetail({
                     </div>
                     {sentToFactory ? (
                       <span className="shrink-0 rounded-full bg-success-50 px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wide text-success-700 dark:bg-success-500/15 dark:text-success-500">
-                        Sent to factory
+                        {STATUS_LABELS[item.production_status]}
                       </span>
                     ) : null}
                   </div>
@@ -376,11 +378,11 @@ export function OrderDetail({
               Cancel
             </Button>
           </div>
-        ) : (
-          <Button variant="primary" disabled={pending || allSent} onClick={finishOrder}>
+        ) : hasPendingSend ? (
+          <Button variant="primary" disabled={pending} onClick={finishOrder}>
             {pending ? "Sending…" : "Fully done — send remaining items to factory"}
           </Button>
-        )}
+        ) : null}
       </div>
     </div>
   );

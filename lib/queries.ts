@@ -22,16 +22,17 @@ export async function fetchBoardItems(): Promise<OrderItemWithOrder[]> {
   return (data ?? []) as unknown as OrderItemWithOrder[];
 }
 
-// Every item of an order still routed to this designer — including items
-// they've already individually sent to the factory — so the whole order
-// (and their progress on it) stays visible until every item has moved on.
+// Every item ever routed to this designer — including items already sent
+// to the factory, or already finished — so an order never just vanishes
+// from their board. The client (app/graphics/board.tsx) splits these into
+// "in progress" vs. "completed" for display; a designer can still correct
+// a mistake on any item the factory hasn't fully completed yet.
 export async function fetchDesignerItems(designerId: string): Promise<OrderItemWithOrder[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("order_items")
     .select(ITEM_SELECT)
-    .eq("order.assigned_designer_id", designerId)
-    .eq("order.stage", "with_designer");
+    .eq("order.assigned_designer_id", designerId);
   if (error) throw new Error(error.message);
   return (data ?? []) as unknown as OrderItemWithOrder[];
 }

@@ -22,9 +22,11 @@ function formatDate(iso: string | null): string {
 
 export function ItemDetail({
   item,
+  workerId,
   onChanged,
 }: {
   item: OrderItemWithOrder;
+  workerId: string;
   onChanged: () => void;
 }) {
   const [pending, start] = useTransition();
@@ -34,6 +36,7 @@ export function ItemDetail({
 
   const photoLink = item.media_link ?? item.order.media_link;
   const isCompleted = item.production_status === "completed";
+  const isMine = item.assigned_worker_id === workerId;
   const nextLabel = isCompleted
     ? null
     : item.production_status === "ready_for_pickup"
@@ -120,46 +123,54 @@ export function ItemDetail({
         <AddMediaButton orderItemId={item.id} onUploaded={onChanged} />
       </div>
 
-      <div className="flex flex-wrap gap-2 border-t border-border pt-3">
-        {nextLabel ? (
-          <Button
-            variant="primary"
-            className="text-xs"
-            disabled={pending}
-            onClick={() => run(() => advanceStatus(item.id))}
-          >
-            {nextLabel}
-          </Button>
-        ) : (
-          <span className="inline-flex min-h-11 items-center text-xs text-muted">
-            {STATUS_LABELS[item.production_status]}
-          </span>
-        )}
+      {isMine || isCompleted ? (
+        <div className="flex flex-wrap gap-2 border-t border-border pt-3">
+          {nextLabel && isMine ? (
+            <Button
+              variant="primary"
+              className="text-xs"
+              disabled={pending}
+              onClick={() => run(() => advanceStatus(item.id))}
+            >
+              {nextLabel}
+            </Button>
+          ) : (
+            <span className="inline-flex min-h-11 items-center text-xs text-muted">
+              {STATUS_LABELS[item.production_status]}
+            </span>
+          )}
 
-        {!isCompleted && !item.is_delayed ? (
-          <Button
-            variant="secondary"
-            className="text-xs"
-            disabled={pending}
-            onClick={() => setDelayOpen((v) => !v)}
-          >
-            Flag delay
-          </Button>
-        ) : null}
+          {isMine && !isCompleted && !item.is_delayed ? (
+            <Button
+              variant="secondary"
+              className="text-xs"
+              disabled={pending}
+              onClick={() => setDelayOpen((v) => !v)}
+            >
+              Flag delay
+            </Button>
+          ) : null}
 
-        {item.is_delayed ? (
-          <Button
-            variant="secondary"
-            className="text-xs"
-            disabled={pending}
-            onClick={() => run(() => clearDelay(item.id))}
-          >
-            Clear delay
-          </Button>
-        ) : null}
-      </div>
+          {isMine && item.is_delayed ? (
+            <Button
+              variant="secondary"
+              className="text-xs"
+              disabled={pending}
+              onClick={() => run(() => clearDelay(item.id))}
+            >
+              Clear delay
+            </Button>
+          ) : null}
+        </div>
+      ) : (
+        <p className="border-t border-border pt-3 text-xs text-muted">
+          {item.assigned_worker_id
+            ? "This item is assigned to another worker — ask a supervisor to reassign it to you."
+            : "This item isn't assigned yet — ask a supervisor to assign it to you before you can update it."}
+        </p>
+      )}
 
-      {delayOpen ? (
+      {isMine && delayOpen ? (
         <div className="space-y-2">
           <textarea
             className="w-full rounded-[var(--radius)] border border-border bg-surface px-2 py-1 text-xs"
