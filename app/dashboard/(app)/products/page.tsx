@@ -14,11 +14,17 @@ export default async function ProductsPage() {
   if (!session || !isManagerRole(session.role)) redirect("/dashboard");
 
   const categories = await fetchProductCatalog();
+  const canManage = session.role === "boss";
 
   return (
     <div className="space-y-6">
       <SectionLabel>Products</SectionLabel>
-      <ProductPanel categories={categories} />
+      {!canManage ? (
+        <p className="text-sm text-muted">
+          View only — the product catalog is managed by the boss.
+        </p>
+      ) : null}
+      <ProductPanel categories={categories} canManage={canManage} />
     </div>
   );
 }

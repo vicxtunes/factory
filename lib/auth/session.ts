@@ -96,8 +96,8 @@ export async function requireRole(role: AppRole): Promise<DashboardSession> {
   return session;
 }
 
-// Receptionist and supervisor share full CRUD access; boss is read-only
-// (except the admins panel, gated separately via requireRole("boss")).
+// Receptionist, supervisor and boss all have full CRUD access. Boss also
+// reaches the admins panel (user management), gated via requireRole("boss").
 export async function requireManager(): Promise<DashboardSession> {
   const session = await requireDashboard();
   if (!isManagerRole(session.role)) {

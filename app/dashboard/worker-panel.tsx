@@ -7,10 +7,12 @@ import { Button } from "@/components/ui/Button";
 import { Field, Select, TextInput } from "@/components/ui/Field";
 import type { Station, Worker } from "@/lib/types";
 
+import { PinReset } from "./pin-reset";
 import {
   addWorker,
   deactivateWorker,
   reactivateWorker,
+  resetWorkerPin,
   updateWorker,
 } from "./actions";
 
@@ -148,25 +150,31 @@ export function WorkerPanel({
                     </span>
                   </td>
                   <td className="px-5 py-3">
-                    {w.active ? (
-                      <Button
-                        variant="danger"
-                        className="min-h-9 text-xs"
-                        disabled={pending}
-                        onClick={() => run(() => deactivateWorker(w.id))}
-                      >
-                        Deactivate
-                      </Button>
-                    ) : (
-                      <Button
-                        variant="secondary"
-                        className="min-h-9 text-xs"
-                        disabled={pending}
-                        onClick={() => run(() => reactivateWorker(w.id))}
-                      >
-                        Reactivate
-                      </Button>
-                    )}
+                    <div className="flex flex-wrap items-center gap-2">
+                      {w.active ? (
+                        <Button
+                          variant="danger"
+                          className="min-h-9 text-xs"
+                          disabled={pending}
+                          onClick={() => run(() => deactivateWorker(w.id))}
+                        >
+                          Deactivate
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="secondary"
+                          className="min-h-9 text-xs"
+                          disabled={pending}
+                          onClick={() => run(() => reactivateWorker(w.id))}
+                        >
+                          Reactivate
+                        </Button>
+                      )}
+                      <PinReset
+                        pending={pending}
+                        onSave={(pin) => run(() => resetWorkerPin({ id: w.id, pin }))}
+                      />
+                    </div>
                   </td>
                 </tr>
               ))}

@@ -20,11 +20,17 @@ export default async function DesignersPage() {
     .order("name");
 
   const designers = (data ?? []) as Omit<Designer, "pin_hash">[];
+  const canManage = session.role === "boss";
 
   return (
     <div className="space-y-6">
       <SectionLabel>Graphics designers</SectionLabel>
-      <DesignerPanel designers={designers} />
+      {!canManage ? (
+        <p className="text-sm text-muted">
+          View only — designers are managed by the boss.
+        </p>
+      ) : null}
+      <DesignerPanel designers={designers} canManage={canManage} />
     </div>
   );
 }
