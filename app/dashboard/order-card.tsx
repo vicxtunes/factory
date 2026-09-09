@@ -42,7 +42,7 @@ export function OrderCard({
         <span>{assignedName ?? "Unassigned"}</span>
       </div>
 
-      {item.order.stage === "with_designer" ? (
+      {item.stage === "with_designer" ? (
         <p className="mt-2 rounded bg-brand-500/10 px-2 py-1 text-xs text-brand-600">
           With designer{item.order.designer_name ? `: ${item.order.designer_name}` : ""}
         </p>

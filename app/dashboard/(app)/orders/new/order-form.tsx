@@ -5,6 +5,7 @@ import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/Button";
 import { Field, Select, TextArea, TextInput } from "@/components/ui/Field";
 import { SectionLabel } from "@/components/ui/SectionLabel";
+import { addMediaLink } from "@/lib/cloudinary/actions";
 import { uploadFileToCloudinary } from "@/lib/cloudinary/upload-client";
 import type { Agent, Client, DesignerPublic, OrderType, ProductCategory } from "@/lib/types";
 
@@ -30,6 +31,14 @@ interface GeneralInfo {
 
 interface ItemFormState extends OrderItemInput {
   files: File[];
+  linksText: string;
+}
+
+function parseLinks(linksText: string): string[] {
+  return linksText
+    .split(/[\n,]/)
+    .map((s) => s.trim())
+    .filter(Boolean);
 }
 
 function emptyGeneral(): GeneralInfo {
@@ -57,6 +66,7 @@ function emptyItem(): ItemFormState {
     attributes: {},
     item_notes: "",
     files: [],
+    linksText: "",
   };
 }
 
@@ -166,6 +176,13 @@ export function OrderForm({
           setUploadStatus(`Uploading "${file.name}"…`);
           const uploadRes = await uploadFileToCloudinary(itemId, file);
           if (!uploadRes.ok) warnings.push(uploadRes.error);
+        }
+
+        const links = parseLinks(items[formIndex]?.linksText ?? "");
+        for (const link of links) {
+          setUploadStatus(`Adding link "${link}"…`);
+          const linkRes = await addMediaLink(itemId, link);
+          if (!linkRes.ok) warnings.push(linkRes.error);
         }
       }
       setUploadStatus(null);
@@ -668,12 +685,21 @@ function ItemRow({
             <p className="mt-1 text-xs text-muted">{item.files.length} file(s) selected.</p>
           ) : null}
         </Field>
-        <Field label="Item notes">
+        <Field label="Or paste links" hint="Drive, Dropbox, etc. — one per line">
           <TextArea
-            value={item.item_notes}
-            onChange={(e) => onChange(index, { item_notes: e.target.value })}
+            value={item.linksText}
+            onChange={(e) => onChange(index, { linksText: e.target.value })}
+            placeholder={"https://…"}
           />
         </Field>
+        <div className="sm:col-span-2">
+          <Field label="Item notes">
+            <TextArea
+              value={item.item_notes}
+              onChange={(e) => onChange(index, { item_notes: e.target.value })}
+            />
+          </Field>
+        </div>
       </div>
     </div>
   );

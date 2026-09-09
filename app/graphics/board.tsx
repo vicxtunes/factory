@@ -6,7 +6,7 @@ import { Drawer } from "@/components/ui/Drawer";
 import { SectionLabel } from "@/components/ui/SectionLabel";
 import { createClient } from "@/lib/supabase/browser";
 import { ORDER_ITEM_SELECT } from "@/lib/item-select";
-import type { OrderItemWithOrder } from "@/lib/types";
+import type { OrderItemWithOrder, ProductCategory } from "@/lib/types";
 
 import { OrderCard, type DesignerOrder } from "./order-card";
 import { OrderDetail } from "./order-detail";
@@ -27,6 +27,7 @@ function groupByOrder(items: OrderItemWithOrder[]): DesignerOrder[] {
       deadlineAt: item.order.deadline_at,
       deliveryDate: item.order.delivery_date,
       brief: item.order.designer_brief,
+      orderNotes: item.order.order_notes,
       items: [item],
     });
   }
@@ -37,10 +38,12 @@ export function Board({
   initialItems,
   designerId,
   designerName,
+  catalog,
 }: {
   initialItems: OrderItemWithOrder[];
   designerId: string;
   designerName: string;
+  catalog: ProductCategory[];
 }) {
   const [items, setItems] = useState(initialItems);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
@@ -107,6 +110,7 @@ export function Board({
         {selectedOrder ? (
           <OrderDetail
             order={selectedOrder}
+            catalog={catalog}
             onChanged={refetch}
             onSent={() => setSelectedOrderId(null)}
           />

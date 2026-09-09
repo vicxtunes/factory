@@ -10,6 +10,7 @@ export interface DesignerOrder {
   deadlineAt: string | null;
   deliveryDate: string | null;
   brief: string | null;
+  orderNotes: string | null;
   items: OrderItemWithOrder[];
 }
 
@@ -22,6 +23,8 @@ function formatDate(iso: string | null): string {
 }
 
 export function OrderCard({ order, onOpen }: { order: DesignerOrder; onOpen: () => void }) {
+  const sent = order.items.filter((i) => i.stage === "factory").length;
+
   return (
     <article>
       <button
@@ -44,6 +47,13 @@ export function OrderCard({ order, onOpen }: { order: DesignerOrder; onOpen: () 
           {order.items.length} item{order.items.length === 1 ? "" : "s"} · Due{" "}
           <span className="tnum text-foreground">{formatDate(order.deliveryDate)}</span>
         </p>
+
+        {sent > 0 ? (
+          <p className="mt-1 text-xs text-brand-600">
+            <span className="tnum">{sent}</span>/<span className="tnum">{order.items.length}</span> already
+            sent to the factory
+          </p>
+        ) : null}
 
         {order.brief ? (
           <p className="mt-2 line-clamp-2 text-xs text-muted">{order.brief}</p>
