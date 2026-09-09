@@ -107,10 +107,12 @@ export async function requireManager(): Promise<DashboardSession> {
 }
 
 // Media upload/session actions are called from the dashboard (Supabase Auth,
-// order intake + "add more photos") and from /graphics (designer PIN
-// session, attaching design files) — any signed-in surface may attach photos.
+// order intake + "add more photos"), from /graphics (designer PIN session,
+// attaching design files), and from /factory (worker PIN session, attaching
+// finished-item photos) — any signed-in surface may attach photos.
 export async function requireMediaUploadAccess(): Promise<void> {
   if (await getDashboardSession()) return;
   if (await getDesignerSession()) return;
+  if (await getWorkerSession()) return;
   throw new Error("Not signed in.");
 }

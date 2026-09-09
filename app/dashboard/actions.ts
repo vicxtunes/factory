@@ -795,6 +795,7 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
       attributes,
       urgency: input.order_type === "express" ? "urgent" : "normal",
       item_notes: clean(item.item_notes),
+      stage: input.route === "designer" ? "with_designer" : "factory",
     });
   }
 

@@ -96,3 +96,36 @@ export async function confirmItemUpload(
   revalidatePath("/graphics");
   return { ok: true };
 }
+
+// Records a pasted link (Drive, Dropbox, WeTransfer, etc.) alongside
+// Cloudinary uploads — same order_item_media table, just without a
+// cloudinary_public_id, so it renders through the same MediaLinks list.
+export async function addMediaLink(orderItemId: string, url: string): Promise<Result> {
+  await requireMediaUploadAccess();
+
+  const trimmed = url.trim();
+  if (!orderItemId || !trimmed) return { ok: false, error: "Missing link." };
+
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    return { ok: false, error: "Enter a valid link (starting with http:// or https://)." };
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    return { ok: false, error: "Enter a valid link (starting with http:// or https://)." };
+  }
+
+  const admin = createAdminClient();
+  const { error } = await admin.from("order_item_media").insert({
+    order_item_id: orderItemId,
+    file_name: trimmed,
+    secure_url: trimmed,
+  });
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/dashboard");
+  revalidatePath("/factory");
+  revalidatePath("/graphics");
+  return { ok: true };
+}

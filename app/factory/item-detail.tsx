@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 
 import { Button } from "@/components/ui/Button";
+import { Linkify } from "@/components/ui/Linkify";
 import { UrgencyBadge } from "@/components/ui/UrgencyBadge";
 import { AddMediaButton } from "@/components/media/AddMediaButton";
 import { MediaLinks } from "@/components/media/MediaLinks";
@@ -100,14 +101,14 @@ export function ItemDetail({
       {item.item_notes ? (
         <div>
           <p className="text-xs uppercase tracking-wide text-muted">Notes</p>
-          <p className="mt-1 text-xs">{item.item_notes}</p>
+          <Linkify text={item.item_notes} className="mt-1 text-xs" />
         </div>
       ) : null}
 
       {item.order.media_notes ? (
         <div>
           <p className="text-xs uppercase tracking-wide text-muted">Photos</p>
-          <p className="mt-1 text-xs">{item.order.media_notes}</p>
+          <Linkify text={item.order.media_notes} className="mt-1 text-xs" />
         </div>
       ) : null}
 

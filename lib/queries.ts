@@ -9,19 +9,22 @@ import {
   type ProductCategory,
 } from "@/lib/types";
 
-// Items visible on the factory board: their order has reached the factory
-// stage (not still sitting with a graphics designer).
+// Items visible on the factory board: the item itself has reached the
+// factory stage — a designer may release items one at a time, so this is
+// an item-level check, not an order-level one (see app/graphics/actions.ts).
 export async function fetchBoardItems(): Promise<OrderItemWithOrder[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("order_items")
     .select(ITEM_SELECT)
-    .eq("order.stage", "factory");
+    .eq("stage", "factory");
   if (error) throw new Error(error.message);
   return (data ?? []) as unknown as OrderItemWithOrder[];
 }
 
-// Items belonging to orders currently routed to this designer.
+// Every item of an order still routed to this designer — including items
+// they've already individually sent to the factory — so the whole order
+// (and their progress on it) stays visible until every item has moved on.
 export async function fetchDesignerItems(designerId: string): Promise<OrderItemWithOrder[]> {
   const supabase = await createClient();
   const { data, error } = await supabase

@@ -45,7 +45,7 @@ export function DisplayBoard({ initialItems }: { initialItems: OrderItemWithOrde
     const { data } = await supabaseRef.current
       .from("order_items")
       .select(ORDER_ITEM_SELECT)
-      .eq("order.stage", "factory");
+      .eq("stage", "factory");
     if (data) setItems(data as unknown as OrderItemWithOrder[]);
   }, []);
 

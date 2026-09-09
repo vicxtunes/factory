@@ -525,3 +525,25 @@ create trigger designers_unassign_on_deactivate
 
 alter table order_item_media rename column drive_file_id to cloudinary_public_id;
 alter table order_item_media rename column web_view_link  to secure_url;
+-- Factory Order Tracker — allow order_item_media rows for pasted links
+-- (Drive/Dropbox/etc.), not just direct Cloudinary uploads. A pasted link
+-- has no Cloudinary asset behind it, so cloudinary_public_id must be
+-- nullable; secure_url still holds the link itself either way.
+
+alter table order_item_media alter column cloudinary_public_id drop not null;
+-- Factory Order Tracker — move "stage" from purely order-level to
+-- item-level. A designer can now send finished items to the factory one at
+-- a time while still working the rest of the order, instead of only being
+-- able to release the whole order at once. orders.stage is kept (now means
+-- "has the designer fully released every item yet") so the order stays on
+-- the designer's board, and the existing "with designer" banners, until
+-- every item has moved — see app/graphics/actions.ts.
+
+alter table order_items add column stage order_stage not null default 'factory';
+
+update order_items oi
+set stage = o.stage
+from orders o
+where oi.order_id = o.id;
+
+create index order_items_stage_idx on order_items (stage);

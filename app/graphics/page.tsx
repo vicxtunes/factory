@@ -1,6 +1,6 @@
 import { Header } from "@/components/ui/Header";
 import { getDesignerSession } from "@/lib/auth/session";
-import { fetchDesignerItems, fetchDesigners } from "@/lib/queries";
+import { fetchDesignerItems, fetchDesigners, fetchProductCatalog } from "@/lib/queries";
 
 import { Board } from "./board";
 import { DesignerLogin } from "./login";
@@ -24,7 +24,10 @@ export default async function GraphicsPage() {
     );
   }
 
-  const items = await fetchDesignerItems(session.designer_id);
+  const [items, catalog] = await Promise.all([
+    fetchDesignerItems(session.designer_id),
+    fetchProductCatalog(true),
+  ]);
 
   return (
     <>
@@ -38,7 +41,12 @@ export default async function GraphicsPage() {
         }
       />
       <main className="mx-auto w-full max-w-6xl flex-1 px-3 py-4">
-        <Board initialItems={items} designerId={session.designer_id} designerName={session.name} />
+        <Board
+          initialItems={items}
+          designerId={session.designer_id}
+          designerName={session.name}
+          catalog={catalog}
+        />
       </main>
     </>
   );

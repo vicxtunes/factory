@@ -68,6 +68,7 @@ export interface OrderItem {
   box_type: string | null;
   urgency: Urgency;
   item_notes: string | null;
+  stage: OrderStage;
   production_status: ProductionStatus;
   is_delayed: boolean;
   delay_reason: string | null;
@@ -200,6 +201,7 @@ export interface OrderItemWithOrder extends OrderItem {
     | "assigned_designer_id"
     | "designer_name"
     | "designer_brief"
+    | "order_notes"
     | "media_link"
     | "media_notes"
     | "order_type"

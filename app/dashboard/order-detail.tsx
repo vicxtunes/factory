@@ -3,6 +3,7 @@
 import { useTransition } from "react";
 
 import { Select } from "@/components/ui/Field";
+import { Linkify } from "@/components/ui/Linkify";
 import { UrgencyBadge } from "@/components/ui/UrgencyBadge";
 import { AddMediaButton } from "@/components/media/AddMediaButton";
 import { MediaLinks } from "@/components/media/MediaLinks";
@@ -95,24 +96,24 @@ export function OrderDetail({
       {item.item_notes ? (
         <div>
           <p className="text-xs uppercase tracking-wide text-muted">Notes</p>
-          <p className="mt-1 text-xs">{item.item_notes}</p>
+          <Linkify text={item.item_notes} className="mt-1 text-xs" />
         </div>
       ) : null}
 
       {item.order.media_notes ? (
         <div>
           <p className="text-xs uppercase tracking-wide text-muted">Photos</p>
-          <p className="mt-1 text-xs">{item.order.media_notes}</p>
+          <Linkify text={item.order.media_notes} className="mt-1 text-xs" />
         </div>
       ) : null}
 
-      {item.order.stage === "with_designer" ? (
+      {item.stage === "with_designer" ? (
         <div className="rounded-[var(--radius)] border border-brand-500/30 bg-brand-500/5 p-3">
           <p className="text-xs uppercase tracking-wide text-brand-600">
             With designer{item.order.designer_name ? `: ${item.order.designer_name}` : ""}
           </p>
           {item.order.designer_brief ? (
-            <p className="mt-1 text-xs">{item.order.designer_brief}</p>
+            <Linkify text={item.order.designer_brief} className="mt-1 text-xs" />
           ) : null}
         </div>
       ) : null}
