@@ -1,6 +1,13 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getDashboardSession } from "@/lib/auth/session";
-import { fetchAllItems, fetchCategoryNames } from "@/lib/queries";
+import {
+  fetchAgents,
+  fetchAllItems,
+  fetchCategoryNames,
+  fetchClients,
+  fetchDesigners,
+  fetchProductCatalog,
+} from "@/lib/queries";
 import { isManagerRole, type Worker } from "@/lib/types";
 
 import { OrderBoard } from "../../order-board";
@@ -12,7 +19,7 @@ export default async function OrdersPage() {
   const canManage = session ? isManagerRole(session.role) : false;
 
   const admin = createAdminClient();
-  const [items, workersRes, categories] = await Promise.all([
+  const [items, workersRes, categories, catalog, clients, agents, designers] = await Promise.all([
     fetchAllItems(),
     admin
       .from("workers")
@@ -20,6 +27,10 @@ export default async function OrdersPage() {
       .eq("active", true)
       .order("name"),
     fetchCategoryNames(),
+    fetchProductCatalog(true),
+    fetchClients(true),
+    fetchAgents(true),
+    fetchDesigners(true),
   ]);
 
   const activeWorkers = (workersRes.data ?? []) as Omit<Worker, "pin_hash">[];
@@ -30,6 +41,10 @@ export default async function OrdersPage() {
       workers={activeWorkers}
       categories={categories}
       canManage={canManage}
+      catalog={catalog}
+      clients={clients}
+      agents={agents}
+      designers={designers}
     />
   );
 }

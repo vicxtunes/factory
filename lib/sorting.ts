@@ -1,28 +1,22 @@
 import type { OrderItemWithOrder, OrderType } from "@/lib/types";
 
+// The floor works its queue from the BOTTOM up — the oldest order is the next
+// job. So the display stacks newest on top, oldest at the bottom, and express
+// orders sink below the normal ones (still "jump the queue": they're worked
+// first because they're nearest the bottom). Urgency drives the badge colour,
+// not the position. One policy, used by every board: factory, display screen,
+// dashboard list + table.
 const ORDER_TYPE_RANK: Record<OrderType, number> = {
-  express: 0,
-  normal: 1,
+  normal: 0, // normal orders sit above…
+  express: 1, // …express, which sinks to the bottom to be worked first
 };
 
-// The one display policy, used by every board (factory, display screen,
-// dashboard list + table): first-come-first-served by creation time. Express
-// orders — and only express orders — are allowed to jump the queue; among
-// themselves they order by deadline (soonest first), then creation time.
-// Urgency drives the badge colour, not the position.
 function compareForDisplay(a: OrderItemWithOrder, b: OrderItemWithOrder): number {
   const byType = ORDER_TYPE_RANK[a.order.order_type] - ORDER_TYPE_RANK[b.order.order_type];
   if (byType !== 0) return byType;
 
-  if (a.order.order_type === "express") {
-    const da = a.order.deadline_at;
-    const db = b.order.deadline_at;
-    if (da && db && da !== db) return da.localeCompare(db);
-    if (da && !db) return -1;
-    if (db && !da) return 1;
-  }
-
-  return a.created_at.localeCompare(b.created_at);
+  // Newest first: a later created_at sorts earlier (higher up the list).
+  return b.created_at.localeCompare(a.created_at);
 }
 
 export function sortItems<T extends OrderItemWithOrder>(items: T[]): T[] {
