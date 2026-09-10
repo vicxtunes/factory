@@ -1,25 +1,35 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 
 import { Button } from "@/components/ui/Button";
 import { Field, Select, TextArea, TextInput } from "@/components/ui/Field";
 import { SectionLabel } from "@/components/ui/SectionLabel";
 import { addMediaLink } from "@/lib/cloudinary/actions";
 import { uploadFileToCloudinary } from "@/lib/cloudinary/upload-client";
-import type { Agent, Client, DesignerPublic, OrderType, ProductCategory } from "@/lib/types";
+import type {
+  ClientDuplicateHit,
+  CreateOrderResult,
+  OrderFormPayload,
+  OrderItemInput,
+} from "@/lib/orders/types";
+import type {
+  Agent,
+  Client,
+  DesignerPublic,
+  OrderType,
+  ProductCategory,
+  WorkerPublic,
+} from "@/lib/types";
 
-import {
-  createOrder,
-  type CreateOrderInput,
-  type OrderItemInput,
-} from "../../../actions";
+type Variant = "manager" | "designer";
 
 interface GeneralInfo {
   customerType: "new" | "existing";
   clientId: string;
   newClient: { name: string; email: string; phone: string };
   agentId: string;
+  responsibleWorkerId: string;
   orderType: OrderType;
   deliveryDate: string;
   deadlineAt: string;
@@ -41,17 +51,18 @@ function parseLinks(linksText: string): string[] {
     .filter(Boolean);
 }
 
-function emptyGeneral(): GeneralInfo {
+function emptyGeneral(variant: Variant): GeneralInfo {
   return {
     customerType: "new",
     clientId: "",
     newClient: { name: "", email: "", phone: "" },
     agentId: "",
+    responsibleWorkerId: "",
     orderType: "normal",
     deliveryDate: "",
     deadlineAt: "",
     orderNotes: "",
-    route: "factory",
+    route: variant === "designer" ? "designer" : "factory",
     designerId: "",
     designerBrief: "",
   };
@@ -70,42 +81,58 @@ function emptyItem(): ItemFormState {
   };
 }
 
-function validateGeneral(general: GeneralInfo): string | null {
+function validateGeneral(general: GeneralInfo, variant: Variant): string | null {
   if (general.customerType === "new" && !general.newClient.name.trim()) {
     return "New client name is required.";
   }
   if (general.customerType === "existing" && !general.clientId) {
     return "Select an existing client.";
   }
+  if (!general.responsibleWorkerId) {
+    return "Pick the worker responsible for this order.";
+  }
   if (!general.deliveryDate) return "Delivery date is required.";
   if (general.orderType === "express" && !general.deadlineAt) {
     return "Express orders need a deadline date & time.";
   }
-  if (general.route === "designer" && !general.designerId) {
+  if (variant === "manager" && general.route === "designer" && !general.designerId) {
     return "Select which designer this order goes to.";
   }
   return null;
 }
 
 export function OrderForm({
+  variant,
   clients,
   agents,
   catalog,
-  designers,
+  workers,
+  designers = [],
+  onCreate,
+  onCheckDuplicates,
 }: {
+  variant: Variant;
   clients: Client[];
   agents: Agent[];
   catalog: ProductCategory[];
-  designers: DesignerPublic[];
+  workers: WorkerPublic[];
+  designers?: DesignerPublic[];
+  onCreate: (payload: OrderFormPayload) => Promise<CreateOrderResult>;
+  onCheckDuplicates: (input: {
+    name: string;
+    email: string;
+    phone: string;
+  }) => Promise<{ ok: true; hits: ClientDuplicateHit[] } | { ok: false; error: string }>;
 }) {
   const [step, setStep] = useState<1 | 2>(1);
-  const [general, setGeneral] = useState<GeneralInfo>(emptyGeneral());
+  const [general, setGeneral] = useState<GeneralInfo>(emptyGeneral(variant));
   const [items, setItems] = useState<ItemFormState[]>([emptyItem()]);
   const [error, setError] = useState<string | null>(null);
   const [confirmed, setConfirmed] = useState<{
     orderNo: string;
     route: "factory" | "designer";
-    designerName: string | null;
+    routedTo: string | null;
+    notes: string[];
     warnings: string[];
   } | null>(null);
   const [pending, startTransition] = useTransition();
@@ -116,7 +143,7 @@ export function OrderForm({
   }
 
   function goToItems() {
-    const err = validateGeneral(general);
+    const err = validateGeneral(general, variant);
     if (err) {
       setError(err);
       return;
@@ -126,7 +153,7 @@ export function OrderForm({
   }
 
   function submit() {
-    const generalErr = validateGeneral(general);
+    const generalErr = validateGeneral(general, variant);
     if (generalErr) {
       setError(generalErr);
       setStep(1);
@@ -141,18 +168,19 @@ export function OrderForm({
     setError(null);
     setConfirmed(null);
     startTransition(async () => {
-      const payload: CreateOrderInput = {
+      const payload: OrderFormPayload = {
         customerType: general.customerType,
         client_id: general.clientId,
         new_client: general.newClient,
         agent_id: general.agentId,
+        responsible_worker_id: general.responsibleWorkerId,
         order_type: general.orderType,
         delivery_date: general.deliveryDate,
         deadline_at: general.deadlineAt,
         order_notes: general.orderNotes,
         route: general.route,
-        designer_id: general.designerId,
-        designer_brief: general.designerBrief,
+        designer_id: variant === "manager" ? general.designerId : "",
+        designer_brief: variant === "manager" ? general.designerBrief : "",
         items: items.map(({ category_id, product_id, variant_id, qty, attributes, item_notes }) => ({
           category_id,
           product_id,
@@ -163,12 +191,13 @@ export function OrderForm({
         })),
       };
 
-      const res = await createOrder(payload);
+      const res = await onCreate(payload);
       if (!res.ok) {
         setError(res.error);
         return;
       }
 
+      const notes: string[] = [...res.warnings];
       const warnings: string[] = [];
       for (const { formIndex, itemId } of res.items) {
         const files = items[formIndex]?.files ?? [];
@@ -187,11 +216,14 @@ export function OrderForm({
       }
       setUploadStatus(null);
 
-      const designerName = general.route === "designer"
-        ? (designers.find((d) => d.id === general.designerId)?.name ?? null)
-        : null;
-      setConfirmed({ orderNo: res.orderNo, route: general.route, designerName, warnings });
-      setGeneral(emptyGeneral());
+      const routedTo =
+        general.route === "designer"
+          ? variant === "designer"
+            ? "you"
+            : (designers.find((d) => d.id === general.designerId)?.name ?? "the designer")
+          : null;
+      setConfirmed({ orderNo: res.orderNo, route: general.route, routedTo, notes, warnings });
+      setGeneral(emptyGeneral(variant));
       setItems([emptyItem()]);
       setStep(1);
     });
@@ -204,9 +236,16 @@ export function OrderForm({
           <p>
             Order <span className="font-semibold tnum">{confirmed.orderNo}</span> created
             {confirmed.route === "designer"
-              ? ` — routed to ${confirmed.designerName ?? "the designer"} for design work.`
+              ? ` — kept with ${confirmed.routedTo} for design work.`
               : " — sent straight to the factory."}
           </p>
+          {confirmed.notes.length > 0 ? (
+            <ul className="mt-2 list-disc space-y-0.5 pl-4 text-xs text-muted">
+              {confirmed.notes.map((n, i) => (
+                <li key={i}>{n}</li>
+              ))}
+            </ul>
+          ) : null}
           {confirmed.warnings.length > 0 ? (
             <ul className="mt-2 list-disc space-y-0.5 pl-4 text-xs text-[var(--rush)]">
               {confirmed.warnings.map((w, i) => (
@@ -225,11 +264,14 @@ export function OrderForm({
 
       {step === 1 ? (
         <GeneralStep
+          variant={variant}
           general={general}
           setGeneral={setGeneral}
           clients={clients}
           agents={agents}
+          workers={workers}
           designers={designers}
+          onCheckDuplicates={onCheckDuplicates}
         />
       ) : (
         <ItemsStep items={items} setItems={setItems} patchItem={patchItem} catalog={catalog} />
@@ -261,17 +303,27 @@ export function OrderForm({
 }
 
 function GeneralStep({
+  variant,
   general,
   setGeneral,
   clients,
   agents,
+  workers,
   designers,
+  onCheckDuplicates,
 }: {
+  variant: Variant;
   general: GeneralInfo;
   setGeneral: (g: GeneralInfo) => void;
   clients: Client[];
   agents: Agent[];
+  workers: WorkerPublic[];
   designers: DesignerPublic[];
+  onCheckDuplicates: (input: {
+    name: string;
+    email: string;
+    phone: string;
+  }) => Promise<{ ok: true; hits: ClientDuplicateHit[] } | { ok: false; error: string }>;
 }) {
   return (
     <section className="space-y-4">
@@ -326,6 +378,18 @@ function GeneralStep({
                 }
               />
             </Field>
+            <DuplicateHint
+              newClient={general.newClient}
+              onCheckDuplicates={onCheckDuplicates}
+              onUseExisting={(id) =>
+                setGeneral({
+                  ...general,
+                  customerType: "existing",
+                  clientId: id,
+                  newClient: { name: "", email: "", phone: "" },
+                })
+              }
+            />
           </div>
         ) : (
           <ClientPicker
@@ -338,6 +402,21 @@ function GeneralStep({
 
       <SectionLabel>Order details</SectionLabel>
       <div className="grid gap-4 rounded-[var(--radius)] border border-border bg-surface p-4 shadow-theme-xs sm:grid-cols-2">
+        <Field label="Responsible worker" hint="Who owns this order to start — can be changed later">
+          <Select
+            value={general.responsibleWorkerId}
+            onChange={(e) => setGeneral({ ...general, responsibleWorkerId: e.target.value })}
+            required
+          >
+            <option value="">Select a worker…</option>
+            {workers.map((w) => (
+              <option key={w.id} value={w.id}>
+                {w.name}
+                {w.station ? ` · ${w.station}` : ""}
+              </option>
+            ))}
+          </Select>
+        </Field>
         <Field label="Agent (optional)" hint="Who brought this client, if anyone">
           <Select
             value={general.agentId}
@@ -390,57 +469,175 @@ function GeneralStep({
 
       <SectionLabel>Routing</SectionLabel>
       <div className="rounded-[var(--radius)] border border-border bg-surface p-4 shadow-theme-xs">
-        <div className="mb-3 flex gap-2">
-          <button
-            type="button"
-            className={`rounded-[var(--radius)] px-3 py-1.5 text-xs font-medium ${
-              general.route === "factory" ? "bg-brand-500 text-white" : "border border-border"
-            }`}
-            onClick={() => setGeneral({ ...general, route: "factory" })}
-          >
-            Send to factory
-          </button>
-          <button
-            type="button"
-            className={`rounded-[var(--radius)] px-3 py-1.5 text-xs font-medium ${
-              general.route === "designer" ? "bg-brand-500 text-white" : "border border-border"
-            }`}
-            onClick={() => setGeneral({ ...general, route: "designer" })}
-          >
-            Send to graphics designer
-          </button>
-        </div>
-
-        {general.route === "designer" ? (
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Designer">
-              <Select
-                value={general.designerId}
-                onChange={(e) => setGeneral({ ...general, designerId: e.target.value })}
-                required
+        {variant === "designer" ? (
+          <>
+            <div className="mb-3 flex gap-2">
+              <button
+                type="button"
+                className={`rounded-[var(--radius)] px-3 py-1.5 text-xs font-medium ${
+                  general.route === "designer" ? "bg-brand-500 text-white" : "border border-border"
+                }`}
+                onClick={() => setGeneral({ ...general, route: "designer" })}
               >
-                <option value="">Select a designer…</option>
-                {designers.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.name}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <div className="sm:col-span-2">
-              <Field label="Brief (optional)" hint="What the designer should do before this reaches the factory">
-                <TextArea
-                  value={general.designerBrief}
-                  onChange={(e) => setGeneral({ ...general, designerBrief: e.target.value })}
-                />
-              </Field>
+                I&apos;ll design it first
+              </button>
+              <button
+                type="button"
+                className={`rounded-[var(--radius)] px-3 py-1.5 text-xs font-medium ${
+                  general.route === "factory" ? "bg-brand-500 text-white" : "border border-border"
+                }`}
+                onClick={() => setGeneral({ ...general, route: "factory" })}
+              >
+                Send straight to the factory
+              </button>
             </div>
-          </div>
+            <p className="text-xs text-muted">
+              {general.route === "designer"
+                ? "This order stays on your board for design work; release items to the factory as you finish."
+                : "This order goes onto the factory board immediately — no design step."}
+            </p>
+          </>
         ) : (
-          <p className="text-xs text-muted">This order will appear on the factory board immediately.</p>
+          <>
+            <div className="mb-3 flex gap-2">
+              <button
+                type="button"
+                className={`rounded-[var(--radius)] px-3 py-1.5 text-xs font-medium ${
+                  general.route === "factory" ? "bg-brand-500 text-white" : "border border-border"
+                }`}
+                onClick={() => setGeneral({ ...general, route: "factory" })}
+              >
+                Send to factory
+              </button>
+              <button
+                type="button"
+                className={`rounded-[var(--radius)] px-3 py-1.5 text-xs font-medium ${
+                  general.route === "designer" ? "bg-brand-500 text-white" : "border border-border"
+                }`}
+                onClick={() => setGeneral({ ...general, route: "designer" })}
+              >
+                Send to graphics designer
+              </button>
+            </div>
+
+            {general.route === "designer" ? (
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Designer">
+                  <Select
+                    value={general.designerId}
+                    onChange={(e) => setGeneral({ ...general, designerId: e.target.value })}
+                    required
+                  >
+                    <option value="">Select a designer…</option>
+                    {designers.map((d) => (
+                      <option key={d.id} value={d.id}>
+                        {d.name}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+                <div className="sm:col-span-2">
+                  <Field
+                    label="Brief (optional)"
+                    hint="What the designer should do before this reaches the factory"
+                  >
+                    <TextArea
+                      value={general.designerBrief}
+                      onChange={(e) => setGeneral({ ...general, designerBrief: e.target.value })}
+                    />
+                  </Field>
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs text-muted">
+                This order will appear on the factory board immediately.
+              </p>
+            )}
+          </>
         )}
       </div>
     </section>
+  );
+}
+
+const MATCH_LABEL: Record<ClientDuplicateHit["reason"], string> = {
+  phone: "same phone",
+  email: "same email",
+  name_exact: "same name",
+  name_similar: "similar name",
+};
+
+// Live check as the initiator fills in a new customer — surfaces existing
+// clients that look like the same person so they can link to one instead of
+// creating a duplicate. Debounced; stale responses are ignored.
+function DuplicateHint({
+  newClient,
+  onCheckDuplicates,
+  onUseExisting,
+}: {
+  newClient: { name: string; email: string; phone: string };
+  onCheckDuplicates: (input: {
+    name: string;
+    email: string;
+    phone: string;
+  }) => Promise<{ ok: true; hits: ClientDuplicateHit[] } | { ok: false; error: string }>;
+  onUseExisting: (id: string) => void;
+}) {
+  const [hits, setHits] = useState<ClientDuplicateHit[]>([]);
+  const reqRef = useRef(0);
+
+  const name = newClient.name.trim();
+  const email = newClient.email.trim();
+  const phone = newClient.phone.trim();
+
+  useEffect(() => {
+    const req = ++reqRef.current;
+    const enoughToSearch = name.length >= 2 || !!email || !!phone;
+    const timer = setTimeout(
+      async () => {
+        if (!enoughToSearch) {
+          if (reqRef.current === req) setHits([]);
+          return;
+        }
+        const res = await onCheckDuplicates({ name, email, phone });
+        if (reqRef.current !== req) return;
+        setHits(res.ok ? res.hits : []);
+      },
+      enoughToSearch ? 400 : 0,
+    );
+    return () => clearTimeout(timer);
+  }, [name, email, phone, onCheckDuplicates]);
+
+  if (hits.length === 0) return null;
+
+  return (
+    <div className="rounded-[var(--radius)] border border-[var(--urgent)]/40 bg-[var(--urgent)]/10 p-3 text-xs sm:col-span-2">
+      <p className="font-medium">
+        Possible existing {hits.length === 1 ? "client" : "clients"} — link to one instead of
+        creating a duplicate?
+      </p>
+      <ul className="mt-2 space-y-1.5">
+        {hits.map((h) => (
+          <li key={h.id} className="flex items-start justify-between gap-3">
+            <span>
+              <span className="font-medium">{h.name}</span>
+              {[h.email, h.phone].filter(Boolean).length > 0 ? (
+                <span className="text-muted"> · {[h.email, h.phone].filter(Boolean).join(" · ")}</span>
+              ) : null}
+              {!h.active ? <span className="text-muted"> · inactive</span> : null}
+              <span className="text-muted"> · {MATCH_LABEL[h.reason]}</span>
+            </span>
+            <button
+              type="button"
+              className="shrink-0 font-medium text-brand-600"
+              onClick={() => onUseExisting(h.id)}
+            >
+              Use this client
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -475,14 +672,18 @@ function ClientPicker({
   }
 
   const q = query.trim().toLowerCase();
-  const filtered = q ? clients.filter((c) => c.name.toLowerCase().includes(q)) : clients;
+  const filtered = q
+    ? clients.filter((c) =>
+        [c.name, c.email, c.phone].some((v) => v?.toLowerCase().includes(q)),
+      )
+    : clients;
 
   return (
     <div>
       <TextInput
         value={query}
         onChange={(e) => setQuery(e.target.value)}
-        placeholder="Search clients by name…"
+        placeholder="Search clients by name, email, or phone…"
       />
       <div className="mt-1 max-h-40 overflow-y-auto rounded-[var(--radius)] border border-border">
         {filtered.slice(0, 50).map((c) => (
@@ -499,7 +700,9 @@ function ClientPicker({
           </button>
         ))}
         {filtered.length === 0 ? (
-          <p className="px-3 py-2 text-sm text-muted">No matches — check spelling or add this client from the dashboard.</p>
+          <p className="px-3 py-2 text-sm text-muted">
+            No matches — check spelling or add this client as a new customer.
+          </p>
         ) : null}
       </div>
     </div>
@@ -521,7 +724,11 @@ function ItemsStep({
     <section>
       <div className="mb-2 flex items-center justify-between">
         <SectionLabel>Items</SectionLabel>
-        <Button type="button" variant="secondary" onClick={() => setItems((prev) => [...prev, emptyItem()])}>
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={() => setItems((prev) => [...prev, emptyItem()])}
+        >
           + Add item
         </Button>
       </div>
@@ -571,7 +778,9 @@ function ItemRow({
   return (
     <div className="rounded-[var(--radius)] border border-border bg-surface p-4 shadow-theme-xs">
       <div className="mb-3 flex items-center justify-between">
-        <span className="text-xs font-semibold uppercase tracking-wide text-muted">Item {index + 1}</span>
+        <span className="text-xs font-semibold uppercase tracking-wide text-muted">
+          Item {index + 1}
+        </span>
         {removable ? (
           <button type="button" onClick={onRemove} className="text-xs text-[var(--rush)]">
             Remove
@@ -584,7 +793,12 @@ function ItemRow({
           <Select
             value={item.category_id}
             onChange={(e) =>
-              onChange(index, { category_id: e.target.value, product_id: "", variant_id: "", attributes: {} })
+              onChange(index, {
+                category_id: e.target.value,
+                product_id: "",
+                variant_id: "",
+                attributes: {},
+              })
             }
             required
           >

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Drawer } from "@/components/ui/Drawer";
@@ -94,8 +95,14 @@ export function Board({
 
   return (
     <div>
-      <div className="mb-4">
+      <div className="mb-4 flex items-center justify-between gap-2">
         <span className="text-xs text-muted">Signed in as {designerName}</span>
+        <Link
+          href="/graphics/orders/new"
+          className="inline-flex min-h-9 items-center rounded-[var(--radius)] bg-brand-500 px-3 text-xs font-medium text-white hover:bg-brand-600"
+        >
+          + New order
+        </Link>
       </div>
 
       <div className="mb-2 flex items-baseline justify-between">
