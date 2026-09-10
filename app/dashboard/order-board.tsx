@@ -42,6 +42,10 @@ type WorkerLite = Omit<Worker, "pin_hash">;
 
 const UNCATEGORIZED = "Uncategorized";
 
+// The dashboard board is about work in progress, so items past the bench —
+// Ready for pickup and Completed — are hidden until asked for.
+const FINISHED_STATUSES: ProductionStatus[] = ["ready_for_pickup", "completed"];
+
 // Table view is paged: start at 20 rows, step up to a hard ceiling of 200.
 // Past that, the filters are the tool for finding what you want, not scroll.
 const TABLE_PAGE_SIZES = [20, 50, 100, 200] as const;
@@ -78,7 +82,7 @@ export function OrderBoard({
   const [items, setItems] = useState(initialItems);
   const [filters, setFilters] = useState<OrderFilterState>(emptyFilters);
   const [view, setView] = useState<"cards" | "table">("cards");
-  const [showCompleted, setShowCompleted] = useState(false);
+  const [showFinished, setShowFinished] = useState(false);
   const [tableRows, setTableRows] = useState<number>(TABLE_PAGE_SIZES[0]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const supabaseRef = useRef(createClient());
@@ -92,7 +96,7 @@ export function OrderBoard({
 
   const resetFilters = useCallback(() => {
     setFilters(emptyFilters());
-    setShowCompleted(false);
+    setShowFinished(false);
     setTableRows(TABLE_PAGE_SIZES[0]);
   }, []);
 
@@ -136,22 +140,24 @@ export function OrderBoard({
     };
   }, [refetch]);
 
-  // Completed items are hidden by default — they're finished work, not
-  // something the floor is tracking. Revealed by the "Show completed" toggle,
-  // or automatically when the status filter is explicitly set to Completed.
+  // Ready + Completed items are hidden by default — the board tracks work in
+  // progress. Revealed by the "Show ready & completed" toggle, or
+  // automatically when the status filter is set to one of those.
   const matched = useMemo(
     () => filterItems(items, filters, workerById),
     [items, filters, workerById],
   );
-  const showingCompleted = showCompleted || filters.status === "completed";
+  const statusFilterIsFinished =
+    filters.status !== "" && FINISHED_STATUSES.includes(filters.status);
+  const showingFinished = showFinished || statusFilterIsFinished;
   const filtered = useMemo(
     () =>
-      showingCompleted
+      showingFinished
         ? matched
-        : matched.filter((i) => i.production_status !== "completed"),
-    [matched, showingCompleted],
+        : matched.filter((i) => !FINISHED_STATUSES.includes(i.production_status)),
+    [matched, showingFinished],
   );
-  const hiddenCompleted = showingCompleted ? 0 : matched.length - filtered.length;
+  const hiddenFinished = showingFinished ? 0 : matched.length - filtered.length;
 
   const chips = useMemo(
     () =>
@@ -341,19 +347,19 @@ export function OrderBoard({
           ))}
         </div>
 
-        {filters.status !== "completed" ? (
+        {!statusFilterIsFinished ? (
           <label className="inline-flex min-h-11 items-center gap-1.5 text-xs text-muted">
             <input
               type="checkbox"
-              checked={showCompleted}
+              checked={showFinished}
               onChange={(e) => {
-                setShowCompleted(e.target.checked);
+                setShowFinished(e.target.checked);
                 setTableRows(TABLE_PAGE_SIZES[0]);
               }}
             />
-            Show completed
-            {hiddenCompleted > 0 ? (
-              <span className="tnum">({hiddenCompleted})</span>
+            Show ready &amp; completed
+            {hiddenFinished > 0 ? (
+              <span className="tnum">({hiddenFinished})</span>
             ) : null}
           </label>
         ) : null}
