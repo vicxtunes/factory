@@ -1,14 +1,21 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { CreateOrderDrawer } from "@/components/order/CreateOrderDrawer";
 import { Drawer } from "@/components/ui/Drawer";
 import { SectionLabel } from "@/components/ui/SectionLabel";
 import { createClient } from "@/lib/supabase/browser";
 import { ORDER_ITEM_SELECT } from "@/lib/item-select";
-import type { OrderItemWithOrder, ProductCategory } from "@/lib/types";
+import type {
+  Agent,
+  Client,
+  OrderItemWithOrder,
+  ProductCategory,
+  WorkerPublic,
+} from "@/lib/types";
 
+import { checkClientDuplicates, createDesignerOrder } from "./actions";
 import { OrderCard, type DesignerOrder } from "./order-card";
 import { OrderDetail } from "./order-detail";
 
@@ -40,11 +47,17 @@ export function Board({
   designerId,
   designerName,
   catalog,
+  clients,
+  agents,
+  workers,
 }: {
   initialItems: OrderItemWithOrder[];
   designerId: string;
   designerName: string;
   catalog: ProductCategory[];
+  clients: Client[];
+  agents: Agent[];
+  workers: WorkerPublic[];
 }) {
   const [items, setItems] = useState(initialItems);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
@@ -97,12 +110,25 @@ export function Board({
     <div>
       <div className="mb-4 flex items-center justify-between gap-2">
         <span className="text-xs text-muted">Signed in as {designerName}</span>
-        <Link
-          href="/graphics/orders/new"
-          className="inline-flex min-h-9 items-center rounded-[var(--radius)] bg-brand-500 px-3 text-xs font-medium text-white hover:bg-brand-600"
-        >
-          + New order
-        </Link>
+        <CreateOrderDrawer
+          variant="designer"
+          clients={clients}
+          agents={agents}
+          catalog={catalog}
+          workers={workers}
+          onCreate={createDesignerOrder}
+          onCheckDuplicates={checkClientDuplicates}
+          onCreated={refetch}
+          trigger={(open) => (
+            <button
+              type="button"
+              onClick={open}
+              className="inline-flex min-h-9 items-center rounded-[var(--radius)] bg-brand-500 px-3 text-xs font-medium text-white hover:bg-brand-600"
+            >
+              + New order
+            </button>
+          )}
+        />
       </div>
 
       <div className="mb-2 flex items-baseline justify-between">

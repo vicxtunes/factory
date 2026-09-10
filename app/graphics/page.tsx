@@ -1,6 +1,13 @@
 import { Header } from "@/components/ui/Header";
 import { getDesignerSession } from "@/lib/auth/session";
-import { fetchDesignerItems, fetchDesigners, fetchProductCatalog } from "@/lib/queries";
+import {
+  fetchActiveWorkersPublic,
+  fetchAgents,
+  fetchClients,
+  fetchDesignerItems,
+  fetchDesigners,
+  fetchProductCatalog,
+} from "@/lib/queries";
 
 import { Board } from "./board";
 import { DesignerLogin } from "./login";
@@ -24,9 +31,12 @@ export default async function GraphicsPage() {
     );
   }
 
-  const [items, catalog] = await Promise.all([
+  const [items, catalog, clients, agents, workers] = await Promise.all([
     fetchDesignerItems(session.designer_id),
     fetchProductCatalog(true),
+    fetchClients(true),
+    fetchAgents(true),
+    fetchActiveWorkersPublic(),
   ]);
 
   return (
@@ -46,6 +56,9 @@ export default async function GraphicsPage() {
           designerId={session.designer_id}
           designerName={session.name}
           catalog={catalog}
+          clients={clients}
+          agents={agents}
+          workers={workers}
         />
       </main>
     </>

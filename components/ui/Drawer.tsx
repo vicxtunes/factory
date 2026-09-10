@@ -7,11 +7,15 @@ export function Drawer({
   onClose,
   title,
   children,
+  size = "md",
 }: {
   open: boolean;
   onClose: () => void;
   title?: ReactNode;
   children: ReactNode;
+  // "md" (default) for detail panels; "lg" for form-heavy content like the
+  // new-order wizard.
+  size?: "md" | "lg";
 }) {
   useEffect(() => {
     if (!open) return;
@@ -34,9 +38,9 @@ export function Drawer({
       <aside
         role="dialog"
         aria-modal="true"
-        className={`fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col border-l border-border bg-surface shadow-theme-xl transition-transform duration-200 ${
-          open ? "translate-x-0" : "translate-x-full"
-        }`}
+        className={`fixed inset-y-0 right-0 z-50 flex w-full flex-col border-l border-border bg-surface shadow-theme-xl transition-transform duration-200 ${
+          size === "lg" ? "max-w-2xl" : "max-w-md"
+        } ${open ? "translate-x-0" : "translate-x-full"}`}
       >
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <h2 className="text-sm font-semibold">{title}</h2>

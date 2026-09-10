@@ -90,14 +90,6 @@ function ProductsIcon({ className }: { className?: string }) {
   );
 }
 
-function NewOrderIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className={className}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v6m3-3H9m10.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-    </svg>
-  );
-}
-
 function DesignersIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className={className}>
@@ -126,7 +118,6 @@ const MANAGER_ROLES = ["supervisor", "receptionist", "boss"] as const;
 
 const TABS = [
   { href: "/dashboard", label: "Dashboard", icon: DashboardIcon, role: null, newTab: false },
-  { href: "/dashboard/orders/new", label: "New order", icon: NewOrderIcon, role: MANAGER_ROLES, newTab: false },
   { href: "/dashboard/orders", label: "Orders", icon: OrdersIcon, role: null, newTab: false },
   { href: "/dashboard/clients", label: "Clients", icon: ClientsIcon, role: MANAGER_ROLES, newTab: false },
   { href: "/dashboard/agents", label: "Agents", icon: AgentsIcon, role: MANAGER_ROLES, newTab: false },

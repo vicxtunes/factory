@@ -24,6 +24,24 @@ import type {
 
 type Variant = "manager" | "designer";
 
+export interface OrderFormProps {
+  variant: Variant;
+  clients: Client[];
+  agents: Agent[];
+  catalog: ProductCategory[];
+  workers: WorkerPublic[];
+  designers?: DesignerPublic[];
+  onCreate: (payload: OrderFormPayload) => Promise<CreateOrderResult>;
+  onCheckDuplicates: (input: {
+    name: string;
+    email: string;
+    phone: string;
+  }) => Promise<{ ok: true; hits: ClientDuplicateHit[] } | { ok: false; error: string }>;
+  // Fired after a successful create (once media uploads finish). Lets a host
+  // drawer refresh its list; the form itself stays open showing the receipt.
+  onCreated?: () => void;
+}
+
 interface GeneralInfo {
   customerType: "new" | "existing";
   clientId: string;
@@ -110,20 +128,8 @@ export function OrderForm({
   designers = [],
   onCreate,
   onCheckDuplicates,
-}: {
-  variant: Variant;
-  clients: Client[];
-  agents: Agent[];
-  catalog: ProductCategory[];
-  workers: WorkerPublic[];
-  designers?: DesignerPublic[];
-  onCreate: (payload: OrderFormPayload) => Promise<CreateOrderResult>;
-  onCheckDuplicates: (input: {
-    name: string;
-    email: string;
-    phone: string;
-  }) => Promise<{ ok: true; hits: ClientDuplicateHit[] } | { ok: false; error: string }>;
-}) {
+  onCreated,
+}: OrderFormProps) {
   const [step, setStep] = useState<1 | 2>(1);
   const [general, setGeneral] = useState<GeneralInfo>(emptyGeneral(variant));
   const [items, setItems] = useState<ItemFormState[]>([emptyItem()]);
@@ -226,6 +232,7 @@ export function OrderForm({
       setGeneral(emptyGeneral(variant));
       setItems([emptyItem()]);
       setStep(1);
+      onCreated?.();
     });
   }
 

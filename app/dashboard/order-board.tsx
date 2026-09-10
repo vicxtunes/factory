@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { CreateOrderDrawer } from "@/components/order/CreateOrderDrawer";
 import { OrderItemsTable } from "@/components/order/OrderItemsTable";
 import { Drawer } from "@/components/ui/Drawer";
 import { Select, TextInput } from "@/components/ui/Field";
@@ -23,18 +24,28 @@ import {
   PRODUCTION_STATUSES,
   STATUS_LABELS,
   URGENCY_LABELS,
+  type Agent,
+  type Client,
+  type DesignerPublic,
   type OrderItemWithOrder,
+  type ProductCategory,
   type ProductionStatus,
   type Urgency,
   type Worker,
 } from "@/lib/types";
 
+import { createOrder, lookupClientDuplicates } from "./actions";
 import { OrderCard } from "./order-card";
 import { OrderDetail } from "./order-detail";
 
 type WorkerLite = Omit<Worker, "pin_hash">;
 
 const UNCATEGORIZED = "Uncategorized";
+
+// Table view is paged: start at 20 rows, step up to a hard ceiling of 200.
+// Past that, the filters are the tool for finding what you want, not scroll.
+const TABLE_PAGE_SIZES = [20, 50, 100, 200] as const;
+const TABLE_MAX = TABLE_PAGE_SIZES[TABLE_PAGE_SIZES.length - 1];
 
 const DATE_PRESETS: { value: DatePreset; label: string }[] = [
   { value: "", label: "Any date" },
@@ -50,23 +61,40 @@ export function OrderBoard({
   workers,
   categories,
   canManage,
+  catalog,
+  clients,
+  agents,
+  designers,
 }: {
   items: OrderItemWithOrder[];
   workers: WorkerLite[];
   categories: { id: string; name: string }[];
   canManage: boolean;
+  catalog: ProductCategory[];
+  clients: Client[];
+  agents: Agent[];
+  designers: DesignerPublic[];
 }) {
   const [items, setItems] = useState(initialItems);
   const [filters, setFilters] = useState<OrderFilterState>(emptyFilters);
   const [view, setView] = useState<"cards" | "table">("cards");
   const [showCompleted, setShowCompleted] = useState(false);
+  const [tableRows, setTableRows] = useState<number>(TABLE_PAGE_SIZES[0]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const supabaseRef = useRef(createClient());
 
-  const patch = useCallback(
-    (p: Partial<OrderFilterState>) => setFilters((f) => ({ ...f, ...p })),
-    [],
-  );
+  // Any filter change collapses the table back to the first page so you
+  // don't stay scrolled 200 rows into a now-different result set.
+  const patch = useCallback((p: Partial<OrderFilterState>) => {
+    setFilters((f) => ({ ...f, ...p }));
+    setTableRows(TABLE_PAGE_SIZES[0]);
+  }, []);
+
+  const resetFilters = useCallback(() => {
+    setFilters(emptyFilters());
+    setShowCompleted(false);
+    setTableRows(TABLE_PAGE_SIZES[0]);
+  }, []);
 
   const workerById = useMemo(() => new Map(workers.map((w) => [w.id, w])), [workers]);
   const categoryById = useMemo(
@@ -141,7 +169,7 @@ export function OrderBoard({
     : null;
 
   // Cards view: grouped by category so product lines don't blur together,
-  // each group internally in display order (FCFS, express first).
+  // each group internally in display order (newest on top, express last).
   const groups = useMemo(() => {
     const byCategory = new Map<string, OrderItemWithOrder[]>();
     for (const item of filtered) {
@@ -164,6 +192,31 @@ export function OrderBoard({
 
   return (
     <div>
+      {canManage ? (
+        <div className="mb-3 flex justify-end">
+          <CreateOrderDrawer
+            variant="manager"
+            clients={clients}
+            agents={agents}
+            catalog={catalog}
+            workers={workers}
+            designers={designers}
+            onCreate={createOrder}
+            onCheckDuplicates={lookupClientDuplicates}
+            onCreated={refetch}
+            trigger={(open) => (
+              <button
+                type="button"
+                onClick={open}
+                className="inline-flex min-h-11 items-center rounded-[var(--radius)] bg-brand-500 px-4 text-sm font-medium text-white hover:bg-brand-600"
+              >
+                + New order
+              </button>
+            )}
+          />
+        </div>
+      ) : null}
+
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <TextInput
           className="max-w-xs"
@@ -293,7 +346,10 @@ export function OrderBoard({
             <input
               type="checkbox"
               checked={showCompleted}
-              onChange={(e) => setShowCompleted(e.target.checked)}
+              onChange={(e) => {
+                setShowCompleted(e.target.checked);
+                setTableRows(TABLE_PAGE_SIZES[0]);
+              }}
             />
             Show completed
             {hiddenCompleted > 0 ? (
@@ -324,7 +380,7 @@ export function OrderBoard({
           ))}
           <button
             type="button"
-            onClick={() => setFilters(emptyFilters())}
+            onClick={resetFilters}
             className="text-xs text-brand-600 underline-offset-2 hover:underline"
           >
             Clear all
@@ -333,7 +389,36 @@ export function OrderBoard({
       ) : null}
 
       {view === "table" ? (
-        <OrderItemsTable items={tableItems} workerName={workerName} onOpen={setSelectedId} />
+        <div className="space-y-2">
+          <OrderItemsTable
+            items={tableItems.slice(0, tableRows)}
+            workerName={workerName}
+            onOpen={setSelectedId}
+          />
+          {tableItems.length > TABLE_PAGE_SIZES[0] ? (
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
+              <span className="tnum">
+                Showing {Math.min(tableRows, tableItems.length)} of {tableItems.length}
+                {tableItems.length > TABLE_MAX ? " — narrow the filters to see the rest" : ""}
+              </span>
+              <div className="flex items-center gap-1">
+                <span className="uppercase tracking-wide">Rows</span>
+                {TABLE_PAGE_SIZES.map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => setTableRows(n)}
+                    className={`rounded-[var(--radius)] px-2 py-1 tnum ${
+                      tableRows === n ? "bg-brand-500 text-white" : "border border-border"
+                    }`}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </div>
       ) : filtered.length === 0 ? (
         <p className="rounded-[var(--radius)] border border-dashed border-border p-3 text-xs text-muted">
           No items match these filters.
