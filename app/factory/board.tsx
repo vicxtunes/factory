@@ -114,6 +114,10 @@ export function Board({
         <span className="text-xs text-muted">Signed in as {workerName}</span>
       </div>
 
+      <p className="mb-3 text-xs text-muted">
+        Newest orders sit on top — take the next job from the bottom of the column.
+      </p>
+
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {BOARD_COLUMNS.map((status) => {
           const columnItems = byColumn(status);
