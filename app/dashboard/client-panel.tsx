@@ -14,6 +14,7 @@ import {
   reactivateClient,
   updateClient,
   type BulkImportRowError,
+  type BulkImportRowSkip,
 } from "./actions";
 
 export function ClientPanel({ clients }: { clients: Client[] }) {
@@ -21,9 +22,18 @@ export function ClientPanel({ clients }: { clients: Client[] }) {
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
+  const [search, setSearch] = useState("");
+
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+
+  const q = search.trim().toLowerCase();
+  const visibleClients = q
+    ? clients.filter((c) =>
+        [c.name, c.email, c.phone].some((v) => v?.toLowerCase().includes(q)),
+      )
+    : clients;
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
@@ -32,7 +42,7 @@ export function ClientPanel({ clients }: { clients: Client[] }) {
 
   const fileRef = useRef<HTMLInputElement>(null);
   const [importResult, setImportResult] = useState<
-    { inserted: number; errors: BulkImportRowError[] } | null
+    { inserted: number; skipped: BulkImportRowSkip[]; errors: BulkImportRowError[] } | null
   >(null);
 
   function run(fn: () => Promise<{ ok: boolean; error?: string }>) {
@@ -60,7 +70,7 @@ export function ClientPanel({ clients }: { clients: Client[] }) {
       if (!res.ok) {
         setError(res.error);
       } else {
-        setImportResult({ inserted: res.inserted, errors: res.errors });
+        setImportResult({ inserted: res.inserted, skipped: res.skipped, errors: res.errors });
         router.refresh();
       }
       if (fileRef.current) fileRef.current.value = "";
@@ -118,10 +128,19 @@ export function ClientPanel({ clients }: { clients: Client[] }) {
           </label>
           <p className="mt-1 text-xs text-muted">Columns: name, email, phone (name is required).</p>
           {importResult ? (
-            <div className="mt-2 text-xs">
-              <p className="text-success-600">Imported {importResult.inserted} client(s).</p>
+            <div className="mt-2 space-y-1 text-xs">
+              <p className="text-success-600">Imported {importResult.inserted} new client(s).</p>
+              {importResult.skipped.length > 0 ? (
+                <ul className="list-disc space-y-0.5 pl-4 text-muted">
+                  {importResult.skipped.map((s, i) => (
+                    <li key={i}>
+                      Row {s.row}: {s.message}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
               {importResult.errors.length > 0 ? (
-                <ul className="mt-1 list-disc space-y-0.5 pl-4 text-error-600">
+                <ul className="list-disc space-y-0.5 pl-4 text-error-600">
                   {importResult.errors.map((e, i) => (
                     <li key={i}>
                       Row {e.row}: {e.message}
@@ -134,6 +153,19 @@ export function ClientPanel({ clients }: { clients: Client[] }) {
         </div>
 
         {error ? <p className="mt-3 text-sm text-error-600">{error}</p> : null}
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <TextInput
+          className="max-w-xs"
+          value={search}
+          placeholder="Search by name, email, or phone…"
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <span className="text-xs text-muted tnum">
+          {visibleClients.length}
+          {q ? ` of ${clients.length}` : ""} client{visibleClients.length === 1 ? "" : "s"}
+        </span>
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-border bg-surface shadow-theme-xs">
@@ -159,7 +191,7 @@ export function ClientPanel({ clients }: { clients: Client[] }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {clients.map((c) =>
+              {visibleClients.map((c) =>
                 editingId === c.id ? (
                   <tr key={c.id} className="bg-background">
                     <td className="px-5 py-3">
@@ -270,10 +302,10 @@ export function ClientPanel({ clients }: { clients: Client[] }) {
                   </tr>
                 ),
               )}
-              {clients.length === 0 ? (
+              {visibleClients.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-5 py-6 text-center text-muted">
-                    No clients yet.
+                    {clients.length === 0 ? "No clients yet." : "No clients match your search."}
                   </td>
                 </tr>
               ) : null}

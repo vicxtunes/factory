@@ -9,7 +9,20 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireManager, requireRole } from "@/lib/auth/session";
 import { hashPin, isValidPinFormat } from "@/lib/auth/pin";
-import type { AppRole, AttributeType, OrderType, ProductionStatus } from "@/lib/types";
+import {
+  exactClientMatch,
+  findClientCandidates,
+  matchReasonLabel,
+  resolveOrCreateClient,
+  type ClientMatchReason,
+} from "@/lib/clients/dedupe";
+import { buildAndInsertOrder, verifyActiveWorker } from "@/lib/orders/create";
+import type {
+  ClientDuplicateHit,
+  CreateOrderResult,
+  OrderFormPayload,
+} from "@/lib/orders/types";
+import type { AppRole, AttributeType, ProductionStatus } from "@/lib/types";
 
 type Result = { ok: true } | { ok: false; error: string };
 
@@ -370,12 +383,28 @@ export async function addClient(input: {
   if (!name) return { ok: false, error: "Name is required." };
 
   const admin = createAdminClient();
+
+  const dupe = exactClientMatch(
+    await findClientCandidates(admin, { name, email: input.email, phone: input.phone }),
+  );
+  if (dupe) {
+    return {
+      ok: false,
+      error: `A client with this ${matchReasonLabel(dupe.match_reason)} already exists: "${dupe.name}". Edit that record instead.`,
+    };
+  }
+
   const { error } = await admin.from("clients").insert({
     name,
     email: input.email.trim() || null,
     phone: input.phone.trim() || null,
   });
-  if (error) return { ok: false, error: error.message };
+  if (error) {
+    if ((error as { code?: string }).code === "23505") {
+      return { ok: false, error: "A client with this phone number or email already exists." };
+    }
+    return { ok: false, error: error.message };
+  }
   revalidatePath("/dashboard/clients");
   return { ok: true };
 }
@@ -391,6 +420,22 @@ export async function updateClient(input: {
   if (!name) return { ok: false, error: "Name is required." };
 
   const admin = createAdminClient();
+
+  const dupe = exactClientMatch(
+    await findClientCandidates(admin, {
+      name,
+      email: input.email,
+      phone: input.phone,
+      excludeId: input.id,
+    }),
+  );
+  if (dupe) {
+    return {
+      ok: false,
+      error: `Another client already uses this ${matchReasonLabel(dupe.match_reason)}: "${dupe.name}".`,
+    };
+  }
+
   const { error } = await admin
     .from("clients")
     .update({
@@ -399,7 +444,12 @@ export async function updateClient(input: {
       phone: input.phone.trim() || null,
     })
     .eq("id", input.id);
-  if (error) return { ok: false, error: error.message };
+  if (error) {
+    if ((error as { code?: string }).code === "23505") {
+      return { ok: false, error: "Another client already uses this phone number or email." };
+    }
+    return { ok: false, error: error.message };
+  }
   revalidatePath("/dashboard/clients");
   return { ok: true };
 }
@@ -427,16 +477,29 @@ export interface BulkImportRowError {
   message: string;
 }
 
-// Expects a CSV with headers name, email, phone (case-insensitive). Inserts
-// row by row so a bad row doesn't sink the whole batch — bulk insert isn't
-// used because we want per-row error attribution back to the sheet's line
-// numbers.
+// A row that wasn't inserted because it duplicates something — an earlier row
+// in the same file, or a client already in the system.
+export interface BulkImportRowSkip {
+  row: number;
+  message: string;
+}
+
+export interface BulkImportResult {
+  ok: true;
+  inserted: number;
+  skipped: BulkImportRowSkip[];
+  errors: BulkImportRowError[];
+}
+
+// Expects a CSV with headers name, email, phone (case-insensitive). Processed
+// row by row so a bad row doesn't sink the whole batch and errors can be
+// attributed back to the sheet's line numbers. De-dup happens in two passes:
+// within the file (first row to use a name/phone/email wins), then against the
+// database via resolveOrCreateClient (an exact phone/email match reuses the
+// existing client instead of inserting a copy).
 export async function bulkImportClients(
   csvText: string,
-): Promise<
-  | { ok: true; inserted: number; errors: BulkImportRowError[] }
-  | { ok: false; error: string }
-> {
+): Promise<BulkImportResult | { ok: false; error: string }> {
   await requireManager();
 
   const parsed = Papa.parse<Record<string, string>>(csvText, {
@@ -463,24 +526,93 @@ export async function bulkImportClients(
 
   const admin = createAdminClient();
   const errors: BulkImportRowError[] = [];
+  const skipped: BulkImportRowSkip[] = [];
   let inserted = 0;
+
+  // In-file dedup keys (loose — the DB check via resolveOrCreateClient is
+  // authoritative; this just lets us say "same as row N").
+  const seenName = new Map<string, number>();
+  const seenPhone = new Map<string, number>();
+  const seenEmail = new Map<string, number>();
 
   for (const row of rows) {
     if (!row.name) {
       errors.push({ row: row.sheetRow, message: "Name is required." });
       continue;
     }
-    const { error } = await admin.from("clients").insert({
-      name: row.name,
-      email: row.email || null,
-      phone: row.phone || null,
-    });
-    if (error) errors.push({ row: row.sheetRow, message: error.message });
-    else inserted += 1;
+
+    const nameKey = row.name.toLowerCase().replace(/\s+/g, " ").trim();
+    const emailKey = row.email.toLowerCase().trim();
+    const phoneDigits = row.phone.replace(/\D/g, "");
+    const phoneKey = phoneDigits.length >= 7 ? phoneDigits.slice(-9) : "";
+
+    const priorRow =
+      (phoneKey ? seenPhone.get(phoneKey) : undefined) ??
+      (emailKey ? seenEmail.get(emailKey) : undefined) ??
+      (!phoneKey && !emailKey ? seenName.get(nameKey) : undefined);
+    if (priorRow) {
+      skipped.push({ row: row.sheetRow, message: `Same as row ${priorRow} in this file.` });
+      continue;
+    }
+    if (!seenName.has(nameKey)) seenName.set(nameKey, row.sheetRow);
+    if (phoneKey) seenPhone.set(phoneKey, row.sheetRow);
+    if (emailKey) seenEmail.set(emailKey, row.sheetRow);
+
+    const resolved = await resolveOrCreateClient(admin, row);
+    if (!resolved.ok) {
+      errors.push({ row: row.sheetRow, message: resolved.error });
+      continue;
+    }
+    if (resolved.client.reused) {
+      skipped.push({
+        row: row.sheetRow,
+        message: `Already in the system as "${resolved.client.name}" (matched by ${matchReasonLabel(
+          resolved.client.reusedReason as ClientMatchReason,
+        )}).`,
+      });
+    } else {
+      inserted += 1;
+    }
   }
 
   revalidatePath("/dashboard/clients");
-  return { ok: true, inserted, errors };
+  return { ok: true, inserted, skipped, errors };
+}
+
+// Live "is this a duplicate?" lookup for the new-order / add-client forms.
+// Read-only; safe to call on every (debounced) keystroke.
+export async function lookupClientDuplicates(input: {
+  name: string;
+  email: string;
+  phone: string;
+  excludeId?: string;
+}): Promise<{ ok: true; hits: ClientDuplicateHit[] } | { ok: false; error: string }> {
+  await requireManager();
+
+  const name = input.name.trim();
+  const email = input.email.trim();
+  const phone = input.phone.trim();
+  if (name.length < 2 && !email && !phone) return { ok: true, hits: [] };
+
+  const admin = createAdminClient();
+  const candidates = await findClientCandidates(admin, {
+    name,
+    email,
+    phone,
+    excludeId: input.excludeId ?? null,
+    limit: 5,
+  });
+  return {
+    ok: true,
+    hits: candidates.map((c) => ({
+      id: c.id,
+      name: c.name,
+      email: c.email,
+      phone: c.phone,
+      active: c.active,
+      reason: c.match_reason,
+    })),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -723,40 +855,7 @@ export async function reactivateDesigner(id: string): Promise<Result> {
 // app/graphics/actions.ts).
 // ---------------------------------------------------------------------------
 
-export interface OrderItemInput {
-  category_id: string;
-  product_id: string;
-  variant_id: string; // "" when the product has no variant selected
-  qty: number;
-  attributes: Record<string, string>;
-  item_notes: string;
-}
-
-export interface CreateOrderInput {
-  customerType: "new" | "existing";
-  client_id: string; // used when customerType === "existing"
-  new_client: { name: string; email: string; phone: string }; // used when "new"
-  agent_id: string;
-  order_type: OrderType;
-  delivery_date: string;
-  deadline_at: string; // datetime-local value, required only when express
-  order_notes: string;
-  items: OrderItemInput[];
-  route: "factory" | "designer";
-  designer_id: string; // used when route === "designer"
-  designer_brief: string; // used when route === "designer"
-}
-
-type CreateOrderResult =
-  | { ok: true; orderNo: string; items: { formIndex: number; itemId: string }[] }
-  | { ok: false; error: string };
-
-function clean(s: string): string | null {
-  const t = s.trim();
-  return t.length ? t : null;
-}
-
-export async function createOrder(input: CreateOrderInput): Promise<CreateOrderResult> {
+export async function createOrder(input: OrderFormPayload): Promise<CreateOrderResult> {
   await requireManager();
 
   if (!input.delivery_date) {
@@ -769,166 +868,71 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
     return { ok: false, error: "Select which designer this order goes to." };
   }
 
-  const candidateItems = input.items
-    .map((item, formIndex) => ({ item, formIndex }))
-    .filter(({ item }) => item.category_id && item.product_id);
-  if (candidateItems.length === 0) {
-    return { ok: false, error: "Add at least one item with a product selected." };
-  }
-
   const admin = createAdminClient();
 
-  // Resolve or create the client.
-  let clientId: string;
-  let clientName: string;
-  let clientEmail: string | null;
-  let clientPhone: string | null;
+  const workerCheck = await verifyActiveWorker(admin, input.responsible_worker_id);
+  if (!workerCheck.ok) return { ok: false, error: workerCheck.error };
 
+  const warnings: string[] = [];
+
+  // Resolve or create the client.
+  let client: { id: string; name: string; email: string | null; phone: string | null };
   if (input.customerType === "new") {
-    const name = input.new_client.name.trim();
-    if (!name) return { ok: false, error: "New client name is required." };
-    const { data: client, error: clientErr } = await admin
-      .from("clients")
-      .insert({
-        name,
-        email: clean(input.new_client.email),
-        phone: clean(input.new_client.phone),
-      })
-      .select("id, name, email, phone")
-      .single();
-    if (clientErr || !client) {
-      return { ok: false, error: clientErr?.message ?? "Could not create client." };
+    const resolved = await resolveOrCreateClient(admin, input.new_client);
+    if (!resolved.ok) return { ok: false, error: resolved.error };
+    client = resolved.client;
+    if (resolved.client.reused) {
+      warnings.push(
+        `Matched an existing client "${resolved.client.name}" by ${matchReasonLabel(
+          resolved.client.reusedReason as ClientMatchReason,
+        )} — linked this order to them instead of creating a duplicate.`,
+      );
     }
-    ({ id: clientId, name: clientName, email: clientEmail, phone: clientPhone } = client);
   } else {
     if (!input.client_id) return { ok: false, error: "Select an existing client." };
-    const { data: client, error: clientErr } = await admin
+    const { data, error } = await admin
       .from("clients")
       .select("id, name, email, phone")
       .eq("id", input.client_id)
       .single();
-    if (clientErr || !client) return { ok: false, error: "Selected client not found." };
-    ({ id: clientId, name: clientName, email: clientEmail, phone: clientPhone } = client);
+    if (error || !data) return { ok: false, error: "Selected client not found." };
+    client = data;
   }
 
   const agent = input.agent_id
     ? (await admin.from("agents").select("name").eq("id", input.agent_id).maybeSingle()).data
     : null;
 
-  let designerName: string | null = null;
+  let designer: { id: string; name: string } | null = null;
   if (input.route === "designer") {
-    const { data: designer, error: designerErr } = await admin
+    const { data, error } = await admin
       .from("designers")
-      .select("name, active")
+      .select("id, name, active")
       .eq("id", input.designer_id)
       .maybeSingle();
-    if (designerErr || !designer || !designer.active) {
+    if (error || !data || !data.active) {
       return { ok: false, error: "Selected designer not found or inactive." };
     }
-    designerName = designer.name;
+    designer = { id: data.id, name: data.name };
   }
 
-  // Look up catalog rows server-side rather than trusting client-supplied
-  // names — the client only tells us which ids it picked.
-  const categoryIds = [...new Set(candidateItems.map(({ item }) => item.category_id))];
-  const productIds = [...new Set(candidateItems.map(({ item }) => item.product_id))];
-  const variantIds = [...new Set(candidateItems.map(({ item }) => item.variant_id).filter(Boolean))];
-
-  const [{ data: categories }, { data: products }, { data: variants }, { data: attributeDefs }] =
-    await Promise.all([
-      admin.from("product_categories").select("id, name").in("id", categoryIds),
-      admin.from("products").select("id, name, category_id").in("id", productIds),
-      variantIds.length
-        ? admin.from("product_variants").select("id, name").in("id", variantIds)
-        : Promise.resolve({ data: [] as { id: string; name: string }[] }),
-      admin
-        .from("category_attributes")
-        .select("category_id, name, required")
-        .in("category_id", categoryIds),
-    ]);
-
-  const categoryById = new Map((categories ?? []).map((c) => [c.id, c]));
-  const productById = new Map((products ?? []).map((p) => [p.id, p]));
-  const variantById = new Map((variants ?? []).map((v) => [v.id, v]));
-  const attributesByCategory = new Map<string, { name: string; required: boolean }[]>();
-  for (const def of attributeDefs ?? []) {
-    const list = attributesByCategory.get(def.category_id) ?? [];
-    list.push(def);
-    attributesByCategory.set(def.category_id, list);
-  }
-
-  const rows: Record<string, unknown>[] = [];
-  for (const { item, formIndex } of candidateItems) {
-    const category = categoryById.get(item.category_id);
-    const product = productById.get(item.product_id);
-    if (!category || !product || product.category_id !== item.category_id) {
-      return { ok: false, error: `Item ${formIndex + 1}: invalid product selection.` };
-    }
-    const variant = item.variant_id ? variantById.get(item.variant_id) : null;
-
-    const attributes: Record<string, string> = {};
-    for (const def of attributesByCategory.get(item.category_id) ?? []) {
-      const value = (item.attributes[def.name] ?? "").trim();
-      if (def.required && !value) {
-        return { ok: false, error: `Item ${formIndex + 1}: "${def.name}" is required.` };
-      }
-      if (value) attributes[def.name] = value;
-    }
-
-    rows.push({
-      category_id: item.category_id,
-      product_id: item.product_id,
-      variant_id: item.variant_id || null,
-      product: product.name,
-      product_type: variant?.name ?? null,
-      qty: Number.isFinite(item.qty) && item.qty > 0 ? Math.floor(item.qty) : 1,
-      attributes,
-      urgency: input.order_type === "express" ? "urgent" : "normal",
-      item_notes: clean(item.item_notes),
-      stage: input.route === "designer" ? "with_designer" : "factory",
-    });
-  }
-
-  const { data: order, error: orderErr } = await admin
-    .from("orders")
-    .insert({
-      client_id: clientId,
-      client_name: clientName,
-      client_email: clientEmail,
-      client_phone: clientPhone,
-      agent_id: input.agent_id || null,
-      agent_name: agent?.name ?? null,
-      order_type: input.order_type,
-      delivery_date: clean(input.delivery_date),
-      deadline_at: input.order_type === "express" ? input.deadline_at : null,
-      order_notes: clean(input.order_notes),
-      stage: input.route === "designer" ? "with_designer" : "factory",
-      assigned_designer_id: input.route === "designer" ? input.designer_id : null,
-      designer_name: designerName,
-      designer_brief: input.route === "designer" ? clean(input.designer_brief) : null,
-    })
-    .select("id, order_no")
-    .single();
-
-  if (orderErr || !order) {
-    return { ok: false, error: orderErr?.message ?? "Could not create order." };
-  }
-
-  const { data: insertedItems, error: itemsErr } = await admin
-    .from("order_items")
-    .insert(rows.map((row) => ({ ...row, order_id: order.id })))
-    .select("id");
-
-  if (itemsErr || !insertedItems) {
-    // Roll back the order so intake can retry cleanly.
-    await admin.from("orders").delete().eq("id", order.id);
-    return { ok: false, error: itemsErr?.message ?? "Could not create items." };
-  }
+  const res = await buildAndInsertOrder(admin, {
+    client,
+    agentId: input.agent_id || null,
+    agentName: agent?.name ?? null,
+    designer,
+    route: input.route,
+    orderType: input.order_type,
+    deliveryDate: input.delivery_date,
+    deadlineAt: input.deadline_at,
+    orderNotes: input.order_notes,
+    designerBrief: input.designer_brief,
+    responsibleWorkerId: input.responsible_worker_id,
+    items: input.items,
+  });
+  if (!res.ok) return res;
 
   revalidatePath("/dashboard/orders");
-  return {
-    ok: true,
-    orderNo: order.order_no,
-    items: candidateItems.map(({ formIndex }, i) => ({ formIndex, itemId: insertedItems[i].id })),
-  };
+  revalidatePath("/dashboard");
+  return { ok: true, orderNo: res.orderNo, items: res.items, warnings };
 }

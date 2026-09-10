@@ -7,6 +7,18 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { DESIGNER_COOKIE, signPayload } from "@/lib/auth/cookies";
 import { getDesignerSession } from "@/lib/auth/session";
 import { verifyPin } from "@/lib/auth/pin";
+import {
+  findClientCandidates,
+  matchReasonLabel,
+  resolveOrCreateClient,
+  type ClientMatchReason,
+} from "@/lib/clients/dedupe";
+import { buildAndInsertOrder, verifyActiveWorker } from "@/lib/orders/create";
+import type {
+  ClientDuplicateHit,
+  CreateOrderResult,
+  OrderFormPayload,
+} from "@/lib/orders/types";
 
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 30; // remembered on device, same as workers
 
@@ -290,4 +302,112 @@ export async function updateDesignerOrder(input: DesignerOrderEditInput): Promis
   revalidatePath("/dashboard");
   revalidatePath("/factory");
   return { ok: true };
+}
+
+// ---------------------------------------------------------------------------
+// Designer-created orders — in-house designers take orders from walk-in
+// clients directly. Same shared body as the dashboard's createOrder
+// (lib/orders/create.ts). Routing is limited: "designer" means the designer
+// keeps it for design work first (assigned to themselves); "factory" sends
+// it straight to production. A responsible worker is required either way.
+// ---------------------------------------------------------------------------
+
+export async function createDesignerOrder(
+  input: OrderFormPayload,
+): Promise<CreateOrderResult> {
+  const session = await getDesignerSession();
+  if (!session) return { ok: false, error: "Not signed in." };
+
+  if (!input.delivery_date) return { ok: false, error: "Delivery date is required." };
+  if (input.order_type === "express" && !input.deadline_at) {
+    return { ok: false, error: "Express orders need a deadline date & time." };
+  }
+
+  const admin = createAdminClient();
+
+  const workerCheck = await verifyActiveWorker(admin, input.responsible_worker_id);
+  if (!workerCheck.ok) return { ok: false, error: workerCheck.error };
+
+  const warnings: string[] = [];
+
+  let client: { id: string; name: string; email: string | null; phone: string | null };
+  if (input.customerType === "new") {
+    const resolved = await resolveOrCreateClient(admin, input.new_client);
+    if (!resolved.ok) return { ok: false, error: resolved.error };
+    client = resolved.client;
+    if (resolved.client.reused) {
+      warnings.push(
+        `Matched an existing client "${resolved.client.name}" by ${matchReasonLabel(
+          resolved.client.reusedReason as ClientMatchReason,
+        )} — linked this order to them instead of creating a duplicate.`,
+      );
+    }
+  } else {
+    if (!input.client_id) return { ok: false, error: "Select an existing client." };
+    const { data, error } = await admin
+      .from("clients")
+      .select("id, name, email, phone")
+      .eq("id", input.client_id)
+      .single();
+    if (error || !data) return { ok: false, error: "Selected client not found." };
+    client = data;
+  }
+
+  const agent = input.agent_id
+    ? (await admin.from("agents").select("name").eq("id", input.agent_id).maybeSingle()).data
+    : null;
+
+  const designer =
+    input.route === "designer" ? { id: session.designer_id, name: session.name } : null;
+
+  const res = await buildAndInsertOrder(admin, {
+    client,
+    agentId: input.agent_id || null,
+    agentName: agent?.name ?? null,
+    designer,
+    route: input.route,
+    orderType: input.order_type,
+    deliveryDate: input.delivery_date,
+    deadlineAt: input.deadline_at,
+    orderNotes: input.order_notes,
+    designerBrief: "",
+    responsibleWorkerId: input.responsible_worker_id,
+    items: input.items,
+  });
+  if (!res.ok) return res;
+
+  revalidatePath("/graphics");
+  revalidatePath("/factory");
+  revalidatePath("/dashboard");
+  return { ok: true, orderNo: res.orderNo, items: res.items, warnings };
+}
+
+// Designer-session equivalent of the dashboard's lookupClientDuplicates —
+// live "is this client already in the system?" check for the order form.
+export async function checkClientDuplicates(input: {
+  name: string;
+  email: string;
+  phone: string;
+}): Promise<{ ok: true; hits: ClientDuplicateHit[] } | { ok: false; error: string }> {
+  const session = await getDesignerSession();
+  if (!session) return { ok: false, error: "Not signed in." };
+
+  const name = input.name.trim();
+  const email = input.email.trim();
+  const phone = input.phone.trim();
+  if (name.length < 2 && !email && !phone) return { ok: true, hits: [] };
+
+  const admin = createAdminClient();
+  const candidates = await findClientCandidates(admin, { name, email, phone, limit: 5 });
+  return {
+    ok: true,
+    hits: candidates.map((c) => ({
+      id: c.id,
+      name: c.name,
+      email: c.email,
+      phone: c.phone,
+      active: c.active,
+      reason: c.match_reason,
+    })),
+  };
 }

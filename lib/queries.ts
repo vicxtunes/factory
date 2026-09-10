@@ -7,6 +7,7 @@ import {
   type NotificationRow,
   type OrderItemWithOrder,
   type ProductCategory,
+  type WorkerPublic,
 } from "@/lib/types";
 
 // Items visible on the factory board: the item itself has reached the
@@ -90,6 +91,19 @@ export async function fetchClients(activeOnly = false): Promise<Client[]> {
   const { data, error } = await query;
   if (error) throw new Error(error.message);
   return data ?? [];
+}
+
+// Active workers, safe projection (no pin_hash) — for the responsible-worker
+// picker on both new-order surfaces (dashboard + graphics).
+export async function fetchActiveWorkersPublic(): Promise<WorkerPublic[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("workers_public")
+    .select("id, name, station, active")
+    .eq("active", true)
+    .order("name", { ascending: true });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as WorkerPublic[];
 }
 
 export async function fetchAgents(activeOnly = false): Promise<Agent[]> {
