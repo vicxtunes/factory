@@ -59,6 +59,7 @@ export function OrderBoard({
   const [items, setItems] = useState(initialItems);
   const [filters, setFilters] = useState<OrderFilterState>(emptyFilters);
   const [view, setView] = useState<"cards" | "table">("cards");
+  const [showCompleted, setShowCompleted] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const supabaseRef = useRef(createClient());
 
@@ -107,10 +108,22 @@ export function OrderBoard({
     };
   }, [refetch]);
 
-  const filtered = useMemo(
+  // Completed items are hidden by default — they're finished work, not
+  // something the floor is tracking. Revealed by the "Show completed" toggle,
+  // or automatically when the status filter is explicitly set to Completed.
+  const matched = useMemo(
     () => filterItems(items, filters, workerById),
     [items, filters, workerById],
   );
+  const showingCompleted = showCompleted || filters.status === "completed";
+  const filtered = useMemo(
+    () =>
+      showingCompleted
+        ? matched
+        : matched.filter((i) => i.production_status !== "completed"),
+    [matched, showingCompleted],
+  );
+  const hiddenCompleted = showingCompleted ? 0 : matched.length - filtered.length;
 
   const chips = useMemo(
     () =>
@@ -274,6 +287,20 @@ export function OrderBoard({
             </button>
           ))}
         </div>
+
+        {filters.status !== "completed" ? (
+          <label className="inline-flex min-h-11 items-center gap-1.5 text-xs text-muted">
+            <input
+              type="checkbox"
+              checked={showCompleted}
+              onChange={(e) => setShowCompleted(e.target.checked)}
+            />
+            Show completed
+            {hiddenCompleted > 0 ? (
+              <span className="tnum">({hiddenCompleted})</span>
+            ) : null}
+          </label>
+        ) : null}
 
         <span className="ml-auto text-xs text-muted tnum">
           {filtered.length} item{filtered.length === 1 ? "" : "s"}
