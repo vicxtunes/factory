@@ -5,8 +5,8 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { Button } from "@/components/ui/Button";
 import { Field, Select, TextArea, TextInput } from "@/components/ui/Field";
 import { SectionLabel } from "@/components/ui/SectionLabel";
-import { addMediaLink } from "@/lib/cloudinary/actions";
-import { uploadFileToCloudinary } from "@/lib/cloudinary/upload-client";
+import { addMediaLink } from "@/lib/storage/actions";
+import { uploadFileToStorage } from "@/lib/storage/upload-client";
 import type {
   ClientDuplicateHit,
   CreateOrderResult,
@@ -209,7 +209,7 @@ export function OrderForm({
         const files = items[formIndex]?.files ?? [];
         for (const file of files) {
           setUploadStatus(`Uploading "${file.name}"…`);
-          const uploadRes = await uploadFileToCloudinary(itemId, file);
+          const uploadRes = await uploadFileToStorage(itemId, file);
           if (!uploadRes.ok) warnings.push(uploadRes.error);
         }
 
@@ -894,7 +894,7 @@ function ItemRow({
       ) : null}
 
       <div className="mt-4 grid gap-4 border-t border-border pt-4 sm:grid-cols-2">
-        <Field label="Photos" hint="Uploaded to Cloudinary once the order is created">
+        <Field label="Photos" hint="Uploaded once the order is created">
           <input
             type="file"
             multiple
