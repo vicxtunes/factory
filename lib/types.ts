@@ -84,7 +84,8 @@ export interface OrderItemMedia {
   order_item_id: string;
   file_name: string;
   mime_type: string | null;
-  cloudinary_public_id: string;
+  cloudinary_public_id: string | null;
+  storage_path: string | null;
   secure_url: string;
   uploaded_at: string;
 }

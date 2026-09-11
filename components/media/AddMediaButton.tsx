@@ -3,12 +3,12 @@
 import { useRef, useState, useTransition } from "react";
 
 import { Button } from "@/components/ui/Button";
-import { addMediaLink } from "@/lib/cloudinary/actions";
-import { uploadFileToCloudinary } from "@/lib/cloudinary/upload-client";
+import { addMediaLink } from "@/lib/storage/actions";
+import { uploadFileToStorage } from "@/lib/storage/upload-client";
 
 // Lets a signed-in user (dashboard order entry, worker, or designer) attach
 // more photos — or paste a link (Drive, Dropbox, WeTransfer, etc.) — to an
-// existing order item after the fact. Reuses the same direct-to-Cloudinary
+// existing order item after the fact. Reuses the same direct-to-Storage
 // upload path as order entry, so a failed upload there isn't a dead end.
 export function AddMediaButton({
   orderItemId,
@@ -30,7 +30,7 @@ export function AddMediaButton({
     startTransition(async () => {
       let failed = 0;
       for (const file of list) {
-        const res = await uploadFileToCloudinary(orderItemId, file);
+        const res = await uploadFileToStorage(orderItemId, file);
         if (!res.ok) {
           failed += 1;
           setStatus(res.error);

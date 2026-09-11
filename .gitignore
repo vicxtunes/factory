@@ -24,6 +24,10 @@
 .DS_Store
 *.pem
 
+# credentials (GCP service account keys, OAuth client secrets)
+/googleapis/
+client_secret*.json
+
 # debug
 npm-debug.log*
 yarn-debug.log*
