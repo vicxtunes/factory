@@ -159,33 +159,43 @@ export function MediaLinks({
 
   if (media.length > 0) {
     content = (
-      <div className="flex flex-wrap gap-2">
-        {media.map((file) =>
-          isImage(file.secure_url, file.mime_type) ? (
-            <Thumbnail
-              key={file.id}
-              thumbUrl={resolveThumbUrl(file)}
-              downloadHref={resolveDownloadUrl(file)}
-              name={file.file_name}
-              onOpen={() =>
-                setPreview({
-                  url: file.secure_url,
-                  name: file.file_name,
-                  downloadHref: resolveDownloadUrl(file),
-                })
-              }
-            />
-          ) : (
-            <a
-              key={file.id}
-              href={resolveDownloadUrl(file)}
-              download={file.file_name}
-              className="inline-flex min-h-11 items-center rounded-[var(--radius)] border border-border px-3 text-xs"
-            >
-              {file.file_name}
-            </a>
-          ),
-        )}
+      <div className="flex flex-col gap-2">
+        {media.length > 1 ? (
+          <a
+            href={`/api/order-items/${media[0].order_item_id}/media-zip`}
+            className="inline-flex min-h-11 w-fit items-center rounded-[var(--radius)] border border-border px-3 text-xs"
+          >
+            Download all ({media.length})
+          </a>
+        ) : null}
+        <div className="flex flex-wrap gap-2">
+          {media.map((file) =>
+            isImage(file.secure_url, file.mime_type) ? (
+              <Thumbnail
+                key={file.id}
+                thumbUrl={resolveThumbUrl(file)}
+                downloadHref={resolveDownloadUrl(file)}
+                name={file.file_name}
+                onOpen={() =>
+                  setPreview({
+                    url: file.secure_url,
+                    name: file.file_name,
+                    downloadHref: resolveDownloadUrl(file),
+                  })
+                }
+              />
+            ) : (
+              <a
+                key={file.id}
+                href={resolveDownloadUrl(file)}
+                download={file.file_name}
+                className="inline-flex min-h-11 items-center rounded-[var(--radius)] border border-border px-3 text-xs"
+              >
+                {file.file_name}
+              </a>
+            ),
+          )}
+        </div>
       </div>
     );
   } else if (legacyLink) {
