@@ -1,5 +1,6 @@
 "use client";
 
+import { NoteBadge } from "@/components/order/NoteBadge";
 import type { OrderItemWithOrder, OrderType } from "@/lib/types";
 
 export interface DesignerOrder {
@@ -26,18 +27,12 @@ export function OrderCard({ order, onOpen }: { order: DesignerOrder; onOpen: () 
   const sent = order.items.filter((i) => i.stage === "factory").length;
 
   return (
-    <article>
-      <button
-        onClick={onOpen}
-        className="w-full rounded-[var(--radius)] border border-border bg-surface p-3 text-left text-sm shadow-theme-xs transition-colors hover:bg-background"
-      >
+    <article className="relative overflow-hidden rounded-[var(--radius)] border border-border bg-surface shadow-theme-xs transition-colors">
+      <button onClick={onOpen} className="w-full p-3 pr-11 text-left text-sm hover:bg-background">
         <div className="flex items-start justify-between gap-2">
-          <div>
-            <p className="font-semibold tnum">{order.orderNo}</p>
-            <p className="text-muted">{order.clientName}</p>
-          </div>
+          <p className="text-base font-semibold leading-tight">{order.clientName}</p>
           {order.orderType === "express" ? (
-            <span className="rounded bg-[var(--rush)]/10 px-2 py-0.5 text-xs font-medium text-[var(--rush)]">
+            <span className="shrink-0 rounded bg-[var(--rush)]/10 px-2 py-0.5 text-xs font-medium text-[var(--rush)]">
               Express
             </span>
           ) : null}
@@ -59,6 +54,12 @@ export function OrderCard({ order, onOpen }: { order: DesignerOrder; onOpen: () 
           <p className="mt-2 line-clamp-2 text-xs text-muted">{order.brief}</p>
         ) : null}
       </button>
+
+      {order.orderNotes ? (
+        <div className="absolute right-2.5 top-2.5">
+          <NoteBadge note={order.orderNotes} />
+        </div>
+      ) : null}
     </article>
   );
 }

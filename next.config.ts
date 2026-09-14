@@ -15,6 +15,7 @@ const nextConfig: NextConfig = {
         "*.app.github.dev",
         "*.githubpreview.dev",
         "localhost:3000",
+        "localhost:3911",
       ],
     },
   },
