@@ -78,6 +78,7 @@ export async function confirmItemUpload(orderItemId: string, path: string): Prom
   });
   if (error) return { ok: false, error: error.message };
 
+  revalidatePath("/dashboard/orders");
   revalidatePath("/dashboard");
   revalidatePath("/factory");
   revalidatePath("/graphics");
@@ -111,6 +112,7 @@ export async function addMediaLink(orderItemId: string, url: string): Promise<Re
   });
   if (error) return { ok: false, error: error.message };
 
+  revalidatePath("/dashboard/orders");
   revalidatePath("/dashboard");
   revalidatePath("/factory");
   revalidatePath("/graphics");
