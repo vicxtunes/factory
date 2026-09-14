@@ -8,6 +8,7 @@ import { UrgencyBadge } from "@/components/ui/UrgencyBadge";
 import { AddMediaButton } from "@/components/media/AddMediaButton";
 import { MediaLinks } from "@/components/media/MediaLinks";
 import { ItemAttributes } from "@/components/order/ItemAttributes";
+import { NotesThread } from "@/components/order/NotesThread";
 import { STATUS_LABELS, type OrderItemWithOrder } from "@/lib/types";
 
 import { advanceStatus, clearDelay, flagDelay } from "./actions";
@@ -101,12 +102,8 @@ export function ItemDetail({
         </p>
       ) : null}
 
-      {item.item_notes ? (
-        <div>
-          <p className="text-xs uppercase tracking-wide text-muted">Notes</p>
-          <Linkify text={item.item_notes} className="mt-1 text-xs" />
-        </div>
-      ) : null}
+      <NotesThread orderId={item.order_id} orderItemId={item.id} title="Item notes" />
+      <NotesThread orderId={item.order_id} orderItemId={null} title="Order notes" />
 
       {item.order.media_notes ? (
         <div>
@@ -119,7 +116,7 @@ export function ItemDetail({
 
       <div className="space-y-2">
         <p className="text-xs uppercase tracking-wide text-muted">Photos</p>
-        <MediaLinks media={item.media} legacyLink={photoLink} />
+        <MediaLinks media={item.media} legacyLink={photoLink} editable onChanged={onChanged} />
         <AddMediaButton orderItemId={item.id} onUploaded={onChanged} />
       </div>
 

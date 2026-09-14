@@ -11,6 +11,10 @@ function formatDate(iso: string | null): string {
   });
 }
 
+function formatCreatedAt(iso: string): string {
+  return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
 const HEAD = "px-3 py-2 text-xs font-medium uppercase tracking-wide text-muted";
 const CELL = "px-3 py-2 align-top";
 
@@ -37,6 +41,8 @@ export function OrderItemsTable({
             <th className={HEAD}>Status</th>
             <th className={HEAD}>Worker</th>
             <th className={HEAD}>Stage</th>
+            <th className={HEAD}>Created</th>
+            <th className={HEAD}>Created by</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-border">
@@ -76,11 +82,18 @@ export function OrderItemsTable({
                   <span className="ml-1 text-xs font-medium text-[var(--rush)]">· Delayed</span>
                 ) : null}
               </td>
+              <td className={`${CELL} whitespace-nowrap tnum`}>{formatCreatedAt(i.order.created_at)}</td>
+              <td className={`${CELL} whitespace-nowrap`}>
+                {i.order.created_by_name ?? "—"}
+                {i.order.created_by_role ? (
+                  <span className="block text-xs text-muted capitalize">{i.order.created_by_role}</span>
+                ) : null}
+              </td>
             </tr>
           ))}
           {items.length === 0 ? (
             <tr>
-              <td colSpan={9} className="px-3 py-6 text-center text-muted">
+              <td colSpan={11} className="px-3 py-6 text-center text-muted">
                 No items match these filters.
               </td>
             </tr>

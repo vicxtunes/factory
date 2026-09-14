@@ -3,14 +3,16 @@
 import { useEffect, useRef, useState } from "react";
 
 import { Linkify } from "@/components/ui/Linkify";
+import type { OrderNote } from "@/lib/types";
 
 // A standalone note icon for order/item cards — filled and colored so it's
 // hard to miss, since a note is expected on every order and easy to skip
-// past otherwise. Click pops the note text open right there, no need to
+// past otherwise. Click pops the notes thread open right there, no need to
 // open the full detail view just to check it. Must render as a sibling of
 // the card's own onOpen button, never nested inside it (nested <button>s
-// are invalid HTML and would fire both handlers).
-export function NoteBadge({ note, align = "right" }: { note: string; align?: "left" | "right" }) {
+// are invalid HTML and would fire both handlers). Read-only preview — editing
+// a note (author-only) happens in the full NotesThread in order detail.
+export function NoteBadge({ notes, align = "right" }: { notes: OrderNote[]; align?: "left" | "right" }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -36,7 +38,7 @@ export function NoteBadge({ note, align = "right" }: { note: string; align?: "le
         type="button"
         aria-expanded={open}
         aria-label={open ? "Hide note" : "View note"}
-        title="This order has a note"
+        title={`${notes.length} note${notes.length === 1 ? "" : "s"}`}
         onClick={() => setOpen((v) => !v)}
         className={`inline-flex h-7 w-7 items-center justify-center rounded-full shadow-theme-xs transition-transform hover:scale-110 ${
           open ? "bg-brand-600" : "bg-[var(--urgent)]"
@@ -54,9 +56,16 @@ export function NoteBadge({ note, align = "right" }: { note: string; align?: "le
           }`}
         >
           <p className="mb-1 text-[0.65rem] font-semibold uppercase tracking-wide text-muted">
-            Note
+            {notes.length === 1 ? "Note" : "Notes"}
           </p>
-          <Linkify text={note} className="text-foreground" />
+          <ul className="space-y-2">
+            {notes.map((n) => (
+              <li key={n.id}>
+                <p className="text-[0.65rem] font-medium text-muted">{n.author_name}</p>
+                <Linkify text={n.body} className="text-foreground" />
+              </li>
+            ))}
+          </ul>
         </div>
       ) : null}
     </div>

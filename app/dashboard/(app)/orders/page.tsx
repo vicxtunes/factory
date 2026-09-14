@@ -8,7 +8,7 @@ import {
   fetchDesigners,
   fetchProductCatalog,
 } from "@/lib/queries";
-import { isManagerRole, type Worker } from "@/lib/types";
+import { canViewOrderAudit, isManagerRole, type Worker } from "@/lib/types";
 
 import { OrderBoard } from "../../order-board";
 
@@ -17,6 +17,7 @@ export const dynamic = "force-dynamic";
 export default async function OrdersPage() {
   const session = await getDashboardSession();
   const canManage = session ? isManagerRole(session.role) : false;
+  const canViewAudit = session ? canViewOrderAudit(session.role) : false;
 
   const admin = createAdminClient();
   const [items, workersRes, categories, catalog, clients, agents, designers] = await Promise.all([
@@ -41,6 +42,7 @@ export default async function OrdersPage() {
       workers={activeWorkers}
       categories={categories}
       canManage={canManage}
+      canViewAudit={canViewAudit}
       catalog={catalog}
       clients={clients}
       agents={agents}

@@ -71,6 +71,7 @@ export function OrderBoard({
   workers,
   categories,
   canManage,
+  canViewAudit,
   catalog,
   clients,
   agents,
@@ -80,6 +81,7 @@ export function OrderBoard({
   workers: WorkerLite[];
   categories: { id: string; name: string }[];
   canManage: boolean;
+  canViewAudit: boolean;
   catalog: ProductCategory[];
   clients: Client[];
   agents: Agent[];
@@ -499,6 +501,8 @@ export function OrderBoard({
             workers={workers}
             assignedName={selectedAssignedName}
             canManage={canManage}
+            canViewAudit={canViewAudit}
+            catalog={catalog}
             onChanged={refetch}
           />
         ) : null}

@@ -6,7 +6,12 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { WORKER_COOKIE, signPayload } from "@/lib/auth/cookies";
 import { getWorkerSession } from "@/lib/auth/session";
 import { verifyPin } from "@/lib/auth/pin";
+import { logOrderEvent, resolveActor } from "@/lib/audit/log";
 import { BOARD_COLUMNS, type ProductionStatus } from "@/lib/types";
+
+function itemLabel(item: { product: string; product_type: string | null }): string {
+  return item.product_type ? `${item.product} (${item.product_type})` : item.product;
+}
 
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 30; // "remembered on device"
 
@@ -69,7 +74,7 @@ export async function advanceStatus(itemId: string): Promise<ActionResult> {
   const admin = createAdminClient();
   const { data: item } = await admin
     .from("order_items")
-    .select("id, production_status, assigned_worker_id")
+    .select("id, order_id, product, product_type, production_status, assigned_worker_id")
     .eq("id", itemId)
     .maybeSingle();
   if (!item) return { ok: false, error: "Item not found." };
@@ -81,15 +86,25 @@ export async function advanceStatus(itemId: string): Promise<ActionResult> {
   if (nextIdx <= 0 || nextIdx >= flow.length) {
     return { ok: false, error: "Item is already complete." };
   }
+  const nextStatus = flow[nextIdx];
 
   const { error } = await admin
     .from("order_items")
     .update({
-      production_status: flow[nextIdx],
+      production_status: nextStatus,
       updated_by_worker_id: session.worker_id,
     })
     .eq("id", itemId);
-  return error ? { ok: false, error: error.message } : { ok: true };
+  if (error) return { ok: false, error: error.message };
+
+  await logOrderEvent({
+    orderId: item.order_id,
+    orderItemId: itemId,
+    actor: await resolveActor(),
+    action: "status_advanced",
+    detail: { itemLabel: itemLabel(item), to: nextStatus },
+  });
+  return { ok: true };
 }
 
 export async function flagDelay(
@@ -103,22 +118,32 @@ export async function flagDelay(
   const admin = createAdminClient();
   const { data: item } = await admin
     .from("order_items")
-    .select("id, assigned_worker_id")
+    .select("id, order_id, product, product_type, assigned_worker_id")
     .eq("id", itemId)
     .maybeSingle();
   if (!item) return { ok: false, error: "Item not found." };
   const forbidden = assertAssignedToWorker(item, session.worker_id);
   if (forbidden) return forbidden;
 
+  const trimmedReason = reason.trim();
   const { error } = await admin
     .from("order_items")
     .update({
       is_delayed: true,
-      delay_reason: reason.trim(),
+      delay_reason: trimmedReason,
       updated_by_worker_id: session.worker_id,
     })
     .eq("id", itemId);
-  return error ? { ok: false, error: error.message } : { ok: true };
+  if (error) return { ok: false, error: error.message };
+
+  await logOrderEvent({
+    orderId: item.order_id,
+    orderItemId: itemId,
+    actor: await resolveActor(),
+    action: "delay_flagged",
+    detail: { itemLabel: itemLabel(item), reason: trimmedReason },
+  });
+  return { ok: true };
 }
 
 export async function clearDelay(itemId: string): Promise<ActionResult> {
@@ -128,7 +153,7 @@ export async function clearDelay(itemId: string): Promise<ActionResult> {
   const admin = createAdminClient();
   const { data: item } = await admin
     .from("order_items")
-    .select("id, assigned_worker_id")
+    .select("id, order_id, product, product_type, assigned_worker_id")
     .eq("id", itemId)
     .maybeSingle();
   if (!item) return { ok: false, error: "Item not found." };
@@ -143,5 +168,14 @@ export async function clearDelay(itemId: string): Promise<ActionResult> {
       updated_by_worker_id: session.worker_id,
     })
     .eq("id", itemId);
-  return error ? { ok: false, error: error.message } : { ok: true };
+  if (error) return { ok: false, error: error.message };
+
+  await logOrderEvent({
+    orderId: item.order_id,
+    orderItemId: itemId,
+    actor: await resolveActor(),
+    action: "delay_cleared",
+    detail: { itemLabel: itemLabel(item) },
+  });
+  return { ok: true };
 }

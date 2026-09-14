@@ -3,11 +3,12 @@
 import { useState, useTransition } from "react";
 
 import { Button } from "@/components/ui/Button";
-import { Field, Select, TextArea, TextInput } from "@/components/ui/Field";
+import { Field, Select, TextInput } from "@/components/ui/Field";
 import { Linkify } from "@/components/ui/Linkify";
 import { AddMediaButton } from "@/components/media/AddMediaButton";
 import { MediaLinks } from "@/components/media/MediaLinks";
 import { ItemAttributes } from "@/components/order/ItemAttributes";
+import { NotesThread } from "@/components/order/NotesThread";
 import { STATUS_LABELS, type OrderItemWithOrder, type ProductCategory } from "@/lib/types";
 
 import {
@@ -39,7 +40,6 @@ interface ItemEditState {
   variant_id: string;
   qty: number;
   attributes: Record<string, string>;
-  item_notes: string;
 }
 
 function itemToEditState(item: OrderItemWithOrder): ItemEditState {
@@ -51,7 +51,6 @@ function itemToEditState(item: OrderItemWithOrder): ItemEditState {
     attributes: Object.fromEntries(
       Object.entries(item.attributes ?? {}).map(([k, v]) => [k, String(v)]),
     ),
-    item_notes: item.item_notes ?? "",
   };
 }
 
@@ -70,7 +69,6 @@ export function OrderDetail({
   const [editing, setEditing] = useState(false);
   const [deliveryDate, setDeliveryDate] = useState("");
   const [deadlineAt, setDeadlineAt] = useState("");
-  const [orderNotes, setOrderNotes] = useState("");
   const [itemEdits, setItemEdits] = useState<Record<string, ItemEditState>>({});
 
   // A mistake can surface after an item's already in production, so editing
@@ -84,7 +82,6 @@ export function OrderDetail({
     setError(null);
     setDeliveryDate(order.deliveryDate ?? "");
     setDeadlineAt(order.deadlineAt ? toLocalInputValue(order.deadlineAt) : "");
-    setOrderNotes(order.orderNotes ?? "");
     setItemEdits(Object.fromEntries(editableItems.map((item) => [item.id, itemToEditState(item)])));
     setEditing(true);
   }
@@ -113,7 +110,6 @@ export function OrderDetail({
         orderId: order.orderId,
         delivery_date: deliveryDate,
         deadline_at: deadlineAt,
-        order_notes: orderNotes,
         items,
       });
       if (!res.ok) {
@@ -197,16 +193,10 @@ export function OrderDetail({
               </Field>
             ) : null}
           </div>
-          <Field label="Order notes">
-            <TextArea value={orderNotes} onChange={(e) => setOrderNotes(e.target.value)} />
-          </Field>
-        </div>
-      ) : order.orderNotes ? (
-        <div>
-          <p className="text-xs uppercase tracking-wide text-muted">Order notes</p>
-          <Linkify text={order.orderNotes} className="mt-1 text-xs" />
         </div>
       ) : null}
+
+      <NotesThread orderId={order.orderId} orderItemId={null} title="Order notes" />
 
       <div className="space-y-4 border-t border-border pt-3">
         {order.items.map((item) => {
@@ -319,13 +309,6 @@ export function OrderDetail({
                       ))}
                     </div>
                   ) : null}
-
-                  <Field label="Item notes">
-                    <TextArea
-                      value={edit.item_notes}
-                      onChange={(e) => patchItem(item.id, { item_notes: e.target.value })}
-                    />
-                  </Field>
                 </div>
               ) : (
                 <>
@@ -341,13 +324,14 @@ export function OrderDetail({
                     ) : null}
                   </div>
                   <ItemAttributes item={item} />
-                  {item.item_notes ? <Linkify text={item.item_notes} className="text-xs text-muted" /> : null}
                 </>
               )}
 
+              <NotesThread orderId={order.orderId} orderItemId={item.id} title="Item notes" />
+
               <div className="space-y-2">
                 <p className="text-xs uppercase tracking-wide text-muted">Photos</p>
-                <MediaLinks media={item.media} legacyLink={photoLink} />
+                <MediaLinks media={item.media} legacyLink={photoLink} editable onChanged={onChanged} />
                 <AddMediaButton orderItemId={item.id} onUploaded={onChanged} />
               </div>
 

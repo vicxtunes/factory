@@ -11,7 +11,6 @@ export interface DesignerOrder {
   deadlineAt: string | null;
   deliveryDate: string | null;
   brief: string | null;
-  orderNotes: string | null;
   items: OrderItemWithOrder[];
 }
 
@@ -25,6 +24,7 @@ function formatDate(iso: string | null): string {
 
 export function OrderCard({ order, onOpen }: { order: DesignerOrder; onOpen: () => void }) {
   const sent = order.items.filter((i) => i.stage === "factory").length;
+  const notes = order.items.flatMap((i) => i.item_notes);
 
   return (
     <article className="relative overflow-hidden rounded-[var(--radius)] border border-border bg-surface shadow-theme-xs transition-colors">
@@ -55,9 +55,9 @@ export function OrderCard({ order, onOpen }: { order: DesignerOrder; onOpen: () 
         ) : null}
       </button>
 
-      {order.orderNotes ? (
+      {notes.length > 0 ? (
         <div className="absolute right-2.5 top-2.5">
-          <NoteBadge note={order.orderNotes} />
+          <NoteBadge notes={notes} />
         </div>
       ) : null}
     </article>
