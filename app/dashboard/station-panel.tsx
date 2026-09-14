@@ -4,10 +4,19 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/Button";
+import { Drawer } from "@/components/ui/Drawer";
+import { ExportButtons } from "@/components/ui/ExportButtons";
 import { TextInput } from "@/components/ui/Field";
+import type { ExportColumn } from "@/lib/export/tableExport";
 import type { Station } from "@/lib/types";
 
 import { createStation, deleteStation, renameStation } from "./actions";
+
+interface StationExportRow extends Record<string, unknown> {
+  name: string;
+}
+
+const EXPORT_COLUMNS: ExportColumn<StationExportRow>[] = [{ key: "name", label: "Station" }];
 
 export function StationPanel({
   stations,
@@ -21,6 +30,7 @@ export function StationPanel({
   const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
 
   function run(fn: () => Promise<{ ok: boolean; error?: string }>) {
     setError(null);
@@ -31,17 +41,31 @@ export function StationPanel({
     });
   }
 
+  const exportRows: StationExportRow[] = stations.map((s) => ({ name: s.name }));
+
   return (
     <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <ExportButtons columns={EXPORT_COLUMNS} rows={exportRows} filename="stations" />
+        {canManage ? (
+          <Button variant="primary" onClick={() => setFormOpen(true)}>
+            + Add station
+          </Button>
+        ) : null}
+      </div>
+
       {canManage ? (
-        <div className="rounded-2xl border border-border bg-surface p-5 shadow-theme-xs">
+        <Drawer open={formOpen} onClose={() => setFormOpen(false)} title="Add station">
           <form
-            className="flex gap-2"
+            className="space-y-3"
             onSubmit={(e) => {
               e.preventDefault();
               run(async () => {
                 const res = await createStation(name);
-                if (res.ok) setName("");
+                if (res.ok) {
+                  setName("");
+                  setFormOpen(false);
+                }
                 return res;
               });
             }}
@@ -52,12 +76,12 @@ export function StationPanel({
               placeholder="New station name"
               required
             />
-            <Button variant="primary" type="submit" disabled={pending}>
+            <Button variant="primary" type="submit" disabled={pending} className="w-full">
               Add station
             </Button>
+            {error ? <p className="text-sm text-error-600">{error}</p> : null}
           </form>
-          {error ? <p className="mt-3 text-sm text-error-600">{error}</p> : null}
-        </div>
+        </Drawer>
       ) : null}
 
       <div className="overflow-hidden rounded-2xl border border-border bg-surface shadow-theme-xs">

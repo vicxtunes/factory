@@ -84,7 +84,7 @@ export async function advanceStatus(itemId: string): Promise<ActionResult> {
   const flow: ProductionStatus[] = [...BOARD_COLUMNS, "completed"];
   const nextIdx = flow.indexOf(item.production_status as ProductionStatus) + 1;
   if (nextIdx <= 0 || nextIdx >= flow.length) {
-    return { ok: false, error: "Item is already complete." };
+    return { ok: false, error: "Item is already delivered." };
   }
   const nextStatus = flow[nextIdx];
 

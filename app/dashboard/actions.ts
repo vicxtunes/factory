@@ -411,7 +411,7 @@ export async function updateOrderItem(input: UpdateOrderItemInput): Promise<Resu
   if (item.production_status === "completed") {
     return {
       ok: false,
-      error: "This item has already been completed by the factory and can no longer be edited.",
+      error: "This item has already been delivered and can no longer be edited.",
     };
   }
 

@@ -323,8 +323,8 @@ export function OrderDetail({
         </p>
       ) : null}
 
-      <NotesThread orderId={item.order_id} orderItemId={item.id} title="Item notes" />
-      <NotesThread orderId={item.order_id} orderItemId={null} title="Order notes" />
+      <NotesThread orderId={item.order_id} orderItemId={item.id} title="Item notes" onChanged={onChanged} />
+      <NotesThread orderId={item.order_id} orderItemId={null} title="Order notes" onChanged={onChanged} />
 
       {item.order.media_notes ? (
         <div>

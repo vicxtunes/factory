@@ -196,7 +196,7 @@ export function OrderDetail({
         </div>
       ) : null}
 
-      <NotesThread orderId={order.orderId} orderItemId={null} title="Order notes" />
+      <NotesThread orderId={order.orderId} orderItemId={null} title="Order notes" onChanged={onChanged} />
 
       <div className="space-y-4 border-t border-border pt-3">
         {order.items.map((item) => {
@@ -327,7 +327,7 @@ export function OrderDetail({
                 </>
               )}
 
-              <NotesThread orderId={order.orderId} orderItemId={item.id} title="Item notes" />
+              <NotesThread orderId={order.orderId} orderItemId={item.id} title="Item notes" onChanged={onChanged} />
 
               <div className="space-y-2">
                 <p className="text-xs uppercase tracking-wide text-muted">Photos</p>

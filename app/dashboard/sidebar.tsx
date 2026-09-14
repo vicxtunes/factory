@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { SUPPORT_OWNER_EMAIL } from "@/lib/support/constants";
 import type { AppRole } from "@/lib/types";
 
 function DashboardIcon({ className }: { className?: string }) {
@@ -102,6 +103,18 @@ function DesignersIcon({ className }: { className?: string }) {
   );
 }
 
+function SupportIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className={className}>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M8.625 12a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H8.25m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H12m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0h-.375M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
+      />
+    </svg>
+  );
+}
+
 function DisplayIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className={className}>
@@ -116,6 +129,14 @@ function DisplayIcon({ className }: { className?: string }) {
 
 const MANAGER_ROLES = ["supervisor", "receptionist", "boss"] as const;
 
+interface Tab {
+  href: string;
+  label: string;
+  icon: typeof DashboardIcon;
+  role: readonly AppRole[] | null;
+  newTab: boolean;
+}
+
 const TABS = [
   { href: "/dashboard", label: "Dashboard", icon: DashboardIcon, role: null, newTab: false },
   { href: "/dashboard/orders", label: "Orders", icon: OrdersIcon, role: null, newTab: false },
@@ -126,25 +147,32 @@ const TABS = [
   { href: "/dashboard/designers", label: "Designers", icon: DesignersIcon, role: MANAGER_ROLES, newTab: false },
   { href: "/dashboard/admins", label: "Admins", icon: AdminsIcon, role: ["boss"], newTab: false },
   { href: "/display", label: "Display screen", icon: DisplayIcon, role: null, newTab: true },
-] as const satisfies {
-  href: string;
-  label: string;
-  icon: typeof DashboardIcon;
-  role: readonly AppRole[] | null;
-  newTab: boolean;
-}[];
+] as const satisfies Tab[];
 
 export function DashboardSidebar({
   role,
+  email,
   mobileOpen,
   onNavigate,
 }: {
   role: AppRole;
+  email: string | null;
   mobileOpen: boolean;
   onNavigate: () => void;
 }) {
   const pathname = usePathname();
-  const tabs = TABS.filter((t) => t.role === null || (t.role as readonly AppRole[]).includes(role));
+  const tabs: Tab[] = TABS.filter((t) => t.role === null || (t.role as readonly AppRole[]).includes(role));
+  // Support-report review is gated by email, not role — several accounts can
+  // be "boss", only this one person should see what staff report.
+  if (email === SUPPORT_OWNER_EMAIL) {
+    tabs.push({
+      href: "/dashboard/support",
+      label: "Support",
+      icon: SupportIcon,
+      role: null,
+      newTab: false,
+    });
+  }
 
   return (
     <aside

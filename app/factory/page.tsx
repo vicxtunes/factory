@@ -1,4 +1,5 @@
 import { Header } from "@/components/ui/Header";
+import { ReportIssueButton } from "@/components/support/ReportIssueButton";
 import { createClient } from "@/lib/supabase/server";
 import { getWorkerSession } from "@/lib/auth/session";
 import { fetchBoardItems } from "@/lib/queries";
@@ -39,6 +40,7 @@ export default async function FactoryPage() {
         surface="Factory"
         right={
           <>
+            <ReportIssueButton triggerClassName="text-white/70 hover:text-white text-xs underline-offset-2 hover:underline" />
             <span className="text-white/80">{session.name}</span>
             <LogoutButton />
           </>

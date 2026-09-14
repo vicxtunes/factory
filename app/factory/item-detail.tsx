@@ -41,7 +41,7 @@ export function ItemDetail({
   const nextLabel = isCompleted
     ? null
     : item.production_status === "ready_for_pickup"
-      ? "Mark complete"
+      ? "Mark delivered"
       : "Advance";
 
   function run(fn: () => Promise<{ ok: boolean; error?: string }>) {
@@ -102,8 +102,8 @@ export function ItemDetail({
         </p>
       ) : null}
 
-      <NotesThread orderId={item.order_id} orderItemId={item.id} title="Item notes" />
-      <NotesThread orderId={item.order_id} orderItemId={null} title="Order notes" />
+      <NotesThread orderId={item.order_id} orderItemId={item.id} title="Item notes" onChanged={onChanged} />
+      <NotesThread orderId={item.order_id} orderItemId={null} title="Order notes" onChanged={onChanged} />
 
       {item.order.media_notes ? (
         <div>

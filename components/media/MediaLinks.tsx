@@ -1,10 +1,69 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
+import { getCurrentActor } from "@/lib/notes/actions";
 import { deleteOrderItemMedia, updateMediaLink } from "@/lib/storage/actions";
 import { replaceFileInStorage } from "@/lib/storage/upload-client";
 import type { OrderItemMedia } from "@/lib/types";
+
+// Chromium-only File System Access API — feature-detected. Where it's not
+// available (Firefox/Safari) downloads still work, just via the browser's
+// normal silent-save-to-Downloads behavior rather than a folder prompt.
+declare global {
+  interface Window {
+    showSaveFilePicker?: (options?: {
+      suggestedName?: string;
+      types?: { description: string; accept: Record<string, string[]> }[];
+    }) => Promise<{
+      createWritable: () => Promise<{
+        write: (data: Blob) => Promise<void>;
+        close: () => Promise<void>;
+      }>;
+    }>;
+  }
+}
+
+function filenameFromContentDisposition(header: string | null, fallback: string): string {
+  const match = header?.match(/filename="?([^"]+)"?/);
+  return match?.[1] ?? fallback;
+}
+
+// Fetches the file ourselves (rather than a plain <a href> navigation) so we
+// can prompt "Save As" via the File System Access API when the browser
+// supports it — a plain download link always saves silently to the default
+// Downloads folder with no way for a site to ask for a location.
+async function downloadWithPicker(url: string, fallbackName: string): Promise<void> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error("Download failed.");
+  const filename = filenameFromContentDisposition(res.headers.get("Content-Disposition"), fallbackName);
+  const blob = await res.blob();
+
+  if (window.showSaveFilePicker) {
+    try {
+      const handle = await window.showSaveFilePicker({
+        suggestedName: filename,
+        types: [{ description: "Zip archive", accept: { "application/zip": [".zip"] } }],
+      });
+      const writable = await handle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      return;
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return; // user cancelled the picker
+      // Fall through to the plain-link fallback below on any other failure.
+    }
+  }
+
+  const blobUrl = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = blobUrl;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(blobUrl);
+}
 
 const IMAGE_EXTENSION = /\.(jpe?g|png|gif|webp|bmp|svg)(\?.*)?$/i;
 
@@ -63,15 +122,28 @@ type Preview = { url: string; name: string; downloadHref: string };
 // "Replace" for an uploaded file re-runs the same signed-upload flow and
 // swaps the file at this row's existing id; for a pasted link it's a quick
 // inline URL edit. "Delete" removes the row (and the Storage object, if
-// any). Same permission boundary as adding media — requireMediaUploadAccess
-// on the server side, no extra gating here.
+// any). Only the person who added this file — or the boss — can do either;
+// the server enforces this too (see canManageMedia in lib/storage/actions),
+// this is just the matching UI gate so the buttons don't even appear when
+// they'd be refused.
 function MediaActions({ file, onChanged }: { file: OrderItemMedia; onChanged?: () => void }) {
   const [busy, setBusy] = useState(false);
   const [editingLink, setEditingLink] = useState(false);
   const [linkValue, setLinkValue] = useState(file.secure_url);
   const [error, setError] = useState<string | null>(null);
+  const [actor, setActor] = useState<{ type: string; id: string; role?: string } | null | undefined>(
+    undefined,
+  );
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isLink = !file.storage_path && !file.cloudinary_public_id;
+
+  useEffect(() => {
+    getCurrentActor().then(setActor);
+  }, []);
+
+  const canManage =
+    !!actor &&
+    (actor.role === "boss" || (file.uploaded_by_type === actor.type && file.uploaded_by_id === actor.id));
 
   async function handleDelete() {
     if (!window.confirm(`Remove "${file.file_name}"?`)) return;
@@ -103,6 +175,14 @@ function MediaActions({ file, onChanged }: { file: OrderItemMedia; onChanged?: (
     }
     setEditingLink(false);
     onChanged?.();
+  }
+
+  if (actor === undefined) return null; // still resolving who's viewing
+
+  if (!canManage) {
+    return file.uploaded_by_name ? (
+      <p className="mt-1 text-[0.65rem] text-muted">Added by {file.uploaded_by_name}</p>
+    ) : null;
   }
 
   if (editingLink) {
@@ -196,6 +276,8 @@ function Thumbnail({
       <a
         href={downloadHref}
         download={name}
+        target="_blank"
+        rel="noopener noreferrer"
         title={`Download ${name}`}
         onClick={(e) => e.stopPropagation()}
         className="absolute bottom-0.5 right-0.5 inline-flex h-5 w-5 items-center justify-center rounded bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100"
@@ -204,6 +286,40 @@ function Thumbnail({
           <path d="M8 1a1 1 0 0 1 1 1v6.086l1.793-1.793a1 1 0 1 1 1.414 1.414l-3.5 3.5a1 1 0 0 1-1.414 0l-3.5-3.5a1 1 0 1 1 1.414-1.414L7 8.086V2a1 1 0 0 1 1-1zM2 13a1 1 0 0 1 1-1h10a1 1 0 1 1 0 2H3a1 1 0 0 1-1-1z" />
         </svg>
       </a>
+    </div>
+  );
+}
+
+// Fetches the zip itself (see downloadWithPicker) instead of a plain link,
+// so Chromium browsers can prompt "Save As" for a location instead of
+// always silently landing in the default Downloads folder.
+function DownloadAllButton({ orderItemId, count }: { orderItemId: string; count: number }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleClick() {
+    setBusy(true);
+    setError(null);
+    try {
+      await downloadWithPicker(`/api/order-items/${orderItemId}/media-zip`, "media.zip");
+    } catch {
+      setError("Could not download the zip.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col items-start gap-1">
+      <button
+        type="button"
+        onClick={handleClick}
+        disabled={busy}
+        className="inline-flex min-h-11 w-fit items-center rounded-[var(--radius)] border border-border px-3 text-xs"
+      >
+        {busy ? "Preparing…" : `Download all (${count})`}
+      </button>
+      {error ? <p className="text-xs text-[var(--rush)]">{error}</p> : null}
     </div>
   );
 }
@@ -225,6 +341,8 @@ function Lightbox({ preview, onClose }: { preview: Preview; onClose: () => void 
         <a
           href={preview.downloadHref}
           download={preview.name}
+          target="_blank"
+          rel="noopener noreferrer"
           onClick={(e) => e.stopPropagation()}
           className="inline-flex min-h-11 items-center rounded-[var(--radius)] bg-white px-3 text-xs font-medium text-gray-900"
         >
@@ -278,12 +396,7 @@ export function MediaLinks({
     content = (
       <div className="flex flex-col gap-2">
         {media.length > 1 ? (
-          <a
-            href={`/api/order-items/${media[0].order_item_id}/media-zip`}
-            className="inline-flex min-h-11 w-fit items-center rounded-[var(--radius)] border border-border px-3 text-xs"
-          >
-            Download all ({media.length})
-          </a>
+          <DownloadAllButton orderItemId={media[0].order_item_id} count={media.length} />
         ) : null}
         <div className="flex flex-wrap gap-3">
           {media.map((file) => (
@@ -305,6 +418,8 @@ export function MediaLinks({
                 <a
                   href={resolveDownloadUrl(file)}
                   download={file.file_name}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="inline-flex min-h-11 items-center rounded-[var(--radius)] border border-border px-3 text-xs"
                 >
                   {file.file_name}

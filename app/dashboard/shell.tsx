@@ -24,6 +24,7 @@ export function DashboardShell({
     <div className="min-h-screen">
       <DashboardSidebar
         role={role}
+        email={email}
         mobileOpen={mobileOpen}
         onNavigate={() => setMobileOpen(false)}
       />

@@ -242,7 +242,7 @@ export async function updateDesignerOrder(input: DesignerOrderEditInput): Promis
   if (existingItems.some((i) => i.production_status === "completed")) {
     return {
       ok: false,
-      error: "An item has already been completed by the factory and can no longer be edited here.",
+      error: "An item has already been delivered and can no longer be edited here.",
     };
   }
 

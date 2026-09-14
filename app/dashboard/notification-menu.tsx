@@ -59,7 +59,13 @@ export function NotificationMenu({ initial }: { initial: NotificationRow[] }) {
   }, []);
 
   return (
-    <div className="relative" ref={ref}>
+    // No local `relative` here on purpose — the dropdown panel anchors to
+    // the shared icon-group container in DashboardTopbar (which is
+    // `relative`), not to this button's own small box. That container's
+    // right edge sits near the true screen edge; anchoring to the button's
+    // own edge (much narrower, further left) let the fixed-width panel run
+    // off the left side of the screen on narrow viewports.
+    <div ref={ref}>
       <button
         onClick={() => setOpen((v) => !v)}
         aria-label="Notifications"
@@ -72,7 +78,7 @@ export function NotificationMenu({ initial }: { initial: NotificationRow[] }) {
       </button>
 
       {open ? (
-        <div className="absolute right-0 z-50 mt-2 flex max-h-96 w-80 flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-theme-lg">
+        <div className="absolute right-0 z-50 mt-2 flex max-h-96 w-80 max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-theme-lg">
           <div className="border-b border-border px-4 py-3">
             <p className="text-sm font-semibold">Notifications</p>
           </div>

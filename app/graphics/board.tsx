@@ -150,7 +150,7 @@ export function Board({
           onClick={() => setShowCompleted((v) => !v)}
           className="text-sm text-muted underline-offset-2 hover:underline"
         >
-          {showCompleted ? "Hide" : "Show"} completed ({completedOrders.length})
+          {showCompleted ? "Hide" : "Show"} delivered ({completedOrders.length})
         </button>
         {showCompleted ? (
           <div className="mt-3 grid gap-4 md:grid-cols-2 xl:grid-cols-3">

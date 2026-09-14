@@ -1,4 +1,5 @@
 import { Header } from "@/components/ui/Header";
+import { ReportIssueButton } from "@/components/support/ReportIssueButton";
 import { getDesignerSession } from "@/lib/auth/session";
 import {
   fetchActiveWorkersPublic,
@@ -45,6 +46,7 @@ export default async function GraphicsPage() {
         surface="Graphics"
         right={
           <>
+            <ReportIssueButton triggerClassName="text-white/70 hover:text-white text-xs underline-offset-2 hover:underline" />
             <span className="text-white/80">{session.name}</span>
             <LogoutButton />
           </>

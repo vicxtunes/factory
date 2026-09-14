@@ -33,10 +33,16 @@ export function NotesThread({
   orderId,
   orderItemId,
   title = "Notes",
+  onChanged,
 }: {
   orderId: string;
   orderItemId: string | null;
   title?: string;
+  // The board that opened this drawer only refetches on order_items/orders
+  // realtime events — it doesn't know about order_notes writes, so a card's
+  // NoteBadge would otherwise go stale until a full page reload. Same
+  // onChanged pattern AddMediaButton/MediaLinks already use.
+  onChanged?: () => void;
 }) {
   const [notes, setNotes] = useState<OrderNote[] | null>(null);
   const [actor, setActor] = useState<{ type: string; id: string } | null>(null);
@@ -61,6 +67,7 @@ export function NotesThread({
 
   function refetch() {
     getOrderNotes(orderId).then(setNotes);
+    onChanged?.();
   }
 
   const scoped = (notes ?? []).filter((n) => n.order_item_id === orderItemId);

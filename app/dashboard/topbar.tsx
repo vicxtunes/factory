@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation";
 
+import { ReportIssueButton } from "@/components/support/ReportIssueButton";
 import type { NotificationRow } from "@/lib/types";
 
 import { NotificationMenu } from "./notification-menu";
@@ -22,6 +23,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/dashboard/workers": "Workers & stations",
   "/dashboard/designers": "Graphics designers",
   "/dashboard/admins": "Dashboard admins",
+  "/dashboard/support": "Support reports",
 };
 
 export function DashboardTopbar({
@@ -48,7 +50,8 @@ export function DashboardTopbar({
         <MenuIcon className="h-5 w-5" />
       </button>
       <h1 className="text-base font-semibold">{title}</h1>
-      <div className="ml-auto flex items-center gap-2">
+      <div className="relative ml-auto flex items-center gap-3">
+        <ReportIssueButton triggerClassName="hidden text-xs text-muted underline-offset-2 hover:underline sm:inline" />
         <NotificationMenu initial={notifications} />
         <UserMenu email={email} role={role} />
       </div>
