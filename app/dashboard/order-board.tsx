@@ -28,6 +28,7 @@ import {
   type Client,
   type DesignerPublic,
   type OrderItemWithOrder,
+  type OrderStage,
   type ProductCategory,
   type ProductionStatus,
   type Urgency,
@@ -45,6 +46,11 @@ const UNCATEGORIZED = "Uncategorized";
 // The dashboard board is about work in progress, so items past the bench —
 // Ready for pickup and Completed — are hidden until asked for.
 const FINISHED_STATUSES: ProductionStatus[] = ["ready_for_pickup", "completed"];
+
+// Supers don't want to see items that aren't in production yet — most of
+// all the ones still sitting with a graphics designer — so those are
+// hidden by default too, same "toggle to reveal" pattern as finished items.
+const NOT_READY_STAGE: OrderStage = "with_designer";
 
 // Table view is paged: start at 20 rows, step up to a hard ceiling of 200.
 // Past that, the filters are the tool for finding what you want, not scroll.
@@ -83,6 +89,7 @@ export function OrderBoard({
   const [filters, setFilters] = useState<OrderFilterState>(emptyFilters);
   const [view, setView] = useState<"cards" | "table">("cards");
   const [showFinished, setShowFinished] = useState(false);
+  const [showWithDesigner, setShowWithDesigner] = useState(false);
   const [tableRows, setTableRows] = useState<number>(TABLE_PAGE_SIZES[0]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const supabaseRef = useRef(createClient());
@@ -97,6 +104,7 @@ export function OrderBoard({
   const resetFilters = useCallback(() => {
     setFilters(emptyFilters());
     setShowFinished(false);
+    setShowWithDesigner(false);
     setTableRows(TABLE_PAGE_SIZES[0]);
   }, []);
 
@@ -150,14 +158,23 @@ export function OrderBoard({
   const statusFilterIsFinished =
     filters.status !== "" && FINISHED_STATUSES.includes(filters.status);
   const showingFinished = showFinished || statusFilterIsFinished;
-  const filtered = useMemo(
+  const finishedFiltered = useMemo(
     () =>
       showingFinished
         ? matched
         : matched.filter((i) => !FINISHED_STATUSES.includes(i.production_status)),
     [matched, showingFinished],
   );
-  const hiddenFinished = showingFinished ? 0 : matched.length - filtered.length;
+  const hiddenFinished = showingFinished ? 0 : matched.length - finishedFiltered.length;
+
+  const filtered = useMemo(
+    () =>
+      showWithDesigner
+        ? finishedFiltered
+        : finishedFiltered.filter((i) => i.stage !== NOT_READY_STAGE),
+    [finishedFiltered, showWithDesigner],
+  );
+  const hiddenWithDesigner = showWithDesigner ? 0 : finishedFiltered.length - filtered.length;
 
   const chips = useMemo(
     () =>
@@ -363,6 +380,21 @@ export function OrderBoard({
             ) : null}
           </label>
         ) : null}
+
+        <label className="inline-flex min-h-11 items-center gap-1.5 text-xs text-muted">
+          <input
+            type="checkbox"
+            checked={showWithDesigner}
+            onChange={(e) => {
+              setShowWithDesigner(e.target.checked);
+              setTableRows(TABLE_PAGE_SIZES[0]);
+            }}
+          />
+          Show items with designer
+          {hiddenWithDesigner > 0 ? (
+            <span className="tnum">({hiddenWithDesigner})</span>
+          ) : null}
+        </label>
 
         <span className="ml-auto text-xs text-muted tnum">
           {filtered.length} item{filtered.length === 1 ? "" : "s"}
