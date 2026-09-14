@@ -12,11 +12,12 @@ function itemLabel(item: { product: string; product_type: string | null } | null
   return item.product_type ? `${item.product} (${item.product_type})` : item.product;
 }
 
-// So NotesThread can tell "is this my note" without the host page threading
-// session identity down through several client-component layers.
-export async function getCurrentActor(): Promise<{ type: string; id: string } | null> {
+// So NotesThread/MediaActions can tell "is this mine" (or "am I the boss")
+// without the host page threading session identity down through several
+// client-component layers.
+export async function getCurrentActor(): Promise<{ type: string; id: string; role?: string } | null> {
   const actor = await resolveActor();
-  return actor ? { type: actor.type, id: actor.id } : null;
+  return actor ? { type: actor.type, id: actor.id, role: actor.role } : null;
 }
 
 export async function getOrderNotes(orderId: string): Promise<OrderNote[]> {

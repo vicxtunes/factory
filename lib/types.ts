@@ -102,6 +102,10 @@ export interface OrderItemMedia {
   storage_path: string | null;
   secure_url: string;
   uploaded_at: string;
+  uploaded_by_type: AuditActorType | null;
+  uploaded_by_id: string | null;
+  uploaded_by_name: string | null;
+  uploaded_by_role: string | null;
 }
 
 export interface OrderNote {
@@ -202,6 +206,20 @@ export interface NotificationRow {
   created_at: string;
 }
 
+export type SupportReportStatus = "open" | "resolved";
+
+export interface SupportReport {
+  id: string;
+  author_type: AuditActorType;
+  author_id: string;
+  author_name: string;
+  author_role: string | null;
+  body: string;
+  status: SupportReportStatus;
+  created_at: string;
+  resolved_at: string | null;
+}
+
 export interface Station {
   id: string;
   name: string;
@@ -251,7 +269,13 @@ export interface OrderItemWithOrder extends OrderItem {
     | "created_at"
     | "created_by_name"
     | "created_by_role"
-  >;
+  > & {
+    // Every order_notes row for the order — both order-level (order_item_id
+    // null) and item-level. Card badges filter to what they need; the drawer
+    // just needs the order-level slice. Fetched here rather than per-item to
+    // avoid an extra round trip when the card badge shows order notes too.
+    order_notes: OrderNote[];
+  };
 }
 
 export const PRODUCTION_STATUSES: ProductionStatus[] = [
@@ -267,7 +291,7 @@ export const STATUS_LABELS: Record<ProductionStatus, string> = {
   in_production: "In Production",
   quality_check: "Quality Check",
   ready_for_pickup: "Ready",
-  completed: "Completed",
+  completed: "Delivered",
 };
 
 // Columns shown on the factory kanban (completed handled separately).

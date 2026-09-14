@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { CreateOrderDrawer } from "@/components/order/CreateOrderDrawer";
+import { ExportButtons } from "@/components/order/ExportButtons";
 import { OrderItemsTable } from "@/components/order/OrderItemsTable";
 import { Drawer } from "@/components/ui/Drawer";
 import { Select, TextInput } from "@/components/ui/Field";
@@ -150,9 +151,12 @@ export function OrderBoard({
     };
   }, [refetch]);
 
-  // Ready + Completed items are hidden by default — the board tracks work in
-  // progress. Revealed by the "Show ready & completed" toggle, or
-  // automatically when the status filter is set to one of those.
+  // Ready + Delivered and with-designer items are hidden by default — the
+  // board tracks work in progress. Checking either toggle switches the whole
+  // view to just that bucket (or both, if both are checked) instead of
+  // appending it below the active-work groups — the point of checking
+  // "show delivered" is to review delivered orders without scrolling past
+  // everything still in progress first.
   const matched = useMemo(
     () => filterItems(items, filters, workerById),
     [items, filters, workerById],
@@ -160,23 +164,40 @@ export function OrderBoard({
   const statusFilterIsFinished =
     filters.status !== "" && FINISHED_STATUSES.includes(filters.status);
   const showingFinished = showFinished || statusFilterIsFinished;
-  const finishedFiltered = useMemo(
-    () =>
-      showingFinished
-        ? matched
-        : matched.filter((i) => !FINISHED_STATUSES.includes(i.production_status)),
-    [matched, showingFinished],
-  );
-  const hiddenFinished = showingFinished ? 0 : matched.length - finishedFiltered.length;
 
+  const deliveredItems = useMemo(
+    () => matched.filter((i) => FINISHED_STATUSES.includes(i.production_status)),
+    [matched],
+  );
+  const withDesignerItems = useMemo(
+    () =>
+      matched.filter(
+        (i) => i.stage === NOT_READY_STAGE && !FINISHED_STATUSES.includes(i.production_status),
+      ),
+    [matched],
+  );
+  const activeItems = useMemo(
+    () =>
+      matched.filter(
+        (i) => i.stage !== NOT_READY_STAGE && !FINISHED_STATUSES.includes(i.production_status),
+      ),
+    [matched],
+  );
+  const hiddenFinished = showingFinished ? 0 : deliveredItems.length;
+  const hiddenWithDesigner = showWithDesigner ? 0 : withDesignerItems.length;
+  const anyBucketToggled = showingFinished || showWithDesigner;
+
+  // When neither toggle is on: active work only (the default). When either
+  // is on: active work is hidden entirely and only the checked bucket(s)
+  // show — same list feeds both the cards view and the table, so the table
+  // follows the same "no scrolling past active work" behavior.
   const filtered = useMemo(
     () =>
-      showWithDesigner
-        ? finishedFiltered
-        : finishedFiltered.filter((i) => i.stage !== NOT_READY_STAGE),
-    [finishedFiltered, showWithDesigner],
+      anyBucketToggled
+        ? [...(showingFinished ? deliveredItems : []), ...(showWithDesigner ? withDesignerItems : [])]
+        : activeItems,
+    [activeItems, deliveredItems, withDesignerItems, showingFinished, showWithDesigner, anyBucketToggled],
   );
-  const hiddenWithDesigner = showWithDesigner ? 0 : finishedFiltered.length - filtered.length;
 
   const chips = useMemo(
     () =>
@@ -195,22 +216,35 @@ export function OrderBoard({
 
   // Cards view: grouped by category so product lines don't blur together,
   // each group internally in display order (newest on top, express last).
-  const groups = useMemo(() => {
-    const byCategory = new Map<string, OrderItemWithOrder[]>();
-    for (const item of filtered) {
-      const name = (item.category_id && categoryById.get(item.category_id)) || UNCATEGORIZED;
-      const bucket = byCategory.get(name) ?? [];
-      bucket.push(item);
-      byCategory.set(name, bucket);
-    }
-    return Array.from(byCategory.entries())
-      .map(([name, groupItems]) => ({ name, items: sortOrderListItems(groupItems) }))
-      .sort((a, b) => {
-        if (a.name === UNCATEGORIZED) return 1;
-        if (b.name === UNCATEGORIZED) return -1;
-        return a.name.localeCompare(b.name);
-      });
-  }, [filtered, categoryById]);
+  const groupByCategory = useCallback(
+    (list: OrderItemWithOrder[]) => {
+      const byCategory = new Map<string, OrderItemWithOrder[]>();
+      for (const item of list) {
+        const name = (item.category_id && categoryById.get(item.category_id)) || UNCATEGORIZED;
+        const bucket = byCategory.get(name) ?? [];
+        bucket.push(item);
+        byCategory.set(name, bucket);
+      }
+      return Array.from(byCategory.entries())
+        .map(([name, groupItems]) => ({ name, items: sortOrderListItems(groupItems) }))
+        .sort((a, b) => {
+          if (a.name === UNCATEGORIZED) return 1;
+          if (b.name === UNCATEGORIZED) return -1;
+          return a.name.localeCompare(b.name);
+        });
+    },
+    [categoryById],
+  );
+
+  const groups = useMemo(() => groupByCategory(activeItems), [groupByCategory, activeItems]);
+  const deliveredGroups = useMemo(
+    () => (showingFinished ? groupByCategory(deliveredItems) : []),
+    [groupByCategory, deliveredItems, showingFinished],
+  );
+  const withDesignerGroups = useMemo(
+    () => (showWithDesigner ? groupByCategory(withDesignerItems) : []),
+    [groupByCategory, withDesignerItems, showWithDesigner],
+  );
 
   const tableItems = useMemo(() => sortOrderListItems(filtered), [filtered]);
   const filterCount = activeFilterCount(filters);
@@ -376,7 +410,7 @@ export function OrderBoard({
                 setTableRows(TABLE_PAGE_SIZES[0]);
               }}
             />
-            Show ready &amp; completed
+            Show ready &amp; delivered
             {hiddenFinished > 0 ? (
               <span className="tnum">({hiddenFinished})</span>
             ) : null}
@@ -430,6 +464,9 @@ export function OrderBoard({
 
       {view === "table" ? (
         <div className="space-y-2">
+          <div className="flex justify-end">
+            <ExportButtons items={tableItems} workerName={workerName} />
+          </div>
           <OrderItemsTable
             items={tableItems.slice(0, tableRows)}
             workerName={workerName}
@@ -463,30 +500,31 @@ export function OrderBoard({
         <p className="rounded-[var(--radius)] border border-dashed border-border p-3 text-xs text-muted">
           No items match these filters.
         </p>
+      ) : !anyBucketToggled ? (
+        <CategoryGroups groups={groups} workerById={workerById} onOpen={setSelectedId} />
       ) : (
-        <div className="space-y-6">
-          {groups.map((group) => (
-            <section key={group.name}>
-              <SectionLabel>
-                {group.name}{" "}
-                <span className="tnum text-muted/70">({group.items.length})</span>
-              </SectionLabel>
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                {group.items.map((i) => (
-                  <OrderCard
-                    key={i.id}
-                    item={i}
-                    assignedName={
-                      i.assigned_worker_id
-                        ? (workerById.get(i.assigned_worker_id)?.name ?? null)
-                        : null
-                    }
-                    onOpen={() => setSelectedId(i.id)}
-                  />
-                ))}
-              </div>
-            </section>
-          ))}
+        // Either toggle on: active work is hidden entirely, not scrolled
+        // past — only the checked bucket(s) render, right at the top.
+        <div className="space-y-8">
+          {showingFinished && deliveredGroups.length > 0 ? (
+            <div className="space-y-6">
+              <h2 className="text-sm font-semibold text-foreground">
+                Delivered <span className="tnum text-muted">({deliveredItems.length})</span>
+              </h2>
+              <CategoryGroups groups={deliveredGroups} workerById={workerById} onOpen={setSelectedId} />
+            </div>
+          ) : null}
+
+          {showWithDesigner && withDesignerGroups.length > 0 ? (
+            <div
+              className={`space-y-6 ${showingFinished && deliveredGroups.length > 0 ? "border-t border-border pt-6" : ""}`}
+            >
+              <h2 className="text-sm font-semibold text-foreground">
+                With designer <span className="tnum text-muted">({withDesignerItems.length})</span>
+              </h2>
+              <CategoryGroups groups={withDesignerGroups} workerById={workerById} onOpen={setSelectedId} />
+            </div>
+          ) : null}
         </div>
       )}
 
@@ -507,6 +545,39 @@ export function OrderBoard({
           />
         ) : null}
       </Drawer>
+    </div>
+  );
+}
+
+function CategoryGroups({
+  groups,
+  workerById,
+  onOpen,
+}: {
+  groups: { name: string; items: OrderItemWithOrder[] }[];
+  workerById: Map<string, WorkerLite>;
+  onOpen: (itemId: string) => void;
+}) {
+  if (groups.length === 0) return null;
+  return (
+    <div className="space-y-6">
+      {groups.map((group) => (
+        <section key={group.name}>
+          <SectionLabel>
+            {group.name} <span className="tnum text-muted/70">({group.items.length})</span>
+          </SectionLabel>
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {group.items.map((i) => (
+              <OrderCard
+                key={i.id}
+                item={i}
+                assignedName={i.assigned_worker_id ? (workerById.get(i.assigned_worker_id)?.name ?? null) : null}
+                onOpen={() => onOpen(i.id)}
+              />
+            ))}
+          </div>
+        </section>
+      ))}
     </div>
   );
 }

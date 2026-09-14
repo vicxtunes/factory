@@ -15,12 +15,16 @@ export function OrderCard({
   onOpen: () => void;
 }) {
   const isExpress = item.order.order_type === "express";
+  const orderNotes = item.order.order_notes.filter((n) => n.order_item_id === null);
 
   return (
     <article
-      className={`relative overflow-hidden rounded-[var(--radius)] border border-l-4 border-border bg-surface shadow-theme-xs transition-colors ${statusCardClasses(item.production_status, item.is_delayed)}`}
+      className={`relative rounded-[var(--radius)] border border-l-4 border-border bg-surface shadow-theme-xs transition-colors ${statusCardClasses(item.production_status, item.is_delayed)}`}
     >
-      <button onClick={onOpen} className="w-full p-3 pr-11 text-left text-sm hover:bg-background">
+      <button
+        onClick={onOpen}
+        className="w-full rounded-[var(--radius)] p-3 pr-11 text-left text-sm hover:bg-background"
+      >
         <div className="flex items-start justify-between gap-2">
           <p className="text-base font-semibold leading-tight">{item.order.client_name}</p>
           <div className="flex shrink-0 flex-col items-end gap-1">
@@ -53,9 +57,9 @@ export function OrderCard({
         ) : null}
       </button>
 
-      {item.item_notes.length > 0 ? (
+      {orderNotes.length + item.item_notes.length > 0 ? (
         <div className="absolute right-2.5 top-2.5">
-          <NoteBadge notes={item.item_notes} />
+          <NoteBadge orderNotes={orderNotes} itemNotes={item.item_notes} />
         </div>
       ) : null}
     </article>

@@ -84,7 +84,7 @@ export default async function DashboardOverviewPage() {
           }
         />
         <StatCard
-          label="Completed today"
+          label="Delivered today"
           value={completedToday}
           icon={
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-6 w-6">

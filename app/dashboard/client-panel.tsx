@@ -4,7 +4,10 @@ import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/Button";
+import { Drawer } from "@/components/ui/Drawer";
+import { ExportButtons } from "@/components/ui/ExportButtons";
 import { Field, TextInput } from "@/components/ui/Field";
+import type { ExportColumn } from "@/lib/export/tableExport";
 import type { Client } from "@/lib/types";
 
 import {
@@ -17,6 +20,20 @@ import {
   type BulkImportRowSkip,
 } from "./actions";
 
+interface ClientExportRow extends Record<string, unknown> {
+  name: string;
+  email: string;
+  phone: string;
+  status: string;
+}
+
+const EXPORT_COLUMNS: ExportColumn<ClientExportRow>[] = [
+  { key: "name", label: "Client" },
+  { key: "email", label: "Email" },
+  { key: "phone", label: "Phone" },
+  { key: "status", label: "Status" },
+];
+
 export function ClientPanel({ clients }: { clients: Client[] }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -27,6 +44,7 @@ export function ClientPanel({ clients }: { clients: Client[] }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [formOpen, setFormOpen] = useState(false);
 
   const q = search.trim().toLowerCase();
   const visibleClients = q
@@ -77,11 +95,25 @@ export function ClientPanel({ clients }: { clients: Client[] }) {
     });
   }
 
+  const exportRows: ClientExportRow[] = visibleClients.map((c) => ({
+    name: c.name,
+    email: c.email ?? "—",
+    phone: c.phone ?? "—",
+    status: c.active ? "Active" : "Inactive",
+  }));
+
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl border border-border bg-surface p-5 shadow-theme-xs">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <ExportButtons columns={EXPORT_COLUMNS} rows={exportRows} filename="clients" />
+        <Button variant="primary" onClick={() => setFormOpen(true)}>
+          + Add client
+        </Button>
+      </div>
+
+      <Drawer open={formOpen} onClose={() => setFormOpen(false)} title="Add client">
         <form
-          className="grid gap-3 sm:grid-cols-[1fr_1fr_1fr_auto]"
+          className="space-y-3"
           onSubmit={(e) => {
             e.preventDefault();
             run(async () => {
@@ -90,6 +122,7 @@ export function ClientPanel({ clients }: { clients: Client[] }) {
                 setName("");
                 setEmail("");
                 setPhone("");
+                setFormOpen(false);
               }
               return res;
             });
@@ -104,11 +137,10 @@ export function ClientPanel({ clients }: { clients: Client[] }) {
           <Field label="Phone">
             <TextInput value={phone} onChange={(e) => setPhone(e.target.value)} />
           </Field>
-          <div className="flex items-end">
-            <Button variant="primary" type="submit" disabled={pending}>
-              Add client
-            </Button>
-          </div>
+          <Button variant="primary" type="submit" disabled={pending} className="w-full">
+            Add client
+          </Button>
+          {error ? <p className="text-sm text-error-600">{error}</p> : null}
         </form>
 
         <div className="mt-4 border-t border-border pt-4">
@@ -151,9 +183,7 @@ export function ClientPanel({ clients }: { clients: Client[] }) {
             </div>
           ) : null}
         </div>
-
-        {error ? <p className="mt-3 text-sm text-error-600">{error}</p> : null}
-      </div>
+      </Drawer>
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <TextInput

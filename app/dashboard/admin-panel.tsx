@@ -4,7 +4,10 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/Button";
+import { Drawer } from "@/components/ui/Drawer";
+import { ExportButtons } from "@/components/ui/ExportButtons";
 import { Field, Select, TextInput } from "@/components/ui/Field";
+import type { ExportColumn } from "@/lib/export/tableExport";
 import type { AppRole } from "@/lib/types";
 
 import {
@@ -28,21 +31,53 @@ const ROLE_OPTIONS: { value: AppRole; label: string }[] = [
   { value: "boss", label: "Boss" },
 ];
 
+interface AdminExportRow extends Record<string, unknown> {
+  name: string;
+  email: string;
+  role: string;
+}
+
+const EXPORT_COLUMNS: ExportColumn<AdminExportRow>[] = [
+  { key: "name", label: "Name" },
+  { key: "email", label: "Email" },
+  { key: "role", label: "Role" },
+];
+
 export function AdminPanel({ admins, ownId }: { admins: AdminRow[]; ownId: string }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<{ email: string; password: string } | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
 
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<AppRole>("supervisor");
 
+  const exportRows: AdminExportRow[] = admins.map((a) => ({
+    name: a.full_name || "—",
+    email: a.email,
+    role: a.role,
+  }));
+
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl border border-border bg-surface p-5 shadow-theme-xs">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <ExportButtons columns={EXPORT_COLUMNS} rows={exportRows} filename="dashboard-admins" />
+        <Button
+          variant="primary"
+          onClick={() => {
+            setCreated(null);
+            setFormOpen(true);
+          }}
+        >
+          + Create user
+        </Button>
+      </div>
+
+      <Drawer open={formOpen} onClose={() => setFormOpen(false)} title="Create dashboard user">
         <form
-          className="grid gap-3 sm:grid-cols-[1fr_1fr_140px_auto]"
+          className="space-y-3"
           onSubmit={(e) => {
             e.preventDefault();
             setError(null);
@@ -81,15 +116,14 @@ export function AdminPanel({ admins, ownId }: { admins: AdminRow[]; ownId: strin
               ))}
             </Select>
           </Field>
-          <div className="flex items-end">
-            <Button variant="primary" type="submit" disabled={pending} className="w-full">
-              Create
-            </Button>
-          </div>
+          <Button variant="primary" type="submit" disabled={pending} className="w-full">
+            Create
+          </Button>
+          {error ? <p className="text-sm text-error-600">{error}</p> : null}
         </form>
 
-        {error ? <p className="mt-3 text-sm text-error-600">{error}</p> : null}
-
+        {/* Deliberately doesn't close the drawer on success — this one-time
+            password would be lost before it could be copied. */}
         {created ? (
           <div className="mt-3 rounded-lg bg-success-50 px-3 py-2 text-sm text-success-700 dark:bg-success-500/15 dark:text-success-500">
             <p className="font-medium">
@@ -99,7 +133,7 @@ export function AdminPanel({ admins, ownId }: { admins: AdminRow[]; ownId: strin
             <p className="mt-1 font-mono text-base tracking-wide">{created.password}</p>
           </div>
         ) : null}
-      </div>
+      </Drawer>
 
       <div className="overflow-hidden rounded-2xl border border-border bg-surface shadow-theme-xs">
         <div className="max-w-full overflow-x-auto">

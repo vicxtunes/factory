@@ -4,7 +4,10 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/Button";
+import { Drawer } from "@/components/ui/Drawer";
+import { ExportButtons } from "@/components/ui/ExportButtons";
 import { Field, TextInput } from "@/components/ui/Field";
+import type { ExportColumn } from "@/lib/export/tableExport";
 import type { Designer } from "@/lib/types";
 
 import { PinReset } from "./pin-reset";
@@ -16,6 +19,16 @@ import {
 } from "./actions";
 
 type DesignerLite = Omit<Designer, "pin_hash">;
+
+interface DesignerExportRow extends Record<string, unknown> {
+  name: string;
+  status: string;
+}
+
+const EXPORT_COLUMNS: ExportColumn<DesignerExportRow>[] = [
+  { key: "name", label: "Designer" },
+  { key: "status", label: "Status" },
+];
 
 export function DesignerPanel({
   designers,
@@ -30,6 +43,7 @@ export function DesignerPanel({
 
   const [name, setName] = useState("");
   const [pin, setPin] = useState("");
+  const [formOpen, setFormOpen] = useState(false);
 
   function run(fn: () => Promise<{ ok: boolean; error?: string }>) {
     setError(null);
@@ -40,12 +54,26 @@ export function DesignerPanel({
     });
   }
 
+  const exportRows: DesignerExportRow[] = designers.map((d) => ({
+    name: d.name,
+    status: d.active ? "Active" : "Inactive",
+  }));
+
   return (
     <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <ExportButtons columns={EXPORT_COLUMNS} rows={exportRows} filename="designers" />
+        {canManage ? (
+          <Button variant="primary" onClick={() => setFormOpen(true)}>
+            + Add designer
+          </Button>
+        ) : null}
+      </div>
+
       {canManage ? (
-        <div className="rounded-2xl border border-border bg-surface p-5 shadow-theme-xs">
+        <Drawer open={formOpen} onClose={() => setFormOpen(false)} title="Add designer">
           <form
-            className="grid gap-3 sm:grid-cols-[1fr_1fr_auto]"
+            className="space-y-3"
             onSubmit={(e) => {
               e.preventDefault();
               run(async () => {
@@ -53,6 +81,7 @@ export function DesignerPanel({
                 if (res.ok) {
                   setName("");
                   setPin("");
+                  setFormOpen(false);
                 }
                 return res;
               });
@@ -69,14 +98,12 @@ export function DesignerPanel({
                 required
               />
             </Field>
-            <div className="flex items-end">
-              <Button variant="primary" type="submit" disabled={pending}>
-                Add designer
-              </Button>
-            </div>
+            <Button variant="primary" type="submit" disabled={pending} className="w-full">
+              Add designer
+            </Button>
+            {error ? <p className="text-sm text-error-600">{error}</p> : null}
           </form>
-          {error ? <p className="mt-3 text-sm text-error-600">{error}</p> : null}
-        </div>
+        </Drawer>
       ) : null}
 
       <div className="overflow-hidden rounded-2xl border border-border bg-surface shadow-theme-xs">

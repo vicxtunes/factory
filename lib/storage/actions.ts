@@ -6,11 +6,24 @@ import { revalidatePath } from "next/cache";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireMediaUploadAccess } from "@/lib/auth/session";
-import { logOrderEvent, resolveActor } from "@/lib/audit/log";
+import { logOrderEvent, resolveActor, type AuditActor } from "@/lib/audit/log";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { MEDIA_BUCKET } from "./client";
 
 type Result = { ok: true } | { ok: false; error: string };
+
+// Only the person who added a piece of media — or the boss, overriding —
+// may replace or delete it. Media with no recorded uploader (added before
+// this tracking existed) has nobody it can match, so it's boss-only too,
+// same posture as imported/unattributed notes.
+function canManageMedia(
+  media: { uploaded_by_type: string | null; uploaded_by_id: string | null },
+  actor: AuditActor | null,
+): boolean {
+  if (!actor) return false;
+  if (actor.type === "dashboard_user" && actor.role === "boss") return true;
+  return media.uploaded_by_type === actor.type && media.uploaded_by_id === actor.id;
+}
 
 async function fetchOrderAndLabel(
   admin: SupabaseClient,
@@ -87,6 +100,7 @@ export async function confirmItemUpload(orderItemId: string, path: string): Prom
 
   const { data: pub } = admin.storage.from(MEDIA_BUCKET).getPublicUrl(path);
 
+  const actor = await resolveActor();
   const fileName = basename.replace(/^[0-9a-f-]{36}-/, "");
   const { error } = await admin.from("order_item_media").insert({
     order_item_id: orderItemId,
@@ -94,6 +108,10 @@ export async function confirmItemUpload(orderItemId: string, path: string): Prom
     mime_type: item.metadata?.mimetype ?? null,
     storage_path: path,
     secure_url: pub.publicUrl,
+    uploaded_by_type: actor?.type ?? null,
+    uploaded_by_id: actor?.id ?? null,
+    uploaded_by_name: actor?.name ?? null,
+    uploaded_by_role: actor?.role ?? null,
   });
   if (error) return { ok: false, error: error.message };
 
@@ -102,7 +120,7 @@ export async function confirmItemUpload(orderItemId: string, path: string): Prom
     await logOrderEvent({
       orderId: context.orderId,
       orderItemId,
-      actor: await resolveActor(),
+      actor,
       action: "photo_uploaded",
       detail: { itemLabel: context.label, fileName },
     });
@@ -135,10 +153,15 @@ export async function addMediaLink(orderItemId: string, url: string): Promise<Re
   }
 
   const admin = createAdminClient();
+  const actor = await resolveActor();
   const { error } = await admin.from("order_item_media").insert({
     order_item_id: orderItemId,
     file_name: trimmed,
     secure_url: trimmed,
+    uploaded_by_type: actor?.type ?? null,
+    uploaded_by_id: actor?.id ?? null,
+    uploaded_by_name: actor?.name ?? null,
+    uploaded_by_role: actor?.role ?? null,
   });
   if (error) return { ok: false, error: error.message };
 
@@ -147,7 +170,7 @@ export async function addMediaLink(orderItemId: string, url: string): Promise<Re
     await logOrderEvent({
       orderId: context.orderId,
       orderItemId,
-      actor: await resolveActor(),
+      actor,
       action: "link_added",
       detail: { itemLabel: context.label },
     });
@@ -160,19 +183,24 @@ export async function addMediaLink(orderItemId: string, url: string): Promise<Re
   return { ok: true };
 }
 
-// A wrong file/link stays wrong forever unless someone can remove it — same
-// access boundary as adding media (requireMediaUploadAccess): whoever can
-// upload on a surface can also correct their own mistake there.
+// A wrong file/link stays wrong forever unless someone can remove it — but
+// only the person who added it (or the boss) may do so, so one person's
+// mistake-fixing can't quietly delete someone else's work.
 export async function deleteOrderItemMedia(mediaId: string): Promise<Result> {
   await requireMediaUploadAccess();
   const admin = createAdminClient();
 
   const { data: media } = await admin
     .from("order_item_media")
-    .select("id, order_item_id, storage_path")
+    .select("id, order_item_id, storage_path, uploaded_by_type, uploaded_by_id")
     .eq("id", mediaId)
     .maybeSingle();
   if (!media) return { ok: false, error: "Media not found." };
+
+  const actor = await resolveActor();
+  if (!canManageMedia(media, actor)) {
+    return { ok: false, error: "Only the person who added this — or the boss — can delete it." };
+  }
 
   if (media.storage_path) {
     await admin.storage.from(MEDIA_BUCKET).remove([media.storage_path]);
@@ -186,7 +214,7 @@ export async function deleteOrderItemMedia(mediaId: string): Promise<Result> {
     await logOrderEvent({
       orderId: context.orderId,
       orderItemId: media.order_item_id,
-      actor: await resolveActor(),
+      actor,
       action: "media_removed",
       detail: { itemLabel: context.label },
     });
@@ -209,10 +237,15 @@ export async function confirmMediaReplace(mediaId: string, path: string): Promis
   const admin = createAdminClient();
   const { data: existing } = await admin
     .from("order_item_media")
-    .select("id, order_item_id, storage_path")
+    .select("id, order_item_id, storage_path, uploaded_by_type, uploaded_by_id")
     .eq("id", mediaId)
     .maybeSingle();
   if (!existing) return { ok: false, error: "Media not found." };
+
+  const actor = await resolveActor();
+  if (!canManageMedia(existing, actor)) {
+    return { ok: false, error: "Only the person who added this — or the boss — can replace it." };
+  }
 
   const lastSlash = path.lastIndexOf("/");
   const dir = path.slice(0, lastSlash);
@@ -250,7 +283,7 @@ export async function confirmMediaReplace(mediaId: string, path: string): Promis
     await logOrderEvent({
       orderId: context.orderId,
       orderItemId: existing.order_item_id,
-      actor: await resolveActor(),
+      actor,
       action: "media_replaced",
       detail: { itemLabel: context.label },
     });
@@ -283,10 +316,15 @@ export async function updateMediaLink(mediaId: string, url: string): Promise<Res
   const admin = createAdminClient();
   const { data: existing } = await admin
     .from("order_item_media")
-    .select("id, order_item_id")
+    .select("id, order_item_id, uploaded_by_type, uploaded_by_id")
     .eq("id", mediaId)
     .maybeSingle();
   if (!existing) return { ok: false, error: "Media not found." };
+
+  const actor = await resolveActor();
+  if (!canManageMedia(existing, actor)) {
+    return { ok: false, error: "Only the person who added this — or the boss — can replace it." };
+  }
 
   const { error } = await admin
     .from("order_item_media")
@@ -299,7 +337,7 @@ export async function updateMediaLink(mediaId: string, url: string): Promise<Res
     await logOrderEvent({
       orderId: context.orderId,
       orderItemId: existing.order_item_id,
-      actor: await resolveActor(),
+      actor,
       action: "media_replaced",
       detail: { itemLabel: context.label },
     });

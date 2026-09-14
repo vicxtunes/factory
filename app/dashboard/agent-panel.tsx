@@ -4,16 +4,30 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/Button";
+import { Drawer } from "@/components/ui/Drawer";
+import { ExportButtons } from "@/components/ui/ExportButtons";
 import { Field, TextInput } from "@/components/ui/Field";
+import type { ExportColumn } from "@/lib/export/tableExport";
 import type { Agent } from "@/lib/types";
 
 import { addAgent, deactivateAgent, reactivateAgent } from "./actions";
+
+interface AgentExportRow extends Record<string, unknown> {
+  name: string;
+  status: string;
+}
+
+const EXPORT_COLUMNS: ExportColumn<AgentExportRow>[] = [
+  { key: "name", label: "Agent" },
+  { key: "status", label: "Status" },
+];
 
 export function AgentPanel({ agents }: { agents: Agent[] }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState("");
+  const [formOpen, setFormOpen] = useState(false);
 
   function run(fn: () => Promise<{ ok: boolean; error?: string }>) {
     setError(null);
@@ -24,33 +38,44 @@ export function AgentPanel({ agents }: { agents: Agent[] }) {
     });
   }
 
+  const exportRows: AgentExportRow[] = agents.map((a) => ({
+    name: a.name,
+    status: a.active ? "Active" : "Inactive",
+  }));
+
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl border border-border bg-surface p-5 shadow-theme-xs">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <ExportButtons columns={EXPORT_COLUMNS} rows={exportRows} filename="agents" />
+        <Button variant="primary" onClick={() => setFormOpen(true)}>
+          + Add agent
+        </Button>
+      </div>
+
+      <Drawer open={formOpen} onClose={() => setFormOpen(false)} title="Add agent">
         <form
-          className="flex gap-3"
+          className="space-y-3"
           onSubmit={(e) => {
             e.preventDefault();
             run(async () => {
               const res = await addAgent(name);
-              if (res.ok) setName("");
+              if (res.ok) {
+                setName("");
+                setFormOpen(false);
+              }
               return res;
             });
           }}
         >
-          <div className="flex-1">
-            <Field label="Name">
-              <TextInput value={name} onChange={(e) => setName(e.target.value)} required />
-            </Field>
-          </div>
-          <div className="flex items-end">
-            <Button variant="primary" type="submit" disabled={pending}>
-              Add agent
-            </Button>
-          </div>
+          <Field label="Name">
+            <TextInput value={name} onChange={(e) => setName(e.target.value)} required />
+          </Field>
+          <Button variant="primary" type="submit" disabled={pending} className="w-full">
+            Add agent
+          </Button>
+          {error ? <p className="text-sm text-error-600">{error}</p> : null}
         </form>
-        {error ? <p className="mt-3 text-sm text-error-600">{error}</p> : null}
-      </div>
+      </Drawer>
 
       <div className="overflow-hidden rounded-2xl border border-border bg-surface shadow-theme-xs">
         <div className="max-w-full overflow-x-auto">

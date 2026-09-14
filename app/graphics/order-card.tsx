@@ -24,11 +24,15 @@ function formatDate(iso: string | null): string {
 
 export function OrderCard({ order, onOpen }: { order: DesignerOrder; onOpen: () => void }) {
   const sent = order.items.filter((i) => i.stage === "factory").length;
-  const notes = order.items.flatMap((i) => i.item_notes);
+  const itemNotes = order.items.flatMap((i) => i.item_notes);
+  const orderNotes = (order.items[0]?.order.order_notes ?? []).filter((n) => n.order_item_id === null);
 
   return (
-    <article className="relative overflow-hidden rounded-[var(--radius)] border border-border bg-surface shadow-theme-xs transition-colors">
-      <button onClick={onOpen} className="w-full p-3 pr-11 text-left text-sm hover:bg-background">
+    <article className="relative rounded-[var(--radius)] border border-border bg-surface shadow-theme-xs transition-colors">
+      <button
+        onClick={onOpen}
+        className="w-full rounded-[var(--radius)] p-3 pr-11 text-left text-sm hover:bg-background"
+      >
         <div className="flex items-start justify-between gap-2">
           <p className="text-base font-semibold leading-tight">{order.clientName}</p>
           {order.orderType === "express" ? (
@@ -55,9 +59,9 @@ export function OrderCard({ order, onOpen }: { order: DesignerOrder; onOpen: () 
         ) : null}
       </button>
 
-      {notes.length > 0 ? (
+      {orderNotes.length + itemNotes.length > 0 ? (
         <div className="absolute right-2.5 top-2.5">
-          <NoteBadge notes={notes} />
+          <NoteBadge orderNotes={orderNotes} itemNotes={itemNotes} />
         </div>
       ) : null}
     </article>

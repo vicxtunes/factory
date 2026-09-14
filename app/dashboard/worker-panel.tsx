@@ -4,7 +4,10 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/Button";
+import { Drawer } from "@/components/ui/Drawer";
+import { ExportButtons } from "@/components/ui/ExportButtons";
 import { Field, Select, TextInput } from "@/components/ui/Field";
+import type { ExportColumn } from "@/lib/export/tableExport";
 import type { Station, Worker } from "@/lib/types";
 
 import { PinReset } from "./pin-reset";
@@ -17,6 +20,18 @@ import {
 } from "./actions";
 
 type WorkerLite = Omit<Worker, "pin_hash">;
+
+interface WorkerExportRow extends Record<string, unknown> {
+  name: string;
+  station: string;
+  status: string;
+}
+
+const EXPORT_COLUMNS: ExportColumn<WorkerExportRow>[] = [
+  { key: "name", label: "Worker" },
+  { key: "station", label: "Station" },
+  { key: "status", label: "Status" },
+];
 
 export function WorkerPanel({
   workers,
@@ -37,6 +52,7 @@ export function WorkerPanel({
   const [name, setName] = useState("");
   const [pin, setPin] = useState("");
   const [station, setStation] = useState("");
+  const [formOpen, setFormOpen] = useState(false);
 
   function run(fn: () => Promise<{ ok: boolean; error?: string }>) {
     setError(null);
@@ -47,12 +63,34 @@ export function WorkerPanel({
     });
   }
 
+  const exportRows: WorkerExportRow[] = workers.map((w) => ({
+    name: w.name,
+    station: w.station ?? "—",
+    status: w.active ? "Active" : "Inactive",
+  }));
+
   return (
     <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <ExportButtons columns={EXPORT_COLUMNS} rows={exportRows} filename="workers" />
+        {canManageSecurity ? (
+          <Button variant="primary" onClick={() => setFormOpen(true)}>
+            + Add worker
+          </Button>
+        ) : null}
+      </div>
+
+      {!canManageSecurity ? (
+        <p className="text-sm text-muted">
+          Adding workers and managing their PIN/access is limited to supervisors — you can still
+          reassign stations below.
+        </p>
+      ) : null}
+
       {canManageSecurity ? (
-        <div className="rounded-2xl border border-border bg-surface p-5 shadow-theme-xs">
+        <Drawer open={formOpen} onClose={() => setFormOpen(false)} title="Add worker">
           <form
-            className="grid gap-3 sm:grid-cols-[1fr_120px_1fr_auto]"
+            className="space-y-3"
             onSubmit={(e) => {
               e.preventDefault();
               run(async () => {
@@ -61,6 +99,7 @@ export function WorkerPanel({
                   setName("");
                   setPin("");
                   setStation("");
+                  setFormOpen(false);
                 }
                 return res;
               });
@@ -87,20 +126,13 @@ export function WorkerPanel({
                 ))}
               </Select>
             </Field>
-            <div className="flex items-end">
-              <Button variant="primary" type="submit" disabled={pending}>
-                Add worker
-              </Button>
-            </div>
+            <Button variant="primary" type="submit" disabled={pending} className="w-full">
+              Add worker
+            </Button>
+            {error ? <p className="text-sm text-error-600">{error}</p> : null}
           </form>
-          {error ? <p className="mt-3 text-sm text-error-600">{error}</p> : null}
-        </div>
-      ) : (
-        <p className="text-sm text-muted">
-          Adding workers and managing their PIN/access is limited to supervisors — you can still
-          reassign stations below.
-        </p>
-      )}
+        </Drawer>
+      ) : null}
 
       <div className="overflow-hidden rounded-2xl border border-border bg-surface shadow-theme-xs">
         <div className="max-w-full overflow-x-auto">

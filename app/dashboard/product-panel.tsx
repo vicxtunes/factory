@@ -5,7 +5,9 @@ import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/Button";
 import { Drawer } from "@/components/ui/Drawer";
+import { ExportButtons } from "@/components/ui/ExportButtons";
 import { Field, Select, TextInput } from "@/components/ui/Field";
+import type { ExportColumn } from "@/lib/export/tableExport";
 import type { AttributeType, CategoryAttribute, Product, ProductCategory } from "@/lib/types";
 
 import {
@@ -28,6 +30,20 @@ type MutationResult = { ok: boolean; error?: string };
 
 const ATTRIBUTE_TYPES: AttributeType[] = ["text", "number", "select"];
 
+interface CategoryExportRow extends Record<string, unknown> {
+  name: string;
+  products: number;
+  fields: number;
+  status: string;
+}
+
+const EXPORT_COLUMNS: ExportColumn<CategoryExportRow>[] = [
+  { key: "name", label: "Category" },
+  { key: "products", label: "Products" },
+  { key: "fields", label: "Custom fields" },
+  { key: "status", label: "Status" },
+];
+
 export function ProductPanel({
   categories,
   canManage = true,
@@ -41,6 +57,7 @@ export function ProductPanel({
   const [newCategoryName, setNewCategoryName] = useState("");
   const [openCategoryId, setOpenCategoryId] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
 
   function run(fn: () => Promise<MutationResult>) {
     setError(null);
@@ -52,18 +69,36 @@ export function ProductPanel({
   }
 
   const openCategory = categories.find((c) => c.id === openCategoryId) ?? null;
+  const exportRows: CategoryExportRow[] = categories.map((c) => ({
+    name: c.name,
+    products: c.products.length,
+    fields: c.attributes.length,
+    status: c.active ? "Active" : "Inactive",
+  }));
 
   return (
     <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <ExportButtons columns={EXPORT_COLUMNS} rows={exportRows} filename="product-categories" />
+        {canManage ? (
+          <Button variant="primary" onClick={() => setFormOpen(true)}>
+            + Add category
+          </Button>
+        ) : null}
+      </div>
+
       {canManage ? (
-        <div className="rounded-2xl border border-border bg-surface p-5 shadow-theme-xs">
+        <Drawer open={formOpen} onClose={() => setFormOpen(false)} title="Add category">
           <form
-            className="flex gap-2"
+            className="space-y-3"
             onSubmit={(e) => {
               e.preventDefault();
               run(async () => {
                 const res = await createCategory(newCategoryName);
-                if (res.ok) setNewCategoryName("");
+                if (res.ok) {
+                  setNewCategoryName("");
+                  setFormOpen(false);
+                }
                 return res;
               });
             }}
@@ -74,12 +109,12 @@ export function ProductPanel({
               placeholder="New category name"
               required
             />
-            <Button variant="primary" type="submit" disabled={pending}>
+            <Button variant="primary" type="submit" disabled={pending} className="w-full">
               Add category
             </Button>
+            {error ? <p className="text-sm text-error-600">{error}</p> : null}
           </form>
-          {error ? <p className="mt-3 text-sm text-error-600">{error}</p> : null}
-        </div>
+        </Drawer>
       ) : null}
 
       <div className="overflow-hidden rounded-2xl border border-border bg-surface shadow-theme-xs">
