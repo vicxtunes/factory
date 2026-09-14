@@ -28,6 +28,20 @@ export function isManagerRole(role: AppRole): boolean {
   return role === "supervisor" || role === "receptionist" || role === "boss";
 }
 
+// Receptionist is the data-entry role (orders, clients, agents) and does
+// NOT get worker login-credential actions — setting a worker's initial PIN,
+// resetting a PIN, or activating/deactivating a worker's account. Those stay
+// with supervisor and boss, gated via requireWorkerSecurity().
+export function canManageWorkerSecurity(role: AppRole): boolean {
+  return role === "supervisor" || role === "boss";
+}
+
+// The order-level "Show logs" audit trail is boss-only for now — written so
+// another role can be added later with a one-line change here.
+export function canViewOrderAudit(role: AppRole): boolean {
+  return role === "boss";
+}
+
 export interface Order {
   id: string;
   order_no: string;
@@ -45,9 +59,10 @@ export interface Order {
   assigned_designer_id: string | null;
   designer_name: string | null;
   designer_brief: string | null;
-  order_notes: string | null;
   media_link: string | null;
   media_notes: string | null;
+  created_by_name: string | null;
+  created_by_role: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -67,7 +82,6 @@ export interface OrderItem {
   lamination_type: string | null;
   box_type: string | null;
   urgency: Urgency;
-  item_notes: string | null;
   stage: OrderStage;
   production_status: ProductionStatus;
   is_delayed: boolean;
@@ -88,6 +102,18 @@ export interface OrderItemMedia {
   storage_path: string | null;
   secure_url: string;
   uploaded_at: string;
+}
+
+export interface OrderNote {
+  id: string;
+  order_id: string;
+  order_item_id: string | null;
+  author_type: AuditActorType;
+  author_id: string | null;
+  author_name: string;
+  author_role: string | null;
+  body: string;
+  created_at: string;
 }
 
 export interface Client {
@@ -182,6 +208,20 @@ export interface Station {
   created_at: string;
 }
 
+export type AuditActorType = "dashboard_user" | "worker" | "designer" | "system";
+
+export interface OrderAuditEntry {
+  id: string;
+  order_id: string;
+  order_item_id: string | null;
+  actor_type: AuditActorType;
+  actor_name: string;
+  actor_role: string | null;
+  action: string;
+  detail: Record<string, unknown>;
+  created_at: string;
+}
+
 export interface Profile {
   id: string;
   role: AppRole;
@@ -192,6 +232,7 @@ export interface Profile {
 // Joined shape used by the factory board and dashboard list.
 export interface OrderItemWithOrder extends OrderItem {
   media: OrderItemMedia[];
+  item_notes: OrderNote[];
   order: Pick<
     Order,
     | "order_no"
@@ -202,12 +243,14 @@ export interface OrderItemWithOrder extends OrderItem {
     | "assigned_designer_id"
     | "designer_name"
     | "designer_brief"
-    | "order_notes"
     | "media_link"
     | "media_notes"
     | "order_type"
     | "deadline_at"
     | "agent_name"
+    | "created_at"
+    | "created_by_name"
+    | "created_by_role"
   >;
 }
 

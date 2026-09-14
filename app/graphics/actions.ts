@@ -7,6 +7,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { DESIGNER_COOKIE, signPayload } from "@/lib/auth/cookies";
 import { getDesignerSession } from "@/lib/auth/session";
 import { verifyPin } from "@/lib/auth/pin";
+import { logOrderEvent, resolveActor } from "@/lib/audit/log";
 import {
   findClientCandidates,
   matchReasonLabel,
@@ -23,6 +24,10 @@ import type {
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 30; // remembered on device, same as workers
 
 type ActionResult = { ok: true } | { ok: false; error: string };
+
+function itemLabel(item: { product: string; product_type: string | null }): string {
+  return item.product_type ? `${item.product} (${item.product_type})` : item.product;
+}
 
 export async function verifyDesignerPin(
   designerId: string,
@@ -90,11 +95,15 @@ export async function advanceItemToFactory(itemId: string): Promise<ActionResult
   const admin = createAdminClient();
   const { data: item } = await admin
     .from("order_items")
-    .select("id, order_id, stage, order:orders!inner (assigned_designer_id)")
+    .select(
+      "id, order_id, product, product_type, stage, order:orders!inner (assigned_designer_id)",
+    )
     .eq("id", itemId)
     .maybeSingle<{
       id: string;
       order_id: string;
+      product: string;
+      product_type: string | null;
       stage: string;
       order: { assigned_designer_id: string | null };
     }>();
@@ -113,6 +122,14 @@ export async function advanceItemToFactory(itemId: string): Promise<ActionResult
   if (error) return { ok: false, error: error.message };
 
   await syncOrderStageIfDone(admin, item.order_id);
+
+  await logOrderEvent({
+    orderId: item.order_id,
+    orderItemId: itemId,
+    actor: await resolveActor(),
+    action: "item_sent_to_factory",
+    detail: { itemLabel: itemLabel(item) },
+  });
 
   revalidatePath("/graphics");
   revalidatePath("/factory");
@@ -139,15 +156,25 @@ export async function completeDesignerWork(orderId: string): Promise<ActionResul
     return { ok: false, error: "This order isn't assigned to you." };
   }
 
-  const { error: itemsError } = await admin
+  const { data: releasedItems, error: itemsError } = await admin
     .from("order_items")
     .update({ stage: "factory" })
     .eq("order_id", orderId)
-    .eq("stage", "with_designer");
+    .eq("stage", "with_designer")
+    .select("id");
   if (itemsError) return { ok: false, error: itemsError.message };
 
   const { error } = await admin.from("orders").update({ stage: "factory" }).eq("id", orderId);
   if (error) return { ok: false, error: error.message };
+
+  if (releasedItems && releasedItems.length > 0) {
+    await logOrderEvent({
+      orderId,
+      actor: await resolveActor(),
+      action: "order_released_to_factory",
+      detail: { count: releasedItems.length },
+    });
+  }
 
   revalidatePath("/graphics");
   revalidatePath("/factory");
@@ -171,14 +198,12 @@ export interface DesignerItemEditInput {
   variant_id: string; // "" when the product has no variant selected
   qty: number;
   attributes: Record<string, string>;
-  item_notes: string;
 }
 
 export interface DesignerOrderEditInput {
   orderId: string;
   delivery_date: string;
   deadline_at: string; // required only when the order is express
-  order_notes: string;
   items: DesignerItemEditInput[];
 }
 
@@ -189,7 +214,7 @@ export async function updateDesignerOrder(input: DesignerOrderEditInput): Promis
   const admin = createAdminClient();
   const { data: order } = await admin
     .from("orders")
-    .select("id, assigned_designer_id, order_type")
+    .select("id, assigned_designer_id, order_type, delivery_date, deadline_at")
     .eq("id", input.orderId)
     .maybeSingle();
   if (!order) return { ok: false, error: "Order not found." };
@@ -205,7 +230,7 @@ export async function updateDesignerOrder(input: DesignerOrderEditInput): Promis
   const itemIds = input.items.map((i) => i.id);
   const { data: existingItems } = await admin
     .from("order_items")
-    .select("id, order_id, production_status")
+    .select("id, order_id, production_status, product, product_type, qty")
     .in("id", itemIds);
   if (
     !existingItems ||
@@ -278,7 +303,6 @@ export async function updateDesignerOrder(input: DesignerOrderEditInput): Promis
         product_type: variant?.name ?? null,
         qty: Number.isFinite(item.qty) && item.qty > 0 ? Math.floor(item.qty) : 1,
         attributes,
-        item_notes: item.item_notes.trim() || null,
       },
     });
   }
@@ -288,15 +312,68 @@ export async function updateDesignerOrder(input: DesignerOrderEditInput): Promis
     if (error) return { ok: false, error: error.message };
   }
 
+  const newDeadline = order.order_type === "express" ? input.deadline_at : null;
+
   const { error: orderError } = await admin
     .from("orders")
     .update({
       delivery_date: input.delivery_date,
-      deadline_at: order.order_type === "express" ? input.deadline_at : null,
-      order_notes: input.order_notes.trim() || null,
+      deadline_at: newDeadline,
     })
     .eq("id", input.orderId);
   if (orderError) return { ok: false, error: orderError.message };
+
+  // One log row per field that actually changed — not a blanket "order
+  // edited" line — so "Show logs" reads as a specific, useful timeline.
+  const actor = await resolveActor();
+  const existingById = new Map((existingItems ?? []).map((i) => [i.id, i]));
+  for (const { id, patch } of updates) {
+    const existing = existingById.get(id);
+    if (!existing) continue;
+    const label = itemLabel(existing);
+    const newProduct = patch.product as string;
+    const newProductType = (patch.product_type as string | null) ?? null;
+    if (existing.product !== newProduct || existing.product_type !== newProductType) {
+      await logOrderEvent({
+        orderId: input.orderId,
+        orderItemId: id,
+        actor,
+        action: "item_details_updated",
+        detail: {
+          itemLabel: label,
+          field: "product",
+          to: newProductType ? `${newProduct} (${newProductType})` : newProduct,
+        },
+      });
+    }
+    const newQty = patch.qty as number;
+    if (existing.qty !== newQty) {
+      await logOrderEvent({
+        orderId: input.orderId,
+        orderItemId: id,
+        actor,
+        action: "item_details_updated",
+        detail: { itemLabel: label, field: "quantity", to: newQty },
+      });
+    }
+  }
+
+  if ((order.delivery_date ?? null) !== input.delivery_date) {
+    await logOrderEvent({
+      orderId: input.orderId,
+      actor,
+      action: "order_details_updated",
+      detail: { field: "delivery date", to: input.delivery_date },
+    });
+  }
+  if ((order.deadline_at ?? null) !== newDeadline) {
+    await logOrderEvent({
+      orderId: input.orderId,
+      actor,
+      action: "order_details_updated",
+      detail: { field: "deadline", to: newDeadline ?? "(cleared)" },
+    });
+  }
 
   revalidatePath("/graphics");
   revalidatePath("/dashboard");

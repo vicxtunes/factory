@@ -35,7 +35,6 @@ function groupByOrder(items: OrderItemWithOrder[]): DesignerOrder[] {
       deadlineAt: item.order.deadline_at,
       deliveryDate: item.order.delivery_date,
       brief: item.order.designer_brief,
-      orderNotes: item.order.order_notes,
       items: [item],
     });
   }

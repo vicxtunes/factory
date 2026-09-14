@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/browser";
-import { confirmItemUpload, createUploadSession } from "@/lib/storage/actions";
+import { confirmItemUpload, confirmMediaReplace, createUploadSession } from "@/lib/storage/actions";
 import { MEDIA_BUCKET } from "@/lib/storage/client";
 
 export type UploadResult = { ok: true } | { ok: false; error: string };
@@ -21,4 +21,24 @@ export async function uploadFileToStorage(orderItemId: string, file: File): Prom
   }
 
   return confirmItemUpload(orderItemId, session.path);
+}
+
+// Same signed-upload flow, but swaps the file at an existing media entry
+// in place instead of adding a new one.
+export async function replaceFileInStorage(
+  mediaId: string,
+  orderItemId: string,
+  file: File,
+): Promise<UploadResult> {
+  const session = await createUploadSession(orderItemId, file.name);
+  if (!session.ok) return session;
+
+  const { error } = await createClient()
+    .storage.from(MEDIA_BUCKET)
+    .uploadToSignedUrl(session.path, session.token, file);
+  if (error) {
+    return { ok: false, error: error.message || `Upload of "${file.name}" failed.` };
+  }
+
+  return confirmMediaReplace(mediaId, session.path);
 }

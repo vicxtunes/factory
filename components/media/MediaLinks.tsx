@@ -1,7 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 
+import { deleteOrderItemMedia, updateMediaLink } from "@/lib/storage/actions";
+import { replaceFileInStorage } from "@/lib/storage/upload-client";
 import type { OrderItemMedia } from "@/lib/types";
 
 const IMAGE_EXTENSION = /\.(jpe?g|png|gif|webp|bmp|svg)(\?.*)?$/i;
@@ -57,6 +59,117 @@ function resolveDownloadUrl(file: OrderItemMedia): string {
 }
 
 type Preview = { url: string; name: string; downloadHref: string };
+
+// "Replace" for an uploaded file re-runs the same signed-upload flow and
+// swaps the file at this row's existing id; for a pasted link it's a quick
+// inline URL edit. "Delete" removes the row (and the Storage object, if
+// any). Same permission boundary as adding media — requireMediaUploadAccess
+// on the server side, no extra gating here.
+function MediaActions({ file, onChanged }: { file: OrderItemMedia; onChanged?: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [editingLink, setEditingLink] = useState(false);
+  const [linkValue, setLinkValue] = useState(file.secure_url);
+  const [error, setError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const isLink = !file.storage_path && !file.cloudinary_public_id;
+
+  async function handleDelete() {
+    if (!window.confirm(`Remove "${file.file_name}"?`)) return;
+    setBusy(true);
+    setError(null);
+    const res = await deleteOrderItemMedia(file.id);
+    setBusy(false);
+    if (!res.ok) setError(res.error);
+    else onChanged?.();
+  }
+
+  async function handleReplaceFile(f: File) {
+    setBusy(true);
+    setError(null);
+    const res = await replaceFileInStorage(file.id, file.order_item_id, f);
+    setBusy(false);
+    if (!res.ok) setError(res.error);
+    else onChanged?.();
+  }
+
+  async function saveLink() {
+    setBusy(true);
+    setError(null);
+    const res = await updateMediaLink(file.id, linkValue);
+    setBusy(false);
+    if (!res.ok) {
+      setError(res.error);
+      return;
+    }
+    setEditingLink(false);
+    onChanged?.();
+  }
+
+  if (editingLink) {
+    return (
+      <div className="mt-1 flex items-center gap-1 text-[0.65rem]">
+        <input
+          type="url"
+          value={linkValue}
+          onChange={(e) => setLinkValue(e.target.value)}
+          className="min-w-0 flex-1 rounded border border-border bg-surface px-1.5 py-0.5"
+        />
+        <button type="button" disabled={busy} onClick={saveLink} className="text-brand-600">
+          Save
+        </button>
+        <button type="button" onClick={() => setEditingLink(false)} className="text-muted">
+          Cancel
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-1 flex flex-col gap-0.5 text-[0.65rem]">
+      <div className="flex items-center gap-2">
+        {isLink ? (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => {
+              setLinkValue(file.secure_url);
+              setEditingLink(true);
+            }}
+            className="text-brand-600"
+          >
+            Replace
+          </button>
+        ) : (
+          <>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => fileInputRef.current?.click()}
+              className="text-brand-600"
+            >
+              {busy ? "Replacing…" : "Replace"}
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*,application/pdf"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) handleReplaceFile(f);
+                e.target.value = "";
+              }}
+            />
+          </>
+        )}
+        <button type="button" disabled={busy} onClick={handleDelete} className="text-[var(--rush)]">
+          Delete
+        </button>
+      </div>
+      {error ? <p className="text-[var(--rush)]">{error}</p> : null}
+    </div>
+  );
+}
 
 function Thumbnail({
   thumbUrl,
@@ -149,9 +262,13 @@ function Lightbox({ preview, onClose }: { preview: Preview; onClose: () => void 
 export function MediaLinks({
   media,
   legacyLink,
+  editable = false,
+  onChanged,
 }: {
   media: OrderItemMedia[];
   legacyLink?: string | null;
+  editable?: boolean;
+  onChanged?: () => void;
 }) {
   const [preview, setPreview] = useState<Preview | null>(null);
 
@@ -168,33 +285,34 @@ export function MediaLinks({
             Download all ({media.length})
           </a>
         ) : null}
-        <div className="flex flex-wrap gap-2">
-          {media.map((file) =>
-            isImage(file.secure_url, file.mime_type) ? (
-              <Thumbnail
-                key={file.id}
-                thumbUrl={resolveThumbUrl(file)}
-                downloadHref={resolveDownloadUrl(file)}
-                name={file.file_name}
-                onOpen={() =>
-                  setPreview({
-                    url: file.secure_url,
-                    name: file.file_name,
-                    downloadHref: resolveDownloadUrl(file),
-                  })
-                }
-              />
-            ) : (
-              <a
-                key={file.id}
-                href={resolveDownloadUrl(file)}
-                download={file.file_name}
-                className="inline-flex min-h-11 items-center rounded-[var(--radius)] border border-border px-3 text-xs"
-              >
-                {file.file_name}
-              </a>
-            ),
-          )}
+        <div className="flex flex-wrap gap-3">
+          {media.map((file) => (
+            <div key={file.id} className="flex flex-col items-start">
+              {isImage(file.secure_url, file.mime_type) ? (
+                <Thumbnail
+                  thumbUrl={resolveThumbUrl(file)}
+                  downloadHref={resolveDownloadUrl(file)}
+                  name={file.file_name}
+                  onOpen={() =>
+                    setPreview({
+                      url: file.secure_url,
+                      name: file.file_name,
+                      downloadHref: resolveDownloadUrl(file),
+                    })
+                  }
+                />
+              ) : (
+                <a
+                  href={resolveDownloadUrl(file)}
+                  download={file.file_name}
+                  className="inline-flex min-h-11 items-center rounded-[var(--radius)] border border-border px-3 text-xs"
+                >
+                  {file.file_name}
+                </a>
+              )}
+              {editable ? <MediaActions file={file} onChanged={onChanged} /> : null}
+            </div>
+          ))}
         </div>
       </div>
     );

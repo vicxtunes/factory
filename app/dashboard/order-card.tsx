@@ -15,7 +15,6 @@ export function OrderCard({
   onOpen: () => void;
 }) {
   const isExpress = item.order.order_type === "express";
-  const note = item.item_notes || item.order.order_notes;
 
   return (
     <article
@@ -54,9 +53,9 @@ export function OrderCard({
         ) : null}
       </button>
 
-      {note ? (
+      {item.item_notes.length > 0 ? (
         <div className="absolute right-2.5 top-2.5">
-          <NoteBadge note={note} />
+          <NoteBadge notes={item.item_notes} />
         </div>
       ) : null}
     </article>

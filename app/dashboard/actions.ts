@@ -7,8 +7,14 @@ import { revalidatePath } from "next/cache";
 
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { requireManager, requireRole } from "@/lib/auth/session";
+import {
+  requireManager,
+  requireOrderAudit,
+  requireRole,
+  requireWorkerSecurity,
+} from "@/lib/auth/session";
 import { hashPin, isValidPinFormat } from "@/lib/auth/pin";
+import { logOrderEvent, resolveActor } from "@/lib/audit/log";
 import {
   exactClientMatch,
   findClientCandidates,
@@ -22,9 +28,13 @@ import type {
   CreateOrderResult,
   OrderFormPayload,
 } from "@/lib/orders/types";
-import type { AppRole, AttributeType, ProductionStatus } from "@/lib/types";
+import type { AppRole, AttributeType, OrderAuditEntry, ProductionStatus } from "@/lib/types";
 
 type Result = { ok: true } | { ok: false; error: string };
+
+function itemLabel(item: { product: string; product_type: string | null }): string {
+  return item.product_type ? `${item.product} (${item.product_type})` : item.product;
+}
 
 export async function signIn(
   _prev: { error?: string },
@@ -48,7 +58,7 @@ export async function addWorker(input: {
   pin: string;
   station: string;
 }): Promise<Result> {
-  await requireManager();
+  await requireWorkerSecurity();
   if (!input.name.trim()) return { ok: false, error: "Name is required." };
   if (!isValidPinFormat(input.pin)) {
     return { ok: false, error: "PIN must be 4–8 digits." };
@@ -81,7 +91,7 @@ export async function updateWorker(input: {
 }
 
 export async function resetWorkerPin(input: { id: string; pin: string }): Promise<Result> {
-  await requireManager();
+  await requireWorkerSecurity();
   if (!isValidPinFormat(input.pin)) {
     return { ok: false, error: "PIN must be 4–8 digits." };
   }
@@ -96,7 +106,7 @@ export async function resetWorkerPin(input: { id: string; pin: string }): Promis
 }
 
 export async function deactivateWorker(id: string): Promise<Result> {
-  await requireManager();
+  await requireWorkerSecurity();
   const admin = createAdminClient();
   // Trigger unassign_items_on_worker_deactivate() nulls their assigned items.
   const { error } = await admin
@@ -109,7 +119,7 @@ export async function deactivateWorker(id: string): Promise<Result> {
 }
 
 export async function reactivateWorker(id: string): Promise<Result> {
-  await requireManager();
+  await requireWorkerSecurity();
   const admin = createAdminClient();
   const { error } = await admin
     .from("workers")
@@ -311,11 +321,33 @@ export async function assignItem(
 ): Promise<Result> {
   await requireManager();
   const admin = createAdminClient();
+
+  const { data: item } = await admin
+    .from("order_items")
+    .select("order_id, product, product_type")
+    .eq("id", itemId)
+    .maybeSingle();
+  if (!item) return { ok: false, error: "Item not found." };
+
   const { error } = await admin
     .from("order_items")
     .update({ assigned_worker_id: workerId })
     .eq("id", itemId);
   if (error) return { ok: false, error: error.message };
+
+  let toWorker: string | null = null;
+  if (workerId) {
+    const { data: worker } = await admin.from("workers").select("name").eq("id", workerId).maybeSingle();
+    toWorker = worker?.name ?? null;
+  }
+  await logOrderEvent({
+    orderId: item.order_id,
+    orderItemId: itemId,
+    actor: await resolveActor(),
+    action: "item_reassigned",
+    detail: { itemLabel: itemLabel(item), toWorker },
+  });
+
   revalidatePath("/dashboard");
   return { ok: true };
 }
@@ -326,13 +358,191 @@ export async function overrideStatus(
 ): Promise<Result> {
   await requireManager();
   const admin = createAdminClient();
+
+  const { data: item } = await admin
+    .from("order_items")
+    .select("order_id, product, product_type")
+    .eq("id", itemId)
+    .maybeSingle();
+  if (!item) return { ok: false, error: "Item not found." };
+
   const { error } = await admin
     .from("order_items")
     .update({ production_status: status })
     .eq("id", itemId);
   if (error) return { ok: false, error: error.message };
+
+  await logOrderEvent({
+    orderId: item.order_id,
+    orderItemId: itemId,
+    actor: await resolveActor(),
+    action: "status_overridden",
+    detail: { itemLabel: itemLabel(item), to: status },
+  });
+
   revalidatePath("/dashboard");
   return { ok: true };
+}
+
+export interface UpdateOrderItemInput {
+  itemId: string;
+  category_id: string;
+  product_id: string;
+  variant_id: string; // "" when the product has no variant selected
+  qty: number;
+  attributes: Record<string, string>;
+  delivery_date: string;
+  deadline_at: string; // required only when the order is express
+}
+
+// Full-order editing for the dashboard (client asks for a change) — every
+// manager role gets this (receptionist included), same "editable until
+// Completed" cutoff the designer side already uses in updateDesignerOrder.
+export async function updateOrderItem(input: UpdateOrderItemInput): Promise<Result> {
+  await requireManager();
+  const admin = createAdminClient();
+
+  const { data: item } = await admin
+    .from("order_items")
+    .select("id, order_id, product, product_type, qty, production_status")
+    .eq("id", input.itemId)
+    .maybeSingle();
+  if (!item) return { ok: false, error: "Item not found." };
+  if (item.production_status === "completed") {
+    return {
+      ok: false,
+      error: "This item has already been completed by the factory and can no longer be edited.",
+    };
+  }
+
+  const { data: order } = await admin
+    .from("orders")
+    .select("id, order_type, delivery_date, deadline_at")
+    .eq("id", item.order_id)
+    .maybeSingle();
+  if (!order) return { ok: false, error: "Order not found." };
+
+  if (!input.delivery_date) return { ok: false, error: "Delivery date is required." };
+  if (order.order_type === "express" && !input.deadline_at) {
+    return { ok: false, error: "Express orders need a deadline date & time." };
+  }
+
+  // Look up catalog rows server-side rather than trusting client-supplied
+  // names — same pattern as buildAndInsertOrder/updateDesignerOrder.
+  const { data: category } = await admin
+    .from("product_categories")
+    .select("id")
+    .eq("id", input.category_id)
+    .maybeSingle();
+  const { data: product } = await admin
+    .from("products")
+    .select("id, name, category_id")
+    .eq("id", input.product_id)
+    .maybeSingle();
+  if (!category || !product || product.category_id !== input.category_id) {
+    return { ok: false, error: "Invalid product selection." };
+  }
+  const { data: variant } = input.variant_id
+    ? await admin.from("product_variants").select("id, name").eq("id", input.variant_id).maybeSingle()
+    : { data: null };
+
+  const { data: attributeDefs } = await admin
+    .from("category_attributes")
+    .select("name, required")
+    .eq("category_id", input.category_id);
+
+  const attributes: Record<string, string> = {};
+  for (const def of attributeDefs ?? []) {
+    const value = (input.attributes[def.name] ?? "").trim();
+    if (def.required && !value) return { ok: false, error: `"${def.name}" is required.` };
+    if (value) attributes[def.name] = value;
+  }
+
+  const newQty = Number.isFinite(input.qty) && input.qty > 0 ? Math.floor(input.qty) : 1;
+  const newProductType = variant?.name ?? null;
+
+  const { error: itemError } = await admin
+    .from("order_items")
+    .update({
+      category_id: input.category_id,
+      product_id: input.product_id,
+      variant_id: input.variant_id || null,
+      product: product.name,
+      product_type: newProductType,
+      qty: newQty,
+      attributes,
+    })
+    .eq("id", input.itemId);
+  if (itemError) return { ok: false, error: itemError.message };
+
+  const newDeadline = order.order_type === "express" ? input.deadline_at : null;
+  const { error: orderError } = await admin
+    .from("orders")
+    .update({ delivery_date: input.delivery_date, deadline_at: newDeadline })
+    .eq("id", order.id);
+  if (orderError) return { ok: false, error: orderError.message };
+
+  // One log row per field that actually changed, same posture as
+  // updateDesignerOrder's diffing.
+  const actor = await resolveActor();
+  const label = itemLabel(item);
+  if (item.product !== product.name || item.product_type !== newProductType) {
+    await logOrderEvent({
+      orderId: order.id,
+      orderItemId: item.id,
+      actor,
+      action: "item_details_updated",
+      detail: {
+        itemLabel: label,
+        field: "product",
+        to: newProductType ? `${product.name} (${newProductType})` : product.name,
+      },
+    });
+  }
+  if (item.qty !== newQty) {
+    await logOrderEvent({
+      orderId: order.id,
+      orderItemId: item.id,
+      actor,
+      action: "item_details_updated",
+      detail: { itemLabel: label, field: "quantity", to: newQty },
+    });
+  }
+  if ((order.delivery_date ?? null) !== input.delivery_date) {
+    await logOrderEvent({
+      orderId: order.id,
+      actor,
+      action: "order_details_updated",
+      detail: { field: "delivery date", to: input.delivery_date },
+    });
+  }
+  if ((order.deadline_at ?? null) !== newDeadline) {
+    await logOrderEvent({
+      orderId: order.id,
+      actor,
+      action: "order_details_updated",
+      detail: { field: "deadline", to: newDeadline ?? "(cleared)" },
+    });
+  }
+
+  revalidatePath("/dashboard/orders");
+  revalidatePath("/dashboard");
+  revalidatePath("/factory");
+  revalidatePath("/graphics");
+  return { ok: true };
+}
+
+// Boss-only "Show logs" read — see requireOrderAudit() and lib/audit/render.ts.
+export async function getOrderAuditLog(orderId: string): Promise<OrderAuditEntry[]> {
+  await requireOrderAudit();
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("order_audit_log")
+    .select("*")
+    .eq("order_id", orderId)
+    .order("created_at", { ascending: false });
+  if (error) return [];
+  return (data ?? []) as OrderAuditEntry[];
 }
 
 // ---------------------------------------------------------------------------

@@ -6,9 +6,27 @@ import { revalidatePath } from "next/cache";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireMediaUploadAccess } from "@/lib/auth/session";
+import { logOrderEvent, resolveActor } from "@/lib/audit/log";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { MEDIA_BUCKET } from "./client";
 
 type Result = { ok: true } | { ok: false; error: string };
+
+async function fetchOrderAndLabel(
+  admin: SupabaseClient,
+  orderItemId: string,
+): Promise<{ orderId: string; label: string } | null> {
+  const { data } = await admin
+    .from("order_items")
+    .select("order_id, product, product_type")
+    .eq("id", orderItemId)
+    .maybeSingle<{ order_id: string; product: string; product_type: string | null }>();
+  if (!data) return null;
+  return {
+    orderId: data.order_id,
+    label: data.product_type ? `${data.product} (${data.product_type})` : data.product,
+  };
+}
 
 // Storage paths (unlike Cloudinary's public_id or a Drive file id) must be
 // unique or an upload silently collides with an existing object, so every
@@ -69,14 +87,26 @@ export async function confirmItemUpload(orderItemId: string, path: string): Prom
 
   const { data: pub } = admin.storage.from(MEDIA_BUCKET).getPublicUrl(path);
 
+  const fileName = basename.replace(/^[0-9a-f-]{36}-/, "");
   const { error } = await admin.from("order_item_media").insert({
     order_item_id: orderItemId,
-    file_name: basename.replace(/^[0-9a-f-]{36}-/, ""),
+    file_name: fileName,
     mime_type: item.metadata?.mimetype ?? null,
     storage_path: path,
     secure_url: pub.publicUrl,
   });
   if (error) return { ok: false, error: error.message };
+
+  const context = await fetchOrderAndLabel(admin, orderItemId);
+  if (context) {
+    await logOrderEvent({
+      orderId: context.orderId,
+      orderItemId,
+      actor: await resolveActor(),
+      action: "photo_uploaded",
+      detail: { itemLabel: context.label, fileName },
+    });
+  }
 
   revalidatePath("/dashboard/orders");
   revalidatePath("/dashboard");
@@ -111,6 +141,169 @@ export async function addMediaLink(orderItemId: string, url: string): Promise<Re
     secure_url: trimmed,
   });
   if (error) return { ok: false, error: error.message };
+
+  const context = await fetchOrderAndLabel(admin, orderItemId);
+  if (context) {
+    await logOrderEvent({
+      orderId: context.orderId,
+      orderItemId,
+      actor: await resolveActor(),
+      action: "link_added",
+      detail: { itemLabel: context.label },
+    });
+  }
+
+  revalidatePath("/dashboard/orders");
+  revalidatePath("/dashboard");
+  revalidatePath("/factory");
+  revalidatePath("/graphics");
+  return { ok: true };
+}
+
+// A wrong file/link stays wrong forever unless someone can remove it — same
+// access boundary as adding media (requireMediaUploadAccess): whoever can
+// upload on a surface can also correct their own mistake there.
+export async function deleteOrderItemMedia(mediaId: string): Promise<Result> {
+  await requireMediaUploadAccess();
+  const admin = createAdminClient();
+
+  const { data: media } = await admin
+    .from("order_item_media")
+    .select("id, order_item_id, storage_path")
+    .eq("id", mediaId)
+    .maybeSingle();
+  if (!media) return { ok: false, error: "Media not found." };
+
+  if (media.storage_path) {
+    await admin.storage.from(MEDIA_BUCKET).remove([media.storage_path]);
+  }
+
+  const { error } = await admin.from("order_item_media").delete().eq("id", mediaId);
+  if (error) return { ok: false, error: error.message };
+
+  const context = await fetchOrderAndLabel(admin, media.order_item_id);
+  if (context) {
+    await logOrderEvent({
+      orderId: context.orderId,
+      orderItemId: media.order_item_id,
+      actor: await resolveActor(),
+      action: "media_removed",
+      detail: { itemLabel: context.label },
+    });
+  }
+
+  revalidatePath("/dashboard/orders");
+  revalidatePath("/dashboard");
+  revalidatePath("/factory");
+  revalidatePath("/graphics");
+  return { ok: true };
+}
+
+// Swaps the file at an existing media entry in place (same row/id), rather
+// than deleting and re-adding — same verify-then-record posture as
+// confirmItemUpload. `path` comes from a fresh createUploadSession call.
+export async function confirmMediaReplace(mediaId: string, path: string): Promise<Result> {
+  await requireMediaUploadAccess();
+  if (!mediaId || !path) return { ok: false, error: "Missing upload details." };
+
+  const admin = createAdminClient();
+  const { data: existing } = await admin
+    .from("order_item_media")
+    .select("id, order_item_id, storage_path")
+    .eq("id", mediaId)
+    .maybeSingle();
+  if (!existing) return { ok: false, error: "Media not found." };
+
+  const lastSlash = path.lastIndexOf("/");
+  const dir = path.slice(0, lastSlash);
+  const basename = path.slice(lastSlash + 1);
+
+  const { data: found, error: listError } = await admin.storage
+    .from(MEDIA_BUCKET)
+    .list(dir, { search: basename, limit: 10 });
+  const item = found?.find((f) => f.name === basename);
+  if (listError || !item) {
+    return { ok: false, error: "Could not verify the uploaded file in storage." };
+  }
+
+  const { data: pub } = admin.storage.from(MEDIA_BUCKET).getPublicUrl(path);
+  const fileName = basename.replace(/^[0-9a-f-]{36}-/, "");
+
+  const { error } = await admin
+    .from("order_item_media")
+    .update({
+      file_name: fileName,
+      mime_type: item.metadata?.mimetype ?? null,
+      storage_path: path,
+      secure_url: pub.publicUrl,
+      cloudinary_public_id: null,
+    })
+    .eq("id", mediaId);
+  if (error) return { ok: false, error: error.message };
+
+  if (existing.storage_path) {
+    await admin.storage.from(MEDIA_BUCKET).remove([existing.storage_path]);
+  }
+
+  const context = await fetchOrderAndLabel(admin, existing.order_item_id);
+  if (context) {
+    await logOrderEvent({
+      orderId: context.orderId,
+      orderItemId: existing.order_item_id,
+      actor: await resolveActor(),
+      action: "media_replaced",
+      detail: { itemLabel: context.label },
+    });
+  }
+
+  revalidatePath("/dashboard/orders");
+  revalidatePath("/dashboard");
+  revalidatePath("/factory");
+  revalidatePath("/graphics");
+  return { ok: true };
+}
+
+// Replace a pasted link's URL in place, same row.
+export async function updateMediaLink(mediaId: string, url: string): Promise<Result> {
+  await requireMediaUploadAccess();
+
+  const trimmed = url.trim();
+  if (!mediaId || !trimmed) return { ok: false, error: "Missing link." };
+
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    return { ok: false, error: "Enter a valid link (starting with http:// or https://)." };
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    return { ok: false, error: "Enter a valid link (starting with http:// or https://)." };
+  }
+
+  const admin = createAdminClient();
+  const { data: existing } = await admin
+    .from("order_item_media")
+    .select("id, order_item_id")
+    .eq("id", mediaId)
+    .maybeSingle();
+  if (!existing) return { ok: false, error: "Media not found." };
+
+  const { error } = await admin
+    .from("order_item_media")
+    .update({ file_name: trimmed, secure_url: trimmed })
+    .eq("id", mediaId);
+  if (error) return { ok: false, error: error.message };
+
+  const context = await fetchOrderAndLabel(admin, existing.order_item_id);
+  if (context) {
+    await logOrderEvent({
+      orderId: context.orderId,
+      orderItemId: existing.order_item_id,
+      actor: await resolveActor(),
+      action: "media_replaced",
+      detail: { itemLabel: context.label },
+    });
+  }
 
   revalidatePath("/dashboard/orders");
   revalidatePath("/dashboard");

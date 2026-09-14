@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { SectionLabel } from "@/components/ui/SectionLabel";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getDashboardSession } from "@/lib/auth/session";
-import { isManagerRole, type Station, type Worker } from "@/lib/types";
+import { canManageWorkerSecurity, isManagerRole, type Station, type Worker } from "@/lib/types";
 
 import { StationPanel } from "../../station-panel";
 import { WorkerPanel } from "../../worker-panel";
@@ -41,7 +41,11 @@ export default async function WorkersPage() {
 
       <section>
         <SectionLabel>Workers</SectionLabel>
-        <WorkerPanel workers={workers} stations={stations} />
+        <WorkerPanel
+          workers={workers}
+          stations={stations}
+          canManageSecurity={canManageWorkerSecurity(session.role)}
+        />
       </section>
     </div>
   );

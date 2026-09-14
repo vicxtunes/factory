@@ -21,9 +21,14 @@ type WorkerLite = Omit<Worker, "pin_hash">;
 export function WorkerPanel({
   workers,
   stations,
+  canManageSecurity = true,
 }: {
   workers: WorkerLite[];
   stations: Station[];
+  // Adding a worker (sets an initial PIN), resetting a PIN, and
+  // activating/deactivating an account are login-credential actions —
+  // receptionist doesn't get these, only supervisor and boss do.
+  canManageSecurity?: boolean;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -44,51 +49,58 @@ export function WorkerPanel({
 
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl border border-border bg-surface p-5 shadow-theme-xs">
-        <form
-          className="grid gap-3 sm:grid-cols-[1fr_120px_1fr_auto]"
-          onSubmit={(e) => {
-            e.preventDefault();
-            run(async () => {
-              const res = await addWorker({ name, pin, station });
-              if (res.ok) {
-                setName("");
-                setPin("");
-                setStation("");
-              }
-              return res;
-            });
-          }}
-        >
-          <Field label="Name">
-            <TextInput value={name} onChange={(e) => setName(e.target.value)} required />
-          </Field>
-          <Field label="PIN (4–8 digits)">
-            <TextInput
-              value={pin}
-              onChange={(e) => setPin(e.target.value)}
-              inputMode="numeric"
-              required
-            />
-          </Field>
-          <Field label="Station">
-            <Select value={station} onChange={(e) => setStation(e.target.value)}>
-              <option value="">No station</option>
-              {stations.map((s) => (
-                <option key={s.id} value={s.name}>
-                  {s.name}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <div className="flex items-end">
-            <Button variant="primary" type="submit" disabled={pending}>
-              Add worker
-            </Button>
-          </div>
-        </form>
-        {error ? <p className="mt-3 text-sm text-error-600">{error}</p> : null}
-      </div>
+      {canManageSecurity ? (
+        <div className="rounded-2xl border border-border bg-surface p-5 shadow-theme-xs">
+          <form
+            className="grid gap-3 sm:grid-cols-[1fr_120px_1fr_auto]"
+            onSubmit={(e) => {
+              e.preventDefault();
+              run(async () => {
+                const res = await addWorker({ name, pin, station });
+                if (res.ok) {
+                  setName("");
+                  setPin("");
+                  setStation("");
+                }
+                return res;
+              });
+            }}
+          >
+            <Field label="Name">
+              <TextInput value={name} onChange={(e) => setName(e.target.value)} required />
+            </Field>
+            <Field label="PIN (4–8 digits)">
+              <TextInput
+                value={pin}
+                onChange={(e) => setPin(e.target.value)}
+                inputMode="numeric"
+                required
+              />
+            </Field>
+            <Field label="Station">
+              <Select value={station} onChange={(e) => setStation(e.target.value)}>
+                <option value="">No station</option>
+                {stations.map((s) => (
+                  <option key={s.id} value={s.name}>
+                    {s.name}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <div className="flex items-end">
+              <Button variant="primary" type="submit" disabled={pending}>
+                Add worker
+              </Button>
+            </div>
+          </form>
+          {error ? <p className="mt-3 text-sm text-error-600">{error}</p> : null}
+        </div>
+      ) : (
+        <p className="text-sm text-muted">
+          Adding workers and managing their PIN/access is limited to supervisors — you can still
+          reassign stations below.
+        </p>
+      )}
 
       <div className="overflow-hidden rounded-2xl border border-border bg-surface shadow-theme-xs">
         <div className="max-w-full overflow-x-auto">
@@ -150,31 +162,35 @@ export function WorkerPanel({
                     </span>
                   </td>
                   <td className="px-5 py-3">
-                    <div className="flex flex-wrap items-center gap-2">
-                      {w.active ? (
-                        <Button
-                          variant="danger"
-                          className="min-h-9 text-xs"
-                          disabled={pending}
-                          onClick={() => run(() => deactivateWorker(w.id))}
-                        >
-                          Deactivate
-                        </Button>
-                      ) : (
-                        <Button
-                          variant="secondary"
-                          className="min-h-9 text-xs"
-                          disabled={pending}
-                          onClick={() => run(() => reactivateWorker(w.id))}
-                        >
-                          Reactivate
-                        </Button>
-                      )}
-                      <PinReset
-                        pending={pending}
-                        onSave={(pin) => run(() => resetWorkerPin({ id: w.id, pin }))}
-                      />
-                    </div>
+                    {canManageSecurity ? (
+                      <div className="flex flex-wrap items-center gap-2">
+                        {w.active ? (
+                          <Button
+                            variant="danger"
+                            className="min-h-9 text-xs"
+                            disabled={pending}
+                            onClick={() => run(() => deactivateWorker(w.id))}
+                          >
+                            Deactivate
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="secondary"
+                            className="min-h-9 text-xs"
+                            disabled={pending}
+                            onClick={() => run(() => reactivateWorker(w.id))}
+                          >
+                            Reactivate
+                          </Button>
+                        )}
+                        <PinReset
+                          pending={pending}
+                          onSave={(pin) => run(() => resetWorkerPin({ id: w.id, pin }))}
+                        />
+                      </div>
+                    ) : (
+                      <span className="text-xs text-muted">Supervisor only</span>
+                    )}
                   </td>
                 </tr>
               ))}

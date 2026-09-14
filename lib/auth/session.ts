@@ -5,7 +5,13 @@ import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { isManagerRole, type AppRole, type Profile } from "@/lib/types";
+import {
+  canManageWorkerSecurity,
+  canViewOrderAudit,
+  isManagerRole,
+  type AppRole,
+  type Profile,
+} from "@/lib/types";
 import {
   DESIGNER_COOKIE,
   WORKER_COOKIE,
@@ -57,6 +63,7 @@ export async function getDesignerSession(): Promise<DesignerSession | null> {
 export interface DashboardSession {
   userId: string;
   email: string | null;
+  fullName: string | null;
   role: AppRole;
 }
 
@@ -70,13 +77,14 @@ export async function getDashboardSession(): Promise<DashboardSession | null> {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("role")
+    .select("role, full_name")
     .eq("id", user.id)
-    .maybeSingle<Pick<Profile, "role">>();
+    .maybeSingle<Pick<Profile, "role" | "full_name">>();
 
   return {
     userId: user.id,
     email: user.email ?? null,
+    fullName: profile?.full_name ?? null,
     role: profile?.role ?? "boss",
   };
 }
@@ -102,6 +110,25 @@ export async function requireManager(): Promise<DashboardSession> {
   const session = await requireDashboard();
   if (!isManagerRole(session.role)) {
     throw new Error("Forbidden: requires manager access");
+  }
+  return session;
+}
+
+// Worker login credentials — initial PIN, PIN reset, activate/deactivate.
+// Receptionist keeps every other manager action; this carve-out is theirs.
+export async function requireWorkerSecurity(): Promise<DashboardSession> {
+  const session = await requireDashboard();
+  if (!canManageWorkerSecurity(session.role)) {
+    throw new Error("Forbidden: requires supervisor or boss access");
+  }
+  return session;
+}
+
+// The order-level "Show logs" audit trail — boss-only for now.
+export async function requireOrderAudit(): Promise<DashboardSession> {
+  const session = await requireDashboard();
+  if (!canViewOrderAudit(session.role)) {
+    throw new Error("Forbidden: requires audit access");
   }
   return session;
 }

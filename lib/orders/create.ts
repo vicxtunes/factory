@@ -2,6 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { logOrderEvent, resolveActor } from "@/lib/audit/log";
 import type { OrderType } from "@/lib/types";
 
 import type { OrderItemInput, OrderRoute } from "./types";
@@ -108,11 +109,12 @@ export async function buildAndInsertOrder(
       qty: Number.isFinite(item.qty) && item.qty > 0 ? Math.floor(item.qty) : 1,
       attributes,
       urgency: p.orderType === "express" ? "urgent" : "normal",
-      item_notes: clean(item.item_notes),
       stage,
       assigned_worker_id: p.responsibleWorkerId,
     });
   }
+
+  const actor = await resolveActor();
 
   const { data: order, error: orderErr } = await admin
     .from("orders")
@@ -126,11 +128,12 @@ export async function buildAndInsertOrder(
       order_type: p.orderType,
       delivery_date: clean(p.deliveryDate),
       deadline_at: p.orderType === "express" ? p.deadlineAt : null,
-      order_notes: clean(p.orderNotes),
       stage,
       assigned_designer_id: p.designer?.id ?? null,
       designer_name: p.designer?.name ?? null,
       designer_brief: p.designer ? clean(p.designerBrief) : null,
+      created_by_name: actor?.name ?? null,
+      created_by_role: actor?.role ?? null,
     })
     .select("id, order_no")
     .single();
@@ -149,6 +152,47 @@ export async function buildAndInsertOrder(
     await admin.from("orders").delete().eq("id", order.id);
     return { ok: false, error: itemsErr?.message ?? "Could not create items." };
   }
+
+  // The order-notes/item-notes textareas at intake become the first entry
+  // in each thread, authored by whoever's creating the order — this is the
+  // "receptionist's initial note" that later editors can add to but never
+  // overwrite (see lib/notes/actions.ts).
+  if (actor) {
+    const noteRows: Record<string, unknown>[] = [];
+    const orderNote = clean(p.orderNotes);
+    if (orderNote) {
+      noteRows.push({
+        order_id: order.id,
+        order_item_id: null,
+        author_type: actor.type,
+        author_id: actor.id,
+        author_name: actor.name,
+        author_role: actor.role ?? null,
+        body: orderNote,
+      });
+    }
+    candidateItems.forEach(({ item }, i) => {
+      const itemNote = clean(item.item_notes);
+      if (!itemNote) return;
+      noteRows.push({
+        order_id: order.id,
+        order_item_id: insertedItems[i].id,
+        author_type: actor.type,
+        author_id: actor.id,
+        author_name: actor.name,
+        author_role: actor.role ?? null,
+        body: itemNote,
+      });
+    });
+    if (noteRows.length > 0) await admin.from("order_notes").insert(noteRows);
+  }
+
+  await logOrderEvent({
+    orderId: order.id,
+    actor,
+    action: "order_created",
+    detail: { clientName: p.client.name },
+  });
 
   return {
     ok: true,
