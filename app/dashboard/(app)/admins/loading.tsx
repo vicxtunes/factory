@@ -1,1 +1,1 @@
-export { ConnectivityLoading as default } from "@/components/pwa/ConnectivityLoading";
+export { ListPageSkeleton as default } from "@/components/ui/ListPageSkeleton";
