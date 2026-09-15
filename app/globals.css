@@ -9,10 +9,10 @@
   --muted: #667085;
   --border: #e4e7ec;
 
-  /* Brand = orange (TailAdmin brand-500/600), drives the header strip and
-     primary buttons. */
-  --navy-900: #f9be8b;
-  --navy-700: #df7416;
+  /* Brand = orange (TailAdmin brand-500/600), drives the header strip (flat,
+     not a gradient) and primary buttons. */
+  --navy-900: #f9a465;
+  --navy-700: #f9a465;
   --amber-500: #f79009;
   --amber-600: #dc6803;
 
@@ -43,18 +43,18 @@
    light/dark, so it lives in its own @theme block rather than the swappable
    one above. */
 @theme {
-  --color-brand-25: #fcfaf8;
-  --color-brand-50: #f9f2eb;
-  --color-brand-100: #f8e7d8;
-  --color-brand-200: #f7d7ba;
-  --color-brand-300: #f8cca5;
-  --color-brand-400: #f8c496;
-  --color-brand-500: #f9be8b;
-  --color-brand-600: #f39849;
-  --color-brand-700: #df7416;
-  --color-brand-800: #9c5516;
-  --color-brand-900: #5e3612;
-  --color-brand-950: #36200d;
+  --color-brand-25: #faf7f5;
+  --color-brand-50: #f6ece4;
+  --color-brand-100: #f4ddcd;
+  --color-brand-200: #f4ccaf;
+  --color-brand-300: #f4ba90;
+  --color-brand-400: #f6ae79;
+  --color-brand-500: #f9a465;
+  --color-brand-600: #f47d25;
+  --color-brand-700: #cb6010;
+  --color-brand-800: #8d4611;
+  --color-brand-900: #522b0f;
+  --color-brand-950: #2d190b;
 
   --color-gray-25: #fcfcfd;
   --color-gray-50: #f9fafb;
@@ -122,7 +122,7 @@ body {
 }
 
 .header-strip {
-  background: linear-gradient(90deg, var(--navy-900) 0%, var(--navy-700) 100%);
+  background: var(--navy-900);
 }
 
 /* Sidebar nav item states, ported from TailAdmin's menu-item utilities. */
