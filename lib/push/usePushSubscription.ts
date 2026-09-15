@@ -14,8 +14,9 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
 }
 
 // Shared by components/push/PushOptIn.tsx (header button, every surface)
-// and components/pwa/PostInstallBanner.tsx (prompt right after install) —
-// same subscribe/unsubscribe flow, two different entry points.
+// and components/pwa/NotificationGate.tsx (blocking prompt for installed
+// apps without push enabled) — same subscribe/unsubscribe flow, two
+// different entry points.
 export function usePushSubscription() {
   const [supported] = useState(
     () => typeof window !== "undefined" && "serviceWorker" in navigator && "PushManager" in window,

@@ -4,8 +4,10 @@
 // only way to trigger the native install UI later (from a click inside our
 // own modal, not the browser's auto-prompt) is to have called
 // event.preventDefault() and held onto it. components/pwa/InstallCapture.tsx
-// registers the listeners once in the root layout; components/pwa/InstallGate.tsx
-// and PostInstallBanner.tsx read/subscribe through the functions below.
+// registers the listener once in the root layout; components/pwa/InstallGate.tsx
+// reads it through the functions below. isRunningStandalone() (checked fresh
+// every session, not via a one-shot event) is what actually sequences
+// InstallGate -> NotificationGate — see NotificationGate's comment.
 
 interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
@@ -14,14 +16,9 @@ interface BeforeInstallPromptEvent extends Event {
 
 let deferredPrompt: BeforeInstallPromptEvent | null = null;
 let installed = false;
-const installedListeners = new Set<() => void>();
 
 export function captureBeforeInstallPrompt(event: BeforeInstallPromptEvent): void {
   deferredPrompt = event;
-}
-
-export function clearDeferredPrompt(): void {
-  deferredPrompt = null;
 }
 
 export function getDeferredPrompt(): BeforeInstallPromptEvent | null {
@@ -31,12 +28,6 @@ export function getDeferredPrompt(): BeforeInstallPromptEvent | null {
 export function markInstalled(): void {
   installed = true;
   deferredPrompt = null;
-  installedListeners.forEach((cb) => cb());
-}
-
-export function onInstalled(cb: () => void): () => void {
-  installedListeners.add(cb);
-  return () => installedListeners.delete(cb);
 }
 
 // display-mode:standalone covers Android/desktop Chrome & Edge;

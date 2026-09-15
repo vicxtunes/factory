@@ -2,7 +2,7 @@ import { Header } from "@/components/ui/Header";
 import { ReportIssueButton } from "@/components/support/ReportIssueButton";
 import { PushOptIn } from "@/components/push/PushOptIn";
 import { InstallGate } from "@/components/pwa/InstallGate";
-import { PostInstallBanner } from "@/components/pwa/PostInstallBanner";
+import { NotificationGate } from "@/components/pwa/NotificationGate";
 import { createClient } from "@/lib/supabase/server";
 import { getWorkerSession } from "@/lib/auth/session";
 import { fetchBoardItems } from "@/lib/queries";
@@ -40,7 +40,7 @@ export default async function FactoryPage() {
   return (
     <>
       <InstallGate />
-      <PostInstallBanner />
+      <NotificationGate />
       <Header
         surface="Factory"
         right={

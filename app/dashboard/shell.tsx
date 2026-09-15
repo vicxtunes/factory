@@ -3,7 +3,7 @@
 import { useState } from "react";
 
 import { InstallGate } from "@/components/pwa/InstallGate";
-import { PostInstallBanner } from "@/components/pwa/PostInstallBanner";
+import { NotificationGate } from "@/components/pwa/NotificationGate";
 import type { AppRole, NotificationRow } from "@/lib/types";
 
 import { DashboardSidebar } from "./sidebar";
@@ -25,7 +25,7 @@ export function DashboardShell({
   return (
     <div className="min-h-screen">
       <InstallGate />
-      <PostInstallBanner />
+      <NotificationGate />
       <DashboardSidebar
         role={role}
         email={email}

@@ -2,7 +2,7 @@ import { Header } from "@/components/ui/Header";
 import { ReportIssueButton } from "@/components/support/ReportIssueButton";
 import { PushOptIn } from "@/components/push/PushOptIn";
 import { InstallGate } from "@/components/pwa/InstallGate";
-import { PostInstallBanner } from "@/components/pwa/PostInstallBanner";
+import { NotificationGate } from "@/components/pwa/NotificationGate";
 import { getDesignerSession } from "@/lib/auth/session";
 import {
   fetchActiveWorkersPublic,
@@ -46,7 +46,7 @@ export default async function GraphicsPage() {
   return (
     <>
       <InstallGate />
-      <PostInstallBanner />
+      <NotificationGate />
       <Header
         surface="Graphics"
         right={
