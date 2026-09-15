@@ -1,10 +1,11 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 
 import { Button } from "@/components/ui/Button";
 import { addMediaLink } from "@/lib/storage/actions";
 import { uploadFileToStorage } from "@/lib/storage/upload-client";
+import { enqueueUpload, pendingUploadsFor, QUEUE_CHANGED_EVENT } from "@/lib/offline-queue/enqueue";
 
 // Lets a signed-in user (dashboard order entry, worker, or designer) attach
 // more photos — or paste a link (Drive, Dropbox, WeTransfer, etc.) — to an
@@ -22,6 +23,14 @@ export function AddMediaButton({
   const [status, setStatus] = useState<string | null>(null);
   const [linkOpen, setLinkOpen] = useState(false);
   const [link, setLink] = useState("");
+  const [pendingUploads, setPendingUploads] = useState(0);
+
+  useEffect(() => {
+    const refresh = () => pendingUploadsFor(orderItemId).then(setPendingUploads);
+    refresh();
+    window.addEventListener(QUEUE_CHANGED_EVENT, refresh);
+    return () => window.removeEventListener(QUEUE_CHANGED_EVENT, refresh);
+  }, [orderItemId]);
 
   function handleFiles(files: FileList | null) {
     if (!files || files.length === 0) return;
@@ -29,14 +38,31 @@ export function AddMediaButton({
     setStatus(null);
     startTransition(async () => {
       let failed = 0;
+      let queued = 0;
       for (const file of list) {
+        // Skip the request entirely when we already know we're offline —
+        // avoids a doomed round trip before falling back to the queue.
+        if (!navigator.onLine) {
+          await enqueueUpload(orderItemId, file);
+          queued += 1;
+          continue;
+        }
         const res = await uploadFileToStorage(orderItemId, file);
         if (!res.ok) {
-          failed += 1;
-          setStatus(res.error);
+          // Connectivity dropped mid-upload (still offline after the
+          // attempt) — queue it. Otherwise it's a genuine error (bad file,
+          // server rejection) and should surface, not silently retry forever.
+          if (!navigator.onLine) {
+            await enqueueUpload(orderItemId, file);
+            queued += 1;
+          } else {
+            failed += 1;
+            setStatus(res.error);
+          }
         }
       }
-      if (failed === 0) setStatus(`Uploaded ${list.length} file(s).`);
+      if (queued > 0) setStatus(`Queued ${queued} file(s) — will upload when back online.`);
+      else if (failed === 0) setStatus(`Uploaded ${list.length} file(s).`);
       if (inputRef.current) inputRef.current.value = "";
       onUploaded?.();
     });
@@ -107,6 +133,11 @@ export function AddMediaButton({
       ) : null}
 
       {status ? <span className="text-xs text-muted">{status}</span> : null}
+      {pendingUploads > 0 ? (
+        <span className="text-xs text-[var(--urgent)]">
+          {pendingUploads} upload{pendingUploads === 1 ? "" : "s"} queued — sends automatically when back online.
+        </span>
+      ) : null}
     </div>
   );
 }

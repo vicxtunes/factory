@@ -11,8 +11,8 @@
 
   /* Brand = orange (TailAdmin brand-500/600), drives the header strip and
      primary buttons. */
-  --navy-900: #ea580c;
-  --navy-700: #c2410c;
+  --navy-900: #f9be8b;
+  --navy-700: #df7416;
   --amber-500: #f79009;
   --amber-600: #dc6803;
 
@@ -43,18 +43,18 @@
    light/dark, so it lives in its own @theme block rather than the swappable
    one above. */
 @theme {
-  --color-brand-25: #fff7ed;
-  --color-brand-50: #ffedd5;
-  --color-brand-100: #fed7aa;
-  --color-brand-200: #fdba74;
-  --color-brand-300: #fb923c;
-  --color-brand-400: #f97316;
-  --color-brand-500: #ea580c;
-  --color-brand-600: #c2410c;
-  --color-brand-700: #9a3412;
-  --color-brand-800: #7c2d12;
-  --color-brand-900: #431407;
-  --color-brand-950: #2a0d05;
+  --color-brand-25: #fcfaf8;
+  --color-brand-50: #f9f2eb;
+  --color-brand-100: #f8e7d8;
+  --color-brand-200: #f7d7ba;
+  --color-brand-300: #f8cca5;
+  --color-brand-400: #f8c496;
+  --color-brand-500: #f9be8b;
+  --color-brand-600: #f39849;
+  --color-brand-700: #df7416;
+  --color-brand-800: #9c5516;
+  --color-brand-900: #5e3612;
+  --color-brand-950: #36200d;
 
   --color-gray-25: #fcfcfd;
   --color-gray-50: #f9fafb;

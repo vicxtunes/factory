@@ -1,5 +1,7 @@
 import type { NextConfig } from "next";
 
+import { withSerwist } from "@serwist/turbopack";
+
 const nextConfig: NextConfig = {
   // "standalone" is for the self-hosted Docker image (see Dockerfile). Vercel
   // has its own serverless output tracing and the two conflict — building
@@ -18,7 +20,11 @@ const nextConfig: NextConfig = {
         "localhost:3911",
       ],
     },
+    // Connectivity-aware retry: a Server Action or navigation started while
+    // offline stays pending (button disabled) and resolves once the network
+    // returns, instead of throwing. See app/dashboard/offline-banner.tsx.
+    useOffline: true,
   },
 };
 
-export default nextConfig;
+export default withSerwist(nextConfig);
