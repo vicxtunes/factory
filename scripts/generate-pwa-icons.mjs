@@ -1,15 +1,15 @@
 // One-off script to generate PWA icon PNGs from the real brand mark
-// (scripts/assets/aming-logo-mark.png — navy rounded-square "A" on a peach
-// ground). Not part of the app; run once locally and commit the resulting
-// PNGs. Uses `sharp`, which is only a transitive dependency here (not
-// declared in package.json) — this script is a build-time tool only, like a
-// favicon generator, not runtime app code.
+// (scripts/assets/aming-icon-source.png — navy "A" on a rounded-square
+// orange ground, transparent corners). Not part of the app; run once
+// locally and commit the resulting PNGs. Uses `sharp`, which is only a
+// transitive dependency here (not declared in package.json) — this script
+// is a build-time tool only, like a favicon generator, not runtime app code.
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
 
-const SOURCE = path.resolve(import.meta.dirname, "assets/aming-logo-mark.png");
-const BG = { r: 252, g: 201, b: 157 }; // sampled corner pixel of the source mark
+const SOURCE = path.resolve(import.meta.dirname, "assets/aming-icon-source.png");
+const BG = { r: 249, g: 164, b: 101 }; // brand-500 (#f9a465), matches the source's own fill
 
 async function writePng(buffer, dir, filename) {
   const outDir = path.resolve(import.meta.dirname, "..", dir);
@@ -24,15 +24,19 @@ async function plainIcon(size, dir, filename) {
 }
 
 // Maskable icons need the important content inside a ~80% safe zone so
-// Android's circle/squircle mask doesn't clip it — shrink the mark and pad
-// with the same background color rather than resizing to fill the frame.
+// Android's circle/squircle mask doesn't clip it — flatten the source's own
+// rounded corners onto a solid square first (so we're padding a clean
+// square, not compounding two different corner treatments), then shrink and
+// center it on a same-color canvas.
 async function maskableIcon(size, dir, filename) {
-  const inner = Math.round(size * 0.7);
-  const mark = await sharp(SOURCE).resize(inner, inner, { kernel: sharp.kernel.lanczos3 }).toBuffer();
+  const inner = Math.round(size * 0.72);
+  const flattened = await sharp(SOURCE).flatten({ background: BG }).resize(inner, inner, {
+    kernel: sharp.kernel.lanczos3,
+  }).toBuffer();
   const buf = await sharp({
     create: { width: size, height: size, channels: 3, background: BG },
   })
-    .composite([{ input: mark, gravity: "center" }])
+    .composite([{ input: flattened, gravity: "center" }])
     .png()
     .toBuffer();
   await writePng(buf, dir, filename);

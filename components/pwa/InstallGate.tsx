@@ -1,25 +1,33 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 
 import { Button } from "@/components/ui/Button";
 import { getDeferredPrompt, isIos, isRunningStandalone } from "@/lib/pwa/install-events";
 
 const DISMISSED_KEY = "install-gate-dismissed";
+const noopSubscribe = () => () => {};
 
 // Blocking install reminder — mounted inside the signed-in views of
 // /dashboard, /factory, /graphics (not /display, not the pre-login screens,
 // not the role-picker). Shows once per browser session (sessionStorage, so
 // it reappears on the next login/session) until the app is actually
 // installed, at which point isRunningStandalone() makes it permanent.
+//
+// The visibility check depends on sessionStorage + display-mode, neither of
+// which exist during SSR — read through useSyncExternalStore (server
+// snapshot: false) rather than a useState lazy initializer, so the server
+// and first client render agree and there's no hydration-mismatch pop-in.
 export function InstallGate() {
-  const [show, setShow] = useState(() => {
-    if (typeof window === "undefined") return false;
-    if (isRunningStandalone()) return false;
-    return !sessionStorage.getItem(DISMISSED_KEY);
-  });
-  const [canPrompt, setCanPrompt] = useState(() => typeof window !== "undefined" && !!getDeferredPrompt());
+  const shouldShow = useSyncExternalStore(
+    noopSubscribe,
+    () => !isRunningStandalone() && !sessionStorage.getItem(DISMISSED_KEY),
+    () => false,
+  );
+  const [dismissed, setDismissed] = useState(false);
+  const [canPrompt, setCanPrompt] = useState(false);
   const [busy, setBusy] = useState(false);
+  const show = shouldShow && !dismissed;
 
   useEffect(() => {
     // beforeinstallprompt can fire after this mounts — poll briefly for it.
@@ -30,7 +38,7 @@ export function InstallGate() {
 
   function dismiss() {
     sessionStorage.setItem(DISMISSED_KEY, "1");
-    setShow(false);
+    setDismissed(true);
   }
 
   async function install() {

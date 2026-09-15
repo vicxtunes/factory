@@ -3,6 +3,7 @@ import { Geist_Mono, Outfit } from "next/font/google";
 import { SerwistProvider } from "@serwist/turbopack/react";
 import { OfflineBanner } from "@/components/pwa/OfflineBanner";
 import { InstallCapture } from "@/components/pwa/InstallCapture";
+import { AppSplash } from "@/components/pwa/AppSplash";
 import "./globals.css";
 
 const outfit = Outfit({
@@ -27,7 +28,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#f9be8b",
+  themeColor: "#f9a465",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
@@ -40,6 +41,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <SerwistProvider swUrl="/serwist/sw.js">
           <InstallCapture />
           <OfflineBanner />
+          <AppSplash />
           {children}
         </SerwistProvider>
       </body>
