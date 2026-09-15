@@ -40,7 +40,19 @@ interface PushPayload {
 
 self.addEventListener("push", (event) => {
   if (!event.data) return;
-  const data = event.data.json() as PushPayload;
+
+  // Payloads we send are always JSON (lib/push/send.ts), but a
+  // non-JSON payload (e.g. DevTools' "Push" test with plain text) must not
+  // throw here — an uncaught error in this handler skips showNotification()
+  // entirely, and a push event that doesn't show a notification is a
+  // spec violation some browsers penalize by revoking the subscription.
+  let data: PushPayload;
+  try {
+    data = event.data.json() as PushPayload;
+  } catch {
+    data = { title: "AMING", body: event.data.text() };
+  }
+
   event.waitUntil(
     self.registration.showNotification(data.title, {
       body: data.body,
