@@ -48,7 +48,7 @@ export function StatusBarChart({ data }: { data: { label: string; count: number 
         />
         <Bar
           dataKey="count"
-          fill="#ea580c"
+          fill="#f9be8b"
           radius={[6, 6, 0, 0]}
           maxBarSize={48}
           isAnimationActive={false}

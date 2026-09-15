@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -181,10 +182,7 @@ export function DashboardSidebar({
       }`}
     >
       <div className="flex h-16 shrink-0 items-center gap-2 border-b border-border px-5">
-        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-500 text-sm font-bold text-white">
-          A
-        </span>
-        <span className="text-sm font-semibold">AMING</span>
+        <Image src="/aming-logo-header.png" alt="AMING" width={193} height={40} className="h-7 w-auto" priority />
       </div>
       <nav className="flex-1 overflow-y-auto px-3 py-4">
         <p className="mb-2 px-3 text-xs font-semibold uppercase tracking-wide text-muted">Menu</p>

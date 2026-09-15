@@ -1,5 +1,8 @@
 import { Header } from "@/components/ui/Header";
 import { ReportIssueButton } from "@/components/support/ReportIssueButton";
+import { PushOptIn } from "@/components/push/PushOptIn";
+import { InstallGate } from "@/components/pwa/InstallGate";
+import { PostInstallBanner } from "@/components/pwa/PostInstallBanner";
 import { createClient } from "@/lib/supabase/server";
 import { getWorkerSession } from "@/lib/auth/session";
 import { fetchBoardItems } from "@/lib/queries";
@@ -36,11 +39,14 @@ export default async function FactoryPage() {
 
   return (
     <>
+      <InstallGate />
+      <PostInstallBanner />
       <Header
         surface="Factory"
         right={
           <>
             <ReportIssueButton triggerClassName="text-white/70 hover:text-white text-xs underline-offset-2 hover:underline" />
+            <PushOptIn triggerClassName="text-white/70 hover:text-white text-xs underline-offset-2 hover:underline" />
             <span className="text-white/80">{session.name}</span>
             <LogoutButton />
           </>

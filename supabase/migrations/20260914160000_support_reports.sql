@@ -22,5 +22,6 @@ alter table support_reports enable row level security;
 
 -- Deliberately no select/insert policy for anon/authenticated: every access
 -- goes through the service-role admin client from a gated server action
--- (lib/support/actions.ts) — submit is any signed-in session, review/resolve/
--- delete is the owner email only.
+-- (lib/support/actions.ts) — submit is any signed-in session, review-all/
+-- resolve/delete is the owner email only, and a reporter may list only their
+-- own reports (scoped by author_type/author_id, not by email).
