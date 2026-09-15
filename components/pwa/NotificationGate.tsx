@@ -6,32 +6,34 @@ import { Button } from "@/components/ui/Button";
 import { isRunningStandalone } from "@/lib/pwa/install-events";
 import { usePushSubscription } from "@/lib/push/usePushSubscription";
 
-const DISMISSED_KEY = "notification-gate-dismissed";
 const noopSubscribe = () => () => {};
 
 // Blocking notification-permission reminder, mounted next to InstallGate.
 // Unlike the earlier PostInstallBanner (removed — see git history), this
 // doesn't depend on the one-shot `appinstalled` event, which never fires on
 // iOS and only fires once ever for a fresh install. Instead it re-checks
-// "is this an installed app that hasn't enabled push yet" every session,
-// same as InstallGate checks "is this installed" every session — so it
-// reliably shows for anyone running the installed app without push on,
+// "is this an installed app that hasn't enabled push yet" every time it
+// mounts, same as InstallGate checks "is this installed" every session — so
+// it reliably shows for anyone running the installed app without push on,
 // regardless of when/how they installed.
+//
+// Deliberately not persisted anywhere (no sessionStorage/localStorage
+// dismiss flag): "Not now" only dismisses it for the current open. Someone
+// who hasn't enabled notifications gets asked again next time they open the
+// app — this is meant to nag until they act, not fade away after one no.
 //
 // Naturally sequenced after InstallGate: isRunningStandalone() is false
 // until actually installed, so this stays hidden during the install-gate
 // phase and only takes over once the app is running standalone.
 export function NotificationGate() {
   const standalone = useSyncExternalStore(noopSubscribe, isRunningStandalone, () => false);
-  const notDismissed = useSyncExternalStore(noopSubscribe, () => !sessionStorage.getItem(DISMISSED_KEY), () => false);
   const [dismissed, setDismissed] = useState(false);
   const { supported, subscribed, pending, error, subscribe } = usePushSubscription();
 
-  const show = standalone && notDismissed && !dismissed && supported && subscribed === false;
+  const show = standalone && !dismissed && supported && subscribed === false;
   if (!show) return null;
 
   function dismiss() {
-    sessionStorage.setItem(DISMISSED_KEY, "1");
     setDismissed(true);
   }
 
