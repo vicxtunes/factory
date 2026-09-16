@@ -220,13 +220,26 @@ export interface SupportReport {
   resolved_at: string | null;
 }
 
+export interface MarketingSlide {
+  id: string;
+  image_url: string;
+  // Not rendered as a visible overlay — the slide image is expected to be
+  // a fully designed graphic already. Used as the <img> alt text.
+  caption: string | null;
+  link_url: string | null;
+  sort_order: number;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Station {
   id: string;
   name: string;
   created_at: string;
 }
 
-export type AuditActorType = "dashboard_user" | "worker" | "designer" | "system";
+export type AuditActorType = "dashboard_user" | "worker" | "designer" | "system" | "client";
 
 export interface OrderAuditEntry {
   id: string;

@@ -26,8 +26,10 @@ export interface BuildOrderParams {
   deadlineAt: string;
   orderNotes: string;
   designerBrief: string;
-  // Required initial owner — written to every item's assigned_worker_id.
-  responsibleWorkerId: string;
+  // Initial owner, written to every item's assigned_worker_id. Required for
+  // staff-created orders (checked by the caller via verifyActiveWorker());
+  // null for client-portal orders, which land unassigned for staff to triage.
+  responsibleWorkerId: string | null;
   items: OrderItemInput[];
 }
 
@@ -111,6 +113,7 @@ export async function buildAndInsertOrder(
       urgency: p.orderType === "express" ? "urgent" : "normal",
       stage,
       assigned_worker_id: p.responsibleWorkerId,
+      media_link: clean(item.media_link ?? ""),
     });
   }
 

@@ -116,6 +116,18 @@ function SupportIcon({ className }: { className?: string }) {
   );
 }
 
+function MarketingIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className={className}>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M3 8.25h13.5v7.5H3v-7.5ZM16.5 10.5 21 8.25v7.5l-4.5-2.25M7.5 18.75h4.5"
+      />
+    </svg>
+  );
+}
+
 function DisplayIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className={className}>
@@ -144,6 +156,7 @@ const TABS = [
   { href: "/dashboard/clients", label: "Clients", icon: ClientsIcon, role: MANAGER_ROLES, newTab: false },
   { href: "/dashboard/agents", label: "Agents", icon: AgentsIcon, role: MANAGER_ROLES, newTab: false },
   { href: "/dashboard/products", label: "Products", icon: ProductsIcon, role: MANAGER_ROLES, newTab: false },
+  { href: "/dashboard/marketing", label: "Marketing", icon: MarketingIcon, role: MANAGER_ROLES, newTab: false },
   { href: "/dashboard/workers", label: "Workers", icon: WorkersIcon, role: MANAGER_ROLES, newTab: false },
   { href: "/dashboard/designers", label: "Designers", icon: DesignersIcon, role: MANAGER_ROLES, newTab: false },
   { href: "/dashboard/admins", label: "Admins", icon: AdminsIcon, role: ["boss"], newTab: false },

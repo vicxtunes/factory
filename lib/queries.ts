@@ -4,6 +4,7 @@ import {
   type Agent,
   type Client,
   type DesignerPublic,
+  type MarketingSlide,
   type NotificationRow,
   type OrderItemWithOrder,
   type ProductCategory,
@@ -34,6 +35,20 @@ export async function fetchDesignerItems(designerId: string): Promise<OrderItemW
     .from("order_items")
     .select(ITEM_SELECT)
     .eq("order.assigned_designer_id", designerId);
+  if (error) throw new Error(error.message);
+  return (data ?? []) as unknown as OrderItemWithOrder[];
+}
+
+// Every item ever placed by this client — the /client-side portal's "My
+// Orders" + "History" views split this by whether every item on the order
+// is completed. Same shape/template as fetchDesignerItems above.
+export async function fetchClientItems(clientId: string): Promise<OrderItemWithOrder[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("order_items")
+    .select(ITEM_SELECT)
+    .eq("order.client_id", clientId)
+    .order("created_at", { ascending: false });
   if (error) throw new Error(error.message);
   return (data ?? []) as unknown as OrderItemWithOrder[];
 }
@@ -126,6 +141,22 @@ const CATALOG_SELECT = `
     variants:product_variants (id, product_id, name, active, created_at)
   )
 `;
+
+// Marketing carousel slides for the client-portal dashboard, each pointing
+// at a catalog category. activeOnly=true is what /client-side renders;
+// false (all slides, for the boss-only admin panel) is the default so an
+// inactive slide doesn't just vanish from the management list.
+export async function fetchMarketingSlides(activeOnly = false): Promise<MarketingSlide[]> {
+  const supabase = await createClient();
+  let query = supabase
+    .from("marketing_slides")
+    .select("id, image_url, caption, link_url, sort_order, active, created_at, updated_at")
+    .order("sort_order", { ascending: true });
+  if (activeOnly) query = query.eq("active", true);
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+  return (data ?? []) as unknown as MarketingSlide[];
+}
 
 // Nested category -> products -> variants + custom-attribute catalog, used
 // by the intake wizard's item pickers and the supervisor products panel.

@@ -33,7 +33,11 @@ function filenameFromContentDisposition(header: string | null, fallback: string)
 // can prompt "Save As" via the File System Access API when the browser
 // supports it — a plain download link always saves silently to the default
 // Downloads folder with no way for a site to ask for a location.
-async function downloadWithPicker(url: string, fallbackName: string): Promise<void> {
+async function downloadWithPicker(
+  url: string,
+  fallbackName: string,
+  fileType?: { description: string; accept: Record<string, string[]> },
+): Promise<void> {
   const res = await fetch(url);
   if (!res.ok) throw new Error("Download failed.");
   const filename = filenameFromContentDisposition(res.headers.get("Content-Disposition"), fallbackName);
@@ -43,7 +47,7 @@ async function downloadWithPicker(url: string, fallbackName: string): Promise<vo
     try {
       const handle = await window.showSaveFilePicker({
         suggestedName: filename,
-        types: [{ description: "Zip archive", accept: { "application/zip": [".zip"] } }],
+        types: fileType ? [fileType] : undefined,
       });
       const writable = await handle.createWritable();
       await writable.write(blob);
@@ -262,6 +266,20 @@ function Thumbnail({
   name: string;
   onOpen: () => void;
 }) {
+  const [downloading, setDownloading] = useState(false);
+
+  async function handleDownload(e: React.MouseEvent) {
+    e.stopPropagation();
+    setDownloading(true);
+    try {
+      await downloadWithPicker(downloadHref, name);
+    } catch {
+      // best-effort — this tile has no room for an inline error message
+    } finally {
+      setDownloading(false);
+    }
+  }
+
   return (
     <div className="group relative h-16 w-16 shrink-0">
       <button
@@ -273,20 +291,75 @@ function Thumbnail({
         {/* eslint-disable-next-line @next/next/no-img-element -- arbitrary remote hosts (Cloudinary/Supabase Storage/pasted links), can't be allowlisted for next/image */}
         <img src={thumbUrl} alt={name} loading="lazy" className="h-full w-full object-cover" />
       </button>
-      <a
-        href={downloadHref}
-        download={name}
-        target="_blank"
-        rel="noopener noreferrer"
+      <button
+        type="button"
+        onClick={handleDownload}
+        disabled={downloading}
         title={`Download ${name}`}
-        onClick={(e) => e.stopPropagation()}
-        className="absolute bottom-0.5 right-0.5 inline-flex h-5 w-5 items-center justify-center rounded bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100"
+        className="absolute bottom-0.5 right-0.5 inline-flex h-5 w-5 items-center justify-center rounded bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100 disabled:opacity-100"
       >
         <svg viewBox="0 0 16 16" width="10" height="10" fill="currentColor" aria-hidden="true">
           <path d="M8 1a1 1 0 0 1 1 1v6.086l1.793-1.793a1 1 0 1 1 1.414 1.414l-3.5 3.5a1 1 0 0 1-1.414 0l-3.5-3.5a1 1 0 1 1 1.414-1.414L7 8.086V2a1 1 0 0 1 1-1zM2 13a1 1 0 0 1 1-1h10a1 1 0 1 1 0 2H3a1 1 0 0 1-1-1z" />
         </svg>
-      </a>
+      </button>
     </div>
+  );
+}
+
+// Both single-file affordances below go through downloadWithPicker too, so
+// "Save As" behaves the same everywhere in this component instead of only
+// on the "Download all" zip — a plain <a download> never prompts for a
+// location, which read as inconsistent/disorganized next to the zip flow.
+function FileDownloadLink({ href, name }: { href: string; name: string }) {
+  const [downloading, setDownloading] = useState(false);
+
+  async function handleClick() {
+    setDownloading(true);
+    try {
+      await downloadWithPicker(href, name);
+    } catch {
+      // best-effort
+    } finally {
+      setDownloading(false);
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      disabled={downloading}
+      className="inline-flex min-h-11 items-center rounded-[var(--radius)] border border-border px-3 text-xs disabled:opacity-60"
+    >
+      {downloading ? "Downloading…" : name}
+    </button>
+  );
+}
+
+function LightboxDownloadButton({ href, name }: { href: string; name: string }) {
+  const [downloading, setDownloading] = useState(false);
+
+  async function handleClick(e: React.MouseEvent) {
+    e.stopPropagation();
+    setDownloading(true);
+    try {
+      await downloadWithPicker(href, name);
+    } catch {
+      // best-effort
+    } finally {
+      setDownloading(false);
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      disabled={downloading}
+      className="inline-flex min-h-11 items-center rounded-[var(--radius)] bg-white px-3 text-xs font-medium text-gray-900 disabled:opacity-60"
+    >
+      {downloading ? "Downloading…" : "Download"}
+    </button>
   );
 }
 
@@ -301,7 +374,10 @@ function DownloadAllButton({ orderItemId, count }: { orderItemId: string; count:
     setBusy(true);
     setError(null);
     try {
-      await downloadWithPicker(`/api/order-items/${orderItemId}/media-zip`, "media.zip");
+      await downloadWithPicker(`/api/order-items/${orderItemId}/media-zip`, "media.zip", {
+        description: "Zip archive",
+        accept: { "application/zip": [".zip"] },
+      });
     } catch {
       setError("Could not download the zip.");
     } finally {
@@ -338,16 +414,7 @@ function Lightbox({ preview, onClose }: { preview: Preview; onClose: () => void 
         onClick={(e) => e.stopPropagation()}
       />
       <div className="absolute bottom-6 right-6 flex gap-2">
-        <a
-          href={preview.downloadHref}
-          download={preview.name}
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={(e) => e.stopPropagation()}
-          className="inline-flex min-h-11 items-center rounded-[var(--radius)] bg-white px-3 text-xs font-medium text-gray-900"
-        >
-          Download
-        </a>
+        <LightboxDownloadButton href={preview.downloadHref} name={preview.name} />
         <a
           href={preview.url}
           target="_blank"
@@ -415,15 +482,7 @@ export function MediaLinks({
                   }
                 />
               ) : (
-                <a
-                  href={resolveDownloadUrl(file)}
-                  download={file.file_name}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex min-h-11 items-center rounded-[var(--radius)] border border-border px-3 text-xs"
-                >
-                  {file.file_name}
-                </a>
+                <FileDownloadLink href={resolveDownloadUrl(file)} name={file.file_name} />
               )}
               {editable ? <MediaActions file={file} onChanged={onChanged} /> : null}
             </div>
