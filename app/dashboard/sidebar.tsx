@@ -160,6 +160,7 @@ const TABS = [
   { href: "/dashboard/workers", label: "Workers", icon: WorkersIcon, role: MANAGER_ROLES, newTab: false },
   { href: "/dashboard/designers", label: "Designers", icon: DesignersIcon, role: MANAGER_ROLES, newTab: false },
   { href: "/dashboard/admins", label: "Admins", icon: AdminsIcon, role: ["boss"], newTab: false },
+  { href: "/support", label: "Support", icon: SupportIcon, role: null, newTab: false },
   { href: "/display", label: "Display screen", icon: DisplayIcon, role: null, newTab: true },
 ] as const satisfies Tab[];
 
@@ -177,11 +178,13 @@ export function DashboardSidebar({
   const pathname = usePathname();
   const tabs: Tab[] = TABS.filter((t) => t.role === null || (t.role as readonly AppRole[]).includes(role));
   // Support-report review is gated by email, not role — several accounts can
-  // be "boss", only this one person should see what staff report.
+  // be "boss", only this one person should see what staff report. Distinct
+  // from the "Support" tab above (everyone's self-service report/opt-in
+  // page at /support) — this is the owner-only inbox of what came in.
   if (email === SUPPORT_OWNER_EMAIL) {
     tabs.push({
       href: "/dashboard/support",
-      label: "Support",
+      label: "Support Reports",
       icon: SupportIcon,
       role: null,
       newTab: false,
