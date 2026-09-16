@@ -47,14 +47,17 @@ export default async function FactoryPage() {
         surface="Factory"
         right={
           <>
-            <Link href="/support" className="text-white/70 hover:text-white text-xs underline-offset-2 hover:underline">
+            <Link
+              href="/support"
+              className="hidden text-white/70 hover:text-white text-xs underline-offset-2 hover:underline sm:inline"
+            >
               Support
             </Link>
             <NotificationBell
               fetchNotifications={getMyNotifications}
               triggerClassName="relative flex h-9 w-9 items-center justify-center rounded-lg text-white/70 hover:text-white hover:bg-white/10"
             />
-            <span className="text-white/80">{session.name}</span>
+            <span className="hidden text-white/80 sm:inline">{session.name}</span>
             <LogoutButton />
           </>
         }
