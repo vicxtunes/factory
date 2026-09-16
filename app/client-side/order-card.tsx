@@ -1,8 +1,9 @@
 "use client";
 
+import { StatusGlowBadge } from "@/components/ui/StatusGlowBadge";
 import { UrgencyBadge } from "@/components/ui/UrgencyBadge";
 import { statusCardClasses } from "@/components/ui/statusColors";
-import { STATUS_LABELS, type OrderItemWithOrder } from "@/lib/types";
+import type { OrderItemWithOrder } from "@/lib/types";
 
 // Same visual card as app/dashboard/order-card.tsx, minus the NoteBadge —
 // order/item notes are internal staff shorthand (see lib/queries.ts's
@@ -41,8 +42,8 @@ export function ClientOrderCard({
 
         <p className="mt-2 font-medium">{item.product}</p>
 
-        <div className="mt-2 flex items-center justify-between text-xs text-muted">
-          <span>{STATUS_LABELS[item.production_status]}</span>
+        <div className="mt-2 flex items-center justify-between gap-2 text-xs text-muted">
+          <StatusGlowBadge status={item.production_status} isDelayed={item.is_delayed} />
           <span>{assignedName ?? "Unassigned"}</span>
         </div>
 

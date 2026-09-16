@@ -177,3 +177,32 @@ body {
     animation: none;
   }
 }
+
+/* Status text "color impulse" — plain colored text (production color, not
+   a filled badge — a background pill read as a clickable button), with a
+   pulsing text-glow for emphasis instead of sitting there static. Color
+   set per-status via the --glow-color custom property
+   (components/ui/StatusGlowBadge.tsx). */
+@keyframes status-text-pulse {
+  0%, 100% {
+    opacity: 0.8;
+    text-shadow: 0 0 0px var(--glow-color);
+  }
+  50% {
+    opacity: 1;
+    text-shadow: 0 0 7px var(--glow-color), 0 0 2px var(--glow-color);
+  }
+}
+.status-glow {
+  animation: status-text-pulse 1.6s ease-in-out infinite;
+}
+.status-glow-fast {
+  animation: status-text-pulse 0.9s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .status-glow,
+  .status-glow-fast {
+    animation: none;
+    text-shadow: 0 0 5px var(--glow-color);
+  }
+}

@@ -24,6 +24,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/dashboard/designers": "Graphics designers",
   "/dashboard/admins": "Dashboard admins",
   "/dashboard/support": "Support reports",
+  "/support": "Support",
 };
 
 export function DashboardTopbar({
