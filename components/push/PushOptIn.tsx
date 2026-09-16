@@ -2,7 +2,7 @@
 
 import { usePushSubscription } from "@/lib/push/usePushSubscription";
 
-// Mounted next to ReportIssueButton on every signed-in surface. Push only
+// Mounted on the shared /support page (app/support/page.tsx). Push only
 // works for an installed PWA on iOS 16.4+ — on an unsupported browser this
 // just doesn't render rather than showing a button that can't work.
 export function PushOptIn({ triggerClassName }: { triggerClassName?: string }) {

@@ -4,6 +4,7 @@ const ROLES = [
   { href: "/factory", label: "Factory", who: "Workers" },
   { href: "/graphics", label: "Graphics", who: "Graphic designers" },
   { href: "/dashboard/login", label: "Dashboard", who: "Receptionist, supervisor & boss" },
+  { href: "/client-side", label: "Client Portal", who: "Customers" },
 ] as const;
 
 export function RoleSwitcher({ current }: { current: (typeof ROLES)[number]["href"] }) {

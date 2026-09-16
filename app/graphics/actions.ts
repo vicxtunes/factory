@@ -15,11 +15,14 @@ import {
   type ClientMatchReason,
 } from "@/lib/clients/dedupe";
 import { buildAndInsertOrder, verifyActiveWorker } from "@/lib/orders/create";
+import { notifyOrderItem } from "@/lib/notifications/notify";
+import { fetchDesignerNotifications } from "@/lib/queries";
 import type {
   ClientDuplicateHit,
   CreateOrderResult,
   OrderFormPayload,
 } from "@/lib/orders/types";
+import type { NotificationRow } from "@/lib/types";
 
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 30; // remembered on device, same as workers
 
@@ -65,6 +68,12 @@ export async function logoutDesigner(): Promise<void> {
   store.delete(DESIGNER_COOKIE);
 }
 
+export async function getMyNotifications(): Promise<NotificationRow[]> {
+  const session = await getDesignerSession();
+  if (!session) return [];
+  return fetchDesignerNotifications(session.designer_id, 10);
+}
+
 // Once every item on an order has moved to the factory, flip the order's
 // own stage too — bookkeeping only (used by
 // unassign_orders_on_designer_deactivate), not something that hides the
@@ -96,7 +105,7 @@ export async function advanceItemToFactory(itemId: string): Promise<ActionResult
   const { data: item } = await admin
     .from("order_items")
     .select(
-      "id, order_id, product, product_type, stage, order:orders!inner (assigned_designer_id)",
+      "id, order_id, product, product_type, stage, assigned_worker_id, order:orders!inner (assigned_designer_id, order_no)",
     )
     .eq("id", itemId)
     .maybeSingle<{
@@ -105,7 +114,8 @@ export async function advanceItemToFactory(itemId: string): Promise<ActionResult
       product: string;
       product_type: string | null;
       stage: string;
-      order: { assigned_designer_id: string | null };
+      assigned_worker_id: string | null;
+      order: { assigned_designer_id: string | null; order_no: string };
     }>();
   if (!item) return { ok: false, error: "Item not found." };
   if (item.order.assigned_designer_id !== session.designer_id) {
@@ -130,6 +140,17 @@ export async function advanceItemToFactory(itemId: string): Promise<ActionResult
     action: "item_sent_to_factory",
     detail: { itemLabel: itemLabel(item) },
   });
+
+  if (item.assigned_worker_id) {
+    await notifyOrderItem({
+      orderItemId: itemId,
+      eventType: "assigned",
+      message: `Order ${item.order.order_no}, ${itemLabel(item)}, is ready for you at the factory.`,
+      recipient: { type: "worker", id: item.assigned_worker_id },
+      pushTitle: "Item ready for you",
+      url: "/factory",
+    });
+  }
 
   revalidatePath("/graphics");
   revalidatePath("/factory");

@@ -3,6 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { logOrderEvent, resolveActor } from "@/lib/audit/log";
+import { notifyOrderItem } from "@/lib/notifications/notify";
 import type { OrderType } from "@/lib/types";
 
 import type { OrderItemInput, OrderRoute } from "./types";
@@ -196,6 +197,29 @@ export async function buildAndInsertOrder(
     action: "order_created",
     detail: { clientName: p.client.name },
   });
+
+  // One order-level "you've been assigned" notification — whichever of
+  // designer/worker the order was routed to at creation, not per item.
+  const firstItemId = insertedItems[0]?.id;
+  if (firstItemId && p.designer) {
+    await notifyOrderItem({
+      orderItemId: firstItemId,
+      eventType: "assigned",
+      message: `Order ${order.order_no} was assigned to you.`,
+      recipient: { type: "designer", id: p.designer.id },
+      pushTitle: "New order assigned",
+      url: "/graphics",
+    });
+  } else if (firstItemId && p.responsibleWorkerId) {
+    await notifyOrderItem({
+      orderItemId: firstItemId,
+      eventType: "assigned",
+      message: `Order ${order.order_no} was assigned to you.`,
+      recipient: { type: "worker", id: p.responsibleWorkerId },
+      pushTitle: "New order assigned",
+      url: "/factory",
+    });
+  }
 
   return {
     ok: true,

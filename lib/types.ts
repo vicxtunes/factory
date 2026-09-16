@@ -17,7 +17,7 @@ export type ProductionStatus =
   | "ready_for_pickup"
   | "completed";
 
-export type NotificationEvent = "completed" | "delayed";
+export type NotificationEvent = "completed" | "delayed" | "assigned" | "ready";
 
 export type AppRole = "supervisor" | "boss" | "receptionist";
 

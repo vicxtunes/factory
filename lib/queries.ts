@@ -84,6 +84,82 @@ export async function fetchNotifications(limit = 50): Promise<NotificationRow[]>
   return data ?? [];
 }
 
+// Same feed as fetchNotifications, scoped to one client's own orders —
+// notifications has no client_id column directly, so this filters through
+// the order_items -> orders embed rather than a plain .eq().
+export async function fetchClientNotifications(
+  clientId: string,
+  limit = 10,
+): Promise<NotificationRow[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("notifications")
+    .select(
+      "id, order_item_id, event_type, message, created_at, order_item:order_items!inner(order:orders!inner(client_id))",
+    )
+    .eq("order_item.order.client_id", clientId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    order_item_id: row.order_item_id,
+    event_type: row.event_type,
+    message: row.message,
+    created_at: row.created_at,
+  })) as NotificationRow[];
+}
+
+// Same idea as fetchClientNotifications, scoped by an item's *current*
+// assigned_worker_id — a worker reassigned off an item loses visibility of
+// its past events, which is the right call (they no longer own it).
+export async function fetchWorkerNotifications(
+  workerId: string,
+  limit = 10,
+): Promise<NotificationRow[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("notifications")
+    .select(
+      "id, order_item_id, event_type, message, created_at, order_item:order_items!inner(assigned_worker_id)",
+    )
+    .eq("order_item.assigned_worker_id", workerId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    order_item_id: row.order_item_id,
+    event_type: row.event_type,
+    message: row.message,
+    created_at: row.created_at,
+  })) as NotificationRow[];
+}
+
+// Same idea, scoped by the order's current assigned_designer_id.
+export async function fetchDesignerNotifications(
+  designerId: string,
+  limit = 10,
+): Promise<NotificationRow[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("notifications")
+    .select(
+      "id, order_item_id, event_type, message, created_at, order_item:order_items!inner(order:orders!inner(assigned_designer_id))",
+    )
+    .eq("order_item.order.assigned_designer_id", designerId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    order_item_id: row.order_item_id,
+    event_type: row.event_type,
+    message: row.message,
+    created_at: row.created_at,
+  })) as NotificationRow[];
+}
+
 // Lightweight id -> name lookup for grouping the dashboard order list by
 // category, without pulling the full nested products/attributes catalog.
 export async function fetchCategoryNames(): Promise<{ id: string; name: string }[]> {

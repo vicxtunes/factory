@@ -1,8 +1,9 @@
+import Link from "next/link";
+
 import { Header } from "@/components/ui/Header";
-import { ReportIssueButton } from "@/components/support/ReportIssueButton";
-import { PushOptIn } from "@/components/push/PushOptIn";
 import { InstallGate } from "@/components/pwa/InstallGate";
 import { NotificationGate } from "@/components/pwa/NotificationGate";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { getDesignerSession } from "@/lib/auth/session";
 import {
   fetchActiveWorkersPublic,
@@ -13,6 +14,7 @@ import {
   fetchProductCatalog,
 } from "@/lib/queries";
 
+import { getMyNotifications } from "./actions";
 import { Board } from "./board";
 import { DesignerLogin } from "./login";
 import { LogoutButton } from "./logout-button";
@@ -51,8 +53,13 @@ export default async function GraphicsPage() {
         surface="Graphics"
         right={
           <>
-            <ReportIssueButton triggerClassName="text-white/70 hover:text-white text-xs underline-offset-2 hover:underline" />
-            <PushOptIn triggerClassName="text-white/70 hover:text-white text-xs underline-offset-2 hover:underline" />
+            <Link href="/support" className="text-white/70 hover:text-white text-xs underline-offset-2 hover:underline">
+              Support
+            </Link>
+            <NotificationBell
+              fetchNotifications={getMyNotifications}
+              triggerClassName="relative flex h-9 w-9 items-center justify-center rounded-lg text-white/70 hover:text-white hover:bg-white/10"
+            />
             <span className="text-white/80">{session.name}</span>
             <LogoutButton />
           </>
