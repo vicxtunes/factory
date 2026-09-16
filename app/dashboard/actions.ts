@@ -1146,3 +1146,71 @@ export async function createOrder(input: OrderFormPayload): Promise<CreateOrderR
   revalidatePath("/dashboard");
   return { ok: true, orderNo: res.orderNo, items: res.items, warnings };
 }
+
+// ---------------------------------------------------------------------------
+// Marketing slides — client-portal carousel, locked to boss same as the
+// rest of the product catalog it points into.
+// ---------------------------------------------------------------------------
+
+export async function createMarketingSlide(input: {
+  imageUrl: string;
+  caption: string;
+  linkUrl: string;
+  sortOrder: number;
+}): Promise<Result> {
+  await requireRole("boss");
+  const imageUrl = input.imageUrl.trim();
+  if (!imageUrl) return { ok: false, error: "Image URL is required." };
+
+  const admin = createAdminClient();
+  const { error } = await admin.from("marketing_slides").insert({
+    image_url: imageUrl,
+    caption: input.caption.trim() || null,
+    link_url: input.linkUrl.trim() || null,
+    sort_order: Number.isFinite(input.sortOrder) ? input.sortOrder : 0,
+  });
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/dashboard/marketing");
+  return { ok: true };
+}
+
+export async function updateMarketingSlide(
+  id: string,
+  input: { imageUrl: string; caption: string; linkUrl: string; sortOrder: number },
+): Promise<Result> {
+  await requireRole("boss");
+  const imageUrl = input.imageUrl.trim();
+  if (!imageUrl) return { ok: false, error: "Image URL is required." };
+
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("marketing_slides")
+    .update({
+      image_url: imageUrl,
+      caption: input.caption.trim() || null,
+      link_url: input.linkUrl.trim() || null,
+      sort_order: Number.isFinite(input.sortOrder) ? input.sortOrder : 0,
+    })
+    .eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/dashboard/marketing");
+  return { ok: true };
+}
+
+export async function setMarketingSlideActive(id: string, active: boolean): Promise<Result> {
+  await requireRole("boss");
+  const admin = createAdminClient();
+  const { error } = await admin.from("marketing_slides").update({ active }).eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/dashboard/marketing");
+  return { ok: true };
+}
+
+export async function deleteMarketingSlide(id: string): Promise<Result> {
+  await requireRole("boss");
+  const admin = createAdminClient();
+  const { error } = await admin.from("marketing_slides").delete().eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/dashboard/marketing");
+  return { ok: true };
+}

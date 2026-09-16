@@ -14,6 +14,9 @@ export interface OrderItemInput {
   qty: number;
   attributes: Record<string, string>;
   item_notes: string;
+  // Optional pasted link (Drive/Dropbox/etc.) — only set by the client-side
+  // portal today; staff attach photos via lib/storage instead.
+  media_link?: string;
 }
 
 export interface OrderFormPayload {

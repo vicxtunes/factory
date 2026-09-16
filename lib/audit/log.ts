@@ -1,7 +1,12 @@
 import "server-only";
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getDashboardSession, getDesignerSession, getWorkerSession } from "@/lib/auth/session";
+import {
+  getClientSession,
+  getDashboardSession,
+  getDesignerSession,
+  getWorkerSession,
+} from "@/lib/auth/session";
 import type { AuditActorType } from "@/lib/types";
 
 export interface AuditActor {
@@ -31,6 +36,9 @@ export async function resolveActor(): Promise<AuditActor | null> {
 
   const worker = await getWorkerSession();
   if (worker) return { type: "worker", id: worker.worker_id, name: worker.name };
+
+  const client = await getClientSession();
+  if (client) return { type: "client", id: client.client_id, name: client.name };
 
   return null;
 }

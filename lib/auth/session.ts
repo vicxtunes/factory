@@ -13,6 +13,7 @@ import {
   type Profile,
 } from "@/lib/types";
 import {
+  CLIENT_COOKIE,
   DESIGNER_COOKIE,
   WORKER_COOKIE,
   verifyPayload,
@@ -55,6 +56,27 @@ export async function getDesignerSession(): Promise<DesignerSession | null> {
     .from("designers")
     .select("id, active")
     .eq("id", session.designer_id)
+    .maybeSingle();
+  if (!data || data.active === false) return null;
+  return session;
+}
+
+export interface ClientSession {
+  client_id: string;
+  name: string;
+}
+
+export async function getClientSession(): Promise<ClientSession | null> {
+  const store = await cookies();
+  const session = await verifyPayload<ClientSession>(store.get(CLIENT_COOKIE)?.value);
+  if (!session?.client_id) return null;
+
+  // Confirm the client still exists and is active.
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("clients")
+    .select("id, active")
+    .eq("id", session.client_id)
     .maybeSingle();
   if (!data || data.active === false) return null;
   return session;
@@ -135,11 +157,14 @@ export async function requireOrderAudit(): Promise<DashboardSession> {
 
 // Media upload/session actions are called from the dashboard (Supabase Auth,
 // order intake + "add more photos"), from /graphics (designer PIN session,
-// attaching design files), and from /factory (worker PIN session, attaching
-// finished-item photos) — any signed-in surface may attach photos.
+// attaching design files), from /factory (worker PIN session, attaching
+// finished-item photos), and from /client-side (client session, viewing/
+// downloading their own item's photos) — any signed-in surface may attach
+// or read photos; ownership of *which* item is enforced by each caller.
 export async function requireMediaUploadAccess(): Promise<void> {
   if (await getDashboardSession()) return;
   if (await getDesignerSession()) return;
   if (await getWorkerSession()) return;
+  if (await getClientSession()) return;
   throw new Error("Not signed in.");
 }
