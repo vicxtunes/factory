@@ -3,6 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 
 import { Button } from "@/components/ui/Button";
+import { Drawer } from "@/components/ui/Drawer";
 import { TextArea } from "@/components/ui/Field";
 import { Linkify } from "@/components/ui/Linkify";
 import { getMySupportReports, submitSupportReport } from "@/lib/support/actions";
@@ -17,12 +18,14 @@ function formatWhen(iso: string): string {
   });
 }
 
-// Same submit/history logic as the old components/support/ReportIssueButton
-// (now removed), just as page content instead of a topbar-triggered Drawer.
+// Tickets are the primary content — "Raise issue" opens the report form in
+// a slide-in Drawer instead of it sitting inline and always open, same
+// add-something pattern as the dashboard's panels (agent-panel.tsx, etc.).
 export function SupportForm() {
+  const [formOpen, setFormOpen] = useState(false);
   const [body, setBody] = useState("");
   const [pending, start] = useTransition();
-  const [status, setStatus] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [mine, setMine] = useState<SupportReport[] | null>(null);
 
   function loadMine() {
@@ -34,71 +37,76 @@ export function SupportForm() {
   }, []);
 
   function submit() {
-    setStatus(null);
+    setError(null);
     start(async () => {
       const res = await submitSupportReport(body);
       if (!res.ok) {
-        setStatus(res.error);
+        setError(res.error);
         return;
       }
       setBody("");
-      setStatus("Sent — thanks.");
+      setFormOpen(false);
       loadMine();
     });
   }
 
   return (
-    <div className="space-y-6">
-      <section className="rounded-2xl border border-border bg-surface p-5 shadow-theme-xs">
-        <h2 className="text-sm font-semibold">Report an issue</h2>
-        <p className="mt-1 text-xs text-muted">
-          What&apos;s not working, or what&apos;s missing? This goes straight to the team.
-        </p>
-        <TextArea
-          className="mt-3"
-          value={body}
-          onChange={(e) => setBody(e.target.value)}
-          placeholder="Describe the issue…"
-          rows={6}
-        />
-        <Button variant="primary" disabled={pending || !body.trim()} onClick={submit} className="mt-3 w-full">
-          {pending ? "Sending…" : "Send report"}
+    <section className="rounded-2xl border border-border bg-surface p-5 shadow-theme-xs">
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold">Your tickets</h2>
+        <Button variant="primary" className="min-h-9 text-sm" onClick={() => setFormOpen(true)}>
+          + Raise issue
         </Button>
-        {status ? <p className="mt-2 text-xs text-muted">{status}</p> : null}
-      </section>
+      </div>
 
-      <section className="rounded-2xl border border-border bg-surface p-5 shadow-theme-xs">
-        <h2 className="text-sm font-semibold">Your past reports</h2>
-        <div className="mt-3 space-y-2">
-          {mine === null ? (
-            <p className="text-xs text-muted">Loading…</p>
-          ) : mine.length === 0 ? (
-            <p className="text-xs text-muted">You haven&apos;t reported anything yet.</p>
-          ) : (
-            mine.map((r) => (
-              <div key={r.id} className="rounded-xl border border-border bg-background p-3">
-                <div className="flex items-start justify-between gap-2">
-                  <Linkify text={r.body} className="text-xs" />
-                  <span
-                    className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                      r.status === "resolved"
-                        ? "bg-success-50 text-success-700 dark:bg-success-500/15 dark:text-success-500"
-                        : "bg-[var(--urgent)]/15 text-[var(--urgent)]"
-                    }`}
-                  >
-                    {r.status === "resolved" ? "Resolved" : "Open"}
-                  </span>
-                </div>
-                <p className="mt-1 text-[11px] text-muted">
-                  {r.status === "resolved" && r.resolved_at
-                    ? `Resolved ${formatWhen(r.resolved_at)}`
-                    : `Sent ${formatWhen(r.created_at)}`}
-                </p>
+      <div className="mt-4 space-y-2">
+        {mine === null ? (
+          <p className="text-xs text-muted">Loading…</p>
+        ) : mine.length === 0 ? (
+          <p className="text-xs text-muted">You haven&apos;t raised anything yet.</p>
+        ) : (
+          mine.map((r) => (
+            <div key={r.id} className="rounded-xl border border-border bg-background p-3">
+              <div className="flex items-start justify-between gap-2">
+                <Linkify text={r.body} className="text-xs" />
+                <span
+                  className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                    r.status === "resolved"
+                      ? "bg-success-50 text-success-700 dark:bg-success-500/15 dark:text-success-500"
+                      : "bg-[var(--urgent)]/15 text-[var(--urgent)]"
+                  }`}
+                >
+                  {r.status === "resolved" ? "Resolved" : "Open"}
+                </span>
               </div>
-            ))
-          )}
+              <p className="mt-1 text-[11px] text-muted">
+                {r.status === "resolved" && r.resolved_at
+                  ? `Resolved ${formatWhen(r.resolved_at)}`
+                  : `Sent ${formatWhen(r.created_at)}`}
+              </p>
+            </div>
+          ))
+        )}
+      </div>
+
+      <Drawer open={formOpen} onClose={() => setFormOpen(false)} title="Raise an issue">
+        <div className="space-y-3">
+          <p className="text-xs text-muted">
+            What&apos;s not working, or what&apos;s missing? This goes straight to the team.
+          </p>
+          <TextArea
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            placeholder="Describe the issue…"
+            rows={6}
+            autoFocus
+          />
+          <Button variant="primary" disabled={pending || !body.trim()} onClick={submit} className="w-full">
+            {pending ? "Sending…" : "Send report"}
+          </Button>
+          {error ? <p className="text-xs text-error-600">{error}</p> : null}
         </div>
-      </section>
-    </div>
+      </Drawer>
+    </section>
   );
 }
