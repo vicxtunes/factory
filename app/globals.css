@@ -177,3 +177,30 @@ body {
     animation: none;
   }
 }
+
+/* Status badge "color impulse" — the glow's intensity/spread pulses using
+   the badge's own color (set per-status via the --glow-color custom
+   property, components/ui/StatusGlowBadge.tsx) rather than a static
+   drop-shadow, so an in-progress or delayed item's status keeps drawing
+   the eye in a dense card list instead of sitting still. */
+@keyframes status-glow-pulse {
+  0%, 100% {
+    box-shadow: 0 0 3px 0px var(--glow-color), 0 0 0px 0px var(--glow-color);
+  }
+  50% {
+    box-shadow: 0 0 10px 2px var(--glow-color), 0 0 16px 5px var(--glow-color);
+  }
+}
+.status-glow {
+  animation: status-glow-pulse 1.6s ease-in-out infinite;
+}
+.status-glow-fast {
+  animation: status-glow-pulse 0.9s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .status-glow,
+  .status-glow-fast {
+    animation: none;
+    box-shadow: 0 0 8px 2px var(--glow-color);
+  }
+}
