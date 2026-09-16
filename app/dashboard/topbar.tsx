@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import type { NotificationRow } from "@/lib/types";
@@ -52,12 +51,6 @@ export function DashboardTopbar({
       </button>
       <h1 className="text-base font-semibold">{title}</h1>
       <div className="relative ml-auto flex items-center gap-3">
-        <Link
-          href="/support"
-          className="hidden text-xs text-muted underline-offset-2 hover:underline sm:inline"
-        >
-          Support
-        </Link>
         <NotificationMenu initial={notifications} />
         <UserMenu email={email} role={role} />
       </div>
