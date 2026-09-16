@@ -10,7 +10,8 @@ import { hashPin, isValidPinFormat, verifyPin } from "@/lib/auth/pin";
 import { exactClientMatch, findClientCandidates, resolveOrCreateClient } from "@/lib/clients/dedupe";
 import { buildAndInsertOrder } from "@/lib/orders/create";
 import type { CreateOrderResult, OrderItemInput } from "@/lib/orders/types";
-import type { OrderType } from "@/lib/types";
+import { fetchClientNotifications } from "@/lib/queries";
+import type { NotificationRow, OrderType } from "@/lib/types";
 
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 30; // "remembered on device", same as worker/designer sessions
 
@@ -201,4 +202,13 @@ export async function placeOrder(input: ClientOrderPayload): Promise<CreateOrder
   revalidatePath("/client-side");
   revalidatePath("/client-side/history");
   return { ...res, warnings: [] };
+}
+
+// Backs the notification bell in the topbar — no page in /client-side
+// shares a layout to fetch this server-side once, so ClientNotificationMenu
+// calls this itself on mount and again on every Realtime insert.
+export async function getMyNotifications(): Promise<NotificationRow[]> {
+  const session = await getClientSession();
+  if (!session) return [];
+  return fetchClientNotifications(session.client_id, 10);
 }

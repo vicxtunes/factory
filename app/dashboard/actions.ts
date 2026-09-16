@@ -28,7 +28,8 @@ import type {
   CreateOrderResult,
   OrderFormPayload,
 } from "@/lib/orders/types";
-import type { AppRole, AttributeType, OrderAuditEntry, ProductionStatus } from "@/lib/types";
+import { pushOnlyOrderItem, notifyOrderItem } from "@/lib/notifications/notify";
+import { STATUS_LABELS, type AppRole, type AttributeType, type OrderAuditEntry, type ProductionStatus } from "@/lib/types";
 
 type Result = { ok: true } | { ok: false; error: string };
 
@@ -361,9 +362,14 @@ export async function overrideStatus(
 
   const { data: item } = await admin
     .from("order_items")
-    .select("order_id, product, product_type")
+    .select("order_id, product, product_type, order:orders!inner (order_no, client_id)")
     .eq("id", itemId)
-    .maybeSingle();
+    .maybeSingle<{
+      order_id: string;
+      product: string;
+      product_type: string | null;
+      order: { order_no: string; client_id: string | null };
+    }>();
   if (!item) return { ok: false, error: "Item not found." };
 
   const { error } = await admin
@@ -379,6 +385,27 @@ export async function overrideStatus(
     action: "status_overridden",
     detail: { itemLabel: itemLabel(item), to: status },
   });
+
+  if (item.order.client_id && (status === "ready_for_pickup" || status === "completed")) {
+    const message = `Order ${item.order.order_no}, ${itemLabel(item)}, is now ${STATUS_LABELS[status]}.`;
+    const recipient = { type: "client" as const, id: item.order.client_id };
+    if (status === "ready_for_pickup") {
+      await notifyOrderItem({
+        orderItemId: itemId,
+        eventType: "ready",
+        message,
+        recipient,
+        pushTitle: "Your order is ready",
+        url: "/client-side/orders",
+      });
+    } else {
+      await pushOnlyOrderItem(recipient, {
+        title: "Your order was delivered",
+        body: message,
+        url: "/client-side/history",
+      });
+    }
+  }
 
   revalidatePath("/dashboard");
   return { ok: true };

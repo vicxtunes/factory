@@ -48,7 +48,7 @@ export default async function DashboardOverviewPage() {
           label="Total items"
           value={items.length}
           icon={
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-6 w-6">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1} className="h-16 w-16">
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -61,7 +61,7 @@ export default async function DashboardOverviewPage() {
           label="In production"
           value={inProduction}
           icon={
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-6 w-6">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1} className="h-16 w-16">
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -74,7 +74,7 @@ export default async function DashboardOverviewPage() {
           label="Delayed"
           value={delayed}
           icon={
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-6 w-6">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1} className="h-16 w-16">
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -87,7 +87,7 @@ export default async function DashboardOverviewPage() {
           label="Delivered today"
           value={completedToday}
           icon={
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-6 w-6">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1} className="h-16 w-16">
               <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
             </svg>
           }

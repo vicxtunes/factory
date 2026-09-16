@@ -2,6 +2,9 @@
 
 import { useState } from "react";
 
+import { InstallGate } from "@/components/pwa/InstallGate";
+import { NotificationGate } from "@/components/pwa/NotificationGate";
+
 import { ClientSidebar } from "./sidebar";
 import { ClientTopbar } from "./topbar";
 
@@ -21,6 +24,15 @@ export function ClientShell({
 
   return (
     <div className="min-h-screen">
+      {/* Same install/notification-permission gates as the dashboard —
+          signed-in surfaces only, never the public showroom or pre-login
+          screens (InstallGate/NotificationGate's own docs). */}
+      {signedIn ? (
+        <>
+          <InstallGate />
+          <NotificationGate />
+        </>
+      ) : null}
       <ClientSidebar signedIn={signedIn} mobileOpen={mobileOpen} onNavigate={() => setMobileOpen(false)} />
       {mobileOpen ? (
         <div

@@ -11,10 +11,10 @@ import type { OrderType, ProductCategory } from "@/lib/types";
 
 import { placeOrder } from "./actions";
 
-function emptyItem(): OrderItemInput {
+function emptyItem(categoryId = "", productId = ""): OrderItemInput {
   return {
-    category_id: "",
-    product_id: "",
+    category_id: categoryId,
+    product_id: productId,
     variant_id: "",
     qty: 1,
     attributes: {},
@@ -26,12 +26,23 @@ function emptyItem(): OrderItemInput {
 // Simplified, single-actor version of components/order/OrderForm.tsx's item
 // picker — no worker/agent/designer routing since the client is the only
 // actor and orders always land in the factory queue unassigned.
-export function OrderForm({ catalog }: { catalog: ProductCategory[] }) {
+export function OrderForm({
+  catalog,
+  initialCategoryId,
+  initialProductId,
+}: {
+  catalog: ProductCategory[];
+  // Pre-selects the first item's category/product — set by the showroom's
+  // "Place an order" button on a product's detail drawer. Variant/attributes
+  // are left for the client to pick, same as choosing a product manually.
+  initialCategoryId?: string;
+  initialProductId?: string;
+}) {
   const router = useRouter();
   const [orderType, setOrderType] = useState<OrderType>("normal");
   const [deliveryDate, setDeliveryDate] = useState("");
   const [orderNotes, setOrderNotes] = useState("");
-  const [items, setItems] = useState<OrderItemInput[]>([emptyItem()]);
+  const [items, setItems] = useState<OrderItemInput[]>([emptyItem(initialCategoryId, initialProductId)]);
   const [error, setError] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<string | null>(null);
   const [pending, start] = useTransition();

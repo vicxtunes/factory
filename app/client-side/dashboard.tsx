@@ -79,7 +79,7 @@ export function ClientDashboard({
               label="Orders"
               value={orderCount}
               icon={
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-6 w-6">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1} className="h-16 w-16">
                   <path
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -94,7 +94,7 @@ export function ClientDashboard({
               label="In production"
               value={inProduction}
               icon={
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-6 w-6">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1} className="h-16 w-16">
                   <path
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -109,7 +109,7 @@ export function ClientDashboard({
               label="Delayed"
               value={delayed}
               icon={
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-6 w-6">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1} className="h-16 w-16">
                   <path
                     strokeLinecap="round"
                     strokeLinejoin="round"

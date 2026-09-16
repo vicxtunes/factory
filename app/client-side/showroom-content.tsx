@@ -105,7 +105,7 @@ function ProductDetail({ product, category }: { product: Product; category: Prod
         </div>
       ) : null}
 
-      <Link href="/client-side/new">
+      <Link href={`/client-side/new?category=${category.id}&product=${product.id}`}>
         <Button variant="primary" className="w-full">
           Place an order
         </Button>

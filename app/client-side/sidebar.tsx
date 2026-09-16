@@ -78,6 +78,18 @@ function SettingsIcon({ className }: { className?: string }) {
   );
 }
 
+function SupportIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className={className}>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M8.625 12a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H8.25m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H12m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0h-.375M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
+      />
+    </svg>
+  );
+}
+
 interface Tab {
   href: string;
   label: string;
@@ -92,6 +104,7 @@ const TABS: Tab[] = [
   { href: "/client-side/new", label: "Place Order", icon: PlaceOrderIcon, requiresSignIn: true },
   { href: "/client-side/showroom", label: "Showroom", icon: ShowroomIcon, requiresSignIn: false },
   { href: "/client-side/settings", label: "Settings", icon: SettingsIcon, requiresSignIn: true },
+  { href: "/support", label: "Support", icon: SupportIcon, requiresSignIn: true },
 ];
 
 export function ClientSidebar({

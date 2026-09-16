@@ -7,7 +7,9 @@ import { WORKER_COOKIE, signPayload } from "@/lib/auth/cookies";
 import { getWorkerSession } from "@/lib/auth/session";
 import { verifyPin } from "@/lib/auth/pin";
 import { logOrderEvent, resolveActor } from "@/lib/audit/log";
-import { BOARD_COLUMNS, type ProductionStatus } from "@/lib/types";
+import { pushOnlyOrderItem, notifyOrderItem } from "@/lib/notifications/notify";
+import { fetchWorkerNotifications } from "@/lib/queries";
+import { BOARD_COLUMNS, STATUS_LABELS, type NotificationRow, type ProductionStatus } from "@/lib/types";
 
 function itemLabel(item: { product: string; product_type: string | null }): string {
   return item.product_type ? `${item.product} (${item.product_type})` : item.product;
@@ -53,6 +55,12 @@ export async function logoutWorker(): Promise<void> {
   store.delete(WORKER_COOKIE);
 }
 
+export async function getMyNotifications(): Promise<NotificationRow[]> {
+  const session = await getWorkerSession();
+  if (!session) return [];
+  return fetchWorkerNotifications(session.worker_id, 10);
+}
+
 // Only the worker a supervisor assigned to an item may move it through the
 // queues — otherwise anyone signed in to /factory could advance/flag/clear
 // work that isn't theirs.
@@ -74,9 +82,19 @@ export async function advanceStatus(itemId: string): Promise<ActionResult> {
   const admin = createAdminClient();
   const { data: item } = await admin
     .from("order_items")
-    .select("id, order_id, product, product_type, production_status, assigned_worker_id")
+    .select(
+      "id, order_id, product, product_type, production_status, assigned_worker_id, order:orders!inner (order_no, client_id)",
+    )
     .eq("id", itemId)
-    .maybeSingle();
+    .maybeSingle<{
+      id: string;
+      order_id: string;
+      product: string;
+      product_type: string | null;
+      production_status: ProductionStatus;
+      assigned_worker_id: string | null;
+      order: { order_no: string; client_id: string | null };
+    }>();
   if (!item) return { ok: false, error: "Item not found." };
   const forbidden = assertAssignedToWorker(item, session.worker_id);
   if (forbidden) return forbidden;
@@ -104,6 +122,31 @@ export async function advanceStatus(itemId: string): Promise<ActionResult> {
     action: "status_advanced",
     detail: { itemLabel: itemLabel(item), to: nextStatus },
   });
+
+  // "Ready" has no DB trigger of its own — write a real system notification.
+  // "Completed" is already logged untargeted by the DB trigger, so this
+  // only adds the push (see notify_on_item_change in supabase/schema.sql).
+  if (item.order.client_id && (nextStatus === "ready_for_pickup" || nextStatus === "completed")) {
+    const message = `Order ${item.order.order_no}, ${itemLabel(item)}, is now ${STATUS_LABELS[nextStatus]}.`;
+    const recipient = { type: "client" as const, id: item.order.client_id };
+    if (nextStatus === "ready_for_pickup") {
+      await notifyOrderItem({
+        orderItemId: itemId,
+        eventType: "ready",
+        message,
+        recipient,
+        pushTitle: "Your order is ready",
+        url: "/client-side/orders",
+      });
+    } else {
+      await pushOnlyOrderItem(recipient, {
+        title: "Your order was delivered",
+        body: message,
+        url: "/client-side/history",
+      });
+    }
+  }
+
   return { ok: true };
 }
 
@@ -118,9 +161,18 @@ export async function flagDelay(
   const admin = createAdminClient();
   const { data: item } = await admin
     .from("order_items")
-    .select("id, order_id, product, product_type, assigned_worker_id")
+    .select(
+      "id, order_id, product, product_type, assigned_worker_id, order:orders!inner (order_no, client_id)",
+    )
     .eq("id", itemId)
-    .maybeSingle();
+    .maybeSingle<{
+      id: string;
+      order_id: string;
+      product: string;
+      product_type: string | null;
+      assigned_worker_id: string | null;
+      order: { order_no: string; client_id: string | null };
+    }>();
   if (!item) return { ok: false, error: "Item not found." };
   const forbidden = assertAssignedToWorker(item, session.worker_id);
   if (forbidden) return forbidden;
@@ -143,6 +195,19 @@ export async function flagDelay(
     action: "delay_flagged",
     detail: { itemLabel: itemLabel(item), reason: trimmedReason },
   });
+
+  // Delayed is already logged untargeted by the DB trigger — just push.
+  if (item.order.client_id) {
+    await pushOnlyOrderItem(
+      { type: "client", id: item.order.client_id },
+      {
+        title: "Your order was delayed",
+        body: `Order ${item.order.order_no}, ${itemLabel(item)}: ${trimmedReason}`,
+        url: "/client-side/orders",
+      },
+    );
+  }
+
   return { ok: true };
 }
 

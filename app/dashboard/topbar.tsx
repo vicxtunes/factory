@@ -1,9 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-import { ReportIssueButton } from "@/components/support/ReportIssueButton";
-import { PushOptIn } from "@/components/push/PushOptIn";
 import type { NotificationRow } from "@/lib/types";
 
 import { NotificationMenu } from "./notification-menu";
@@ -53,8 +52,12 @@ export function DashboardTopbar({
       </button>
       <h1 className="text-base font-semibold">{title}</h1>
       <div className="relative ml-auto flex items-center gap-3">
-        <ReportIssueButton triggerClassName="hidden text-xs text-muted underline-offset-2 hover:underline sm:inline" />
-        <PushOptIn triggerClassName="hidden text-xs text-muted underline-offset-2 hover:underline sm:inline" />
+        <Link
+          href="/support"
+          className="hidden text-xs text-muted underline-offset-2 hover:underline sm:inline"
+        >
+          Support
+        </Link>
         <NotificationMenu initial={notifications} />
         <UserMenu email={email} role={role} />
       </div>
