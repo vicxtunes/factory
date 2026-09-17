@@ -48,7 +48,22 @@ export async function GET(
         if (!res.ok) return;
         const bytes = await res.arrayBuffer();
 
+        // Some Cloudinary-era rows have file_name set to the full
+        // folder-qualified public_id (e.g. "orders/2026-0001/Board/xyz")
+        // rather than a plain filename — JSZip treats "/" as a directory
+        // separator, which would otherwise bury the file in nested,
+        // extension-less folders instead of zipping it flat. Fall back to
+        // the delivery URL's last path segment (always a real filename)
+        // whenever file_name still looks like a path.
         let name = file.file_name || "file";
+        if (name.includes("/")) {
+          try {
+            const path = new URL(file.secure_url).pathname;
+            name = decodeURIComponent(path.slice(path.lastIndexOf("/") + 1)) || "file";
+          } catch {
+            name = name.slice(name.lastIndexOf("/") + 1) || "file";
+          }
+        }
         while (usedNames.has(name)) name = `dup-${name}`;
         usedNames.add(name);
 
