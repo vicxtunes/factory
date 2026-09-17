@@ -4,7 +4,8 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/Button";
-import { Field, Select, TextInput } from "@/components/ui/Field";
+import { Field, Select } from "@/components/ui/Field";
+import { PasswordInput } from "@/components/ui/PasswordInput";
 import { RoleSwitcher } from "@/components/ui/RoleSwitcher";
 import { SectionLabel } from "@/components/ui/SectionLabel";
 import type { DesignerPublic } from "@/lib/types";
@@ -46,8 +47,7 @@ export function DesignerLogin({ designers }: { designers: DesignerPublic[] }) {
           </Select>
         </Field>
         <Field label="Personal PIN">
-          <TextInput
-            type="password"
+          <PasswordInput
             inputMode="numeric"
             autoComplete="off"
             value={pin}

@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CreateOrderDrawer } from "@/components/order/CreateOrderDrawer";
 import { ExportButtons } from "@/components/order/ExportButtons";
 import { OrderItemsTable } from "@/components/order/OrderItemsTable";
+import { DateRangeCalendar } from "@/components/ui/DateRangeCalendar";
 import { Drawer } from "@/components/ui/Drawer";
 import { Select, TextInput } from "@/components/ui/Field";
 import { Popover } from "@/components/ui/Popover";
@@ -15,8 +16,10 @@ import {
   activeChips,
   activeFilterCount,
   anyFilterActive,
+  datePresetOptions,
   emptyFilters,
   filterItems,
+  isDatePresetValidForField,
   type DatePreset,
   type OrderFilterState,
 } from "@/lib/orders/filters";
@@ -57,15 +60,6 @@ const NOT_READY_STAGE: OrderStage = "with_designer";
 // Past that, the filters are the tool for finding what you want, not scroll.
 const TABLE_PAGE_SIZES = [20, 50, 100, 200] as const;
 const TABLE_MAX = TABLE_PAGE_SIZES[TABLE_PAGE_SIZES.length - 1];
-
-const DATE_PRESETS: { value: DatePreset; label: string }[] = [
-  { value: "", label: "Any date" },
-  { value: "overdue", label: "Overdue" },
-  { value: "today", label: "Due today" },
-  { value: "next7", label: "Next 7 days" },
-  { value: "none", label: "No date set" },
-  { value: "custom", label: "Custom range…" },
-];
 
 export function OrderBoard({
   items: initialItems,
@@ -339,7 +333,13 @@ export function OrderBoard({
                   <button
                     key={f}
                     type="button"
-                    onClick={() => patch({ dateField: f })}
+                    onClick={() =>
+                      patch(
+                        isDatePresetValidForField(filters.datePreset, f)
+                          ? { dateField: f }
+                          : { dateField: f, datePreset: "", dateFrom: "", dateTo: "" },
+                      )
+                    }
                     className={`rounded-[var(--radius)] px-2 py-1 text-xs font-medium ${
                       filters.dateField === f ? "bg-brand-500 text-white" : "border border-border"
                     }`}
@@ -352,25 +352,34 @@ export function OrderBoard({
                 value={filters.datePreset}
                 onChange={(e) => patch({ datePreset: e.target.value as DatePreset })}
               >
-                {DATE_PRESETS.map(({ value, label }) => (
+                {datePresetOptions(filters.dateField).map(({ value, label }) => (
                   <option key={value} value={value}>
                     {label}
                   </option>
                 ))}
               </Select>
               {filters.datePreset === "custom" ? (
-                <div className="mt-1.5 grid grid-cols-2 gap-2">
-                  <TextInput
-                    type="date"
-                    value={filters.dateFrom}
-                    onChange={(e) => patch({ dateFrom: e.target.value })}
-                  />
-                  <TextInput
-                    type="date"
-                    value={filters.dateTo}
-                    onChange={(e) => patch({ dateTo: e.target.value })}
-                  />
-                </div>
+                <>
+                  <div className="mt-1.5 hidden md:block">
+                    <DateRangeCalendar
+                      from={filters.dateFrom}
+                      to={filters.dateTo}
+                      onChange={(dateFrom, dateTo) => patch({ dateFrom, dateTo })}
+                    />
+                  </div>
+                  <div className="mt-1.5 grid grid-cols-2 gap-2 md:hidden">
+                    <TextInput
+                      type="date"
+                      value={filters.dateFrom}
+                      onChange={(e) => patch({ dateFrom: e.target.value })}
+                    />
+                    <TextInput
+                      type="date"
+                      value={filters.dateTo}
+                      onChange={(e) => patch({ dateTo: e.target.value })}
+                    />
+                  </div>
+                </>
               ) : null}
             </div>
 

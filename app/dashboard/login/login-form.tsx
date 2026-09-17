@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/Button";
 import { Field, TextInput } from "@/components/ui/Field";
+import { PasswordInput } from "@/components/ui/PasswordInput";
 import { SectionLabel } from "@/components/ui/SectionLabel";
 import { signIn } from "../actions";
 
@@ -30,12 +31,7 @@ export function LoginForm() {
           <TextInput name="email" type="email" autoComplete="email" required />
         </Field>
         <Field label="Password">
-          <TextInput
-            name="password"
-            type="password"
-            autoComplete="current-password"
-            required
-          />
+          <PasswordInput name="password" autoComplete="current-password" required />
         </Field>
         {state.error ? (
           <p className="text-sm text-[var(--rush)]">{state.error}</p>
