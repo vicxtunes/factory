@@ -37,12 +37,9 @@ export function ItemDetail({
 
   const photoLink = item.media_link ?? item.order.media_link;
   const isCompleted = item.production_status === "completed";
+  const isReady = item.production_status === "ready_for_pickup";
   const isMine = item.assigned_worker_id === workerId;
-  const nextLabel = isCompleted
-    ? null
-    : item.production_status === "ready_for_pickup"
-      ? "Mark delivered"
-      : "Advance";
+  const nextLabel = isCompleted || isReady ? null : "Advance";
 
   function run(fn: () => Promise<{ ok: boolean; error?: string }>) {
     setError(null);
@@ -133,7 +130,7 @@ export function ItemDetail({
             </Button>
           ) : (
             <span className="inline-flex min-h-11 items-center text-xs text-muted">
-              {STATUS_LABELS[item.production_status]}
+              {isReady ? "Ready — waiting for the client to pick it up" : STATUS_LABELS[item.production_status]}
             </span>
           )}
 

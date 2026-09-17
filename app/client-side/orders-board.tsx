@@ -337,12 +337,7 @@ export function ClientOrdersBoard({
       ) : (
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {filtered.map((item) => (
-            <ClientOrderCard
-              key={item.id}
-              item={item}
-              assignedName={item.assigned_worker_id ? workerName(item.assigned_worker_id) : null}
-              onOpen={() => setSelectedId(item.id)}
-            />
+            <ClientOrderCard key={item.id} item={item} onOpen={() => setSelectedId(item.id)} />
           ))}
         </div>
       )}
@@ -352,7 +347,7 @@ export function ClientOrdersBoard({
         onClose={() => setSelectedId(null)}
         title={selectedItem ? selectedItem.product : undefined}
       >
-        {selectedItem ? <ClientItemDetail item={selectedItem} workerName={workerName} /> : null}
+        {selectedItem ? <ClientItemDetail item={selectedItem} /> : null}
       </Drawer>
     </div>
   );

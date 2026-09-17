@@ -74,7 +74,11 @@ function assertAssignedToWorker(
   return null;
 }
 
-// Advance to the next production status (Not Started -> ... -> Ready -> Completed).
+// Advance to the next production status (Not Started -> ... -> Ready). A
+// worker's last stop is "Ready" — "Completed" only happens once the client
+// has actually picked the order up at the office, which is the
+// receptionist's call via the dashboard's status override (overrideStatus
+// in app/dashboard/actions.ts), not something the factory floor can trigger.
 export async function advanceStatus(itemId: string): Promise<ActionResult> {
   const session = await getWorkerSession();
   if (!session) return { ok: false, error: "Not signed in." };
@@ -99,12 +103,11 @@ export async function advanceStatus(itemId: string): Promise<ActionResult> {
   const forbidden = assertAssignedToWorker(item, session.worker_id);
   if (forbidden) return forbidden;
 
-  const flow: ProductionStatus[] = [...BOARD_COLUMNS, "completed"];
-  const nextIdx = flow.indexOf(item.production_status as ProductionStatus) + 1;
-  if (nextIdx <= 0 || nextIdx >= flow.length) {
-    return { ok: false, error: "Item is already delivered." };
+  const nextIdx = BOARD_COLUMNS.indexOf(item.production_status as ProductionStatus) + 1;
+  if (nextIdx <= 0 || nextIdx >= BOARD_COLUMNS.length) {
+    return { ok: false, error: "Item is ready for pickup — a receptionist marks it delivered once the client collects it." };
   }
-  const nextStatus = flow[nextIdx];
+  const nextStatus = BOARD_COLUMNS[nextIdx];
 
   const { error } = await admin
     .from("order_items")
@@ -124,27 +127,15 @@ export async function advanceStatus(itemId: string): Promise<ActionResult> {
   });
 
   // "Ready" has no DB trigger of its own — write a real system notification.
-  // "Completed" is already logged untargeted by the DB trigger, so this
-  // only adds the push (see notify_on_item_change in supabase/schema.sql).
-  if (item.order.client_id && (nextStatus === "ready_for_pickup" || nextStatus === "completed")) {
-    const message = `Order ${item.order.order_no}, ${itemLabel(item)}, is now ${STATUS_LABELS[nextStatus]}.`;
-    const recipient = { type: "client" as const, id: item.order.client_id };
-    if (nextStatus === "ready_for_pickup") {
-      await notifyOrderItem({
-        orderItemId: itemId,
-        eventType: "ready",
-        message,
-        recipient,
-        pushTitle: "Your order is ready",
-        url: "/client-side/orders",
-      });
-    } else {
-      await pushOnlyOrderItem(recipient, {
-        title: "Your order was delivered",
-        body: message,
-        url: "/client-side/history",
-      });
-    }
+  if (item.order.client_id && nextStatus === "ready_for_pickup") {
+    await notifyOrderItem({
+      orderItemId: itemId,
+      eventType: "ready",
+      message: `Order ${item.order.order_no}, ${itemLabel(item)}, is now ${STATUS_LABELS[nextStatus]}.`,
+      recipient: { type: "client", id: item.order.client_id },
+      pushTitle: "Your order is ready",
+      url: "/client-side/orders",
+    });
   }
 
   return { ok: true };

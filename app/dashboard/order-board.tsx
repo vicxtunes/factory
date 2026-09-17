@@ -209,7 +209,8 @@ export function OrderBoard({
     : null;
 
   // Cards view: grouped by category so product lines don't blur together,
-  // each group internally in display order (newest on top, express last).
+  // each group internally newest-first (see lib/sorting.ts's
+  // sortOrderListItems — no express carve-out here, unlike the factory queue).
   const groupByCategory = useCallback(
     (list: OrderItemWithOrder[]) => {
       const byCategory = new Map<string, OrderItemWithOrder[]>();

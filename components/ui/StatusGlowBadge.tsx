@@ -28,9 +28,14 @@ const DELAYED_GLOW = "rgba(217, 45, 32, 0.85)";
 export function StatusGlowBadge({
   status,
   isDelayed,
+  label,
 }: {
   status: ProductionStatus;
   isDelayed: boolean;
+  // Overrides the displayed text while keeping the color driven by `status`
+  // — used by the client portal, which shows its own status vocabulary
+  // (see lib/orders/clientStatus.ts) over the same color language.
+  label?: string;
 }) {
   const pulses = isDelayed || status !== "completed";
   const textColor = isDelayed ? DELAYED_TEXT : TEXT_COLOR[status];
@@ -41,7 +46,7 @@ export function StatusGlowBadge({
       className={`text-xs font-bold ${textColor} ${pulses ? (isDelayed ? "status-glow-fast" : "status-glow") : ""}`}
       style={pulses ? ({ "--glow-color": glowColor } as React.CSSProperties) : undefined}
     >
-      {STATUS_LABELS[status]}
+      {label ?? STATUS_LABELS[status]}
     </span>
   );
 }

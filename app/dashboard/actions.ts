@@ -930,6 +930,23 @@ export async function setProductActive(id: string, active: boolean): Promise<Res
   return { ok: true };
 }
 
+// Nullable — clearing the field (empty string) removes pricing rather than
+// forcing every product to have one before it can be shown in the showroom.
+export async function setProductPrice(id: string, price: string): Promise<Result> {
+  await requireRole("boss");
+  const trimmed = price.trim();
+  const value = trimmed ? Number(trimmed) : null;
+  if (trimmed && (!Number.isFinite(value) || value! < 0)) {
+    return { ok: false, error: "Enter a valid, non-negative price." };
+  }
+
+  const admin = createAdminClient();
+  const { error } = await admin.from("products").update({ price: value }).eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/dashboard/products");
+  return { ok: true };
+}
+
 export async function createVariant(productId: string, name: string): Promise<Result> {
   await requireRole("boss");
   const trimmed = name.trim();

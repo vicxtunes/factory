@@ -3,26 +3,28 @@
 import { StatusGlowBadge } from "@/components/ui/StatusGlowBadge";
 import { UrgencyBadge } from "@/components/ui/UrgencyBadge";
 import { statusCardClasses } from "@/components/ui/statusColors";
+import { CLIENT_STATUS_LABELS, clientStatus, clientStatusColorKey } from "@/lib/orders/clientStatus";
 import type { OrderItemWithOrder } from "@/lib/types";
 
-// Same visual card as app/dashboard/order-card.tsx, minus the NoteBadge —
-// order/item notes are internal staff shorthand (see lib/queries.ts's
-// ORDER_ITEM_SELECT comment), not something to surface to the customer
-// who's the subject of them.
+// Same visual card as app/dashboard/order-card.tsx, minus the NoteBadge and
+// the assigned-worker name — order/item notes are internal staff shorthand
+// (see lib/queries.ts's ORDER_ITEM_SELECT comment), and who's handling an
+// item internally isn't something to surface to the customer who's the
+// subject of them.
 export function ClientOrderCard({
   item,
-  assignedName,
   onOpen,
 }: {
   item: OrderItemWithOrder;
-  assignedName: string | null;
   onOpen: () => void;
 }) {
   const isExpress = item.order.order_type === "express";
+  const cs = clientStatus(item);
+  const colorKey = clientStatusColorKey(cs);
 
   return (
     <article
-      className={`relative rounded-[var(--radius)] border border-l-4 border-border bg-surface shadow-theme-xs transition-colors ${statusCardClasses(item.production_status, item.is_delayed)}`}
+      className={`relative rounded-[var(--radius)] border border-l-4 border-border bg-surface shadow-theme-xs transition-colors ${statusCardClasses(colorKey, item.is_delayed)}`}
     >
       <button
         onClick={onOpen}
@@ -42,14 +44,9 @@ export function ClientOrderCard({
 
         <p className="mt-2 font-medium">{item.product}</p>
 
-        <div className="mt-2 flex items-center justify-between gap-2 text-xs text-muted">
-          <StatusGlowBadge status={item.production_status} isDelayed={item.is_delayed} />
-          <span>{assignedName ?? "Unassigned"}</span>
+        <div className="mt-2 flex items-center gap-2 text-xs text-muted">
+          <StatusGlowBadge status={colorKey} isDelayed={item.is_delayed} label={CLIENT_STATUS_LABELS[cs]} />
         </div>
-
-        {item.stage === "with_designer" ? (
-          <p className="mt-2 rounded bg-brand-500/10 px-2 py-1 text-xs text-brand-600">Being designed</p>
-        ) : null}
 
         {item.is_delayed ? (
           <p className="mt-2 rounded bg-[var(--rush)]/10 px-2 py-1 text-xs text-[var(--rush)]">

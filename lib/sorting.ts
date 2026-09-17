@@ -4,14 +4,14 @@ import type { OrderItemWithOrder, OrderType } from "@/lib/types";
 // job. So the display stacks newest on top, oldest at the bottom, and express
 // orders sink below the normal ones (still "jump the queue": they're worked
 // first because they're nearest the bottom). Urgency drives the badge colour,
-// not the position. One policy, used by every board: factory, display screen,
-// dashboard list + table.
+// not the position. Used by the actual work queues: factory board, display
+// screen.
 const ORDER_TYPE_RANK: Record<OrderType, number> = {
   normal: 0, // normal orders sit above…
   express: 1, // …express, which sinks to the bottom to be worked first
 };
 
-function compareForDisplay(a: OrderItemWithOrder, b: OrderItemWithOrder): number {
+function compareForQueue(a: OrderItemWithOrder, b: OrderItemWithOrder): number {
   const byType = ORDER_TYPE_RANK[a.order.order_type] - ORDER_TYPE_RANK[b.order.order_type];
   if (byType !== 0) return byType;
 
@@ -20,10 +20,14 @@ function compareForDisplay(a: OrderItemWithOrder, b: OrderItemWithOrder): number
 }
 
 export function sortItems<T extends OrderItemWithOrder>(items: T[]): T[] {
-  return [...items].sort(compareForDisplay);
+  return [...items].sort(compareForQueue);
 }
 
-// Kept as a separate name for the dashboard list/table call sites; same policy.
+// Dashboard list/table and the client portal aren't work queues — they're
+// read for "what came in recently," so the most recent order is always
+// first, full stop. No express-sinks-to-the-bottom carve-out here: that
+// grouping was pulling brand-new express orders below older normal ones,
+// which read as the list being out of order.
 export function sortOrderListItems<T extends OrderItemWithOrder>(items: T[]): T[] {
-  return [...items].sort(compareForDisplay);
+  return [...items].sort((a, b) => b.created_at.localeCompare(a.created_at));
 }

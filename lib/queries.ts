@@ -213,7 +213,7 @@ const CATALOG_SELECT = `
   id, name, sort_order, active, created_at,
   attributes:category_attributes (id, category_id, name, type, options, required, sort_order, created_at),
   products (
-    id, category_id, name, active, created_at,
+    id, category_id, name, price, active, created_at,
     variants:product_variants (id, product_id, name, active, created_at)
   )
 `;

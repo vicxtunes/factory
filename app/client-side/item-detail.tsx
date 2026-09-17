@@ -7,22 +7,14 @@ import type { OrderItemWithOrder } from "@/lib/types";
 
 import { OrderProgressTracker } from "./progress-tracker";
 
-function formatDate(iso: string | null): string {
-  if (!iso) return "—";
-  return new Date(iso + "T00:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
-}
-
 // Read-only counterpart to app/dashboard/order-detail.tsx — no status
 // override, reassignment, or note authoring, and no order-audit log (that
 // stays staff/boss-only). Reuses the same display-only building blocks
 // (ItemAttributes, MediaLinks with editable=false) the staff detail view does.
-export function ClientItemDetail({
-  item,
-  workerName,
-}: {
-  item: OrderItemWithOrder;
-  workerName: (id: string | null) => string;
-}) {
+// No "Handled by" (who's working it internally) or "Due" date — neither is
+// something the customer should see; the progress tracker above already
+// communicates where the order stands.
+export function ClientItemDetail({ item }: { item: OrderItemWithOrder }) {
   const photoLink = item.media_link ?? item.order.media_link;
 
   return (
@@ -41,7 +33,12 @@ export function ClientItemDetail({
         ) : null}
       </div>
 
-      <OrderProgressTracker status={item.production_status} delayed={item.is_delayed} />
+      <OrderProgressTracker
+        status={item.production_status}
+        stage={item.stage}
+        assignedWorkerId={item.assigned_worker_id}
+        delayed={item.is_delayed}
+      />
 
       {item.is_delayed ? (
         <p className="rounded bg-[var(--rush)]/10 px-2 py-1 text-xs text-[var(--rush)]">
@@ -59,17 +56,6 @@ export function ClientItemDetail({
       </div>
 
       <ItemAttributes item={item} />
-
-      <div className="grid grid-cols-2 gap-3 text-xs">
-        <div>
-          <p className="font-semibold uppercase tracking-wide text-muted">Due</p>
-          <p className="text-foreground">{formatDate(item.order.delivery_date)}</p>
-        </div>
-        <div>
-          <p className="font-semibold uppercase tracking-wide text-muted">Handled by</p>
-          <p className="text-foreground">{workerName(item.assigned_worker_id)}</p>
-        </div>
-      </div>
 
       {photoLink || item.media.length > 0 ? (
         <div>

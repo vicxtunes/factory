@@ -21,6 +21,7 @@ import {
   renameVariant,
   setCategoryActive,
   setProductActive,
+  setProductPrice,
   setVariantActive,
   updateAttribute,
   type AttributeInput,
@@ -404,6 +405,31 @@ function ProductCard({
           </div>
         ) : null}
       </div>
+
+      {canManage ? (
+        // Boss-only, and only here (the boss is the one setting it) — the
+        // price itself isn't shown to other dashboard roles, only in the
+        // client-facing showroom (see showroom-content.tsx / showroom-free-mode.tsx).
+        <div className="mt-1.5 flex items-center gap-1.5 text-xs text-muted">
+          <span>Price:</span>
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            defaultValue={product.price ?? ""}
+            placeholder="—"
+            className="min-h-7 w-24 rounded-[var(--radius)] border border-border bg-surface px-2 text-xs"
+            onBlur={(e) => {
+              if (e.target.value !== (product.price?.toString() ?? "")) {
+                run(() => setProductPrice(product.id, e.target.value));
+              }
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") e.currentTarget.blur();
+            }}
+          />
+        </div>
+      ) : null}
 
       <div className="mt-2 space-y-1.5 border-t border-border pt-2">
         {product.variants.length === 0 && !canManage ? (
