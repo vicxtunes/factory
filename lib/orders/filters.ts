@@ -47,6 +47,39 @@ function itemDate(i: OrderItemWithOrder, field: DateField): string | null {
   return field === "created" ? i.created_at.slice(0, 10) : i.order.delivery_date;
 }
 
+export interface DatePresetOption {
+  value: DatePreset;
+  label: string;
+}
+
+// The preset list is field-specific, not just relabeled — "Overdue",
+// "Next 7 days", and "No date set" only make sense for a due date (a
+// created_at is always in the past and always set, so those presets would
+// either match nothing or match everything). Picking "Created date" swaps
+// in a shorter, honest list instead of keeping due-date wording that no
+// longer describes what's being filtered.
+export function datePresetOptions(field: DateField): DatePresetOption[] {
+  if (field === "created") {
+    return [
+      { value: "", label: "Any date" },
+      { value: "today", label: "Created today" },
+      { value: "custom", label: "Custom range…" },
+    ];
+  }
+  return [
+    { value: "", label: "Any date" },
+    { value: "overdue", label: "Overdue" },
+    { value: "today", label: "Due today" },
+    { value: "next7", label: "Next 7 days" },
+    { value: "none", label: "No date set" },
+    { value: "custom", label: "Custom range…" },
+  ];
+}
+
+export function isDatePresetValidForField(preset: DatePreset, field: DateField): boolean {
+  return datePresetOptions(field).some((o) => o.value === preset);
+}
+
 // The popover badge count — the search box is shown separately and not counted.
 export function activeFilterCount(f: OrderFilterState): number {
   let n = 0;
@@ -143,22 +176,11 @@ export function activeChips(
     chips.push({ key: "station", label: `Station: ${f.station}`, clear: { station: "" } });
   }
   if (f.datePreset) {
-    const which = f.dateField === "due" ? "Due" : "Created";
-    const presetLabel =
-      f.datePreset === "overdue"
-        ? "overdue"
-        : f.datePreset === "today"
-          ? "today"
-          : f.datePreset === "next7"
-            ? "next 7 days"
-            : f.datePreset === "none"
-              ? "no date"
-              : `${f.dateFrom || "…"} → ${f.dateTo || "…"}`;
-    chips.push({
-      key: "date",
-      label: `${which}: ${presetLabel}`,
-      clear: { datePreset: "", dateFrom: "", dateTo: "" },
-    });
+    const label =
+      f.datePreset === "custom"
+        ? `${f.dateField === "due" ? "Due" : "Created"}: ${f.dateFrom || "…"} → ${f.dateTo || "…"}`
+        : (datePresetOptions(f.dateField).find((o) => o.value === f.datePreset)?.label ?? "Date filter");
+    chips.push({ key: "date", label, clear: { datePreset: "", dateFrom: "", dateTo: "" } });
   }
   return chips;
 }
