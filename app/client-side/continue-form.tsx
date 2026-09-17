@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/Button";
 import { Field, TextInput } from "@/components/ui/Field";
+import { PasswordInput } from "@/components/ui/PasswordInput";
 
 import { checkAccount, continueLogin } from "./actions";
 
@@ -112,8 +113,7 @@ export function ContinueForm() {
       >
         <p className="text-sm text-muted">Enter your PIN for {step.phone}.</p>
         <Field label="PIN">
-          <TextInput
-            type="password"
+          <PasswordInput
             inputMode="numeric"
             autoComplete="off"
             value={pin}
