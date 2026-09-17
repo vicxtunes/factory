@@ -89,14 +89,32 @@ function cloudinaryThumbUrl(url: string): string {
   return `${url.slice(0, idx + marker.length)}w_200,h_200,c_fill,q_auto,f_auto/${url.slice(idx + marker.length)}`;
 }
 
+// The fl_attachment value below is embedded inside a Cloudinary
+// transformation *component* of the URL path, so it can't contain "/"
+// (path/component separator — breaks even percent-encoded, since Cloudinary
+// decodes then re-splits), "." (Cloudinary docs: omit the extension, it
+// reattaches the real one itself — any dot after it is parsed as another,
+// invalid flag), or "," "(" ")" (chained-transformation/parameter
+// separators). Strip to a bare extensionless base name so any real-world
+// filename (which almost always has a folder-ish public_id or a ".jpg")
+// survives instead of 400ing.
+function sanitizeCloudinaryAttachmentName(name: string): string {
+  const base = name.split("/").pop() || name;
+  const withoutExtension = base.replace(/\.[^./]+$/, "");
+  const safe = withoutExtension.replace(/[,:().]/g, "_").trim();
+  return safe || "download";
+}
+
 // Forces a real file download (with the original filename) instead of the
 // browser just navigating to the asset — Cloudinary's fl_attachment flag
-// sets Content-Disposition: attachment on delivery.
+// sets Content-Disposition: attachment on delivery, and reattaches the
+// asset's real extension on its own.
 function cloudinaryDownloadUrl(url: string, name: string): string {
   const marker = "/upload/";
   const idx = url.indexOf(marker);
   if (idx === -1) return url;
-  return `${url.slice(0, idx + marker.length)}fl_attachment:${encodeURIComponent(name)}/${url.slice(idx + marker.length)}`;
+  const safeName = sanitizeCloudinaryAttachmentName(name);
+  return `${url.slice(0, idx + marker.length)}fl_attachment:${encodeURIComponent(safeName)}/${url.slice(idx + marker.length)}`;
 }
 
 // Supabase Storage's public-URL endpoint honors a plain ?download= query
@@ -121,6 +139,31 @@ function resolveDownloadUrl(file: OrderItemMedia): string {
   return file.secure_url;
 }
 
+// A batch of early Cloudinary-era uploads stored the full folder-qualified
+// public_id (e.g. "orders/2026-0001/Normal Board/xyz") in file_name instead
+// of a plain filename, due to a since-fixed bug in the (now removed)
+// Cloudinary upload code — there's no DB backfill for those rows, so fall
+// back to deriving a clean name from the delivery URL's last path segment
+// (which always carries the real filename + extension) whenever file_name
+// still looks like a path.
+function resolveDisplayName(file: OrderItemMedia): string {
+  if (!file.file_name.includes("/")) return file.file_name;
+  try {
+    const path = new URL(file.secure_url).pathname;
+    return decodeURIComponent(path.slice(path.lastIndexOf("/") + 1)) || file.file_name;
+  } catch {
+    return file.file_name;
+  }
+}
+
+// A row with neither backend field set is a pasted third-party link (Drive,
+// Dropbox, a webpage, ...), not a file we uploaded ourselves — there's no
+// guarantee its bytes are even fetchable cross-origin, so it must not go
+// through downloadWithPicker. It should just open like a normal link.
+function isPastedLink(file: OrderItemMedia): boolean {
+  return !file.storage_path && !file.cloudinary_public_id;
+}
+
 type Preview = { url: string; name: string; downloadHref: string };
 
 // "Replace" for an uploaded file re-runs the same signed-upload flow and
@@ -139,7 +182,7 @@ function MediaActions({ file, onChanged }: { file: OrderItemMedia; onChanged?: (
     undefined,
   );
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const isLink = !file.storage_path && !file.cloudinary_public_id;
+  const isLink = isPastedLink(file);
 
   useEffect(() => {
     getCurrentActor().then(setActor);
@@ -150,7 +193,7 @@ function MediaActions({ file, onChanged }: { file: OrderItemMedia; onChanged?: (
     (actor.role === "boss" || (file.uploaded_by_type === actor.type && file.uploaded_by_id === actor.id));
 
   async function handleDelete() {
-    if (!window.confirm(`Remove "${file.file_name}"?`)) return;
+    if (!window.confirm(`Remove "${resolveDisplayName(file)}"?`)) return;
     setBusy(true);
     setError(null);
     const res = await deleteOrderItemMedia(file.id);
@@ -336,6 +379,22 @@ function FileDownloadLink({ href, name }: { href: string; name: string }) {
   );
 }
 
+// A pasted third-party link renders as a plain navigation, not a download —
+// see isPastedLink. Browsers can't be asked to force-save an arbitrary
+// cross-origin page anyway; this just opens it in a new tab like any link.
+function OpenLink({ href, name }: { href: string; name: string }) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex min-h-11 items-center rounded-[var(--radius)] border border-border px-3 text-xs text-blue-600 underline underline-offset-2 dark:text-blue-400"
+    >
+      {name}
+    </a>
+  );
+}
+
 function LightboxDownloadButton({ href, name }: { href: string; name: string }) {
   const [downloading, setDownloading] = useState(false);
 
@@ -472,17 +531,19 @@ export function MediaLinks({
                 <Thumbnail
                   thumbUrl={resolveThumbUrl(file)}
                   downloadHref={resolveDownloadUrl(file)}
-                  name={file.file_name}
+                  name={resolveDisplayName(file)}
                   onOpen={() =>
                     setPreview({
                       url: file.secure_url,
-                      name: file.file_name,
+                      name: resolveDisplayName(file),
                       downloadHref: resolveDownloadUrl(file),
                     })
                   }
                 />
+              ) : isPastedLink(file) ? (
+                <OpenLink href={file.secure_url} name={file.file_name} />
               ) : (
-                <FileDownloadLink href={resolveDownloadUrl(file)} name={file.file_name} />
+                <FileDownloadLink href={resolveDownloadUrl(file)} name={resolveDisplayName(file)} />
               )}
               {editable ? <MediaActions file={file} onChanged={onChanged} /> : null}
             </div>
