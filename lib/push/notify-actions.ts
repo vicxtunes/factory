@@ -8,6 +8,12 @@ import type { AuditActorType } from "@/lib/types";
 
 type Result = { ok: true; sent: number } | { ok: false; error: string };
 
+export interface NotificationInput {
+  title: string;
+  body: string;
+  url?: string;
+}
+
 export interface SubscribedActor {
   type: AuditActorType;
   id: string;
@@ -15,14 +21,20 @@ export interface SubscribedActor {
 }
 
 // dementaacademy@gmail.com is the owner account and, per the same reasoning
-// as lib/support/actions.ts's requireOwner(), the designated testing ground
-// for new notification features — gated by email, not role, since several
-// accounts can be "boss".
+// as lib/support/actions.ts's requireOwner(), the designated sender for
+// ad-hoc notifications — gated by email, not role, since several accounts
+// can be "boss".
 async function requireOwner(): Promise<void> {
   const session = await getDashboardSession();
   if (!session || session.email !== SUPPORT_OWNER_EMAIL) {
     throw new Error("Forbidden: owner only");
   }
+}
+
+function validate(input: NotificationInput): string | null {
+  if (!input.title.trim()) return "Title can't be empty.";
+  if (!input.body.trim()) return "Message can't be empty.";
+  return null;
 }
 
 // Every distinct actor with at least one push subscription, with a
@@ -68,23 +80,23 @@ export async function getSubscribedActors(): Promise<SubscribedActor[]> {
   return [...uniqueKeys.values()].map((a) => ({ ...a, name: nameById.get(a.id) ?? a.id }));
 }
 
-export async function sendTestBroadcast(message: string): Promise<Result> {
+export async function sendBroadcast(input: NotificationInput): Promise<Result> {
   await requireOwner();
-  const trimmed = message.trim();
-  if (!trimmed) return { ok: false, error: "Message can't be empty." };
+  const error = validate(input);
+  if (error) return { ok: false, error };
 
+  const payload = { title: input.title.trim(), body: input.body.trim(), url: input.url?.trim() || undefined };
   const actors = await getSubscribedActors();
-  await Promise.all(
-    actors.map((a) => notifyActor({ type: a.type, id: a.id }, { title: "Test broadcast", body: trimmed })),
-  );
+  await Promise.all(actors.map((a) => notifyActor({ type: a.type, id: a.id }, payload)));
   return { ok: true, sent: actors.length };
 }
 
-export async function sendTestToActor(type: AuditActorType, id: string, message: string): Promise<Result> {
+export async function sendToActor(type: AuditActorType, id: string, input: NotificationInput): Promise<Result> {
   await requireOwner();
-  const trimmed = message.trim();
-  if (!trimmed) return { ok: false, error: "Message can't be empty." };
+  const error = validate(input);
+  if (error) return { ok: false, error };
 
-  await notifyActor({ type, id }, { title: "Test notification", body: trimmed });
+  const payload = { title: input.title.trim(), body: input.body.trim(), url: input.url?.trim() || undefined };
+  await notifyActor({ type, id }, payload);
   return { ok: true, sent: 1 };
 }
