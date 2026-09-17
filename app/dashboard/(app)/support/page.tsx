@@ -5,7 +5,7 @@ import { getSupportReports } from "@/lib/support/actions";
 import { SUPPORT_OWNER_EMAIL } from "@/lib/support/constants";
 
 import { SupportPanel } from "../../support-panel";
-import { TestPushPanel } from "../../test-push-panel";
+import { NotifyPanel } from "../../notify-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +18,7 @@ export default async function SupportPage() {
   return (
     <div className="space-y-6">
       <SupportPanel reports={reports} />
-      <TestPushPanel />
+      <NotifyPanel />
     </div>
   );
 }
