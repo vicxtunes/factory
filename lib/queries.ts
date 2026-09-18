@@ -8,6 +8,7 @@ import {
   type NotificationRow,
   type OrderItemWithOrder,
   type ProductCategory,
+  type ShowroomSettings,
   type WorkerPublic,
 } from "@/lib/types";
 
@@ -213,8 +214,9 @@ const CATALOG_SELECT = `
   id, name, sort_order, active, created_at,
   attributes:category_attributes (id, category_id, name, type, options, required, sort_order, created_at),
   products (
-    id, category_id, name, price, active, created_at,
-    variants:product_variants (id, product_id, name, active, created_at)
+    id, category_id, name, price, active, created_at, display_image_url, preview_video_url,
+    variants:product_variants (id, product_id, name, price, active, created_at),
+    media:product_media (id, product_id, kind, file_name, mime_type, storage_path, secure_url, sort_order, created_at)
   )
 `;
 
@@ -253,7 +255,21 @@ export async function fetchProductCatalog(activeOnly = false): Promise<ProductCa
     for (const product of category.products) {
       product.variants.sort((a, b) => a.name.localeCompare(b.name));
       if (activeOnly) product.variants = product.variants.filter((v) => v.active);
+      product.media.sort((a, b) => a.sort_order - b.sort_order);
     }
   }
   return categories;
+}
+
+// Singleton row — always id 1, created by its migration and never deleted,
+// so this can't come back empty.
+export async function fetchShowroomSettings(): Promise<ShowroomSettings> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("showroom_settings")
+    .select("product_view_mode")
+    .eq("id", 1)
+    .single();
+  if (error) throw new Error(error.message);
+  return data as unknown as ShowroomSettings;
 }

@@ -29,7 +29,14 @@ import type {
   OrderFormPayload,
 } from "@/lib/orders/types";
 import { pushOnlyOrderItem, notifyOrderItem } from "@/lib/notifications/notify";
-import { STATUS_LABELS, type AppRole, type AttributeType, type OrderAuditEntry, type ProductionStatus } from "@/lib/types";
+import {
+  STATUS_LABELS,
+  type AppRole,
+  type AttributeType,
+  type OrderAuditEntry,
+  type ProductionStatus,
+  type ShowroomViewMode,
+} from "@/lib/types";
 
 type Result = { ok: true } | { ok: false; error: string };
 
@@ -977,6 +984,37 @@ export async function setVariantActive(id: string, active: boolean): Promise<Res
   await requireRole("boss");
   const admin = createAdminClient();
   const { error } = await admin.from("product_variants").update({ active }).eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/dashboard/products");
+  return { ok: true };
+}
+
+// Which image display the showroom's single-product view uses (see
+// app/client-side/product-showcase.tsx) — the boss's call, since neither
+// is objectively better (3D scene can't show video; carousel can).
+export async function setShowroomViewMode(mode: ShowroomViewMode): Promise<Result> {
+  await requireRole("boss");
+  const admin = createAdminClient();
+  const { error } = await admin.from("showroom_settings").update({ product_view_mode: mode }).eq("id", 1);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/dashboard/products");
+  revalidatePath("/client-side/showroom");
+  return { ok: true };
+}
+
+// Overrides the parent product's price when set; clearing it (empty string)
+// falls back to the product's own price rather than forcing every variant
+// to carry one. Same validation as setProductPrice.
+export async function setVariantPrice(id: string, price: string): Promise<Result> {
+  await requireRole("boss");
+  const trimmed = price.trim();
+  const value = trimmed ? Number(trimmed) : null;
+  if (trimmed && (!Number.isFinite(value) || value! < 0)) {
+    return { ok: false, error: "Enter a valid, non-negative price." };
+  }
+
+  const admin = createAdminClient();
+  const { error } = await admin.from("product_variants").update({ price: value }).eq("id", id);
   if (error) return { ok: false, error: error.message };
   revalidatePath("/dashboard/products");
   return { ok: true };
