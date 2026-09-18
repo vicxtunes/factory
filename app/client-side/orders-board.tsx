@@ -34,6 +34,7 @@ import {
 
 import { ClientItemDetail } from "./item-detail";
 import { ClientOrderCard } from "./order-card";
+import { ClientQuoteReview } from "./quote-review";
 
 // Same search/filter/table/export toolset as app/dashboard/order-board.tsx
 // (lib/orders/filters.ts, OrderItemsTable, ExportButtons, Popover), scoped
@@ -347,7 +348,17 @@ export function ClientOrdersBoard({
         onClose={() => setSelectedId(null)}
         title={selectedItem ? selectedItem.product : undefined}
       >
-        {selectedItem ? <ClientItemDetail item={selectedItem} /> : null}
+        {selectedItem ? (
+          selectedItem.order.released_at === null ? (
+            <ClientQuoteReview
+              orderId={selectedItem.order_id}
+              order={selectedItem.order}
+              onDone={() => setSelectedId(null)}
+            />
+          ) : (
+            <ClientItemDetail item={selectedItem} />
+          )
+        ) : null}
       </Drawer>
     </div>
   );

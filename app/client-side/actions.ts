@@ -7,9 +7,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { CLIENT_COOKIE, signPayload } from "@/lib/auth/cookies";
 import { getClientSession } from "@/lib/auth/session";
 import { hashPin, isValidPinFormat, verifyPin } from "@/lib/auth/pin";
+import { logOrderEvent, resolveActor } from "@/lib/audit/log";
 import { exactClientMatch, findClientCandidates, resolveOrCreateClient } from "@/lib/clients/dedupe";
 import { buildAndInsertOrder } from "@/lib/orders/create";
 import type { CreateOrderResult, OrderItemInput } from "@/lib/orders/types";
+import { notifyActor } from "@/lib/push/send";
 import { fetchClientNotifications } from "@/lib/queries";
 import type { NotificationRow, OrderType } from "@/lib/types";
 
@@ -195,6 +197,10 @@ export async function placeOrder(input: ClientOrderPayload): Promise<CreateOrder
     designerBrief: "",
     responsibleWorkerId: null,
     items: input.items,
+    // Goes to the receptionist's quote queue first, not straight to the
+    // factory board — see quoteOrder/routeApprovedOrder in
+    // app/dashboard/actions.ts.
+    releaseImmediately: false,
   });
 
   if (!res.ok) return res;
@@ -202,6 +208,70 @@ export async function placeOrder(input: ClientOrderPayload): Promise<CreateOrder
   revalidatePath("/client-side");
   revalidatePath("/client-side/history");
   return { ...res, warnings: [] };
+}
+
+// The client's half of the receptionist quote/approval loop (see
+// app/dashboard/actions.ts's quoteOrder/routeApprovedOrder). Only valid
+// while awaiting_client_approval, and only for the order's own client —
+// this repo's RLS is wide open (select-only, enforced at the query layer
+// everywhere else too), so that ownership check is load-bearing here.
+export async function respondToQuote(
+  orderId: string,
+  decision: "approve" | "changes_requested",
+  note?: string,
+): Promise<ActionResult> {
+  const session = await getClientSession();
+  if (!session) return { ok: false, error: "Not signed in." };
+
+  const admin = createAdminClient();
+  const { data: order } = await admin
+    .from("orders")
+    .select("id, client_id, approval_status, order_no")
+    .eq("id", orderId)
+    .maybeSingle();
+  if (!order || order.client_id !== session.client_id) return { ok: false, error: "Order not found." };
+  if (order.approval_status !== "awaiting_client_approval") {
+    return { ok: false, error: "This order isn't awaiting your response." };
+  }
+
+  const updates =
+    decision === "approve"
+      ? { approval_status: "approved" as const, client_decision_note: null }
+      : { approval_status: "changes_requested" as const, client_decision_note: note?.trim() || null };
+
+  const { error } = await admin.from("orders").update(updates).eq("id", orderId);
+  if (error) return { ok: false, error: error.message };
+
+  const actor = await resolveActor();
+  await logOrderEvent({
+    orderId,
+    actor,
+    action: decision === "approve" ? "quote_approved" : "quote_changes_requested",
+    detail: note ? { note } : {},
+  });
+
+  // No single "the receptionist" — any dashboard user with a manager role
+  // (receptionist/supervisor/boss) can work the approval queue, so all of
+  // them get notified. Push-only: unlike quoteOrder's client-facing
+  // notification, there's no single order-item-owning recipient to hang an
+  // in-app notifications row on here.
+  const { data: managers } = await admin.from("profiles").select("id").in("role", ["receptionist", "supervisor", "boss"]);
+  await Promise.all(
+    (managers ?? []).map((m) =>
+      notifyActor(
+        { type: "dashboard_user", id: m.id },
+        {
+          title: decision === "approve" ? "Client approved a quote" : "Client requested changes",
+          body: `Order ${order.order_no}${decision === "changes_requested" && note ? `: ${note}` : ""}`,
+          url: "/dashboard/order-approvals",
+        },
+      ),
+    ),
+  );
+
+  revalidatePath("/client-side");
+  revalidatePath("/client-side/orders");
+  return { ok: true };
 }
 
 // Backs the notification bell in the topbar — no page in /client-side

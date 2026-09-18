@@ -20,7 +20,12 @@ export async function fetchBoardItems(): Promise<OrderItemWithOrder[]> {
   const { data, error } = await supabase
     .from("order_items")
     .select(ITEM_SELECT)
-    .eq("stage", "factory");
+    .eq("stage", "factory")
+    // Client-portal orders sit unreleased (see lib/orders/create.ts's
+    // `releaseImmediately`) until the receptionist routes them post-approval
+    // — invisible to the factory floor until then. Staff-created orders
+    // default released_at to now(), so this is a no-op for them.
+    .not("order.released_at", "is", null);
   if (error) throw new Error(error.message);
   return (data ?? []) as unknown as OrderItemWithOrder[];
 }
@@ -61,6 +66,22 @@ export async function fetchDesigners(activeOnly = false): Promise<DesignerPublic
   const { data, error } = await query;
   if (error) throw new Error(error.message);
   return data ?? [];
+}
+
+// The receptionist's quote/approval queue: every item belonging to an order
+// that still needs a quote, is awaiting the client's response, or has been
+// approved but not yet routed to the factory/a designer. Staff-created
+// orders never appear here (they default to approval_status='approved' and
+// released_at=now() at creation, matching neither condition below).
+export async function fetchApprovalQueueItems(): Promise<OrderItemWithOrder[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("order_items")
+    .select(ITEM_SELECT)
+    .or("approval_status.neq.approved,released_at.is.null", { referencedTable: "order" })
+    .order("created_at", { ascending: false });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as unknown as OrderItemWithOrder[];
 }
 
 // Every item, for the dashboard list (all order statuses).

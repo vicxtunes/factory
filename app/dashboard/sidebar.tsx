@@ -19,6 +19,15 @@ function DashboardIcon({ className }: { className?: string }) {
   );
 }
 
+function ApprovalsIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className={className}>
+      <circle cx="12" cy="12" r="9" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="m8.5 12.5 2.5 2.5 4.5-5" />
+    </svg>
+  );
+}
+
 function OrdersIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className={className}>
@@ -153,6 +162,13 @@ interface Tab {
 const TABS = [
   { href: "/dashboard", label: "Dashboard", icon: DashboardIcon, role: null, newTab: false },
   { href: "/dashboard/orders", label: "Orders", icon: OrdersIcon, role: null, newTab: false },
+  {
+    href: "/dashboard/order-approvals",
+    label: "Order Approvals",
+    icon: ApprovalsIcon,
+    role: MANAGER_ROLES,
+    newTab: false,
+  },
   { href: "/dashboard/clients", label: "Clients", icon: ClientsIcon, role: MANAGER_ROLES, newTab: false },
   { href: "/dashboard/agents", label: "Agents", icon: AgentsIcon, role: MANAGER_ROLES, newTab: false },
   { href: "/dashboard/products", label: "Products", icon: ProductsIcon, role: MANAGER_ROLES, newTab: false },
