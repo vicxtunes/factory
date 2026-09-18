@@ -8,15 +8,35 @@ import { Button } from "@/components/ui/Button";
 import { Field, Select, TextArea, TextInput } from "@/components/ui/Field";
 import { SectionLabel } from "@/components/ui/SectionLabel";
 import type { OrderItemInput } from "@/lib/orders/types";
+import { uploadFileToStorage } from "@/lib/storage/upload-client";
 import type { OrderType, Product, ProductCategory } from "@/lib/types";
 
 import { placeOrder } from "./actions";
 
+// Local-only staging for direct photo uploads — mirrors
+// components/order/OrderForm.tsx's ItemFormState: no order_item row (and so
+// no upload target) exists until the order's actually created, so files
+// just sit here as plain File objects and get uploaded one by one right
+// after placeOrder resolves (see submit()). Not offered for Photo Books —
+// those go through a whole folder of photos, better suited to the existing
+// "Photo link" paste field than picking files one at a time here.
+interface ClientItemForm extends OrderItemInput {
+  files: File[];
+}
+
 // Delivery is quoted automatically instead of picked by the client — a
-// factory promise window, not a date they choose. Express only shortens
-// that window; it doesn't let them pick an arbitrary one.
-const NORMAL_ETA_DAYS = 4;
-const EXPRESS_ETA_DAYS = 2;
+// factory promise window, not a date they choose. Most categories are
+// always "normal", no exceptions offered; Photo Books is the one category
+// the boss wants an express upgrade path for, with its own wording (the
+// clock starts at design confirmation, not at order placement, since
+// there's a design-approval step before production).
+const GENERIC_NORMAL_DAYS = 4; // "3-4 business days" from today
+const PHOTOBOOK_NORMAL_DAYS = 5; // "4-5 days after design confirmation"
+const PHOTOBOOK_EXPRESS_DAYS = 2; // "1-2 days after design confirmation"
+
+function isPhotobookCategory(name: string | undefined): boolean {
+  return (name ?? "").trim().toLowerCase() === "photo books";
+}
 
 function etaDate(days: number): string {
   const d = new Date();
@@ -24,14 +44,7 @@ function etaDate(days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-function formatEta(isoDate: string): string {
-  return new Date(`${isoDate}T00:00:00`).toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-  });
-}
-
-function emptyItem(categoryId: string, productId: string, variantId = ""): OrderItemInput {
+function emptyItem(categoryId = "", productId = "", variantId = ""): ClientItemForm {
   return {
     category_id: categoryId,
     product_id: productId,
@@ -40,6 +53,7 @@ function emptyItem(categoryId: string, productId: string, variantId = ""): Order
     attributes: {},
     item_notes: "",
     media_link: "",
+    files: [],
   };
 }
 
@@ -59,14 +73,13 @@ function ArrowRightIcon({ className }: { className?: string }) {
   );
 }
 
-// Simplified, single-actor, single-item version of components/order/OrderForm.tsx's
-// item picker — no worker/agent/designer routing since the client is the only
-// actor and orders always land in the factory queue unassigned. The category
-// and product themselves are picked in the showroom, not here (see
-// showroom-content.tsx / product-showcase.tsx's "Place an order" buttons
-// and app/client-side/new/page.tsx, which redirects back to the showroom if
-// they're missing) — this form only covers what the showroom doesn't:
-// variant, quantity, photo/notes, and order-level delivery timing.
+// Simplified, single-actor version of components/order/OrderForm.tsx's item
+// picker — no worker/agent/designer routing since the client is the only
+// actor and orders always land in the factory queue unassigned. Reachable
+// two ways: standalone (sidebar's "Place Order", nothing pre-filled — the
+// client picks category/product/size here) and from the showroom's "Place
+// an order" buttons, which pre-fill the first item but leave every field
+// editable and the "+ Add item" flow intact, same as standalone.
 //
 // Layout is a checkout-style two column split (form left, running order
 // summary right) rather than one long stacked form, per the shop's design
@@ -80,32 +93,65 @@ export function OrderForm({
   initialVariantId,
 }: {
   catalog: ProductCategory[];
-  initialCategoryId: string;
-  initialProductId: string;
-  // Set when the client already picked a size in the showroom's free-walk
-  // view — left unset otherwise so they pick it here instead.
+  // Set when arriving from the showroom's "Place an order" button — left
+  // unset for the standalone "Place Order" entry, which starts from one
+  // fully blank item instead.
+  initialCategoryId?: string;
+  initialProductId?: string;
   initialVariantId?: string;
 }) {
   const router = useRouter();
   const [orderType, setOrderType] = useState<OrderType>("normal");
   const [expressWarningOpen, setExpressWarningOpen] = useState(false);
   const [orderNotes, setOrderNotes] = useState("");
-  const [item, setItem] = useState<OrderItemInput>(() =>
+  const [items, setItems] = useState<ClientItemForm[]>(() => [
     emptyItem(initialCategoryId, initialProductId, initialVariantId),
-  );
+  ]);
   const [error, setError] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<string | null>(null);
+  const [uploadStatus, setUploadStatus] = useState<string | null>(null);
+  const [uploadWarnings, setUploadWarnings] = useState<string[]>([]);
   const [pending, start] = useTransition();
 
-  const category = catalog.find((c) => c.id === item.category_id) ?? null;
-  const product = category?.products.find((p) => p.id === item.product_id) ?? null;
-  const deliveryDate = useMemo(
-    () => etaDate(orderType === "express" ? EXPRESS_ETA_DAYS : NORMAL_ETA_DAYS),
-    [orderType],
+  // Express is only ever offered when the order includes a Photo Books
+  // item — everything else is always Normal, no choice shown at all.
+  const hasPhotobookItem = items.some((item) =>
+    isPhotobookCategory(catalog.find((c) => c.id === item.category_id)?.name),
   );
 
-  function patchItem(patch: Partial<OrderItemInput>) {
-    setItem((prev) => ({ ...prev, ...patch }));
+  // Clamp back to Normal the moment the order no longer has a Photo Books
+  // item (e.g. it was removed) — adjusting state during render (React's
+  // "reset when a computed value changes" pattern) rather than an effect,
+  // so it can't flash a since-unavailable Express state for a frame.
+  const [lastHadPhotobook, setLastHadPhotobook] = useState(hasPhotobookItem);
+  if (hasPhotobookItem !== lastHadPhotobook) {
+    setLastHadPhotobook(hasPhotobookItem);
+    if (!hasPhotobookItem) setOrderType("normal");
+  }
+
+  const etaLabel = !hasPhotobookItem
+    ? "3-4 business days"
+    : orderType === "express"
+      ? "1-2 days after design confirmation"
+      : "4-5 days after design confirmation";
+
+  const deliveryDate = useMemo(() => {
+    if (!hasPhotobookItem) return etaDate(GENERIC_NORMAL_DAYS);
+    return etaDate(orderType === "express" ? PHOTOBOOK_EXPRESS_DAYS : PHOTOBOOK_NORMAL_DAYS);
+  }, [hasPhotobookItem, orderType]);
+
+  function addItem() {
+    // Prepended, not appended — the boss wants a freshly added item to show
+    // up on top, not buried below whatever's already there.
+    setItems((prev) => [emptyItem(), ...prev]);
+  }
+
+  function patchItem(index: number, patch: Partial<ClientItemForm>) {
+    setItems((prev) => prev.map((it, i) => (i === index ? { ...it, ...patch } : it)));
+  }
+
+  function removeItem(index: number) {
+    setItems((prev) => prev.filter((_, i) => i !== index));
   }
 
   function confirmExpress() {
@@ -117,15 +163,33 @@ export function OrderForm({
     setError(null);
     start(async () => {
       const res = await placeOrder({
-        order_type: orderType,
+        // Non-Photo-Books orders can never actually be "express" — nothing
+        // in the UI offers it, but this is the belt-and-braces guarantee.
+        order_type: hasPhotobookItem ? orderType : "normal",
         delivery_date: deliveryDate,
         order_notes: orderNotes,
-        items: [item],
+        items,
       });
       if (!res.ok) {
         setError(res.error);
         return;
       }
+
+      // Staged files have no upload target until the items actually exist
+      // — upload them now that placeOrder handed back real item ids,
+      // same order as components/order/OrderForm.tsx's staff-side flow.
+      const warnings: string[] = [];
+      for (const { formIndex, itemId } of res.items) {
+        const files = items[formIndex]?.files ?? [];
+        for (const file of files) {
+          setUploadStatus(`Uploading "${file.name}"…`);
+          const uploadRes = await uploadFileToStorage(itemId, file);
+          if (!uploadRes.ok) warnings.push(uploadRes.error);
+        }
+      }
+      setUploadStatus(null);
+      setUploadWarnings(warnings);
+
       setReceipt(res.orderNo);
       router.refresh();
     });
@@ -138,7 +202,18 @@ export function OrderForm({
         <p className="mt-2 text-sm text-muted">
           We&apos;ll start working on it — track progress under My Orders.
         </p>
-        <Link href="/client-side/showroom">
+        {uploadWarnings.length > 0 ? (
+          <div className="mt-3 rounded-[var(--radius)] border border-warning-100 bg-warning-50 p-3 text-left text-sm text-warning-700">
+            <p className="font-medium">The order went through, but some photos didn&apos;t upload:</p>
+            <ul className="mt-1 list-disc space-y-0.5 pl-4">
+              {uploadWarnings.map((w, i) => (
+                <li key={i}>{w}</li>
+              ))}
+            </ul>
+            <p className="mt-1 text-warning-600">You can add them again from My Orders.</p>
+          </div>
+        ) : null}
+        <Link href="/client-side/new">
           <Button className="mt-4">Place another order</Button>
         </Link>
       </div>
@@ -165,113 +240,185 @@ export function OrderForm({
 
       <div className="mt-6 flex flex-col-reverse gap-6 lg:grid lg:grid-cols-[1fr_22rem] lg:items-start lg:gap-8">
         <div className="space-y-6">
-          <ProductOptions item={item} category={category} product={product} onChange={patchItem} />
+          <section>
+            <div className="mb-2 flex items-center justify-between">
+              <SectionLabel>Items</SectionLabel>
+              <Button type="button" variant="secondary" onClick={addItem}>
+                + Add item
+              </Button>
+            </div>
+            <div className="space-y-4">
+              {items.map((item, idx) => (
+                <ItemRow
+                  key={idx}
+                  item={item}
+                  catalog={catalog}
+                  onChange={(patch) => patchItem(idx, patch)}
+                  onRemove={() => removeItem(idx)}
+                  removable={items.length > 1}
+                />
+              ))}
+            </div>
+          </section>
+
+          {hasPhotobookItem ? (
+            <section className="rounded-[var(--radius)] border border-border bg-surface p-4 shadow-theme-xs">
+              <SectionLabel>Delivery</SectionLabel>
+
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs text-muted">Estimated delivery</p>
+                  <p className="text-lg font-semibold">{etaLabel}</p>
+                </div>
+
+                {orderType === "normal" ? (
+                  <Button type="button" variant="secondary" onClick={() => setExpressWarningOpen(true)}>
+                    Need it faster? Request express
+                  </Button>
+                ) : (
+                  <div className="flex items-center gap-3">
+                    <span className="rounded-full bg-warning-100 px-3 py-1 text-xs font-semibold text-warning-700">
+                      Express requested
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setOrderType("normal")}
+                      className="text-xs text-muted hover:underline"
+                    >
+                      Switch back to normal
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {expressWarningOpen ? (
+                <div className="mt-4 rounded-[var(--radius)] border border-warning-100 bg-warning-50 p-3 text-sm">
+                  <p className="font-medium text-warning-700">
+                    Express orders may include an additional rush charge.
+                  </p>
+                  <p className="mt-1 text-warning-600">
+                    Delivery drops to 1-2 days after design confirmation instead of 4-5.
+                  </p>
+                  <div className="mt-3 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={confirmExpress}
+                      className="rounded-[var(--radius)] bg-warning-500 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-warning-600"
+                    >
+                      Confirm express
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setExpressWarningOpen(false)}
+                      className="rounded-[var(--radius)] border border-border px-3 py-1.5 text-xs font-medium text-muted transition-colors hover:bg-gray-50"
+                    >
+                      Never mind
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </section>
+          ) : null}
 
           <section className="rounded-[var(--radius)] border border-border bg-surface p-4 shadow-theme-xs">
-            <SectionLabel>Delivery</SectionLabel>
-
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="text-xs text-muted">Estimated delivery</p>
-                <p className="text-lg font-semibold">
-                  {orderType === "express" ? "1-2 business days" : "3-4 business days"}
-                  <span className="ml-2 text-sm font-normal text-muted">by {formatEta(deliveryDate)}</span>
-                </p>
-              </div>
-
-              {orderType === "normal" ? (
-                <Button type="button" variant="secondary" onClick={() => setExpressWarningOpen(true)}>
-                  Need it faster? Request express
-                </Button>
-              ) : (
-                <div className="flex items-center gap-3">
-                  <span className="rounded-full bg-warning-100 px-3 py-1 text-xs font-semibold text-warning-700">
-                    Express requested
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setOrderType("normal")}
-                    className="text-xs text-muted hover:underline"
-                  >
-                    Switch back to normal
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {expressWarningOpen ? (
-              <div className="mt-4 rounded-[var(--radius)] border border-warning-100 bg-warning-50 p-3 text-sm">
-                <p className="font-medium text-warning-700">
-                  Express orders may include an additional rush charge.
-                </p>
-                <p className="mt-1 text-warning-600">Delivery drops to 1-2 business days instead of 3-4.</p>
-                <div className="mt-3 flex gap-2">
-                  <button
-                    type="button"
-                    onClick={confirmExpress}
-                    className="rounded-[var(--radius)] bg-warning-500 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-warning-600"
-                  >
-                    Confirm express
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setExpressWarningOpen(false)}
-                    className="rounded-[var(--radius)] border border-border px-3 py-1.5 text-xs font-medium text-muted transition-colors hover:bg-gray-50"
-                  >
-                    Never mind
-                  </button>
-                </div>
-              </div>
-            ) : null}
-
-            <div className="mt-4">
-              <Field label="Notes" hint="Anything the factory should know">
-                <TextArea value={orderNotes} onChange={(e) => setOrderNotes(e.target.value)} />
-              </Field>
-            </div>
+            <Field label="Notes" hint="Anything the factory should know">
+              <TextArea value={orderNotes} onChange={(e) => setOrderNotes(e.target.value)} />
+            </Field>
           </section>
 
           {error ? <p className="text-sm text-[var(--rush)]">{error}</p> : null}
           <Button variant="primary" type="submit" className="w-full sm:w-auto" disabled={pending}>
-            {pending ? "Placing order…" : "Place order"}
+            {uploadStatus ?? (pending ? "Placing order…" : "Place order")}
             {pending ? null : <ArrowRightIcon className="h-4 w-4" />}
           </Button>
         </div>
 
         <OrderSummary
-          category={category}
-          product={product}
-          item={item}
+          catalog={catalog}
+          items={items}
           orderType={orderType}
-          deliveryDate={deliveryDate}
+          hasPhotobookItem={hasPhotobookItem}
+          etaLabel={etaLabel}
         />
       </div>
     </form>
   );
 }
 
-function ProductOptions({
+function ItemRow({
   item,
-  category,
-  product,
+  catalog,
   onChange,
+  onRemove,
+  removable,
 }: {
-  item: OrderItemInput;
-  category: ProductCategory | null;
-  product: Product | null;
-  onChange: (patch: Partial<OrderItemInput>) => void;
+  item: ClientItemForm;
+  catalog: ProductCategory[];
+  onChange: (patch: Partial<ClientItemForm>) => void;
+  onRemove: () => void;
+  removable: boolean;
 }) {
+  const category = catalog.find((c) => c.id === item.category_id) ?? null;
+  const products = category?.products ?? [];
+  const product = products.find((p) => p.id === item.product_id) ?? null;
   const variants = product?.variants ?? [];
   const attributeDefs = category?.attributes ?? [];
+  // Photo Books send a whole folder of photos, better suited to the "Photo
+  // link" field than picking files one at a time — direct upload is for
+  // everything else.
+  const allowDirectUpload = category != null && !isPhotobookCategory(category.name);
 
   function patchAttribute(name: string, value: string) {
     onChange({ attributes: { ...item.attributes, [name]: value } });
   }
 
   return (
-    <section className="rounded-[var(--radius)] border border-border bg-surface p-4 shadow-theme-xs">
-      <SectionLabel>Customize your order</SectionLabel>
+    <div className="rounded-[var(--radius)] border border-border bg-surface p-4 shadow-theme-xs">
+      {removable ? (
+        <div className="mb-3 flex justify-end">
+          <button type="button" onClick={onRemove} className="text-xs text-[var(--rush)]">
+            Remove
+          </button>
+        </div>
+      ) : null}
+
       <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Category">
+          <Select
+            value={item.category_id}
+            onChange={(e) =>
+              onChange({
+                category_id: e.target.value,
+                product_id: "",
+                variant_id: "",
+                attributes: {},
+              })
+            }
+            required
+          >
+            <option value="">Select a category…</option>
+            {catalog.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Product">
+          <Select
+            value={item.product_id}
+            onChange={(e) => onChange({ product_id: e.target.value, variant_id: "" })}
+            disabled={!category}
+            required
+          >
+            <option value="">{category ? "Select a product…" : "Pick a category first"}</option>
+            {products.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </Select>
+        </Field>
         {variants.length > 0 ? (
           <Field label="Size">
             <Select value={item.variant_id} onChange={(e) => onChange({ variant_id: e.target.value })}>
@@ -338,11 +485,22 @@ function ProductOptions({
             placeholder="https://…"
           />
         </Field>
-        <Field label="Item notes">
-          <TextArea value={item.item_notes} onChange={(e) => onChange({ item_notes: e.target.value })} />
-        </Field>
+        {allowDirectUpload ? (
+          <Field label="Add photos" hint="Uploaded once the order is placed — optional">
+            <input
+              type="file"
+              multiple
+              accept="image/*,application/pdf"
+              className="block w-full text-sm"
+              onChange={(e) => onChange({ files: Array.from(e.target.files ?? []) })}
+            />
+            {item.files.length > 0 ? (
+              <p className="mt-1 text-xs text-muted">{item.files.length} file(s) selected.</p>
+            ) : null}
+          </Field>
+        ) : null}
       </div>
-    </section>
+    </div>
   );
 }
 
@@ -383,52 +541,59 @@ const TRUST_BADGES = [
 ];
 
 function OrderSummary({
-  category,
-  product,
-  item,
+  catalog,
+  items,
   orderType,
-  deliveryDate,
+  hasPhotobookItem,
+  etaLabel,
 }: {
-  category: ProductCategory | null;
-  product: Product | null;
-  item: OrderItemInput;
+  catalog: ProductCategory[];
+  items: OrderItemInput[];
   orderType: OrderType;
-  deliveryDate: string;
+  hasPhotobookItem: boolean;
+  etaLabel: string;
 }) {
-  const variant = product?.variants.find((v) => v.id === item.variant_id) ?? null;
-
   return (
     <aside className="rounded-2xl border border-border bg-surface p-5 shadow-theme-sm lg:sticky lg:top-6">
       <SectionLabel>Order summary</SectionLabel>
 
-      <div className="flex items-center gap-3">
-        {/* eslint-disable-next-line @next/next/no-img-element -- Supabase Storage URL, can't be allowlisted for next/image */}
-        <img
-          src={product?.display_image_url ?? "/showroom/placeholder.jpg"}
-          alt={product?.name ?? "Product"}
-          className="h-16 w-16 shrink-0 rounded-lg object-cover"
-        />
-        <div className="min-w-0">
-          <p className="truncate text-xs font-semibold uppercase tracking-wide text-muted">{category?.name}</p>
-          <p className="truncate text-base font-semibold">{product?.name}</p>
-          {variant ? <p className="text-xs text-muted">Size: {variant.name}</p> : null}
-        </div>
+      <div className="space-y-3">
+        {items.map((item, idx) => {
+          const category = catalog.find((c) => c.id === item.category_id) ?? null;
+          const product: Product | null = category?.products.find((p) => p.id === item.product_id) ?? null;
+          const variant = product?.variants.find((v) => v.id === item.variant_id) ?? null;
+          return (
+            <div key={idx} className="flex items-center gap-3">
+              {/* eslint-disable-next-line @next/next/no-img-element -- Supabase Storage URL, can't be allowlisted for next/image */}
+              <img
+                src={product?.display_image_url ?? "/showroom/placeholder.jpg"}
+                alt={product?.name ?? "Product"}
+                className="h-12 w-12 shrink-0 rounded-lg object-cover"
+              />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold">{product?.name ?? "Pick a product"}</p>
+                <p className="truncate text-xs text-muted">
+                  {category?.name ?? "No category yet"}
+                  {variant ? ` · ${variant.name}` : ""} · Qty {item.qty}
+                </p>
+              </div>
+            </div>
+          );
+        })}
       </div>
 
-      <div className="mt-4 space-y-2 border-t border-border pt-4 text-sm">
-        <div className="flex items-center justify-between">
-          <span className="text-muted">Quantity</span>
-          <span className="tnum font-medium">{item.qty}</span>
+      {hasPhotobookItem ? (
+        <div className="mt-4 space-y-2 border-t border-border pt-4 text-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-muted">Rush</span>
+            <span className="font-medium">{orderType === "express" ? "Express" : "Normal"}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-muted">Delivery</span>
+            <span className="font-medium">{etaLabel}</span>
+          </div>
         </div>
-        <div className="flex items-center justify-between">
-          <span className="text-muted">Rush</span>
-          <span className="font-medium">{orderType === "express" ? "Express" : "Normal"}</span>
-        </div>
-        <div className="flex items-center justify-between">
-          <span className="text-muted">Arrives by</span>
-          <span className="font-medium">{formatEta(deliveryDate)}</span>
-        </div>
-      </div>
+      ) : null}
 
       {/* Pricing is deliberately not shown to clients yet (see Product.price
           in lib/types.ts) — a plain note here instead of a dollar total. */}

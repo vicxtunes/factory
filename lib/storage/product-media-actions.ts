@@ -57,18 +57,30 @@ export async function confirmProductMediaUpload(
   const fileName = basename.replace(/^[0-9a-f-]{36}-/, "");
   const mimeType: string | null = item.metadata?.mimetype ?? null;
 
-  if (kind === "display") {
+  if (kind === "display" || kind === "preview_video") {
+    const pathColumn = kind === "display" ? "display_image_path" : "preview_video_path";
+    const urlColumn = kind === "display" ? "display_image_url" : "preview_video_url";
+
+    // The client already confirmed this replace (see product-panel.tsx's
+    // confirm prompt before opening the file picker) — the old file is
+    // genuinely done for, not just orphaned, so fetch its path before
+    // overwriting the pointer and delete it once the new one is live.
+    const { data: existing } = await admin
+      .from("products")
+      .select(pathColumn)
+      .eq("id", productId)
+      .maybeSingle<Record<string, string | null>>();
+    const oldPath = existing?.[pathColumn] ?? null;
+
     const { error } = await admin
       .from("products")
-      .update({ display_image_path: path, display_image_url: pub.publicUrl })
+      .update({ [pathColumn]: path, [urlColumn]: pub.publicUrl })
       .eq("id", productId);
     if (error) return { ok: false, error: error.message };
-  } else if (kind === "preview_video") {
-    const { error } = await admin
-      .from("products")
-      .update({ preview_video_path: path, preview_video_url: pub.publicUrl })
-      .eq("id", productId);
-    if (error) return { ok: false, error: error.message };
+
+    if (oldPath && oldPath !== path) {
+      await admin.storage.from(PRODUCT_MEDIA_BUCKET).remove([oldPath]);
+    }
   } else {
     const { count } = await admin
       .from("product_media")
@@ -94,11 +106,21 @@ export async function confirmProductMediaUpload(
 export async function clearProductDisplayImage(productId: string): Promise<Result> {
   await requireRole("boss");
   const admin = createAdminClient();
+  const { data: existing } = await admin
+    .from("products")
+    .select("display_image_path")
+    .eq("id", productId)
+    .maybeSingle<{ display_image_path: string | null }>();
+
   const { error } = await admin
     .from("products")
     .update({ display_image_path: null, display_image_url: null })
     .eq("id", productId);
   if (error) return { ok: false, error: error.message };
+
+  if (existing?.display_image_path) {
+    await admin.storage.from(PRODUCT_MEDIA_BUCKET).remove([existing.display_image_path]);
+  }
   revalidatePath("/dashboard/products");
   revalidatePath("/client-side/showroom");
   return { ok: true };
@@ -107,11 +129,21 @@ export async function clearProductDisplayImage(productId: string): Promise<Resul
 export async function clearProductPreviewVideo(productId: string): Promise<Result> {
   await requireRole("boss");
   const admin = createAdminClient();
+  const { data: existing } = await admin
+    .from("products")
+    .select("preview_video_path")
+    .eq("id", productId)
+    .maybeSingle<{ preview_video_path: string | null }>();
+
   const { error } = await admin
     .from("products")
     .update({ preview_video_path: null, preview_video_url: null })
     .eq("id", productId);
   if (error) return { ok: false, error: error.message };
+
+  if (existing?.preview_video_path) {
+    await admin.storage.from(PRODUCT_MEDIA_BUCKET).remove([existing.preview_video_path]);
+  }
   revalidatePath("/dashboard/products");
   revalidatePath("/client-side/showroom");
   return { ok: true };

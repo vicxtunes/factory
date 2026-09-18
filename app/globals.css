@@ -21,6 +21,11 @@
   --normal: #667085;
 
   --radius: 0.625rem;
+
+  /* Client showroom's "studio" product view (product-showcase.tsx) — dark
+     navy text, meant for the light pastel backdrops below. Swapped for a
+     pale tone under dark mode, same pattern as --foreground/--background. */
+  --showroom-ink: #1b2a4b;
 }
 
 @theme inline {
@@ -33,6 +38,7 @@
   --color-navy-700: var(--navy-700);
   --color-amber-500: var(--amber-500);
   --color-amber-600: var(--amber-600);
+  --color-showroom-ink: var(--showroom-ink);
   --font-sans: var(--font-outfit), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
   --radius-base: var(--radius);
@@ -108,7 +114,36 @@
     --foreground: #f9fafb;
     --muted: #98a2b3;
     --border: #1d2939;
+    --showroom-ink: #e7ebf5;
   }
+}
+
+/* Showroom product-view "studio" backdrop (product-showcase.tsx) — a
+   spotlight/floor gradient with 6 product-hashed tints (see its
+   paletteIndexFor), each with a dark-mode equivalent so the view doesn't
+   stay pastel-light regardless of the app's theme. Plain custom
+   properties, not Tailwind theme tokens: product-showcase.tsx consumes
+   them via var() inside an inline radial-gradient formula that Tailwind
+   utility classes can't express. */
+.showroom-theme-0 { --showroom-base: #f6f9ff; --showroom-glow: #ffffff; --showroom-floor: #e6ecf8; }
+.showroom-theme-1 { --showroom-base: #fff8f2; --showroom-glow: #ffffff; --showroom-floor: #f4e4d6; }
+.showroom-theme-2 { --showroom-base: #f3fcf6; --showroom-glow: #ffffff; --showroom-floor: #e0efe6; }
+.showroom-theme-3 { --showroom-base: #f9f5ff; --showroom-glow: #ffffff; --showroom-floor: #e9e0f8; }
+.showroom-theme-4 { --showroom-base: #f2fbfd; --showroom-glow: #ffffff; --showroom-floor: #dceef3; }
+.showroom-theme-5 { --showroom-base: #fff5f9; --showroom-glow: #ffffff; --showroom-floor: #f5dfe9; }
+
+@media (prefers-color-scheme: dark) {
+  /* Not just the light values dimmed — a separate, deliberately darker set
+     (base/floor sit close to the app's own --background: #0c111d / --surface:
+     #101828, and glow is a modest highlight, not a bright wash) so this
+     unambiguously reads as dark mode instead of a pale card sitting in a
+     dark app. */
+  .showroom-theme-0 { --showroom-base: #0d1220; --showroom-glow: #1a2540; --showroom-floor: #070a12; }
+  .showroom-theme-1 { --showroom-base: #1c130d; --showroom-glow: #332318; --showroom-floor: #0f0a06; }
+  .showroom-theme-2 { --showroom-base: #0b1712; --showroom-glow: #16281f; --showroom-floor: #060d0a; }
+  .showroom-theme-3 { --showroom-base: #14101c; --showroom-glow: #251c37; --showroom-floor: #0b0812; }
+  .showroom-theme-4 { --showroom-base: #0b171c; --showroom-glow: #162c35; --showroom-floor: #060e11; }
+  .showroom-theme-5 { --showroom-base: #1c0f16; --showroom-glow: #351e29; --showroom-floor: #0f080c; }
 }
 
 body {

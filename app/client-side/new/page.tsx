@@ -19,24 +19,22 @@ export default async function ClientNewOrderPage({
 
   const [catalog, params] = await Promise.all([fetchProductCatalog(true), searchParams]);
 
-  // The product is always picked in the showroom now, never on this page —
-  // only honored if it actually resolves to a real category/product pair in
-  // the live catalog (a stale link shouldn't seed a broken item). No pick,
-  // or a stale one: send them to the showroom to make one.
+  // Reachable two ways: standalone (sidebar's "Place Order", no params —
+  // the client picks category/product/size in the form itself) or from the
+  // showroom's "Place an order" buttons, which pass all three. Only honored
+  // if they actually resolve to real, live catalog rows — a stale link
+  // just falls back to letting the client pick manually instead of seeding
+  // a broken item.
   const category = params.category ? catalog.find((c) => c.id === params.category) : undefined;
   const product = category?.products.find((p) => p.id === params.product);
-  if (!category || !product) redirect("/client-side/showroom");
-
-  // The showroom's size picker is optional — a stale/invalid variant id
-  // just means the client picks a size here instead.
-  const variant = product.variants.find((v) => v.id === params.variant);
+  const variant = product?.variants.find((v) => v.id === params.variant);
 
   return (
     <ClientShell signedIn name={session.name}>
       <OrderForm
         catalog={catalog}
-        initialCategoryId={category.id}
-        initialProductId={product.id}
+        initialCategoryId={category?.id}
+        initialProductId={product?.id}
         initialVariantId={variant?.id}
       />
     </ClientShell>

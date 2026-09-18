@@ -32,8 +32,11 @@ export function ClientDashboard({
         <div className="rounded-2xl border border-dashed border-border bg-surface p-8 text-center">
           <p className="text-sm text-muted">No orders yet.</p>
           <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+            <Link href="/client-side/new">
+              <Button variant="primary">Place an order</Button>
+            </Link>
             <Link href="/client-side/showroom">
-              <Button variant="primary">Browse the showroom</Button>
+              <Button variant="secondary">Browse the showroom</Button>
             </Link>
           </div>
         </div>
