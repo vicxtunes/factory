@@ -753,6 +753,7 @@ function UploadRow({
         dragOver ? "border-brand-500 bg-brand-50 dark:bg-brand-500/10" : "border-border bg-background"
       }`}
     >
+      <UploadCloudIcon className={`h-5 w-5 shrink-0 ${dragOver ? "text-brand-600" : "text-muted"}`} />
       <div className="min-w-0 flex-1">
         <p className="text-xs font-semibold text-foreground">{label}</p>
         <p className="truncate text-[0.65rem] text-muted">
@@ -816,7 +817,17 @@ function ProductMediaSection({
   const displayInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
 
+  // Uploading into a slot that already has something deletes that old file
+  // for good (see confirmProductMediaUpload) — confirm before it happens,
+  // regardless of which of the two pickers (Preview panel's Replace button,
+  // or the Upload panel's row below) the boss used to get here.
   function uploadDisplay(file: File) {
+    if (
+      product.display_image_url &&
+      !window.confirm("Replacing the display image will permanently delete the current one. Continue?")
+    ) {
+      return;
+    }
     setDisplayProgress(0);
     run(async () => {
       const res = await uploadProductMedia(product.id, "display", file, setDisplayProgress);
@@ -826,6 +837,12 @@ function ProductMediaSection({
   }
 
   function uploadVideo(file: File) {
+    if (
+      product.preview_video_url &&
+      !window.confirm("Replacing the preview video will permanently delete the current one. Continue?")
+    ) {
+      return;
+    }
     setVideoProgress(0);
     run(async () => {
       const res = await uploadProductMedia(product.id, "preview_video", file, setVideoProgress);
@@ -878,7 +895,11 @@ function ProductMediaSection({
             kind="image"
             pending={pending}
             onReplace={() => displayInputRef.current?.click()}
-            onClear={() => run(() => clearProductDisplayImage(product.id))}
+            onClear={() => {
+              if (window.confirm("Remove the display image completely? This can't be undone.")) {
+                run(() => clearProductDisplayImage(product.id));
+              }
+            }}
           />
           <MediaPreview
             label="Preview video"
@@ -886,7 +907,11 @@ function ProductMediaSection({
             kind="video"
             pending={pending}
             onReplace={() => videoInputRef.current?.click()}
-            onClear={() => run(() => clearProductPreviewVideo(product.id))}
+            onClear={() => {
+              if (window.confirm("Remove the preview video completely? This can't be undone.")) {
+                run(() => clearProductPreviewVideo(product.id));
+              }
+            }}
           />
         </div>
 
@@ -908,7 +933,11 @@ function ProductMediaSection({
                 )}
                 <button
                   type="button"
-                  onClick={() => run(() => deleteProductMedia(m.id))}
+                  onClick={() => {
+                    if (window.confirm("Remove this item completely? This can't be undone.")) {
+                      run(() => deleteProductMedia(m.id));
+                    }
+                  }}
                   disabled={pending}
                   title="Remove"
                   aria-label="Remove"

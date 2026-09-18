@@ -77,8 +77,10 @@ function OptionGallery({ title, options }: { title: string; options: string[] })
 // Visual language lifted from the "Show Room v1" mockup (public/showroom):
 // a full-bleed photo banner, a Product/Packaging/Lamination tab bar, and —
 // under Product — a section per category listing that category's products
-// as photo cards. Clicking a product opens the full-screen ProductShowcase
-// (see product-showcase.tsx) instead of drilling into variants inline.
+// as photo cards. Clicking a product swaps this whole body for
+// ProductShowcase (see product-showcase.tsx) instead of drilling into
+// variants inline — still rendered inside ClientShell, so the
+// sidebar/topbar stay put; it's deliberately not a full-screen takeover.
 // Falls back to the shared placeholder image for any product without its
 // own uploaded display image yet.
 export function ShowroomContent({
@@ -102,6 +104,17 @@ export function ShowroomContent({
     () => [...catalog].sort((a, b) => b.products.length - a.products.length),
     [catalog],
   );
+
+  if (selected) {
+    return (
+      <ProductShowcase
+        product={selected.product}
+        category={selected.category}
+        viewMode={viewMode}
+        onExit={() => setSelected(null)}
+      />
+    );
+  }
 
   return (
     <div className="overflow-x-clip">
@@ -142,7 +155,9 @@ export function ShowroomContent({
             aria-selected={tab === t.key}
             onClick={() => setTab(t.key)}
             className={`min-w-[7.5rem] flex-1 whitespace-nowrap px-5 py-2.5 text-sm font-bold transition-colors sm:min-w-0 sm:flex-none sm:px-4 sm:py-2 sm:text-xs ${
-              tab === t.key ? "bg-[#1b2a4b] text-white" : "bg-brand-100 text-[#1b2a4b] hover:bg-brand-200"
+              tab === t.key
+                ? "bg-[#1b2a4b] text-white"
+                : "bg-brand-100 text-[#1b2a4b] hover:bg-brand-200 dark:bg-brand-500/15 dark:text-brand-400 dark:hover:bg-brand-500/25"
             }`}
           >
             {t.label}
@@ -192,15 +207,6 @@ export function ShowroomContent({
         {tab === "packaging" ? <OptionGallery title="Packaging" options={packagingOptions} /> : null}
         {tab === "lamination" ? <OptionGallery title="Lamination" options={laminationOptions} /> : null}
       </div>
-
-      {selected ? (
-        <ProductShowcase
-          product={selected.product}
-          category={selected.category}
-          viewMode={viewMode}
-          onExit={() => setSelected(null)}
-        />
-      ) : null}
     </div>
   );
 }

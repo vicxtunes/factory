@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/Button";
 import { Drawer } from "@/components/ui/Drawer";
 import { Field, TextArea, TextInput } from "@/components/ui/Field";
+import { uploadMarketingImage } from "@/lib/storage/marketing-media-client";
 import type { MarketingSlide } from "@/lib/types";
 
 import {
@@ -39,6 +40,23 @@ export function MarketingPanel({
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<SlideFormState>(emptyForm());
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  function handleUpload(file: File) {
+    setUploadError(null);
+    setUploadProgress(0);
+    start(async () => {
+      const res = await uploadMarketingImage(file, setUploadProgress);
+      setUploadProgress(null);
+      if (!res.ok) {
+        setUploadError(res.error);
+        return;
+      }
+      setForm((f) => ({ ...f, imageUrl: res.url }));
+    });
+  }
 
   function run(fn: () => Promise<{ ok: boolean; error?: string }>, closeForm = false) {
     setError(null);
@@ -56,6 +74,7 @@ export function MarketingPanel({
     setEditingId(null);
     setForm(emptyForm());
     setError(null);
+    setUploadError(null);
     setFormOpen(true);
   }
 
@@ -68,6 +87,7 @@ export function MarketingPanel({
       sortOrder: slide.sort_order,
     });
     setError(null);
+    setUploadError(null);
     setFormOpen(true);
   }
 
@@ -94,14 +114,62 @@ export function MarketingPanel({
               submit();
             }}
           >
-            <Field label="Image URL" hint="A hosted link to the finished, designed slide image (Drive, Dropbox, Cloudinary, etc.) — shown as-is, no text is added on top">
-              <TextInput
-                type="url"
-                value={form.imageUrl}
-                onChange={(e) => setForm((f) => ({ ...f, imageUrl: e.target.value }))}
-                placeholder="https://…"
-                required
-              />
+            <Field label="Image" hint="Upload the finished, designed slide image, or paste a direct image link — shown as-is, no text is added on top">
+              <div className="flex items-center gap-2">
+                <TextInput
+                  type="url"
+                  value={form.imageUrl}
+                  onChange={(e) => setForm((f) => ({ ...f, imageUrl: e.target.value }))}
+                  placeholder="https://…"
+                  required
+                  disabled={uploadProgress != null}
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="shrink-0 text-xs"
+                  disabled={uploadProgress != null}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  Upload
+                </Button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    e.target.value = "";
+                    if (file) handleUpload(file);
+                  }}
+                />
+              </div>
+              {/* A pasted share-page link (Drive/Dropbox "view" URLs, not a
+                  direct image) is exactly what used to break the carousel's
+                  width-only auto-height sizing — uploading sidesteps that
+                  failure mode entirely since Storage always returns a
+                  working direct URL. */}
+              <p className="mt-1 text-[0.65rem] text-muted">
+                Pasted links must be a direct image URL, not a Drive/Dropbox &quot;view&quot; page — when in doubt,
+                upload instead.
+              </p>
+              {uploadProgress != null ? (
+                <div className="mt-1.5">
+                  <div className="h-1 w-full overflow-hidden rounded-full bg-border">
+                    <div
+                      className="h-full rounded-full bg-brand-500 transition-[width] duration-150"
+                      style={{ width: `${Math.round(uploadProgress * 100)}%` }}
+                    />
+                  </div>
+                  <p className="mt-1 text-[0.65rem] text-muted">Uploading… {Math.round(uploadProgress * 100)}%</p>
+                </div>
+              ) : null}
+              {uploadError ? <p className="mt-1 text-xs text-error-600">{uploadError}</p> : null}
+              {form.imageUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element -- arbitrary staff-pasted or uploaded hosted image URL, can't be allowlisted for next/image
+                <img src={form.imageUrl} alt="" className="mt-2 h-16 w-28 rounded object-cover" />
+              ) : null}
             </Field>
             <Field label="Link" hint="Optional — where tapping the slide goes (a full URL, or a path like /client-side/showroom)">
               <TextInput

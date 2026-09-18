@@ -10,3 +10,7 @@ export const MEDIA_BUCKET = "order-media";
 // customer's uploaded original, so it doesn't need order-media's
 // per-upload ownership tracking.
 export const PRODUCT_MEDIA_BUCKET = "product-media";
+
+// Same posture again — single hosted image per marketing slide, uploaded
+// by staff as an alternative to pasting an (often wrong) link.
+export const MARKETING_MEDIA_BUCKET = "marketing-media";
