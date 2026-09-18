@@ -152,7 +152,25 @@ export interface ProductVariant {
   id: string;
   product_id: string;
   name: string;
+  // Overrides the parent product's price when set (e.g. a larger size costs
+  // more); null falls back to Product.price. Not shown to clients yet — see
+  // Product.price's comment.
+  price: number | null;
   active: boolean;
+  created_at: string;
+}
+
+// Extra photos/videos beyond the product's single display image and preview
+// video — shown behind the showroom's "View more detail" toggle.
+export interface ProductMedia {
+  id: string;
+  product_id: string;
+  kind: "photo" | "video";
+  file_name: string;
+  mime_type: string | null;
+  storage_path: string;
+  secure_url: string;
+  sort_order: number;
   created_at: string;
 }
 
@@ -160,10 +178,17 @@ export interface Product {
   id: string;
   category_id: string;
   name: string;
+  // Deliberately not surfaced client-side right now — the boss wants
+  // pricing held back from the showroom until further notice. Still
+  // recorded so it's ready whenever that changes (see order-form.tsx,
+  // showroom-content.tsx, product-showcase.tsx).
   price: number | null;
   active: boolean;
   created_at: string;
+  display_image_url: string | null;
+  preview_video_url: string | null;
   variants: ProductVariant[];
+  media: ProductMedia[];
 }
 
 export interface ProductCategory {
@@ -174,6 +199,17 @@ export interface ProductCategory {
   created_at: string;
   attributes: CategoryAttribute[];
   products: Product[];
+}
+
+// Whether a product's showcase view (opened by clicking it in the showroom
+// grid) uses the scroll-driven 3D scene or a plain photo/video carousel.
+// Boss-configurable, boring default of "carousel" (shows everything a
+// product has, including video; the 3D scene can only cycle through
+// photos).
+export type ShowroomViewMode = "carousel" | "scene";
+
+export interface ShowroomSettings {
+  product_view_mode: ShowroomViewMode;
 }
 
 export interface WorkerPublic {

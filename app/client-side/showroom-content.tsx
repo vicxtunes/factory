@@ -5,18 +5,16 @@ import Image from "next/image";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/Button";
-import { Drawer } from "@/components/ui/Drawer";
-import type { Product, ProductCategory } from "@/lib/types";
+import type { Product, ProductCategory, ShowroomViewMode } from "@/lib/types";
 
-import { ShowroomFreeMode } from "./showroom-free-mode";
+import { ProductShowcase } from "./product-showcase";
 
-type Tab = "product" | "packaging" | "lamination" | "free";
+type Tab = "product" | "packaging" | "lamination";
 
 const TABS: { key: Tab; label: string }[] = [
   { key: "product", label: "Product" },
   { key: "packaging", label: "Packaging" },
   { key: "lamination", label: "Lamination" },
-  { key: "free", label: "Free Walk" },
 ];
 
 // Every category can define its own custom attributes (see
@@ -37,11 +35,11 @@ function collectAttributeOptions(catalog: ProductCategory[], nameMatch: string):
 
 function PhotoCard({
   label,
-  price,
+  image,
   onClick,
 }: {
   label: string;
-  price?: number | null;
+  image?: string | null;
   onClick?: () => void;
 }) {
   const Tag = onClick ? "button" : "div";
@@ -51,13 +49,13 @@ function PhotoCard({
       onClick={onClick}
       className="relative h-48 w-40 shrink-0 overflow-hidden rounded-xl text-left shadow-theme-sm sm:h-48 sm:w-40"
     >
-      <Image src="/showroom/placeholder.PNG" alt={label} fill className="object-cover" />
+      {/* eslint-disable-next-line @next/next/no-img-element -- Supabase Storage URL, can't be allowlisted for next/image */}
+      <img
+        src={image ?? "/showroom/placeholder.PNG"}
+        alt={label}
+        className="absolute inset-0 h-full w-full object-cover"
+      />
       <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
-      {price != null ? (
-        <span className="absolute right-2 top-2 rounded-full bg-brand-500 px-2 py-0.5 text-[0.65rem] font-bold text-white">
-          ${price.toFixed(2)}
-        </span>
-      ) : null}
       <p className="absolute inset-x-0 bottom-3 px-2 text-center text-sm font-bold text-white">{label}</p>
     </Tag>
   );
@@ -76,73 +74,21 @@ function OptionGallery({ title, options }: { title: string; options: string[] })
   );
 }
 
-export function ProductDetail({ product, category }: { product: Product; category: ProductCategory }) {
-  return (
-    <div className="space-y-4 text-sm">
-      <div className="relative h-48 w-full overflow-hidden rounded-xl">
-        <Image src="/showroom/placeholder.PNG" alt={product.name} fill className="object-cover" />
-      </div>
-
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted">Category</p>
-          <p className="font-medium">{category.name}</p>
-        </div>
-        {product.price != null ? (
-          <p className="shrink-0 rounded-full bg-brand-500/10 px-3 py-1 text-sm font-bold text-brand-600">
-            ${product.price.toFixed(2)}
-          </p>
-        ) : null}
-      </div>
-
-      {product.variants.length > 0 ? (
-        <div>
-          <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted">Options</p>
-          <div className="flex flex-wrap gap-2">
-            {product.variants.map((v) => (
-              <span key={v.id} className="rounded-full border border-border px-3 py-1 text-xs">
-                {v.name}
-              </span>
-            ))}
-          </div>
-        </div>
-      ) : null}
-
-      {category.attributes.length > 0 ? (
-        <div>
-          <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted">Customize</p>
-          <ul className="space-y-1 text-xs text-muted">
-            {category.attributes.map((a) => (
-              <li key={a.id}>
-                {a.name}
-                {a.options?.length ? `: ${a.options.join(" / ")}` : ""}
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-
-      <Link href={`/client-side/new?category=${category.id}&product=${product.id}`}>
-        <Button variant="primary" className="w-full">
-          Place an order
-        </Button>
-      </Link>
-    </div>
-  );
-}
-
 // Visual language lifted from the "Show Room v1" mockup (public/showroom):
 // a full-bleed photo banner, a Product/Packaging/Lamination tab bar, and —
 // under Product — a section per category listing that category's products
-// as photo cards. Clicking a product opens a detail drawer instead of
-// drilling into variants inline. There's no per-product photo yet, so
-// every card uses the same placeholder image, same as the mockup did.
+// as photo cards. Clicking a product opens the full-screen ProductShowcase
+// (see product-showcase.tsx) instead of drilling into variants inline.
+// Falls back to the shared placeholder image for any product without its
+// own uploaded display image yet.
 export function ShowroomContent({
   catalog,
   signedIn,
+  viewMode,
 }: {
   catalog: ProductCategory[];
   signedIn: boolean;
+  viewMode: ShowroomViewMode;
 }) {
   const [tab, setTab] = useState<Tab>("product");
   const [selected, setSelected] = useState<{ product: Product; category: ProductCategory } | null>(null);
@@ -231,7 +177,7 @@ export function ShowroomContent({
                         <PhotoCard
                           key={product.id}
                           label={product.name}
-                          price={product.price}
+                          image={product.display_image_url}
                           onClick={() => setSelected({ product, category })}
                         />
                       ))}
@@ -245,17 +191,16 @@ export function ShowroomContent({
 
         {tab === "packaging" ? <OptionGallery title="Packaging" options={packagingOptions} /> : null}
         {tab === "lamination" ? <OptionGallery title="Lamination" options={laminationOptions} /> : null}
-        {tab === "free" ? (
-          <ShowroomFreeMode
-            catalog={catalog}
-            onSelect={(product, category) => setSelected({ product, category })}
-          />
-        ) : null}
       </div>
 
-      <Drawer open={!!selected} onClose={() => setSelected(null)} title={selected?.product.name}>
-        {selected ? <ProductDetail product={selected.product} category={selected.category} /> : null}
-      </Drawer>
+      {selected ? (
+        <ProductShowcase
+          product={selected.product}
+          category={selected.category}
+          viewMode={viewMode}
+          onExit={() => setSelected(null)}
+        />
+      ) : null}
     </div>
   );
 }

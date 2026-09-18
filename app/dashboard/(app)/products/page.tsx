@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { SectionLabel } from "@/components/ui/SectionLabel";
-import { fetchProductCatalog } from "@/lib/queries";
+import { fetchProductCatalog, fetchShowroomSettings } from "@/lib/queries";
 import { getDashboardSession } from "@/lib/auth/session";
 import { isManagerRole } from "@/lib/types";
 
@@ -13,7 +13,10 @@ export default async function ProductsPage() {
   const session = await getDashboardSession();
   if (!session || !isManagerRole(session.role)) redirect("/dashboard");
 
-  const categories = await fetchProductCatalog();
+  const [categories, showroomSettings] = await Promise.all([
+    fetchProductCatalog(),
+    fetchShowroomSettings(),
+  ]);
   const canManage = session.role === "boss";
 
   return (
@@ -24,7 +27,7 @@ export default async function ProductsPage() {
           View only — the product catalog is managed by the boss.
         </p>
       ) : null}
-      <ProductPanel categories={categories} canManage={canManage} />
+      <ProductPanel categories={categories} showroomSettings={showroomSettings} canManage={canManage} />
     </div>
   );
 }
