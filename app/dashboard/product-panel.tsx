@@ -352,7 +352,7 @@ export function ProductPanel({
   return (
     <div className="space-y-4">
       {canManage ? <ShowroomSettingsCard settings={showroomSettings} run={run} pending={pending} /> : null}
-      {canManage ? <CurrencyManager currencies={currencies} run={run} pending={pending} /> : null}
+      {/* Currency manager intentionally not rendered: prices are UGX only. */}
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <ExportButtons columns={EXPORT_COLUMNS} rows={exportRows} filename="product-categories" />
