@@ -123,9 +123,13 @@ export function OrderBoard({
   );
 
   const refetch = useCallback(async () => {
+    // Same released-orders-only filter as the server-side fetchOfficeItems
+    // this board is initially seeded with — otherwise a Realtime event on
+    // an unreleased client-portal order would sneak it back in here.
     const { data } = await supabaseRef.current
       .from("order_items")
       .select(ORDER_ITEM_SELECT)
+      .not("order.released_at", "is", null)
       .order("created_at", { ascending: false });
     if (data) setItems(data as unknown as OrderItemWithOrder[]);
   }, []);

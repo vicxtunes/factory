@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Header } from "@/components/ui/Header";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { PushOptIn } from "@/components/push/PushOptIn";
+import { AnnouncementPopup } from "@/components/announcements/AnnouncementPopup";
 import { InstallGate } from "@/components/pwa/InstallGate";
 import { NotificationGate } from "@/components/pwa/NotificationGate";
 import {
@@ -70,6 +71,7 @@ export default async function SupportPage() {
       <>
         <InstallGate />
         <NotificationGate />
+        <AnnouncementPopup />
         <Header
           surface="Graphics"
           right={
@@ -102,6 +104,7 @@ export default async function SupportPage() {
       <>
         <InstallGate />
         <NotificationGate />
+        <AnnouncementPopup />
         <Header
           surface="Factory"
           right={

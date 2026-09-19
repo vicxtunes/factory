@@ -8,6 +8,16 @@ export type OrderType = "normal" | "express";
 
 export type OrderStage = "with_designer" | "factory";
 
+// The receptionist quote/approval gate a client-portal order goes through
+// before it's routed anywhere (see lib/orders/create.ts's
+// `releaseImmediately` and Order.released_at below). Staff-created orders
+// skip this entirely — they default straight to 'approved'.
+export type OrderApprovalStatus =
+  | "pending_review"
+  | "awaiting_client_approval"
+  | "approved"
+  | "changes_requested";
+
 export type AttributeType = "text" | "number" | "select";
 
 export type ProductionStatus =
@@ -17,7 +27,7 @@ export type ProductionStatus =
   | "ready_for_pickup"
   | "completed";
 
-export type NotificationEvent = "completed" | "delayed" | "assigned" | "ready";
+export type NotificationEvent = "completed" | "delayed" | "assigned" | "ready" | "quote_ready" | "client_responded";
 
 export type AppRole = "supervisor" | "boss" | "receptionist";
 
@@ -65,6 +75,13 @@ export interface Order {
   created_by_role: string | null;
   created_at: string;
   updated_at: string;
+  // Receptionist quote/approval gate — see lib/orders/create.ts's
+  // `releaseImmediately`. Staff-created orders default to 'approved' with
+  // released_at already set, so this is a no-op for them.
+  approval_status: OrderApprovalStatus;
+  quoted_price: number | null;
+  client_decision_note: string | null;
+  released_at: string | null;
 }
 
 export interface OrderItem {
@@ -210,6 +227,25 @@ export type ShowroomViewMode = "carousel" | "scene";
 
 export interface ShowroomSettings {
   product_view_mode: ShowroomViewMode;
+  // Boss-configurable, off by default — see Product.price's comment. When
+  // true, the showroom and order form show each product/variant's recorded
+  // price instead of "Pricing confirmed after review".
+  show_prices: boolean;
+}
+
+// A currency clients may view prices in. `rate` is "units of this currency
+// per 1 unit of the base currency" (the one row with is_base=true, which
+// products.price/product_variants.price are actually stored in) — see
+// supabase/migrations/20260919130000_currencies.sql.
+export interface Currency {
+  id: string;
+  code: string;
+  label: string;
+  symbol: string;
+  rate: number;
+  is_base: boolean;
+  active: boolean;
+  sort_order: number;
 }
 
 export interface WorkerPublic {
@@ -278,6 +314,20 @@ export interface Station {
 
 export type AuditActorType = "dashboard_user" | "worker" | "designer" | "system" | "client";
 
+// A one-time "what's new" popup — see supabase/migrations/20260919140000_
+// announcements.sql. `audience` is a subset of AuditActorType's four
+// signed-in values ("system" never applies, there's no session for it);
+// empty means shown to everyone.
+export interface Announcement {
+  id: string;
+  title: string;
+  body: string;
+  audience: AuditActorType[];
+  active: boolean;
+  created_by_name: string | null;
+  created_at: string;
+}
+
 export interface OrderAuditEntry {
   id: string;
   order_id: string;
@@ -319,6 +369,10 @@ export interface OrderItemWithOrder extends OrderItem {
     | "created_at"
     | "created_by_name"
     | "created_by_role"
+    | "approval_status"
+    | "quoted_price"
+    | "client_decision_note"
+    | "released_at"
   > & {
     // Every order_notes row for the order — both order-level (order_item_id
     // null) and item-level. Card badges filter to what they need; the drawer

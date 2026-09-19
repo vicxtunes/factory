@@ -102,12 +102,20 @@ export async function getDashboardSession(): Promise<DashboardSession | null> {
     .select("role, full_name")
     .eq("id", user.id)
     .maybeSingle<Pick<Profile, "role" | "full_name">>();
+  // A Supabase Auth user with no matching profiles row (deleted out from
+  // under them, or created outside this app's own createAdminUser, which
+  // always inserts both atomically) has no assigned role — treat as not
+  // signed in rather than defaulting to any role, let alone "boss": every
+  // dashboard-only gate (requireRole("boss"), isManagerRole, etc.) checks
+  // `session.role`, so a silent default here would hand out that role's
+  // access to an account nobody explicitly granted it to.
+  if (!profile) return null;
 
   return {
     userId: user.id,
     email: user.email ?? null,
-    fullName: profile?.full_name ?? null,
-    role: profile?.role ?? "boss",
+    fullName: profile.full_name,
+    role: profile.role,
   };
 }
 

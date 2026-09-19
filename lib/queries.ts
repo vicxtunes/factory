@@ -2,7 +2,9 @@ import { createClient } from "@/lib/supabase/server";
 import { ORDER_ITEM_SELECT as ITEM_SELECT } from "@/lib/item-select";
 import {
   type Agent,
+  type Announcement,
   type Client,
+  type Currency,
   type DesignerPublic,
   type MarketingSlide,
   type NotificationRow,
@@ -20,7 +22,12 @@ export async function fetchBoardItems(): Promise<OrderItemWithOrder[]> {
   const { data, error } = await supabase
     .from("order_items")
     .select(ITEM_SELECT)
-    .eq("stage", "factory");
+    .eq("stage", "factory")
+    // Client-portal orders sit unreleased (see lib/orders/create.ts's
+    // `releaseImmediately`) until the receptionist routes them post-approval
+    // — invisible to the factory floor until then. Staff-created orders
+    // default released_at to now(), so this is a no-op for them.
+    .not("order.released_at", "is", null);
   if (error) throw new Error(error.message);
   return (data ?? []) as unknown as OrderItemWithOrder[];
 }
@@ -63,12 +70,48 @@ export async function fetchDesigners(activeOnly = false): Promise<DesignerPublic
   return data ?? [];
 }
 
-// Every item, for the dashboard list (all order statuses).
+// The receptionist's quote/approval queue: every item belonging to an order
+// that still needs a quote, is awaiting the client's response, or has been
+// approved but not yet routed to the factory/a designer. Staff-created
+// orders never appear here (they default to approval_status='approved' and
+// released_at=now() at creation, matching neither condition below).
+export async function fetchApprovalQueueItems(): Promise<OrderItemWithOrder[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("order_items")
+    .select(ITEM_SELECT)
+    .or("approval_status.neq.approved,released_at.is.null", { referencedTable: "order" })
+    .order("created_at", { ascending: false });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as unknown as OrderItemWithOrder[];
+}
+
+// Every item, for the dashboard overview's stats (all order statuses,
+// including a client-portal order still sitting unreleased in the
+// receptionist's quote queue) — kept separate from fetchOfficeItems below so
+// this one page's totals aren't quietly narrowed by that split.
 export async function fetchAllItems(): Promise<OrderItemWithOrder[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("order_items")
     .select(ITEM_SELECT)
+    .order("created_at", { ascending: false });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as unknown as OrderItemWithOrder[];
+}
+
+// The "Office Orders" board (/dashboard/orders): every item, same as
+// fetchAllItems, but only once its order has actually been released —
+// same filter and reasoning as fetchBoardItems above. A client-portal order
+// still waiting on a quote or the client's approval belongs on the
+// receptionist's "Client Orders" queue (fetchApprovalQueueItems) instead,
+// not mixed in here alongside confirmed work.
+export async function fetchOfficeItems(): Promise<OrderItemWithOrder[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("order_items")
+    .select(ITEM_SELECT)
+    .not("order.released_at", "is", null)
     .order("created_at", { ascending: false });
   if (error) throw new Error(error.message);
   return (data ?? []) as unknown as OrderItemWithOrder[];
@@ -267,9 +310,38 @@ export async function fetchShowroomSettings(): Promise<ShowroomSettings> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("showroom_settings")
-    .select("product_view_mode")
+    .select("product_view_mode, show_prices")
     .eq("id", 1)
     .single();
   if (error) throw new Error(error.message);
   return data as unknown as ShowroomSettings;
+}
+
+// Boss-managed currencies clients may view prices in — see lib/types.ts's
+// Currency comment. `activeOnly` is what the client-facing showroom/order
+// form want; the dashboard's currency manager passes false to also show
+// currencies the boss has retired (still listed, just not offerable).
+export async function fetchCurrencies(activeOnly = false): Promise<Currency[]> {
+  const supabase = await createClient();
+  let query = supabase
+    .from("currencies")
+    .select("id, code, label, symbol, rate, is_base, active, sort_order")
+    .order("sort_order");
+  if (activeOnly) query = query.eq("active", true);
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+  return data ?? [];
+}
+
+// Every announcement, active or not, for the dashboard's manager page — the
+// popup itself only ever asks lib/announcements/actions.ts's
+// getActiveAnnouncement for a single actor-scoped one.
+export async function fetchAnnouncements(): Promise<Announcement[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("announcements")
+    .select("id, title, body, audience, active, created_by_name, created_at")
+    .order("created_at", { ascending: false });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as unknown as Announcement[];
 }

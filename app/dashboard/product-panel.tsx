@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { Drawer } from "@/components/ui/Drawer";
 import { ExportButtons } from "@/components/ui/ExportButtons";
 import { Field, Select, TextInput } from "@/components/ui/Field";
+import { UploadRow } from "@/components/ui/UploadRow";
 import type { ExportColumn } from "@/lib/export/tableExport";
 import {
   clearProductDisplayImage,
@@ -17,28 +18,32 @@ import { uploadProductMedia } from "@/lib/storage/product-media-client";
 import type {
   AttributeType,
   CategoryAttribute,
+  Currency,
   Product,
   ProductCategory,
   ShowroomSettings,
-  ShowroomViewMode,
 } from "@/lib/types";
 
 import {
   createAttribute,
   createCategory,
+  createCurrency,
   createProduct,
   createVariant,
   deleteAttribute,
+  deleteCurrency,
   renameCategory,
   renameProduct,
   renameVariant,
   setCategoryActive,
+  setCurrencyActive,
   setProductActive,
   setProductPrice,
-  setShowroomViewMode,
+  setShowPrices,
   setVariantActive,
   setVariantPrice,
   updateAttribute,
+  updateCurrency,
   type AttributeInput,
 } from "./actions";
 
@@ -60,11 +65,11 @@ const EXPORT_COLUMNS: ExportColumn<CategoryExportRow>[] = [
   { key: "status", label: "Status" },
 ];
 
-// Which image display clicking a product in the client-facing showroom
-// grid opens into (see app/client-side/product-showcase.tsx): the 3D scene
-// (flashier, photos only) or a plain carousel (shows video too). Boss's
-// call, and either one is a one-click switch since it's app-wide, not
-// per-product.
+// The showroom product-view-mode toggle (3D scene vs. photo carousel) that
+// used to live here is hidden for now, per the boss — product_view_mode
+// still exists on showroom_settings and still drives product-showcase.tsx,
+// it just can't be changed from this panel any more; only this "show
+// prices" switch is exposed today.
 function ShowroomSettingsCard({
   settings,
   run,
@@ -74,29 +79,29 @@ function ShowroomSettingsCard({
   run: (fn: () => Promise<MutationResult>) => void;
   pending: boolean;
 }) {
-  const options: { value: ShowroomViewMode; label: string; hint: string }[] = [
-    { value: "carousel", label: "Photo carousel", hint: "Shows every uploaded photo and video" },
-    { value: "scene", label: "3D scene", hint: "Scroll-driven motion; photos only, no video" },
+  const options: { value: boolean; label: string; hint: string }[] = [
+    { value: false, label: "Hidden", hint: 'Clients see "Pricing confirmed after review"' },
+    { value: true, label: "Visible to clients", hint: "Shows each product/variant's recorded price" },
   ];
 
   return (
     <div className="rounded-2xl border border-border bg-surface p-4 shadow-theme-xs">
-      <p className="text-xs font-semibold uppercase tracking-wide text-muted">Showroom product view</p>
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted">Showroom pricing</p>
       <p className="mt-1 text-xs text-muted">
-        What clicking a product in the client-facing showroom opens into.
+        Whether the showroom and order form show product/variant prices to clients.
       </p>
       <div className="mt-3 flex flex-wrap gap-2">
         {options.map((opt) => (
           <button
-            key={opt.value}
+            key={String(opt.value)}
             type="button"
             disabled={pending}
             onClick={() => {
-              if (opt.value !== settings.product_view_mode) run(() => setShowroomViewMode(opt.value));
+              if (opt.value !== settings.show_prices) run(() => setShowPrices(opt.value));
             }}
             title={opt.hint}
             className={`rounded-[var(--radius)] border px-3 py-2 text-left text-xs transition-colors ${
-              settings.product_view_mode === opt.value
+              settings.show_prices === opt.value
                 ? "border-brand-500 bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-400"
                 : "border-border text-muted hover:bg-background"
             }`}
@@ -110,13 +115,213 @@ function ShowroomSettingsCard({
   );
 }
 
+// One row in the Currencies card: read-only summary, or an inline
+// label/symbol/rate edit form. The base currency (rate fixed at 1, price
+// entry currency) can't be edited, hidden, or removed here — see
+// updateCurrency/setCurrencyActive/deleteCurrency's comments.
+function CurrencyRow({
+  currency,
+  baseCode,
+  run,
+  pending,
+}: {
+  currency: Currency;
+  baseCode: string;
+  run: (fn: () => Promise<MutationResult>) => void;
+  pending: boolean;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [label, setLabel] = useState(currency.label);
+  const [symbol, setSymbol] = useState(currency.symbol);
+  const [rate, setRate] = useState(String(currency.rate));
+
+  function save() {
+    run(async () => {
+      const res = await updateCurrency(currency.id, { label, symbol, rate });
+      if (res.ok) setEditing(false);
+      return res;
+    });
+  }
+
+  if (editing) {
+    return (
+      <div className="flex flex-wrap items-center gap-2 rounded-[var(--radius)] border border-border p-2">
+        <span className="w-14 shrink-0 font-mono text-xs font-semibold">{currency.code}</span>
+        <TextInput className="w-32" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Name" />
+        <TextInput className="w-16" value={symbol} onChange={(e) => setSymbol(e.target.value)} placeholder="Symbol" />
+        <TextInput
+          className="w-24 tnum"
+          type="number"
+          min={0}
+          step="0.0001"
+          value={rate}
+          onChange={(e) => setRate(e.target.value)}
+          placeholder="Rate"
+        />
+        <Button variant="primary" className="text-xs" disabled={pending} onClick={save}>
+          Save
+        </Button>
+        <button type="button" className="text-xs text-muted" onClick={() => setEditing(false)}>
+          Cancel
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 rounded-[var(--radius)] border border-border p-2 text-sm">
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
+        <span className="font-mono text-xs font-semibold">{currency.code}</span>
+        <span className="truncate">{currency.label}</span>
+        <span className="text-muted">({currency.symbol})</span>
+        {currency.is_base ? (
+          <span className="rounded-full bg-brand-100 px-2 py-0.5 text-[0.65rem] font-semibold text-brand-700 dark:bg-brand-500/15 dark:text-brand-400">
+            Base — prices entered here
+          </span>
+        ) : (
+          <span className="text-xs text-muted tnum">
+            1 {baseCode} = {currency.rate} {currency.code}
+          </span>
+        )}
+      </div>
+      <div className="flex shrink-0 items-center gap-3 text-xs">
+        {!currency.is_base ? (
+          <button type="button" className="text-brand-600" disabled={pending} onClick={() => setEditing(true)}>
+            Edit
+          </button>
+        ) : null}
+        <button
+          type="button"
+          className={currency.active ? "text-muted" : "text-brand-600"}
+          disabled={pending || currency.is_base}
+          title={currency.is_base ? "The base currency can't be hidden" : undefined}
+          onClick={() => run(() => setCurrencyActive(currency.id, !currency.active))}
+        >
+          {currency.active ? "Hide" : "Show"}
+        </button>
+        {!currency.is_base ? (
+          <button
+            type="button"
+            className="text-[var(--rush)]"
+            disabled={pending}
+            onClick={() => {
+              if (window.confirm(`Remove ${currency.code}? Clients viewing prices in it will fall back to ${baseCode}.`)) {
+                run(() => deleteCurrency(currency.id));
+              }
+            }}
+          >
+            Remove
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+// Lets clients view prices converted from the fixed base currency (see
+// ShowroomSettingsCard's "show prices" toggle above and Currency's comment
+// in lib/types.ts) — this only manages the conversion list, not whether
+// prices show at all.
+function CurrencyManager({
+  currencies,
+  run,
+  pending,
+}: {
+  currencies: Currency[];
+  run: (fn: () => Promise<MutationResult>) => void;
+  pending: boolean;
+}) {
+  const [addOpen, setAddOpen] = useState(false);
+  const [code, setCode] = useState("");
+  const [label, setLabel] = useState("");
+  const [symbol, setSymbol] = useState("");
+  const [rate, setRate] = useState("");
+  const base = currencies.find((c) => c.is_base) ?? null;
+
+  function addCurrency() {
+    run(async () => {
+      const res = await createCurrency({ code, label, symbol, rate });
+      if (res.ok) {
+        setCode("");
+        setLabel("");
+        setSymbol("");
+        setRate("");
+        setAddOpen(false);
+      }
+      return res;
+    });
+  }
+
+  return (
+    <div className="rounded-2xl border border-border bg-surface p-4 shadow-theme-xs">
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted">Currencies</p>
+      <p className="mt-1 text-xs text-muted">
+        Lets clients view prices converted from the base currency ({base?.code ?? "—"}) — doesn&apos;t change what
+        currency prices are entered in.
+      </p>
+      <div className="mt-3 space-y-2">
+        {currencies.map((c) => (
+          <CurrencyRow key={c.id} currency={c} baseCode={base?.code ?? c.code} run={run} pending={pending} />
+        ))}
+      </div>
+
+      {addOpen ? (
+        <div className="mt-3 flex flex-wrap items-end gap-2 rounded-[var(--radius)] border border-dashed border-border p-2">
+          <Field label="Code">
+            <TextInput className="w-20" value={code} onChange={(e) => setCode(e.target.value)} placeholder="UGX" />
+          </Field>
+          <Field label="Name">
+            <TextInput
+              className="w-36"
+              value={label}
+              onChange={(e) => setLabel(e.target.value)}
+              placeholder="Ugandan Shilling"
+            />
+          </Field>
+          <Field label="Symbol">
+            <TextInput className="w-16" value={symbol} onChange={(e) => setSymbol(e.target.value)} placeholder="USh" />
+          </Field>
+          <Field label={`1 ${base?.code ?? "base"} =`}>
+            <TextInput
+              className="w-24 tnum"
+              type="number"
+              min={0}
+              step="0.0001"
+              value={rate}
+              onChange={(e) => setRate(e.target.value)}
+              placeholder="3800"
+            />
+          </Field>
+          <Button
+            variant="primary"
+            className="text-xs"
+            disabled={pending || !code.trim() || !label.trim() || !symbol.trim() || !rate.trim()}
+            onClick={addCurrency}
+          >
+            Add
+          </Button>
+          <button type="button" className="text-xs text-muted" onClick={() => setAddOpen(false)}>
+            Cancel
+          </button>
+        </div>
+      ) : (
+        <Button variant="secondary" className="mt-3 text-xs" onClick={() => setAddOpen(true)}>
+          + Add currency
+        </Button>
+      )}
+    </div>
+  );
+}
+
 export function ProductPanel({
   categories,
   showroomSettings,
+  currencies,
   canManage = true,
 }: {
   categories: ProductCategory[];
   showroomSettings: ShowroomSettings;
+  currencies: Currency[];
   canManage?: boolean;
 }) {
   const router = useRouter();
@@ -147,6 +352,7 @@ export function ProductPanel({
   return (
     <div className="space-y-4">
       {canManage ? <ShowroomSettingsCard settings={showroomSettings} run={run} pending={pending} /> : null}
+      {canManage ? <CurrencyManager currencies={currencies} run={run} pending={pending} /> : null}
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <ExportButtons columns={EXPORT_COLUMNS} rows={exportRows} filename="product-categories" />
@@ -599,18 +805,6 @@ function ProductCard({
 // Supabase Storage (lib/storage/product-media-client.ts), so `run` here
 // just drives the same shared pending/error/refresh flow as every other
 // mutation on this panel.
-function UploadCloudIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className={className}>
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M7.5 15.75a4.5 4.5 0 0 1-1.406-8.775 5.25 5.25 0 0 1 10.233-2.33 3.75 3.75 0 0 1 4.123 4.985A4.502 4.502 0 0 1 18.75 15.75M9 12.75 12 9.75m0 0 3 3m-3-3v9"
-      />
-    </svg>
-  );
-}
-
 function TrashIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className={className}>
@@ -709,85 +903,6 @@ function MediaPreview({
           </div>
         ) : null}
       </div>
-    </div>
-  );
-}
-
-// Compact upload control: a labelled row with a "Choose file" button and
-// its own drag-and-drop target. Reusable for image, video, or batch
-// gallery uploads. Progress renders inline on the right when uploading.
-function UploadRow({
-  label,
-  hint,
-  accept,
-  multiple,
-  disabled,
-  progress,
-  onFiles,
-}: {
-  label: string;
-  hint: string;
-  accept: string;
-  multiple?: boolean;
-  disabled: boolean;
-  progress?: number | null;
-  onFiles: (files: FileList) => void;
-}) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [dragOver, setDragOver] = useState(false);
-  const uploading = progress != null;
-
-  return (
-    <div
-      onDragOver={(e) => {
-        e.preventDefault();
-        if (!disabled) setDragOver(true);
-      }}
-      onDragLeave={() => setDragOver(false)}
-      onDrop={(e) => {
-        e.preventDefault();
-        setDragOver(false);
-        if (!disabled && e.dataTransfer.files?.length) onFiles(e.dataTransfer.files);
-      }}
-      className={`flex items-center justify-between gap-3 rounded-xl border-2 border-dashed px-3 py-2.5 transition-colors ${
-        dragOver ? "border-brand-500 bg-brand-50 dark:bg-brand-500/10" : "border-border bg-background"
-      }`}
-    >
-      <UploadCloudIcon className={`h-5 w-5 shrink-0 ${dragOver ? "text-brand-600" : "text-muted"}`} />
-      <div className="min-w-0 flex-1">
-        <p className="text-xs font-semibold text-foreground">{label}</p>
-        <p className="truncate text-[0.65rem] text-muted">
-          {uploading ? `Uploading… ${Math.round((progress ?? 0) * 100)}%` : hint}
-        </p>
-        {uploading ? (
-          <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-border">
-            <div
-              className="h-full rounded-full bg-brand-500 transition-[width] duration-150"
-              style={{ width: `${Math.round((progress ?? 0) * 100)}%` }}
-            />
-          </div>
-        ) : null}
-      </div>
-      <button
-        type="button"
-        onClick={() => inputRef.current?.click()}
-        disabled={disabled || uploading}
-        className="shrink-0 rounded-[var(--radius)] border border-border bg-surface px-2.5 py-1 text-xs font-medium hover:bg-background disabled:opacity-50"
-      >
-        Choose file
-      </button>
-      <input
-        ref={inputRef}
-        type="file"
-        accept={accept}
-        multiple={multiple}
-        className="hidden"
-        disabled={disabled || uploading}
-        onChange={(e) => {
-          if (e.target.files?.length) onFiles(e.target.files);
-          e.target.value = "";
-        }}
-      />
     </div>
   );
 }

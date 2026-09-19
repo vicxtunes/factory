@@ -32,6 +32,18 @@ export interface BuildOrderParams {
   // null for client-portal orders, which land unassigned for staff to triage.
   responsibleWorkerId: string | null;
   items: OrderItemInput[];
+  // true for every staff-created order (dashboard's createOrder, an
+  // in-house designer's createDesignerOrder) — already reviewed/priced by a
+  // human at intake, so it's visible on its board immediately
+  // (approval_status='approved', released_at=now(), matching those
+  // columns' defaults — set explicitly here anyway so both branches are
+  // equally visible in this one insert rather than only client-portal's
+  // depending on "don't pass it and hope the default is right").
+  // false only for the client portal's placeOrder: the order goes to the
+  // receptionist's quote queue first, invisible to any board until she both
+  // quotes it (client approves) and explicitly routes it — see
+  // app/dashboard/actions.ts's quoteOrder/routeApprovedOrder.
+  releaseImmediately: boolean;
 }
 
 export type BuildOrderResult =
@@ -145,6 +157,8 @@ export async function buildAndInsertOrder(
       designer_brief: p.designer ? clean(p.designerBrief) : null,
       created_by_name: actor?.name ?? null,
       created_by_role: actor?.role ?? null,
+      approval_status: p.releaseImmediately ? "approved" : "pending_review",
+      released_at: p.releaseImmediately ? new Date().toISOString() : null,
     })
     .select("id, order_no")
     .single();
@@ -206,9 +220,13 @@ export async function buildAndInsertOrder(
   });
 
   // One order-level "you've been assigned" notification — whichever of
-  // designer/worker the order was routed to at creation, not per item.
+  // designer/worker the order was routed to at creation, not per item. Only
+  // relevant when the order is actually released to production immediately
+  // — a pending-review client order has no designer/worker yet anyway (the
+  // client path always passes both as null), but the guard is explicit so
+  // this can't silently misfire if that ever changes.
   const firstItemId = insertedItems[0]?.id;
-  if (firstItemId && p.designer) {
+  if (p.releaseImmediately && firstItemId && p.designer) {
     await notifyOrderItem({
       orderItemId: firstItemId,
       eventType: "assigned",
@@ -217,7 +235,7 @@ export async function buildAndInsertOrder(
       pushTitle: "New order assigned",
       url: "/graphics",
     });
-  } else if (firstItemId && p.responsibleWorkerId) {
+  } else if (p.releaseImmediately && firstItemId && p.responsibleWorkerId) {
     await notifyOrderItem({
       orderItemId: firstItemId,
       eventType: "assigned",

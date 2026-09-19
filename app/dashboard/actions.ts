@@ -27,6 +27,7 @@ import type {
   ClientDuplicateHit,
   CreateOrderResult,
   OrderFormPayload,
+  OrderRoute,
 } from "@/lib/orders/types";
 import { pushOnlyOrderItem, notifyOrderItem } from "@/lib/notifications/notify";
 import {
@@ -1002,6 +1003,126 @@ export async function setShowroomViewMode(mode: ShowroomViewMode): Promise<Resul
   return { ok: true };
 }
 
+// Whether the showroom/order form show a product or variant's recorded
+// price, or the fallback "Pricing confirmed after review" text.
+export async function setShowPrices(show: boolean): Promise<Result> {
+  await requireRole("boss");
+  const admin = createAdminClient();
+  const { error } = await admin.from("showroom_settings").update({ show_prices: show }).eq("id", 1);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/dashboard/products");
+  revalidatePath("/client-side/showroom");
+  revalidatePath("/client-side/new");
+  return { ok: true };
+}
+
+function revalidateCurrencyViews(): void {
+  revalidatePath("/dashboard/products");
+  revalidatePath("/client-side/showroom");
+  revalidatePath("/client-side/new");
+}
+
+// Currencies clients may view prices in, converted from the fixed base
+// currency (see supabase/migrations/20260919130000_currencies.sql) — the
+// base row itself is seeded once and never editable here; there's no
+// "change the base currency" action, since every existing product/variant
+// price is already recorded in it, and rescaling every other currency's
+// rate to a new base is a different, much riskier feature than "let clients
+// view converted prices."
+export async function createCurrency(input: {
+  code: string;
+  label: string;
+  symbol: string;
+  rate: string;
+}): Promise<Result> {
+  await requireRole("boss");
+  const code = input.code.trim().toUpperCase();
+  const label = input.label.trim();
+  const symbol = input.symbol.trim();
+  const rate = Number(input.rate);
+  if (!code) return { ok: false, error: "Currency code is required." };
+  if (!label) return { ok: false, error: "Currency name is required." };
+  if (!symbol) return { ok: false, error: "Symbol is required." };
+  if (!Number.isFinite(rate) || rate <= 0) {
+    return { ok: false, error: "Enter a valid, positive exchange rate." };
+  }
+
+  const admin = createAdminClient();
+  const { count } = await admin.from("currencies").select("id", { count: "exact", head: true });
+  const { error } = await admin.from("currencies").insert({
+    code,
+    label,
+    symbol,
+    rate,
+    sort_order: count ?? 0,
+  });
+  if (error) {
+    return {
+      ok: false,
+      error: error.code === "23505" ? `"${code}" already exists.` : error.message,
+    };
+  }
+  revalidateCurrencyViews();
+  return { ok: true };
+}
+
+// Label/symbol/rate only — never `is_base` or `code` (code is effectively
+// the currency's identity; renaming it in place would silently change what
+// clients think they're looking at for anyone with it already selected).
+export async function updateCurrency(
+  id: string,
+  input: { label: string; symbol: string; rate: string },
+): Promise<Result> {
+  await requireRole("boss");
+  const label = input.label.trim();
+  const symbol = input.symbol.trim();
+  const rate = Number(input.rate);
+  if (!label) return { ok: false, error: "Currency name is required." };
+  if (!symbol) return { ok: false, error: "Symbol is required." };
+  if (!Number.isFinite(rate) || rate <= 0) {
+    return { ok: false, error: "Enter a valid, positive exchange rate." };
+  }
+
+  const admin = createAdminClient();
+  const { data: existing } = await admin.from("currencies").select("is_base").eq("id", id).maybeSingle();
+  if (existing?.is_base) {
+    return { ok: false, error: "The base currency's rate is fixed at 1 — every price is recorded in it." };
+  }
+
+  const { error } = await admin.from("currencies").update({ label, symbol, rate }).eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  revalidateCurrencyViews();
+  return { ok: true };
+}
+
+export async function setCurrencyActive(id: string, active: boolean): Promise<Result> {
+  await requireRole("boss");
+  const admin = createAdminClient();
+  const { data: existing } = await admin.from("currencies").select("is_base").eq("id", id).maybeSingle();
+  if (existing?.is_base && !active) {
+    return { ok: false, error: "The base currency can't be hidden." };
+  }
+
+  const { error } = await admin.from("currencies").update({ active }).eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  revalidateCurrencyViews();
+  return { ok: true };
+}
+
+export async function deleteCurrency(id: string): Promise<Result> {
+  await requireRole("boss");
+  const admin = createAdminClient();
+  const { data: existing } = await admin.from("currencies").select("is_base").eq("id", id).maybeSingle();
+  if (existing?.is_base) {
+    return { ok: false, error: "The base currency can't be removed." };
+  }
+
+  const { error } = await admin.from("currencies").delete().eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  revalidateCurrencyViews();
+  return { ok: true };
+}
+
 // Overrides the parent product's price when set; clearing it (empty string)
 // falls back to the product's own price rather than forcing every variant
 // to carry one. Same validation as setProductPrice.
@@ -1221,12 +1342,162 @@ export async function createOrder(input: OrderFormPayload): Promise<CreateOrderR
     designerBrief: input.designer_brief,
     responsibleWorkerId: input.responsible_worker_id,
     items: input.items,
+    releaseImmediately: true,
   });
   if (!res.ok) return res;
 
   revalidatePath("/dashboard/orders");
   revalidatePath("/dashboard");
   return { ok: true, orderNo: res.orderNo, items: res.items, warnings };
+}
+
+// ---------------------------------------------------------------------------
+// Receptionist quote/approval gate for client-portal orders — see
+// lib/orders/create.ts's `releaseImmediately`. A client-portal order sits
+// with approval_status='pending_review' and released_at=null until this
+// loop resolves: quoteOrder (receptionist) -> respondToQuote (client, in
+// app/client-side/actions.ts) -> routeApprovedOrder (receptionist).
+// ---------------------------------------------------------------------------
+
+// Only valid from pending_review or changes_requested — quoting an order
+// that's already awaiting the client's response, approved, or routed would
+// silently clobber state a human is actively relying on.
+export async function quoteOrder(orderId: string, price: number): Promise<Result> {
+  await requireManager();
+  if (!Number.isFinite(price) || price <= 0) return { ok: false, error: "Enter a valid price." };
+
+  const admin = createAdminClient();
+  const { data: order } = await admin
+    .from("orders")
+    .select("id, approval_status, order_no, client_id")
+    .eq("id", orderId)
+    .maybeSingle();
+  if (!order) return { ok: false, error: "Order not found." };
+  if (order.approval_status !== "pending_review" && order.approval_status !== "changes_requested") {
+    return { ok: false, error: "This order isn't awaiting a quote." };
+  }
+
+  const { error } = await admin
+    .from("orders")
+    .update({ quoted_price: price, approval_status: "awaiting_client_approval", client_decision_note: null })
+    .eq("id", orderId);
+  if (error) return { ok: false, error: error.message };
+
+  const actor = await resolveActor();
+  await logOrderEvent({ orderId, actor, action: "quote_sent", detail: { price } });
+
+  // notifyOrderItem needs an order_item_id (the notifications table has no
+  // order-level row shape) — any one of the order's items works as the
+  // anchor, same trick lib/orders/create.ts already uses for its own
+  // order-level "assigned" notification.
+  if (order.client_id) {
+    const { data: firstItem } = await admin
+      .from("order_items")
+      .select("id")
+      .eq("order_id", orderId)
+      .limit(1)
+      .maybeSingle();
+    if (firstItem) {
+      await notifyOrderItem({
+        orderItemId: firstItem.id,
+        eventType: "quote_ready",
+        message: `Your quote for order ${order.order_no} is ready — $${price.toFixed(2)}.`,
+        recipient: { type: "client", id: order.client_id },
+        pushTitle: "Quote ready",
+        url: "/client-side/orders",
+      });
+    }
+  }
+
+  revalidatePath("/dashboard/order-approvals");
+  return { ok: true };
+}
+
+// Only valid once the client has approved and the order hasn't already been
+// sent somewhere — the receptionist's deliberate "send it" step, distinct
+// from the client's approval itself.
+export async function routeApprovedOrder(
+  orderId: string,
+  route: OrderRoute,
+  designerId?: string,
+): Promise<Result> {
+  await requireManager();
+
+  const admin = createAdminClient();
+  const { data: order } = await admin
+    .from("orders")
+    .select("id, approval_status, released_at, order_no")
+    .eq("id", orderId)
+    .maybeSingle();
+  if (!order) return { ok: false, error: "Order not found." };
+  if (order.approval_status !== "approved") return { ok: false, error: "Client hasn't approved this order yet." };
+  if (order.released_at) return { ok: false, error: "This order was already sent to production." };
+
+  let designer: { id: string; name: string } | null = null;
+  if (route === "designer") {
+    if (!designerId) return { ok: false, error: "Select which designer this order goes to." };
+    const { data } = await admin
+      .from("designers")
+      .select("id, name, active")
+      .eq("id", designerId)
+      .maybeSingle();
+    if (!data || !data.active) return { ok: false, error: "Selected designer not found or inactive." };
+    designer = { id: data.id, name: data.name };
+  }
+
+  const updates: Record<string, unknown> = { released_at: new Date().toISOString() };
+  if (route === "designer" && designer) {
+    updates.stage = "with_designer";
+    updates.assigned_designer_id = designer.id;
+    updates.designer_name = designer.name;
+  }
+  const { error: orderErr } = await admin.from("orders").update(updates).eq("id", orderId);
+  if (orderErr) return { ok: false, error: orderErr.message };
+
+  if (route === "designer") {
+    // buildAndInsertOrder stamps every item's own `stage` at creation
+    // (lib/orders/create.ts) — routing after the fact has to move every
+    // item too, not just the order row.
+    const { error: itemsErr } = await admin
+      .from("order_items")
+      .update({ stage: "with_designer" })
+      .eq("order_id", orderId);
+    if (itemsErr) return { ok: false, error: itemsErr.message };
+  }
+
+  const actor = await resolveActor();
+  await logOrderEvent({
+    orderId,
+    actor,
+    action: "order_routed",
+    detail: { route, designerId: designer?.id ?? null },
+  });
+
+  if (route === "designer" && designer) {
+    const { data: firstItem } = await admin
+      .from("order_items")
+      .select("id")
+      .eq("order_id", orderId)
+      .limit(1)
+      .maybeSingle();
+    if (firstItem) {
+      await notifyOrderItem({
+        orderItemId: firstItem.id,
+        eventType: "assigned",
+        message: `Order ${order.order_no} was assigned to you.`,
+        recipient: { type: "designer", id: designer.id },
+        pushTitle: "New order assigned",
+        url: "/graphics",
+      });
+    }
+  }
+
+  revalidatePath("/dashboard/order-approvals");
+  revalidatePath("/dashboard/orders");
+  revalidatePath("/dashboard");
+  revalidatePath("/factory");
+  revalidatePath("/graphics");
+  return { ok: true };
 }
 
 // ---------------------------------------------------------------------------

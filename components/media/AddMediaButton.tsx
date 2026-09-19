@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 
 import { Button } from "@/components/ui/Button";
+import { UploadRow } from "@/components/ui/UploadRow";
 import { addMediaLink } from "@/lib/storage/actions";
 import { uploadFileToStorage } from "@/lib/storage/upload-client";
 import { enqueueUpload, pendingUploadsFor, QUEUE_CHANGED_EVENT } from "@/lib/offline-queue/enqueue";
@@ -18,7 +19,6 @@ export function AddMediaButton({
   orderItemId: string;
   onUploaded?: () => void;
 }) {
-  const inputRef = useRef<HTMLInputElement>(null);
   const [pending, startTransition] = useTransition();
   const [status, setStatus] = useState<string | null>(null);
   const [linkOpen, setLinkOpen] = useState(false);
@@ -63,7 +63,6 @@ export function AddMediaButton({
       }
       if (queued > 0) setStatus(`Queued ${queued} file(s) — will upload when back online.`);
       else if (failed === 0) setStatus(`Uploaded ${list.length} file(s).`);
-      if (inputRef.current) inputRef.current.value = "";
       onUploaded?.();
     });
   }
@@ -87,28 +86,23 @@ export function AddMediaButton({
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex flex-wrap items-center gap-2">
-        <label className="inline-flex min-h-11 w-fit cursor-pointer items-center rounded-[var(--radius)] border border-border px-3 text-xs">
-          {pending ? "Uploading…" : "Add photos"}
-          <input
-            ref={inputRef}
-            type="file"
-            multiple
-            accept="image/*,application/pdf"
-            className="hidden"
-            disabled={pending}
-            onChange={(e) => handleFiles(e.target.files)}
-          />
-        </label>
-        <button
-          type="button"
-          className="inline-flex min-h-11 w-fit items-center rounded-[var(--radius)] border border-border px-3 text-xs"
-          disabled={pending}
-          onClick={() => setLinkOpen((v) => !v)}
-        >
-          Add link
-        </button>
-      </div>
+      <UploadRow
+        label="Add photos"
+        hint="Photos or PDFs, uploaded straight to this item — or drop them here"
+        accept="image/*,application/pdf"
+        multiple
+        disabled={pending}
+        onFiles={handleFiles}
+      />
+
+      <button
+        type="button"
+        className="inline-flex min-h-11 w-fit items-center rounded-[var(--radius)] border border-border px-3 text-xs"
+        disabled={pending}
+        onClick={() => setLinkOpen((v) => !v)}
+      >
+        Add link instead
+      </button>
 
       {linkOpen ? (
         <div className="flex flex-wrap items-center gap-2">
@@ -132,7 +126,11 @@ export function AddMediaButton({
         </div>
       ) : null}
 
-      {status ? <span className="text-xs text-muted">{status}</span> : null}
+      {pending ? (
+        <span className="text-xs text-muted">Uploading…</span>
+      ) : status ? (
+        <span className="text-xs text-muted">{status}</span>
+      ) : null}
       {pendingUploads > 0 ? (
         <span className="text-xs text-[var(--urgent)]">
           {pendingUploads} upload{pendingUploads === 1 ? "" : "s"} queued — sends automatically when back online.

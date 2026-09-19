@@ -471,6 +471,7 @@ export async function createDesignerOrder(
     designerBrief: "",
     responsibleWorkerId: input.responsible_worker_id,
     items: input.items,
+    releaseImmediately: true,
   });
   if (!res.ok) return res;
 

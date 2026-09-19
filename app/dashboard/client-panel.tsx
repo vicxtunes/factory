@@ -1,12 +1,13 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/Button";
 import { Drawer } from "@/components/ui/Drawer";
 import { ExportButtons } from "@/components/ui/ExportButtons";
 import { Field, TextInput } from "@/components/ui/Field";
+import { UploadRow } from "@/components/ui/UploadRow";
 import type { ExportColumn } from "@/lib/export/tableExport";
 import type { Client } from "@/lib/types";
 
@@ -58,7 +59,6 @@ export function ClientPanel({ clients }: { clients: Client[] }) {
   const [editEmail, setEditEmail] = useState("");
   const [editPhone, setEditPhone] = useState("");
 
-  const fileRef = useRef<HTMLInputElement>(null);
   const [importResult, setImportResult] = useState<
     { inserted: number; skipped: BulkImportRowSkip[]; errors: BulkImportRowError[] } | null
   >(null);
@@ -91,7 +91,6 @@ export function ClientPanel({ clients }: { clients: Client[] }) {
         setImportResult({ inserted: res.inserted, skipped: res.skipped, errors: res.errors });
         router.refresh();
       }
-      if (fileRef.current) fileRef.current.value = "";
     });
   }
 
@@ -144,21 +143,17 @@ export function ClientPanel({ clients }: { clients: Client[] }) {
         </form>
 
         <div className="mt-4 border-t border-border pt-4">
-          <label className="inline-flex min-h-11 cursor-pointer items-center rounded-[var(--radius)] border border-border px-3 text-xs">
-            {pending ? "Importing…" : "Bulk import from CSV"}
-            <input
-              ref={fileRef}
-              type="file"
-              accept=".csv,text/csv"
-              className="hidden"
-              disabled={pending}
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) void handleCsv(file);
-              }}
-            />
-          </label>
-          <p className="mt-1 text-xs text-muted">Columns: name, email, phone (name is required).</p>
+          <UploadRow
+            label="Bulk import from CSV"
+            hint="Columns: name, email, phone (name is required)"
+            accept=".csv,text/csv"
+            disabled={pending}
+            onFiles={(files) => {
+              const file = files[0];
+              if (file) void handleCsv(file);
+            }}
+          />
+          {pending ? <p className="mt-1 text-xs text-muted">Importing…</p> : null}
           {importResult ? (
             <div className="mt-2 space-y-1 text-xs">
               <p className="text-success-600">Imported {importResult.inserted} new client(s).</p>

@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { Header } from "@/components/ui/Header";
+import { AnnouncementPopup } from "@/components/announcements/AnnouncementPopup";
 import { InstallGate } from "@/components/pwa/InstallGate";
 import { NotificationGate } from "@/components/pwa/NotificationGate";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
@@ -43,6 +44,7 @@ export default async function FactoryPage() {
     <>
       <InstallGate />
       <NotificationGate />
+      <AnnouncementPopup />
       <Header
         surface="Factory"
         right={

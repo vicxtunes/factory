@@ -21,7 +21,10 @@ export function Header({
             {surface}
           </span>
         </div>
-        {right ? <div className="flex items-center gap-3 text-sm">{right}</div> : null}
+        {/* relative: gives NotificationBell's dropdown a same-width-as-header
+            positioned ancestor to anchor `right-0` against, instead of its
+            own narrow button box — see components/notifications/NotificationBell.tsx. */}
+        {right ? <div className="relative flex items-center gap-3 text-sm">{right}</div> : null}
       </div>
     </header>
   );

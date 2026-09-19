@@ -5,11 +5,14 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/Button";
+import { CurrencySelect } from "@/components/ui/CurrencySelect";
 import { Field, Select, TextArea, TextInput } from "@/components/ui/Field";
 import { SectionLabel } from "@/components/ui/SectionLabel";
+import { UploadRow } from "@/components/ui/UploadRow";
+import { useCurrency } from "@/lib/currency/useCurrency";
 import type { OrderItemInput } from "@/lib/orders/types";
 import { uploadFileToStorage } from "@/lib/storage/upload-client";
-import type { OrderType, Product, ProductCategory } from "@/lib/types";
+import type { Currency, OrderType, Product, ProductCategory } from "@/lib/types";
 
 import { placeOrder } from "./actions";
 
@@ -91,6 +94,8 @@ export function OrderForm({
   initialCategoryId,
   initialProductId,
   initialVariantId,
+  showPrices,
+  currencies,
 }: {
   catalog: ProductCategory[];
   // Set when arriving from the showroom's "Place an order" button — left
@@ -99,6 +104,9 @@ export function OrderForm({
   initialCategoryId?: string;
   initialProductId?: string;
   initialVariantId?: string;
+  // Boss-configurable (dashboard Products page) — see ShowroomSettings.
+  showPrices: boolean;
+  currencies: Currency[];
 }) {
   const router = useRouter();
   const [orderType, setOrderType] = useState<OrderType>("normal");
@@ -168,7 +176,22 @@ export function OrderForm({
         order_type: hasPhotobookItem ? orderType : "normal",
         delivery_date: deliveryDate,
         order_notes: orderNotes,
-        items,
+        // Strip `files` before this crosses the Server Action boundary —
+        // passing the raw File objects through would encode their bytes
+        // into the action's request body, blowing straight through Next's
+        // default 1MB Server Action body limit for any real photo and
+        // failing the whole order. Files are staged locally and uploaded
+        // separately, straight to Storage, once real item ids exist (see
+        // below) — exactly like components/order/OrderForm.tsx's submit().
+        items: items.map(({ category_id, product_id, variant_id, qty, attributes, item_notes, media_link }) => ({
+          category_id,
+          product_id,
+          variant_id,
+          qty,
+          attributes,
+          item_notes,
+          media_link,
+        })),
       });
       if (!res.ok) {
         setError(res.error);
@@ -339,6 +362,8 @@ export function OrderForm({
           orderType={orderType}
           hasPhotobookItem={hasPhotobookItem}
           etaLabel={etaLabel}
+          showPrices={showPrices}
+          currencies={currencies}
         />
       </div>
     </form>
@@ -486,18 +511,18 @@ function ItemRow({
           />
         </Field>
         {allowDirectUpload ? (
-          <Field label="Add photos" hint="Uploaded once the order is placed — optional">
-            <input
-              type="file"
-              multiple
-              accept="image/*,application/pdf"
-              className="block w-full text-sm"
-              onChange={(e) => onChange({ files: Array.from(e.target.files ?? []) })}
-            />
-            {item.files.length > 0 ? (
-              <p className="mt-1 text-xs text-muted">{item.files.length} file(s) selected.</p>
-            ) : null}
-          </Field>
+          <UploadRow
+            label="Add photos"
+            hint={
+              item.files.length > 0
+                ? `${item.files.length} file(s) selected — uploaded once the order is placed`
+                : "Optional — uploaded once the order is placed"
+            }
+            accept="image/*,application/pdf"
+            multiple
+            disabled={false}
+            onFiles={(files) => onChange({ files: Array.from(files) })}
+          />
         ) : null}
       </div>
     </div>
@@ -546,40 +571,63 @@ function OrderSummary({
   orderType,
   hasPhotobookItem,
   etaLabel,
+  showPrices,
+  currencies,
 }: {
   catalog: ProductCategory[];
   items: OrderItemInput[];
   orderType: OrderType;
   hasPhotobookItem: boolean;
   etaLabel: string;
+  showPrices: boolean;
+  currencies: Currency[];
 }) {
+  const currency = useCurrency(currencies);
+  const resolved = items.map((item) => {
+    const category = catalog.find((c) => c.id === item.category_id) ?? null;
+    const product: Product | null = category?.products.find((p) => p.id === item.product_id) ?? null;
+    const variant = product?.variants.find((v) => v.id === item.variant_id) ?? null;
+    // A variant's own price overrides the parent product's — see
+    // ProductVariant.price's comment in lib/types.ts.
+    const unitPrice = variant?.price ?? product?.price ?? null;
+    return { item, category, product, variant, unitPrice };
+  });
+
+  // Only ever shown once every line item resolves to a real, priced product
+  // — a total that silently drops an unpriced item would understate what's
+  // actually owed, which is worse than not showing a total at all.
+  const total =
+    showPrices && resolved.length > 0 && resolved.every((r) => r.product && r.unitPrice != null)
+      ? resolved.reduce((sum, r) => sum + (r.unitPrice ?? 0) * r.item.qty, 0)
+      : null;
+
   return (
     <aside className="rounded-2xl border border-border bg-surface p-5 shadow-theme-sm lg:sticky lg:top-6">
       <SectionLabel>Order summary</SectionLabel>
 
       <div className="space-y-3">
-        {items.map((item, idx) => {
-          const category = catalog.find((c) => c.id === item.category_id) ?? null;
-          const product: Product | null = category?.products.find((p) => p.id === item.product_id) ?? null;
-          const variant = product?.variants.find((v) => v.id === item.variant_id) ?? null;
-          return (
-            <div key={idx} className="flex items-center gap-3">
-              {/* eslint-disable-next-line @next/next/no-img-element -- Supabase Storage URL, can't be allowlisted for next/image */}
-              <img
-                src={product?.display_image_url ?? "/showroom/placeholder.jpg"}
-                alt={product?.name ?? "Product"}
-                className="h-12 w-12 shrink-0 rounded-lg object-cover"
-              />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold">{product?.name ?? "Pick a product"}</p>
-                <p className="truncate text-xs text-muted">
-                  {category?.name ?? "No category yet"}
-                  {variant ? ` · ${variant.name}` : ""} · Qty {item.qty}
-                </p>
-              </div>
+        {resolved.map(({ item, category, product, variant, unitPrice }, idx) => (
+          <div key={idx} className="flex items-center gap-3">
+            {/* eslint-disable-next-line @next/next/no-img-element -- Supabase Storage URL, can't be allowlisted for next/image */}
+            <img
+              src={product?.display_image_url ?? "/showroom/placeholder.jpg"}
+              alt={product?.name ?? "Product"}
+              className="h-12 w-12 shrink-0 rounded-lg object-cover"
+            />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold">{product?.name ?? "Pick a product"}</p>
+              <p className="truncate text-xs text-muted">
+                {category?.name ?? "No category yet"}
+                {variant ? ` · ${variant.name}` : ""} · Qty {item.qty}
+              </p>
             </div>
-          );
-        })}
+            {showPrices && unitPrice != null ? (
+              <span className="shrink-0 text-sm font-medium tabular-nums">
+                {currency.format(unitPrice * item.qty)}
+              </span>
+            ) : null}
+          </div>
+        ))}
       </div>
 
       {hasPhotobookItem ? (
@@ -595,10 +643,22 @@ function OrderSummary({
         </div>
       ) : null}
 
-      {/* Pricing is deliberately not shown to clients yet (see Product.price
-          in lib/types.ts) — a plain note here instead of a dollar total. */}
+      {/* Pricing is boss-configurable (dashboard Products page) — see
+          Product.price's comment in lib/types.ts. */}
       <div className="mt-4 border-t border-border pt-4">
-        <p className="text-sm font-medium text-muted">Pricing confirmed after review</p>
+        {total != null ? (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-sm">
+              <span className="font-semibold">Total</span>
+              <span className="font-semibold tabular-nums">{currency.format(total)}</span>
+            </div>
+            <div className="flex justify-end">
+              <CurrencySelect currencies={currencies} selected={currency.selected} onChange={currency.select} />
+            </div>
+          </div>
+        ) : (
+          <p className="text-sm font-medium text-muted">Pricing confirmed after review</p>
+        )}
       </div>
 
       <div className="mt-5 grid grid-cols-3 gap-2 border-t border-border pt-4">
