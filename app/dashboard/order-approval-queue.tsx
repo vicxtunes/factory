@@ -9,6 +9,7 @@ import { SectionLabel } from "@/components/ui/SectionLabel";
 import type { DesignerPublic, OrderItemWithOrder } from "@/lib/types";
 
 import { quoteOrder, routeApprovedOrder } from "./actions";
+import { formatUgx } from "@/lib/currency/format";
 
 type Result = { ok: boolean; error?: string };
 
@@ -93,7 +94,7 @@ export function OrderApprovalQueue({
             <OrderCard key={g.orderId} group={g}>
               <p className="text-sm text-muted">
                 Quoted{" "}
-                <span className="font-semibold text-foreground">${g.order.quoted_price?.toFixed(2)}</span> —
+                <span className="font-semibold text-foreground">{formatUgx(g.order.quoted_price)}</span> —
                 waiting on the client to approve or request changes.
               </p>
             </OrderCard>
@@ -209,7 +210,7 @@ function RouteCard({
     <OrderCard group={group}>
       <p className="mb-2 text-xs text-muted">
         Approved at{" "}
-        <span className="font-semibold text-foreground">${group.order.quoted_price?.toFixed(2)}</span>.
+        <span className="font-semibold text-foreground">{formatUgx(group.order.quoted_price)}</span>.
       </p>
       <div className="mb-3 flex gap-2">
         <button

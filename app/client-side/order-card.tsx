@@ -5,6 +5,7 @@ import { UrgencyBadge } from "@/components/ui/UrgencyBadge";
 import { statusCardClasses } from "@/components/ui/statusColors";
 import { CLIENT_STATUS_LABELS, clientStatus, clientStatusColorKey } from "@/lib/orders/clientStatus";
 import type { OrderItemWithOrder } from "@/lib/types";
+import { formatUgx } from "@/lib/currency/format";
 
 // Same visual card as app/dashboard/order-card.tsx, minus the NoteBadge and
 // the assigned-worker name — order/item notes are internal staff shorthand
@@ -82,7 +83,7 @@ export function ClientOrderCard({
 
         {notReleased && item.order.approval_status === "awaiting_client_approval" ? (
           <p className="mt-2 text-xs text-muted">
-            ${item.order.quoted_price?.toFixed(2)} — tap to approve or request changes
+            {formatUgx(item.order.quoted_price)} — tap to approve or request changes
           </p>
         ) : null}
 

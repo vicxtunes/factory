@@ -2,6 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 
+import { formatUgx } from "@/lib/currency/format";
 import type { Currency } from "@/lib/types";
 
 const STORAGE_KEY = "client-currency-code";
@@ -50,12 +51,11 @@ export function useCurrency(currencies: Currency[]) {
     window.dispatchEvent(new StorageEvent("storage", { key: STORAGE_KEY, newValue: nextCode }));
   }
 
-  // Converts a price recorded in the base currency into the selected
-  // currency's amount, formatted with its symbol — see Currency's comment
-  // in lib/types.ts for what `rate` means. Falls back to a bare "$" format
-  // if currencies haven't loaded yet, so a price never renders as garbage.
+  // Prices are UGX only, so the base currency's rate is 1 and no other
+  // currencies exist — format() is a plain UGX format. The picker
+  // (CurrencySelect) hides itself when there is just one currency.
   function format(baseAmount: number): string {
-    if (!selected || !base) return `$${baseAmount.toFixed(2)}`;
+    if (!selected || !base || selected.code === base.code) return formatUgx(baseAmount);
     const converted = baseAmount * (selected.rate / base.rate);
     return `${selected.symbol}${converted.toFixed(2)}`;
   }
