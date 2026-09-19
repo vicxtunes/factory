@@ -7,7 +7,8 @@ import { Field, TextArea } from "@/components/ui/Field";
 import type { OrderItemWithOrder } from "@/lib/types";
 
 import { respondToQuote } from "./actions";
-import { formatUgx } from "@/lib/currency/format";
+import { useCurrencySymbol } from "@/lib/currency/CurrencySymbolProvider";
+import { formatMoney } from "@/lib/currency/format";
 
 // The client's side of the receptionist quote/approval loop (see
 // app/dashboard/order-approval-queue.tsx for the receptionist's side).
@@ -25,6 +26,7 @@ export function ClientQuoteReview({
   order: OrderItemWithOrder["order"];
   onDone: () => void;
 }) {
+  const symbol = useCurrencySymbol();
   const [decliningWithNote, setDecliningWithNote] = useState(false);
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -61,7 +63,7 @@ export function ClientQuoteReview({
     return (
       <p className="text-sm text-muted">
         You approved this order at{" "}
-        <span className="font-semibold text-foreground">{formatUgx(order.quoted_price)}</span> — we&apos;re
+        <span className="font-semibold text-foreground">{formatMoney(order.quoted_price, symbol)}</span> — we&apos;re
         sending it into production.
       </p>
     );
@@ -72,7 +74,7 @@ export function ClientQuoteReview({
     <div className="space-y-4">
       <div>
         <p className="text-xs uppercase tracking-wide text-muted">Quoted price</p>
-        <p className="text-3xl font-extrabold tabular-nums">{formatUgx(order.quoted_price)}</p>
+        <p className="text-3xl font-extrabold tabular-nums">{formatMoney(order.quoted_price, symbol)}</p>
       </div>
 
       {error ? <p className="text-sm text-[var(--rush)]">{error}</p> : null}
