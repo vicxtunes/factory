@@ -476,7 +476,7 @@ export function ProductShowcase({
           <h2 className="text-4xl font-extrabold leading-tight sm:text-5xl">{product.name}</h2>
 
           {product.description ? (
-            <p className="whitespace-pre-line text-sm text-showroom-ink/80 sm:text-base">{product.description}</p>
+            <p className="whitespace-pre-line text-sm text-showroom-ink/60 sm:text-base">{product.description}</p>
           ) : null}
 
           {(() => {
