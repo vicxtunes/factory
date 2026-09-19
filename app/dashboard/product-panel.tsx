@@ -38,6 +38,7 @@ import {
   setCategoryActive,
   setCurrencyActive,
   setProductActive,
+  setProductDescription,
   setProductPrice,
   setShowPrices,
   setVariantActive,
@@ -701,6 +702,23 @@ function ProductCard({
             }}
             onKeyDown={(e) => {
               if (e.key === "Enter") e.currentTarget.blur();
+            }}
+          />
+        </div>
+      ) : null}
+
+      {canManage ? (
+        <div className="mt-1.5 text-xs text-muted">
+          <span>Description:</span>
+          <textarea
+            defaultValue={product.description ?? ""}
+            placeholder="Shown to clients under the product name"
+            rows={2}
+            className="mt-1 w-full rounded-[var(--radius)] border border-border bg-surface px-2 py-1 text-xs"
+            onBlur={(e) => {
+              if (e.target.value.trim() !== (product.description ?? "")) {
+                run(() => setProductDescription(product.id, e.target.value));
+              }
             }}
           />
         </div>

@@ -200,6 +200,7 @@ export interface Product {
   // recorded so it's ready whenever that changes (see order-form.tsx,
   // showroom-content.tsx, product-showcase.tsx).
   price: number | null;
+  description: string | null;
   active: boolean;
   created_at: string;
   display_image_url: string | null;

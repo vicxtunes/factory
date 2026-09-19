@@ -956,6 +956,19 @@ export async function setProductPrice(id: string, price: string): Promise<Result
   return { ok: true };
 }
 
+export async function setProductDescription(id: string, description: string): Promise<Result> {
+  await requireRole("boss");
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("products")
+    .update({ description: description.trim() || null })
+    .eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/dashboard/products");
+  revalidatePath("/client-side/showroom");
+  return { ok: true };
+}
+
 export async function createVariant(productId: string, name: string): Promise<Result> {
   await requireRole("boss");
   const trimmed = name.trim();

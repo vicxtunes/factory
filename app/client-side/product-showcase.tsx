@@ -5,7 +5,6 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/Button";
-import { CurrencySelect } from "@/components/ui/CurrencySelect";
 import { useCurrency } from "@/lib/currency/useCurrency";
 import type { Currency, Product, ProductCategory, ShowroomViewMode } from "@/lib/types";
 
@@ -362,6 +361,11 @@ export function ProductShowcase({
 
   const current = media[index] ?? media[0];
 
+  function stepImage(direction: 1 | -1) {
+    if (viewMode === "scene") sceneRef.current?.advance(direction);
+    else advanceImage(direction);
+  }
+
   return (
     <div
       className={`showroom-theme-${themeIndex} fixed inset-0 z-40 overflow-y-auto px-4 py-6 sm:static sm:inset-auto sm:z-auto sm:overflow-hidden sm:rounded-3xl sm:px-8 sm:py-8`}
@@ -445,119 +449,84 @@ export function ProductShowcase({
           ) : null}
         </div>
 
-        <div className="flex flex-col gap-6 text-showroom-ink lg:flex-row lg:items-start lg:gap-10">
-          <div className="flex flex-1 flex-col gap-4">
-            {(() => {
-              // Scene mode only ever cycles through `photos` (the preview
-              // video is unreachable from it except via the overlay
-              // button) — the nav/counter must agree with that, not with
-              // `media.length`, or arrows would show a count that never
-              // advances.
+        <div className="flex flex-col gap-4 text-showroom-ink">
+          {media.length > 1 || (viewMode === "scene" && photos.length > 1) ? (
+            (() => {
+              // Scene mode only cycles through `photos` — the nav/counter
+              // must agree with that, not with `media.length`.
               const cycleLength = viewMode === "scene" ? photos.length : media.length;
-              return cycleLength > 1 ? (
+              return (
                 <div className="flex items-center gap-2">
                   <ArrowButton
                     direction="prev"
-                    onClick={() => (viewMode === "scene" ? sceneRef.current?.advance(-1) : advanceImage(-1))}
+                    onClick={() => stepImage(-1)}
                   />
                   <ArrowButton
                     direction="next"
-                    onClick={() => (viewMode === "scene" ? sceneRef.current?.advance(1) : advanceImage(1))}
+                    onClick={() => stepImage(1)}
                   />
                   <span className="ml-1 text-xs uppercase tracking-widest text-showroom-ink/60">
                     {(index % cycleLength) + 1} / {cycleLength}
                   </span>
                 </div>
-              ) : null;
-            })()}
-
-            <p className="truncate text-xs font-semibold uppercase tracking-widest text-showroom-ink/60">
-              {category.name}
-            </p>
-
-            <h2 className="line-clamp-2 min-h-[2.5em] text-4xl font-extrabold leading-tight sm:text-5xl">
-              {product.name}
-            </h2>
-
-            <p className="line-clamp-1 min-h-[1.25rem] text-sm text-showroom-ink/70">
-              {category.attributes.length > 0
-                ? `Customizable: ${category.attributes.map((a) => a.name).join(", ")}`
-                : " "}
-            </p>
-
-          </div>
-
-          <div className="flex flex-col gap-4 lg:w-64 lg:shrink-0 lg:pt-1">
-            {(() => {
-              const selectedVariant = product.variants.find((v) => v.id === selectedVariantId) ?? null;
-              // A selected variant's own price overrides the product's base
-              // price — see ProductVariant.price's comment in lib/types.ts.
-              const effectivePrice = selectedVariant?.price ?? product.price ?? null;
-              if (!showPrices || effectivePrice == null) {
-                return <p className="text-sm font-medium text-showroom-ink/70">Pricing confirmed after review</p>;
-              }
-              const amount = currency.format(effectivePrice);
-              return (
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-sm font-medium text-showroom-ink/70">
-                    {!selectedVariant && product.variants.length > 0 ? `Starting at ${amount}` : amount}
-                  </p>
-                  <CurrencySelect currencies={currencies} selected={currency.selected} onChange={currency.select} />
-                </div>
               );
-            })()}
+            })()
+          ) : null}
 
-            <div className="min-h-[4.5rem]">
-              {product.variants.length > 0 ? (
-                <>
-                  <p className="mb-1.5 text-xs uppercase tracking-widest text-showroom-ink/60">Choose a size</p>
-                  <div className="flex flex-wrap gap-2">
-                    {product.variants.map((v) => {
-                      const selected = v.id === selectedVariantId;
-                      return (
-                        <button
-                          key={v.id}
-                          type="button"
-                          onClick={() => setSelectedVariantId(selected ? "" : v.id)}
-                          aria-pressed={selected}
-                          className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-                            // Solid brand orange when selected, not the ink
-                            // token — same reasoning as the "Watch preview"
-                            // button above: a solid accent shouldn't flip
-                            // light↔dark the way ink (built for text) does.
-                            selected
-                              ? "border-brand-600 bg-brand-600 text-white"
-                              : "border-showroom-ink/40 bg-showroom-ink/5 text-showroom-ink hover:bg-showroom-ink/15"
-                          }`}
-                        >
-                          {v.name}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </>
-              ) : null}
-            </div>
+          <h2 className="text-4xl font-extrabold leading-tight sm:text-5xl">{product.name}</h2>
 
-            {category.attributes.length > 0 ? (
-              <div>
-                <p className="mb-1.5 text-xs uppercase tracking-widest text-showroom-ink/60">Customize</p>
-                <ul className="space-y-1 text-xs text-showroom-ink/70">
-                  {category.attributes.map((a) => (
-                    <li key={a.id}>
-                      {a.name}
-                      {a.options?.length ? `: ${a.options.join(" / ")}` : ""}
-                    </li>
-                  ))}
-                </ul>
+          {product.description ? (
+            <p className="whitespace-pre-line text-sm text-showroom-ink/80 sm:text-base">{product.description}</p>
+          ) : null}
+
+          {(() => {
+            const selectedVariant = product.variants.find((v) => v.id === selectedVariantId) ?? null;
+            // A selected variant's own price overrides the product's base
+            // price — see ProductVariant.price's comment in lib/types.ts.
+            const effectivePrice = selectedVariant?.price ?? product.price ?? null;
+            if (!showPrices || effectivePrice == null) {
+              return <p className="text-lg font-semibold text-showroom-ink/70">Pricing confirmed after review</p>;
+            }
+            const amount = currency.format(effectivePrice);
+            return (
+              <p className="text-4xl font-extrabold tabular-nums sm:text-5xl">
+                {!selectedVariant && product.variants.length > 0 ? (
+                  <span className="mr-2 text-base font-medium text-showroom-ink/60">From</span>
+                ) : null}
+                {amount}
+              </p>
+            );
+          })()}
+
+          {product.variants.length > 0 ? (
+            <div>
+              <p className="mb-1.5 text-xs uppercase tracking-widest text-showroom-ink/60">Choose a size</p>
+              <div className="flex flex-wrap gap-2">
+                {product.variants.map((v) => {
+                  const selected = v.id === selectedVariantId;
+                  return (
+                    <button
+                      key={v.id}
+                      type="button"
+                      onClick={() => setSelectedVariantId(selected ? "" : v.id)}
+                      aria-pressed={selected}
+                      className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                        // Solid brand orange when selected, not the ink
+                        // token — a solid accent shouldn't flip light↔dark
+                        // the way ink (built for text) does.
+                        selected
+                          ? "border-brand-600 bg-brand-600 text-white"
+                          : "border-showroom-ink/40 bg-showroom-ink/5 text-showroom-ink hover:bg-showroom-ink/15"
+                      }`}
+                    >
+                      {v.name}
+                    </button>
+                  );
+                })}
               </div>
-            ) : null}
-          </div>
+            </div>
+          ) : null}
         </div>
-
-        {/* Last in the queue of display, deliberately — after the client's
-            read through the name, size options and customization, not
-            competing with those for attention up top. */}
         <Link
           href={`/client-side/new?category=${category.id}&product=${product.id}${
             selectedVariantId ? `&variant=${selectedVariantId}` : ""
