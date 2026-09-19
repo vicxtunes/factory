@@ -257,7 +257,7 @@ const CATALOG_SELECT = `
   id, name, sort_order, active, created_at,
   attributes:category_attributes (id, category_id, name, type, options, required, sort_order, created_at),
   products (
-    id, category_id, name, price, active, created_at, display_image_url, preview_video_url,
+    id, category_id, name, price, description, active, created_at, display_image_url, preview_video_url,
     variants:product_variants (id, product_id, name, price, active, created_at),
     media:product_media (id, product_id, kind, file_name, mime_type, storage_path, secure_url, sort_order, created_at)
   )
