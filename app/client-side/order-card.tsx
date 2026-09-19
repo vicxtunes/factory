@@ -5,7 +5,8 @@ import { UrgencyBadge } from "@/components/ui/UrgencyBadge";
 import { statusCardClasses } from "@/components/ui/statusColors";
 import { CLIENT_STATUS_LABELS, clientStatus, clientStatusColorKey } from "@/lib/orders/clientStatus";
 import type { OrderItemWithOrder } from "@/lib/types";
-import { formatUgx } from "@/lib/currency/format";
+import { useCurrencySymbol } from "@/lib/currency/CurrencySymbolProvider";
+import { formatMoney } from "@/lib/currency/format";
 
 // Same visual card as app/dashboard/order-card.tsx, minus the NoteBadge and
 // the assigned-worker name — order/item notes are internal staff shorthand
@@ -43,6 +44,7 @@ export function ClientOrderCard({
   item: OrderItemWithOrder;
   onOpen: () => void;
 }) {
+  const symbol = useCurrencySymbol();
   const isExpress = item.order.order_type === "express";
   const notReleased = item.order.released_at === null;
   const approvalBadge = APPROVAL_BADGE[item.order.approval_status];
@@ -83,7 +85,7 @@ export function ClientOrderCard({
 
         {notReleased && item.order.approval_status === "awaiting_client_approval" ? (
           <p className="mt-2 text-xs text-muted">
-            {formatUgx(item.order.quoted_price)} — tap to approve or request changes
+            {formatMoney(item.order.quoted_price, symbol)} — tap to approve or request changes
           </p>
         ) : null}
 

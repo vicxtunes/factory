@@ -489,9 +489,9 @@ export function ProductShowcase({
             }
             const amount = currency.format(effectivePrice);
             return (
-              <p className="text-4xl font-extrabold tabular-nums sm:text-5xl">
+              <p className="text-2xl font-bold tabular-nums text-brand-600 dark:text-brand-400 sm:text-3xl">
                 {!selectedVariant && product.variants.length > 0 ? (
-                  <span className="mr-2 text-base font-medium text-showroom-ink/60">From</span>
+                  <span className="mr-2 text-sm font-medium text-showroom-ink/60">From</span>
                 ) : null}
                 {amount}
               </p>

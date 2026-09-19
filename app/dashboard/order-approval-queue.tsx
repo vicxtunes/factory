@@ -9,7 +9,8 @@ import { SectionLabel } from "@/components/ui/SectionLabel";
 import type { DesignerPublic, OrderItemWithOrder } from "@/lib/types";
 
 import { quoteOrder, routeApprovedOrder } from "./actions";
-import { formatUgx } from "@/lib/currency/format";
+import { useCurrencySymbol } from "@/lib/currency/CurrencySymbolProvider";
+import { formatMoney } from "@/lib/currency/format";
 
 type Result = { ok: boolean; error?: string };
 
@@ -51,6 +52,7 @@ export function OrderApprovalQueue({
   items: OrderItemWithOrder[];
   designers: DesignerPublic[];
 }) {
+  const symbol = useCurrencySymbol();
   const router = useRouter();
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -94,7 +96,7 @@ export function OrderApprovalQueue({
             <OrderCard key={g.orderId} group={g}>
               <p className="text-sm text-muted">
                 Quoted{" "}
-                <span className="font-semibold text-foreground">{formatUgx(g.order.quoted_price)}</span> —
+                <span className="font-semibold text-foreground">{formatMoney(g.order.quoted_price, symbol)}</span> —
                 waiting on the client to approve or request changes.
               </p>
             </OrderCard>
@@ -203,6 +205,7 @@ function RouteCard({
   pending: boolean;
   run: (fn: () => Promise<Result>) => void;
 }) {
+  const symbol = useCurrencySymbol();
   const [route, setRoute] = useState<"factory" | "designer">("factory");
   const [designerId, setDesignerId] = useState("");
 
@@ -210,7 +213,7 @@ function RouteCard({
     <OrderCard group={group}>
       <p className="mb-2 text-xs text-muted">
         Approved at{" "}
-        <span className="font-semibold text-foreground">{formatUgx(group.order.quoted_price)}</span>.
+        <span className="font-semibold text-foreground">{formatMoney(group.order.quoted_price, symbol)}</span>.
       </p>
       <div className="mb-3 flex gap-2">
         <button

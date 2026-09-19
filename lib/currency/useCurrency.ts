@@ -2,7 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 
-import { formatUgx } from "@/lib/currency/format";
+import { formatMoney } from "@/lib/currency/format";
 import type { Currency } from "@/lib/types";
 
 const STORAGE_KEY = "client-currency-code";
@@ -55,7 +55,7 @@ export function useCurrency(currencies: Currency[]) {
   // currencies exist — format() is a plain UGX format. The picker
   // (CurrencySelect) hides itself when there is just one currency.
   function format(baseAmount: number): string {
-    if (!selected || !base || selected.code === base.code) return formatUgx(baseAmount);
+    if (!selected || !base || selected.code === base.code) return formatMoney(baseAmount, base?.symbol);
     const converted = baseAmount * (selected.rate / base.rate);
     return `${selected.symbol}${converted.toFixed(2)}`;
   }

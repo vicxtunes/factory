@@ -4,6 +4,9 @@ import { SerwistProvider } from "@serwist/turbopack/react";
 import { OfflineBanner } from "@/components/pwa/OfflineBanner";
 import { InstallCapture } from "@/components/pwa/InstallCapture";
 import { AppSplash } from "@/components/pwa/AppSplash";
+import { CurrencySymbolProvider } from "@/lib/currency/CurrencySymbolProvider";
+import { DEFAULT_CURRENCY_SYMBOL } from "@/lib/currency/format";
+import { fetchBaseCurrencySymbol } from "@/lib/queries";
 import "./globals.css";
 
 const outfit = Outfit({
@@ -31,7 +34,9 @@ export const viewport: Viewport = {
   themeColor: "#f67413",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  // Never let a failed lookup take the whole app down — fall back to UGX.
+  const symbol = await fetchBaseCurrencySymbol().catch(() => DEFAULT_CURRENCY_SYMBOL);
   return (
     <html
       lang="en"
@@ -42,7 +47,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           <InstallCapture />
           <OfflineBanner />
           <AppSplash />
-          {children}
+          <CurrencySymbolProvider symbol={symbol}>{children}</CurrencySymbolProvider>
         </SerwistProvider>
       </body>
     </html>
