@@ -257,7 +257,7 @@ const CATALOG_SELECT = `
   id, name, sort_order, active, created_at,
   attributes:category_attributes (id, category_id, name, type, options, required, sort_order, created_at),
   products (
-    id, category_id, name, price, active, created_at, display_image_url, preview_video_url,
+    id, category_id, name, price, description, active, created_at, display_image_url, preview_video_url,
     variants:product_variants (id, product_id, name, price, active, created_at),
     media:product_media (id, product_id, kind, file_name, mime_type, storage_path, secure_url, sort_order, created_at)
   )
@@ -321,6 +321,12 @@ export async function fetchShowroomSettings(): Promise<ShowroomSettings> {
 // Currency comment. `activeOnly` is what the client-facing showroom/order
 // form want; the dashboard's currency manager passes false to also show
 // currencies the boss has retired (still listed, just not offerable).
+export async function fetchBaseCurrencySymbol(): Promise<string> {
+  const supabase = await createClient();
+  const { data } = await supabase.from("currencies").select("symbol").eq("is_base", true).maybeSingle();
+  return data?.symbol?.trim() || "UGX";
+}
+
 export async function fetchCurrencies(activeOnly = false): Promise<Currency[]> {
   const supabase = await createClient();
   let query = supabase

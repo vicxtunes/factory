@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache";
 
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { fetchBaseCurrencySymbol } from "@/lib/queries";
 import {
   requireManager,
   requireOrderAudit,
@@ -30,7 +31,7 @@ import type {
   OrderRoute,
 } from "@/lib/orders/types";
 import { pushOnlyOrderItem, notifyOrderItem } from "@/lib/notifications/notify";
-import { formatUgx } from "@/lib/currency/format";
+import { formatMoney } from "@/lib/currency/format";
 import {
   STATUS_LABELS,
   type AppRole,
@@ -956,6 +957,19 @@ export async function setProductPrice(id: string, price: string): Promise<Result
   return { ok: true };
 }
 
+export async function setProductDescription(id: string, description: string): Promise<Result> {
+  await requireRole("boss");
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("products")
+    .update({ description: description.trim() || null })
+    .eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/dashboard/products");
+  revalidatePath("/client-side/showroom");
+  return { ok: true };
+}
+
 export async function createVariant(productId: string, name: string): Promise<Result> {
   await requireRole("boss");
   const trimmed = name.trim();
@@ -1093,6 +1107,19 @@ export async function updateCurrency(
   const { error } = await admin.from("currencies").update({ label, symbol, rate }).eq("id", id);
   if (error) return { ok: false, error: error.message };
   revalidateCurrencyViews();
+  return { ok: true };
+}
+
+// The one display symbol for prices (the business prices in a single
+// currency) — stored on the base currency row so conversion math is untouched.
+export async function setCurrencySymbol(symbol: string): Promise<Result> {
+  await requireRole("boss");
+  const trimmed = symbol.trim();
+  if (!trimmed) return { ok: false, error: "Symbol is required." };
+  if (trimmed.length > 8) return { ok: false, error: "Keep the symbol to 8 characters or fewer." };
+  const { error } = await createAdminClient().from("currencies").update({ symbol: trimmed }).eq("is_base", true);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/", "layout");
   return { ok: true };
 }
 
@@ -1402,7 +1429,7 @@ export async function quoteOrder(orderId: string, price: number): Promise<Result
       await notifyOrderItem({
         orderItemId: firstItem.id,
         eventType: "quote_ready",
-        message: `Your quote for order ${order.order_no} is ready — ${formatUgx(price)}.`,
+        message: `Your quote for order ${order.order_no} is ready — ${formatMoney(price, await fetchBaseCurrencySymbol())}.`,
         recipient: { type: "client", id: order.client_id },
         pushTitle: "Quote ready",
         url: "/client-side/orders",

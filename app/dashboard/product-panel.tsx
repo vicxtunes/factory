@@ -27,23 +27,21 @@ import type {
 import {
   createAttribute,
   createCategory,
-  createCurrency,
   createProduct,
   createVariant,
   deleteAttribute,
-  deleteCurrency,
   renameCategory,
   renameProduct,
   renameVariant,
   setCategoryActive,
-  setCurrencyActive,
+  setCurrencySymbol,
   setProductActive,
+  setProductDescription,
   setProductPrice,
   setShowPrices,
   setVariantActive,
   setVariantPrice,
   updateAttribute,
-  updateCurrency,
   type AttributeInput,
 } from "./actions";
 
@@ -115,114 +113,9 @@ function ShowroomSettingsCard({
   );
 }
 
-// One row in the Currencies card: read-only summary, or an inline
-// label/symbol/rate edit form. The base currency (rate fixed at 1, price
-// entry currency) can't be edited, hidden, or removed here — see
-// updateCurrency/setCurrencyActive/deleteCurrency's comments.
-function CurrencyRow({
-  currency,
-  baseCode,
-  run,
-  pending,
-}: {
-  currency: Currency;
-  baseCode: string;
-  run: (fn: () => Promise<MutationResult>) => void;
-  pending: boolean;
-}) {
-  const [editing, setEditing] = useState(false);
-  const [label, setLabel] = useState(currency.label);
-  const [symbol, setSymbol] = useState(currency.symbol);
-  const [rate, setRate] = useState(String(currency.rate));
-
-  function save() {
-    run(async () => {
-      const res = await updateCurrency(currency.id, { label, symbol, rate });
-      if (res.ok) setEditing(false);
-      return res;
-    });
-  }
-
-  if (editing) {
-    return (
-      <div className="flex flex-wrap items-center gap-2 rounded-[var(--radius)] border border-border p-2">
-        <span className="w-14 shrink-0 font-mono text-xs font-semibold">{currency.code}</span>
-        <TextInput className="w-32" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Name" />
-        <TextInput className="w-16" value={symbol} onChange={(e) => setSymbol(e.target.value)} placeholder="Symbol" />
-        <TextInput
-          className="w-24 tnum"
-          type="number"
-          min={0}
-          step="0.0001"
-          value={rate}
-          onChange={(e) => setRate(e.target.value)}
-          placeholder="Rate"
-        />
-        <Button variant="primary" className="text-xs" disabled={pending} onClick={save}>
-          Save
-        </Button>
-        <button type="button" className="text-xs text-muted" onClick={() => setEditing(false)}>
-          Cancel
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex flex-wrap items-center justify-between gap-2 rounded-[var(--radius)] border border-border p-2 text-sm">
-      <div className="flex min-w-0 flex-wrap items-center gap-2">
-        <span className="font-mono text-xs font-semibold">{currency.code}</span>
-        <span className="truncate">{currency.label}</span>
-        <span className="text-muted">({currency.symbol})</span>
-        {currency.is_base ? (
-          <span className="rounded-full bg-brand-100 px-2 py-0.5 text-[0.65rem] font-semibold text-brand-700 dark:bg-brand-500/15 dark:text-brand-400">
-            Base — prices entered here
-          </span>
-        ) : (
-          <span className="text-xs text-muted tnum">
-            1 {baseCode} = {currency.rate} {currency.code}
-          </span>
-        )}
-      </div>
-      <div className="flex shrink-0 items-center gap-3 text-xs">
-        {!currency.is_base ? (
-          <button type="button" className="text-brand-600" disabled={pending} onClick={() => setEditing(true)}>
-            Edit
-          </button>
-        ) : null}
-        <button
-          type="button"
-          className={currency.active ? "text-muted" : "text-brand-600"}
-          disabled={pending || currency.is_base}
-          title={currency.is_base ? "The base currency can't be hidden" : undefined}
-          onClick={() => run(() => setCurrencyActive(currency.id, !currency.active))}
-        >
-          {currency.active ? "Hide" : "Show"}
-        </button>
-        {!currency.is_base ? (
-          <button
-            type="button"
-            className="text-[var(--rush)]"
-            disabled={pending}
-            onClick={() => {
-              if (window.confirm(`Remove ${currency.code}? Clients viewing prices in it will fall back to ${baseCode}.`)) {
-                run(() => deleteCurrency(currency.id));
-              }
-            }}
-          >
-            Remove
-          </button>
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
-// Lets clients view prices converted from the fixed base currency (see
-// ShowroomSettingsCard's "show prices" toggle above and Currency's comment
-// in lib/types.ts) — this only manages the conversion list, not whether
-// prices show at all.
-function CurrencyManager({
+// The single display symbol for every price (the business prices in one
+// currency). Saved on blur/Enter to the base currency row.
+function CurrencySymbolCard({
   currencies,
   run,
   pending,
@@ -231,84 +124,25 @@ function CurrencyManager({
   run: (fn: () => Promise<MutationResult>) => void;
   pending: boolean;
 }) {
-  const [addOpen, setAddOpen] = useState(false);
-  const [code, setCode] = useState("");
-  const [label, setLabel] = useState("");
-  const [symbol, setSymbol] = useState("");
-  const [rate, setRate] = useState("");
-  const base = currencies.find((c) => c.is_base) ?? null;
-
-  function addCurrency() {
-    run(async () => {
-      const res = await createCurrency({ code, label, symbol, rate });
-      if (res.ok) {
-        setCode("");
-        setLabel("");
-        setSymbol("");
-        setRate("");
-        setAddOpen(false);
-      }
-      return res;
-    });
-  }
-
+  const current = currencies.find((c) => c.is_base)?.symbol ?? "UGX";
   return (
     <div className="rounded-2xl border border-border bg-surface p-4 shadow-theme-xs">
-      <p className="text-xs font-semibold uppercase tracking-wide text-muted">Currencies</p>
-      <p className="mt-1 text-xs text-muted">
-        Lets clients view prices converted from the base currency ({base?.code ?? "—"}) — doesn&apos;t change what
-        currency prices are entered in.
-      </p>
-      <div className="mt-3 space-y-2">
-        {currencies.map((c) => (
-          <CurrencyRow key={c.id} currency={c} baseCode={base?.code ?? c.code} run={run} pending={pending} />
-        ))}
-      </div>
-
-      {addOpen ? (
-        <div className="mt-3 flex flex-wrap items-end gap-2 rounded-[var(--radius)] border border-dashed border-border p-2">
-          <Field label="Code">
-            <TextInput className="w-20" value={code} onChange={(e) => setCode(e.target.value)} placeholder="UGX" />
-          </Field>
-          <Field label="Name">
-            <TextInput
-              className="w-36"
-              value={label}
-              onChange={(e) => setLabel(e.target.value)}
-              placeholder="Ugandan Shilling"
-            />
-          </Field>
-          <Field label="Symbol">
-            <TextInput className="w-16" value={symbol} onChange={(e) => setSymbol(e.target.value)} placeholder="USh" />
-          </Field>
-          <Field label={`1 ${base?.code ?? "base"} =`}>
-            <TextInput
-              className="w-24 tnum"
-              type="number"
-              min={0}
-              step="0.0001"
-              value={rate}
-              onChange={(e) => setRate(e.target.value)}
-              placeholder="3800"
-            />
-          </Field>
-          <Button
-            variant="primary"
-            className="text-xs"
-            disabled={pending || !code.trim() || !label.trim() || !symbol.trim() || !rate.trim()}
-            onClick={addCurrency}
-          >
-            Add
-          </Button>
-          <button type="button" className="text-xs text-muted" onClick={() => setAddOpen(false)}>
-            Cancel
-          </button>
-        </div>
-      ) : (
-        <Button variant="secondary" className="mt-3 text-xs" onClick={() => setAddOpen(true)}>
-          + Add currency
-        </Button>
-      )}
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted">Currency symbol</p>
+      <p className="mt-1 text-xs text-muted">Shown before every price, e.g. &ldquo;UGX 150,000&rdquo;.</p>
+      <input
+        key={current}
+        defaultValue={current}
+        maxLength={8}
+        disabled={pending}
+        className="mt-3 min-h-9 w-28 rounded-[var(--radius)] border border-border bg-surface px-2 text-sm"
+        onBlur={(e) => {
+          const value = e.target.value.trim();
+          if (value && value !== current) run(() => setCurrencySymbol(value));
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") e.currentTarget.blur();
+        }}
+      />
     </div>
   );
 }
@@ -352,7 +186,7 @@ export function ProductPanel({
   return (
     <div className="space-y-4">
       {canManage ? <ShowroomSettingsCard settings={showroomSettings} run={run} pending={pending} /> : null}
-      {/* Currency manager intentionally not rendered: prices are UGX only. */}
+      {canManage ? <CurrencySymbolCard currencies={currencies} run={run} pending={pending} /> : null}
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <ExportButtons columns={EXPORT_COLUMNS} rows={exportRows} filename="product-categories" />
@@ -701,6 +535,23 @@ function ProductCard({
             }}
             onKeyDown={(e) => {
               if (e.key === "Enter") e.currentTarget.blur();
+            }}
+          />
+        </div>
+      ) : null}
+
+      {canManage ? (
+        <div className="mt-1.5 text-xs text-muted">
+          <span>Description:</span>
+          <textarea
+            defaultValue={product.description ?? ""}
+            placeholder="Shown to clients under the product name"
+            rows={2}
+            className="mt-1 w-full rounded-[var(--radius)] border border-border bg-surface px-2 py-1 text-xs"
+            onBlur={(e) => {
+              if (e.target.value.trim() !== (product.description ?? "")) {
+                run(() => setProductDescription(product.id, e.target.value));
+              }
             }}
           />
         </div>
