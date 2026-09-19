@@ -30,6 +30,7 @@ import type {
   OrderRoute,
 } from "@/lib/orders/types";
 import { pushOnlyOrderItem, notifyOrderItem } from "@/lib/notifications/notify";
+import { formatUgx } from "@/lib/currency/format";
 import {
   STATUS_LABELS,
   type AppRole,
@@ -1401,7 +1402,7 @@ export async function quoteOrder(orderId: string, price: number): Promise<Result
       await notifyOrderItem({
         orderItemId: firstItem.id,
         eventType: "quote_ready",
-        message: `Your quote for order ${order.order_no} is ready — $${price.toFixed(2)}.`,
+        message: `Your quote for order ${order.order_no} is ready — ${formatUgx(price)}.`,
         recipient: { type: "client", id: order.client_id },
         pushTitle: "Quote ready",
         url: "/client-side/orders",
