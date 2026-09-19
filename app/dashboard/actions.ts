@@ -1003,6 +1003,126 @@ export async function setShowroomViewMode(mode: ShowroomViewMode): Promise<Resul
   return { ok: true };
 }
 
+// Whether the showroom/order form show a product or variant's recorded
+// price, or the fallback "Pricing confirmed after review" text.
+export async function setShowPrices(show: boolean): Promise<Result> {
+  await requireRole("boss");
+  const admin = createAdminClient();
+  const { error } = await admin.from("showroom_settings").update({ show_prices: show }).eq("id", 1);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/dashboard/products");
+  revalidatePath("/client-side/showroom");
+  revalidatePath("/client-side/new");
+  return { ok: true };
+}
+
+function revalidateCurrencyViews(): void {
+  revalidatePath("/dashboard/products");
+  revalidatePath("/client-side/showroom");
+  revalidatePath("/client-side/new");
+}
+
+// Currencies clients may view prices in, converted from the fixed base
+// currency (see supabase/migrations/20260919130000_currencies.sql) — the
+// base row itself is seeded once and never editable here; there's no
+// "change the base currency" action, since every existing product/variant
+// price is already recorded in it, and rescaling every other currency's
+// rate to a new base is a different, much riskier feature than "let clients
+// view converted prices."
+export async function createCurrency(input: {
+  code: string;
+  label: string;
+  symbol: string;
+  rate: string;
+}): Promise<Result> {
+  await requireRole("boss");
+  const code = input.code.trim().toUpperCase();
+  const label = input.label.trim();
+  const symbol = input.symbol.trim();
+  const rate = Number(input.rate);
+  if (!code) return { ok: false, error: "Currency code is required." };
+  if (!label) return { ok: false, error: "Currency name is required." };
+  if (!symbol) return { ok: false, error: "Symbol is required." };
+  if (!Number.isFinite(rate) || rate <= 0) {
+    return { ok: false, error: "Enter a valid, positive exchange rate." };
+  }
+
+  const admin = createAdminClient();
+  const { count } = await admin.from("currencies").select("id", { count: "exact", head: true });
+  const { error } = await admin.from("currencies").insert({
+    code,
+    label,
+    symbol,
+    rate,
+    sort_order: count ?? 0,
+  });
+  if (error) {
+    return {
+      ok: false,
+      error: error.code === "23505" ? `"${code}" already exists.` : error.message,
+    };
+  }
+  revalidateCurrencyViews();
+  return { ok: true };
+}
+
+// Label/symbol/rate only — never `is_base` or `code` (code is effectively
+// the currency's identity; renaming it in place would silently change what
+// clients think they're looking at for anyone with it already selected).
+export async function updateCurrency(
+  id: string,
+  input: { label: string; symbol: string; rate: string },
+): Promise<Result> {
+  await requireRole("boss");
+  const label = input.label.trim();
+  const symbol = input.symbol.trim();
+  const rate = Number(input.rate);
+  if (!label) return { ok: false, error: "Currency name is required." };
+  if (!symbol) return { ok: false, error: "Symbol is required." };
+  if (!Number.isFinite(rate) || rate <= 0) {
+    return { ok: false, error: "Enter a valid, positive exchange rate." };
+  }
+
+  const admin = createAdminClient();
+  const { data: existing } = await admin.from("currencies").select("is_base").eq("id", id).maybeSingle();
+  if (existing?.is_base) {
+    return { ok: false, error: "The base currency's rate is fixed at 1 — every price is recorded in it." };
+  }
+
+  const { error } = await admin.from("currencies").update({ label, symbol, rate }).eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  revalidateCurrencyViews();
+  return { ok: true };
+}
+
+export async function setCurrencyActive(id: string, active: boolean): Promise<Result> {
+  await requireRole("boss");
+  const admin = createAdminClient();
+  const { data: existing } = await admin.from("currencies").select("is_base").eq("id", id).maybeSingle();
+  if (existing?.is_base && !active) {
+    return { ok: false, error: "The base currency can't be hidden." };
+  }
+
+  const { error } = await admin.from("currencies").update({ active }).eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  revalidateCurrencyViews();
+  return { ok: true };
+}
+
+export async function deleteCurrency(id: string): Promise<Result> {
+  await requireRole("boss");
+  const admin = createAdminClient();
+  const { data: existing } = await admin.from("currencies").select("is_base").eq("id", id).maybeSingle();
+  if (existing?.is_base) {
+    return { ok: false, error: "The base currency can't be removed." };
+  }
+
+  const { error } = await admin.from("currencies").delete().eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  revalidateCurrencyViews();
+  return { ok: true };
+}
+
 // Overrides the parent product's price when set; clearing it (empty string)
 // falls back to the product's own price rather than forcing every variant
 // to carry one. Same validation as setProductPrice.

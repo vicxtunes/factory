@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import { AnnouncementPopup } from "@/components/announcements/AnnouncementPopup";
 import { InstallGate } from "@/components/pwa/InstallGate";
 import { NotificationGate } from "@/components/pwa/NotificationGate";
 import type { AppRole, NotificationRow } from "@/lib/types";
@@ -26,6 +27,7 @@ export function DashboardShell({
     <div className="min-h-screen">
       <InstallGate />
       <NotificationGate />
+      <AnnouncementPopup />
       <DashboardSidebar
         role={role}
         email={email}

@@ -2,10 +2,10 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getDashboardSession } from "@/lib/auth/session";
 import {
   fetchAgents,
-  fetchAllItems,
   fetchCategoryNames,
   fetchClients,
   fetchDesigners,
+  fetchOfficeItems,
   fetchProductCatalog,
 } from "@/lib/queries";
 import { canViewOrderAudit, isManagerRole, type Worker } from "@/lib/types";
@@ -21,7 +21,7 @@ export default async function OrdersPage() {
 
   const admin = createAdminClient();
   const [items, workersRes, categories, catalog, clients, agents, designers] = await Promise.all([
-    fetchAllItems(),
+    fetchOfficeItems(),
     admin
       .from("workers")
       .select("id, name, station, active, created_at")

@@ -5,7 +5,9 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/Button";
-import type { Product, ProductCategory, ShowroomViewMode } from "@/lib/types";
+import { CurrencySelect } from "@/components/ui/CurrencySelect";
+import { useCurrency } from "@/lib/currency/useCurrency";
+import type { Currency, Product, ProductCategory, ShowroomViewMode } from "@/lib/types";
 
 import type { ShowroomSceneHandle } from "./showroom-scene";
 
@@ -63,6 +65,101 @@ function BackLink({ onClick }: { onClick: () => void }) {
   );
 }
 
+// Full-screen single-photo viewer over the "More details" waterfall — steps
+// through only the *photo* entries (videos already have their own inline
+// controls in the waterfall and aren't worth re-opening full-screen), via
+// the same arrow buttons/counter/keyboard-arrows pattern as the main
+// showcase carousel above, just restyled for this overlay's black backdrop
+// instead of the showroom theme.
+function GalleryLightbox({
+  media,
+  photoIndices,
+  index,
+  onIndexChange,
+  onClose,
+}: {
+  media: ShowcaseMedia[];
+  photoIndices: number[];
+  index: number;
+  onIndexChange: (mediaIndex: number) => void;
+  onClose: () => void;
+}) {
+  const pos = photoIndices.indexOf(index);
+
+  function step(direction: 1 | -1) {
+    const nextPos = (pos + direction + photoIndices.length) % photoIndices.length;
+    onIndexChange(photoIndices[nextPos]);
+  }
+
+  // Escape is deliberately not handled here — it's owned by ProductShowcase's
+  // single keydown effect, which knows about every stacked overlay (video /
+  // gallery / this lightbox) and closes exactly the topmost one. A second,
+  // independent listener here would *also* fire on the same Escape press
+  // (window keydown listeners don't stop each other via stopPropagation —
+  // that only affects DOM bubbling between different elements), closing the
+  // lightbox and the whole gallery in one keystroke instead of one at a time.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "ArrowRight") step(1);
+      else if (e.key === "ArrowLeft") step(-1);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pos, photoIndices]);
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/95 p-4" onClick={onClose}>
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label="Close"
+        className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-lg text-white transition-colors hover:bg-white/20"
+      >
+        ✕
+      </button>
+
+      {photoIndices.length > 1 ? (
+        <>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              step(-1);
+            }}
+            aria-label="Previous photo"
+            className="absolute left-2 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-2xl text-white transition-colors hover:bg-white/20 sm:left-4"
+          >
+            ‹
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              step(1);
+            }}
+            aria-label="Next photo"
+            className="absolute right-2 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-2xl text-white transition-colors hover:bg-white/20 sm:right-4"
+          >
+            ›
+          </button>
+          <span className="absolute bottom-4 left-1/2 -translate-x-1/2 text-xs uppercase tracking-widest text-white/70">
+            {pos + 1} / {photoIndices.length}
+          </span>
+        </>
+      ) : null}
+
+      {/* eslint-disable-next-line @next/next/no-img-element -- Supabase Storage URL, can't be allowlisted for next/image */}
+      <img
+        src={media[index].url}
+        alt=""
+        className="max-h-full max-w-full rounded-xl object-contain"
+        onClick={(e) => e.stopPropagation()}
+      />
+    </div>
+  );
+}
+
 // Pinterest-style waterfall of every extra photo/video a product has,
 // opened from "More details" — CSS multi-column (`columns-*` +
 // `break-inside-avoid`) rather than a JS masonry library: items keep their
@@ -73,11 +170,24 @@ function MoreDetailsGallery({
   media,
   productName,
   onClose,
+  lightboxIndex,
+  onOpenLightbox,
+  onCloseLightbox,
 }: {
   media: ShowcaseMedia[];
   productName: string;
   onClose: () => void;
+  // Lifted to ProductShowcase, not owned here — see the Escape-handling
+  // comment in GalleryLightbox for why.
+  lightboxIndex: number | null;
+  onOpenLightbox: (mediaIndex: number) => void;
+  onCloseLightbox: () => void;
 }) {
+  const photoIndices = useMemo(
+    () => media.map((m, i) => (m.kind === "photo" ? i : -1)).filter((i) => i !== -1),
+    [media],
+  );
+
   return (
     <div className="fixed inset-0 z-[60] overflow-y-auto bg-black/90 p-4 sm:p-8" onClick={onClose}>
       <div className="mx-auto max-w-5xl" onClick={(e) => e.stopPropagation()}>
@@ -98,13 +208,25 @@ function MoreDetailsGallery({
               {m.kind === "video" ? (
                 <video src={m.url} controls className="w-full" />
               ) : (
-                // eslint-disable-next-line @next/next/no-img-element -- Supabase Storage URL, can't be allowlisted for next/image
-                <img src={m.url} alt="" className="w-full" />
+                <button type="button" onClick={() => onOpenLightbox(i)} className="block w-full">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- Supabase Storage URL, can't be allowlisted for next/image */}
+                  <img src={m.url} alt="" className="w-full transition-opacity hover:opacity-90" />
+                </button>
               )}
             </div>
           ))}
         </div>
       </div>
+
+      {lightboxIndex != null ? (
+        <GalleryLightbox
+          media={media}
+          photoIndices={photoIndices}
+          index={lightboxIndex}
+          onIndexChange={onOpenLightbox}
+          onClose={onCloseLightbox}
+        />
+      ) : null}
     </div>
   );
 }
@@ -128,6 +250,8 @@ export function ProductShowcase({
   product,
   category,
   viewMode,
+  showPrices,
+  currencies,
   onExit,
 }: {
   product: Product;
@@ -137,8 +261,12 @@ export function ProductShowcase({
   // can only flip through actual photos (WebGL textures need static
   // images), so it silently drops any video; the carousel shows everything.
   viewMode: ShowroomViewMode;
+  // Boss-configurable (dashboard Products page) — see ShowroomSettings.
+  showPrices: boolean;
+  currencies: Currency[];
   onExit: () => void;
 }) {
+  const currency = useCurrency(currencies);
   const themeIndex = useMemo(() => themeIndexFor(product.id), [product.id]);
   const media = useMemo<ShowcaseMedia[]>(() => {
     const list: ShowcaseMedia[] = [];
@@ -165,7 +293,18 @@ export function ProductShowcase({
   const [selectedVariantId, setSelectedVariantId] = useState("");
   const [videoOpen, setVideoOpen] = useState(false);
   const [galleryOpen, setGalleryOpen] = useState(false);
+  // Which "More details" photo is expanded full-screen, if any — lifted up
+  // from MoreDetailsGallery so a single Escape handler below can close
+  // exactly one overlay layer at a time (lightbox, then gallery, then exit)
+  // instead of two independent keydown listeners both firing on the same
+  // press.
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const sceneRef = useRef<ShowroomSceneHandle>(null);
+
+  function closeGallery() {
+    setGalleryOpen(false);
+    setLightboxIndex(null);
+  }
 
   function advanceImage(direction: 1 | -1) {
     const len = viewMode === "scene" ? photos.length : media.length;
@@ -205,17 +344,21 @@ export function ProductShowcase({
     };
   }, [isMobile, videoOpen, galleryOpen]);
 
-  // ESC closes whichever overlay is open, otherwise leaves the product view.
+  // ESC closes whichever overlay is topmost, otherwise leaves the product
+  // view — lightbox, then gallery, then video, then exit, one layer per
+  // press (see the lightboxIndex comment above for why this one effect owns
+  // all of it instead of each overlay listening independently).
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key !== "Escape") return;
-      if (videoOpen) setVideoOpen(false);
-      else if (galleryOpen) setGalleryOpen(false);
+      if (lightboxIndex != null) setLightboxIndex(null);
+      else if (videoOpen) setVideoOpen(false);
+      else if (galleryOpen) closeGallery();
       else onExit();
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [videoOpen, galleryOpen, onExit]);
+  }, [lightboxIndex, videoOpen, galleryOpen, onExit]);
 
   const current = media[index] ?? media[0];
 
@@ -345,7 +488,24 @@ export function ProductShowcase({
           </div>
 
           <div className="flex flex-col gap-4 lg:w-64 lg:shrink-0 lg:pt-1">
-            <p className="text-sm font-medium text-showroom-ink/70">Pricing confirmed after review</p>
+            {(() => {
+              const selectedVariant = product.variants.find((v) => v.id === selectedVariantId) ?? null;
+              // A selected variant's own price overrides the product's base
+              // price — see ProductVariant.price's comment in lib/types.ts.
+              const effectivePrice = selectedVariant?.price ?? product.price ?? null;
+              if (!showPrices || effectivePrice == null) {
+                return <p className="text-sm font-medium text-showroom-ink/70">Pricing confirmed after review</p>;
+              }
+              const amount = currency.format(effectivePrice);
+              return (
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-medium text-showroom-ink/70">
+                    {!selectedVariant && product.variants.length > 0 ? `Starting at ${amount}` : amount}
+                  </p>
+                  <CurrencySelect currencies={currencies} selected={currency.selected} onChange={currency.select} />
+                </div>
+              );
+            })()}
 
             <div className="min-h-[4.5rem]">
               {product.variants.length > 0 ? (
@@ -429,7 +589,14 @@ export function ProductShowcase({
       ) : null}
 
       {galleryOpen ? (
-        <MoreDetailsGallery media={extraMedia} productName={product.name} onClose={() => setGalleryOpen(false)} />
+        <MoreDetailsGallery
+          media={extraMedia}
+          productName={product.name}
+          onClose={closeGallery}
+          lightboxIndex={lightboxIndex}
+          onOpenLightbox={setLightboxIndex}
+          onCloseLightbox={() => setLightboxIndex(null)}
+        />
       ) : null}
     </div>
   );

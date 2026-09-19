@@ -82,7 +82,15 @@ export function NotificationBell({
   }, []);
 
   return (
-    <div ref={ref} className="relative">
+    // No local `relative` here on purpose — same reasoning as
+    // app/dashboard/notification-menu.tsx: the dropdown panel anchors to
+    // the shared icon-group container in the hosting topbar/header (which
+    // is `relative` and sits near the true screen edge), not to this
+    // button's own small box. Anchoring to the button's own edge — much
+    // narrower, and often further from the screen edge on a mobile topbar
+    // — let the fixed-width panel run off the left side of the screen on
+    // narrow viewports.
+    <div ref={ref}>
       <button
         onClick={() => setOpen((v) => !v)}
         aria-label="Notifications"

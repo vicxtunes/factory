@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import { AnnouncementPopup } from "@/components/announcements/AnnouncementPopup";
 import { InstallGate } from "@/components/pwa/InstallGate";
 import { NotificationGate } from "@/components/pwa/NotificationGate";
 
@@ -31,6 +32,7 @@ export function ClientShell({
         <>
           <InstallGate />
           <NotificationGate />
+          <AnnouncementPopup />
         </>
       ) : null}
       <ClientSidebar signedIn={signedIn} mobileOpen={mobileOpen} onNavigate={() => setMobileOpen(false)} />

@@ -1,11 +1,12 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/Button";
 import { Drawer } from "@/components/ui/Drawer";
 import { Field, TextArea, TextInput } from "@/components/ui/Field";
+import { UploadRow } from "@/components/ui/UploadRow";
 import { uploadMarketingImage } from "@/lib/storage/marketing-media-client";
 import type { MarketingSlide } from "@/lib/types";
 
@@ -42,7 +43,6 @@ export function MarketingPanel({
   const [form, setForm] = useState<SlideFormState>(emptyForm());
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   function handleUpload(file: File) {
     setUploadError(null);
@@ -115,56 +115,39 @@ export function MarketingPanel({
             }}
           >
             <Field label="Image" hint="Upload the finished, designed slide image, or paste a direct image link — shown as-is, no text is added on top">
-              <div className="flex items-center gap-2">
-                <TextInput
-                  type="url"
-                  value={form.imageUrl}
-                  onChange={(e) => setForm((f) => ({ ...f, imageUrl: e.target.value }))}
-                  placeholder="https://…"
-                  required
+              <TextInput
+                type="url"
+                value={form.imageUrl}
+                onChange={(e) => setForm((f) => ({ ...f, imageUrl: e.target.value }))}
+                placeholder="https://…"
+                required
+                disabled={uploadProgress != null}
+              />
+              <div className="mt-2">
+                <UploadRow
+                  label="Upload instead"
+                  // A pasted share-page link (Drive/Dropbox "view" URLs, not
+                  // a direct image) is exactly what used to break the
+                  // carousel's width-only auto-height sizing — uploading
+                  // sidesteps that failure mode entirely since Storage
+                  // always returns a working direct URL.
+                  hint='Or drop a file here — pasted links must be a direct image URL, not a Drive/Dropbox "view" page'
+                  // Plain "image/*" isn't enough on its own — some OS-level
+                  // file pickers (notably Windows, and several Linux file
+                  // managers) don't have .svg registered as an image MIME
+                  // type, so they silently hide .svg files from the browse
+                  // dialog even though the browser itself would happily
+                  // accept and render one. The explicit ".svg" extension
+                  // covers that gap.
+                  accept="image/*,.svg"
                   disabled={uploadProgress != null}
-                />
-                <Button
-                  type="button"
-                  variant="secondary"
-                  className="shrink-0 text-xs"
-                  disabled={uploadProgress != null}
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  Upload
-                </Button>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    e.target.value = "";
+                  progress={uploadProgress}
+                  onFiles={(files) => {
+                    const file = files[0];
                     if (file) handleUpload(file);
                   }}
                 />
               </div>
-              {/* A pasted share-page link (Drive/Dropbox "view" URLs, not a
-                  direct image) is exactly what used to break the carousel's
-                  width-only auto-height sizing — uploading sidesteps that
-                  failure mode entirely since Storage always returns a
-                  working direct URL. */}
-              <p className="mt-1 text-[0.65rem] text-muted">
-                Pasted links must be a direct image URL, not a Drive/Dropbox &quot;view&quot; page — when in doubt,
-                upload instead.
-              </p>
-              {uploadProgress != null ? (
-                <div className="mt-1.5">
-                  <div className="h-1 w-full overflow-hidden rounded-full bg-border">
-                    <div
-                      className="h-full rounded-full bg-brand-500 transition-[width] duration-150"
-                      style={{ width: `${Math.round(uploadProgress * 100)}%` }}
-                    />
-                  </div>
-                  <p className="mt-1 text-[0.65rem] text-muted">Uploading… {Math.round(uploadProgress * 100)}%</p>
-                </div>
-              ) : null}
               {uploadError ? <p className="mt-1 text-xs text-error-600">{uploadError}</p> : null}
               {form.imageUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element -- arbitrary staff-pasted or uploaded hosted image URL, can't be allowlisted for next/image

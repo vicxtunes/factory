@@ -5,7 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/Button";
-import type { Product, ProductCategory, ShowroomViewMode } from "@/lib/types";
+import type { Currency, Product, ProductCategory, ShowroomViewMode } from "@/lib/types";
 
 import { ProductShowcase } from "./product-showcase";
 
@@ -87,10 +87,14 @@ export function ShowroomContent({
   catalog,
   signedIn,
   viewMode,
+  showPrices,
+  currencies,
 }: {
   catalog: ProductCategory[];
   signedIn: boolean;
   viewMode: ShowroomViewMode;
+  showPrices: boolean;
+  currencies: Currency[];
 }) {
   const [tab, setTab] = useState<Tab>("product");
   const [selected, setSelected] = useState<{ product: Product; category: ProductCategory } | null>(null);
@@ -111,6 +115,8 @@ export function ShowroomContent({
         product={selected.product}
         category={selected.category}
         viewMode={viewMode}
+        showPrices={showPrices}
+        currencies={currencies}
         onExit={() => setSelected(null)}
       />
     );

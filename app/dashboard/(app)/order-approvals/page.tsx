@@ -6,7 +6,7 @@ import { isManagerRole } from "@/lib/types";
 
 import { OrderApprovalQueue } from "../../order-approval-queue";
 
-export const metadata = { title: "Order Approvals — Factory Order Tracker" };
+export const metadata = { title: "Client Orders — Factory Order Tracker" };
 export const dynamic = "force-dynamic";
 
 export default async function OrderApprovalsPage() {

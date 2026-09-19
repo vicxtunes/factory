@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { Button } from "@/components/ui/Button";
 import { Field, Select, TextArea, TextInput } from "@/components/ui/Field";
 import { SectionLabel } from "@/components/ui/SectionLabel";
+import { UploadRow } from "@/components/ui/UploadRow";
 import { addMediaLink } from "@/lib/storage/actions";
 import { uploadFileToStorage } from "@/lib/storage/upload-client";
 import type {
@@ -894,18 +895,21 @@ function ItemRow({
       ) : null}
 
       <div className="mt-4 grid gap-4 border-t border-border pt-4 sm:grid-cols-2">
-        <Field label="Photos" hint="Uploaded once the order is created">
-          <input
-            type="file"
-            multiple
+        <div>
+          <p className="mb-1.5 text-xs font-medium text-muted">Photos</p>
+          <UploadRow
+            label="Add photos"
+            hint={
+              item.files.length > 0
+                ? `${item.files.length} file(s) selected — uploaded once the order is created`
+                : "Uploaded once the order is created"
+            }
             accept="image/*,application/pdf"
-            className="block w-full text-sm"
-            onChange={(e) => onChange(index, { files: Array.from(e.target.files ?? []) })}
+            multiple
+            disabled={false}
+            onFiles={(files) => onChange(index, { files: Array.from(files) })}
           />
-          {item.files.length > 0 ? (
-            <p className="mt-1 text-xs text-muted">{item.files.length} file(s) selected.</p>
-          ) : null}
-        </Field>
+        </div>
         <Field label="Or paste links" hint="Drive, Dropbox, etc. — one per line">
           <TextArea
             value={item.linksText}

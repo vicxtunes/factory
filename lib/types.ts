@@ -227,6 +227,25 @@ export type ShowroomViewMode = "carousel" | "scene";
 
 export interface ShowroomSettings {
   product_view_mode: ShowroomViewMode;
+  // Boss-configurable, off by default — see Product.price's comment. When
+  // true, the showroom and order form show each product/variant's recorded
+  // price instead of "Pricing confirmed after review".
+  show_prices: boolean;
+}
+
+// A currency clients may view prices in. `rate` is "units of this currency
+// per 1 unit of the base currency" (the one row with is_base=true, which
+// products.price/product_variants.price are actually stored in) — see
+// supabase/migrations/20260919130000_currencies.sql.
+export interface Currency {
+  id: string;
+  code: string;
+  label: string;
+  symbol: string;
+  rate: number;
+  is_base: boolean;
+  active: boolean;
+  sort_order: number;
 }
 
 export interface WorkerPublic {
@@ -294,6 +313,20 @@ export interface Station {
 }
 
 export type AuditActorType = "dashboard_user" | "worker" | "designer" | "system" | "client";
+
+// A one-time "what's new" popup — see supabase/migrations/20260919140000_
+// announcements.sql. `audience` is a subset of AuditActorType's four
+// signed-in values ("system" never applies, there's no session for it);
+// empty means shown to everyone.
+export interface Announcement {
+  id: string;
+  title: string;
+  body: string;
+  audience: AuditActorType[];
+  active: boolean;
+  created_by_name: string | null;
+  created_at: string;
+}
 
 export interface OrderAuditEntry {
   id: string;

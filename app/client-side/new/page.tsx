@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { getClientSession } from "@/lib/auth/session";
-import { fetchProductCatalog } from "@/lib/queries";
+import { fetchCurrencies, fetchProductCatalog, fetchShowroomSettings } from "@/lib/queries";
 
 import { ClientShell } from "../shell";
 import { OrderForm } from "../order-form";
@@ -17,7 +17,12 @@ export default async function ClientNewOrderPage({
   const session = await getClientSession();
   if (!session) redirect("/client-side");
 
-  const [catalog, params] = await Promise.all([fetchProductCatalog(true), searchParams]);
+  const [catalog, showroomSettings, currencies, params] = await Promise.all([
+    fetchProductCatalog(true),
+    fetchShowroomSettings(),
+    fetchCurrencies(true),
+    searchParams,
+  ]);
 
   // Reachable two ways: standalone (sidebar's "Place Order", no params —
   // the client picks category/product/size in the form itself) or from the
@@ -36,6 +41,8 @@ export default async function ClientNewOrderPage({
         initialCategoryId={category?.id}
         initialProductId={product?.id}
         initialVariantId={variant?.id}
+        showPrices={showroomSettings.show_prices}
+        currencies={currencies}
       />
     </ClientShell>
   );

@@ -19,15 +19,6 @@ function DashboardIcon({ className }: { className?: string }) {
   );
 }
 
-function ApprovalsIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className={className}>
-      <circle cx="12" cy="12" r="9" />
-      <path strokeLinecap="round" strokeLinejoin="round" d="m8.5 12.5 2.5 2.5 4.5-5" />
-    </svg>
-  );
-}
-
 function OrdersIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className={className}>
@@ -113,6 +104,22 @@ function DesignersIcon({ className }: { className?: string }) {
   );
 }
 
+// Same bell path as components/notifications/NotificationBell.tsx — bell
+// already reads as "announcement" everywhere else in this app, and reusing
+// a path already known to render correctly beats guessing at a megaphone
+// glyph from memory.
+function AnnouncementIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className={className}>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0"
+      />
+    </svg>
+  );
+}
+
 function SupportIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className={className}>
@@ -159,16 +166,25 @@ interface Tab {
   newTab: boolean;
 }
 
+// Office Orders and Client Orders used to be two unrelated top-level tabs
+// ("Orders" and "Order Approvals") — easy to miss that the second one
+// exists at all, and no visual cue that they're two halves of the same
+// order lifecycle (a client-portal order lives in Client Orders until the
+// receptionist quotes + routes it, only then does it show up in Office
+// Orders — see fetchOfficeItems/fetchApprovalQueueItems in lib/queries.ts).
+// Grouped as one non-clickable "Orders" heading with these two as its real
+// links instead, so that relationship is visible in the nav itself.
+const ORDERS_GROUP = {
+  label: "Orders",
+  icon: OrdersIcon,
+  children: [
+    { href: "/dashboard/orders", label: "Office Orders", role: null },
+    { href: "/dashboard/order-approvals", label: "Client Orders", role: MANAGER_ROLES },
+  ],
+} as const;
+
 const TABS = [
   { href: "/dashboard", label: "Dashboard", icon: DashboardIcon, role: null, newTab: false },
-  { href: "/dashboard/orders", label: "Orders", icon: OrdersIcon, role: null, newTab: false },
-  {
-    href: "/dashboard/order-approvals",
-    label: "Order Approvals",
-    icon: ApprovalsIcon,
-    role: MANAGER_ROLES,
-    newTab: false,
-  },
   { href: "/dashboard/clients", label: "Clients", icon: ClientsIcon, role: MANAGER_ROLES, newTab: false },
   { href: "/dashboard/agents", label: "Agents", icon: AgentsIcon, role: MANAGER_ROLES, newTab: false },
   { href: "/dashboard/products", label: "Products", icon: ProductsIcon, role: MANAGER_ROLES, newTab: false },
@@ -179,6 +195,22 @@ const TABS = [
   { href: "/support", label: "Support", icon: SupportIcon, role: null, newTab: false },
   { href: "/display", label: "Display screen", icon: DisplayIcon, role: null, newTab: true },
 ] as const satisfies Tab[];
+
+function TabLink({ tab, active, onNavigate }: { tab: Tab; active: boolean; onNavigate: () => void }) {
+  const Icon = tab.icon;
+  return (
+    <Link
+      href={tab.href}
+      onClick={onNavigate}
+      target={tab.newTab ? "_blank" : undefined}
+      rel={tab.newTab ? "noopener noreferrer" : undefined}
+      className={`menu-item ${active ? "menu-item-active" : "menu-item-inactive"}`}
+    >
+      <Icon className={`h-5 w-5 ${active ? "menu-item-icon-active" : "menu-item-icon-inactive"}`} />
+      {tab.label}
+    </Link>
+  );
+}
 
 export function DashboardSidebar({
   role,
@@ -193,18 +225,31 @@ export function DashboardSidebar({
 }) {
   const pathname = usePathname();
   const tabs: Tab[] = TABS.filter((t) => t.role === null || (t.role as readonly AppRole[]).includes(role));
+  const ordersChildren = ORDERS_GROUP.children.filter(
+    (c) => c.role === null || (c.role as readonly AppRole[]).includes(role),
+  );
+  const ordersActive = ordersChildren.some((c) => pathname === c.href);
   // Support-report review is gated by email, not role — several accounts can
   // be "boss", only this one person should see what staff report. Distinct
   // from the "Support" tab above (everyone's self-service report/opt-in
   // page at /support) — this is the owner-only inbox of what came in.
   if (email === SUPPORT_OWNER_EMAIL) {
-    tabs.push({
-      href: "/dashboard/support",
-      label: "Support Reports",
-      icon: SupportIcon,
-      role: null,
-      newTab: false,
-    });
+    tabs.push(
+      {
+        href: "/dashboard/support",
+        label: "Support Reports",
+        icon: SupportIcon,
+        role: null,
+        newTab: false,
+      },
+      {
+        href: "/dashboard/announcements",
+        label: "Announcements",
+        icon: AnnouncementIcon,
+        role: null,
+        newTab: false,
+      },
+    );
   }
 
   return (
@@ -219,26 +264,44 @@ export function DashboardSidebar({
       <nav className="flex-1 overflow-y-auto px-3 py-4">
         <p className="mb-2 px-3 text-xs font-semibold uppercase tracking-wide text-muted">Menu</p>
         <ul className="space-y-1">
-          {tabs.map((tab) => {
-            const Icon = tab.icon;
-            const active = pathname === tab.href;
-            return (
-              <li key={tab.href}>
-                <Link
-                  href={tab.href}
-                  onClick={onNavigate}
-                  target={tab.newTab ? "_blank" : undefined}
-                  rel={tab.newTab ? "noopener noreferrer" : undefined}
-                  className={`menu-item ${active ? "menu-item-active" : "menu-item-inactive"}`}
-                >
-                  <Icon
-                    className={`h-5 w-5 ${active ? "menu-item-icon-active" : "menu-item-icon-inactive"}`}
-                  />
-                  {tab.label}
-                </Link>
-              </li>
-            );
-          })}
+          {/* Dashboard first, exactly where it's always been. */}
+          <li key={tabs[0].href}>
+            <TabLink tab={tabs[0]} active={pathname === tabs[0].href} onNavigate={onNavigate} />
+          </li>
+
+          {/* Orders: a non-clickable group heading over its two real
+              workflows — see the ORDERS_GROUP comment above for why these
+              used to be separate top-level tabs and aren't anymore. */}
+          <li>
+            <div className={`menu-item cursor-default ${ordersActive ? "menu-item-active" : "menu-item-inactive"}`}>
+              <ORDERS_GROUP.icon
+                className={`h-5 w-5 ${ordersActive ? "menu-item-icon-active" : "menu-item-icon-inactive"}`}
+              />
+              {ORDERS_GROUP.label}
+            </div>
+            <ul className="ml-8 mt-1 space-y-1">
+              {ordersChildren.map((child) => {
+                const active = pathname === child.href;
+                return (
+                  <li key={child.href}>
+                    <Link
+                      href={child.href}
+                      onClick={onNavigate}
+                      className={`menu-item text-sm ${active ? "menu-item-active" : "menu-item-inactive"}`}
+                    >
+                      {child.label}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </li>
+
+          {tabs.slice(1).map((tab) => (
+            <li key={tab.href}>
+              <TabLink tab={tab} active={pathname === tab.href} onNavigate={onNavigate} />
+            </li>
+          ))}
         </ul>
       </nav>
     </aside>

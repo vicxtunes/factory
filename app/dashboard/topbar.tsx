@@ -17,14 +17,15 @@ function MenuIcon({ className }: { className?: string }) {
 
 const PAGE_TITLES: Record<string, string> = {
   "/dashboard": "Dashboard",
-  "/dashboard/orders": "Orders & items",
+  "/dashboard/orders": "Office Orders",
   "/dashboard/orders/new": "New order",
-  "/dashboard/order-approvals": "Order Approvals",
+  "/dashboard/order-approvals": "Client Orders",
   "/dashboard/marketing": "Marketing carousel",
   "/dashboard/workers": "Workers & stations",
   "/dashboard/designers": "Graphics designers",
   "/dashboard/admins": "Dashboard admins",
   "/dashboard/support": "Support reports",
+  "/dashboard/announcements": "Announcements",
   "/support": "Support",
 };
 
