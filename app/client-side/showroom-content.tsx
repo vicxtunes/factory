@@ -33,6 +33,13 @@ function collectAttributeOptions(catalog: ProductCategory[], nameMatch: string):
   return [...seen];
 }
 
+// Packaging is its own product category (so each option carries its own
+// image, video, media and price) shown on the Packaging tab rather than
+// among the Product tab's categories.
+function isPackagingCategory(category: ProductCategory): boolean {
+  return category.name.trim().toLowerCase() === "packaging";
+}
+
 function PhotoCard({
   label,
   image,
@@ -99,13 +106,14 @@ export function ShowroomContent({
   const [tab, setTab] = useState<Tab>("product");
   const [selected, setSelected] = useState<{ product: Product; category: ProductCategory } | null>(null);
 
-  const packagingOptions = collectAttributeOptions(catalog, "packaging");
+  const packagingCategory = catalog.find(isPackagingCategory) ?? null;
   const laminationOptions = collectAttributeOptions(catalog, "lamination");
 
   // Lead with whichever category has the most to show, rather than
   // whatever order the catalog admin panel happens to list them in.
   const categoriesByProductCount = useMemo(
-    () => [...catalog].sort((a, b) => b.products.length - a.products.length),
+    () =>
+      catalog.filter((c) => !isPackagingCategory(c)).sort((a, b) => b.products.length - a.products.length),
     [catalog],
   );
 
@@ -175,7 +183,7 @@ export function ShowroomContent({
           page height (and anything below it) never jumps between tabs. */}
       <div className="min-h-[65vh]">
         {tab === "product" ? (
-          catalog.length === 0 ? (
+          categoriesByProductCount.length === 0 ? (
             <p className="rounded-[var(--radius)] border border-dashed border-border p-4 text-sm text-muted">
               Nothing in the showroom yet.
             </p>
@@ -210,7 +218,22 @@ export function ShowroomContent({
           )
         ) : null}
 
-        {tab === "packaging" ? <OptionGallery title="Packaging" options={packagingOptions} /> : null}
+        {tab === "packaging" ? (
+          !packagingCategory || packagingCategory.products.length === 0 ? (
+            <p className="text-sm text-muted">No packaging options listed yet.</p>
+          ) : (
+            <div className="flex flex-wrap gap-4">
+              {packagingCategory.products.map((product) => (
+                <PhotoCard
+                  key={product.id}
+                  label={product.name}
+                  image={product.display_image_url}
+                  onClick={() => setSelected({ product, category: packagingCategory })}
+                />
+              ))}
+            </div>
+          )
+        ) : null}
         {tab === "lamination" ? <OptionGallery title="Lamination" options={laminationOptions} /> : null}
       </div>
     </div>

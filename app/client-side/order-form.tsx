@@ -388,6 +388,11 @@ function ItemRow({
   const product = products.find((p) => p.id === item.product_id) ?? null;
   const variants = product?.variants ?? [];
   const attributeDefs = category?.attributes ?? [];
+  // Packaging is its own product category; its products are the choices for
+  // any category's "Packaging" attribute (falls back to the attribute's own
+  // options if that category has no products yet).
+  const packagingNames =
+    catalog.find((c) => c.name.trim().toLowerCase() === "packaging")?.products.map((p) => p.name) ?? [];
   // Photo Books send a whole folder of photos, better suited to the "Photo
   // link" field than picking files one at a time — direct upload is for
   // everything else.
@@ -482,7 +487,10 @@ function ItemRow({
                     required={attr.required}
                   >
                     <option value="">Select…</option>
-                    {(attr.options ?? []).map((opt) => (
+                    {(attr.name.toLowerCase().includes("packaging") && packagingNames.length > 0
+                      ? packagingNames
+                      : (attr.options ?? [])
+                    ).map((opt) => (
                       <option key={opt} value={opt}>
                         {opt}
                       </option>
