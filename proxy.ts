@@ -1,8 +1,11 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-// Refreshes the Supabase Auth session cookie on dashboard and client-portal
-// (Google sign-in) requests.
+// Refreshes the Supabase Auth session cookie. Every signed-in surface now
+// rides on a Supabase session (staff email+password, everyone else Google), and
+// the access token lasts an hour: server components can't write cookies, so
+// this is the only place a refreshed token gets saved. A route missing from the
+// matcher below would be signed out after about an hour.
 // (Next.js 16 renamed Middleware -> Proxy; runtime is nodejs.)
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
@@ -34,5 +37,12 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/client-side/:path*"],
+  matcher: [
+    "/dashboard/:path*",
+    "/client-side/:path*",
+    "/factory/:path*",
+    "/graphics/:path*",
+    "/support/:path*",
+    "/api/:path*",
+  ],
 };
