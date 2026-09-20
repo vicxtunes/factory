@@ -92,7 +92,7 @@ export default async function SupportPage() {
             </>
           }
         />
-        <main className="mx-auto w-full max-w-6xl flex-1 px-3 py-4 pb-28 md:pb-4">
+        <main className="mx-auto w-full max-w-6xl flex-1 px-3 py-4 pb-32 md:pb-4">
           <SupportPageContent />
         </main>
         <HomeBar
@@ -133,7 +133,7 @@ export default async function SupportPage() {
             </>
           }
         />
-        <main className="mx-auto w-full max-w-6xl flex-1 px-3 py-4 pb-28 md:pb-4">
+        <main className="mx-auto w-full max-w-6xl flex-1 px-3 py-4 pb-32 md:pb-4">
           <SupportPageContent />
         </main>
         <HomeBar
