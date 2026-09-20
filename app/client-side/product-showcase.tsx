@@ -9,6 +9,7 @@ import { useCurrency } from "@/lib/currency/useCurrency";
 import type { Currency, Product, ProductCategory, ShowroomViewMode } from "@/lib/types";
 
 import type { ShowroomSceneHandle } from "./showroom-scene";
+import { useSwipe } from "./use-swipe";
 
 const ShowroomScene = dynamic(() => import("./showroom-scene").then((m) => m.ShowroomScene), {
   ssr: false,
@@ -90,6 +91,9 @@ function GalleryLightbox({
     onIndexChange(photoIndices[nextPos]);
   }
 
+  // Finger swipe steps through photos too (buttons and arrow keys still work).
+  const swipe = useSwipe(step, photoIndices.length > 1);
+
   // Escape is deliberately not handled here — it's owned by ProductShowcase's
   // single keydown effect, which knows about every stacked overlay (video /
   // gallery / this lightbox) and closes exactly the topmost one. A second,
@@ -108,7 +112,11 @@ function GalleryLightbox({
   }, [pos, photoIndices]);
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/95 p-4" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/95 p-4"
+      onClick={onClose}
+      {...swipe.bind}
+    >
       <button
         type="button"
         onClick={onClose}
@@ -152,7 +160,11 @@ function GalleryLightbox({
       <img
         src={media[index].url}
         alt=""
-        className="max-h-full max-w-full rounded-xl object-contain"
+        draggable={false}
+        className={`max-h-full max-w-full select-none rounded-xl object-contain ${
+          swipe.dragging ? "" : "transition-transform duration-200"
+        }`}
+        style={{ transform: `translateX(${swipe.offset}px)` }}
         onClick={(e) => e.stopPropagation()}
       />
     </div>
@@ -366,6 +378,11 @@ export function ProductShowcase({
     else advanceImage(direction);
   }
 
+  // Finger swipe on the flat photo view. Not for videos (horizontal drags on
+  // their controls scrub the timeline) and not for the 3D scene, which has
+  // its own touch handling.
+  const mediaSwipe = useSwipe(stepImage, viewMode !== "scene" && current.kind !== "video" && media.length > 1);
+
   return (
     <div
       className={`showroom-theme-${themeIndex} fixed inset-0 z-40 overflow-y-auto px-4 py-6 sm:static sm:inset-auto sm:z-auto sm:overflow-hidden sm:rounded-3xl sm:px-8 sm:py-8`}
@@ -391,12 +408,20 @@ export function ProductShowcase({
               nextImage={photos[(index + 1) % photos.length]?.url ?? PLACEHOLDER}
             />
           ) : (
-            <div className="absolute inset-0 overflow-hidden rounded-2xl bg-black/5">
+            <div className="absolute inset-0 overflow-hidden rounded-2xl bg-black/5" {...mediaSwipe.bind}>
               {current.kind === "video" ? (
                 <video src={current.url} controls className="h-full w-full object-cover" />
               ) : (
                 // eslint-disable-next-line @next/next/no-img-element -- Supabase Storage URL, can't be allowlisted for next/image
-                <img src={current.url} alt={product.name} className="h-full w-full object-cover" />
+                <img
+                  src={current.url}
+                  alt={product.name}
+                  draggable={false}
+                  className={`h-full w-full select-none object-cover ${
+                    mediaSwipe.dragging ? "" : "transition-transform duration-200"
+                  }`}
+                  style={{ transform: `translateX(${mediaSwipe.offset}px)` }}
+                />
               )}
               {media.length > 1 ? (
                 <div className="absolute inset-x-0 bottom-3 flex items-center justify-center gap-2">
