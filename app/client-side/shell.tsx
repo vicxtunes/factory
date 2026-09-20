@@ -47,7 +47,7 @@ export function ClientShell({
       <div className="flex min-h-screen flex-col md:pl-64">
         <ClientTopbar signedIn={signedIn} name={name} onToggleSidebar={() => setMobileOpen((v) => !v)} />
         {/* Extra bottom padding on mobile so content clears the fixed home bar. */}
-        <main className={`flex-1 bg-background px-4 py-6 sm:px-6 ${signedIn ? "pb-32 md:pb-6" : ""}`}>
+        <main className={`flex-1 bg-background px-4 py-6 sm:px-6 ${signedIn ? "pb-24 md:pb-6" : ""}`}>
           {children}
         </main>
       </div>
