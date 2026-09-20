@@ -22,6 +22,7 @@ import { LogoutButton as WorkerLogoutButton } from "@/app/factory/logout-button"
 import { getMyNotifications as getMyDesignerNotifications, logoutDesigner } from "@/app/graphics/actions";
 import { LogoutButton as DesignerLogoutButton } from "@/app/graphics/logout-button";
 
+import { ClientSupportContent } from "./client-support";
 import { SupportForm } from "./support-form";
 
 export const metadata = { title: "Support — Order Tracker" };
@@ -152,7 +153,7 @@ export default async function SupportPage() {
   if (clientSession) {
     return (
       <ClientShell signedIn name={clientSession.name}>
-        <SupportPageContent />
+        <ClientSupportContent />
       </ClientShell>
     );
   }
