@@ -18,9 +18,9 @@ export function DashboardHomeBar({ role, email }: { role: AppRole; email: string
 
   const tabs: HomeBarLink[] = [
     { href: "/dashboard", label: "Dashboard", icon: "dashboard", exact: true },
-    { href: "/dashboard/orders", label: "Office Orders", icon: "orders" },
+    { href: "/dashboard/orders", label: "Office Orders", barLabel: "Orders", icon: "orders" },
     ...(isManager
-      ? [{ href: "/dashboard/order-approvals", label: "Client Orders", icon: "clients" } as const]
+      ? [{ href: "/dashboard/order-approvals", label: "Client Orders", barLabel: "Approvals", icon: "clients" } as const]
       : []),
     { href: "/support", label: "Support", icon: "support" },
   ];

@@ -59,6 +59,8 @@ export interface HomeBarLink {
   href: string;
   label: string;
   icon: HomeBarIcon;
+  /** Shorter text for the bar itself when `label` is too long to fit under an icon. */
+  barLabel?: string;
   /** Match only this exact path (for section roots like /dashboard). */
   exact?: boolean;
   newTab?: boolean;
@@ -83,6 +85,22 @@ function LogoutIcon({ className }: { className?: string }) {
         d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15M18 12H9m9 0-3-3m3 3-3 3"
       />
     </svg>
+  );
+}
+
+// Small caption under each bar icon. The icon alone isn't always obvious (and
+// the active circle only hides the label of the page you're already on, not
+// the others), so every slot names itself. Truncates rather than wrapping so
+// the bar height stays fixed.
+function BarLabel({ current, children }: { current: boolean; children: React.ReactNode }) {
+  return (
+    <span
+      className={`mt-0.5 w-full truncate px-0.5 text-center text-[10px] leading-tight transition-colors duration-300 ${
+        current ? "font-semibold text-white" : "font-medium text-brand-100/80"
+      }`}
+    >
+      {children}
+    </span>
   );
 }
 
@@ -197,16 +215,16 @@ export function HomeBar({
 
       <nav
         aria-label="Primary"
-        className="relative grid h-16 rounded-full bg-brand-950 p-1.5 shadow-theme-lg ring-1 ring-brand-800/60"
+        className="relative grid h-[4.75rem] rounded-full bg-brand-950 p-1.5 shadow-theme-lg ring-1 ring-brand-800/60"
         style={{ gridTemplateColumns: `repeat(${slots}, minmax(0, 1fr))` }}
       >
         {activeSlot >= 0 ? (
           <span
             aria-hidden="true"
-            className="pointer-events-none absolute inset-y-1.5 left-1.5 flex items-center justify-center transition-transform duration-300 ease-out motion-reduce:transition-none"
+            className="pointer-events-none absolute left-1.5 top-2 flex justify-center transition-transform duration-300 ease-out motion-reduce:transition-none"
             style={{ width: `calc((100% - 0.75rem) / ${slots})`, transform: `translateX(${activeSlot * 100}%)` }}
           >
-            <span className="aspect-square h-full rounded-full bg-brand-500" />
+            <span className="h-10 w-10 rounded-full bg-brand-500" />
           </span>
         ) : null}
 
@@ -222,11 +240,16 @@ export function HomeBar({
               aria-label={tab.label}
               aria-current={current ? "page" : undefined}
               onClick={() => setMoreOpen(false)}
-              className={`relative z-10 flex items-center justify-center rounded-full transition-colors duration-300 focus-visible:outline-2 focus-visible:outline-brand-300 ${
-                current ? "text-brand-950" : "text-brand-100"
-              }`}
+              className="relative z-10 flex min-w-0 flex-col items-center rounded-full pt-2 focus-visible:outline-2 focus-visible:outline-brand-300"
             >
-              <Icon className="h-6 w-6" />
+              <span
+                className={`flex h-10 w-10 items-center justify-center transition-colors duration-300 ${
+                  current ? "text-brand-950" : "text-brand-100"
+                }`}
+              >
+                <Icon className="h-6 w-6" />
+              </span>
+              <BarLabel current={current}>{tab.barLabel ?? tab.label}</BarLabel>
             </Link>
           );
         })}
@@ -237,11 +260,16 @@ export function HomeBar({
             aria-label="More options"
             aria-expanded={moreOpen}
             onClick={() => setMoreOpen((v) => !v)}
-            className={`relative z-10 flex items-center justify-center rounded-full transition-colors duration-300 focus-visible:outline-2 focus-visible:outline-brand-300 ${
-              activeSlot === tabs.length ? "text-brand-950" : "text-brand-100"
-            }`}
+            className="relative z-10 flex min-w-0 flex-col items-center rounded-full pt-2 focus-visible:outline-2 focus-visible:outline-brand-300"
           >
-            <MoreIcon className="h-6 w-6" />
+            <span
+              className={`flex h-10 w-10 items-center justify-center transition-colors duration-300 ${
+                activeSlot === tabs.length ? "text-brand-950" : "text-brand-100"
+              }`}
+            >
+              <MoreIcon className="h-6 w-6" />
+            </span>
+            <BarLabel current={activeSlot === tabs.length}>More</BarLabel>
           </button>
         ) : null}
       </nav>
