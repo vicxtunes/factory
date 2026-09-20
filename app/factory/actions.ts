@@ -3,6 +3,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { clearAttempts, isBlocked, recordFailure, TOO_MANY_ATTEMPTS } from "@/lib/auth/attempts";
+import { parsePhone } from "@/lib/clients/phone";
 import { getGoogleIdentity, getWorkerSession } from "@/lib/auth/session";
 import { verifyPin } from "@/lib/auth/pin";
 import { logOrderEvent, resolveActor } from "@/lib/audit/log";
@@ -79,8 +80,17 @@ export async function requestWorkerAccess(input: {
 }): Promise<ActionResult> {
   const google = await getGoogleIdentity();
   if (!google) return { ok: false, error: "Please sign in with Google first." };
-  const name = input.name.trim();
+  const name = input.name.trim().replace(/\s+/g, " ");
   if (!name) return { ok: false, error: "Please enter your name." };
+  if (name.length > 100) return { ok: false, error: "Name must be 100 characters or fewer." };
+  const note = input.note?.trim() ?? "";
+  if (note.length > 300) return { ok: false, error: "Note must be 300 characters or fewer." };
+  let phone: string | null = null;
+  if (input.phone?.trim()) {
+    const parsed = parsePhone(input.phone);
+    if (!parsed.ok) return { ok: false, error: parsed.error };
+    phone = parsed.store;
+  }
 
   const admin = createAdminClient();
   const { data: linked } = await admin
@@ -94,8 +104,8 @@ export async function requestWorkerAccess(input: {
     auth_user_id: google.userId,
     email: google.email,
     name,
-    phone: input.phone?.trim() || null,
-    note: input.note?.trim() || null,
+    phone,
+    note: note || null,
   });
   // 23505: they already have a pending request — treat as success.
   if (error && (error as { code?: string }).code !== "23505") return { ok: false, error: error.message };
