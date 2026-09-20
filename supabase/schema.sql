@@ -271,6 +271,15 @@ create trigger clients_set_updated_at
   before update on clients
   for each row execute function set_updated_at();
 
+-- Google sign-in link for the client portal (see
+-- migrations/20260920120000_client_google_auth.sql). No RLS policies: server-only.
+create table client_identities (
+  auth_user_id uuid primary key references auth.users (id) on delete cascade,
+  client_id    uuid not null unique references clients (id) on delete cascade,
+  created_at   timestamptz not null default now()
+);
+alter table client_identities enable row level security;
+
 create table agents (
   id         uuid primary key default gen_random_uuid(),
   name       text not null,

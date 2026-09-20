@@ -8,7 +8,7 @@ import { usePathname } from "next/navigation";
 // list with active-state utilities from app/globals.css. Gated items
 // (everything but Showroom) only render when signed in.
 
-function DashboardIcon({ className }: { className?: string }) {
+export function DashboardIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className={className}>
       <path
@@ -20,7 +20,7 @@ function DashboardIcon({ className }: { className?: string }) {
   );
 }
 
-function OrdersIcon({ className }: { className?: string }) {
+export function OrdersIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className={className}>
       <path
@@ -33,7 +33,7 @@ function OrdersIcon({ className }: { className?: string }) {
   );
 }
 
-function HistoryIcon({ className }: { className?: string }) {
+export function HistoryIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className={className}>
       <path
@@ -45,7 +45,7 @@ function HistoryIcon({ className }: { className?: string }) {
   );
 }
 
-function PlaceOrderIcon({ className }: { className?: string }) {
+export function PlaceOrderIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className={className}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
@@ -53,7 +53,7 @@ function PlaceOrderIcon({ className }: { className?: string }) {
   );
 }
 
-function ShowroomIcon({ className }: { className?: string }) {
+export function ShowroomIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className={className}>
       <path
@@ -65,7 +65,7 @@ function ShowroomIcon({ className }: { className?: string }) {
   );
 }
 
-function SettingsIcon({ className }: { className?: string }) {
+export function SettingsIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className={className}>
       <path
@@ -78,7 +78,7 @@ function SettingsIcon({ className }: { className?: string }) {
   );
 }
 
-function SupportIcon({ className }: { className?: string }) {
+export function SupportIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className={className}>
       <path

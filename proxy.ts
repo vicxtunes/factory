@@ -1,7 +1,8 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-// Refreshes the Supabase Auth session cookie on dashboard requests.
+// Refreshes the Supabase Auth session cookie on dashboard and client-portal
+// (Google sign-in) requests.
 // (Next.js 16 renamed Middleware -> Proxy; runtime is nodejs.)
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
@@ -33,5 +34,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*"],
+  matcher: ["/dashboard/:path*", "/client-side/:path*"],
 };

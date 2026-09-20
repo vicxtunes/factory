@@ -1,5 +1,5 @@
 import { Header } from "@/components/ui/Header";
-import { getClientSession } from "@/lib/auth/session";
+import { getClientSession, getGoogleIdentity } from "@/lib/auth/session";
 import { fetchClientItems, fetchMarketingSlides } from "@/lib/queries";
 
 import { AuthGate } from "./auth-gate";
@@ -13,11 +13,12 @@ export default async function ClientSidePage() {
   const session = await getClientSession();
 
   if (!session) {
+    const google = await getGoogleIdentity();
     return (
       <>
         <Header surface="Client Portal" />
         <main className="mx-auto w-full max-w-md flex-1 px-4 py-8">
-          <AuthGate />
+          <AuthGate google={google} />
         </main>
       </>
     );

@@ -6,6 +6,7 @@ import { AnnouncementPopup } from "@/components/announcements/AnnouncementPopup"
 import { InstallGate } from "@/components/pwa/InstallGate";
 import { NotificationGate } from "@/components/pwa/NotificationGate";
 
+import { ClientMobileBar } from "./mobile-bar";
 import { ClientSidebar } from "./sidebar";
 import { ClientTopbar } from "./topbar";
 
@@ -45,8 +46,12 @@ export function ClientShell({
       ) : null}
       <div className="flex min-h-screen flex-col md:pl-64">
         <ClientTopbar signedIn={signedIn} name={name} onToggleSidebar={() => setMobileOpen((v) => !v)} />
-        <main className="flex-1 bg-background px-4 py-6 sm:px-6">{children}</main>
+        {/* Extra bottom padding on mobile so content clears the fixed home bar. */}
+        <main className={`flex-1 bg-background px-4 py-6 sm:px-6 ${signedIn ? "pb-28 md:pb-6" : ""}`}>
+          {children}
+        </main>
       </div>
+      {signedIn ? <ClientMobileBar /> : null}
     </div>
   );
 }

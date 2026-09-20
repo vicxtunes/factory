@@ -5,7 +5,8 @@ import { revalidatePath } from "next/cache";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { CLIENT_COOKIE, signPayload } from "@/lib/auth/cookies";
-import { getClientSession } from "@/lib/auth/session";
+import { getClientSession, getGoogleIdentity } from "@/lib/auth/session";
+import { createClient } from "@/lib/supabase/server";
 import { hashPin, isValidPinFormat, verifyPin } from "@/lib/auth/pin";
 import { logOrderEvent, resolveActor } from "@/lib/audit/log";
 import { exactClientMatch, findClientCandidates, resolveOrCreateClient } from "@/lib/clients/dedupe";
@@ -161,6 +162,109 @@ export async function removePin(currentPin: string): Promise<ActionResult> {
 export async function logoutClient(): Promise<void> {
   const store = await cookies();
   store.delete(CLIENT_COOKIE);
+  // Also end a Google session if there is one (no-op for phone/PIN logins).
+  // Guarded so a dashboard staff member's session isn't signed out from here.
+  if (await getGoogleIdentity()) {
+    const supabase = await createClient();
+    await supabase.auth.signOut();
+  }
+}
+
+// --- Continue with Google ---------------------------------------------------
+// Google proves who the person is; it doesn't tell us which client row is
+// theirs. After the OAuth round trip we ask for a phone number and either
+// link the Google account to the existing client that owns it (keeping their
+// orders, history and notifications — nothing is recreated) or, if the number
+// is new, create the client. The link lives in client_identities.
+
+export async function linkGoogleAccount(input: {
+  phone: string;
+  name?: string;
+  pin?: string;
+}): Promise<ActionResult> {
+  const google = await getGoogleIdentity();
+  if (!google) return { ok: false, error: "Please sign in with Google first." };
+  if (!input.phone.trim()) return { ok: false, error: "Phone number is required." };
+
+  const admin = createAdminClient();
+
+  // Already linked (e.g. a double submit): nothing to do. Never re-point an
+  // existing link at a different client.
+  const { data: existingLink } = await admin
+    .from("client_identities")
+    .select("client_id")
+    .eq("auth_user_id", google.userId)
+    .maybeSingle();
+  if (existingLink) return { ok: true };
+
+  const match = exactClientMatch(await findClientCandidates(admin, { phone: input.phone }));
+
+  let clientId: string;
+
+  if (match) {
+    if (!match.active) return { ok: false, error: "This account is inactive — contact us for help." };
+
+    const { data: taken } = await admin
+      .from("client_identities")
+      .select("auth_user_id")
+      .eq("client_id", match.id)
+      .maybeSingle();
+    if (taken && taken.auth_user_id !== google.userId) {
+      return { ok: false, error: "This number is already connected to another Google account — contact us for help." };
+    }
+
+    // A Google-verified email that already matches the one on file is proof
+    // enough. Otherwise, if the client set a PIN, they must supply it — that
+    // is what stops someone typing a stranger's number to take over their
+    // account.
+    const emailVerified =
+      !!google.email && !!match.email && match.email.trim().toLowerCase() === google.email.toLowerCase();
+    if (!emailVerified) {
+      const { data: cred } = await admin
+        .from("client_credentials")
+        .select("pin_hash")
+        .eq("client_id", match.id)
+        .maybeSingle();
+      if (cred) {
+        if (!input.pin) return { ok: false, error: "PIN required." };
+        if (!(await verifyPin(input.pin, cred.pin_hash))) return { ok: false, error: "Incorrect PIN." };
+      }
+    }
+
+    clientId = match.id;
+    if (!match.email && google.email) {
+      await admin.from("clients").update({ email: google.email }).eq("id", match.id);
+    }
+  } else {
+    const name = input.name?.trim() || google.name?.trim() || "";
+    if (!name) return { ok: false, error: "Name is required." };
+    const resolved = await resolveOrCreateClient(admin, {
+      name,
+      phone: input.phone,
+      email: google.email,
+    });
+    if (!resolved.ok) return { ok: false, error: resolved.error };
+    clientId = resolved.client.id;
+  }
+
+  const { error } = await admin
+    .from("client_identities")
+    .insert({ auth_user_id: google.userId, client_id: clientId });
+  if (error) {
+    // 23505 = that client is already linked to a different Google account
+    // (created between the check above and now).
+    if ((error as { code?: string }).code === "23505") {
+      return { ok: false, error: "This number is already connected to another Google account — contact us for help." };
+    }
+    return { ok: false, error: error.message };
+  }
+
+  // The Google identity is now the session — drop any stale phone/PIN cookie
+  // so it can't shadow it with a different client.
+  const store = await cookies();
+  store.delete(CLIENT_COOKIE);
+  revalidatePath("/client-side");
+  return { ok: true };
 }
 
 export interface ClientOrderPayload {

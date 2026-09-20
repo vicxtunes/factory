@@ -66,20 +66,57 @@ export interface ClientSession {
   name: string;
 }
 
+// The signed-in Supabase Auth user, if they signed in with Google. Dashboard
+// staff also hold Supabase sessions (email + password) — those are excluded
+// here so a staff login can never be mistaken for a client identity.
+export interface GoogleIdentity {
+  userId: string;
+  email: string | null;
+  name: string | null;
+}
+
+export async function getGoogleIdentity(): Promise<GoogleIdentity | null> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user || !user.identities?.some((i) => i.provider === "google")) return null;
+  const meta = (user.user_metadata ?? {}) as { full_name?: string; name?: string };
+  return {
+    userId: user.id,
+    email: user.email ?? null,
+    name: meta.full_name ?? meta.name ?? null,
+  };
+}
+
+// Two ways to be a signed-in client: the phone/PIN cookie, or a Google
+// identity linked to a client row (client_identities). The cookie wins when
+// both exist; linking a Google account clears it (see linkGoogleAccount).
 export async function getClientSession(): Promise<ClientSession | null> {
   const store = await cookies();
   const session = await verifyPayload<ClientSession>(store.get(CLIENT_COOKIE)?.value);
-  if (!session?.client_id) return null;
-
-  // Confirm the client still exists and is active.
   const admin = createAdminClient();
+
+  if (session?.client_id) {
+    // Confirm the client still exists and is active.
+    const { data } = await admin
+      .from("clients")
+      .select("id, active")
+      .eq("id", session.client_id)
+      .maybeSingle();
+    if (!data || data.active === false) return null;
+    return session;
+  }
+
+  const google = await getGoogleIdentity();
+  if (!google) return null;
   const { data } = await admin
-    .from("clients")
-    .select("id, active")
-    .eq("id", session.client_id)
-    .maybeSingle();
-  if (!data || data.active === false) return null;
-  return session;
+    .from("client_identities")
+    .select("client:clients!inner (id, name, active)")
+    .eq("auth_user_id", google.userId)
+    .maybeSingle<{ client: { id: string; name: string; active: boolean } }>();
+  if (!data || data.client.active === false) return null;
+  return { client_id: data.client.id, name: data.client.name };
 }
 
 export interface DashboardSession {
