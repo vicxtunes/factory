@@ -7,7 +7,7 @@ import { usePathname } from "next/navigation";
 import { SUPPORT_OWNER_EMAIL } from "@/lib/support/constants";
 import type { AppRole } from "@/lib/types";
 
-function DashboardIcon({ className }: { className?: string }) {
+export function DashboardIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className={className}>
       <path
@@ -19,7 +19,7 @@ function DashboardIcon({ className }: { className?: string }) {
   );
 }
 
-function OrdersIcon({ className }: { className?: string }) {
+export function OrdersIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className={className}>
       <path
@@ -32,7 +32,7 @@ function OrdersIcon({ className }: { className?: string }) {
   );
 }
 
-function WorkersIcon({ className }: { className?: string }) {
+export function WorkersIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className={className}>
       <path
@@ -44,7 +44,7 @@ function WorkersIcon({ className }: { className?: string }) {
   );
 }
 
-function AdminsIcon({ className }: { className?: string }) {
+export function AdminsIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className={className}>
       <path
@@ -56,7 +56,7 @@ function AdminsIcon({ className }: { className?: string }) {
   );
 }
 
-function ClientsIcon({ className }: { className?: string }) {
+export function ClientsIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className={className}>
       <path
@@ -68,7 +68,7 @@ function ClientsIcon({ className }: { className?: string }) {
   );
 }
 
-function AgentsIcon({ className }: { className?: string }) {
+export function AgentsIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className={className}>
       <path
@@ -80,7 +80,7 @@ function AgentsIcon({ className }: { className?: string }) {
   );
 }
 
-function ProductsIcon({ className }: { className?: string }) {
+export function ProductsIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className={className}>
       <path
@@ -92,7 +92,7 @@ function ProductsIcon({ className }: { className?: string }) {
   );
 }
 
-function DesignersIcon({ className }: { className?: string }) {
+export function DesignersIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className={className}>
       <path
@@ -108,7 +108,7 @@ function DesignersIcon({ className }: { className?: string }) {
 // already reads as "announcement" everywhere else in this app, and reusing
 // a path already known to render correctly beats guessing at a megaphone
 // glyph from memory.
-function AnnouncementIcon({ className }: { className?: string }) {
+export function AnnouncementIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className={className}>
       <path
@@ -120,7 +120,7 @@ function AnnouncementIcon({ className }: { className?: string }) {
   );
 }
 
-function SupportIcon({ className }: { className?: string }) {
+export function SupportIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className={className}>
       <path
@@ -132,7 +132,7 @@ function SupportIcon({ className }: { className?: string }) {
   );
 }
 
-function MarketingIcon({ className }: { className?: string }) {
+export function MarketingIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className={className}>
       <path
@@ -144,7 +144,7 @@ function MarketingIcon({ className }: { className?: string }) {
   );
 }
 
-function DisplayIcon({ className }: { className?: string }) {
+export function DisplayIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className={className}>
       <path

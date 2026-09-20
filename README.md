@@ -11,6 +11,22 @@ the main company system — fed by manual entry at reception. See
 | `/dashboard`  | Receptionist / Supervisor / Boss  | Supabase Auth (email + pass)   |
 | `/factory`    | Production floor                  | Worker name + personal PIN     |
 | `/graphics`   | Graphic designers                 | Designer name + personal PIN   |
+| `/client-side`| Clients                           | Google (Supabase Auth) or phone (+ optional PIN) |
+
+### Client "Continue with Google"
+
+Google sign-in is followed by a phone-number step: a number we already know is
+linked to that existing client (orders and history carry over — nothing is
+recreated), a new number creates the client. The link is `client_identities`
+(`supabase/migrations/20260920120000_client_google_auth.sql`). One-time setup:
+
+1. Google Cloud Console → OAuth client (Web). Authorized redirect URI:
+   `https://<project-ref>.supabase.co/auth/v1/callback`.
+2. Supabase dashboard → Authentication → Providers → Google: enable, paste the
+   client ID + secret.
+3. Supabase → Authentication → URL Configuration: set Site URL and add
+   `<your-origin>/auth/callback` to Redirect URLs (plus the localhost/codespace
+   origins you use in dev).
 
 Order intake lives in the dashboard (`/dashboard/orders/new`): the initiator
 picks whether an order goes straight to the factory or to a specific graphics
