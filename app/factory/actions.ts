@@ -1,10 +1,9 @@
 "use server";
 
-import { cookies } from "next/headers";
-
 import { createAdminClient } from "@/lib/supabase/admin";
-import { WORKER_COOKIE, signPayload } from "@/lib/auth/cookies";
-import { getWorkerSession } from "@/lib/auth/session";
+import { createClient } from "@/lib/supabase/server";
+import { clearAttempts, isBlocked, recordFailure, TOO_MANY_ATTEMPTS } from "@/lib/auth/attempts";
+import { getGoogleIdentity, getWorkerSession } from "@/lib/auth/session";
 import { verifyPin } from "@/lib/auth/pin";
 import { logOrderEvent, resolveActor } from "@/lib/audit/log";
 import { pushOnlyOrderItem, notifyOrderItem } from "@/lib/notifications/notify";
@@ -15,44 +14,99 @@ function itemLabel(item: { product: string; product_type: string | null }): stri
   return item.product_type ? `${item.product} (${item.product_type})` : item.product;
 }
 
-const COOKIE_MAX_AGE = 60 * 60 * 24 * 30; // "remembered on device"
-
 type ActionResult = { ok: true } | { ok: false; error: string };
 
-export async function verifyWorkerPin(
-  workerId: string,
-  pin: string,
-): Promise<ActionResult> {
+// Step 2 of "Continue with Google" for an existing worker: they've signed in
+// with Google, now they pick their name and enter their old PIN *once* to
+// prove it's them, and the Google account is attached to that worker. After
+// this the PIN is never used again — only Google signs them in.
+export async function linkWorkerAccount(workerId: string, pin: string): Promise<ActionResult> {
+  const google = await getGoogleIdentity();
+  if (!google) return { ok: false, error: "Please sign in with Google first." };
+
   const admin = createAdminClient();
+  const { data: existingLink } = await admin
+    .from("worker_identities")
+    .select("worker_id")
+    .eq("auth_user_id", google.userId)
+    .maybeSingle();
+  if (existingLink) return { ok: true }; // already linked; never re-point a link
+
+  const keys = [`worker:${workerId}`, `user:${google.userId}`];
+  if (await isBlocked(keys)) return { ok: false, error: TOO_MANY_ATTEMPTS };
+
   const { data: worker } = await admin
     .from("workers")
-    .select("id, name, pin_hash, active")
+    .select("id, pin_hash, active")
     .eq("id", workerId)
     .maybeSingle();
-
   if (!worker || !worker.active) return { ok: false, error: "Unknown worker." };
-  if (!(await verifyPin(pin, worker.pin_hash))) {
+
+  const { data: taken } = await admin
+    .from("worker_identities")
+    .select("auth_user_id")
+    .eq("worker_id", workerId)
+    .maybeSingle();
+  if (taken) {
+    return { ok: false, error: "This worker is already connected to a Google account — ask a supervisor to reset it." };
+  }
+
+  if (!worker.pin_hash || !(await verifyPin(pin, worker.pin_hash))) {
+    await recordFailure(keys);
     return { ok: false, error: "Incorrect PIN." };
   }
 
-  const store = await cookies();
-  store.set(
-    WORKER_COOKIE,
-    await signPayload({ worker_id: worker.id, name: worker.name }),
-    {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
-      path: "/",
-      maxAge: COOKIE_MAX_AGE,
-    },
-  );
+  const { error } = await admin
+    .from("worker_identities")
+    .insert({ auth_user_id: google.userId, worker_id: workerId });
+  if (error) {
+    if ((error as { code?: string }).code === "23505") {
+      return { ok: false, error: "This worker is already connected to a Google account — ask a supervisor to reset it." };
+    }
+    return { ok: false, error: error.message };
+  }
+  await clearAttempts(keys);
+  return { ok: true };
+}
+
+// "I'm not on the list": a signed-in Google user who isn't an existing worker
+// asks to be added. A supervisor/boss approves it from the dashboard's
+// Workers page; until then they have no access.
+export async function requestWorkerAccess(input: {
+  name: string;
+  phone?: string;
+  note?: string;
+}): Promise<ActionResult> {
+  const google = await getGoogleIdentity();
+  if (!google) return { ok: false, error: "Please sign in with Google first." };
+  const name = input.name.trim();
+  if (!name) return { ok: false, error: "Please enter your name." };
+
+  const admin = createAdminClient();
+  const { data: linked } = await admin
+    .from("worker_identities")
+    .select("worker_id")
+    .eq("auth_user_id", google.userId)
+    .maybeSingle();
+  if (linked) return { ok: true };
+
+  const { error } = await admin.from("worker_access_requests").insert({
+    auth_user_id: google.userId,
+    email: google.email,
+    name,
+    phone: input.phone?.trim() || null,
+    note: input.note?.trim() || null,
+  });
+  // 23505: they already have a pending request — treat as success.
+  if (error && (error as { code?: string }).code !== "23505") return { ok: false, error: error.message };
   return { ok: true };
 }
 
 export async function logoutWorker(): Promise<void> {
-  const store = await cookies();
-  store.delete(WORKER_COOKIE);
+  if (await getGoogleIdentity()) {
+    const supabase = await createClient();
+    await supabase.auth.signOut();
+  }
 }
 
 export async function getMyNotifications(): Promise<NotificationRow[]> {
