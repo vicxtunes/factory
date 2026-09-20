@@ -1,6 +1,6 @@
 import "server-only";
 
-import { cookies } from "next/headers";
+import { cache } from "react";
 import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
@@ -12,70 +12,26 @@ import {
   type AppRole,
   type Profile,
 } from "@/lib/types";
-import {
-  CLIENT_COOKIE,
-  DESIGNER_COOKIE,
-  WORKER_COOKIE,
-  verifyPayload,
-} from "@/lib/auth/cookies";
 
-export interface WorkerSession {
-  worker_id: string;
-  name: string;
-}
-
-export async function getWorkerSession(): Promise<WorkerSession | null> {
-  const store = await cookies();
-  const session = await verifyPayload<WorkerSession>(store.get(WORKER_COOKIE)?.value);
-  if (!session?.worker_id) return null;
-
-  // Confirm the worker still exists and is active.
-  const admin = createAdminClient();
-  const { data } = await admin
-    .from("workers")
-    .select("id, active")
-    .eq("id", session.worker_id)
-    .maybeSingle();
-  if (!data || data.active === false) return null;
-  return session;
-}
-
-export interface DesignerSession {
-  designer_id: string;
-  name: string;
-}
-
-export async function getDesignerSession(): Promise<DesignerSession | null> {
-  const store = await cookies();
-  const session = await verifyPayload<DesignerSession>(store.get(DESIGNER_COOKIE)?.value);
-  if (!session?.designer_id) return null;
-
-  // Confirm the designer still exists and is active.
-  const admin = createAdminClient();
-  const { data } = await admin
-    .from("designers")
-    .select("id, active")
-    .eq("id", session.designer_id)
-    .maybeSingle();
-  if (!data || data.active === false) return null;
-  return session;
-}
-
-export interface ClientSession {
-  client_id: string;
-  name: string;
-}
+// Everyone but dashboard staff signs in with Google (Supabase Auth). The
+// Google account is then linked to the record it belongs to — a worker,
+// designer or client — through worker_identities / designer_identities /
+// client_identities. There are no PIN or phone-only sessions any more; the old
+// PIN is only used once, to prove a worker/designer's identity at link time.
 
 // The signed-in Supabase Auth user, if they signed in with Google. Dashboard
 // staff also hold Supabase sessions (email + password) — those are excluded
-// here so a staff login can never be mistaken for a client identity.
+// here so a staff login can never be mistaken for a worker/designer/client.
+// Cached per request: several session getters run per request (e.g.
+// requireMediaUploadAccess tries all four) and each would otherwise make its
+// own round trip to Supabase Auth.
 export interface GoogleIdentity {
   userId: string;
   email: string | null;
   name: string | null;
 }
 
-export async function getGoogleIdentity(): Promise<GoogleIdentity | null> {
+export const getGoogleIdentity = cache(async (): Promise<GoogleIdentity | null> => {
   const supabase = await createClient();
   const {
     data: { user },
@@ -87,29 +43,54 @@ export async function getGoogleIdentity(): Promise<GoogleIdentity | null> {
     email: user.email ?? null,
     name: meta.full_name ?? meta.name ?? null,
   };
+});
+
+export interface WorkerSession {
+  worker_id: string;
+  name: string;
 }
 
-// Two ways to be a signed-in client: the phone/PIN cookie, or a Google
-// identity linked to a client row (client_identities). The cookie wins when
-// both exist; linking a Google account clears it (see linkGoogleAccount).
-export async function getClientSession(): Promise<ClientSession | null> {
-  const store = await cookies();
-  const session = await verifyPayload<ClientSession>(store.get(CLIENT_COOKIE)?.value);
-  const admin = createAdminClient();
-
-  if (session?.client_id) {
-    // Confirm the client still exists and is active.
-    const { data } = await admin
-      .from("clients")
-      .select("id, active")
-      .eq("id", session.client_id)
-      .maybeSingle();
-    if (!data || data.active === false) return null;
-    return session;
-  }
-
+export async function getWorkerSession(): Promise<WorkerSession | null> {
   const google = await getGoogleIdentity();
   if (!google) return null;
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("worker_identities")
+    .select("worker:workers!inner (id, name, active)")
+    .eq("auth_user_id", google.userId)
+    .maybeSingle<{ worker: { id: string; name: string; active: boolean } }>();
+  // Deactivating a worker takes effect on their very next request.
+  if (!data || data.worker.active === false) return null;
+  return { worker_id: data.worker.id, name: data.worker.name };
+}
+
+export interface DesignerSession {
+  designer_id: string;
+  name: string;
+}
+
+export async function getDesignerSession(): Promise<DesignerSession | null> {
+  const google = await getGoogleIdentity();
+  if (!google) return null;
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("designer_identities")
+    .select("designer:designers!inner (id, name, active)")
+    .eq("auth_user_id", google.userId)
+    .maybeSingle<{ designer: { id: string; name: string; active: boolean } }>();
+  if (!data || data.designer.active === false) return null;
+  return { designer_id: data.designer.id, name: data.designer.name };
+}
+
+export interface ClientSession {
+  client_id: string;
+  name: string;
+}
+
+export async function getClientSession(): Promise<ClientSession | null> {
+  const google = await getGoogleIdentity();
+  if (!google) return null;
+  const admin = createAdminClient();
   const { data } = await admin
     .from("client_identities")
     .select("client:clients!inner (id, name, active)")

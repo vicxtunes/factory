@@ -7,7 +7,8 @@ import { InstallGate } from "@/components/pwa/InstallGate";
 import { NotificationGate } from "@/components/pwa/NotificationGate";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { createClient } from "@/lib/supabase/server";
-import { getWorkerSession } from "@/lib/auth/session";
+import { getGoogleIdentity, getWorkerSession } from "@/lib/auth/session";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { fetchBoardItems } from "@/lib/queries";
 import type { WorkerPublic } from "@/lib/types";
 
@@ -29,11 +30,25 @@ export default async function FactoryPage() {
       .select("id, name, station, active")
       .eq("active", true)
       .order("name");
+    const google = await getGoogleIdentity();
+    // This Google account's latest access request, if it has filed one.
+    let requestStatus: "pending" | "rejected" | null = null;
+    if (google) {
+      const { data: req } = await createAdminClient()
+        .from("worker_access_requests")
+        .select("status")
+        .eq("auth_user_id", google.userId)
+        .in("status", ["pending", "rejected"])
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle<{ status: "pending" | "rejected" }>();
+      requestStatus = req?.status ?? null;
+    }
     return (
       <>
         <Header surface="Factory" />
         <main className="mx-auto w-full max-w-md flex-1 px-4 py-8">
-          <WorkerLogin workers={(data ?? []) as WorkerPublic[]} />
+          <WorkerLogin workers={(data ?? []) as WorkerPublic[]} google={google} requestStatus={requestStatus} />
         </main>
       </>
     );
