@@ -7,6 +7,7 @@ import { InstallGate } from "@/components/pwa/InstallGate";
 import { NotificationGate } from "@/components/pwa/NotificationGate";
 import type { AppRole, NotificationRow } from "@/lib/types";
 
+import { DashboardHomeBar } from "./home-bar";
 import { DashboardSidebar } from "./sidebar";
 import { DashboardTopbar } from "./topbar";
 
@@ -48,8 +49,10 @@ export function DashboardShell({
           notifications={notifications}
           onToggleSidebar={() => setMobileOpen((v) => !v)}
         />
-        <main className="flex-1 bg-background px-4 py-6 sm:px-6">{children}</main>
+        {/* Bottom padding so content clears the fixed mobile home bar. */}
+        <main className="flex-1 bg-background px-4 py-6 pb-28 sm:px-6 lg:pb-6">{children}</main>
       </div>
+      <DashboardHomeBar role={role} email={email} />
     </div>
   );
 }

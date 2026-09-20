@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { Header } from "@/components/ui/Header";
+import { HomeBar } from "@/components/ui/HomeBar";
 import { AnnouncementPopup } from "@/components/announcements/AnnouncementPopup";
 import { InstallGate } from "@/components/pwa/InstallGate";
 import { NotificationGate } from "@/components/pwa/NotificationGate";
@@ -10,7 +11,7 @@ import { getWorkerSession } from "@/lib/auth/session";
 import { fetchBoardItems } from "@/lib/queries";
 import type { WorkerPublic } from "@/lib/types";
 
-import { getMyNotifications } from "./actions";
+import { getMyNotifications, logoutWorker } from "./actions";
 import { Board } from "./board";
 import { WorkerLogin } from "./login";
 import { LogoutButton } from "./logout-button";
@@ -64,13 +65,21 @@ export default async function FactoryPage() {
           </>
         }
       />
-      <main className="mx-auto w-full max-w-6xl flex-1 px-3 py-4">
+      <main className="mx-auto w-full max-w-6xl flex-1 px-3 py-4 pb-28 md:pb-4">
         <Board
           initialItems={items}
           workerId={session.worker_id}
           workerName={session.name}
         />
       </main>
+      <HomeBar
+        tabs={[
+          { href: "/factory", label: "Board", icon: "dashboard" },
+          { href: "/support", label: "Support", icon: "support" },
+        ]}
+        logout={logoutWorker}
+        afterLogout="/factory"
+      />
     </>
   );
 }

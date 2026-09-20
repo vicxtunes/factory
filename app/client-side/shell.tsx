@@ -6,7 +6,7 @@ import { AnnouncementPopup } from "@/components/announcements/AnnouncementPopup"
 import { InstallGate } from "@/components/pwa/InstallGate";
 import { NotificationGate } from "@/components/pwa/NotificationGate";
 
-import { ClientMobileBar } from "./mobile-bar";
+import { ClientHomeBar } from "./home-bar";
 import { ClientSidebar } from "./sidebar";
 import { ClientTopbar } from "./topbar";
 
@@ -51,7 +51,7 @@ export function ClientShell({
           {children}
         </main>
       </div>
-      {signedIn ? <ClientMobileBar /> : null}
+      {signedIn ? <ClientHomeBar /> : null}
     </div>
   );
 }

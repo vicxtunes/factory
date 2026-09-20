@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { Header } from "@/components/ui/Header";
+import { HomeBar } from "@/components/ui/HomeBar";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { PushOptIn } from "@/components/push/PushOptIn";
 import { AnnouncementPopup } from "@/components/announcements/AnnouncementPopup";
@@ -16,9 +17,9 @@ import { fetchNotifications } from "@/lib/queries";
 
 import { DashboardShell } from "@/app/dashboard/shell";
 import { ClientShell } from "@/app/client-side/shell";
-import { getMyNotifications as getMyWorkerNotifications } from "@/app/factory/actions";
+import { getMyNotifications as getMyWorkerNotifications, logoutWorker } from "@/app/factory/actions";
 import { LogoutButton as WorkerLogoutButton } from "@/app/factory/logout-button";
-import { getMyNotifications as getMyDesignerNotifications } from "@/app/graphics/actions";
+import { getMyNotifications as getMyDesignerNotifications, logoutDesigner } from "@/app/graphics/actions";
 import { LogoutButton as DesignerLogoutButton } from "@/app/graphics/logout-button";
 
 import { SupportForm } from "./support-form";
@@ -91,9 +92,17 @@ export default async function SupportPage() {
             </>
           }
         />
-        <main className="mx-auto w-full max-w-6xl flex-1 px-3 py-4">
+        <main className="mx-auto w-full max-w-6xl flex-1 px-3 py-4 pb-28 md:pb-4">
           <SupportPageContent />
         </main>
+        <HomeBar
+          tabs={[
+            { href: "/graphics", label: "Board", icon: "dashboard" },
+            { href: "/support", label: "Support", icon: "support" },
+          ]}
+          logout={logoutDesigner}
+          afterLogout="/graphics"
+        />
       </>
     );
   }
@@ -124,9 +133,17 @@ export default async function SupportPage() {
             </>
           }
         />
-        <main className="mx-auto w-full max-w-6xl flex-1 px-3 py-4">
+        <main className="mx-auto w-full max-w-6xl flex-1 px-3 py-4 pb-28 md:pb-4">
           <SupportPageContent />
         </main>
+        <HomeBar
+          tabs={[
+            { href: "/factory", label: "Board", icon: "dashboard" },
+            { href: "/support", label: "Support", icon: "support" },
+          ]}
+          logout={logoutWorker}
+          afterLogout="/factory"
+        />
       </>
     );
   }
