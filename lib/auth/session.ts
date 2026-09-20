@@ -28,6 +28,9 @@ import {
 export interface GoogleIdentity {
   userId: string;
   email: string | null;
+  // Google vouches for the address. Only a verified email may be used to match
+  // an existing record; an unverified one proves nothing about who they are.
+  emailVerified: boolean;
   name: string | null;
 }
 
@@ -36,11 +39,13 @@ export const getGoogleIdentity = cache(async (): Promise<GoogleIdentity | null> 
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user || !user.identities?.some((i) => i.provider === "google")) return null;
+  const googleIdentity = user?.identities?.find((i) => i.provider === "google");
+  if (!user || !googleIdentity) return null;
   const meta = (user.user_metadata ?? {}) as { full_name?: string; name?: string };
   return {
     userId: user.id,
     email: user.email ?? null,
+    emailVerified: googleIdentity.identity_data?.email_verified === true && !!user.email_confirmed_at,
     name: meta.full_name ?? meta.name ?? null,
   };
 });
