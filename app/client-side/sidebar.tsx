@@ -107,23 +107,15 @@ const TABS: Tab[] = [
   { href: "/support", label: "Support", icon: SupportIcon, requiresSignIn: true },
 ];
 
-export function ClientSidebar({
-  signedIn,
-  mobileOpen,
-  onNavigate,
-}: {
-  signedIn: boolean;
-  mobileOpen: boolean;
-  onNavigate: () => void;
-}) {
+// Desktop/tablet only (md+). On phones navigation is the bottom home bar
+// (./home-bar.tsx) — no hamburger, no slide-out drawer.
+export function ClientSidebar({ signedIn }: { signedIn: boolean }) {
   const pathname = usePathname();
   const tabs = TABS.filter((t) => signedIn || !t.requiresSignIn);
 
   return (
     <aside
-      className={`fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-border bg-surface transition-transform duration-200 md:translate-x-0 ${
-        mobileOpen ? "translate-x-0" : "-translate-x-full"
-      }`}
+      className="fixed inset-y-0 left-0 z-50 hidden w-64 flex-col border-r border-border bg-surface md:flex"
     >
       <div className="flex h-16 shrink-0 items-center gap-2 border-b border-border px-5">
         <Image src="/aming-logo-header.png" alt="AMING" width={193} height={40} className="h-7 w-auto" priority />
@@ -138,7 +130,6 @@ export function ClientSidebar({
               <li key={tab.href}>
                 <Link
                   href={tab.href}
-                  onClick={onNavigate}
                   className={`menu-item ${active ? "menu-item-active" : "menu-item-inactive"}`}
                 >
                   <Icon className={`h-5 w-5 ${active ? "menu-item-icon-active" : "menu-item-icon-inactive"}`} />

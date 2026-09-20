@@ -196,12 +196,11 @@ const TABS = [
   { href: "/display", label: "Display screen", icon: DisplayIcon, role: null, newTab: true },
 ] as const satisfies Tab[];
 
-function TabLink({ tab, active, onNavigate }: { tab: Tab; active: boolean; onNavigate: () => void }) {
+function TabLink({ tab, active }: { tab: Tab; active: boolean }) {
   const Icon = tab.icon;
   return (
     <Link
       href={tab.href}
-      onClick={onNavigate}
       target={tab.newTab ? "_blank" : undefined}
       rel={tab.newTab ? "noopener noreferrer" : undefined}
       className={`menu-item ${active ? "menu-item-active" : "menu-item-inactive"}`}
@@ -212,17 +211,9 @@ function TabLink({ tab, active, onNavigate }: { tab: Tab; active: boolean; onNav
   );
 }
 
-export function DashboardSidebar({
-  role,
-  email,
-  mobileOpen,
-  onNavigate,
-}: {
-  role: AppRole;
-  email: string | null;
-  mobileOpen: boolean;
-  onNavigate: () => void;
-}) {
+// Desktop only (lg+). On phones navigation is the bottom home bar
+// (./home-bar.tsx) — no hamburger, no slide-out drawer.
+export function DashboardSidebar({ role, email }: { role: AppRole; email: string | null }) {
   const pathname = usePathname();
   const tabs: Tab[] = TABS.filter((t) => t.role === null || (t.role as readonly AppRole[]).includes(role));
   const ordersChildren = ORDERS_GROUP.children.filter(
@@ -254,9 +245,7 @@ export function DashboardSidebar({
 
   return (
     <aside
-      className={`fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-border bg-surface transition-transform duration-200 lg:translate-x-0 ${
-        mobileOpen ? "translate-x-0" : "-translate-x-full"
-      }`}
+      className="fixed inset-y-0 left-0 z-50 hidden w-64 flex-col border-r border-border bg-surface lg:flex"
     >
       <div className="flex h-16 shrink-0 items-center gap-2 border-b border-border px-5">
         <Image src="/aming-logo-header.png" alt="AMING" width={193} height={40} className="h-7 w-auto" priority />
@@ -266,7 +255,7 @@ export function DashboardSidebar({
         <ul className="space-y-1">
           {/* Dashboard first, exactly where it's always been. */}
           <li key={tabs[0].href}>
-            <TabLink tab={tabs[0]} active={pathname === tabs[0].href} onNavigate={onNavigate} />
+            <TabLink tab={tabs[0]} active={pathname === tabs[0].href} />
           </li>
 
           {/* Orders: a non-clickable group heading over its two real
@@ -286,8 +275,7 @@ export function DashboardSidebar({
                   <li key={child.href}>
                     <Link
                       href={child.href}
-                      onClick={onNavigate}
-                      className={`menu-item text-sm ${active ? "menu-item-active" : "menu-item-inactive"}`}
+                                      className={`menu-item text-sm ${active ? "menu-item-active" : "menu-item-inactive"}`}
                     >
                       {child.label}
                     </Link>
@@ -299,7 +287,7 @@ export function DashboardSidebar({
 
           {tabs.slice(1).map((tab) => (
             <li key={tab.href}>
-              <TabLink tab={tab} active={pathname === tab.href} onNavigate={onNavigate} />
+              <TabLink tab={tab} active={pathname === tab.href} />
             </li>
           ))}
         </ul>

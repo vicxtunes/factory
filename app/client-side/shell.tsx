@@ -1,7 +1,5 @@
 "use client";
 
-import { useState } from "react";
-
 import { AnnouncementPopup } from "@/components/announcements/AnnouncementPopup";
 import { InstallGate } from "@/components/pwa/InstallGate";
 import { NotificationGate } from "@/components/pwa/NotificationGate";
@@ -22,8 +20,6 @@ export function ClientShell({
   name: string | null;
   children: React.ReactNode;
 }) {
-  const [mobileOpen, setMobileOpen] = useState(false);
-
   return (
     <div className="min-h-screen">
       {/* Same install/notification-permission gates as the dashboard —
@@ -36,18 +32,11 @@ export function ClientShell({
           <AnnouncementPopup />
         </>
       ) : null}
-      <ClientSidebar signedIn={signedIn} mobileOpen={mobileOpen} onNavigate={() => setMobileOpen(false)} />
-      {mobileOpen ? (
-        <div
-          aria-hidden="true"
-          onClick={() => setMobileOpen(false)}
-          className="fixed inset-0 z-40 bg-gray-900/50 md:hidden"
-        />
-      ) : null}
+      <ClientSidebar signedIn={signedIn} />
       <div className="flex min-h-screen flex-col md:pl-64">
-        <ClientTopbar signedIn={signedIn} name={name} onToggleSidebar={() => setMobileOpen((v) => !v)} />
+        <ClientTopbar signedIn={signedIn} name={name} />
         {/* Extra bottom padding on mobile so content clears the fixed home bar. */}
-        <main className={`flex-1 bg-background px-4 py-6 sm:px-6 ${signedIn ? "pb-32 md:pb-6" : ""}`}>
+        <main className={`flex-1 bg-background px-4 py-6 sm:px-6 ${signedIn ? "pb-24 md:pb-6" : ""}`}>
           {children}
         </main>
       </div>
