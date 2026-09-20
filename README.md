@@ -9,24 +9,39 @@ the main company system — fed by manual entry at reception. See
 | Route         | Who                              | Auth                           |
 | ------------- | --------------------------------- | ------------------------------- |
 | `/dashboard`  | Receptionist / Supervisor / Boss  | Supabase Auth (email + pass)   |
-| `/factory`    | Production floor                  | Worker name + personal PIN     |
-| `/graphics`   | Graphic designers                 | Designer name + personal PIN   |
-| `/client-side`| Clients                           | Google (Supabase Auth) or phone (+ optional PIN) |
+| `/factory`    | Production floor                  | Google (linked once with old PIN) |
+| `/graphics`   | Graphic designers                 | Google (linked once with old PIN) |
+| `/client-side`| Clients                           | Google (Supabase Auth) + phone number |
 
-### Client "Continue with Google"
+### Google sign-in (clients, workers, designers)
 
-Google sign-in is followed by a phone-number step: a number we already know is
-linked to that existing client (orders and history carry over — nothing is
-recreated), a new number creates the client. The link is `client_identities`
-(`supabase/migrations/20260920120000_client_google_auth.sql`). One-time setup:
+Everyone except dashboard staff signs in with **Continue with Google**
+(Supabase Auth); there are no PIN or phone-only logins any more. The Google
+account is then linked to the record it belongs to:
+
+- **Clients** — after Google, enter a phone number: a known number links to
+  that existing client (orders/history carry over, Gmail added); a new number
+  creates the client. No approval. (Clients who once set a PIN must still enter
+  it when linking.) `client_identities`.
+- **Workers / designers** — after Google, pick your name and enter your old PIN
+  **once** to connect. After that only Google works. `worker_identities`,
+  `designer_identities`. Failed PIN attempts are throttled (`auth_attempts`).
+- **Workers not on the list** can request access; supervisors/boss approve on
+  the dashboard's Workers page (`worker_access_requests`). "Reset Google" on the
+  Workers/Designers tables detaches an account so a different one can be linked.
+
+Migrations: `20260920120000_client_google_auth.sql`,
+`20260920140000_google_only_login.sql`. One-time setup:
 
 1. Google Cloud Console → OAuth client (Web). Authorized redirect URI:
-   `https://<project-ref>.supabase.co/auth/v1/callback`.
-2. Supabase dashboard → Authentication → Providers → Google: enable, paste the
-   client ID + secret.
+   `https://<project-ref>.supabase.co/auth/v1/callback`. Authorized JavaScript
+   origins: your production origin and `http://localhost:3000` (for the
+   on-device account picker).
+2. Supabase → Authentication → Providers → Google: enable, paste client ID +
+   secret.
 3. Supabase → Authentication → URL Configuration: set Site URL and add
-   `<your-origin>/auth/callback` to Redirect URLs (plus the localhost/codespace
-   origins you use in dev).
+   `<origin>/auth/callback` to Redirect URLs (plus localhost / Codespaces).
+4. Set `NEXT_PUBLIC_GOOGLE_CLIENT_ID` to the same client ID.
 
 Order intake lives in the dashboard (`/dashboard/orders/new`): the initiator
 picks whether an order goes straight to the factory or to a specific graphics
@@ -50,7 +65,7 @@ Docker.
 2. Copy `.env.example` to `.env.local` and fill in:
    - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`,
      `SUPABASE_SERVICE_ROLE_KEY` — from the Supabase project API settings
-   - `APP_SECRET` — `openssl rand -hex 32`
+   - `NEXT_PUBLIC_GOOGLE_CLIENT_ID` — Google OAuth Web client ID (see "Google sign-in" below)
 3. Apply the schema:
    ```bash
    npx supabase link --project-ref <ref>

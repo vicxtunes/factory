@@ -257,7 +257,9 @@ export interface WorkerPublic {
 }
 
 export interface Worker extends WorkerPublic {
-  pin_hash: string;
+  // Null for workers approved from an access request — see
+  // migrations/20260920140000_google_only_login.sql.
+  pin_hash: string | null;
   created_at: string;
 }
 

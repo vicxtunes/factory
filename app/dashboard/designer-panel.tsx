@@ -15,6 +15,7 @@ import {
   addDesigner,
   deactivateDesigner,
   reactivateDesigner,
+  resetDesignerGoogle,
   resetDesignerPin,
 } from "./actions";
 
@@ -174,6 +175,15 @@ export function DesignerPanel({
                           pending={pending}
                           onSave={(pin) => run(() => resetDesignerPin({ id: d.id, pin }))}
                         />
+                        <Button
+                          variant="secondary"
+                          className="min-h-9 text-xs"
+                          disabled={pending}
+                          title="Disconnect their Google account so they can connect a different one (they re-link with their PIN)"
+                          onClick={() => run(() => resetDesignerGoogle(d.id))}
+                        >
+                          Reset Google
+                        </Button>
                       </div>
                     </td>
                   ) : null}
