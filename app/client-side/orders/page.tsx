@@ -1,5 +1,7 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { Button } from "@/components/ui/Button";
 import { getClientSession } from "@/lib/auth/session";
 import { fetchActiveWorkersPublic, fetchClientItems } from "@/lib/queries";
 
@@ -20,6 +22,11 @@ export default async function ClientOrdersPage() {
 
   return (
     <ClientShell signedIn name={session.name}>
+      <div className="mb-4 flex justify-end">
+        <Link href="/client-side/new">
+          <Button variant="primary">+ New order</Button>
+        </Link>
+      </div>
       <ClientOrdersBoard initialItems={items} clientId={session.client_id} workers={workers} bucket="active" />
     </ClientShell>
   );

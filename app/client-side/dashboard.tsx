@@ -1,6 +1,3 @@
-import Link from "next/link";
-
-import { Button } from "@/components/ui/Button";
 import { SectionLabel } from "@/components/ui/SectionLabel";
 import { StatusBarChart, UrgencyDonutChart } from "@/app/dashboard/charts";
 import { StatCard } from "@/app/dashboard/stat-card";
@@ -14,6 +11,7 @@ import {
 } from "@/lib/types";
 
 import { MarketingCarousel } from "./marketing-carousel";
+import { QuickActions } from "./quick-actions";
 
 // Same shape as app/dashboard/(app)/page.tsx's overview — the exact
 // StatCard/StatusBarChart/UrgencyDonutChart components, reused as-is,
@@ -28,17 +26,10 @@ export function ClientDashboard({
   if (items.length === 0) {
     return (
       <div className="space-y-6">
+        <QuickActions />
         <MarketingCarousel slides={slides} />
         <div className="rounded-2xl border border-dashed border-border bg-surface p-8 text-center">
-          <p className="text-sm text-muted">No orders yet.</p>
-          <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
-            <Link href="/client-side/new">
-              <Button variant="primary">Place an order</Button>
-            </Link>
-            <Link href="/client-side/showroom">
-              <Button variant="secondary">Browse the showroom</Button>
-            </Link>
-          </div>
+          <p className="text-sm text-muted">No orders yet — add your first one above.</p>
         </div>
       </div>
     );
@@ -59,7 +50,9 @@ export function ClientDashboard({
   }));
 
   return (
-    <div className="grid grid-cols-1 gap-6 lg:grid-cols-3 lg:items-start">
+    <div className="space-y-6">
+      <QuickActions />
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3 lg:items-start">
       {/* Mobile: DOM order stands as-is, so this renders first — carousel
           full-width, then the metric row, then the charts, stacked. Desktop
           (lg: up): lg:order-2 pushes the carousel to the right column while
@@ -132,6 +125,7 @@ export function ClientDashboard({
           </div>
         </div>
       </div>
+    </div>
     </div>
   );
 }
