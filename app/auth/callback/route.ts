@@ -17,6 +17,9 @@ export async function GET(request: NextRequest) {
     const supabase = await createClient();
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) return NextResponse.redirect(`${origin}${target}`);
+    console.error("[auth/callback] exchangeCodeForSession failed:", error.message);
+    return NextResponse.redirect(`${origin}/client-side?auth_error=1&reason=${encodeURIComponent(error.message)}`);
   }
+  console.error("[auth/callback] no ?code in", request.nextUrl.search);
   return NextResponse.redirect(`${origin}/client-side?auth_error=1`);
 }
