@@ -159,33 +159,88 @@ function ItemsList({ items }: { items: OrderItemWithOrder[] }) {
   );
 }
 
-// What the receptionist checks before receiving an order: is everything filled in?
+// What the receptionist checks before receiving an order: is everything filled
+// in? Two plain tables — order info, then one row per item with its options
+// stacked as label / value pairs so nothing runs together.
 function OrderDetails({ order, items }: { order: OrderGroup["order"]; items: OrderItemWithOrder[] }) {
+  const notes = order.order_notes.map((n) => n.body).filter(Boolean);
+  const info: [string, string][] = [
+    ["Order type", order.order_type === "express" ? "Express" : "Normal"],
+    ["Delivery", order.delivery_date ?? "Not set"],
+    ["Client phone", order.client_phone ?? "Not on file"],
+  ];
+
   return (
-    <div className="mb-3 space-y-2 rounded-[var(--radius)] border border-border p-3 text-xs">
-      <p className="text-muted">
-        {order.order_type === "express" ? "Express" : "Normal"} · Delivery{" "}
-        <span className="font-semibold text-foreground">{order.delivery_date ?? "not set"}</span>
-        {order.client_phone ? <> · {order.client_phone}</> : null}
-      </p>
-      {items.map((item) => {
-        const attrs = Object.entries(item.attributes ?? {});
-        return (
-          <div key={item.id}>
-            <p className="font-medium text-foreground">
-              {item.product}
-              {item.product_type ? ` (${item.product_type})` : ""} · Qty {item.qty}
-            </p>
-            <p className="text-muted">
-              {attrs.length > 0 ? attrs.map(([k, v]) => `${k}: ${v}`).join(" · ") : "No options filled in"}
-              {item.media.length > 0 || item.media_link ? ` · ${item.media.length} file(s)${item.media_link ? " + link" : ""}` : " · No files attached"}
-            </p>
-          </div>
-        );
-      })}
-      {order.order_notes.length > 0 ? (
-        <p className="text-muted">Notes: {order.order_notes.map((n) => n.body).join(" / ")}</p>
-      ) : null}
+    <div className="mb-3 space-y-3 text-xs">
+      <table className="w-full border-collapse">
+        <tbody>
+          {info.map(([label, value]) => (
+            <tr key={label} className="border-b border-border last:border-b-0">
+              <th scope="row" className="w-32 py-1.5 pr-3 text-left font-medium text-muted">
+                {label}
+              </th>
+              <td className="py-1.5 text-foreground">{value}</td>
+            </tr>
+          ))}
+          {notes.length > 0 ? (
+            <tr className="border-b border-border last:border-b-0">
+              <th scope="row" className="w-32 py-1.5 pr-3 text-left align-top font-medium text-muted">
+                Notes
+              </th>
+              <td className="py-1.5 text-foreground">{notes.join(" / ")}</td>
+            </tr>
+          ) : null}
+        </tbody>
+      </table>
+
+      <div className="overflow-x-auto rounded-[var(--radius)] border border-border">
+        <table className="w-full border-collapse">
+          <thead>
+            <tr className="bg-gray-50 text-left text-muted dark:bg-white/5">
+              <th className="px-3 py-2 font-medium">Item</th>
+              <th className="px-3 py-2 text-right font-medium">Qty</th>
+              <th className="px-3 py-2 font-medium">Details</th>
+              <th className="px-3 py-2 font-medium">Files</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((item) => {
+              const attrs = Object.entries(item.attributes ?? {});
+              const files = item.media.length + (item.media_link ? 1 : 0);
+              return (
+                <tr key={item.id} className="border-t border-border align-top">
+                  <td className="px-3 py-2 font-medium text-foreground">
+                    {item.product}
+                    {item.product_type ? <span className="block font-normal text-muted">{item.product_type}</span> : null}
+                  </td>
+                  <td className="tnum px-3 py-2 text-right text-foreground">{item.qty}</td>
+                  <td className="px-3 py-2">
+                    {attrs.length > 0 ? (
+                      <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5">
+                        {attrs.map(([label, value]) => (
+                          <div key={label} className="contents">
+                            <dt className="text-muted">{label}</dt>
+                            <dd className="text-foreground">{String(value)}</dd>
+                          </div>
+                        ))}
+                      </dl>
+                    ) : (
+                      <span className="text-[var(--rush)]">Nothing filled in</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2">
+                    {files > 0 ? (
+                      <span className="text-foreground">{files}</span>
+                    ) : (
+                      <span className="text-[var(--rush)]">None</span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
