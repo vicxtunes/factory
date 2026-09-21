@@ -258,3 +258,20 @@ body {
   0% { transform: translateX(-100%); }
   100% { transform: translateX(300%); }
 }
+
+/* Stable, app-like touch behaviour. Deliberately outside any @layer so these
+   beat Tailwind's utilities (e.g. text-sm on inputs). */
+html {
+  /* No double-tap-to-zoom delay/zoom, but scrolling and taps work normally. */
+  touch-action: manipulation;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+@media (max-width: 767px) {
+  /* iOS Safari zooms the whole page when a focused field's font is under 16px. */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}

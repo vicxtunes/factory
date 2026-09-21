@@ -38,6 +38,14 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export const viewport: Viewport = {
   themeColor: "#f67413",
+  width: "device-width",
+  initialScale: 1,
+  // App-like feel: no pinch-zoom, and the page never rescales itself. Also
+  // extends the layout under the notch/home indicator (safe-area padding is
+  // already handled where it matters, e.g. the home bar).
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: "cover",
 };
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {
