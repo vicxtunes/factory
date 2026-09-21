@@ -8,8 +8,7 @@ import { NextResponse, type NextRequest } from "next/server";
 //                       at the root (client.<domain>/orders, not /client-side/orders)
 // Any other host (localhost, Codespaces, previews, the apex domain) is left
 // untouched, so local dev keeps the original path-based URLs.
-// Also refreshes the Supabase Auth session cookie on dashboard and
-// client-portal (Google sign-in) requests.
+// Also refreshes the Supabase Auth session cookie on every signed-in surface.
 // (Next.js 16 renamed Middleware -> Proxy; runtime is nodejs.)
 
 const FACTORY_HOST = /^factory\./i;
@@ -23,8 +22,19 @@ const CLIENT_BASE = "/client-side";
 const within = (pathname: string, base: string) =>
   pathname === base || pathname.startsWith(`${base}/`);
 
+// Every signed-in surface rides on a Supabase session whose access token lasts
+// an hour; server components can't write cookies, so this is the only place a
+// refreshed token gets saved. A route missing here is signed out after ~1h.
+const SESSION_PATHS = [
+  "/dashboard",
+  CLIENT_BASE,
+  "/factory",
+  "/graphics",
+  "/support",
+  "/api",
+];
 const needsSession = (pathname: string) =>
-  within(pathname, "/dashboard") || within(pathname, CLIENT_BASE);
+  SESSION_PATHS.some((p) => within(pathname, p));
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;

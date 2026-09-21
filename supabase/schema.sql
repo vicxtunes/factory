@@ -791,3 +791,43 @@ on conflict (id) do nothing;
 -- uploads. cloudinary_public_id/secure_url are left untouched so existing
 -- rows keep rendering unmodified — no backfill.
 alter table order_item_media add column storage_path text;
+
+-- ---------------------------------------------------------------------------
+-- Google-only login (see migrations/20260920140000_google_only_login.sql).
+-- No RLS policies on any of these: server-only.
+-- ---------------------------------------------------------------------------
+create table worker_identities (
+  auth_user_id uuid primary key references auth.users (id) on delete cascade,
+  worker_id    uuid not null unique references workers (id) on delete cascade,
+  created_at   timestamptz not null default now()
+);
+create table designer_identities (
+  auth_user_id uuid primary key references auth.users (id) on delete cascade,
+  designer_id  uuid not null unique references designers (id) on delete cascade,
+  created_at   timestamptz not null default now()
+);
+alter table workers alter column pin_hash drop not null;
+create table worker_access_requests (
+  id           uuid primary key default gen_random_uuid(),
+  auth_user_id uuid not null references auth.users (id) on delete cascade,
+  email        text,
+  name         text not null,
+  phone        text,
+  note         text,
+  status       text not null default 'pending'
+                 check (status in ('pending', 'approved', 'rejected')),
+  decided_by   uuid references auth.users (id) on delete set null,
+  decided_at   timestamptz,
+  created_at   timestamptz not null default now()
+);
+create unique index worker_access_requests_one_pending
+  on worker_access_requests (auth_user_id) where status = 'pending';
+create table auth_attempts (
+  key          text primary key,
+  failures     int not null default 0,
+  window_start timestamptz not null default now()
+);
+alter table worker_identities      enable row level security;
+alter table designer_identities    enable row level security;
+alter table worker_access_requests enable row level security;
+alter table auth_attempts          enable row level security;

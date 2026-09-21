@@ -28,6 +28,10 @@ export function GoogleSetupForm({ defaultName, email }: { defaultName: string; e
     setError(null);
     start(async () => {
       const acct = await checkAccount(phone);
+      if (acct.error) {
+        setError(acct.error);
+        return;
+      }
       if (!acct.exists) {
         setStep("new");
         return;
@@ -105,7 +109,7 @@ export function GoogleSetupForm({ defaultName, email }: { defaultName: string; e
 
       {step === "new" ? (
         <Field label="Your name">
-          <TextInput value={name} onChange={(e) => setName(e.target.value)} required autoFocus />
+          <TextInput value={name} onChange={(e) => setName(e.target.value)} maxLength={100} required autoFocus />
         </Field>
       ) : null}
 

@@ -16,7 +16,6 @@ const PAGE_TITLES: Record<string, string> = {
   "/client-side/history": "History",
   "/client-side/new": "Place order",
   "/client-side/showroom": "Showroom",
-  "/client-side/settings": "Settings",
   "/support": "Support",
 };
 

@@ -1,11 +1,11 @@
 "use server";
 
-import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import { DESIGNER_COOKIE, signPayload } from "@/lib/auth/cookies";
-import { getDesignerSession } from "@/lib/auth/session";
+import { createClient } from "@/lib/supabase/server";
+import { clearAttempts, isBlocked, recordFailure, TOO_MANY_ATTEMPTS } from "@/lib/auth/attempts";
+import { getDesignerSession, getGoogleIdentity } from "@/lib/auth/session";
 import { verifyPin } from "@/lib/auth/pin";
 import { logOrderEvent, resolveActor } from "@/lib/audit/log";
 import {
@@ -24,48 +24,68 @@ import type {
 } from "@/lib/orders/types";
 import type { NotificationRow } from "@/lib/types";
 
-const COOKIE_MAX_AGE = 60 * 60 * 24 * 30; // remembered on device, same as workers
-
 type ActionResult = { ok: true } | { ok: false; error: string };
 
 function itemLabel(item: { product: string; product_type: string | null }): string {
   return item.product_type ? `${item.product} (${item.product_type})` : item.product;
 }
 
-export async function verifyDesignerPin(
-  designerId: string,
-  pin: string,
-): Promise<ActionResult> {
+// Step 2 of "Continue with Google" for an existing designer — same one-time
+// PIN proof as workers (see linkWorkerAccount in app/factory/actions.ts).
+export async function linkDesignerAccount(designerId: string, pin: string): Promise<ActionResult> {
+  const google = await getGoogleIdentity();
+  if (!google) return { ok: false, error: "Please sign in with Google first." };
+
   const admin = createAdminClient();
+  const { data: existingLink } = await admin
+    .from("designer_identities")
+    .select("designer_id")
+    .eq("auth_user_id", google.userId)
+    .maybeSingle();
+  if (existingLink) return { ok: true };
+
+  const keys = [`designer:${designerId}`, `user:${google.userId}`];
+  if (await isBlocked(keys)) return { ok: false, error: TOO_MANY_ATTEMPTS };
+
   const { data: designer } = await admin
     .from("designers")
-    .select("id, name, pin_hash, active")
+    .select("id, pin_hash, active")
     .eq("id", designerId)
     .maybeSingle();
-
   if (!designer || !designer.active) return { ok: false, error: "Unknown designer." };
-  if (!(await verifyPin(pin, designer.pin_hash))) {
+
+  const { data: taken } = await admin
+    .from("designer_identities")
+    .select("auth_user_id")
+    .eq("designer_id", designerId)
+    .maybeSingle();
+  if (taken) {
+    return { ok: false, error: "This designer is already connected to a Google account — ask a supervisor to reset it." };
+  }
+
+  if (!designer.pin_hash || !(await verifyPin(pin, designer.pin_hash))) {
+    await recordFailure(keys);
     return { ok: false, error: "Incorrect PIN." };
   }
 
-  const store = await cookies();
-  store.set(
-    DESIGNER_COOKIE,
-    await signPayload({ designer_id: designer.id, name: designer.name }),
-    {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
-      path: "/",
-      maxAge: COOKIE_MAX_AGE,
-    },
-  );
+  const { error } = await admin
+    .from("designer_identities")
+    .insert({ auth_user_id: google.userId, designer_id: designerId });
+  if (error) {
+    if ((error as { code?: string }).code === "23505") {
+      return { ok: false, error: "This designer is already connected to a Google account — ask a supervisor to reset it." };
+    }
+    return { ok: false, error: error.message };
+  }
+  await clearAttempts(keys);
   return { ok: true };
 }
 
 export async function logoutDesigner(): Promise<void> {
-  const store = await cookies();
-  store.delete(DESIGNER_COOKIE);
+  if (await getGoogleIdentity()) {
+    const supabase = await createClient();
+    await supabase.auth.signOut();
+  }
 }
 
 export async function getMyNotifications(): Promise<NotificationRow[]> {
