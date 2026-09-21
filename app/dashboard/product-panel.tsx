@@ -219,7 +219,7 @@ export function ProductPanel({
               placeholder="New category name"
               required
             />
-            <Button variant="primary" type="submit" disabled={pending} className="w-full">
+            <Button variant="primary" type="submit" loading={pending} disabled={pending} className="w-full">
               Add category
             </Button>
             {error ? <p className="text-sm text-error-600">{error}</p> : null}
@@ -313,7 +313,7 @@ export function ProductPanel({
                             <Button
                               variant="danger"
                               className="min-h-9 text-xs"
-                              disabled={pending}
+                              loading={pending} disabled={pending}
                               onClick={() => run(() => setCategoryActive(c.id, false))}
                             >
                               Deactivate
@@ -322,7 +322,7 @@ export function ProductPanel({
                             <Button
                               variant="secondary"
                               className="min-h-9 text-xs"
-                              disabled={pending}
+                              loading={pending} disabled={pending}
                               onClick={() => run(() => setCategoryActive(c.id, true))}
                             >
                               Reactivate
@@ -431,7 +431,7 @@ function ProductsTab({
             placeholder="New product name"
             required
           />
-          <Button variant="primary" type="submit" disabled={pending}>
+          <Button variant="primary" type="submit" loading={pending} disabled={pending}>
             Add
           </Button>
         </form>
@@ -496,7 +496,7 @@ function ProductCard({
               <Button
                 variant="danger"
                 className="min-h-8 text-xs"
-                disabled={pending}
+                loading={pending} disabled={pending}
                 onClick={() => run(() => setProductActive(product.id, false))}
               >
                 Deactivate
@@ -505,7 +505,7 @@ function ProductCard({
               <Button
                 variant="secondary"
                 className="min-h-8 text-xs"
-                disabled={pending}
+                loading={pending} disabled={pending}
                 onClick={() => run(() => setProductActive(product.id, true))}
               >
                 Reactivate
@@ -1066,7 +1066,7 @@ function AttributesTab({
                 <Button
                   variant="danger"
                   className="min-h-8 text-xs"
-                  disabled={pending}
+                  loading={pending} disabled={pending}
                   onClick={() => run(() => deleteAttribute(attr.id))}
                 >
                   Delete
@@ -1149,7 +1149,7 @@ function AttributesTab({
           </label>
         </div>
         <div className="flex gap-2">
-          <Button variant="primary" type="submit" disabled={pending}>
+          <Button variant="primary" type="submit" loading={pending} disabled={pending}>
             {editingId ? "Save field" : "Add field"}
           </Button>
           {editingId ? (

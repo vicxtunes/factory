@@ -82,7 +82,7 @@ export function NotifyPanel() {
         <Button
           variant="secondary"
           className="text-xs"
-          disabled={pending || !broadcastForm.title.trim() || !broadcastForm.body.trim()}
+          loading={pending} disabled={pending || !broadcastForm.title.trim() || !broadcastForm.body.trim()}
           onClick={runBroadcast}
         >
           Send broadcast
@@ -128,7 +128,7 @@ export function NotifyPanel() {
             <Button
               variant="secondary"
               className="text-xs"
-              disabled={pending || !targetKey || !targetForm.title.trim() || !targetForm.body.trim()}
+              loading={pending} disabled={pending || !targetKey || !targetForm.title.trim() || !targetForm.body.trim()}
               onClick={runTargeted}
             >
               Send

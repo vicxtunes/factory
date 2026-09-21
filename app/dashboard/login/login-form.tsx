@@ -40,7 +40,7 @@ export function LoginForm() {
           variant="primary"
           type="submit"
           className="w-full"
-          disabled={pending}
+          loading={pending} disabled={pending}
         >
           {pending ? "Signing in…" : "Sign in"}
         </Button>

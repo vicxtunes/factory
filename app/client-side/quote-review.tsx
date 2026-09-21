@@ -45,7 +45,7 @@ export function ClientQuoteReview({
   }
 
   if (order.approval_status === "pending_review") {
-    return <p className="text-sm text-muted">We&apos;re reviewing this order — a quote is on its way.</p>;
+    return <p className="text-sm text-muted">Thanks! We&apos;ll call you shortly to confirm the details of this order before it goes into production.</p>;
   }
 
   if (order.approval_status === "changes_requested") {
@@ -85,20 +85,20 @@ export function ClientQuoteReview({
             <TextArea value={note} onChange={(e) => setNote(e.target.value)} />
           </Field>
           <div className="flex gap-2">
-            <Button variant="danger" disabled={pending} onClick={() => submit("changes_requested")}>
+            <Button variant="danger" loading={pending} disabled={pending} onClick={() => submit("changes_requested")}>
               Send request
             </Button>
-            <Button variant="secondary" disabled={pending} onClick={() => setDecliningWithNote(false)}>
+            <Button variant="secondary" loading={pending} disabled={pending} onClick={() => setDecliningWithNote(false)}>
               Never mind
             </Button>
           </div>
         </div>
       ) : (
         <div className="flex gap-2">
-          <Button variant="primary" disabled={pending} onClick={() => submit("approve")}>
+          <Button variant="primary" loading={pending} disabled={pending} onClick={() => submit("approve")}>
             Approve
           </Button>
-          <Button variant="secondary" disabled={pending} onClick={() => setDecliningWithNote(true)}>
+          <Button variant="secondary" loading={pending} disabled={pending} onClick={() => setDecliningWithNote(true)}>
             Request changes
           </Button>
         </div>

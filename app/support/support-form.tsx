@@ -101,7 +101,7 @@ export function SupportForm() {
             rows={6}
             autoFocus
           />
-          <Button variant="primary" disabled={pending || !body.trim()} onClick={submit} className="w-full">
+          <Button variant="primary" loading={pending} disabled={pending || !body.trim()} onClick={submit} className="w-full">
             {pending ? "Sending…" : "Send report"}
           </Button>
           {error ? <p className="text-xs text-error-600">{error}</p> : null}

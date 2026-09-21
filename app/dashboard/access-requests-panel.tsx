@@ -87,7 +87,7 @@ export function AccessRequestsPanel({
               <Button
                 variant="primary"
                 className="min-h-9 text-xs"
-                disabled={pending}
+                loading={pending} disabled={pending}
                 onClick={() =>
                   run(() =>
                     approveWorkerRequest({
@@ -103,7 +103,7 @@ export function AccessRequestsPanel({
               <Button
                 variant="danger"
                 className="min-h-9 text-xs"
-                disabled={pending}
+                loading={pending} disabled={pending}
                 onClick={() => run(() => rejectWorkerRequest(r.id))}
               >
                 Reject

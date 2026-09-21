@@ -8,7 +8,7 @@ import { Field, Select, TextInput } from "@/components/ui/Field";
 import { SectionLabel } from "@/components/ui/SectionLabel";
 import type { DesignerPublic, OrderItemWithOrder } from "@/lib/types";
 
-import { quoteOrder, routeApprovedOrder } from "./actions";
+import { receiveClientOrder, quoteOrder, routeApprovedOrder } from "./actions";
 import { useCurrencySymbol } from "@/lib/currency/CurrencySymbolProvider";
 import { formatMoney } from "@/lib/currency/format";
 
@@ -48,9 +48,11 @@ function groupByOrder(items: OrderItemWithOrder[]): OrderGroup[] {
 export function OrderApprovalQueue({
   items,
   designers,
+  photobookCategoryIds,
 }: {
   items: OrderItemWithOrder[];
   designers: DesignerPublic[];
+  photobookCategoryIds: string[];
 }) {
   const symbol = useCurrencySymbol();
   const router = useRouter();
@@ -67,9 +69,11 @@ export function OrderApprovalQueue({
   }
 
   const groups = useMemo(() => groupByOrder(items), [items]);
-  const needsQuote = groups.filter(
-    (g) => g.order.approval_status === "pending_review" || g.order.approval_status === "changes_requested",
-  );
+  // Every new client order waits here: check it, receive it, choose where it
+  // goes. Photo books also need a call to the client first.
+  const photobookIds = new Set(photobookCategoryIds);
+  const incoming = groups.filter((g) => g.order.approval_status === "pending_review" && g.order.released_at === null);
+  const needsQuote = groups.filter((g) => g.order.approval_status === "changes_requested");
   const awaitingClient = groups.filter((g) => g.order.approval_status === "awaiting_client_approval");
   const readyToRoute = groups.filter(
     (g) => g.order.approval_status === "approved" && g.order.released_at === null,
@@ -77,6 +81,24 @@ export function OrderApprovalQueue({
 
   return (
     <div className="space-y-8">
+      <div>
+        <SectionLabel>New client orders{incoming.length > 0 ? ` (${incoming.length})` : ""}</SectionLabel>
+        <div className="space-y-3">
+          {incoming.map((g) => (
+            <RouteCard
+              key={g.orderId}
+              group={g}
+              designers={designers}
+              pending={pending}
+              run={run}
+              incoming
+              call={g.items.some((i) => i.category_id && photobookIds.has(i.category_id))}
+            />
+          ))}
+          {incoming.length === 0 ? <p className="text-sm text-muted">No new client orders.</p> : null}
+        </div>
+      </div>
+
       <div>
         <SectionLabel>Needs a quote{needsQuote.length > 0 ? ` (${needsQuote.length})` : ""}</SectionLabel>
         <div className="space-y-3">
@@ -137,6 +159,37 @@ function ItemsList({ items }: { items: OrderItemWithOrder[] }) {
   );
 }
 
+// What the receptionist checks before receiving an order: is everything filled in?
+function OrderDetails({ order, items }: { order: OrderGroup["order"]; items: OrderItemWithOrder[] }) {
+  return (
+    <div className="mb-3 space-y-2 rounded-[var(--radius)] border border-border p-3 text-xs">
+      <p className="text-muted">
+        {order.order_type === "express" ? "Express" : "Normal"} · Delivery{" "}
+        <span className="font-semibold text-foreground">{order.delivery_date ?? "not set"}</span>
+        {order.client_phone ? <> · {order.client_phone}</> : null}
+      </p>
+      {items.map((item) => {
+        const attrs = Object.entries(item.attributes ?? {});
+        return (
+          <div key={item.id}>
+            <p className="font-medium text-foreground">
+              {item.product}
+              {item.product_type ? ` (${item.product_type})` : ""} · Qty {item.qty}
+            </p>
+            <p className="text-muted">
+              {attrs.length > 0 ? attrs.map(([k, v]) => `${k}: ${v}`).join(" · ") : "No options filled in"}
+              {item.media.length > 0 || item.media_link ? ` · ${item.media.length} file(s)${item.media_link ? " + link" : ""}` : " · No files attached"}
+            </p>
+          </div>
+        );
+      })}
+      {order.order_notes.length > 0 ? (
+        <p className="text-muted">Notes: {order.order_notes.map((n) => n.body).join(" / ")}</p>
+      ) : null}
+    </div>
+  );
+}
+
 function OrderCard({ group, children }: { group: OrderGroup; children: React.ReactNode }) {
   return (
     <div className="rounded-[var(--radius)] border border-border bg-surface p-4 shadow-theme-xs">
@@ -184,7 +237,7 @@ function QuoteCard({
         </Field>
         <Button
           variant="primary"
-          disabled={pending || !price}
+          loading={pending} disabled={pending || !price}
           onClick={() => run(() => quoteOrder(group.orderId, Number(price)))}
         >
           Send quote
@@ -199,11 +252,18 @@ function RouteCard({
   designers,
   pending,
   run,
+  call = false,
+  incoming = false,
 }: {
   group: OrderGroup;
   designers: DesignerPublic[];
   pending: boolean;
   run: (fn: () => Promise<Result>) => void;
+  // Photo-book order: show a call-the-client prompt instead of the approved
+  // price, and confirm details + send in one step.
+  call?: boolean;
+  // New order awaiting review (vs. a legacy approved-not-routed one).
+  incoming?: boolean;
 }) {
   const symbol = useCurrencySymbol();
   const [route, setRoute] = useState<"factory" | "designer">("factory");
@@ -211,10 +271,30 @@ function RouteCard({
 
   return (
     <OrderCard group={group}>
-      <p className="mb-2 text-xs text-muted">
-        Approved at{" "}
-        <span className="font-semibold text-foreground">{formatMoney(group.order.quoted_price, symbol)}</span>.
-      </p>
+      {incoming ? (
+        <OrderDetails order={group.order} items={group.items} />
+      ) : null}
+      {call ? (
+        <div className="mb-3 rounded-[var(--radius)] border border-brand-200 bg-brand-50 p-3 text-sm dark:border-brand-500/30 dark:bg-brand-500/10">
+          <p className="mb-2 text-xs text-muted">
+            This order has a photo book — call {group.clientName} to confirm the details first.
+          </p>
+          {group.order.client_phone ? (
+            <a href={`tel:${group.order.client_phone}`}>
+              <Button variant="primary" type="button">
+                Call {group.order.client_phone}
+              </Button>
+            </a>
+          ) : (
+            <p className="text-xs text-muted">No phone number on file for this client.</p>
+          )}
+        </div>
+      ) : incoming ? null : (
+        <p className="mb-2 text-xs text-muted">
+          Approved at{" "}
+          <span className="font-semibold text-foreground">{formatMoney(group.order.quoted_price, symbol)}</span>.
+        </p>
+      )}
       <div className="mb-3 flex gap-2">
         <button
           type="button"
@@ -250,10 +330,16 @@ function RouteCard({
       <Button
         variant="primary"
         className="mt-3"
-        disabled={pending || (route === "designer" && !designerId)}
-        onClick={() => run(() => routeApprovedOrder(group.orderId, route, designerId || undefined))}
+        loading={pending} disabled={pending || (route === "designer" && !designerId)}
+        onClick={() =>
+          run(() =>
+            incoming
+              ? receiveClientOrder(group.orderId, route, designerId || undefined)
+              : routeApprovedOrder(group.orderId, route, designerId || undefined),
+          )
+        }
       >
-        Send order
+        {incoming ? (call ? "Called — receive & send" : "Receive & send") : "Send order"}
       </Button>
     </OrderCard>
   );

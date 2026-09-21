@@ -88,7 +88,7 @@ function ReportCard({ report, onChanged }: { report: SupportReport; onChanged: (
           <Button
             variant="primary"
             className="min-h-9 text-xs"
-            disabled={pending}
+            loading={pending} disabled={pending}
             onClick={() => run(() => setSupportReportStatus(report.id, true))}
           >
             Mark resolved
@@ -97,7 +97,7 @@ function ReportCard({ report, onChanged }: { report: SupportReport; onChanged: (
           <Button
             variant="secondary"
             className="min-h-9 text-xs"
-            disabled={pending}
+            loading={pending} disabled={pending}
             onClick={() => run(() => setSupportReportStatus(report.id, false))}
           >
             Reopen
@@ -106,7 +106,7 @@ function ReportCard({ report, onChanged }: { report: SupportReport; onChanged: (
         <Button
           variant="danger"
           className="min-h-9 text-xs"
-          disabled={pending}
+          loading={pending} disabled={pending}
           onClick={() => {
             if (window.confirm("Delete this report?")) run(() => deleteSupportReport(report.id));
           }}

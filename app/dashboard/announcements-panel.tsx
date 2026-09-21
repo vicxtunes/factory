@@ -92,7 +92,7 @@ function AnnouncementRow({
         <TextArea value={body} onChange={(e) => setBody(e.target.value)} placeholder="Message" rows={3} />
         <AudiencePicker value={audience} onChange={setAudience} />
         <div className="flex gap-3 text-xs">
-          <Button variant="primary" className="text-xs" disabled={pending} onClick={save}>
+          <Button variant="primary" className="text-xs" loading={pending} disabled={pending} onClick={save}>
             Save
           </Button>
           <button type="button" className="text-muted" onClick={() => setEditing(false)}>
@@ -204,7 +204,7 @@ export function AnnouncementsPanel({ announcements }: { announcements: Announcem
         <Button
           variant="primary"
           className="text-xs"
-          disabled={pending || !title.trim() || !body.trim()}
+          loading={pending} disabled={pending || !title.trim() || !body.trim()}
           onClick={publish}
         >
           Publish

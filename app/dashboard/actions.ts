@@ -1528,6 +1528,40 @@ export async function routeApprovedOrder(
   return { ok: true };
 }
 
+// Client-portal orders wait (pending_review, unreleased) for the receptionist
+// to check they're filled in properly — and, for photo books, to phone the
+// client — then receive them and choose where they go. There's no quote or
+// client approval step. Marks the order received, then sends it on exactly
+// like routeApprovedOrder does.
+export async function receiveClientOrder(
+  orderId: string,
+  route: OrderRoute,
+  designerId?: string,
+): Promise<Result> {
+  await requireManager();
+
+  const admin = createAdminClient();
+  const { data: order } = await admin
+    .from("orders")
+    .select("id, approval_status, released_at")
+    .eq("id", orderId)
+    .maybeSingle();
+  if (!order) return { ok: false, error: "Order not found." };
+  if (order.approval_status !== "pending_review" || order.released_at) {
+    return { ok: false, error: "This order isn't waiting to be received." };
+  }
+
+  const { error } = await admin.from("orders").update({ approval_status: "approved" }).eq("id", orderId);
+  if (error) return { ok: false, error: error.message };
+
+  const actor = await resolveActor();
+  await logOrderEvent({ orderId, actor, action: "order_received", detail: {} });
+
+  // If routing fails (e.g. no designer picked) the order is left "approved,
+  // not routed", which the queue already shows with a Send button.
+  return routeApprovedOrder(orderId, route, designerId);
+}
+
 // ---------------------------------------------------------------------------
 // Marketing slides — client-portal carousel, locked to boss same as the
 // rest of the product catalog it points into.

@@ -290,7 +290,7 @@ export function OrderForm({
 
       <div className="flex justify-between">
         {step === 2 ? (
-          <Button variant="secondary" type="button" onClick={() => setStep(1)} disabled={pending}>
+          <Button variant="secondary" type="button" onClick={() => setStep(1)} loading={pending} disabled={pending}>
             Back
           </Button>
         ) : (
@@ -301,7 +301,7 @@ export function OrderForm({
             Continue to items
           </Button>
         ) : (
-          <Button variant="intake" type="button" onClick={submit} disabled={pending}>
+          <Button variant="intake" type="button" onClick={submit} loading={pending} disabled={pending}>
             {pending ? "Creating…" : "Create order"}
           </Button>
         )}

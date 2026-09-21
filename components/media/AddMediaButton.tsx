@@ -118,7 +118,7 @@ export function AddMediaButton({
             type="button"
             variant="secondary"
             className="text-xs"
-            disabled={pending || !link.trim()}
+            loading={pending} disabled={pending || !link.trim()}
             onClick={handleAddLink}
           >
             Add

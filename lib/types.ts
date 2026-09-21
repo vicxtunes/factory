@@ -358,6 +358,7 @@ export interface OrderItemWithOrder extends OrderItem {
     Order,
     | "order_no"
     | "client_name"
+    | "client_phone"
     | "delivery_date"
     | "status"
     | "stage"

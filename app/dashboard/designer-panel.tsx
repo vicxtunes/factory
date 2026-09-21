@@ -99,7 +99,7 @@ export function DesignerPanel({
                 required
               />
             </Field>
-            <Button variant="primary" type="submit" disabled={pending} className="w-full">
+            <Button variant="primary" type="submit" loading={pending} disabled={pending} className="w-full">
               Add designer
             </Button>
             {error ? <p className="text-sm text-error-600">{error}</p> : null}
@@ -156,7 +156,7 @@ export function DesignerPanel({
                           <Button
                             variant="danger"
                             className="min-h-9 text-xs"
-                            disabled={pending}
+                            loading={pending} disabled={pending}
                             onClick={() => run(() => deactivateDesigner(d.id))}
                           >
                             Deactivate
@@ -165,7 +165,7 @@ export function DesignerPanel({
                           <Button
                             variant="secondary"
                             className="min-h-9 text-xs"
-                            disabled={pending}
+                            loading={pending} disabled={pending}
                             onClick={() => run(() => reactivateDesigner(d.id))}
                           >
                             Reactivate
@@ -178,7 +178,7 @@ export function DesignerPanel({
                         <Button
                           variant="secondary"
                           className="min-h-9 text-xs"
-                          disabled={pending}
+                          loading={pending} disabled={pending}
                           title="Disconnect their Google account so they can connect a different one (they re-link with their PIN)"
                           onClick={() => run(() => resetDesignerGoogle(d.id))}
                         >

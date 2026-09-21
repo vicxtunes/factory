@@ -70,7 +70,7 @@ export function AgentPanel({ agents }: { agents: Agent[] }) {
           <Field label="Name">
             <TextInput value={name} onChange={(e) => setName(e.target.value)} required />
           </Field>
-          <Button variant="primary" type="submit" disabled={pending} className="w-full">
+          <Button variant="primary" type="submit" loading={pending} disabled={pending} className="w-full">
             Add agent
           </Button>
           {error ? <p className="text-sm text-error-600">{error}</p> : null}
@@ -117,7 +117,7 @@ export function AgentPanel({ agents }: { agents: Agent[] }) {
                       <Button
                         variant="danger"
                         className="min-h-9 text-xs"
-                        disabled={pending}
+                        loading={pending} disabled={pending}
                         onClick={() => run(() => deactivateAgent(a.id))}
                       >
                         Deactivate
@@ -126,7 +126,7 @@ export function AgentPanel({ agents }: { agents: Agent[] }) {
                       <Button
                         variant="secondary"
                         className="min-h-9 text-xs"
-                        disabled={pending}
+                        loading={pending} disabled={pending}
                         onClick={() => run(() => reactivateAgent(a.id))}
                       >
                         Reactivate

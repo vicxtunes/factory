@@ -20,7 +20,7 @@ import { formatMoney } from "@/lib/currency/format";
 // card falls back to the normal clientStatus() badge below.
 const APPROVAL_BADGE: Record<string, { label: string; className: string }> = {
   pending_review: {
-    label: "Awaiting review",
+    label: "We'll call you",
     className: "bg-gray-100 text-gray-700 dark:bg-white/5 dark:text-gray-300",
   },
   awaiting_client_approval: {

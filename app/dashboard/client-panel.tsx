@@ -136,7 +136,7 @@ export function ClientPanel({ clients }: { clients: Client[] }) {
           <Field label="Phone">
             <TextInput value={phone} onChange={(e) => setPhone(e.target.value)} />
           </Field>
-          <Button variant="primary" type="submit" disabled={pending} className="w-full">
+          <Button variant="primary" type="submit" loading={pending} disabled={pending} className="w-full">
             Add client
           </Button>
           {error ? <p className="text-sm text-error-600">{error}</p> : null}
@@ -247,7 +247,7 @@ export function ClientPanel({ clients }: { clients: Client[] }) {
                         <Button
                           variant="primary"
                           className="min-h-9 text-xs"
-                          disabled={pending}
+                          loading={pending} disabled={pending}
                           onClick={() =>
                             run(async () => {
                               const res = await updateClient({
@@ -298,7 +298,7 @@ export function ClientPanel({ clients }: { clients: Client[] }) {
                         <Button
                           variant="secondary"
                           className="min-h-9 text-xs"
-                          disabled={pending}
+                          loading={pending} disabled={pending}
                           onClick={() => startEdit(c)}
                         >
                           Edit
@@ -307,7 +307,7 @@ export function ClientPanel({ clients }: { clients: Client[] }) {
                           <Button
                             variant="danger"
                             className="min-h-9 text-xs"
-                            disabled={pending}
+                            loading={pending} disabled={pending}
                             onClick={() => run(() => deactivateClient(c.id))}
                           >
                             Deactivate
@@ -316,7 +316,7 @@ export function ClientPanel({ clients }: { clients: Client[] }) {
                           <Button
                             variant="secondary"
                             className="min-h-9 text-xs"
-                            disabled={pending}
+                            loading={pending} disabled={pending}
                             onClick={() => run(() => reactivateClient(c.id))}
                           >
                             Reactivate

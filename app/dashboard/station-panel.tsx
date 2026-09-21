@@ -76,7 +76,7 @@ export function StationPanel({
               placeholder="New station name"
               required
             />
-            <Button variant="primary" type="submit" disabled={pending} className="w-full">
+            <Button variant="primary" type="submit" loading={pending} disabled={pending} className="w-full">
               Add station
             </Button>
             {error ? <p className="text-sm text-error-600">{error}</p> : null}
@@ -129,7 +129,7 @@ export function StationPanel({
                         <Button
                           variant="secondary"
                           className="min-h-9 text-xs"
-                          disabled={pending}
+                          loading={pending} disabled={pending}
                           onClick={() => setEditingId(s.id)}
                         >
                           Rename
@@ -137,7 +137,7 @@ export function StationPanel({
                         <Button
                           variant="danger"
                           className="min-h-9 text-xs"
-                          disabled={pending}
+                          loading={pending} disabled={pending}
                           onClick={() => run(() => deleteStation(s.id))}
                         >
                           Delete
