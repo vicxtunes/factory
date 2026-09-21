@@ -11,6 +11,7 @@ import { logOrderEvent, resolveActor } from "@/lib/audit/log";
 import { exactClientMatch, findClientCandidates, type ClientCandidate } from "@/lib/clients/dedupe";
 import { parsePhone } from "@/lib/clients/phone";
 import { buildAndInsertOrder } from "@/lib/orders/create";
+import { isPhotobookCategory } from "@/lib/orders/photobook";
 import type { CreateOrderResult, OrderItemInput } from "@/lib/orders/types";
 import { notifyActor } from "@/lib/push/send";
 import { fetchClientNotifications } from "@/lib/queries";
@@ -215,6 +216,15 @@ export async function placeOrder(input: ClientOrderPayload): Promise<CreateOrder
     .single();
   if (error || !client) return { ok: false, error: "Your account could not be found." };
 
+  // Everything goes straight to the factory except photo books, which are held
+  // for the receptionist to call the client and confirm details first (see
+  // confirmPhotobookOrder in app/dashboard/actions.ts).
+  const categoryIds = [...new Set(input.items.map((i) => i.category_id).filter(Boolean))];
+  const { data: categories } = categoryIds.length
+    ? await admin.from("product_categories").select("id, name").in("id", categoryIds)
+    : { data: [] };
+  const needsCall = (categories ?? []).some((c) => isPhotobookCategory(c.name));
+
   const res = await buildAndInsertOrder(admin, {
     client,
     agentId: null,
@@ -228,13 +238,26 @@ export async function placeOrder(input: ClientOrderPayload): Promise<CreateOrder
     designerBrief: "",
     responsibleWorkerId: null,
     items: input.items,
-    // Goes to the receptionist's quote queue first, not straight to the
-    // factory board — see quoteOrder/routeApprovedOrder in
-    // app/dashboard/actions.ts.
-    releaseImmediately: false,
+    releaseImmediately: !needsCall,
   });
 
   if (!res.ok) return res;
+
+  if (needsCall) {
+    const { data: managers } = await admin.from("profiles").select("id").in("role", ["receptionist", "supervisor", "boss"]);
+    await Promise.all(
+      (managers ?? []).map((m) =>
+        notifyActor(
+          { type: "dashboard_user", id: m.id },
+          {
+            title: "Photo book order — call the client",
+            body: `Order ${res.orderNo} from ${client.name}${client.phone ? ` (${client.phone})` : ""}`,
+            url: "/dashboard/order-approvals",
+          },
+        ),
+      ),
+    );
+  }
 
   revalidatePath("/client-side");
   revalidatePath("/client-side/history");

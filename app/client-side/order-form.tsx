@@ -10,6 +10,7 @@ import { Field, Select, TextArea, TextInput } from "@/components/ui/Field";
 import { SectionLabel } from "@/components/ui/SectionLabel";
 import { UploadRow } from "@/components/ui/UploadRow";
 import { useCurrency } from "@/lib/currency/useCurrency";
+import { isPhotobookCategory } from "@/lib/orders/photobook";
 import type { OrderItemInput } from "@/lib/orders/types";
 import { uploadFileToStorage } from "@/lib/storage/upload-client";
 import type { Currency, OrderType, Product, ProductCategory } from "@/lib/types";
@@ -36,10 +37,6 @@ interface ClientItemForm extends OrderItemInput {
 const GENERIC_NORMAL_DAYS = 4; // "3-4 business days" from today
 const PHOTOBOOK_NORMAL_DAYS = 5; // "4-5 days after design confirmation"
 const PHOTOBOOK_EXPRESS_DAYS = 2; // "1-2 days after design confirmation"
-
-function isPhotobookCategory(name: string | undefined): boolean {
-  return (name ?? "").trim().toLowerCase() === "photo books";
-}
 
 function etaDate(days: number): string {
   const d = new Date();

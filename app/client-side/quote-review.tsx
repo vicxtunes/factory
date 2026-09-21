@@ -45,7 +45,7 @@ export function ClientQuoteReview({
   }
 
   if (order.approval_status === "pending_review") {
-    return <p className="text-sm text-muted">We&apos;re reviewing this order — a quote is on its way.</p>;
+    return <p className="text-sm text-muted">Thanks! We&apos;ll call you shortly to confirm the details of this order before it goes into production.</p>;
   }
 
   if (order.approval_status === "changes_requested") {

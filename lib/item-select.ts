@@ -12,7 +12,7 @@ export const ORDER_ITEM_SELECT = `
   media:order_item_media (id, order_item_id, file_name, mime_type, cloudinary_public_id, storage_path, secure_url, uploaded_at, uploaded_by_type, uploaded_by_id, uploaded_by_name, uploaded_by_role),
   item_notes:order_notes!order_item_id (id, order_id, order_item_id, author_type, author_id, author_name, author_role, body, created_at),
   order:orders!inner (
-    order_no, client_name, delivery_date, status, stage, assigned_designer_id,
+    order_no, client_name, client_phone, delivery_date, status, stage, assigned_designer_id,
     designer_name, designer_brief, media_link, media_notes,
     order_type, deadline_at, agent_name, created_at, created_by_name, created_by_role,
     approval_status, quoted_price, client_decision_note, released_at,

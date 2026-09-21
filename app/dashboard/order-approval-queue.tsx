@@ -8,7 +8,7 @@ import { Field, Select, TextInput } from "@/components/ui/Field";
 import { SectionLabel } from "@/components/ui/SectionLabel";
 import type { DesignerPublic, OrderItemWithOrder } from "@/lib/types";
 
-import { quoteOrder, routeApprovedOrder } from "./actions";
+import { confirmPhotobookOrder, quoteOrder, routeApprovedOrder } from "./actions";
 import { useCurrencySymbol } from "@/lib/currency/CurrencySymbolProvider";
 import { formatMoney } from "@/lib/currency/format";
 
@@ -48,9 +48,11 @@ function groupByOrder(items: OrderItemWithOrder[]): OrderGroup[] {
 export function OrderApprovalQueue({
   items,
   designers,
+  photobookCategoryIds,
 }: {
   items: OrderItemWithOrder[];
   designers: DesignerPublic[];
+  photobookCategoryIds: string[];
 }) {
   const symbol = useCurrencySymbol();
   const router = useRouter();
@@ -67,8 +69,19 @@ export function OrderApprovalQueue({
   }
 
   const groups = useMemo(() => groupByOrder(items), [items]);
+  // Photo-book orders wait here for the receptionist to phone the client.
+  const photobookIds = new Set(photobookCategoryIds);
+  const needsCall = groups.filter(
+    (g) =>
+      g.order.approval_status === "pending_review" &&
+      g.order.released_at === null &&
+      g.items.some((i) => i.category_id && photobookIds.has(i.category_id)),
+  );
+  const needsCallIds = new Set(needsCall.map((g) => g.orderId));
   const needsQuote = groups.filter(
-    (g) => g.order.approval_status === "pending_review" || g.order.approval_status === "changes_requested",
+    (g) =>
+      !needsCallIds.has(g.orderId) &&
+      (g.order.approval_status === "pending_review" || g.order.approval_status === "changes_requested"),
   );
   const awaitingClient = groups.filter((g) => g.order.approval_status === "awaiting_client_approval");
   const readyToRoute = groups.filter(
@@ -77,6 +90,23 @@ export function OrderApprovalQueue({
 
   return (
     <div className="space-y-8">
+      <div>
+        <SectionLabel>Call client to confirm{needsCall.length > 0 ? ` (${needsCall.length})` : ""}</SectionLabel>
+        <div className="space-y-3">
+          {needsCall.map((g) => (
+            <RouteCard
+              key={g.orderId}
+              group={g}
+              designers={designers}
+              pending={pending}
+              run={run}
+              call
+            />
+          ))}
+          {needsCall.length === 0 ? <p className="text-sm text-muted">No photo books waiting on a call.</p> : null}
+        </div>
+      </div>
+
       <div>
         <SectionLabel>Needs a quote{needsQuote.length > 0 ? ` (${needsQuote.length})` : ""}</SectionLabel>
         <div className="space-y-3">
@@ -199,11 +229,15 @@ function RouteCard({
   designers,
   pending,
   run,
+  call = false,
 }: {
   group: OrderGroup;
   designers: DesignerPublic[];
   pending: boolean;
   run: (fn: () => Promise<Result>) => void;
+  // Photo-book order: show a call-the-client prompt instead of the approved
+  // price, and confirm details + send in one step.
+  call?: boolean;
 }) {
   const symbol = useCurrencySymbol();
   const [route, setRoute] = useState<"factory" | "designer">("factory");
@@ -211,10 +245,27 @@ function RouteCard({
 
   return (
     <OrderCard group={group}>
-      <p className="mb-2 text-xs text-muted">
-        Approved at{" "}
-        <span className="font-semibold text-foreground">{formatMoney(group.order.quoted_price, symbol)}</span>.
-      </p>
+      {call ? (
+        <div className="mb-3 rounded-[var(--radius)] border border-brand-200 bg-brand-50 p-3 text-sm dark:border-brand-500/30 dark:bg-brand-500/10">
+          <p className="mb-2 text-xs text-muted">
+            Call {group.clientName} to confirm the photo book details, then send the order on.
+          </p>
+          {group.order.client_phone ? (
+            <a href={`tel:${group.order.client_phone}`}>
+              <Button variant="primary" type="button">
+                Call {group.order.client_phone}
+              </Button>
+            </a>
+          ) : (
+            <p className="text-xs text-muted">No phone number on file for this client.</p>
+          )}
+        </div>
+      ) : (
+        <p className="mb-2 text-xs text-muted">
+          Approved at{" "}
+          <span className="font-semibold text-foreground">{formatMoney(group.order.quoted_price, symbol)}</span>.
+        </p>
+      )}
       <div className="mb-3 flex gap-2">
         <button
           type="button"
@@ -251,9 +302,15 @@ function RouteCard({
         variant="primary"
         className="mt-3"
         disabled={pending || (route === "designer" && !designerId)}
-        onClick={() => run(() => routeApprovedOrder(group.orderId, route, designerId || undefined))}
+        onClick={() =>
+          run(() =>
+            call
+              ? confirmPhotobookOrder(group.orderId, route, designerId || undefined)
+              : routeApprovedOrder(group.orderId, route, designerId || undefined),
+          )
+        }
       >
-        Send order
+        {call ? "Details confirmed — send order" : "Send order"}
       </Button>
     </OrderCard>
   );

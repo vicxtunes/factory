@@ -1528,6 +1528,39 @@ export async function routeApprovedOrder(
   return { ok: true };
 }
 
+// Photo-book orders from the client portal are held (pending_review, unreleased)
+// until the receptionist has called the client and confirmed the details —
+// there's no quote or client approval step. This records that call, then
+// sends the order on exactly like routeApprovedOrder does.
+export async function confirmPhotobookOrder(
+  orderId: string,
+  route: OrderRoute,
+  designerId?: string,
+): Promise<Result> {
+  await requireManager();
+
+  const admin = createAdminClient();
+  const { data: order } = await admin
+    .from("orders")
+    .select("id, approval_status, released_at")
+    .eq("id", orderId)
+    .maybeSingle();
+  if (!order) return { ok: false, error: "Order not found." };
+  if (order.approval_status !== "pending_review" || order.released_at) {
+    return { ok: false, error: "This order isn't waiting on a confirmation call." };
+  }
+
+  const { error } = await admin.from("orders").update({ approval_status: "approved" }).eq("id", orderId);
+  if (error) return { ok: false, error: error.message };
+
+  const actor = await resolveActor();
+  await logOrderEvent({ orderId, actor, action: "details_confirmed", detail: {} });
+
+  // If routing fails (e.g. no designer picked) the order is left "approved,
+  // not routed", which the queue already shows with a Send button.
+  return routeApprovedOrder(orderId, route, designerId);
+}
+
 // ---------------------------------------------------------------------------
 // Marketing slides — client-portal carousel, locked to boss same as the
 // rest of the product catalog it points into.
