@@ -1547,9 +1547,9 @@ export async function receiveClientOrder(
     .eq("id", orderId)
     .maybeSingle();
   if (!order) return { ok: false, error: "Order not found." };
-  if (order.approval_status !== "pending_review" || order.released_at) {
-    return { ok: false, error: "This order isn't waiting to be received." };
-  }
+  // Any unsent order can be confirmed, including ones left mid-way in the old
+  // quote/approval flow.
+  if (order.released_at) return { ok: false, error: "This order was already sent to production." };
 
   const { error } = await admin.from("orders").update({ approval_status: "approved" }).eq("id", orderId);
   if (error) return { ok: false, error: error.message };
