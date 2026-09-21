@@ -116,7 +116,7 @@ export function AdminPanel({ admins, ownId }: { admins: AdminRow[]; ownId: strin
               ))}
             </Select>
           </Field>
-          <Button variant="primary" type="submit" disabled={pending} className="w-full">
+          <Button variant="primary" type="submit" loading={pending} disabled={pending} className="w-full">
             Create
           </Button>
           {error ? <p className="text-sm text-error-600">{error}</p> : null}
@@ -229,7 +229,7 @@ function AdminRowView({ admin, isSelf }: { admin: AdminRow; isSelf: boolean }) {
               variant="secondary"
               type="button"
               className="min-h-9 px-3 text-xs"
-              disabled={pending}
+              loading={pending} disabled={pending}
               onClick={() => {
                 setShowPwForm((v) => !v);
                 setNewPassword(null);
@@ -242,7 +242,7 @@ function AdminRowView({ admin, isSelf }: { admin: AdminRow; isSelf: boolean }) {
                 variant="danger"
                 type="button"
                 className="min-h-9 px-3 text-xs"
-                disabled={pending}
+                loading={pending} disabled={pending}
                 onClick={() => {
                   if (
                     confirm(
@@ -270,7 +270,7 @@ function AdminRowView({ admin, isSelf }: { admin: AdminRow; isSelf: boolean }) {
                 variant="primary"
                 type="button"
                 className="min-h-9 px-3 text-xs"
-                disabled={pending}
+                loading={pending} disabled={pending}
                 onClick={() =>
                   run(
                     async () => {

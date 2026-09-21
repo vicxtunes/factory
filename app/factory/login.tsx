@@ -61,7 +61,7 @@ function RequestStatus({ status, email }: { status: "pending" | "rejected"; emai
       <Button
         variant="secondary"
         className="w-full"
-        disabled={pending}
+        loading={pending} disabled={pending}
         onClick={() =>
           start(async () => {
             await logoutWorker();
@@ -117,7 +117,7 @@ function AttachWorker({ workers, google }: { workers: WorkerPublic[]; google: Go
           <TextInput value={note} onChange={(e) => setNote(e.target.value)} />
         </Field>
         {error ? <p className="text-sm text-[var(--rush)]">{error}</p> : null}
-        <Button variant="primary" type="submit" className="w-full" disabled={pending}>
+        <Button variant="primary" type="submit" className="w-full" loading={pending} disabled={pending}>
           {pending ? "Sending…" : "Request access"}
         </Button>
         <button
@@ -163,7 +163,7 @@ function AttachWorker({ workers, google }: { workers: WorkerPublic[]; google: Go
         />
       </Field>
       {error ? <p className="text-sm text-[var(--rush)]">{error}</p> : null}
-      <Button variant="primary" type="submit" className="w-full" disabled={pending || !workerId}>
+      <Button variant="primary" type="submit" className="w-full" loading={pending} disabled={pending || !workerId}>
         {pending ? "Checking…" : "Connect my account"}
       </Button>
       <button

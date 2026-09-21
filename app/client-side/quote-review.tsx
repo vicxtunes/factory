@@ -85,20 +85,20 @@ export function ClientQuoteReview({
             <TextArea value={note} onChange={(e) => setNote(e.target.value)} />
           </Field>
           <div className="flex gap-2">
-            <Button variant="danger" disabled={pending} onClick={() => submit("changes_requested")}>
+            <Button variant="danger" loading={pending} disabled={pending} onClick={() => submit("changes_requested")}>
               Send request
             </Button>
-            <Button variant="secondary" disabled={pending} onClick={() => setDecliningWithNote(false)}>
+            <Button variant="secondary" loading={pending} disabled={pending} onClick={() => setDecliningWithNote(false)}>
               Never mind
             </Button>
           </div>
         </div>
       ) : (
         <div className="flex gap-2">
-          <Button variant="primary" disabled={pending} onClick={() => submit("approve")}>
+          <Button variant="primary" loading={pending} disabled={pending} onClick={() => submit("approve")}>
             Approve
           </Button>
-          <Button variant="secondary" disabled={pending} onClick={() => setDecliningWithNote(true)}>
+          <Button variant="secondary" loading={pending} disabled={pending} onClick={() => setDecliningWithNote(true)}>
             Request changes
           </Button>
         </div>

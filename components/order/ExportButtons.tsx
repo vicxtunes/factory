@@ -35,7 +35,7 @@ export function ExportButtons({
       <Button
         variant="secondary"
         className="text-xs"
-        disabled={pending !== null || items.length === 0}
+        loading={pending === "excel"} disabled={pending !== null || items.length === 0}
         onClick={() => handle("excel")}
       >
         {pending === "excel" ? "Exporting…" : "Export Excel"}
@@ -43,7 +43,7 @@ export function ExportButtons({
       <Button
         variant="secondary"
         className="text-xs"
-        disabled={pending !== null || items.length === 0}
+        loading={pending === "pdf"} disabled={pending !== null || items.length === 0}
         onClick={() => handle("pdf")}
       >
         {pending === "pdf" ? "Exporting…" : "Export PDF"}

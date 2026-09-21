@@ -347,7 +347,7 @@ export function OrderForm({
           </section>
 
           {error ? <p className="text-sm text-[var(--rush)]">{error}</p> : null}
-          <Button variant="primary" type="submit" className="w-full sm:w-auto" disabled={pending}>
+          <Button variant="primary" type="submit" className="w-full sm:w-auto" loading={pending} disabled={pending}>
             {uploadStatus ?? (pending ? "Placing order…" : "Place order")}
             {pending ? null : <ArrowRightIcon className="h-4 w-4" />}
           </Button>

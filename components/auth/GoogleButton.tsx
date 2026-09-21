@@ -141,7 +141,7 @@ export function GoogleButton() {
 
   return (
     <div className="space-y-2">
-      <Button variant="secondary" type="button" className="w-full" onClick={start} disabled={pending}>
+      <Button variant="secondary" type="button" className="w-full" onClick={start} loading={pending} disabled={pending}>
         <GoogleIcon />
         {pending ? "Opening Google…" : "Continue with Google"}
       </Button>

@@ -24,7 +24,7 @@ export function PinReset({
       <Button
         variant="secondary"
         className="min-h-9 text-xs"
-        disabled={pending}
+        loading={pending} disabled={pending}
         onClick={() => {
           setOpen(true);
           setDone(false);
@@ -54,7 +54,7 @@ export function PinReset({
         autoFocus
         className="min-h-9 w-24 text-xs"
       />
-      <Button variant="primary" type="submit" className="min-h-9 text-xs" disabled={pending}>
+      <Button variant="primary" type="submit" className="min-h-9 text-xs" loading={pending} disabled={pending}>
         Save
       </Button>
       <Button

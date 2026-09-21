@@ -54,7 +54,7 @@ export function NotificationGate() {
           <Button
             variant="primary"
             className="w-full"
-            disabled={pending}
+            loading={pending} disabled={pending}
             onClick={() => subscribe((ok) => ok && dismiss())}
           >
             {pending ? "Enabling…" : "Enable"}

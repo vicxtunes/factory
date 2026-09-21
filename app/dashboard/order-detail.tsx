@@ -159,7 +159,7 @@ export function OrderDetail({
         <div className="flex shrink-0 flex-col items-end gap-2">
           <UrgencyBadge urgency={item.urgency} />
           {!editing && canEdit ? (
-            <Button variant="secondary" className="text-xs" disabled={pending} onClick={startEditing}>
+            <Button variant="secondary" className="text-xs" loading={pending} disabled={pending} onClick={startEditing}>
               Edit
             </Button>
           ) : null}
@@ -287,10 +287,10 @@ export function OrderDetail({
           {error ? <p className="text-xs text-[var(--rush)]">{error}</p> : null}
 
           <div className="flex gap-2">
-            <Button variant="primary" disabled={pending} onClick={save}>
+            <Button variant="primary" loading={pending} disabled={pending} onClick={save}>
               {pending ? "Saving…" : "Save changes"}
             </Button>
-            <Button variant="secondary" disabled={pending} onClick={() => setEditing(false)}>
+            <Button variant="secondary" loading={pending} disabled={pending} onClick={() => setEditing(false)}>
               Cancel
             </Button>
           </div>

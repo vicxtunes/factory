@@ -216,9 +216,10 @@ export async function placeOrder(input: ClientOrderPayload): Promise<CreateOrder
     .single();
   if (error || !client) return { ok: false, error: "Your account could not be found." };
 
-  // Everything goes straight to the factory except photo books, which are held
-  // for the receptionist to call the client and confirm details first (see
-  // confirmPhotobookOrder in app/dashboard/actions.ts).
+  // No quote or client approval: every order lands in the receptionist's
+  // incoming queue, she checks it's filled in properly, receives it and picks
+  // where it goes (receiveClientOrder in app/dashboard/actions.ts). Photo
+  // books additionally need her to phone the client first.
   const categoryIds = [...new Set(input.items.map((i) => i.category_id).filter(Boolean))];
   const { data: categories } = categoryIds.length
     ? await admin.from("product_categories").select("id, name").in("id", categoryIds)
@@ -238,19 +239,19 @@ export async function placeOrder(input: ClientOrderPayload): Promise<CreateOrder
     designerBrief: "",
     responsibleWorkerId: null,
     items: input.items,
-    releaseImmediately: !needsCall,
+    releaseImmediately: false,
   });
 
   if (!res.ok) return res;
 
-  if (needsCall) {
+  {
     const { data: managers } = await admin.from("profiles").select("id").in("role", ["receptionist", "supervisor", "boss"]);
     await Promise.all(
       (managers ?? []).map((m) =>
         notifyActor(
           { type: "dashboard_user", id: m.id },
           {
-            title: "Photo book order — call the client",
+            title: needsCall ? "Photo book order — call the client" : "New client order",
             body: `Order ${res.orderNo} from ${client.name}${client.phone ? ` (${client.phone})` : ""}`,
             url: "/dashboard/order-approvals",
           },

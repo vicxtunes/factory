@@ -115,7 +115,7 @@ export function GoogleSetupForm({ defaultName, email }: { defaultName: string; e
 
       {error ? <p className="text-sm text-[var(--rush)]">{error}</p> : null}
 
-      <Button variant="primary" type="submit" className="w-full" disabled={pending}>
+      <Button variant="primary" type="submit" className="w-full" loading={pending} disabled={pending}>
         {pending ? "Working…" : step === "new" ? "Create account" : "Continue"}
       </Button>
 

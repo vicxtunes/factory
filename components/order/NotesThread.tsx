@@ -140,7 +140,7 @@ export function NotesThread({
                       <Button
                         variant="secondary"
                         className="text-xs"
-                        disabled={pending || !editDraft.trim()}
+                        loading={pending} disabled={pending || !editDraft.trim()}
                         onClick={() => saveEdit(n.id)}
                       >
                         Save
@@ -192,7 +192,7 @@ export function NotesThread({
         <Button
           variant="secondary"
           className="text-xs"
-          disabled={pending || !draft.trim()}
+          loading={pending} disabled={pending || !draft.trim()}
           onClick={submitNew}
         >
           Add note

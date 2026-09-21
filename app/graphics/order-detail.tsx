@@ -158,7 +158,7 @@ export function OrderDetail({
           </p>
         </div>
         {!editing && canEditAnything ? (
-          <Button variant="secondary" className="text-xs" disabled={pending} onClick={startEditing}>
+          <Button variant="secondary" className="text-xs" loading={pending} disabled={pending} onClick={startEditing}>
             Edit order
           </Button>
         ) : null}
@@ -339,7 +339,7 @@ export function OrderDetail({
                 <Button
                   variant="secondary"
                   className="text-xs"
-                  disabled={pending}
+                  loading={pending} disabled={pending}
                   onClick={() => sendItem(item.id)}
                 >
                   {pending && advancingId === item.id ? "Sending…" : "Send this item to factory"}
@@ -355,15 +355,15 @@ export function OrderDetail({
       <div className="border-t border-border pt-3">
         {editing ? (
           <div className="flex gap-2">
-            <Button variant="primary" disabled={pending} onClick={save}>
+            <Button variant="primary" loading={pending} disabled={pending} onClick={save}>
               {pending ? "Saving…" : "Save changes"}
             </Button>
-            <Button variant="secondary" disabled={pending} onClick={() => setEditing(false)}>
+            <Button variant="secondary" loading={pending} disabled={pending} onClick={() => setEditing(false)}>
               Cancel
             </Button>
           </div>
         ) : hasPendingSend ? (
-          <Button variant="primary" disabled={pending} onClick={finishOrder}>
+          <Button variant="primary" loading={pending} disabled={pending} onClick={finishOrder}>
             {pending ? "Sending…" : "Fully done — send remaining items to factory"}
           </Button>
         ) : null}

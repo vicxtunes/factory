@@ -84,7 +84,7 @@ function Attach({ designers, google }: { designers: DesignerPublic[]; google: Go
         />
       </Field>
       {error ? <p className="text-sm text-[var(--rush)]">{error}</p> : null}
-      <Button variant="primary" type="submit" className="w-full" disabled={pending || !designerId}>
+      <Button variant="primary" type="submit" className="w-full" loading={pending} disabled={pending || !designerId}>
         {pending ? "Checking…" : "Connect my account"}
       </Button>
       <p className="text-xs text-muted">Not on the list? Ask a supervisor to add you.</p>

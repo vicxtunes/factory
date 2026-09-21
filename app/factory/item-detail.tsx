@@ -123,7 +123,7 @@ export function ItemDetail({
             <Button
               variant="primary"
               className="text-xs"
-              disabled={pending}
+              loading={pending} disabled={pending}
               onClick={() => run(() => advanceStatus(item.id))}
             >
               {nextLabel}
@@ -138,7 +138,7 @@ export function ItemDetail({
             <Button
               variant="secondary"
               className="text-xs"
-              disabled={pending}
+              loading={pending} disabled={pending}
               onClick={() => setDelayOpen((v) => !v)}
             >
               Flag delay
@@ -149,7 +149,7 @@ export function ItemDetail({
             <Button
               variant="secondary"
               className="text-xs"
-              disabled={pending}
+              loading={pending} disabled={pending}
               onClick={() => run(() => clearDelay(item.id))}
             >
               Clear delay
@@ -177,7 +177,7 @@ export function ItemDetail({
             <Button
               variant="danger"
               className="text-xs"
-              disabled={pending || !reason.trim()}
+              loading={pending} disabled={pending || !reason.trim()}
               onClick={() =>
                 run(async () => {
                   const res = await flagDelay(item.id, reason);

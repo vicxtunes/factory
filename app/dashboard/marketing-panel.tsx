@@ -173,7 +173,7 @@ export function MarketingPanel({
               />
             </Field>
             {error ? <p className="text-sm text-error-600">{error}</p> : null}
-            <Button variant="primary" type="submit" disabled={pending} className="w-full">
+            <Button variant="primary" type="submit" loading={pending} disabled={pending} className="w-full">
               {editingId ? "Save" : "Add slide"}
             </Button>
           </form>
@@ -230,7 +230,7 @@ export function MarketingPanel({
                         <Button
                           variant="secondary"
                           className="min-h-9 text-xs"
-                          disabled={pending}
+                          loading={pending} disabled={pending}
                           onClick={() => openEdit(s)}
                         >
                           Edit
@@ -239,7 +239,7 @@ export function MarketingPanel({
                           <Button
                             variant="danger"
                             className="min-h-9 text-xs"
-                            disabled={pending}
+                            loading={pending} disabled={pending}
                             onClick={() => run(() => setMarketingSlideActive(s.id, false))}
                           >
                             Deactivate
@@ -248,7 +248,7 @@ export function MarketingPanel({
                           <Button
                             variant="secondary"
                             className="min-h-9 text-xs"
-                            disabled={pending}
+                            loading={pending} disabled={pending}
                             onClick={() => run(() => setMarketingSlideActive(s.id, true))}
                           >
                             Reactivate
@@ -257,7 +257,7 @@ export function MarketingPanel({
                         <Button
                           variant="danger"
                           className="min-h-9 text-xs"
-                          disabled={pending}
+                          loading={pending} disabled={pending}
                           onClick={() => {
                             if (window.confirm("Delete this slide?")) run(() => deleteMarketingSlide(s.id));
                           }}
