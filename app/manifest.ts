@@ -1,10 +1,16 @@
 import type { MetadataRoute } from "next";
 
-export default function manifest(): MetadataRoute.Manifest {
+import { getAppIdentity } from "@/lib/app-identity";
+
+// Dynamic (reads the request host) so client.* and factory.* install as two
+// separately named apps — see lib/app-identity.ts.
+export default async function manifest(): Promise<MetadataRoute.Manifest> {
+  const app = await getAppIdentity();
   return {
-    name: "AMING Factory Tracker",
-    short_name: "AMING",
-    description: "Internal production tracking for the print factory.",
+    id: app.id,
+    name: app.name,
+    short_name: app.shortName,
+    description: app.description,
     start_url: "/",
     display: "standalone",
     background_color: "#f9fafb",
