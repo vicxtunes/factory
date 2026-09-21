@@ -39,7 +39,7 @@ export function ClientTopbar({
             <ClientUserMenu name={name} />
           </>
         ) : (
-          <Link href="/client-side" className="text-sm font-medium text-brand-600 hover:underline">
+          <Link href="/client-side?signin=1" className="text-sm font-medium text-brand-600 hover:underline">
             Log in
           </Link>
         )}

@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 
 export default async function ClientHistoryPage() {
   const session = await getClientSession();
-  if (!session) redirect("/client-side");
+  if (!session) redirect("/client-side?signin=1");
 
   const [items, workers] = await Promise.all([
     fetchClientItems(session.client_id),
