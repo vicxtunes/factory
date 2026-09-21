@@ -15,7 +15,7 @@ export default async function ClientNewOrderPage({
   searchParams: Promise<{ category?: string; product?: string; variant?: string }>;
 }) {
   const session = await getClientSession();
-  if (!session) redirect("/client-side");
+  if (!session) redirect("/client-side?signin=1");
 
   const [catalog, showroomSettings, currencies, params] = await Promise.all([
     fetchProductCatalog(true),

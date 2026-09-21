@@ -146,7 +146,7 @@ export function ShowroomContent({
       {!signedIn ? (
         <div className="mb-6 rounded-[var(--radius)] border border-border bg-surface p-4 shadow-theme-xs">
           <p className="text-sm text-muted">Sign in to place an order or track existing ones.</p>
-          <Link href="/client-side">
+          <Link href="/client-side?signin=1">
             <Button className="mt-3">Sign in / Sign up</Button>
           </Link>
         </div>
