@@ -80,7 +80,7 @@ export default async function FactoryPage() {
           </>
         }
       />
-      <main className="mx-auto w-full max-w-6xl flex-1 px-3 py-4 pb-24 md:pb-4">
+      <main className="mx-auto w-full max-w-6xl flex-1 px-3 py-4 pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-4">
         <Board
           initialItems={items}
           workerId={session.worker_id}

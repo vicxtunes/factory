@@ -36,7 +36,7 @@ export function ClientShell({
       <div className="flex min-h-screen flex-col md:pl-64">
         <ClientTopbar signedIn={signedIn} name={name} />
         {/* Extra bottom padding on mobile so content clears the fixed home bar. */}
-        <main className={`flex-1 bg-background px-4 py-6 sm:px-6 ${signedIn ? "pb-24 md:pb-6" : ""}`}>
+        <main className={`flex-1 bg-background px-4 py-6 sm:px-6 ${signedIn ? "pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-6" : ""}`}>
           {children}
         </main>
       </div>

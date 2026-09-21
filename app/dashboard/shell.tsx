@@ -33,7 +33,7 @@ export function DashboardShell({
           notifications={notifications}
         />
         {/* Bottom padding so content clears the fixed mobile home bar. */}
-        <main className="flex-1 bg-background px-4 py-6 pb-24 sm:px-6 lg:pb-6">{children}</main>
+        <main className="flex-1 bg-background px-4 py-6 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:px-6 lg:pb-6">{children}</main>
       </div>
       <DashboardHomeBar role={role} email={email} />
     </div>
