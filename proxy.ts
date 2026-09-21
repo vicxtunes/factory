@@ -4,8 +4,8 @@ import { NextResponse, type NextRequest } from "next/server";
 // Two subdomains, one app (see Notion: "Aming Ltd - Multi-Subdomain Routing
 // Architecture"):
 //   factory.<domain> -> staff surfaces (/, /factory, /graphics, /dashboard, /display)
-//   clients.<domain> -> the client portal, served from /client-side but shown
-//                       at the root (clients.<domain>/orders, not /client-side/orders)
+//   client.<domain> -> the client portal, served from /client-side but shown
+//                       at the root (client.<domain>/orders, not /client-side/orders)
 // Any other host (localhost, Codespaces, previews, the apex domain) is left
 // untouched, so local dev keeps the original path-based URLs.
 // Also refreshes the Supabase Auth session cookie on dashboard and
@@ -13,7 +13,7 @@ import { NextResponse, type NextRequest } from "next/server";
 // (Next.js 16 renamed Middleware -> Proxy; runtime is nodejs.)
 
 const FACTORY_HOST = /^factory\./i;
-const CLIENTS_HOST = /^clients\./i;
+const CLIENT_HOST = /^client\./i;
 
 const STAFF_PATHS = ["/factory", "/graphics", "/dashboard", "/display"];
 // Served from the same public path on every host.
@@ -33,11 +33,11 @@ export async function proxy(request: NextRequest) {
   let internalPath = pathname;
   let rewriteTo: URL | null = null;
 
-  if (CLIENTS_HOST.test(host)) {
+  if (CLIENT_HOST.test(host)) {
     if (STAFF_PATHS.some((p) => within(pathname, p))) {
       // Staff tools live on the factory subdomain.
       const url = request.nextUrl.clone();
-      url.host = host.replace(CLIENTS_HOST, "factory.");
+      url.host = host.replace(CLIENT_HOST, "factory.");
       return NextResponse.redirect(url);
     }
     if (within(pathname, CLIENT_BASE)) {
@@ -53,7 +53,7 @@ export async function proxy(request: NextRequest) {
     }
   } else if (FACTORY_HOST.test(host) && within(pathname, CLIENT_BASE)) {
     const url = request.nextUrl.clone();
-    url.host = host.replace(FACTORY_HOST, "clients.");
+    url.host = host.replace(FACTORY_HOST, "client.");
     url.pathname = pathname.slice(CLIENT_BASE.length) || "/";
     return NextResponse.redirect(url);
   }
