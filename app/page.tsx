@@ -23,12 +23,6 @@ const SURFACES = [
     desc: "Order intake, full visibility, worker/designer management, live notifications.",
   },
   {
-    href: "/client-side",
-    title: "Client Portal",
-    who: "Customers",
-    desc: "Browse the showroom, place orders, and track their progress to delivery.",
-  },
-  {
     href: "/display",
     title: "Display screen",
     who: "Factory TV",
