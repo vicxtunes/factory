@@ -8,6 +8,7 @@ import { NavigationProgress } from "@/components/pwa/NavigationProgress";
 import { CurrencySymbolProvider } from "@/lib/currency/CurrencySymbolProvider";
 import { DEFAULT_CURRENCY_SYMBOL } from "@/lib/currency/format";
 import { fetchBaseCurrencySymbol } from "@/lib/queries";
+import { getAppIdentity } from "@/lib/app-identity";
 import "./globals.css";
 
 const outfit = Outfit({
@@ -20,16 +21,20 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
-  title: "Factory Order Tracker",
-  description: "Internal production tracking for the print factory.",
-  applicationName: "AMING",
-  appleWebApp: {
-    capable: true,
-    statusBarStyle: "default",
-    title: "AMING",
-  },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const app = await getAppIdentity();
+  return {
+    title: "Factory Order Tracker",
+    description: app.description,
+    applicationName: app.shortName,
+    // iOS uses this for the home-screen label.
+    appleWebApp: {
+      capable: true,
+      statusBarStyle: "default",
+      title: app.shortName,
+    },
+  };
+}
 
 export const viewport: Viewport = {
   themeColor: "#f67413",
