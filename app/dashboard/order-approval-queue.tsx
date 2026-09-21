@@ -89,8 +89,6 @@ export function OrderApprovalQueue({
               key={g.orderId}
               group={g}
               designers={designers}
-              pending={pending}
-              run={run}
               incoming
               call={g.items.some((i) => i.category_id && photobookIds.has(i.category_id))}
             />
@@ -133,7 +131,7 @@ export function OrderApprovalQueue({
         <SectionLabel>Approved, not routed{readyToRoute.length > 0 ? ` (${readyToRoute.length})` : ""}</SectionLabel>
         <div className="space-y-3">
           {readyToRoute.map((g) => (
-            <RouteCard key={g.orderId} group={g} designers={designers} pending={pending} run={run} />
+            <RouteCard key={g.orderId} group={g} designers={designers} />
           ))}
           {readyToRoute.length === 0 ? (
             <p className="text-sm text-muted">Nothing approved and waiting to be sent on.</p>
@@ -250,15 +248,11 @@ function QuoteCard({
 function RouteCard({
   group,
   designers,
-  pending,
-  run,
   call = false,
   incoming = false,
 }: {
   group: OrderGroup;
   designers: DesignerPublic[];
-  pending: boolean;
-  run: (fn: () => Promise<Result>) => void;
   // Photo-book order: show a call-the-client prompt instead of the approved
   // price, and confirm details + send in one step.
   call?: boolean;
@@ -266,8 +260,29 @@ function RouteCard({
   incoming?: boolean;
 }) {
   const symbol = useCurrencySymbol();
-  const [route, setRoute] = useState<"factory" | "designer">("factory");
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
   const [designerId, setDesignerId] = useState("");
+  const [sending, startSending] = useTransition();
+  const [sendingTo, setSendingTo] = useState<"factory" | "designer" | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  function send(route: "factory" | "designer") {
+    setError(null);
+    setSendingTo(route);
+    startSending(async () => {
+      const arg = route === "designer" ? designerId : undefined;
+      const res = incoming
+        ? await receiveClientOrder(group.orderId, route, arg)
+        : await routeApprovedOrder(group.orderId, route, arg);
+      if (!res.ok) {
+        setError(res.error ?? "Something went wrong.");
+        return;
+      }
+      setOpen(false);
+      router.refresh();
+    });
+  }
 
   return (
     <OrderCard group={group}>
@@ -295,52 +310,64 @@ function RouteCard({
           <span className="font-semibold text-foreground">{formatMoney(group.order.quoted_price, symbol)}</span>.
         </p>
       )}
-      <div className="mb-3 flex gap-2">
-        <button
-          type="button"
-          className={`rounded-[var(--radius)] px-3 py-1.5 text-xs font-medium ${
-            route === "factory" ? "bg-brand-500 text-white" : "border border-border"
-          }`}
-          onClick={() => setRoute("factory")}
-        >
-          Send to factory
-        </button>
-        <button
-          type="button"
-          className={`rounded-[var(--radius)] px-3 py-1.5 text-xs font-medium ${
-            route === "designer" ? "bg-brand-500 text-white" : "border border-border"
-          }`}
-          onClick={() => setRoute("designer")}
-        >
-          Send to graphics designer
-        </button>
-      </div>
-      {route === "designer" ? (
-        <Field label="Designer" hint="Required">
-          <Select value={designerId} onChange={(e) => setDesignerId(e.target.value)}>
-            <option value="">Select a designer…</option>
-            {designers.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.name}
-              </option>
-            ))}
-          </Select>
-        </Field>
-      ) : null}
-      <Button
-        variant="primary"
-        className="mt-3"
-        loading={pending} disabled={pending || (route === "designer" && !designerId)}
-        onClick={() =>
-          run(() =>
-            incoming
-              ? receiveClientOrder(group.orderId, route, designerId || undefined)
-              : routeApprovedOrder(group.orderId, route, designerId || undefined),
-          )
-        }
-      >
-        {incoming ? (call ? "Called — receive & send" : "Receive & send") : "Send order"}
+      <Button variant="primary" onClick={() => setOpen(true)}>
+        {incoming ? "Confirm order" : "Send order"}
       </Button>
+      {open ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-gray-400/50 p-4 backdrop-blur-[2px] dark:bg-gray-950/60"
+          onClick={() => !sending && setOpen(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Where should this order go?"
+            className="w-full max-w-sm rounded-[var(--radius)] border border-border bg-surface p-5 shadow-theme-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-base font-semibold">Where should this order go?</h3>
+            <p className="mt-0.5 text-xs text-muted">
+              {group.orderNo} · {group.clientName}
+            </p>
+            <div className="mt-4 space-y-3">
+              <Button
+                variant="primary"
+                className="w-full"
+                loading={sending && sendingTo === "factory"}
+                disabled={sending}
+                onClick={() => send("factory")}
+              >
+                Factory
+              </Button>
+              <div className="rounded-[var(--radius)] border border-border p-3">
+                <Field label="Graphics designer">
+                  <Select value={designerId} onChange={(e) => setDesignerId(e.target.value)} disabled={sending}>
+                    <option value="">Select a designer…</option>
+                    {designers.map((d) => (
+                      <option key={d.id} value={d.id}>
+                        {d.name}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+                <Button
+                  variant="secondary"
+                  className="mt-3 w-full"
+                  loading={sending && sendingTo === "designer"}
+                  disabled={sending || !designerId}
+                  onClick={() => send("designer")}
+                >
+                  Designer
+                </Button>
+              </div>
+            </div>
+            {error ? <p className="mt-3 text-sm text-[var(--rush)]">{error}</p> : null}
+            <Button variant="ghost" className="mt-3 w-full" disabled={sending} onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      ) : null}
     </OrderCard>
   );
 }
