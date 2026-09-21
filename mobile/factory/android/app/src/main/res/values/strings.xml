@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">AMING Factory</string>
+    <string name="title_activity_main">AMING Factory</string>
+    <string name="package_name">com.amingltd.factory</string>
+    <string name="custom_url_scheme">com.amingltd.factory</string>
+</resources>

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/Button";
 import { createClient } from "@/lib/supabase/browser";
+import { isNativeApp } from "@/lib/pwa/install-events";
 
 // "Continue with Google", shared by the client, worker and designer sign-in
 // screens.
@@ -63,6 +64,23 @@ async function sha256Hex(text: string): Promise<string> {
     .join("");
 }
 
+// Inside the Capacitor apps Google refuses to sign in from a WebView, so the
+// account picker is native (@capgo/capacitor-social-login, installed in
+// mobile/*). The plugin isn't bundled into this web app — the native shell
+// already has it registered, so we just get a proxy to it by name.
+interface SocialLoginPlugin {
+  initialize(options: { google: { webClientId: string; iOSClientId?: string; mode?: "online" } }): Promise<void>;
+  login(options: {
+    provider: "google";
+    options: { scopes: string[]; nonce?: string; forceRefreshToken?: boolean };
+  }): Promise<{ result: { idToken: string | null } }>;
+}
+
+function getSocialLogin(): SocialLoginPlugin | null {
+  const cap = (window as Window & { Capacitor?: { registerPlugin?: (name: string) => unknown } }).Capacitor;
+  return (cap?.registerPlugin?.("SocialLogin") as SocialLoginPlugin | undefined) ?? null;
+}
+
 function GoogleIcon() {
   return (
     <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden>
@@ -99,6 +117,33 @@ export function GoogleButton() {
     setPending(true);
     setError(null);
     if (!CLIENT_ID) return viaRedirect();
+
+    if (isNativeApp()) {
+      try {
+        const social = getSocialLogin();
+        if (!social) throw new Error("Google sign-in isn't available in this app build.");
+        // Same nonce dance as the web picker below: Google gets the hash,
+        // Supabase gets the raw value to check against it.
+        const rawNonce = crypto.randomUUID();
+        await social.initialize({ google: { webClientId: CLIENT_ID } });
+        const { result } = await social.login({
+          provider: "google",
+          options: { scopes: ["email", "profile"], nonce: await sha256Hex(rawNonce) },
+        });
+        if (!result.idToken) throw new Error("Google didn't return a sign-in token.");
+        const { error } = await createClient().auth.signInWithIdToken({
+          provider: "google",
+          token: result.idToken,
+          nonce: rawNonce,
+        });
+        if (error) throw error;
+        router.refresh();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Google sign-in failed.");
+        setPending(false);
+      }
+      return;
+    }
 
     try {
       await loadGsi();

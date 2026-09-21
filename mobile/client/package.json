@@ -1,0 +1,25 @@
+{
+  "name": "aming-client-app",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Capacitor shell for the AMING client app (loads the live site).",
+  "scripts": {
+    "sync": "cap sync",
+    "android": "cap open android",
+    "ios": "cap open ios",
+    "assets": "capacitor-assets generate --iconBackgroundColor '#f67413' --splashBackgroundColor '#f67413'"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/cli": "^8.5.2",
+    "@capacitor/core": "^8.5.2",
+    "@capacitor/ios": "^8.5.2",
+    "@capacitor/splash-screen": "^8.0.2",
+    "@capacitor/status-bar": "^8.0.3",
+    "@capgo/capacitor-social-login": "^8.5.10"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "typescript": "^7.0.2"
+  }
+}

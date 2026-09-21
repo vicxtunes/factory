@@ -30,11 +30,18 @@ export function markInstalled(): void {
   deferredPrompt = null;
 }
 
+// True inside the Capacitor shells (mobile/client, mobile/factory), which load
+// this site in a native WebView. The bridge injects window.Capacitor.
+export function isNativeApp(): boolean {
+  if (typeof window === "undefined") return false;
+  return (window as Window & { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.() === true;
+}
+
 // display-mode:standalone covers Android/desktop Chrome & Edge;
 // navigator.standalone (non-standard, iOS Safari only) covers iOS home-screen.
 export function isRunningStandalone(): boolean {
   if (typeof window === "undefined") return false;
-  if (installed) return true;
+  if (installed || isNativeApp()) return true;
   return (
     window.matchMedia("(display-mode: standalone)").matches ||
     (window.navigator as Navigator & { standalone?: boolean }).standalone === true
