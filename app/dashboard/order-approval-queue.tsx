@@ -4,15 +4,11 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/Button";
-import { Field, Select, TextInput } from "@/components/ui/Field";
+import { Field, Select } from "@/components/ui/Field";
 import { SectionLabel } from "@/components/ui/SectionLabel";
 import type { DesignerPublic, OrderItemWithOrder } from "@/lib/types";
 
-import { receiveClientOrder, quoteOrder, routeApprovedOrder } from "./actions";
-import { useCurrencySymbol } from "@/lib/currency/CurrencySymbolProvider";
-import { formatMoney } from "@/lib/currency/format";
-
-type Result = { ok: boolean; error?: string };
+import { receiveClientOrder } from "./actions";
 
 interface OrderGroup {
   orderId: string;
@@ -54,92 +50,26 @@ export function OrderApprovalQueue({
   designers: DesignerPublic[];
   photobookCategoryIds: string[];
 }) {
-  const symbol = useCurrencySymbol();
-  const router = useRouter();
-  const [pending, start] = useTransition();
-  const [error, setError] = useState<string | null>(null);
-
-  function run(fn: () => Promise<Result>) {
-    setError(null);
-    start(async () => {
-      const res = await fn();
-      if (!res.ok) setError(res.error ?? "Something went wrong.");
-      else router.refresh();
-    });
-  }
-
   const groups = useMemo(() => groupByOrder(items), [items]);
-  // Every new client order waits here: check it, receive it, choose where it
-  // goes. Photo books also need a call to the client first.
+  // Every client order that hasn't been sent on yet: check it, confirm it,
+  // choose where it goes. Photo books also need a call to the client first.
   const photobookIds = new Set(photobookCategoryIds);
-  const incoming = groups.filter((g) => g.order.approval_status === "pending_review" && g.order.released_at === null);
-  const needsQuote = groups.filter((g) => g.order.approval_status === "changes_requested");
-  const awaitingClient = groups.filter((g) => g.order.approval_status === "awaiting_client_approval");
-  const readyToRoute = groups.filter(
-    (g) => g.order.approval_status === "approved" && g.order.released_at === null,
-  );
+  const incoming = groups.filter((g) => g.order.released_at === null);
 
   return (
-    <div className="space-y-8">
-      <div>
-        <SectionLabel>New client orders{incoming.length > 0 ? ` (${incoming.length})` : ""}</SectionLabel>
-        <div className="space-y-3">
-          {incoming.map((g) => (
-            <RouteCard
-              key={g.orderId}
-              group={g}
-              designers={designers}
-              incoming
-              call={g.items.some((i) => i.category_id && photobookIds.has(i.category_id))}
-            />
-          ))}
-          {incoming.length === 0 ? <p className="text-sm text-muted">No new client orders.</p> : null}
-        </div>
+    <div>
+      <SectionLabel>New client orders{incoming.length > 0 ? ` (${incoming.length})` : ""}</SectionLabel>
+      <div className="space-y-3">
+        {incoming.map((g) => (
+          <RouteCard
+            key={g.orderId}
+            group={g}
+            designers={designers}
+            call={g.items.some((i) => i.category_id && photobookIds.has(i.category_id))}
+          />
+        ))}
+        {incoming.length === 0 ? <p className="text-sm text-muted">No new client orders.</p> : null}
       </div>
-
-      <div>
-        <SectionLabel>Needs a quote{needsQuote.length > 0 ? ` (${needsQuote.length})` : ""}</SectionLabel>
-        <div className="space-y-3">
-          {needsQuote.map((g) => (
-            <QuoteCard key={g.orderId} group={g} pending={pending} run={run} />
-          ))}
-          {needsQuote.length === 0 ? <p className="text-sm text-muted">Nothing waiting on a quote.</p> : null}
-        </div>
-      </div>
-
-      <div>
-        <SectionLabel>
-          Awaiting client{awaitingClient.length > 0 ? ` (${awaitingClient.length})` : ""}
-        </SectionLabel>
-        <div className="space-y-3">
-          {awaitingClient.map((g) => (
-            <OrderCard key={g.orderId} group={g}>
-              <p className="text-sm text-muted">
-                Quoted{" "}
-                <span className="font-semibold text-foreground">{formatMoney(g.order.quoted_price, symbol)}</span> —
-                waiting on the client to approve or request changes.
-              </p>
-            </OrderCard>
-          ))}
-          {awaitingClient.length === 0 ? (
-            <p className="text-sm text-muted">Nothing waiting on a client response.</p>
-          ) : null}
-        </div>
-      </div>
-
-      <div>
-        <SectionLabel>Approved, not routed{readyToRoute.length > 0 ? ` (${readyToRoute.length})` : ""}</SectionLabel>
-        <div className="space-y-3">
-          {readyToRoute.map((g) => (
-            <RouteCard key={g.orderId} group={g} designers={designers} />
-          ))}
-          {readyToRoute.length === 0 ? (
-            <p className="text-sm text-muted">Nothing approved and waiting to be sent on.</p>
-          ) : null}
-        </div>
-      </div>
-
-      {error ? <p className="text-sm text-[var(--rush)]">{error}</p> : null}
     </div>
   );
 }
@@ -263,58 +193,17 @@ function OrderCard({ group, children }: { group: OrderGroup; children: React.Rea
   );
 }
 
-function QuoteCard({
-  group,
-  pending,
-  run,
-}: {
-  group: OrderGroup;
-  pending: boolean;
-  run: (fn: () => Promise<Result>) => void;
-}) {
-  const [price, setPrice] = useState("");
-
-  return (
-    <OrderCard group={group}>
-      <div className="flex flex-wrap items-end gap-2">
-        <Field label="Quote a total price">
-          <TextInput
-            type="number"
-            min={0}
-            step="0.01"
-            className="tnum w-32"
-            value={price}
-            onChange={(e) => setPrice(e.target.value)}
-            placeholder="0.00"
-          />
-        </Field>
-        <Button
-          variant="primary"
-          loading={pending} disabled={pending || !price}
-          onClick={() => run(() => quoteOrder(group.orderId, Number(price)))}
-        >
-          Send quote
-        </Button>
-      </div>
-    </OrderCard>
-  );
-}
-
 function RouteCard({
   group,
   designers,
   call = false,
-  incoming = false,
 }: {
   group: OrderGroup;
   designers: DesignerPublic[];
   // Photo-book order: show a call-the-client prompt instead of the approved
   // price, and confirm details + send in one step.
   call?: boolean;
-  // New order awaiting review (vs. a legacy approved-not-routed one).
-  incoming?: boolean;
 }) {
-  const symbol = useCurrencySymbol();
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [designerId, setDesignerId] = useState("");
@@ -327,9 +216,7 @@ function RouteCard({
     setSendingTo(route);
     startSending(async () => {
       const arg = route === "designer" ? designerId : undefined;
-      const res = incoming
-        ? await receiveClientOrder(group.orderId, route, arg)
-        : await routeApprovedOrder(group.orderId, route, arg);
+      const res = await receiveClientOrder(group.orderId, route, arg);
       if (!res.ok) {
         setError(res.error ?? "Something went wrong.");
         return;
@@ -341,9 +228,7 @@ function RouteCard({
 
   return (
     <OrderCard group={group}>
-      {incoming ? (
-        <OrderDetails order={group.order} items={group.items} />
-      ) : null}
+      <OrderDetails order={group.order} items={group.items} />
       {call ? (
         <div className="mb-3 rounded-[var(--radius)] border border-brand-200 bg-brand-50 p-3 text-sm dark:border-brand-500/30 dark:bg-brand-500/10">
           <p className="mb-2 text-xs text-muted">
@@ -359,14 +244,9 @@ function RouteCard({
             <p className="text-xs text-muted">No phone number on file for this client.</p>
           )}
         </div>
-      ) : incoming ? null : (
-        <p className="mb-2 text-xs text-muted">
-          Approved at{" "}
-          <span className="font-semibold text-foreground">{formatMoney(group.order.quoted_price, symbol)}</span>.
-        </p>
-      )}
+      ) : null}
       <Button variant="primary" onClick={() => setOpen(true)}>
-        {incoming ? "Confirm order" : "Send order"}
+        Confirm order
       </Button>
       {open ? (
         <div
