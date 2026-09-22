@@ -389,7 +389,11 @@ export function ProductShowcase({
 
   return (
     <div
-      className={`showroom-theme-${themeIndex} fixed inset-0 z-40 overflow-y-auto px-4 py-6 sm:static sm:inset-auto sm:z-auto sm:overflow-hidden sm:rounded-3xl sm:px-8 sm:py-8`}
+      // Mobile only: this view is `fixed inset-0`, same z-40 as the bottom
+      // home bar it sits behind in the DOM — a plain py-6 let the home bar
+      // cover the "Place an order" button at the bottom of the scroll.
+      // sm:py-8 below overrides both for desktop, where there's no home bar.
+      className={`showroom-theme-${themeIndex} fixed inset-0 z-40 overflow-y-auto px-4 pt-6 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:static sm:inset-auto sm:z-auto sm:overflow-hidden sm:rounded-3xl sm:px-8 sm:py-8`}
       style={
         {
           backgroundImage: `
