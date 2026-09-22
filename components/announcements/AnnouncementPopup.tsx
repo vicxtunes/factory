@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/Button";
 import { dismissAnnouncement, getActiveAnnouncement } from "@/lib/announcements/actions";
+import { createClient } from "@/lib/supabase/browser";
 import type { Announcement } from "@/lib/types";
 
 // Mounted next to InstallGate/NotificationGate on every signed-in surface
@@ -13,12 +14,35 @@ import type { Announcement } from "@/lib/types";
 // them, oldest first" logic. Dismissing re-checks immediately, so someone
 // with several unseen announcements sees them one at a time in one sitting
 // instead of only one per page load.
+//
+// Also subscribes to the announcements table (see migration
+// 20260922100000_announcements_realtime.sql) so a boss publishing — or
+// re-activating — one pops up for everyone already signed in right then,
+// not only on their next page load. Audience/dismissal targeting is
+// per-actor server logic (getActiveAnnouncement), so any change just
+// triggers a re-check rather than trusting the raw payload.
 export function AnnouncementPopup() {
   const [announcement, setAnnouncement] = useState<Announcement | null>(null);
   const [dismissing, setDismissing] = useState(false);
+  const supabaseRef = useRef(createClient());
 
   useEffect(() => {
     getActiveAnnouncement().then(setAnnouncement);
+  }, []);
+
+  useEffect(() => {
+    const supabase = supabaseRef.current;
+    const channel = supabase
+      .channel("announcement-popup")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "announcements" },
+        () => getActiveAnnouncement().then(setAnnouncement),
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   if (!announcement) return null;
