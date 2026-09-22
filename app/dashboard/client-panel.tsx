@@ -70,12 +70,36 @@ export function ClientPanel({
     { inserted: number; skipped: BulkImportRowSkip[]; errors: BulkImportRowError[] } | null
   >(null);
 
+  // Permanent and irreversible, so a plain window.confirm() isn't enough —
+  // it's dismissed by the same reflexive "OK" click/Enter people use for
+  // harmless browser dialogs. Typing the client's exact name back is a
+  // deliberate, can't-miss-it second step instead.
+  const [deleteTarget, setDeleteTarget] = useState<Client | null>(null);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+
   function run(fn: () => Promise<{ ok: boolean; error?: string }>) {
     setError(null);
     start(async () => {
       const res = await fn();
       if (!res.ok) setError(res.error ?? "Something went wrong.");
       else router.refresh();
+    });
+  }
+
+  function confirmDelete() {
+    if (!deleteTarget) return;
+    setError(null);
+    start(async () => {
+      const res = await deleteClient(deleteTarget.id);
+      if (!res.ok) {
+        // Keep the dialog open so the error is seen right where the
+        // client's name is still typed in, not lost below a closed dialog.
+        setError(res.error);
+        return;
+      }
+      setDeleteTarget(null);
+      setDeleteConfirmText("");
+      router.refresh();
     });
   }
 
@@ -316,9 +340,9 @@ export function ClientPanel({
                             className="min-h-9 text-xs"
                             loading={pending} disabled={pending}
                             onClick={() => {
-                              if (window.confirm(`Permanently delete ${c.name}? This can't be undone.`)) {
-                                run(() => deleteClient(c.id));
-                              }
+                              setError(null);
+                              setDeleteConfirmText("");
+                              setDeleteTarget(c);
                             }}
                           >
                             Delete
@@ -342,6 +366,69 @@ export function ClientPanel({
           </table>
         </div>
       </div>
+
+      {deleteTarget ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-gray-400/50 p-4 backdrop-blur-[2px] dark:bg-gray-950/60"
+          onClick={() => {
+            if (pending) return;
+            setDeleteTarget(null);
+            setDeleteConfirmText("");
+            setError(null);
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Delete ${deleteTarget.name}`}
+            className="w-full max-w-sm rounded-[var(--radius)] border border-border bg-surface p-5 shadow-theme-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-base font-semibold text-error-600">Delete {deleteTarget.name}?</h3>
+            <p className="mt-2 text-xs text-muted">
+              This permanently removes their record — it can&apos;t be undone. A client with any
+              order history can&apos;t be deleted at all (the order data would be lost); this will
+              fail instead of silently breaking anything.
+            </p>
+            <Field label={`Type "${deleteTarget.name}" to confirm`}>
+              <TextInput
+                autoFocus
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && deleteConfirmText.trim() === deleteTarget.name.trim()) {
+                    confirmDelete();
+                  }
+                }}
+              />
+            </Field>
+            {error ? <p className="mt-2 text-sm text-error-600">{error}</p> : null}
+            <div className="mt-4 flex gap-2">
+              <Button
+                variant="danger"
+                className="flex-1"
+                loading={pending}
+                disabled={pending || deleteConfirmText.trim() !== deleteTarget.name.trim()}
+                onClick={confirmDelete}
+              >
+                Delete permanently
+              </Button>
+              <Button
+                variant="secondary"
+                className="flex-1"
+                disabled={pending}
+                onClick={() => {
+                  setDeleteTarget(null);
+                  setDeleteConfirmText("");
+                  setError(null);
+                }}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
