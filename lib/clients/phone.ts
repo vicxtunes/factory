@@ -1,4 +1,4 @@
-// Phone validation for the Google sign-up/link step.
+// Phone validation for client sign-up/login.
 //
 // The DB matcher (norm_client_phone in migration 20260910120000) folds numbers
 // as Ghana (+233): "0700768312" and "+256700768312" — the same Ugandan number —

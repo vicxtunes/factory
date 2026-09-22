@@ -171,13 +171,16 @@ function GalleryLightbox({
   );
 }
 
-// Pinterest-style waterfall of every extra photo/video a product has,
-// opened from "More details" — CSS multi-column (`columns-*` +
-// `break-inside-avoid`) rather than a JS masonry library: items keep their
-// natural aspect ratio (no forced object-cover box), which is exactly what
-// produces the variable-height waterfall look, and it degrades to a single
-// column gracefully with zero layout JS.
-function MoreDetailsGallery({
+// Preview video (if any) followed by a Pinterest-style waterfall of every
+// extra photo/video a product has — a single overlay reached from one
+// button on the media box (see the comment above it below). CSS
+// multi-column (`columns-*` + `break-inside-avoid`) rather than a JS
+// masonry library for the waterfall: items keep their natural aspect ratio
+// (no forced object-cover box), which is exactly what produces the
+// variable-height look, and it degrades to a single column gracefully with
+// zero layout JS.
+function DetailsOverlay({
+  videoUrl,
   media,
   productName,
   onClose,
@@ -185,6 +188,7 @@ function MoreDetailsGallery({
   onOpenLightbox,
   onCloseLightbox,
 }: {
+  videoUrl?: string;
   media: ShowcaseMedia[];
   productName: string;
   onClose: () => void;
@@ -213,6 +217,9 @@ function MoreDetailsGallery({
             ✕
           </button>
         </div>
+        {videoUrl ? (
+          <video src={videoUrl} controls className="mb-4 w-full rounded-xl" />
+        ) : null}
         <div className="columns-2 gap-3 sm:columns-3">
           {media.map((m, i) => (
             <div key={m.url + i} className="mb-3 break-inside-avoid overflow-hidden rounded-xl bg-white/5">
@@ -302,18 +309,16 @@ export function ProductShowcase({
 
   const [index, setIndex] = useState(0);
   const [selectedVariantId, setSelectedVariantId] = useState("");
-  const [videoOpen, setVideoOpen] = useState(false);
-  const [galleryOpen, setGalleryOpen] = useState(false);
-  // Which "More details" photo is expanded full-screen, if any — lifted up
-  // from MoreDetailsGallery so a single Escape handler below can close
-  // exactly one overlay layer at a time (lightbox, then gallery, then exit)
-  // instead of two independent keydown listeners both firing on the same
-  // press.
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  // Which details-overlay photo is expanded full-screen, if any — lifted up
+  // from DetailsOverlay so a single Escape handler below can close exactly
+  // one overlay layer at a time (lightbox, then details, then exit) instead
+  // of two independent keydown listeners both firing on the same press.
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const sceneRef = useRef<ShowroomSceneHandle>(null);
 
-  function closeGallery() {
-    setGalleryOpen(false);
+  function closeDetails() {
+    setDetailsOpen(false);
     setLightboxIndex(null);
   }
 
@@ -338,12 +343,12 @@ export function ProductShowcase({
     return () => mq.removeEventListener("change", onChange);
   }, []);
 
-  // Locked whenever the showcase itself is full-screen (mobile) or a
-  // deliberate overlay (video / full gallery) is open — a single effect
-  // recomputing from both, so there's one lock/unlock lifecycle instead of
-  // two independent ones fighting over the same body style.
+  // Locked whenever the showcase itself is full-screen (mobile) or the
+  // details overlay is open — a single effect recomputing from both, so
+  // there's one lock/unlock lifecycle instead of two independent ones
+  // fighting over the same body style.
   useEffect(() => {
-    if (!isMobile && !videoOpen && !galleryOpen) return;
+    if (!isMobile && !detailsOpen) return;
     const prevOverflow = document.body.style.overflow;
     const prevPadding = document.body.style.paddingRight;
     const scrollbar = window.innerWidth - document.documentElement.clientWidth;
@@ -353,23 +358,22 @@ export function ProductShowcase({
       document.body.style.overflow = prevOverflow;
       document.body.style.paddingRight = prevPadding;
     };
-  }, [isMobile, videoOpen, galleryOpen]);
+  }, [isMobile, detailsOpen]);
 
   // ESC closes whichever overlay is topmost, otherwise leaves the product
-  // view — lightbox, then gallery, then video, then exit, one layer per
-  // press (see the lightboxIndex comment above for why this one effect owns
-  // all of it instead of each overlay listening independently).
+  // view — lightbox, then details, then exit, one layer per press (see the
+  // lightboxIndex comment above for why this one effect owns all of it
+  // instead of each overlay listening independently).
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key !== "Escape") return;
       if (lightboxIndex != null) setLightboxIndex(null);
-      else if (videoOpen) setVideoOpen(false);
-      else if (galleryOpen) closeGallery();
+      else if (detailsOpen) closeDetails();
       else onExit();
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [lightboxIndex, videoOpen, galleryOpen, onExit]);
+  }, [lightboxIndex, detailsOpen, onExit]);
 
   const current = media[index] ?? media[0];
 
@@ -436,40 +440,35 @@ export function ProductShowcase({
             </div>
           )}
 
-          {/* Both overlay buttons live directly on the media box — right by
+          {/* One overlay button lives directly on the media box — right by
               the viewpoint, not buried in the details panel below where
-              they'd need scrolling to reach on a short viewport. */}
-          {viewMode === "scene" && product.preview_video_url ? (
+              it'd need scrolling to reach on a short viewport. Opens the
+              preview video (if any) followed by the rest of the product's
+              photos/videos in one overlay — see DetailsOverlay above. */}
+          {product.preview_video_url || extraMedia.length > 0 ? (
             <button
               type="button"
-              onClick={() => setVideoOpen(true)}
-              aria-label="Watch preview video"
+              onClick={() => setDetailsOpen(true)}
+              aria-label={product.preview_video_url ? "Watch preview video" : "More details"}
               // Solid brand orange, not the ink token — ink flips light↔dark
               // for text/outline use, which would turn this into a pale
               // pill instead of a solid accent button under dark mode.
               className="absolute bottom-3 right-3 z-10 flex items-center gap-2 rounded-full bg-brand-600/90 px-3 py-2 text-xs font-semibold text-white backdrop-blur-sm transition-colors hover:bg-brand-600"
             >
-              <svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4">
-                <path d="M8 5.5v13l11-6.5-11-6.5Z" />
-              </svg>
-              Watch preview
-            </button>
-          ) : null}
-
-          {extraMedia.length > 0 ? (
-            <button
-              type="button"
-              onClick={() => setGalleryOpen(true)}
-              className="absolute bottom-3 left-3 z-10 flex items-center gap-2 rounded-full bg-black/60 px-3 py-2 text-xs font-semibold text-white backdrop-blur-sm transition-colors hover:bg-black/75"
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-4 w-4">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M2.25 7.5A2.25 2.25 0 0 1 4.5 5.25h4.5l1.5 2.25h7.25A2.25 2.25 0 0 1 20 9.75v7A2.25 2.25 0 0 1 17.75 19H4.5a2.25 2.25 0 0 1-2.25-2.25v-9.25Z"
-                />
-              </svg>
-              More details
+              {product.preview_video_url ? (
+                <svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4">
+                  <path d="M8 5.5v13l11-6.5-11-6.5Z" />
+                </svg>
+              ) : (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-4 w-4">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M2.25 7.5A2.25 2.25 0 0 1 4.5 5.25h4.5l1.5 2.25h7.25A2.25 2.25 0 0 1 20 9.75v7A2.25 2.25 0 0 1 17.75 19H4.5a2.25 2.25 0 0 1-2.25-2.25v-9.25Z"
+                  />
+                </svg>
+              )}
+              {product.preview_video_url ? "Watch preview" : "More details"}
             </button>
           ) : null}
         </div>
@@ -563,30 +562,12 @@ export function ProductShowcase({
         </Link>
       </div>
 
-      {videoOpen && product.preview_video_url ? (
-        <div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4"
-          onClick={() => setVideoOpen(false)}
-        >
-          <div className="relative w-full max-w-3xl" onClick={(e) => e.stopPropagation()}>
-            <button
-              type="button"
-              onClick={() => setVideoOpen(false)}
-              aria-label="Close preview video"
-              className="absolute -top-10 right-0 flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-lg text-white hover:bg-white/20"
-            >
-              ✕
-            </button>
-            <video src={product.preview_video_url} controls autoPlay className="w-full rounded-xl" />
-          </div>
-        </div>
-      ) : null}
-
-      {galleryOpen ? (
-        <MoreDetailsGallery
+      {detailsOpen ? (
+        <DetailsOverlay
+          videoUrl={product.preview_video_url ?? undefined}
           media={extraMedia}
           productName={product.name}
-          onClose={closeGallery}
+          onClose={closeDetails}
           lightboxIndex={lightboxIndex}
           onOpenLightbox={setLightboxIndex}
           onCloseLightbox={() => setLightboxIndex(null)}

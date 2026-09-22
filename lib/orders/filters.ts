@@ -3,7 +3,7 @@ import type { OrderItemWithOrder, ProductionStatus, Urgency } from "@/lib/types"
 // Shared filter model for the Orders page (cards + table views).
 
 export type DateField = "due" | "created";
-export type DatePreset = "" | "overdue" | "today" | "next7" | "none" | "custom";
+export type DatePreset = "" | "overdue" | "today" | "yesterday" | "week" | "month" | "next7" | "none" | "custom";
 
 export interface OrderFilterState {
   search: string;
@@ -43,6 +43,23 @@ function addDaysISO(iso: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+// Monday-start week, so "This Week" matches a normal work week rather than
+// splitting it across the Sunday boundary.
+function startOfWeekISO(iso: string): string {
+  const day = new Date(iso + "T00:00:00").getDay(); // 0 Sun .. 6 Sat
+  return addDaysISO(iso, day === 0 ? -6 : 1 - day);
+}
+
+function startOfMonthISO(iso: string): string {
+  return `${iso.slice(0, 7)}-01`;
+}
+
+function endOfMonthISO(iso: string): string {
+  const d = new Date(iso + "T00:00:00");
+  const last = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+  return last.toISOString().slice(0, 10);
+}
+
 function itemDate(i: OrderItemWithOrder, field: DateField): string | null {
   return field === "created" ? i.created_at.slice(0, 10) : i.order.delivery_date;
 }
@@ -63,6 +80,9 @@ export function datePresetOptions(field: DateField): DatePresetOption[] {
     return [
       { value: "", label: "Any date" },
       { value: "today", label: "Created today" },
+      { value: "yesterday", label: "Created yesterday" },
+      { value: "week", label: "This week" },
+      { value: "month", label: "This month" },
       { value: "custom", label: "Custom range…" },
     ];
   }
@@ -71,10 +91,23 @@ export function datePresetOptions(field: DateField): DatePresetOption[] {
     { value: "overdue", label: "Overdue" },
     { value: "today", label: "Due today" },
     { value: "next7", label: "Next 7 days" },
+    { value: "week", label: "Due this week" },
+    { value: "month", label: "Due this month" },
     { value: "none", label: "No date set" },
     { value: "custom", label: "Custom range…" },
   ];
 }
+
+// The dashboard Orders page's quick-access tabs (above the search bar) —
+// always filter by created date, the "when was this placed" question the
+// tabs answer; the Filters popover's Date section still offers the same
+// presets for due date, or to combine a preset with the other filters.
+export const QUICK_DATE_TABS: { value: Exclude<DatePreset, "" | "overdue" | "next7" | "none" | "custom">; label: string }[] = [
+  { value: "today", label: "Today" },
+  { value: "yesterday", label: "Yesterday" },
+  { value: "week", label: "This Week" },
+  { value: "month", label: "This Month" },
+];
 
 export function isDatePresetValidForField(preset: DatePreset, field: DateField): boolean {
   return datePresetOptions(field).some((o) => o.value === preset);
@@ -111,6 +144,15 @@ export function filterItems(
   if (f.datePreset === "today") {
     rangeFrom = today;
     rangeTo = today;
+  } else if (f.datePreset === "yesterday") {
+    rangeFrom = addDaysISO(today, -1);
+    rangeTo = rangeFrom;
+  } else if (f.datePreset === "week") {
+    rangeFrom = startOfWeekISO(today);
+    rangeTo = addDaysISO(rangeFrom, 6);
+  } else if (f.datePreset === "month") {
+    rangeFrom = startOfMonthISO(today);
+    rangeTo = endOfMonthISO(today);
   } else if (f.datePreset === "next7") {
     rangeFrom = today;
     rangeTo = addDaysISO(today, 7);

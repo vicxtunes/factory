@@ -6,6 +6,10 @@ import { UrgencyBadge } from "@/components/ui/UrgencyBadge";
 import { statusCardClasses } from "@/components/ui/statusColors";
 import type { OrderItemWithOrder } from "@/lib/types";
 
+function formatCreatedAt(iso: string): string {
+  return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
 export function OrderCard({
   item,
   assignedName,
@@ -39,6 +43,7 @@ export function OrderCard({
         </div>
 
         <p className="mt-2 font-medium">{item.product}</p>
+        <p className="mt-0.5 tnum text-xs text-muted">Created {formatCreatedAt(item.created_at)}</p>
 
         <div className="mt-2 flex items-center justify-between gap-2 text-xs text-muted">
           <StatusGlowBadge status={item.production_status} isDelayed={item.is_delayed} />

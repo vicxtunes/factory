@@ -6,7 +6,7 @@ import { AnnouncementPopup } from "@/components/announcements/AnnouncementPopup"
 import { InstallGate } from "@/components/pwa/InstallGate";
 import { NotificationGate } from "@/components/pwa/NotificationGate";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
-import { getDesignerSession, getGoogleIdentity } from "@/lib/auth/session";
+import { getDesignerSession } from "@/lib/auth/session";
 import {
   fetchActiveWorkersPublic,
   fetchAgents,
@@ -28,12 +28,12 @@ export default async function GraphicsPage() {
   const session = await getDesignerSession();
 
   if (!session) {
-    const [designers, google] = await Promise.all([fetchDesigners(true), getGoogleIdentity()]);
+    const designers = await fetchDesigners(true);
     return (
       <>
         <Header surface="Graphics" />
         <main className="mx-auto w-full max-w-md flex-1 px-4 py-8">
-          <DesignerLogin designers={designers} google={google} />
+          <DesignerLogin designers={designers} />
         </main>
       </>
     );

@@ -20,6 +20,7 @@ import {
   emptyFilters,
   filterItems,
   isDatePresetValidForField,
+  QUICK_DATE_TABS,
   type DatePreset,
   type OrderFilterState,
 } from "@/lib/orders/filters";
@@ -104,6 +105,17 @@ export function OrderBoard({
     setShowWithDesigner(false);
     setTableRows(TABLE_PAGE_SIZES[0]);
   }, []);
+
+  // Order Detail's calendar icon (next to Created) — jump straight to every
+  // order created on the day picked, closing the drawer so the now-filtered
+  // list is what's on screen.
+  const pickCreatedDate = useCallback(
+    (date: string) => {
+      patch({ dateField: "created", datePreset: "custom", dateFrom: date, dateTo: date });
+      setSelectedId(null);
+    },
+    [patch],
+  );
 
   const workerById = useMemo(() => new Map(workers.map((w) => [w.id, w])), [workers]);
   const categoryById = useMemo(
@@ -274,6 +286,33 @@ export function OrderBoard({
           />
         </div>
       ) : null}
+
+      {/* Quick-access created-date tabs — the popover's Date section offers
+          the same presets (and due date too) for combining with other
+          filters; these are just the one-tap common case. */}
+      <div className="mb-3 flex flex-wrap items-center gap-1.5">
+        {QUICK_DATE_TABS.map(({ value, label }) => {
+          const active = filters.dateField === "created" && filters.datePreset === value;
+          return (
+            <button
+              key={value}
+              type="button"
+              onClick={() =>
+                patch(
+                  active
+                    ? { datePreset: "", dateFrom: "", dateTo: "" }
+                    : { dateField: "created", datePreset: value, dateFrom: "", dateTo: "" },
+                )
+              }
+              className={`min-h-9 rounded-full px-3 text-xs font-medium transition-colors ${
+                active ? "bg-brand-500 text-white" : "border border-border bg-surface hover:bg-background"
+              }`}
+            >
+              {label}
+            </button>
+          );
+        })}
+      </div>
 
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <TextInput
@@ -556,6 +595,7 @@ export function OrderBoard({
             canViewAudit={canViewAudit}
             catalog={catalog}
             onChanged={refetch}
+            onPickCreatedDate={pickCreatedDate}
           />
         ) : null}
       </Drawer>

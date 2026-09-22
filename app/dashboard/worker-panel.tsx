@@ -15,7 +15,6 @@ import {
   addWorker,
   deactivateWorker,
   reactivateWorker,
-  resetWorkerGoogle,
   resetWorkerPin,
   updateWorker,
 } from "./actions";
@@ -220,15 +219,6 @@ export function WorkerPanel({
                           pending={pending}
                           onSave={(pin) => run(() => resetWorkerPin({ id: w.id, pin }))}
                         />
-                        <Button
-                          variant="secondary"
-                          className="min-h-9 text-xs"
-                          loading={pending} disabled={pending}
-                          title="Disconnect their Google account so they can connect a different one (they re-link with their PIN)"
-                          onClick={() => run(() => resetWorkerGoogle(w.id))}
-                        >
-                          Reset Google
-                        </Button>
                       </div>
                     ) : (
                       <span className="text-xs text-muted">Supervisor only</span>
