@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 
 import { Button } from "@/components/ui/Button";
 import { Field, Select, TextInput } from "@/components/ui/Field";
@@ -30,6 +30,29 @@ function formatDate(iso: string | null): string {
     month: "short",
     day: "numeric",
   });
+}
+
+// item.created_at is a full timestamptz, unlike delivery_date's plain
+// yyyy-mm-dd — formatDate's "T00:00:00" suffix would mangle it, so this
+// parses it directly instead.
+function formatCreatedAt(iso: string): string {
+  return new Date(iso).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function CalendarIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className={className}>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M6.75 3v2.25M17.25 3v2.25M3.75 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h12a2.25 2.25 0 0 1 2.25 2.25v11.25m-16.5 0A2.25 2.25 0 0 0 6 21h12a2.25 2.25 0 0 0 2.25-2.25m-16.5 0V11.25a2.25 2.25 0 0 1 2.25-2.25h12a2.25 2.25 0 0 1 2.25 2.25v7.5"
+      />
+    </svg>
+  );
 }
 
 // ISO timestamptz -> the local "YYYY-MM-DDTHH:mm" a datetime-local input wants.
@@ -67,6 +90,7 @@ export function OrderDetail({
   canViewAudit,
   catalog,
   onChanged,
+  onPickCreatedDate,
 }: {
   item: OrderItemWithOrder;
   workers: WorkerLite[];
@@ -75,6 +99,10 @@ export function OrderDetail({
   canViewAudit: boolean;
   catalog: ProductCategory[];
   onChanged: () => void;
+  // Calendar icon next to "Created" — pick any date to jump to every order
+  // created that day (see pickCreatedDate in ../order-board.tsx). Optional
+  // so OrderDetail doesn't require a board to render in.
+  onPickCreatedDate?: (date: string) => void;
 }) {
   const [pending, start] = useTransition();
   const [editing, setEditing] = useState(false);
@@ -82,6 +110,7 @@ export function OrderDetail({
   const [deliveryDate, setDeliveryDate] = useState("");
   const [deadlineAt, setDeadlineAt] = useState("");
   const [edit, setEdit] = useState<ItemEditState | null>(null);
+  const createdDateInputRef = useRef<HTMLInputElement>(null);
   const photoLink = item.media_link ?? item.order.media_link;
 
   // Same cutoff the designer's edit already uses — a mistake can surface
@@ -311,6 +340,44 @@ export function OrderDetail({
           <div>
             <dt className="uppercase tracking-wide">Due</dt>
             <dd className="tnum text-foreground">{formatDate(item.order.delivery_date)}</dd>
+          </div>
+          <div className="col-span-2">
+            <dt className="uppercase tracking-wide">Created</dt>
+            <dd className="flex items-center gap-1.5 tnum text-foreground">
+              {formatCreatedAt(item.created_at)}
+              {onPickCreatedDate ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const input = createdDateInputRef.current;
+                      if (!input) return;
+                      // showPicker() isn't supported everywhere (older
+                      // Safari) — fall back to a plain click, which also
+                      // opens the native picker in every browser that lacks it.
+                      try {
+                        input.showPicker();
+                      } catch {
+                        input.click();
+                      }
+                    }}
+                    aria-label="Pick a date to see all orders created then"
+                    title="Pick a date to see all orders created then"
+                    className="text-muted hover:text-brand-600"
+                  >
+                    <CalendarIcon className="h-4 w-4" />
+                  </button>
+                  <input
+                    ref={createdDateInputRef}
+                    type="date"
+                    className="sr-only"
+                    onChange={(e) => {
+                      if (e.target.value) onPickCreatedDate(e.target.value);
+                    }}
+                  />
+                </>
+              ) : null}
+            </dd>
           </div>
         </dl>
       ) : null}
