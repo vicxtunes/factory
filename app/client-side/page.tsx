@@ -1,5 +1,5 @@
 import { Header } from "@/components/ui/Header";
-import { getClientSession, getGoogleIdentity } from "@/lib/auth/session";
+import { getClientSession } from "@/lib/auth/session";
 import { fetchClientItems, fetchMarketingSlides } from "@/lib/queries";
 
 import { AuthGate } from "./auth-gate";
@@ -13,22 +13,20 @@ export const dynamic = "force-dynamic";
 export default async function ClientSidePage({
   searchParams,
 }: {
-  searchParams: Promise<{ signin?: string; auth_error?: string }>;
+  searchParams: Promise<{ signin?: string }>;
 }) {
   const session = await getClientSession();
 
   if (!session) {
-    const google = await getGoogleIdentity();
-    // Signed-out visitors land on the public showroom. The sign-in form only
-    // shows when asked for (?signin=1), after a failed Google callback, or
-    // mid-signup (Google done, phone number still to link).
+    // Signed-out visitors land on the public showroom; the sign-in form only
+    // shows when asked for (?signin=1, e.g. from the topbar's Log in link).
     const params = await searchParams;
-    if (!google && !params.signin && !params.auth_error) return <ShowroomView />;
+    if (!params.signin) return <ShowroomView />;
     return (
       <>
         <Header surface="Client Portal" />
         <main className="mx-auto w-full max-w-md flex-1 px-4 py-8">
-          <AuthGate google={google} />
+          <AuthGate />
         </main>
       </>
     );

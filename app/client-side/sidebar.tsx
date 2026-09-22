@@ -103,6 +103,7 @@ const TABS: Tab[] = [
   { href: "/client-side/history", label: "History", icon: HistoryIcon, requiresSignIn: true },
   { href: "/client-side/new", label: "Place Order", icon: PlaceOrderIcon, requiresSignIn: true },
   { href: "/client-side/showroom", label: "Showroom", icon: ShowroomIcon, requiresSignIn: false },
+  { href: "/client-side/settings", label: "Settings", icon: SettingsIcon, requiresSignIn: true },
   { href: "/support", label: "Support", icon: SupportIcon, requiresSignIn: true },
 ];
 

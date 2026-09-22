@@ -1,15 +1,14 @@
-import { GoogleButton } from "@/components/auth/GoogleButton";
-import type { GoogleIdentity } from "@/lib/auth/session";
+import { RoleSwitcher } from "@/components/ui/RoleSwitcher";
+import { SectionLabel } from "@/components/ui/SectionLabel";
 
-import { GoogleSetupForm } from "./google-setup-form";
+import { ContinueForm } from "./continue-form";
 
-// The client sign-in is just "Continue with Google". `google` is set once
-// they have, but haven't yet linked (or created) a client record — then the
-// phone-number step (linkGoogleAccount) shows instead.
-export function AuthGate({ google }: { google?: GoogleIdentity | null }) {
+export function AuthGate() {
   return (
     <div className="rounded-[var(--radius)] border border-border bg-surface p-6 shadow-theme-sm">
-      {google ? <GoogleSetupForm defaultName={google.name ?? ""} email={google.email} /> : <GoogleButton />}
+      <SectionLabel>Client sign-in</SectionLabel>
+      <ContinueForm />
+      <RoleSwitcher current="/client-side" />
     </div>
   );
 }
