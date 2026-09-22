@@ -15,7 +15,7 @@ export async function ShowroomView() {
   ]);
 
   return (
-    <ClientShell signedIn={!!session} name={session?.name ?? null}>
+    <ClientShell signedIn={!!session} name={session?.name ?? null} avatarUrl={session?.avatarUrl ?? null}>
       <ShowroomContent
         catalog={catalog}
         signedIn={!!session}

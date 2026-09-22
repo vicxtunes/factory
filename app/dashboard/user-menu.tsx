@@ -3,6 +3,9 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
+import { Avatar } from "@/components/profile/Avatar";
+import { ManageProfileModal } from "@/components/profile/ManageProfileModal";
+
 import { signOut } from "./actions";
 
 function ChevronDownIcon({ className }: { className?: string }) {
@@ -25,9 +28,32 @@ function LogoutIcon({ className }: { className?: string }) {
   );
 }
 
-export function UserMenu({ email, role }: { email: string | null; role: string }) {
+function ProfileIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className={className}>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z"
+      />
+    </svg>
+  );
+}
+
+export function UserMenu({
+  email,
+  fullName,
+  avatarUrl,
+  role,
+}: {
+  email: string | null;
+  fullName: string | null;
+  avatarUrl: string | null;
+  role: string;
+}) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [pending, start] = useTransition();
   const ref = useRef<HTMLDivElement>(null);
 
@@ -39,7 +65,10 @@ export function UserMenu({ email, role }: { email: string | null; role: string }
     return () => document.removeEventListener("mousedown", onClickOutside);
   }, []);
 
-  const initial = (email ?? "?").trim().charAt(0).toUpperCase();
+  // full_name is optional (not every dashboard account has set one) — fall
+  // back to email so there's always something to show, and so the profile
+  // modal's name field starts from *something* the first time it's opened.
+  const displayName = fullName || email || "?";
 
   return (
     <div className="relative" ref={ref}>
@@ -47,9 +76,7 @@ export function UserMenu({ email, role }: { email: string | null; role: string }
         onClick={() => setOpen((v) => !v)}
         className="flex items-center gap-2 rounded-lg py-1 pl-1 pr-2 text-sm hover:bg-gray-100 dark:hover:bg-white/5"
       >
-        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-500 text-sm font-semibold text-white">
-          {initial}
-        </span>
+        <Avatar url={avatarUrl} name={displayName} />
         <span className="hidden max-w-32 truncate font-medium sm:inline">{email}</span>
         <ChevronDownIcon className={`h-4 w-4 text-muted transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
@@ -57,9 +84,20 @@ export function UserMenu({ email, role }: { email: string | null; role: string }
       {open ? (
         <div className="absolute right-0 z-50 mt-2 flex w-64 flex-col rounded-2xl border border-border bg-surface p-3 shadow-theme-lg">
           <div className="px-2 pb-3">
-            <p className="truncate text-sm font-medium">{email}</p>
+            <p className="truncate text-sm font-medium">{displayName}</p>
+            {fullName && email ? <p className="truncate text-xs text-muted">{email}</p> : null}
             <p className="mt-0.5 text-xs capitalize text-muted">{role}</p>
           </div>
+          <button
+            onClick={() => {
+              setOpen(false);
+              setProfileOpen(true);
+            }}
+            className="flex items-center gap-3 rounded-lg border-t border-border px-2 pt-3 text-left text-sm font-medium text-gray-700 hover:text-foreground dark:text-gray-300"
+          >
+            <ProfileIcon className="h-5 w-5 text-muted" />
+            Manage profile
+          </button>
           <button
             disabled={pending}
             onClick={() =>
@@ -69,13 +107,21 @@ export function UserMenu({ email, role }: { email: string | null; role: string }
                 router.refresh();
               })
             }
-            className="group flex items-center gap-3 rounded-lg border-t border-border px-2 pt-3 text-left text-sm font-medium text-gray-700 hover:text-foreground dark:text-gray-300"
+            className="group mt-1 flex items-center gap-3 rounded-lg px-2 py-1.5 text-left text-sm font-medium text-gray-700 hover:text-foreground dark:text-gray-300"
           >
             <LogoutIcon className="h-5 w-5 text-muted group-hover:text-foreground" />
             Sign out
           </button>
         </div>
       ) : null}
+
+      <ManageProfileModal
+        open={profileOpen}
+        onClose={() => setProfileOpen(false)}
+        name={displayName}
+        avatarUrl={avatarUrl}
+        onSaved={() => router.refresh()}
+      />
     </div>
   );
 }

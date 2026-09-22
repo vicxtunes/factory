@@ -142,6 +142,7 @@ export interface Client {
   name: string;
   email: string | null;
   phone: string | null;
+  avatar_url: string | null;
   active: boolean;
   created_at: string;
   updated_at: string;
@@ -258,6 +259,7 @@ export interface WorkerPublic {
 
 export interface Worker extends WorkerPublic {
   pin_hash: string;
+  avatar_url: string | null;
   created_at: string;
 }
 
@@ -269,6 +271,7 @@ export interface DesignerPublic {
 
 export interface Designer extends DesignerPublic {
   pin_hash: string;
+  avatar_url: string | null;
   created_at: string;
 }
 
@@ -345,6 +348,7 @@ export interface Profile {
   id: string;
   role: AppRole;
   full_name: string | null;
+  avatar_url: string | null;
   created_at: string;
 }
 

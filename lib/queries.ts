@@ -220,7 +220,7 @@ export async function fetchClients(activeOnly = false): Promise<Client[]> {
   const supabase = await createClient();
   let query = supabase
     .from("clients")
-    .select("id, name, email, phone, active, created_at, updated_at")
+    .select("id, name, email, phone, avatar_url, active, created_at, updated_at")
     .order("name", { ascending: true });
   if (activeOnly) query = query.eq("active", true);
   const { data, error } = await query;

@@ -22,70 +22,79 @@ import {
 export interface WorkerSession {
   worker_id: string;
   name: string;
+  avatarUrl: string | null;
 }
 
 export async function getWorkerSession(): Promise<WorkerSession | null> {
   const store = await cookies();
-  const session = await verifyPayload<WorkerSession>(store.get(WORKER_COOKIE)?.value);
+  const session = await verifyPayload<{ worker_id: string }>(store.get(WORKER_COOKIE)?.value);
   if (!session?.worker_id) return null;
 
-  // Confirm the worker still exists and is active.
+  // Confirm the worker still exists and is active. name/avatar are read
+  // fresh here rather than trusted from the (login-time) cookie payload, so
+  // a profile edit (see lib/profile/actions.ts) shows up immediately
+  // instead of only after the next sign-in.
   const admin = createAdminClient();
   const { data } = await admin
     .from("workers")
-    .select("id, active")
+    .select("id, name, avatar_url, active")
     .eq("id", session.worker_id)
     .maybeSingle();
   if (!data || data.active === false) return null;
-  return session;
+  return { worker_id: data.id, name: data.name, avatarUrl: data.avatar_url };
 }
 
 export interface DesignerSession {
   designer_id: string;
   name: string;
+  avatarUrl: string | null;
 }
 
 export async function getDesignerSession(): Promise<DesignerSession | null> {
   const store = await cookies();
-  const session = await verifyPayload<DesignerSession>(store.get(DESIGNER_COOKIE)?.value);
+  const session = await verifyPayload<{ designer_id: string }>(store.get(DESIGNER_COOKIE)?.value);
   if (!session?.designer_id) return null;
 
-  // Confirm the designer still exists and is active.
+  // Confirm the designer still exists and is active — see getWorkerSession's
+  // comment on reading name/avatar fresh rather than from the cookie.
   const admin = createAdminClient();
   const { data } = await admin
     .from("designers")
-    .select("id, active")
+    .select("id, name, avatar_url, active")
     .eq("id", session.designer_id)
     .maybeSingle();
   if (!data || data.active === false) return null;
-  return session;
+  return { designer_id: data.id, name: data.name, avatarUrl: data.avatar_url };
 }
 
 export interface ClientSession {
   client_id: string;
   name: string;
+  avatarUrl: string | null;
 }
 
 export async function getClientSession(): Promise<ClientSession | null> {
   const store = await cookies();
-  const session = await verifyPayload<ClientSession>(store.get(CLIENT_COOKIE)?.value);
+  const session = await verifyPayload<{ client_id: string }>(store.get(CLIENT_COOKIE)?.value);
   if (!session?.client_id) return null;
 
-  // Confirm the client still exists and is active.
+  // Confirm the client still exists and is active — see getWorkerSession's
+  // comment on reading name/avatar fresh rather than from the cookie.
   const admin = createAdminClient();
   const { data } = await admin
     .from("clients")
-    .select("id, active")
+    .select("id, name, avatar_url, active")
     .eq("id", session.client_id)
     .maybeSingle();
   if (!data || data.active === false) return null;
-  return session;
+  return { client_id: data.id, name: data.name, avatarUrl: data.avatar_url };
 }
 
 export interface DashboardSession {
   userId: string;
   email: string | null;
   fullName: string | null;
+  avatarUrl: string | null;
   role: AppRole;
 }
 
@@ -99,9 +108,9 @@ export async function getDashboardSession(): Promise<DashboardSession | null> {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("role, full_name")
+    .select("role, full_name, avatar_url")
     .eq("id", user.id)
-    .maybeSingle<Pick<Profile, "role" | "full_name">>();
+    .maybeSingle<Pick<Profile, "role" | "full_name" | "avatar_url">>();
   // A Supabase Auth user with no matching profiles row (deleted out from
   // under them, or created outside this app's own createAdminUser, which
   // always inserts both atomically) has no assigned role — treat as not
@@ -115,6 +124,7 @@ export async function getDashboardSession(): Promise<DashboardSession | null> {
     userId: user.id,
     email: user.email ?? null,
     fullName: profile.full_name,
+    avatarUrl: profile.avatar_url,
     role: profile.role,
   };
 }

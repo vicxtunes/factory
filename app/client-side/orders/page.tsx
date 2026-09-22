@@ -21,7 +21,7 @@ export default async function ClientOrdersPage() {
   ]);
 
   return (
-    <ClientShell signedIn name={session.name}>
+    <ClientShell signedIn name={session.name} avatarUrl={session.avatarUrl}>
       <div className="mb-4 flex justify-end">
         <Link href="/client-side/new">
           <Button variant="primary">+ New order</Button>

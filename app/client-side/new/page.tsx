@@ -35,7 +35,7 @@ export default async function ClientNewOrderPage({
   const variant = product?.variants.find((v) => v.id === params.variant);
 
   return (
-    <ClientShell signedIn name={session.name}>
+    <ClientShell signedIn name={session.name} avatarUrl={session.avatarUrl}>
       <OrderForm
         catalog={catalog}
         initialCategoryId={category?.id}

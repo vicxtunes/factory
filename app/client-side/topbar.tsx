@@ -23,9 +23,11 @@ const PAGE_TITLES: Record<string, string> = {
 export function ClientTopbar({
   signedIn,
   name,
+  avatarUrl,
 }: {
   signedIn: boolean;
   name: string | null;
+  avatarUrl: string | null;
 }) {
   const pathname = usePathname();
   const title = PAGE_TITLES[pathname] ?? "Client Portal";
@@ -37,7 +39,7 @@ export function ClientTopbar({
         {signedIn && name ? (
           <>
             <NotificationBell fetchNotifications={getMyNotifications} />
-            <ClientUserMenu name={name} />
+            <ClientUserMenu name={name} avatarUrl={avatarUrl} />
           </>
         ) : (
           <Link href="/client-side?signin=1" className="text-sm font-medium text-brand-600 hover:underline">

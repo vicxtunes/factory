@@ -61,7 +61,13 @@ export default async function SupportPage() {
   if (dashboardSession) {
     const notifications = await fetchNotifications(10);
     return (
-      <DashboardShell email={dashboardSession.email} role={dashboardSession.role} notifications={notifications}>
+      <DashboardShell
+        email={dashboardSession.email}
+        fullName={dashboardSession.fullName}
+        avatarUrl={dashboardSession.avatarUrl}
+        role={dashboardSession.role}
+        notifications={notifications}
+      >
         <SupportPageContent />
       </DashboardShell>
     );
@@ -152,7 +158,7 @@ export default async function SupportPage() {
   const clientSession = await getClientSession();
   if (clientSession) {
     return (
-      <ClientShell signedIn name={clientSession.name}>
+      <ClientShell signedIn name={clientSession.name} avatarUrl={clientSession.avatarUrl}>
         <ClientSupportContent />
       </ClientShell>
     );
