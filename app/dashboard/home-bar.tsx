@@ -43,7 +43,9 @@ export function DashboardHomeBar({ role, email }: { role: AppRole; email: string
           { href: "/dashboard/announcements", label: "Announcements", icon: "announcements" },
         ] as const)
       : []),
-    { href: "/display", label: "Display screen", icon: "display", newTab: true },
+    // Signed-in staff now get the display board in the same tab/app session
+    // (not a separate browser tab) — no reason to leave the app for it.
+    { href: "/display", label: "Display screen", icon: "display" },
   ];
 
   return <HomeBar tabs={tabs} more={more} logout={signOut} afterLogout="/dashboard/login" hideFrom="lg" />;

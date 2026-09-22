@@ -193,7 +193,9 @@ const TABS = [
   { href: "/dashboard/designers", label: "Designers", icon: DesignersIcon, role: MANAGER_ROLES, newTab: false },
   { href: "/dashboard/admins", label: "Admins", icon: AdminsIcon, role: ["boss"], newTab: false },
   { href: "/support", label: "Support", icon: SupportIcon, role: null, newTab: false },
-  { href: "/display", label: "Display screen", icon: DisplayIcon, role: null, newTab: true },
+  // Signed-in staff now get the display board in the same tab/app session
+  // (not a separate browser tab) — no reason to leave the app for it.
+  { href: "/display", label: "Display screen", icon: DisplayIcon, role: null, newTab: false },
 ] as const satisfies Tab[];
 
 function TabLink({ tab, active }: { tab: Tab; active: boolean }) {

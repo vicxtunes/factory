@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { usePathname } from "next/navigation";
 import { useOffline } from "next/offline";
 
 import { startOfflineQueueFlush } from "@/lib/offline-queue/flush";
@@ -14,12 +15,19 @@ import { startOfflineQueueFlush } from "@/lib/offline-queue/flush";
 // to run regardless of which surface the user is on.
 export function OfflineBanner() {
   const isOffline = useOffline();
+  const pathname = usePathname();
+  // The client portal's connectivity reading flickers true/false while the
+  // client is actually online (their network conditions and the extra
+  // Realtime/notification-polling traffic that page carries make
+  // useOffline's detection unreliable there) — don't show a banner that
+  // contradicts what they can see is working.
+  const onClientPortal = pathname.startsWith("/client-side");
 
   useEffect(() => {
     startOfflineQueueFlush();
   }, []);
 
-  if (!isOffline) return null;
+  if (!isOffline || onClientPortal) return null;
 
   return (
     <div

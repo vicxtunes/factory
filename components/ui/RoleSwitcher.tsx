@@ -1,10 +1,12 @@
 import Link from "next/link";
 
+// Staff-only switcher (factory/graphics/dashboard login) — the client
+// portal lives on its own subdomain now (see proxy.ts) and doesn't cross-link
+// with these, so it's deliberately not one of the options here.
 const ROLES = [
   { href: "/factory", label: "Factory", who: "Workers" },
   { href: "/graphics", label: "Graphics", who: "Graphic designers" },
   { href: "/dashboard/login", label: "Dashboard", who: "Receptionist, supervisor & boss" },
-  { href: "/client-side", label: "Client Portal", who: "Customers" },
 ] as const;
 
 export function RoleSwitcher({ current }: { current: (typeof ROLES)[number]["href"] }) {
