@@ -24,6 +24,7 @@ interface ClientExportRow extends Record<string, unknown> {
   name: string;
   email: string;
   phone: string;
+  orders: number;
   status: string;
 }
 
@@ -31,14 +32,20 @@ const EXPORT_COLUMNS: ExportColumn<ClientExportRow>[] = [
   { key: "name", label: "Client" },
   { key: "email", label: "Email" },
   { key: "phone", label: "Phone" },
+  { key: "orders", label: "Orders" },
   { key: "status", label: "Status" },
 ];
 
 export function ClientPanel({
   clients,
+  orderCounts,
   canDelete,
 }: {
   clients: Client[];
+  // Keyed by client id; a client with no orders simply has no entry — see
+  // fetchClientOrderCounts. Shown up front so it's obvious which clients
+  // Delete will actually work on, instead of finding out by trying.
+  orderCounts: Record<string, number>;
   // Permanently deleting a client is boss-only — receptionist/supervisor
   // keep everything else (add, edit, bulk import).
   canDelete: boolean;
@@ -129,6 +136,7 @@ export function ClientPanel({
     name: c.name,
     email: c.email ?? "—",
     phone: c.phone ?? "—",
+    orders: orderCounts[c.id] ?? 0,
     status: c.active ? "Active" : "Inactive",
   }));
 
@@ -239,6 +247,9 @@ export function ClientPanel({
                   <p className="text-xs uppercase tracking-wide">Phone</p>
                 </th>
                 <th className="px-5 py-3 font-medium text-muted">
+                  <p className="text-xs uppercase tracking-wide">Orders</p>
+                </th>
+                <th className="px-5 py-3 font-medium text-muted">
                   <p className="text-xs uppercase tracking-wide">Status</p>
                 </th>
                 <th className="px-5 py-3 font-medium text-muted">
@@ -272,6 +283,7 @@ export function ClientPanel({
                         className="min-h-9 w-full rounded-[var(--radius)] border border-border bg-surface px-2 text-sm"
                       />
                     </td>
+                    <td className="px-5 py-3" />
                     <td className="px-5 py-3" />
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-2">
@@ -314,6 +326,15 @@ export function ClientPanel({
                     <td className="px-5 py-3 text-muted">{c.email ?? "—"}</td>
                     <td className="px-5 py-3 text-muted">{c.phone ?? "—"}</td>
                     <td className="px-5 py-3">
+                      {orderCounts[c.id] ? (
+                        <span className="rounded-full bg-brand-50 px-2.5 py-0.5 text-xs font-medium text-brand-700 dark:bg-brand-500/15 dark:text-brand-400">
+                          {orderCounts[c.id]} order{orderCounts[c.id] === 1 ? "" : "s"}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-muted">No orders</span>
+                      )}
+                    </td>
+                    <td className="px-5 py-3">
                       <span
                         className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
                           c.active
@@ -334,7 +355,13 @@ export function ClientPanel({
                         >
                           Edit
                         </Button>
-                        {canDelete ? (
+                        {!canDelete ? (
+                          <span className="text-xs text-muted">Boss only</span>
+                        ) : orderCounts[c.id] ? (
+                          <span className="text-xs text-muted" title="Clients with order history can't be deleted">
+                            Has orders attached
+                          </span>
+                        ) : (
                           <Button
                             variant="danger"
                             className="min-h-9 text-xs"
@@ -347,8 +374,6 @@ export function ClientPanel({
                           >
                             Delete
                           </Button>
-                        ) : (
-                          <span className="text-xs text-muted">Boss only</span>
                         )}
                       </div>
                     </td>
@@ -357,7 +382,7 @@ export function ClientPanel({
               )}
               {visibleClients.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-5 py-6 text-center text-muted">
+                  <td colSpan={6} className="px-5 py-6 text-center text-muted">
                     {clients.length === 0 ? "No clients yet." : "No clients match your search."}
                   </td>
                 </tr>
@@ -386,9 +411,7 @@ export function ClientPanel({
           >
             <h3 className="text-base font-semibold text-error-600">Delete {deleteTarget.name}?</h3>
             <p className="mt-2 text-xs text-muted">
-              This permanently removes their record — it can&apos;t be undone. A client with any
-              order history can&apos;t be deleted at all (the order data would be lost); this will
-              fail instead of silently breaking anything.
+              This permanently removes their record — it can&apos;t be undone.
             </p>
             <Field label={`Type "${deleteTarget.name}" to confirm`}>
               <TextInput

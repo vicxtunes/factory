@@ -228,6 +228,24 @@ export async function fetchClients(activeOnly = false): Promise<Client[]> {
   return data ?? [];
 }
 
+// How many orders each client has — used only by the Clients admin panel,
+// to show up front (before anyone tries) which clients Delete will
+// actually work on: orders.client_id has no cascade/set-null, so a client
+// with any order history can't be deleted (see deleteClient in
+// app/dashboard/actions.ts). Keyed by client_id; a client with none simply
+// has no entry.
+export async function fetchClientOrderCounts(): Promise<Record<string, number>> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.from("orders").select("client_id").not("client_id", "is", null);
+  if (error) throw new Error(error.message);
+  const counts: Record<string, number> = {};
+  for (const row of data ?? []) {
+    if (!row.client_id) continue;
+    counts[row.client_id] = (counts[row.client_id] ?? 0) + 1;
+  }
+  return counts;
+}
+
 // Active workers, safe projection (no pin_hash) — for the responsible-worker
 // picker on both new-order surfaces (dashboard + graphics).
 export async function fetchActiveWorkersPublic(): Promise<WorkerPublic[]> {
