@@ -273,9 +273,10 @@ export function OrderBoard({
         />
       </div>
 
-      {/* 2. Actions: Filters, Cards/Table, and a calendar icon to jump
-          straight to any one date (created-date, same as the drawer's). */}
-      <div className="mb-3 flex flex-wrap items-center gap-2">
+      {/* 2. Actions: Filters, Cards/Table, a calendar icon to jump straight
+          to any one date (created-date, same as the drawer's), and + New
+          order — icon-only view toggle so all of it fits on one line. */}
+      <div className="mb-3 flex flex-nowrap items-center gap-2 overflow-x-auto">
         <Popover
           label={
             <>
@@ -392,19 +393,31 @@ export function OrderBoard({
           </div>
         </Popover>
 
-        <div className="inline-flex overflow-hidden rounded-[var(--radius)] border border-border">
-          {(["cards", "table"] as const).map((v) => (
-            <button
-              key={v}
-              type="button"
-              onClick={() => setView(v)}
-              className={`min-h-11 px-3 text-sm capitalize ${
-                view === v ? "bg-brand-500 text-white" : "bg-surface hover:bg-background"
-              }`}
-            >
-              {v}
-            </button>
-          ))}
+        <div className="inline-flex shrink-0 overflow-hidden rounded-[var(--radius)] border border-border">
+          <button
+            type="button"
+            onClick={() => setView("cards")}
+            aria-label="Cards view"
+            aria-pressed={view === "cards"}
+            title="Cards view"
+            className={`flex min-h-11 min-w-11 items-center justify-center ${
+              view === "cards" ? "bg-brand-500 text-white" : "bg-surface hover:bg-background"
+            }`}
+          >
+            <CardsIcon className="h-5 w-5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setView("table")}
+            aria-label="Table view"
+            aria-pressed={view === "table"}
+            title="Table view"
+            className={`flex min-h-11 min-w-11 items-center justify-center border-l border-border ${
+              view === "table" ? "bg-brand-500 text-white" : "bg-surface hover:bg-background"
+            }`}
+          >
+            <TableViewIcon className="h-5 w-5" />
+          </button>
         </div>
 
         <button
@@ -420,7 +433,7 @@ export function OrderBoard({
           }}
           aria-label="Pick a date to see orders created then"
           title="Pick a date to see orders created then"
-          className="flex min-h-11 min-w-11 items-center justify-center rounded-[var(--radius)] border border-border bg-surface text-muted hover:bg-background hover:text-foreground"
+          className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-[var(--radius)] border border-border bg-surface text-muted hover:bg-background hover:text-foreground"
         >
           <CalendarIcon className="h-5 w-5" />
         </button>
@@ -432,11 +445,8 @@ export function OrderBoard({
             if (e.target.value) pickCreatedDate(e.target.value);
           }}
         />
-      </div>
 
-      {/* 3. Add new order. */}
-      {canManage ? (
-        <div className="mb-3">
+        {canManage ? (
           <CreateOrderDrawer
             variant="manager"
             clients={clients}
@@ -451,19 +461,19 @@ export function OrderBoard({
               <button
                 type="button"
                 onClick={open}
-                className="inline-flex min-h-11 items-center rounded-[var(--radius)] bg-brand-500 px-4 text-sm font-medium text-white hover:bg-brand-600"
+                className="inline-flex min-h-11 shrink-0 items-center rounded-[var(--radius)] bg-brand-500 px-4 text-sm font-medium text-white hover:bg-brand-600"
               >
                 + New order
               </button>
             )}
           />
-        </div>
-      ) : null}
+        ) : null}
+      </div>
 
-      {/* 4. Checkboxes. */}
-      <div className="mb-3 flex flex-wrap items-center gap-4">
+      {/* 3. Checkboxes — one line, no wrap. */}
+      <div className="mb-3 flex flex-nowrap items-center gap-4 overflow-x-auto">
         {!statusFilterIsFinished ? (
-          <label className="inline-flex min-h-11 items-center gap-1.5 text-xs text-muted">
+          <label className="inline-flex min-h-11 shrink-0 items-center gap-1.5 text-xs text-muted">
             <input
               type="checkbox"
               checked={showFinished}
@@ -472,14 +482,14 @@ export function OrderBoard({
                 setTableRows(TABLE_PAGE_SIZES[0]);
               }}
             />
-            Show ready &amp; delivered
+            Ready &amp; delivered
             {hiddenFinished > 0 ? (
               <span className="tnum">({hiddenFinished})</span>
             ) : null}
           </label>
         ) : null}
 
-        <label className="inline-flex min-h-11 items-center gap-1.5 text-xs text-muted">
+        <label className="inline-flex min-h-11 shrink-0 items-center gap-1.5 text-xs text-muted">
           <input
             type="checkbox"
             checked={showWithDesigner}
@@ -488,14 +498,14 @@ export function OrderBoard({
               setTableRows(TABLE_PAGE_SIZES[0]);
             }}
           />
-          Show items with designer
+          Items with designer
           {hiddenWithDesigner > 0 ? (
             <span className="tnum">({hiddenWithDesigner})</span>
           ) : null}
         </label>
       </div>
 
-      {/* 5. Quick-access created-date tabs — the Filters popover's Date
+      {/* 4. Quick-access created-date tabs — the Filters popover's Date
           section offers the same presets (and due date too, and the
           calendar icon above for any one date) for combining with other
           filters; these are just the one-tap common case. */}
@@ -523,7 +533,7 @@ export function OrderBoard({
         })}
       </div>
 
-      {/* 6. The display: result count, active-filter chips, then the list. */}
+      {/* 5. The display: result count, active-filter chips, then the list. */}
       <div className="mb-3 flex flex-wrap items-center gap-1.5">
         <span className="text-xs text-muted tnum">
           {filtered.length} item{filtered.length === 1 ? "" : "s"}
@@ -672,6 +682,31 @@ function CategoryGroups({
         </section>
       ))}
     </div>
+  );
+}
+
+function CardsIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className={className}>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM3.75 15.75A2.25 2.25 0 0 1 6 13.5h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 18v-2.25ZM13.5 6a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25a2.25 2.25 0 0 1-2.25-2.25V6ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25A2.25 2.25 0 0 1 13.5 18v-2.25Z"
+      />
+    </svg>
+  );
+}
+
+function TableViewIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className={className}>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M3.75 5.25h16.5v13.5H3.75V5.25Z"
+      />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 10.25h16.5M3.75 14.75h16.5" />
+    </svg>
   );
 }
 
