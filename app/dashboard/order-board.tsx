@@ -91,6 +91,7 @@ export function OrderBoard({
   const [tableRows, setTableRows] = useState<number>(TABLE_PAGE_SIZES[0]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const supabaseRef = useRef(createClient());
+  const calendarInputRef = useRef<HTMLInputElement>(null);
 
   // Any filter change collapses the table back to the first page so you
   // don't stay scrolled 200 rows into a now-different result set.
@@ -262,66 +263,19 @@ export function OrderBoard({
 
   return (
     <div>
-      {canManage ? (
-        <div className="mb-3 flex justify-end">
-          <CreateOrderDrawer
-            variant="manager"
-            clients={clients}
-            agents={agents}
-            catalog={catalog}
-            workers={workers}
-            designers={designers}
-            onCreate={createOrder}
-            onCheckDuplicates={lookupClientDuplicates}
-            onCreated={refetch}
-            trigger={(open) => (
-              <button
-                type="button"
-                onClick={open}
-                className="inline-flex min-h-11 items-center rounded-[var(--radius)] bg-brand-500 px-4 text-sm font-medium text-white hover:bg-brand-600"
-              >
-                + New order
-              </button>
-            )}
-          />
-        </div>
-      ) : null}
-
-      {/* Quick-access created-date tabs — the popover's Date section offers
-          the same presets (and due date too) for combining with other
-          filters; these are just the one-tap common case. */}
-      <div className="mb-3 flex flex-wrap items-center gap-1.5">
-        {QUICK_DATE_TABS.map(({ value, label }) => {
-          const active = filters.dateField === "created" && filters.datePreset === value;
-          return (
-            <button
-              key={value}
-              type="button"
-              onClick={() =>
-                patch(
-                  active
-                    ? { datePreset: "", dateFrom: "", dateTo: "" }
-                    : { dateField: "created", datePreset: value, dateFrom: "", dateTo: "" },
-                )
-              }
-              className={`min-h-9 rounded-full px-3 text-xs font-medium transition-colors ${
-                active ? "bg-brand-500 text-white" : "border border-border bg-surface hover:bg-background"
-              }`}
-            >
-              {label}
-            </button>
-          );
-        })}
-      </div>
-
-      <div className="mb-3 flex flex-wrap items-center gap-2">
+      {/* 1. Search — full width, first. */}
+      <div className="mb-3">
         <TextInput
-          className="max-w-xs"
+          className="w-full"
           value={filters.search}
           placeholder="Search order no or client…"
           onChange={(e) => patch({ search: e.target.value })}
         />
+      </div>
 
+      {/* 2. Actions: Filters, Cards/Table, and a calendar icon to jump
+          straight to any one date (created-date, same as the drawer's). */}
+      <div className="mb-3 flex flex-wrap items-center gap-2">
         <Popover
           label={
             <>
@@ -453,6 +407,61 @@ export function OrderBoard({
           ))}
         </div>
 
+        <button
+          type="button"
+          onClick={() => {
+            const input = calendarInputRef.current;
+            if (!input) return;
+            try {
+              input.showPicker();
+            } catch {
+              input.click();
+            }
+          }}
+          aria-label="Pick a date to see orders created then"
+          title="Pick a date to see orders created then"
+          className="flex min-h-11 min-w-11 items-center justify-center rounded-[var(--radius)] border border-border bg-surface text-muted hover:bg-background hover:text-foreground"
+        >
+          <CalendarIcon className="h-5 w-5" />
+        </button>
+        <input
+          ref={calendarInputRef}
+          type="date"
+          className="sr-only"
+          onChange={(e) => {
+            if (e.target.value) pickCreatedDate(e.target.value);
+          }}
+        />
+      </div>
+
+      {/* 3. Add new order. */}
+      {canManage ? (
+        <div className="mb-3">
+          <CreateOrderDrawer
+            variant="manager"
+            clients={clients}
+            agents={agents}
+            catalog={catalog}
+            workers={workers}
+            designers={designers}
+            onCreate={createOrder}
+            onCheckDuplicates={lookupClientDuplicates}
+            onCreated={refetch}
+            trigger={(open) => (
+              <button
+                type="button"
+                onClick={open}
+                className="inline-flex min-h-11 items-center rounded-[var(--radius)] bg-brand-500 px-4 text-sm font-medium text-white hover:bg-brand-600"
+              >
+                + New order
+              </button>
+            )}
+          />
+        </div>
+      ) : null}
+
+      {/* 4. Checkboxes. */}
+      <div className="mb-3 flex flex-wrap items-center gap-4">
         {!statusFilterIsFinished ? (
           <label className="inline-flex min-h-11 items-center gap-1.5 text-xs text-muted">
             <input
@@ -484,36 +493,66 @@ export function OrderBoard({
             <span className="tnum">({hiddenWithDesigner})</span>
           ) : null}
         </label>
-
-        <span className="ml-auto text-xs text-muted tnum">
-          {filtered.length} item{filtered.length === 1 ? "" : "s"}
-        </span>
       </div>
 
-      {anyFilterActive(filters) ? (
-        <div className="mb-3 flex flex-wrap items-center gap-1.5">
-          {chips.map((chip) => (
+      {/* 5. Quick-access created-date tabs — the Filters popover's Date
+          section offers the same presets (and due date too, and the
+          calendar icon above for any one date) for combining with other
+          filters; these are just the one-tap common case. */}
+      <div className="mb-3 flex flex-wrap items-center gap-1.5">
+        {QUICK_DATE_TABS.map(({ value, label }) => {
+          const active = filters.dateField === "created" && filters.datePreset === value;
+          return (
             <button
-              key={chip.key}
+              key={value}
               type="button"
-              onClick={() => patch(chip.clear)}
-              className="inline-flex items-center gap-1 rounded-full border border-border bg-surface px-2 py-0.5 text-xs hover:bg-background"
+              onClick={() =>
+                patch(
+                  active
+                    ? { datePreset: "", dateFrom: "", dateTo: "" }
+                    : { dateField: "created", datePreset: value, dateFrom: "", dateTo: "" },
+                )
+              }
+              className={`min-h-9 rounded-full px-3 text-xs font-medium transition-colors ${
+                active ? "bg-brand-500 text-white" : "border border-border bg-surface hover:bg-background"
+              }`}
             >
-              {chip.label}
-              <span aria-hidden className="text-muted">
-                ✕
-              </span>
+              {label}
             </button>
-          ))}
-          <button
-            type="button"
-            onClick={resetFilters}
-            className="text-xs text-brand-600 underline-offset-2 hover:underline"
-          >
-            Clear all
-          </button>
-        </div>
-      ) : null}
+          );
+        })}
+      </div>
+
+      {/* 6. The display: result count, active-filter chips, then the list. */}
+      <div className="mb-3 flex flex-wrap items-center gap-1.5">
+        <span className="text-xs text-muted tnum">
+          {filtered.length} item{filtered.length === 1 ? "" : "s"}
+        </span>
+        {anyFilterActive(filters) ? (
+          <>
+            {chips.map((chip) => (
+              <button
+                key={chip.key}
+                type="button"
+                onClick={() => patch(chip.clear)}
+                className="inline-flex items-center gap-1 rounded-full border border-border bg-surface px-2 py-0.5 text-xs hover:bg-background"
+              >
+                {chip.label}
+                <span aria-hidden className="text-muted">
+                  ✕
+                </span>
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={resetFilters}
+              className="text-xs text-brand-600 underline-offset-2 hover:underline"
+            >
+              Clear all
+            </button>
+          </>
+        ) : null}
+      </div>
 
       {view === "table" ? (
         <div className="space-y-2">
@@ -633,6 +672,18 @@ function CategoryGroups({
         </section>
       ))}
     </div>
+  );
+}
+
+function CalendarIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className={className}>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M6.75 3v2.25M17.25 3v2.25M3.75 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h12a2.25 2.25 0 0 1 2.25 2.25v11.25m-16.5 0A2.25 2.25 0 0 0 6 21h12a2.25 2.25 0 0 0 2.25-2.25m-16.5 0V11.25a2.25 2.25 0 0 1 2.25-2.25h12a2.25 2.25 0 0 1 2.25 2.25v7.5"
+      />
+    </svg>
   );
 }
 
