@@ -701,20 +701,21 @@ export async function updateClient(input: {
   return { ok: true };
 }
 
-export async function deactivateClient(id: string): Promise<Result> {
-  await requireManager();
+// Permanent, boss only — replaces the old deactivate/reactivate toggle.
+// Clients with any order history can't be deleted: orders.client_id has no
+// ON DELETE CASCADE/SET NULL, so Postgres itself rejects it (23503, foreign
+// key violation) rather than silently losing that history — caught below
+// and turned into a plain message instead of a raw DB error.
+export async function deleteClient(id: string): Promise<Result> {
+  await requireRole("boss");
   const admin = createAdminClient();
-  const { error } = await admin.from("clients").update({ active: false }).eq("id", id);
-  if (error) return { ok: false, error: error.message };
-  revalidatePath("/dashboard/clients");
-  return { ok: true };
-}
-
-export async function reactivateClient(id: string): Promise<Result> {
-  await requireManager();
-  const admin = createAdminClient();
-  const { error } = await admin.from("clients").update({ active: true }).eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  const { error } = await admin.from("clients").delete().eq("id", id);
+  if (error) {
+    if ((error as { code?: string }).code === "23503") {
+      return { ok: false, error: "This client has orders and can't be deleted." };
+    }
+    return { ok: false, error: error.message };
+  }
   revalidatePath("/dashboard/clients");
   return { ok: true };
 }

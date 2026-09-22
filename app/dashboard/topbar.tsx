@@ -23,10 +23,14 @@ const PAGE_TITLES: Record<string, string> = {
 
 export function DashboardTopbar({
   email,
+  fullName,
+  avatarUrl,
   role,
   notifications,
 }: {
   email: string | null;
+  fullName: string | null;
+  avatarUrl: string | null;
   role: string;
   notifications: NotificationRow[];
 }) {
@@ -38,7 +42,7 @@ export function DashboardTopbar({
       <h1 className="text-base font-semibold">{title}</h1>
       <div className="relative ml-auto flex items-center gap-3">
         <NotificationMenu initial={notifications} />
-        <UserMenu email={email} role={role} />
+        <UserMenu email={email} fullName={fullName} avatarUrl={avatarUrl} role={role} />
       </div>
     </header>
   );

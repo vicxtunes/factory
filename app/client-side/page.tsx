@@ -38,7 +38,7 @@ export default async function ClientSidePage({
   ]);
 
   return (
-    <ClientShell signedIn name={session.name}>
+    <ClientShell signedIn name={session.name} avatarUrl={session.avatarUrl}>
       <ClientDashboard items={items} slides={slides} />
     </ClientShell>
   );

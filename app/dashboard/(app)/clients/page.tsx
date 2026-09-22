@@ -18,7 +18,7 @@ export default async function ClientsPage() {
   return (
     <div className="space-y-6">
       <SectionLabel>Clients</SectionLabel>
-      <ClientPanel clients={clients} />
+      <ClientPanel clients={clients} canDelete={session.role === "boss"} />
     </div>
   );
 }

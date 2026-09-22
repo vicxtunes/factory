@@ -18,7 +18,13 @@ export default async function DashboardLayout({
   const notifications = await fetchNotifications(10);
 
   return (
-    <DashboardShell email={session.email} role={session.role} notifications={notifications}>
+    <DashboardShell
+      email={session.email}
+      fullName={session.fullName}
+      avatarUrl={session.avatarUrl}
+      role={session.role}
+      notifications={notifications}
+    >
       {children}
     </DashboardShell>
   );

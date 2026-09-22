@@ -14,8 +14,7 @@ import type { Client } from "@/lib/types";
 import {
   addClient,
   bulkImportClients,
-  deactivateClient,
-  reactivateClient,
+  deleteClient,
   updateClient,
   type BulkImportRowError,
   type BulkImportRowSkip,
@@ -35,7 +34,15 @@ const EXPORT_COLUMNS: ExportColumn<ClientExportRow>[] = [
   { key: "status", label: "Status" },
 ];
 
-export function ClientPanel({ clients }: { clients: Client[] }) {
+export function ClientPanel({
+  clients,
+  canDelete,
+}: {
+  clients: Client[];
+  // Permanently deleting a client is boss-only — receptionist/supervisor
+  // keep everything else (add, edit, bulk import).
+  canDelete: boolean;
+}) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -303,24 +310,21 @@ export function ClientPanel({ clients }: { clients: Client[] }) {
                         >
                           Edit
                         </Button>
-                        {c.active ? (
+                        {canDelete ? (
                           <Button
                             variant="danger"
                             className="min-h-9 text-xs"
                             loading={pending} disabled={pending}
-                            onClick={() => run(() => deactivateClient(c.id))}
+                            onClick={() => {
+                              if (window.confirm(`Permanently delete ${c.name}? This can't be undone.`)) {
+                                run(() => deleteClient(c.id));
+                              }
+                            }}
                           >
-                            Deactivate
+                            Delete
                           </Button>
                         ) : (
-                          <Button
-                            variant="secondary"
-                            className="min-h-9 text-xs"
-                            loading={pending} disabled={pending}
-                            onClick={() => run(() => reactivateClient(c.id))}
-                          >
-                            Reactivate
-                          </Button>
+                          <span className="text-xs text-muted">Boss only</span>
                         )}
                       </div>
                     </td>

@@ -275,8 +275,11 @@ export function OrderBoard({
 
       {/* 2. Actions: Filters, Cards/Table, a calendar icon to jump straight
           to any one date (created-date, same as the drawer's), and + New
-          order — icon-only view toggle so all of it fits on one line. */}
-      <div className="mb-3 flex flex-nowrap items-center gap-2 overflow-x-auto">
+          order — icon-only view toggle so all of it fits on one line.
+          No overflow-x here: it would force overflow-y to a computed
+          "auto" too (a CSS quirk when only one axis is non-visible),
+          clipping the Filters popover's dropdown panel. */}
+      <div className="mb-3 flex flex-nowrap items-center gap-2">
         <Popover
           label={
             <>
@@ -471,7 +474,7 @@ export function OrderBoard({
       </div>
 
       {/* 3. Checkboxes — one line, no wrap. */}
-      <div className="mb-3 flex flex-nowrap items-center gap-4 overflow-x-auto">
+      <div className="mb-3 flex flex-nowrap items-center gap-4">
         {!statusFilterIsFinished ? (
           <label className="inline-flex min-h-11 shrink-0 items-center gap-1.5 text-xs text-muted">
             <input

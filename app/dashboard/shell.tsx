@@ -11,11 +11,15 @@ import { DashboardTopbar } from "./topbar";
 
 export function DashboardShell({
   email,
+  fullName,
+  avatarUrl,
   role,
   notifications,
   children,
 }: {
   email: string | null;
+  fullName: string | null;
+  avatarUrl: string | null;
   role: AppRole;
   notifications: NotificationRow[];
   children: React.ReactNode;
@@ -29,6 +33,8 @@ export function DashboardShell({
       <div className="flex min-h-screen flex-col lg:pl-64">
         <DashboardTopbar
           email={email}
+          fullName={fullName}
+          avatarUrl={avatarUrl}
           role={role}
           notifications={notifications}
         />

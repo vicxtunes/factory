@@ -4,6 +4,9 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
+import { Avatar } from "@/components/profile/Avatar";
+import { ManageProfileModal } from "@/components/profile/ManageProfileModal";
+
 import { logoutClient } from "./actions";
 
 // Same shape as app/dashboard/user-menu.tsx, adapted for a client session
@@ -29,6 +32,18 @@ function LogoutIcon({ className }: { className?: string }) {
   );
 }
 
+function ProfileIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className={className}>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z"
+      />
+    </svg>
+  );
+}
+
 function SettingsIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className={className}>
@@ -42,9 +57,10 @@ function SettingsIcon({ className }: { className?: string }) {
   );
 }
 
-export function ClientUserMenu({ name }: { name: string }) {
+export function ClientUserMenu({ name, avatarUrl }: { name: string; avatarUrl: string | null }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [pending, start] = useTransition();
   const ref = useRef<HTMLDivElement>(null);
 
@@ -56,17 +72,13 @@ export function ClientUserMenu({ name }: { name: string }) {
     return () => document.removeEventListener("mousedown", onClickOutside);
   }, []);
 
-  const initial = name.trim().charAt(0).toUpperCase() || "?";
-
   return (
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen((v) => !v)}
         className="flex items-center gap-2 rounded-lg py-1 pl-1 pr-2 text-sm hover:bg-gray-100 dark:hover:bg-white/5"
       >
-        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-500 text-sm font-semibold text-white">
-          {initial}
-        </span>
+        <Avatar url={avatarUrl} name={name} />
         <span className="hidden max-w-32 truncate font-medium sm:inline">{name}</span>
         <ChevronDownIcon className={`h-4 w-4 text-muted transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
@@ -76,10 +88,20 @@ export function ClientUserMenu({ name }: { name: string }) {
           <div className="px-2 pb-3">
             <p className="truncate text-sm font-medium">{name}</p>
           </div>
+          <button
+            onClick={() => {
+              setOpen(false);
+              setProfileOpen(true);
+            }}
+            className="flex items-center gap-3 rounded-lg border-t border-border px-2 pt-3 text-left text-sm font-medium text-gray-700 hover:text-foreground dark:text-gray-300"
+          >
+            <ProfileIcon className="h-5 w-5 text-muted" />
+            Manage profile
+          </button>
           <Link
             href="/client-side/settings"
             onClick={() => setOpen(false)}
-            className="flex items-center gap-3 rounded-lg border-t border-border px-2 pt-3 text-left text-sm font-medium text-gray-700 hover:text-foreground dark:text-gray-300"
+            className="flex items-center gap-3 rounded-lg px-2 py-1.5 text-left text-sm font-medium text-gray-700 hover:text-foreground dark:text-gray-300"
           >
             <SettingsIcon className="h-5 w-5 text-muted" />
             Settings
@@ -100,6 +122,14 @@ export function ClientUserMenu({ name }: { name: string }) {
           </button>
         </div>
       ) : null}
+
+      <ManageProfileModal
+        open={profileOpen}
+        onClose={() => setProfileOpen(false)}
+        name={name}
+        avatarUrl={avatarUrl}
+        onSaved={() => router.refresh()}
+      />
     </div>
   );
 }

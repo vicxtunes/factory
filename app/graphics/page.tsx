@@ -6,6 +6,7 @@ import { AnnouncementPopup } from "@/components/announcements/AnnouncementPopup"
 import { InstallGate } from "@/components/pwa/InstallGate";
 import { NotificationGate } from "@/components/pwa/NotificationGate";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
+import { InlineProfileTrigger } from "@/components/profile/InlineProfileTrigger";
 import { getDesignerSession } from "@/lib/auth/session";
 import {
   fetchActiveWorkersPublic,
@@ -66,7 +67,7 @@ export default async function GraphicsPage() {
               fetchNotifications={getMyNotifications}
               triggerClassName="relative flex h-9 w-9 items-center justify-center rounded-lg text-white/70 hover:text-white hover:bg-white/10"
             />
-            <span className="hidden text-white/80 sm:inline">{session.name}</span>
+            <InlineProfileTrigger name={session.name} avatarUrl={session.avatarUrl} />
             <LogoutButton />
           </>
         }
