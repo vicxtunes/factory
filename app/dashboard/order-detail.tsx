@@ -34,12 +34,15 @@ function formatDate(iso: string | null): string {
 
 // item.created_at is a full timestamptz, unlike delivery_date's plain
 // yyyy-mm-dd — formatDate's "T00:00:00" suffix would mangle it, so this
-// parses it directly instead.
+// parses it directly instead. Includes the time (not just the date) — it's
+// already right there in the timestamp, just never surfaced before.
 function formatCreatedAt(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, {
+  return new Date(iso).toLocaleString(undefined, {
     month: "short",
     day: "numeric",
     year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
   });
 }
 
