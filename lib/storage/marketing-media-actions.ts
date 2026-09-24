@@ -5,7 +5,7 @@ import { randomUUID } from "crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth/session";
 
-import { MARKETING_MEDIA_BUCKET } from "./client";
+import { MARKETING_MEDIA_BUCKET, safeStorageSegment } from "./client";
 
 type UploadSessionResult = { ok: true; path: string; token: string } | { ok: false; error: string };
 type ConfirmResult = { ok: true; url: string } | { ok: false; error: string };
@@ -20,7 +20,7 @@ export async function createMarketingUploadSession(fileName: string): Promise<Up
   await requireRole("boss");
   if (!fileName.trim()) return { ok: false, error: "Missing file details." };
 
-  const path = `marketing/${randomUUID()}-${fileName}`;
+  const path = `marketing/${randomUUID()}-${safeStorageSegment(fileName)}`;
   const { data, error } = await createAdminClient()
     .storage.from(MARKETING_MEDIA_BUCKET)
     .createSignedUploadUrl(path);

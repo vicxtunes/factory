@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth/session";
 
-import { PRODUCT_MEDIA_BUCKET } from "./client";
+import { PRODUCT_MEDIA_BUCKET, safeStorageSegment } from "./client";
 
 type Result = { ok: true } | { ok: false; error: string };
 type UploadSessionResult = { ok: true; path: string; token: string } | { ok: false; error: string };
@@ -23,7 +23,7 @@ export async function createProductMediaUploadSession(
   await requireRole("boss");
   if (!productId || !fileName.trim()) return { ok: false, error: "Missing file details." };
 
-  const path = `products/${productId}/${kind}/${randomUUID()}-${fileName}`;
+  const path = `products/${productId}/${kind}/${randomUUID()}-${safeStorageSegment(fileName)}`;
   const { data, error } = await createAdminClient()
     .storage.from(PRODUCT_MEDIA_BUCKET)
     .createSignedUploadUrl(path);
