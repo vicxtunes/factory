@@ -45,6 +45,18 @@ export function HistoryIcon({ className }: { className?: string }) {
   );
 }
 
+export function PaymentIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className={className}>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 0 0 2.25-2.25V6.75A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25v10.5A2.25 2.25 0 0 0 4.5 19.5Z"
+      />
+    </svg>
+  );
+}
+
 export function PlaceOrderIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className={className}>
@@ -101,6 +113,7 @@ const TABS: Tab[] = [
   { href: "/client-side", label: "Dashboard", icon: DashboardIcon, requiresSignIn: true },
   { href: "/client-side/orders", label: "Orders", icon: OrdersIcon, requiresSignIn: true },
   { href: "/client-side/history", label: "History", icon: HistoryIcon, requiresSignIn: true },
+  { href: "/client-side/payment", label: "Payment", icon: PaymentIcon, requiresSignIn: true },
   { href: "/client-side/new", label: "Place Order", icon: PlaceOrderIcon, requiresSignIn: true },
   { href: "/client-side/showroom", label: "Showroom", icon: ShowroomIcon, requiresSignIn: false },
   { href: "/client-side/settings", label: "Settings", icon: SettingsIcon, requiresSignIn: true },

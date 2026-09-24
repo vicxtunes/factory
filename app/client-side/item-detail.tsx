@@ -2,6 +2,7 @@
 
 import { MediaLinks } from "@/components/media/MediaLinks";
 import { ItemAttributes } from "@/components/order/ItemAttributes";
+import { PaymentMethods } from "@/components/payments/PaymentMethods";
 import { UrgencyBadge } from "@/components/ui/UrgencyBadge";
 import type { OrderItemWithOrder } from "@/lib/types";
 
@@ -63,6 +64,18 @@ export function ClientItemDetail({ item }: { item: OrderItemWithOrder }) {
           <MediaLinks media={item.media} legacyLink={photoLink} editable={false} />
         </div>
       ) : null}
+
+      <details className="group rounded-2xl border border-border">
+        <summary className="flex min-h-11 cursor-pointer items-center justify-between px-4 text-sm font-semibold">
+          How to pay
+          <span className="text-muted transition-transform group-open:rotate-180" aria-hidden>
+            ▾
+          </span>
+        </summary>
+        <div className="border-t border-border p-3">
+          <PaymentMethods orderNo={item.order.order_no} amount={item.order.quoted_price} />
+        </div>
+      </details>
     </div>
   );
 }

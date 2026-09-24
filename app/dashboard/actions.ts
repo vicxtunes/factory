@@ -1533,20 +1533,26 @@ export async function routeApprovedOrder(
 
 // Client-portal orders wait (pending_review, unreleased) for the receptionist
 // to check they're filled in properly — and, for photo books, to phone the
-// client — then receive them and choose where they go. There's no quote or
-// client approval step. Marks the order received, then sends it on exactly
-// like routeApprovedOrder does.
+// client — then receive them and choose where they go. There's no client
+// approval step. Photo books have no catalog price, so the price agreed on
+// that call is entered here (`price`) and becomes the order's quoted_price —
+// what the client portal's "How to pay" shows as the amount to pay. Marks the
+// order received, then sends it on exactly like routeApprovedOrder does.
 export async function receiveClientOrder(
   orderId: string,
   route: OrderRoute,
   designerId?: string,
+  price?: number,
 ): Promise<Result> {
   await requireManager();
+  if (price !== undefined && (!Number.isFinite(price) || price <= 0)) {
+    return { ok: false, error: "Enter a valid price." };
+  }
 
   const admin = createAdminClient();
   const { data: order } = await admin
     .from("orders")
-    .select("id, approval_status, released_at, cancelled_at")
+    .select("id, approval_status, released_at, order_no, client_id, cancelled_at")
     .eq("id", orderId)
     .maybeSingle();
   if (!order) return { ok: false, error: "Order not found." };
@@ -1555,11 +1561,35 @@ export async function receiveClientOrder(
   // quote/approval flow.
   if (order.released_at) return { ok: false, error: "This order was already sent to production." };
 
-  const { error } = await admin.from("orders").update({ approval_status: "approved" }).eq("id", orderId);
+  const { error } = await admin
+    .from("orders")
+    .update(price !== undefined ? { approval_status: "approved", quoted_price: price } : { approval_status: "approved" })
+    .eq("id", orderId);
   if (error) return { ok: false, error: error.message };
 
   const actor = await resolveActor();
-  await logOrderEvent({ orderId, actor, action: "order_received", detail: {} });
+  await logOrderEvent({ orderId, actor, action: "order_received", detail: price !== undefined ? { price } : {} });
+
+  // Tell the client the agreed price so they can pay — same any-item anchor
+  // trick as quoteOrder above.
+  if (price !== undefined && order.client_id) {
+    const { data: firstItem } = await admin
+      .from("order_items")
+      .select("id")
+      .eq("order_id", orderId)
+      .limit(1)
+      .maybeSingle();
+    if (firstItem) {
+      await notifyOrderItem({
+        orderItemId: firstItem.id,
+        eventType: "quote_ready",
+        message: `Order ${order.order_no} is confirmed — ${formatMoney(price, await fetchBaseCurrencySymbol())}. Open it to see how to pay.`,
+        recipient: { type: "client", id: order.client_id },
+        pushTitle: "Order confirmed",
+        url: "/client-side/orders",
+      });
+    }
+  }
 
   // If routing fails (e.g. no designer picked) the order is left "approved,
   // not routed", which the queue already shows with a Send button.

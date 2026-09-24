@@ -5,8 +5,8 @@ import { HomeBar } from "@/components/ui/HomeBar";
 import { logoutClient } from "./actions";
 
 // Client portal: the four places clients live in (Dashboard, Orders,
-// Showroom, Support); placing an order and history are occasional,
-// so they sit under "more".
+// Showroom, Support); placing an order, history and payment details are
+// occasional, so they sit under "more".
 export function ClientHomeBar() {
   return (
     <HomeBar
@@ -19,6 +19,7 @@ export function ClientHomeBar() {
       more={[
         { href: "/client-side/new", label: "Place Order", icon: "placeOrder" },
         { href: "/client-side/history", label: "History", icon: "history" },
+        { href: "/client-side/payment", label: "Payment", icon: "payment" },
       ]}
       logout={logoutClient}
       afterLogout="/client-side"

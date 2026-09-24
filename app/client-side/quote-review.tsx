@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 
 import { Button } from "@/components/ui/Button";
 import { Field, TextArea } from "@/components/ui/Field";
+import { PaymentMethods } from "@/components/payments/PaymentMethods";
 import type { OrderItemWithOrder } from "@/lib/types";
 
 import { respondToQuote } from "./actions";
@@ -61,11 +62,14 @@ export function ClientQuoteReview({
 
   if (order.approval_status === "approved") {
     return (
-      <p className="text-sm text-muted">
-        You approved this order at{" "}
-        <span className="font-semibold text-foreground">{formatMoney(order.quoted_price, symbol)}</span> — we&apos;re
-        sending it into production.
-      </p>
+      <div className="space-y-4">
+        <p className="text-sm text-muted">
+          You approved this order at{" "}
+          <span className="font-semibold text-foreground">{formatMoney(order.quoted_price, symbol)}</span> — we&apos;re
+          sending it into production.
+        </p>
+        <HowToPay orderNo={order.order_no} amount={order.quoted_price} />
+      </div>
     );
   }
 
@@ -103,6 +107,17 @@ export function ClientQuoteReview({
           </Button>
         </div>
       )}
+
+      <HowToPay orderNo={order.order_no} amount={order.quoted_price} />
+    </div>
+  );
+}
+
+function HowToPay({ orderNo, amount }: { orderNo: string; amount: number | null }) {
+  return (
+    <div className="space-y-2 border-t border-border pt-4">
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted">How to pay</p>
+      <PaymentMethods orderNo={orderNo} amount={amount} />
     </div>
   );
 }

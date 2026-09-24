@@ -8,7 +8,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireMediaUploadAccess } from "@/lib/auth/session";
 import { logOrderEvent, resolveActor, type AuditActor } from "@/lib/audit/log";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { MEDIA_BUCKET } from "./client";
+import { MEDIA_BUCKET, safeStorageSegment } from "./client";
 
 type Result = { ok: true } | { ok: false; error: string };
 
@@ -52,7 +52,7 @@ async function resolvePath(orderItemId: string, fileName: string): Promise<strin
     .eq("id", orderItemId)
     .single<{ product: string; order: { order_no: string } }>();
   if (error || !item) throw new Error("Order item not found.");
-  return `orders/${item.order.order_no}/${item.product}/${randomUUID()}-${fileName}`;
+  return `orders/${safeStorageSegment(item.order.order_no)}/${safeStorageSegment(item.product)}/${randomUUID()}-${safeStorageSegment(fileName)}`;
 }
 
 export async function createUploadSession(

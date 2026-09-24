@@ -4,12 +4,14 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/Button";
-import { Field, Select } from "@/components/ui/Field";
+import { Field, Select, TextInput } from "@/components/ui/Field";
 import { SectionLabel } from "@/components/ui/SectionLabel";
 import type { DesignerPublic, OrderItemWithOrder } from "@/lib/types";
 
 import { CancelOrderButton } from "@/components/order/CancelOrder";
 import { cancelOrder, receiveClientOrder } from "./actions";
+import { useCurrencySymbol } from "@/lib/currency/CurrencySymbolProvider";
+import { formatMoney } from "@/lib/currency/format";
 
 interface OrderGroup {
   orderId: string;
@@ -205,13 +207,18 @@ function RouteCard({
 }: {
   group: OrderGroup;
   designers: DesignerPublic[];
-  // Photo-book order: show a call-the-client prompt instead of the approved
-  // price, and confirm details + send in one step.
+  // Photo-book order: show a call-the-client prompt, and require the price
+  // agreed on that call before it can be confirmed — photo books have no
+  // catalog price, and this is what the client is asked to pay.
   call?: boolean;
   canCancel?: boolean;
 }) {
+  const symbol = useCurrencySymbol();
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [price, setPrice] = useState("");
+  const priceValue = Number(price);
+  const priceValid = price.trim() !== "" && Number.isFinite(priceValue) && priceValue > 0;
   const [designerId, setDesignerId] = useState("");
   const [sending, startSending] = useTransition();
   const [sendingTo, setSendingTo] = useState<"factory" | "designer" | null>(null);
@@ -222,7 +229,7 @@ function RouteCard({
     setSendingTo(route);
     startSending(async () => {
       const arg = route === "designer" ? designerId : undefined;
-      const res = await receiveClientOrder(group.orderId, route, arg);
+      const res = await receiveClientOrder(group.orderId, route, arg, call ? priceValue : undefined);
       if (!res.ok) {
         setError(res.error ?? "Something went wrong.");
         return;
@@ -249,9 +256,24 @@ function RouteCard({
           ) : (
             <p className="text-xs text-muted">No phone number on file for this client.</p>
           )}
+          <div className="mt-3">
+            <Field label={`Agreed price (${symbol})`}>
+              <TextInput
+                type="number"
+                inputMode="numeric"
+                min={0}
+                step="1"
+                className="tnum w-40"
+                value={price}
+                onChange={(e) => setPrice(e.target.value)}
+                placeholder="0"
+              />
+            </Field>
+            <p className="mt-1 text-xs text-muted">The client is shown this as the amount to pay.</p>
+          </div>
         </div>
       ) : null}
-      <Button variant="primary" onClick={() => setOpen(true)}>
+      <Button variant="primary" disabled={call && !priceValid} onClick={() => setOpen(true)}>
         Confirm order
       </Button>
       {canCancel ? (
@@ -280,6 +302,7 @@ function RouteCard({
             <h3 className="text-base font-semibold">Where should this order go?</h3>
             <p className="mt-0.5 text-xs text-muted">
               {group.orderNo} · {group.clientName}
+              {call && priceValid ? ` · ${formatMoney(priceValue, symbol)}` : ""}
             </p>
             <div className="mt-4 space-y-3">
               <Button
