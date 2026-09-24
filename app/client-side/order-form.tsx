@@ -16,6 +16,7 @@ import { uploadFileToStorage } from "@/lib/storage/upload-client";
 import type { Currency, OrderType, Product, ProductCategory } from "@/lib/types";
 
 import { placeOrder } from "./actions";
+import { OrderPlaced } from "./order-placed";
 
 // Local-only staging for direct photo uploads — mirrors
 // components/order/OrderForm.tsx's ItemFormState: no order_item row (and so
@@ -113,7 +114,11 @@ export function OrderForm({
     emptyItem(initialCategoryId, initialProductId, initialVariantId),
   ]);
   const [error, setError] = useState<string | null>(null);
-  const [receipt, setReceipt] = useState<string | null>(null);
+  // Snapshot of the placed order for the confirmation screen — taken at
+  // submit time, not re-derived, so it can't drift if the catalog refreshes.
+  const [receipt, setReceipt] = useState<{ orderNo: string; total: number | null; needsReview: boolean } | null>(
+    null,
+  );
   const [uploadStatus, setUploadStatus] = useState<string | null>(null);
   const [uploadWarnings, setUploadWarnings] = useState<string[]>([]);
   const [pending, start] = useTransition();
@@ -210,33 +215,25 @@ export function OrderForm({
       setUploadStatus(null);
       setUploadWarnings(warnings);
 
-      setReceipt(res.orderNo);
+      setReceipt({
+        orderNo: res.orderNo,
+        total: orderTotal(resolveItems(catalog, items), showPrices),
+        // Photo books get a call from the receptionist first, so the price
+        // isn't final until then — don't ask for money up front.
+        needsReview: hasPhotobookItem,
+      });
       router.refresh();
     });
   }
 
   if (receipt) {
     return (
-      <div className="mx-auto max-w-lg rounded-[var(--radius)] border border-border bg-surface p-6 text-center shadow-theme-sm">
-        <p className="text-lg font-semibold">Order {receipt} placed!</p>
-        <p className="mt-2 text-sm text-muted">
-          We&apos;ll start working on it — track progress under My Orders.
-        </p>
-        {uploadWarnings.length > 0 ? (
-          <div className="mt-3 rounded-[var(--radius)] border border-warning-100 bg-warning-50 p-3 text-left text-sm text-warning-700">
-            <p className="font-medium">The order went through, but some photos didn&apos;t upload:</p>
-            <ul className="mt-1 list-disc space-y-0.5 pl-4">
-              {uploadWarnings.map((w, i) => (
-                <li key={i}>{w}</li>
-              ))}
-            </ul>
-            <p className="mt-1 text-warning-600">You can add them again from My Orders.</p>
-          </div>
-        ) : null}
-        <Link href="/client-side/new">
-          <Button className="mt-4">Place another order</Button>
-        </Link>
-      </div>
+      <OrderPlaced
+        orderNo={receipt.orderNo}
+        total={receipt.total}
+        needsReview={receipt.needsReview}
+        uploadWarnings={uploadWarnings}
+      />
     );
   }
 
@@ -570,6 +567,29 @@ const TRUST_BADGES = [
   { icon: BadgeCubeIcon, label: "Factory made" },
 ];
 
+// Only ever returns a total once every line item resolves to a real, priced
+// product — a total that silently drops an unpriced item would understate
+// what's actually owed, which is worse than not showing a total at all.
+// Shared by the summary sidebar and the post-order payment prompt so both
+// always agree on the amount.
+function resolveItems(catalog: ProductCategory[], items: OrderItemInput[]) {
+  return items.map((item) => {
+    const category = catalog.find((c) => c.id === item.category_id) ?? null;
+    const product: Product | null = category?.products.find((p) => p.id === item.product_id) ?? null;
+    const variant = product?.variants.find((v) => v.id === item.variant_id) ?? null;
+    // A variant's own price overrides the parent product's — see
+    // ProductVariant.price's comment in lib/types.ts.
+    const unitPrice = variant?.price ?? product?.price ?? null;
+    return { item, category, product, variant, unitPrice };
+  });
+}
+
+function orderTotal(resolved: ReturnType<typeof resolveItems>, showPrices: boolean): number | null {
+  return showPrices && resolved.length > 0 && resolved.every((r) => r.product && r.unitPrice != null)
+    ? resolved.reduce((sum, r) => sum + (r.unitPrice ?? 0) * r.item.qty, 0)
+    : null;
+}
+
 function OrderSummary({
   catalog,
   items,
@@ -588,23 +608,8 @@ function OrderSummary({
   currencies: Currency[];
 }) {
   const currency = useCurrency(currencies);
-  const resolved = items.map((item) => {
-    const category = catalog.find((c) => c.id === item.category_id) ?? null;
-    const product: Product | null = category?.products.find((p) => p.id === item.product_id) ?? null;
-    const variant = product?.variants.find((v) => v.id === item.variant_id) ?? null;
-    // A variant's own price overrides the parent product's — see
-    // ProductVariant.price's comment in lib/types.ts.
-    const unitPrice = variant?.price ?? product?.price ?? null;
-    return { item, category, product, variant, unitPrice };
-  });
-
-  // Only ever shown once every line item resolves to a real, priced product
-  // — a total that silently drops an unpriced item would understate what's
-  // actually owed, which is worse than not showing a total at all.
-  const total =
-    showPrices && resolved.length > 0 && resolved.every((r) => r.product && r.unitPrice != null)
-      ? resolved.reduce((sum, r) => sum + (r.unitPrice ?? 0) * r.item.qty, 0)
-      : null;
+  const resolved = resolveItems(catalog, items);
+  const total = orderTotal(resolved, showPrices);
 
   return (
     <aside className="rounded-2xl border border-border bg-surface p-5 shadow-theme-sm lg:sticky lg:top-6">
