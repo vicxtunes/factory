@@ -8,7 +8,8 @@ import { Field, Select } from "@/components/ui/Field";
 import { SectionLabel } from "@/components/ui/SectionLabel";
 import type { DesignerPublic, OrderItemWithOrder } from "@/lib/types";
 
-import { receiveClientOrder } from "./actions";
+import { CancelOrderButton } from "@/components/order/CancelOrder";
+import { cancelOrder, receiveClientOrder } from "./actions";
 
 interface OrderGroup {
   orderId: string;
@@ -45,10 +46,12 @@ export function OrderApprovalQueue({
   items,
   designers,
   photobookCategoryIds,
+  canCancel = false,
 }: {
   items: OrderItemWithOrder[];
   designers: DesignerPublic[];
   photobookCategoryIds: string[];
+  canCancel?: boolean;
 }) {
   const groups = useMemo(() => groupByOrder(items), [items]);
   // Every client order that hasn't been sent on yet: check it, confirm it,
@@ -66,6 +69,7 @@ export function OrderApprovalQueue({
             group={g}
             designers={designers}
             call={g.items.some((i) => i.category_id && photobookIds.has(i.category_id))}
+            canCancel={canCancel}
           />
         ))}
         {incoming.length === 0 ? <p className="text-sm text-muted">No new client orders.</p> : null}
@@ -197,12 +201,14 @@ function RouteCard({
   group,
   designers,
   call = false,
+  canCancel = false,
 }: {
   group: OrderGroup;
   designers: DesignerPublic[];
   // Photo-book order: show a call-the-client prompt instead of the approved
   // price, and confirm details + send in one step.
   call?: boolean;
+  canCancel?: boolean;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -248,6 +254,17 @@ function RouteCard({
       <Button variant="primary" onClick={() => setOpen(true)}>
         Confirm order
       </Button>
+      {canCancel ? (
+        <span className="ml-2">
+          <CancelOrderButton
+            orderNo={group.orderNo}
+            cancel={(reason) => cancelOrder(group.orderId, reason)}
+            onCancelled={() => router.refresh()}
+            requireTypedOrderNo
+            description="The order is removed from this queue and the client is notified with your reason. This can't be undone."
+          />
+        </span>
+      ) : null}
       {open ? (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-gray-400/50 p-4 backdrop-blur-[2px] dark:bg-gray-950/60"

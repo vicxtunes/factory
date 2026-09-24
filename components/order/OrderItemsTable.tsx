@@ -74,7 +74,7 @@ export function OrderItemsTable({
               <td className={CELL}>
                 <UrgencyBadge urgency={i.urgency} />
               </td>
-              <td className={`${CELL} whitespace-nowrap`}>{STATUS_LABELS[i.production_status]}</td>
+              <td className={`${CELL} whitespace-nowrap`}>{i.order.cancelled_at ? "Cancelled" : STATUS_LABELS[i.production_status]}</td>
               <td className={CELL}>{workerName(i.assigned_worker_id)}</td>
               <td className={`${CELL} whitespace-nowrap`}>
                 {i.stage === "with_designer" ? "With designer" : "Factory"}

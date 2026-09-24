@@ -21,5 +21,12 @@ export default async function OrderApprovalsPage() {
   ]);
   const photobookCategoryIds = catalog.filter((c) => isPhotobookCategory(c.name)).map((c) => c.id);
 
-  return <OrderApprovalQueue items={items} designers={designers} photobookCategoryIds={photobookCategoryIds} />;
+  return (
+    <OrderApprovalQueue
+      items={items}
+      designers={designers}
+      photobookCategoryIds={photobookCategoryIds}
+      canCancel={session.role === "boss"}
+    />
+  );
 }

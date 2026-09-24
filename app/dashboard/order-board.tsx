@@ -68,6 +68,7 @@ export function OrderBoard({
   categories,
   canManage,
   canViewAudit,
+  canCancel = false,
   catalog,
   clients,
   agents,
@@ -78,6 +79,8 @@ export function OrderBoard({
   categories: { id: string; name: string }[];
   canManage: boolean;
   canViewAudit: boolean;
+  // Boss only — see cancelOrder in ./actions.ts.
+  canCancel?: boolean;
   catalog: ProductCategory[];
   clients: Client[];
   agents: Agent[];
@@ -88,6 +91,7 @@ export function OrderBoard({
   const [view, setView] = useState<"cards" | "table">("cards");
   const [showFinished, setShowFinished] = useState(false);
   const [showWithDesigner, setShowWithDesigner] = useState(false);
+  const [showCancelled, setShowCancelled] = useState(false);
   const [tableRows, setTableRows] = useState<number>(TABLE_PAGE_SIZES[0]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const supabaseRef = useRef(createClient());
@@ -104,6 +108,7 @@ export function OrderBoard({
     setFilters(emptyFilters());
     setShowFinished(false);
     setShowWithDesigner(false);
+    setShowCancelled(false);
     setTableRows(TABLE_PAGE_SIZES[0]);
   }, []);
 
@@ -156,6 +161,7 @@ export function OrderBoard({
         { event: "*", schema: "public", table: "order_items" },
         () => refetch(),
       )
+      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, () => refetch())
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
@@ -176,27 +182,33 @@ export function OrderBoard({
     filters.status !== "" && FINISHED_STATUSES.includes(filters.status);
   const showingFinished = showFinished || statusFilterIsFinished;
 
+  // Cancelled orders are their own bucket, hidden unless asked for, and never
+  // mixed into the active / delivered / with-designer buckets below.
+  const cancelledItems = useMemo(() => matched.filter((i) => i.order.cancelled_at), [matched]);
+  const liveMatched = useMemo(() => matched.filter((i) => !i.order.cancelled_at), [matched]);
+
   const deliveredItems = useMemo(
-    () => matched.filter((i) => FINISHED_STATUSES.includes(i.production_status)),
-    [matched],
+    () => liveMatched.filter((i) => FINISHED_STATUSES.includes(i.production_status)),
+    [liveMatched],
   );
   const withDesignerItems = useMemo(
     () =>
-      matched.filter(
+      liveMatched.filter(
         (i) => i.stage === NOT_READY_STAGE && !FINISHED_STATUSES.includes(i.production_status),
       ),
-    [matched],
+    [liveMatched],
   );
   const activeItems = useMemo(
     () =>
-      matched.filter(
+      liveMatched.filter(
         (i) => i.stage !== NOT_READY_STAGE && !FINISHED_STATUSES.includes(i.production_status),
       ),
-    [matched],
+    [liveMatched],
   );
   const hiddenFinished = showingFinished ? 0 : deliveredItems.length;
   const hiddenWithDesigner = showWithDesigner ? 0 : withDesignerItems.length;
-  const anyBucketToggled = showingFinished || showWithDesigner;
+  const hiddenCancelled = showCancelled ? 0 : cancelledItems.length;
+  const anyBucketToggled = showingFinished || showWithDesigner || showCancelled;
 
   // When neither toggle is on: active work only (the default). When either
   // is on: active work is hidden entirely and only the checked bucket(s)
@@ -205,9 +217,22 @@ export function OrderBoard({
   const filtered = useMemo(
     () =>
       anyBucketToggled
-        ? [...(showingFinished ? deliveredItems : []), ...(showWithDesigner ? withDesignerItems : [])]
+        ? [
+            ...(showingFinished ? deliveredItems : []),
+            ...(showWithDesigner ? withDesignerItems : []),
+            ...(showCancelled ? cancelledItems : []),
+          ]
         : activeItems,
-    [activeItems, deliveredItems, withDesignerItems, showingFinished, showWithDesigner, anyBucketToggled],
+    [
+      activeItems,
+      deliveredItems,
+      withDesignerItems,
+      cancelledItems,
+      showingFinished,
+      showWithDesigner,
+      showCancelled,
+      anyBucketToggled,
+    ],
   );
 
   const chips = useMemo(
@@ -256,6 +281,10 @@ export function OrderBoard({
   const withDesignerGroups = useMemo(
     () => (showWithDesigner ? groupByCategory(withDesignerItems) : []),
     [groupByCategory, withDesignerItems, showWithDesigner],
+  );
+  const cancelledGroups = useMemo(
+    () => (showCancelled ? groupByCategory(cancelledItems) : []),
+    [groupByCategory, cancelledItems, showCancelled],
   );
 
   const tableItems = useMemo(() => sortOrderListItems(filtered), [filtered]);
@@ -474,7 +503,7 @@ export function OrderBoard({
       </div>
 
       {/* 3. Checkboxes — one line, no wrap. */}
-      <div className="mb-3 flex flex-nowrap items-center gap-4">
+      <div className="mb-3 flex flex-nowrap items-center gap-4 overflow-x-auto">
         {!statusFilterIsFinished ? (
           <label className="inline-flex min-h-11 shrink-0 items-center gap-1.5 text-xs text-muted">
             <input
@@ -505,6 +534,19 @@ export function OrderBoard({
           {hiddenWithDesigner > 0 ? (
             <span className="tnum">({hiddenWithDesigner})</span>
           ) : null}
+        </label>
+
+        <label className="inline-flex min-h-11 shrink-0 items-center gap-1.5 text-xs text-muted">
+          <input
+            type="checkbox"
+            checked={showCancelled}
+            onChange={(e) => {
+              setShowCancelled(e.target.checked);
+              setTableRows(TABLE_PAGE_SIZES[0]);
+            }}
+          />
+          Cancelled
+          {hiddenCancelled > 0 ? <span className="tnum">({hiddenCancelled})</span> : null}
         </label>
       </div>
 
@@ -630,6 +672,21 @@ export function OrderBoard({
               <CategoryGroups groups={withDesignerGroups} workerById={workerById} onOpen={setSelectedId} />
             </div>
           ) : null}
+
+          {showCancelled && cancelledGroups.length > 0 ? (
+            <div
+              className={`space-y-6 ${
+                (showingFinished && deliveredGroups.length > 0) || (showWithDesigner && withDesignerGroups.length > 0)
+                  ? "border-t border-border pt-6"
+                  : ""
+              }`}
+            >
+              <h2 className="text-sm font-semibold text-foreground">
+                Cancelled <span className="tnum text-muted">({cancelledItems.length})</span>
+              </h2>
+              <CategoryGroups groups={cancelledGroups} workerById={workerById} onOpen={setSelectedId} />
+            </div>
+          ) : null}
         </div>
       )}
 
@@ -645,6 +702,13 @@ export function OrderBoard({
             assignedName={selectedAssignedName}
             canManage={canManage}
             canViewAudit={canViewAudit}
+            canCancel={
+              canCancel &&
+              !selectedItem.order.cancelled_at &&
+              !items
+                .filter((i) => i.order_id === selectedItem.order_id)
+                .every((i) => i.production_status === "completed")
+            }
             catalog={catalog}
             onChanged={refetch}
             onPickCreatedDate={pickCreatedDate}

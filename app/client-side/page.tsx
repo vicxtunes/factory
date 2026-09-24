@@ -39,7 +39,8 @@ export default async function ClientSidePage({
 
   return (
     <ClientShell signedIn name={session.name} avatarUrl={session.avatarUrl}>
-      <ClientDashboard items={items} slides={slides} />
+      {/* Cancelled orders aren't work in progress — keep them out of the stats. */}
+      <ClientDashboard items={items.filter((i) => !i.order.cancelled_at)} slides={slides} />
     </ClientShell>
   );
 }

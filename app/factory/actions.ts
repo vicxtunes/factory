@@ -87,7 +87,7 @@ export async function advanceStatus(itemId: string): Promise<ActionResult> {
   const { data: item } = await admin
     .from("order_items")
     .select(
-      "id, order_id, product, product_type, production_status, assigned_worker_id, order:orders!inner (order_no, client_id)",
+      "id, order_id, product, product_type, production_status, assigned_worker_id, order:orders!inner (order_no, client_id, cancelled_at)",
     )
     .eq("id", itemId)
     .maybeSingle<{
@@ -97,9 +97,10 @@ export async function advanceStatus(itemId: string): Promise<ActionResult> {
       product_type: string | null;
       production_status: ProductionStatus;
       assigned_worker_id: string | null;
-      order: { order_no: string; client_id: string | null };
+      order: { order_no: string; client_id: string | null; cancelled_at: string | null };
     }>();
   if (!item) return { ok: false, error: "Item not found." };
+  if (item.order.cancelled_at) return { ok: false, error: "This order was cancelled." };
   const forbidden = assertAssignedToWorker(item, session.worker_id);
   if (forbidden) return forbidden;
 

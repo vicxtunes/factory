@@ -18,6 +18,7 @@ export default async function OrdersPage() {
   const session = await getDashboardSession();
   const canManage = session ? isManagerRole(session.role) : false;
   const canViewAudit = session ? canViewOrderAudit(session.role) : false;
+  const canCancel = session?.role === "boss";
 
   const admin = createAdminClient();
   const [items, workersRes, categories, catalog, clients, agents, designers] = await Promise.all([
@@ -43,6 +44,7 @@ export default async function OrdersPage() {
       categories={categories}
       canManage={canManage}
       canViewAudit={canViewAudit}
+      canCancel={canCancel}
       catalog={catalog}
       clients={clients}
       agents={agents}
