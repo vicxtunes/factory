@@ -105,7 +105,7 @@ export async function advanceItemToFactory(itemId: string): Promise<ActionResult
   const { data: item } = await admin
     .from("order_items")
     .select(
-      "id, order_id, product, product_type, stage, assigned_worker_id, order:orders!inner (assigned_designer_id, order_no)",
+      "id, order_id, product, product_type, stage, assigned_worker_id, order:orders!inner (assigned_designer_id, order_no, cancelled_at)",
     )
     .eq("id", itemId)
     .maybeSingle<{
@@ -115,9 +115,10 @@ export async function advanceItemToFactory(itemId: string): Promise<ActionResult
       product_type: string | null;
       stage: string;
       assigned_worker_id: string | null;
-      order: { assigned_designer_id: string | null; order_no: string };
+      order: { assigned_designer_id: string | null; order_no: string; cancelled_at: string | null };
     }>();
   if (!item) return { ok: false, error: "Item not found." };
+  if (item.order.cancelled_at) return { ok: false, error: "This order was cancelled." };
   if (item.order.assigned_designer_id !== session.designer_id) {
     return { ok: false, error: "This item isn't assigned to you." };
   }

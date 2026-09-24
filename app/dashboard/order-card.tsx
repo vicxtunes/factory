@@ -46,7 +46,13 @@ export function OrderCard({
         <p className="mt-0.5 tnum text-xs text-muted">Created {formatCreatedAt(item.created_at)}</p>
 
         <div className="mt-2 flex items-center justify-between gap-2 text-xs text-muted">
-          <StatusGlowBadge status={item.production_status} isDelayed={item.is_delayed} />
+          {item.order.cancelled_at ? (
+            <span className="rounded-full bg-error-50 px-2.5 py-0.5 text-xs font-medium text-error-700 dark:bg-error-500/15 dark:text-error-400">
+              Cancelled
+            </span>
+          ) : (
+            <StatusGlowBadge status={item.production_status} isDelayed={item.is_delayed} />
+          )}
           <span>{assignedName ?? "Unassigned"}</span>
         </div>
 

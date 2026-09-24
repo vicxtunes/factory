@@ -24,6 +24,7 @@ import {
   type ClientMatchReason,
 } from "@/lib/clients/dedupe";
 import { buildAndInsertOrder, verifyActiveWorker } from "@/lib/orders/create";
+import { applyCancellation, cleanReason, loadCancellableOrder } from "@/lib/orders/cancel";
 import type {
   ClientDuplicateHit,
   CreateOrderResult,
@@ -1455,10 +1456,11 @@ export async function routeApprovedOrder(
   const admin = createAdminClient();
   const { data: order } = await admin
     .from("orders")
-    .select("id, approval_status, released_at, order_no")
+    .select("id, approval_status, released_at, order_no, cancelled_at")
     .eq("id", orderId)
     .maybeSingle();
   if (!order) return { ok: false, error: "Order not found." };
+  if (order.cancelled_at) return { ok: false, error: "This order was cancelled." };
   if (order.approval_status !== "approved") return { ok: false, error: "Client hasn't approved this order yet." };
   if (order.released_at) return { ok: false, error: "This order was already sent to production." };
 
@@ -1550,10 +1552,11 @@ export async function receiveClientOrder(
   const admin = createAdminClient();
   const { data: order } = await admin
     .from("orders")
-    .select("id, approval_status, released_at, order_no, client_id")
+    .select("id, approval_status, released_at, order_no, client_id, cancelled_at")
     .eq("id", orderId)
     .maybeSingle();
   if (!order) return { ok: false, error: "Order not found." };
+  if (order.cancelled_at) return { ok: false, error: "This order was cancelled." };
   // Any unsent order can be confirmed, including ones left mid-way in the old
   // quote/approval flow.
   if (order.released_at) return { ok: false, error: "This order was already sent to production." };
@@ -1591,6 +1594,27 @@ export async function receiveClientOrder(
   // If routing fails (e.g. no designer picked) the order is left "approved,
   // not routed", which the queue already shows with a Send button.
   return routeApprovedOrder(orderId, route, designerId);
+}
+
+// Boss-only: cancel any order that isn't fully completed yet — before or
+// after it's been confirmed and sent to production. Soft cancel (see
+// lib/orders/cancel.ts): the order drops off every work board and the client,
+// designer and assigned workers are told, with the reason.
+export async function cancelOrder(orderId: string, reason: string): Promise<Result> {
+  await requireRole("boss");
+  const why = cleanReason(reason);
+  if (!why) return { ok: false, error: "Enter a reason for cancelling." };
+
+  const { order, items } = await loadCancellableOrder(orderId);
+  if (!order) return { ok: false, error: "Order not found." };
+  if (order.cancelled_at) return { ok: false, error: "This order is already cancelled." };
+  if (items.length > 0 && items.every((i) => i.production_status === "completed")) {
+    return { ok: false, error: "This order is already completed and can't be cancelled." };
+  }
+
+  const actor = await resolveActor();
+  if (!actor) return { ok: false, error: "Not signed in." };
+  return applyCancellation({ order, items, reason: why, actor, notifyClient: true });
 }
 
 // ---------------------------------------------------------------------------

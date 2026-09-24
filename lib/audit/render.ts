@@ -25,6 +25,7 @@ const ACTION_TEMPLATES: Record<string, (d: Record<string, unknown>) => string> =
   note_added: (d) => (d.itemLabel ? `added a note on ${str(d.itemLabel)}` : "added a note on the order"),
   note_edited: () => "edited their note",
   note_removed: () => "removed their note",
+  order_cancelled: (d) => `cancelled this order — "${str(d.reason)}"`,
 };
 
 function str(v: unknown): string {

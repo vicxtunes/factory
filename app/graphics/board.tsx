@@ -81,7 +81,8 @@ export function Board({
     const { data } = await supabaseRef.current
       .from("order_items")
       .select(ORDER_ITEM_SELECT)
-      .eq("order.assigned_designer_id", designerId);
+      .eq("order.assigned_designer_id", designerId)
+      .is("order.cancelled_at", null);
     if (data) setItems(data as unknown as OrderItemWithOrder[]);
   }, [designerId]);
 

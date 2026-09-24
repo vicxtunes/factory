@@ -46,7 +46,8 @@ export function ClientOrderCard({
 }) {
   const symbol = useCurrencySymbol();
   const isExpress = item.order.order_type === "express";
-  const notReleased = item.order.released_at === null;
+  const cancelled = item.order.cancelled_at !== null;
+  const notReleased = item.order.released_at === null && !cancelled;
   const approvalBadge = APPROVAL_BADGE[item.order.approval_status];
   const cs = clientStatus(item);
   const colorKey = clientStatusColorKey(cs);
@@ -74,7 +75,11 @@ export function ClientOrderCard({
         <p className="mt-2 font-medium">{item.product}</p>
 
         <div className="mt-2 flex items-center gap-2 text-xs text-muted">
-          {notReleased ? (
+          {cancelled ? (
+            <span className="rounded-full bg-error-50 px-2.5 py-0.5 text-xs font-medium text-error-700 dark:bg-error-500/15 dark:text-error-400">
+              Cancelled
+            </span>
+          ) : notReleased ? (
             <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${approvalBadge.className}`}>
               {approvalBadge.label}
             </span>
@@ -89,7 +94,7 @@ export function ClientOrderCard({
           </p>
         ) : null}
 
-        {!notReleased && item.is_delayed ? (
+        {!notReleased && !cancelled && item.is_delayed ? (
           <p className="mt-2 rounded bg-[var(--rush)]/10 px-2 py-1 text-xs text-[var(--rush)]">
             Delayed{item.delay_reason ? `: ${item.delay_reason}` : ""}
           </p>

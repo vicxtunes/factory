@@ -27,7 +27,14 @@ export type ProductionStatus =
   | "ready_for_pickup"
   | "completed";
 
-export type NotificationEvent = "completed" | "delayed" | "assigned" | "ready" | "quote_ready" | "client_responded";
+export type NotificationEvent =
+  | "completed"
+  | "delayed"
+  | "assigned"
+  | "ready"
+  | "quote_ready"
+  | "client_responded"
+  | "cancelled";
 
 export type AppRole = "supervisor" | "boss" | "receptionist";
 
@@ -82,6 +89,12 @@ export interface Order {
   quoted_price: number | null;
   client_decision_note: string | null;
   released_at: string | null;
+  // Order cancellation — see supabase/migrations/20260924100000_order_cancellation.sql.
+  // Null while the order is live; a cancelled order drops off every work board.
+  cancelled_at: string | null;
+  cancel_reason: string | null;
+  cancelled_by_name: string | null;
+  cancelled_by_type: string | null;
 }
 
 export interface OrderItem {
@@ -379,6 +392,10 @@ export interface OrderItemWithOrder extends OrderItem {
     | "quoted_price"
     | "client_decision_note"
     | "released_at"
+    | "cancelled_at"
+    | "cancel_reason"
+    | "cancelled_by_name"
+    | "cancelled_by_type"
   > & {
     // Every order_notes row for the order — both order-level (order_item_id
     // null) and item-level. Card badges filter to what they need; the drawer

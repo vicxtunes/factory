@@ -8,6 +8,7 @@ import { Linkify } from "@/components/ui/Linkify";
 import { UrgencyBadge } from "@/components/ui/UrgencyBadge";
 import { AddMediaButton } from "@/components/media/AddMediaButton";
 import { MediaLinks } from "@/components/media/MediaLinks";
+import { CancelledNotice, CancelOrderButton } from "@/components/order/CancelOrder";
 import { ItemAttributes } from "@/components/order/ItemAttributes";
 import { NotesThread } from "@/components/order/NotesThread";
 import { OrderAuditLog } from "@/components/order/OrderAuditLog";
@@ -20,7 +21,7 @@ import {
   type Worker,
 } from "@/lib/types";
 
-import { assignItem, overrideStatus, updateOrderItem } from "./actions";
+import { assignItem, cancelOrder, overrideStatus, updateOrderItem } from "./actions";
 
 type WorkerLite = Omit<Worker, "pin_hash">;
 
@@ -91,6 +92,7 @@ export function OrderDetail({
   assignedName,
   canManage,
   canViewAudit,
+  canCancel = false,
   catalog,
   onChanged,
   onPickCreatedDate,
@@ -100,6 +102,9 @@ export function OrderDetail({
   assignedName: string | null;
   canManage: boolean;
   canViewAudit: boolean;
+  // Boss only, and only while the order is live and not fully completed —
+  // the board works that out (see ./order-board.tsx).
+  canCancel?: boolean;
   catalog: ProductCategory[];
   onChanged: () => void;
   // Calendar icon next to "Created" — pick any date to jump to every order
@@ -119,7 +124,10 @@ export function OrderDetail({
   // Same cutoff the designer's edit already uses — a mistake can surface
   // after production starts, so editing stays open until the factory has
   // actually finished this item.
-  const canEdit = canManage && item.production_status !== "completed";
+  // A cancelled order is read-only: nothing to edit, reassign or advance.
+  const cancelled = item.order.cancelled_at !== null;
+  const manageable = canManage && !cancelled;
+  const canEdit = manageable && item.production_status !== "completed";
 
   const category = catalog.find((c) => c.id === edit?.category_id) ?? null;
   const products = category?.products ?? [];
@@ -172,6 +180,13 @@ export function OrderDetail({
 
   return (
     <div className="space-y-4 text-sm">
+      {item.order.cancelled_at ? (
+        <CancelledNotice
+          reason={item.order.cancel_reason}
+          by={item.order.cancelled_by_type === "client" ? `${item.order.cancelled_by_name ?? "the client"} (client)` : item.order.cancelled_by_name}
+          at={item.order.cancelled_at}
+        />
+      ) : null}
       <div className="flex items-start justify-between gap-2">
         <div>
           <p className="text-lg font-semibold tnum">{item.order.order_no}</p>
@@ -425,7 +440,7 @@ export function OrderDetail({
           <p className="mb-1 text-xs uppercase tracking-wide text-muted">
             Status
           </p>
-          {canManage ? (
+          {manageable ? (
             <Select
               value={item.production_status}
               disabled={pending}
@@ -454,7 +469,7 @@ export function OrderDetail({
           <p className="mb-1 text-xs uppercase tracking-wide text-muted">
             Assigned worker
           </p>
-          {canManage ? (
+          {manageable ? (
             <Select
               value={item.assigned_worker_id ?? ""}
               disabled={pending}
@@ -477,6 +492,21 @@ export function OrderDetail({
           )}
         </div>
       </div>
+
+      {canCancel ? (
+        <div className="border-t border-border pt-3">
+          <p className="mb-2 text-xs text-muted">
+            Cancels the whole order ({item.order.order_no}), every item on it. Only the boss can do this.
+          </p>
+          <CancelOrderButton
+            orderNo={item.order.order_no}
+            cancel={(reason) => cancelOrder(item.order_id, reason)}
+            onCancelled={onChanged}
+            requireTypedOrderNo
+            description="The order comes off the factory, designer and display boards, and the client, designer and assigned workers are notified with your reason. This can't be undone."
+          />
+        </div>
+      ) : null}
     </div>
   );
 }

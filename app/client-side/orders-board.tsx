@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { CancelledNotice, CancelOrderButton } from "@/components/order/CancelOrder";
 import { ExportButtons } from "@/components/order/ExportButtons";
 import { OrderItemsTable } from "@/components/order/OrderItemsTable";
 import { DateRangeCalendar } from "@/components/ui/DateRangeCalendar";
@@ -35,6 +36,7 @@ import {
 import { ClientItemDetail } from "./item-detail";
 import { ClientOrderCard } from "./order-card";
 import { ClientQuoteReview } from "./quote-review";
+import { cancelMyOrder } from "./actions";
 
 // Same search/filter/table/export toolset as app/dashboard/order-board.tsx
 // (lib/orders/filters.ts, OrderItemsTable, ExportButtons, Popover), scoped
@@ -112,7 +114,8 @@ export function ClientOrdersBoard({
     }
     const done = new Set<string>();
     for (const [orderId, list] of byOrder) {
-      if (list.every((i) => i.production_status === "completed")) done.add(orderId);
+      // Cancelled orders are finished too, as far as the client is concerned.
+      if (list[0]?.order.cancelled_at || list.every((i) => i.production_status === "completed")) done.add(orderId);
     }
     return done;
   }, [items]);
@@ -333,7 +336,7 @@ export function ClientOrdersBoard({
         </div>
       ) : filtered.length === 0 ? (
         <p className="rounded-[var(--radius)] border border-dashed border-border p-3 text-xs text-muted">
-          {bucket === "history" ? "No completed orders yet." : "No active orders match these filters."}
+          {bucket === "history" ? "No completed or cancelled orders yet." : "No active orders match these filters."}
         </p>
       ) : (
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -349,12 +352,40 @@ export function ClientOrdersBoard({
         title={selectedItem ? selectedItem.product : undefined}
       >
         {selectedItem ? (
-          selectedItem.order.released_at === null ? (
-            <ClientQuoteReview
-              orderId={selectedItem.order_id}
-              order={selectedItem.order}
-              onDone={() => setSelectedId(null)}
-            />
+          selectedItem.order.cancelled_at ? (
+            <div className="space-y-4">
+              <CancelledNotice
+                reason={selectedItem.order.cancel_reason}
+                by={selectedItem.order.cancelled_by_type === "client" ? "you" : "us"}
+                at={selectedItem.order.cancelled_at}
+              />
+              <p className="text-sm">
+                <span className="text-muted">Order</span> {selectedItem.order.order_no} · {selectedItem.product} · Qty{" "}
+                {selectedItem.qty}
+              </p>
+            </div>
+          ) : selectedItem.order.released_at === null ? (
+            <div className="space-y-6">
+              <ClientQuoteReview
+                orderId={selectedItem.order_id}
+                order={selectedItem.order}
+                onDone={() => setSelectedId(null)}
+              />
+              <div className="border-t border-border pt-4">
+                <p className="mb-2 text-xs text-muted">
+                  Changed your mind? You can cancel until we confirm your order.
+                </p>
+                <CancelOrderButton
+                  orderNo={selectedItem.order.order_no}
+                  cancel={(reason) => cancelMyOrder(selectedItem.order_id, reason)}
+                  onCancelled={() => {
+                    setSelectedId(null);
+                    refetch();
+                  }}
+                  description="The whole order (every item on it) will be cancelled. This can't be undone — you'd need to place a new order."
+                />
+              </div>
+            </div>
           ) : (
             <ClientItemDetail item={selectedItem} />
           )

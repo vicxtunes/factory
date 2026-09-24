@@ -16,6 +16,7 @@ export const ORDER_ITEM_SELECT = `
     designer_name, designer_brief, media_link, media_notes,
     order_type, deadline_at, agent_name, created_at, created_by_name, created_by_role,
     approval_status, quoted_price, client_decision_note, released_at,
+    cancelled_at, cancel_reason, cancelled_by_name, cancelled_by_type,
     order_notes:order_notes!order_id (id, order_id, order_item_id, author_type, author_id, author_name, author_role, body, created_at)
   )
 `;

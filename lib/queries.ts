@@ -27,7 +27,9 @@ export async function fetchBoardItems(): Promise<OrderItemWithOrder[]> {
     // `releaseImmediately`) until the receptionist routes them post-approval
     // — invisible to the factory floor until then. Staff-created orders
     // default released_at to now(), so this is a no-op for them.
-    .not("order.released_at", "is", null);
+    .not("order.released_at", "is", null)
+    // Cancelled orders (see Order.cancelled_at) drop off every work board.
+    .is("order.cancelled_at", null);
   if (error) throw new Error(error.message);
   return (data ?? []) as unknown as OrderItemWithOrder[];
 }
@@ -42,7 +44,8 @@ export async function fetchDesignerItems(designerId: string): Promise<OrderItemW
   const { data, error } = await supabase
     .from("order_items")
     .select(ITEM_SELECT)
-    .eq("order.assigned_designer_id", designerId);
+    .eq("order.assigned_designer_id", designerId)
+    .is("order.cancelled_at", null);
   if (error) throw new Error(error.message);
   return (data ?? []) as unknown as OrderItemWithOrder[];
 }
@@ -81,6 +84,7 @@ export async function fetchApprovalQueueItems(): Promise<OrderItemWithOrder[]> {
     .from("order_items")
     .select(ITEM_SELECT)
     .or("approval_status.neq.approved,released_at.is.null", { referencedTable: "order" })
+    .is("order.cancelled_at", null)
     .order("created_at", { ascending: false });
   if (error) throw new Error(error.message);
   return (data ?? []) as unknown as OrderItemWithOrder[];
@@ -89,12 +93,14 @@ export async function fetchApprovalQueueItems(): Promise<OrderItemWithOrder[]> {
 // Every item, for the dashboard overview's stats (all order statuses,
 // including a client-portal order still sitting unreleased in the
 // receptionist's quote queue) — kept separate from fetchOfficeItems below so
-// this one page's totals aren't quietly narrowed by that split.
+// this one page's totals aren't quietly narrowed by that split. Cancelled
+// orders are left out — they're not work, and would inflate "not started".
 export async function fetchAllItems(): Promise<OrderItemWithOrder[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("order_items")
     .select(ITEM_SELECT)
+    .is("order.cancelled_at", null)
     .order("created_at", { ascending: false });
   if (error) throw new Error(error.message);
   return (data ?? []) as unknown as OrderItemWithOrder[];

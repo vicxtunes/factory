@@ -16,6 +16,7 @@ import {
 } from "@/lib/clients/dedupe";
 import { parsePhone } from "@/lib/clients/phone";
 import { buildAndInsertOrder } from "@/lib/orders/create";
+import { applyCancellation, cleanReason, loadCancellableOrder } from "@/lib/orders/cancel";
 import { isPhotobookCategory } from "@/lib/orders/photobook";
 import type { CreateOrderResult, OrderItemInput } from "@/lib/orders/types";
 import { notifyActor } from "@/lib/push/send";
@@ -332,4 +333,47 @@ export async function getMyNotifications(): Promise<NotificationRow[]> {
   const session = await getClientSession();
   if (!session) return [];
   return fetchClientNotifications(session.client_id, 10);
+}
+
+// A client can cancel their own order only while it's still unconfirmed —
+// once the receptionist has confirmed it and sent it on (released_at set),
+// work may have started, so only the boss can cancel it from then on (see
+// cancelOrder in app/dashboard/actions.ts). Staff get told either way.
+export async function cancelMyOrder(orderId: string, reason: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  const session = await getClientSession();
+  if (!session) return { ok: false, error: "Not signed in." };
+  const why = cleanReason(reason);
+  if (!why) return { ok: false, error: "Please tell us why you're cancelling." };
+
+  const { order, items } = await loadCancellableOrder(orderId);
+  // Ownership check is load-bearing — see respondToQuote above.
+  if (!order || order.client_id !== session.client_id) return { ok: false, error: "Order not found." };
+  if (order.cancelled_at) return { ok: false, error: "This order is already cancelled." };
+  if (order.released_at) {
+    return {
+      ok: false,
+      error: "This order has already been confirmed and is being worked on. Please contact us to cancel it.",
+    };
+  }
+
+  const actor = await resolveActor();
+  if (!actor) return { ok: false, error: "Not signed in." };
+  const res = await applyCancellation({ order, items, reason: why, actor, notifyClient: false });
+  if (!res.ok) return res;
+
+  const admin = createAdminClient();
+  const { data: managers } = await admin.from("profiles").select("id").in("role", ["receptionist", "supervisor", "boss"]);
+  await Promise.all(
+    (managers ?? []).map((m) =>
+      notifyActor(
+        { type: "dashboard_user", id: m.id },
+        {
+          title: "Client cancelled an order",
+          body: `Order ${order.order_no} from ${session.name}: "${why}"`,
+          url: "/dashboard/order-approvals",
+        },
+      ),
+    ),
+  );
+  return { ok: true };
 }
