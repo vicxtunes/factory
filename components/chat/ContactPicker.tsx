@@ -11,6 +11,8 @@ const SEARCH_DEBOUNCE_MS = 250;
 
 /**
  * Searchable list of people the viewer may contact (server applies policy).
+ * Fills its parent: the search box stays put and only the list scrolls, so
+ * give the parent a bounded height (e.g. flex-1 min-h-0, or h-80).
  * `filter` narrows further client-side, e.g. groups exclude clients.
  * In multi mode rows are checkboxes; otherwise tapping a row picks it.
  */
@@ -57,7 +59,7 @@ export function ContactPicker({
   const visible = (results ?? []).filter((p) => (!filter || filter(p.type)) && !excluded.has(participantKey(p)));
 
   return (
-    <div className="flex min-h-0 flex-col gap-2">
+    <div className="flex h-full min-h-0 flex-col gap-2">
       <input
         type="search"
         autoFocus
@@ -65,12 +67,12 @@ export function ContactPicker({
         onChange={(e) => setQuery(e.target.value)}
         placeholder="Search people"
         aria-label="Search people"
-        className="w-full min-h-10 rounded-[var(--radius)] border border-border bg-background px-3 text-sm outline-none focus:border-brand-300"
+        className="w-full min-h-10 shrink-0 rounded-[var(--radius)] border border-border bg-background px-3 text-sm outline-none focus:border-brand-300"
       />
 
       {error ? <p className="text-xs text-[var(--rush)]">{error}</p> : null}
 
-      <ul className="min-h-0 flex-1 overflow-y-auto">
+      <ul className="-mx-1 min-h-0 flex-1 overflow-y-auto overscroll-contain px-1">
         {results === null ? (
           <li className="p-3 text-sm text-muted">Loading…</li>
         ) : visible.length === 0 ? (

@@ -131,11 +131,11 @@ people open it at the same moment.
 
 ```tsx
 import { ChatLauncher } from "@/components/chat/ChatLauncher";      // header icon + unread badge
-import { OrderChatButton } from "@/components/chat/OrderChatButton"; // "Order chat" on any order view
+import { OrderChat } from "@/components/chat/OrderChat";         // order thread, inline in any order view
 import { chatHref } from "@/lib/chat/routes";                        // link to /chat or a conversation
 
 <ChatLauncher />
-<OrderChatButton orderId={order.id} />
+<OrderChat orderId={order.id} />
 <Link href={chatHref(conversationId)}>Open chat</Link>
 ```
 

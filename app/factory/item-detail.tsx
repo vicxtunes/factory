@@ -8,7 +8,7 @@ import { UrgencyBadge } from "@/components/ui/UrgencyBadge";
 import { AddMediaButton } from "@/components/media/AddMediaButton";
 import { MediaLinks } from "@/components/media/MediaLinks";
 import { ItemAttributes } from "@/components/order/ItemAttributes";
-import { OrderChatButton } from "@/components/chat/OrderChatButton";
+import { OrderChat } from "@/components/chat/OrderChat";
 import { NotesThread } from "@/components/order/NotesThread";
 import { STATUS_LABELS, type OrderItemWithOrder } from "@/lib/types";
 
@@ -100,7 +100,7 @@ export function ItemDetail({
         </p>
       ) : null}
 
-      <OrderChatButton orderId={item.order_id} />
+      <OrderChat orderId={item.order_id} />
 
       <NotesThread orderId={item.order_id} orderItemId={item.id} title="Item notes" onChanged={onChanged} />
       <NotesThread orderId={item.order_id} orderItemId={null} title="Order notes" onChanged={onChanged} />
