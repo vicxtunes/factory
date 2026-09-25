@@ -18,6 +18,7 @@ import type {
   ChatPerson,
   ChatRealtimeConfig,
   ChatResult,
+  ChatSearchResult,
   ConversationDetail,
   ConversationSummary,
   MessagePage,
@@ -59,6 +60,10 @@ export async function getMessages(conversationId: string, before?: string | null
 
 export async function searchContacts(query: string): Promise<ChatResult<ChatPerson[]>> {
   return run((v) => service.searchContacts(v, query));
+}
+
+export async function searchMessages(query: string): Promise<ChatResult<ChatSearchResult[]>> {
+  return run((v) => service.searchMessages(v, query));
 }
 
 export async function getRealtimeConfig(): Promise<ChatResult<ChatRealtimeConfig>> {

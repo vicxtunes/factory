@@ -13,6 +13,11 @@ export const CHAT_LIMITS = {
   maxAttachmentsPerMessage: 10,
   maxAttachmentBytes: 25 * 1024 * 1024,
   messagesPerPage: 50,
+  /** Message search: shortest query worth running, and max hits returned. */
+  minSearchLength: 2,
+  maxSearchResults: 30,
+  /** Voice messages stop recording automatically after this long. */
+  maxVoiceMessageMs: 5 * 60 * 1000,
   /** Signed attachment URLs live this long (seconds). */
   attachmentUrlTtl: 60 * 60,
 } as const;

@@ -43,6 +43,15 @@ export function staffTeamChannel(): string {
   return channelFor("team:staff");
 }
 
+/**
+ * A conversation's typing-indicator channel. Unlike the doorbells, browsers
+ * broadcast on this one directly (client → client), so the name is only
+ * given to people who passed the conversation's access check.
+ */
+export function conversationChannel(conversationId: string): string {
+  return channelFor(`conversation:${conversationId}`);
+}
+
 /** Channels the given viewer should subscribe to. */
 export function channelsFor(viewer: ParticipantRef): string[] {
   return isStaff(viewer) ? [personalChannel(viewer), staffTeamChannel()] : [personalChannel(viewer)];

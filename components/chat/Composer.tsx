@@ -9,6 +9,7 @@ import type { ChatMessage, UploadedAttachment } from "@/lib/chat/types";
 
 import { formatBytes } from "./format";
 import { PaperclipIcon, SendIcon } from "./icons";
+import { canRecordVoice, VoiceRecorder } from "./VoiceRecorder";
 
 interface PendingFile {
   key: string;
@@ -24,6 +25,7 @@ const MAX_ROWS_PX = 160;
  * Message input. Enter sends, Shift+Enter adds a new line. Files are uploaded
  * straight to storage when Send is pressed, then attached to the message.
  *
+ * With an empty draft the Send button becomes a microphone for voice messages.
  * In edit mode it edits `editing` in place instead of sending a new message.
  * Rendered inside the per-conversation ConversationView, so drafts never
  * leak between conversations.
@@ -36,6 +38,8 @@ export function Composer({
   onCancelEdit,
   onSent,
   onEdited,
+  onTyping,
+  onStoppedTyping,
 }: {
   conversationId: string;
   replyTo: ChatMessage | null;
@@ -44,11 +48,18 @@ export function Composer({
   onCancelEdit: () => void;
   onSent: (message: ChatMessage) => void;
   onEdited: () => void;
+  /** Called on each keystroke (the caller throttles) — drives typing indicators. */
+  onTyping?: () => void;
+  onStoppedTyping?: () => void;
 }) {
   const [text, setText] = useState("");
   const [files, setFiles] = useState<PendingFile[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [recording, setRecording] = useState(false);
+  // The composer only mounts in the browser (after the conversation loads),
+  // so feature-detecting in the initializer can't cause a hydration mismatch.
+  const [voiceSupported] = useState(canRecordVoice);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -78,6 +89,21 @@ export function Composer({
     const incoming = [...list].map((file) => ({ key: `${file.name}-${file.size}-${Math.random()}`, file, progress: 0, error: null }));
     setFiles((prev) => [...prev, ...incoming].slice(0, CHAT_LIMITS.maxAttachmentsPerMessage));
     setError(null);
+  }
+
+  /** Uploads a finished voice recording and sends it as its own message. */
+  async function sendVoice(file: File, durationMs: number) {
+    setBusy(true);
+    setError(null);
+    try {
+      const upload = await uploadChatAttachment(conversationId, file, { durationMs });
+      if (!upload.ok) return setError(upload.error);
+      const res = await sendMessage({ conversationId, body: "", replyToId: replyTo?.id ?? null, attachments: [upload.attachment] });
+      if (!res.ok) return setError(res.error);
+      onSent(res.data);
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function submit() {
@@ -115,6 +141,7 @@ export function Composer({
       if (!res.ok) return setError(res.error);
       setText("");
       setFiles([]);
+      onStoppedTyping?.();
       onSent(res.data);
     } finally {
       setBusy(false);
@@ -174,7 +201,7 @@ export function Composer({
       ) : null}
 
       <div className="flex items-end gap-2">
-        {!editing ? (
+        {!editing && !recording ? (
           <>
             <button
               type="button"
@@ -203,7 +230,12 @@ export function Composer({
           ref={inputRef}
           value={text}
           rows={1}
-          onChange={(e) => setText(e.target.value)}
+          hidden={recording}
+          onChange={(e) => {
+            setText(e.target.value);
+            if (e.target.value.trim()) onTyping?.();
+            else onStoppedTyping?.();
+          }}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
               e.preventDefault();
@@ -223,21 +255,30 @@ export function Composer({
           className="max-h-40 min-h-10 flex-1 resize-none rounded-2xl border border-border bg-background px-3.5 py-2 text-sm outline-none focus:border-brand-300"
         />
 
-        <button
-          type="button"
-          onClick={submit}
-          disabled={busy || (!text.trim() && !files.length)}
-          aria-label={editing ? "Save edit" : "Send"}
-          className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-500 text-white hover:bg-brand-600 disabled:opacity-40"
-        >
-          {busy ? (
-            <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
-          ) : (
-            <SendIcon className="h-5 w-5" />
-          )}
-        </button>
+        {voiceSupported && !editing && !text.trim() && !files.length ? (
+          <VoiceRecorder disabled={busy} onRecorded={sendVoice} onRecordingChange={setRecording} />
+        ) : (
+          <button
+            type="button"
+            onClick={submit}
+            disabled={busy || (!text.trim() && !files.length)}
+            aria-label={editing ? "Save edit" : "Send"}
+            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-500 text-white hover:bg-brand-600 disabled:opacity-40"
+          >
+            {busy ? (
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+            ) : (
+              <SendIcon className="h-5 w-5" />
+            )}
+          </button>
+        )}
       </div>
 
+      {busy && !editing && !text.trim() && !files.length ? (
+        <p className="mt-1.5 px-1 text-xs text-muted" role="status">
+          Sending voice message…
+        </p>
+      ) : null}
       {error ? <p className="mt-1.5 px-1 text-xs text-[var(--rush)]">{error}</p> : null}
     </div>
   );

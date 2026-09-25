@@ -7,6 +7,7 @@ import type { ConversationKind, ConversationSummary } from "@/lib/chat/types";
 
 import { formatListTime, KIND_LABELS } from "./format";
 import { GroupIcon, OrderIcon, PlusIcon, SupportIcon } from "./icons";
+import { MessageSearchResults } from "./MessageSearchResults";
 
 type Filter = "all" | "unread" | ConversationKind;
 
@@ -34,7 +35,9 @@ export function ConversationAvatar({ c }: { c: ConversationSummary }) {
 
 /**
  * The inbox: searchable, filterable list of conversations, newest first.
- * Purely presentational — data and selection are owned by ChatApp.
+ * The search box filters chats by name locally and, from two characters,
+ * also searches message text server-side (MessageSearchResults). Data and
+ * selection are owned by ChatApp.
  */
 export function ConversationList({
   conversations,
@@ -85,8 +88,8 @@ export function ConversationList({
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search chats"
-          aria-label="Search chats"
+          placeholder="Search chats and messages"
+          aria-label="Search chats and messages"
           className="w-full min-h-10 rounded-[var(--radius)] border border-border bg-background px-3 text-sm outline-none focus:border-brand-300"
         />
         {available.length > 2 ? (
@@ -121,7 +124,7 @@ export function ConversationList({
           </ul>
         ) : visible.length === 0 ? (
           <p className="p-6 text-center text-sm text-muted">
-            {conversations.length === 0 ? "No conversations yet. Start one with New." : "Nothing matches."}
+            {conversations.length === 0 ? "No conversations yet. Start one with New." : "No chats match."}
           </p>
         ) : (
           <ul className="p-1.5">
@@ -173,6 +176,7 @@ export function ConversationList({
             })}
           </ul>
         )}
+        <MessageSearchResults query={query} onSelect={onSelect} />
       </div>
     </div>
   );

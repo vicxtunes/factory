@@ -139,6 +139,13 @@ export async function createConversation(
   fail("createConversation", error ?? { message: "no row returned" });
 }
 
+export async function getConversations(ids: string[]): Promise<ConversationRow[]> {
+  if (!ids.length) return [];
+  const { data, error } = await db().from("chat_conversations").select("*").in("id", ids);
+  if (error) fail("getConversations", error);
+  return (data ?? []) as ConversationRow[];
+}
+
 export async function updateConversationTitle(id: string, title: string): Promise<void> {
   const { error } = await db().from("chat_conversations").update({ title }).eq("id", id);
   if (error) fail("updateConversationTitle", error);
@@ -152,6 +159,32 @@ export async function listInbox(viewer: ParticipantRef, includeTeam: boolean): P
   });
   if (error) fail("listInbox", error);
   return (data ?? []) as InboxRow[];
+}
+
+export interface SearchRow {
+  message_id: string;
+  conversation_id: string;
+  sender_name: string | null;
+  body: string;
+  created_at: string;
+}
+
+/** Messages matching an (already escaped) ILIKE pattern that the viewer can see. */
+export async function searchMessages(
+  viewer: ParticipantRef,
+  includeTeam: boolean,
+  pattern: string,
+  limit: number,
+): Promise<SearchRow[]> {
+  const { data, error } = await db().rpc("chat_search", {
+    p_type: viewer.type,
+    p_id: viewer.id,
+    p_include_team: includeTeam,
+    p_pattern: pattern,
+    p_limit: limit,
+  });
+  if (error) fail("searchMessages", error);
+  return (data ?? []) as SearchRow[];
 }
 
 // ---------------------------------------------------------------------------

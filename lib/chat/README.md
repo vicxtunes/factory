@@ -9,10 +9,9 @@ boss), factory workers, graphics designers, and clients.
   and all staff.
 - **Support**: one thread per client with "the team" (all staff).
 
-Features: realtime delivery, unread badges, read receipts ("Seen"), push notifications,
-photo/video/audio/file attachments, replies, edit/delete, mute, member management. Voice
-messages are supported in the data model and UI but have no recorder yet (see
-[Adding voice recording](#adding-voice-recording)).
+Features: realtime delivery, unread badges, read receipts ("Seen"), typing indicators, push
+notifications, voice messages, photo/video/file attachments, replies, edit/delete, mute, member
+management, message search, and order status updates posted into order threads.
 
 ## Layout
 
@@ -32,8 +31,9 @@ lib/chat/
     signals.ts        Adapter: Supabase Realtime "doorbells".
     notifier.ts       Adapter: web push.                              (touches lib/push)
   client/
-    useChatSignals.ts Realtime subscription hook (shared, reference-counted).
-    upload.ts         Direct-to-storage upload with progress.
+    useChatSignals.ts     Realtime subscription hook (shared, reference-counted).
+    useTypingIndicator.ts Typing indicators for the open conversation.
+    upload.ts             Direct-to-storage upload with progress.
 
 components/chat/      React UI. Talks only to lib/chat/actions, types, policy, routes.
 app/chat/page.tsx     The /chat route, rendered inside the viewer's own surface chrome.
@@ -97,6 +97,9 @@ the browser reaches Supabase as `anon`, and Row Level Security can't tell them a
    one-hour signed URLs, minted after an access check. Uploads go straight from the browser to
    Storage with a signed token scoped to the conversation's folder. The server then checks that
    the object exists, sits in that folder, and has an allowed type before recording it.
+4. **Typing indicators go browser to browser** on a per-conversation channel. Its HMAC-derived
+   name is only handed out with the conversation details, after the access check. Nothing is
+   stored.
 
 ## Data model
 
@@ -106,6 +109,14 @@ the browser reaches Supabase as `anon`, and Row Level Security can't tell them a
 | `chat_participants`  | Membership, role, `last_read_at` (unread counts + receipts), mute, soft leave. |
 | `chat_messages`      | Text / attachment / system messages, replies, edit and soft-delete markers.  |
 | `chat_attachments`   | Files per message, including `duration_ms` for audio/video.                |
+
+Database functions, all callable only with the service-role key:
+
+- `chat_inbox()`: a person's conversations with their unread counts.
+- `chat_search()`: messages matching a search that the person is allowed to see. A trigram index
+  keeps substring search fast.
+- Triggers keep the inbox preview current, including "🎤 Voice message" and "📷 Photo" for
+  attachments without text. They also copy order status updates into order threads (see below).
 
 Uniqueness is enforced in the database: one DM per pair (`direct_key`), one thread per order,
 and one support thread per client. This makes "open conversation" idempotent even when two
@@ -143,32 +154,37 @@ await chat.sendMessage(staffViewer, { conversationId: id, body: "Your order has 
 3. Teach `server/directory.ts` where that person's name and avatar live.
 4. Make `server/identity.ts` recognise their session.
 
-### Adding voice recording
+### How the remaining features work
 
-The pipeline already accepts audio. `audio/*` is an allowed type, attachments store
-`duration_ms`, and `MessageBubble` renders an audio player. A recorder only has to produce a
-file:
+- **Voice messages**: `components/chat/VoiceRecorder.tsx`. Tap the mic (it appears when the draft
+  is empty), then send or discard. It records WebM/Opus where the browser supports it and
+  MP4/AAC on Safari. Recordings stop automatically after `CHAT_LIMITS.maxVoiceMessageMs`
+  (5 minutes). Recordings are uploaded like any other attachment with `durationMs` set.
+  Recording needs HTTPS (or localhost) and microphone permission.
+- **Typing indicators**: `lib/chat/client/useTypingIndicator.ts`. Each browser announces
+  "typing" at most every 2.5 seconds while keys are pressed, and "stopped" when a message is
+  sent or the draft is cleared. A typist who goes quiet expires after 6 seconds.
+- **Message search**: type two or more characters in the inbox search box. Chat names are
+  filtered locally, and message text is searched on the server (`searchMessages`). Picking a
+  result opens its conversation. `%` and `_` are searched literally.
+- **Order status updates**: every order lifecycle event (completed, delayed, assigned, ready,
+  cancelled) is already written to `notifications`. A trigger copies each one into that order's
+  thread as a system message, but only if the thread exists. No order code knows about chat.
+  These messages don't push or count as unread, because people already get the notification
+  itself. Open threads pick them up on their next refresh (focus or the 60-second fallback).
 
-```ts
-const recorder = new MediaRecorder(stream);
-// ...collect chunks, then on stop:
-const file = new File(chunks, "voice-message.webm", { type: recorder.mimeType });
-const res = await uploadChatAttachment(conversationId, file, { durationMs });
-if (res.ok) await sendMessage({ conversationId, body: "", attachments: [res.attachment] });
-```
+### Ideas for later
 
-Add a hold-to-record button next to the paperclip in `components/chat/Composer.tsx`.
-
-### Other natural next steps
-
-- Typing indicators: a per-conversation Broadcast channel (HMAC-named like the personal ones).
-- Message search: a `tsvector` column plus a GIN index on `chat_messages.body`.
-- Order status updates posted into order threads as system messages.
+- Jump to the matching message when opening a search result. Search currently opens the
+  conversation at its newest messages.
+- Reactions (👍) on messages.
+- Delivery via SMS or email for clients without push, by swapping `server/notifier.ts`.
 
 ## Deploying
 
-1. Apply the migration: `npx supabase db push` (or paste
-   `supabase/migrations/20260925100000_chat.sql` into the SQL editor).
+1. Apply the migrations: `npx supabase db push`. Alternatively, paste
+   `supabase/migrations/20260925100000_chat.sql` and then `20260925120000_chat_extras.sql` into
+   the SQL editor, in that order.
 2. Make sure Realtime → Settings allows public channels. The chat channels are public but
    unguessable; see the security model above.
 3. No new environment variables. Chat uses the existing `APP_SECRET`, Supabase keys and VAPID

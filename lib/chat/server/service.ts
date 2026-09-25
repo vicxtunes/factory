@@ -19,6 +19,7 @@ import type {
   ChatMessage,
   ChatPerson,
   ChatRealtimeConfig,
+  ChatSearchResult,
   ChatSignal,
   ConversationDetail,
   ConversationSummary,
@@ -35,12 +36,13 @@ import {
   hydrateMessages,
   presentConversation,
   sameParticipant,
+  snippetAround,
   toMembers,
   toRef,
   toSummary,
 } from "./presenter";
 import * as repo from "./repository";
-import { channelsFor, ringPeople } from "./signals";
+import { channelsFor, conversationChannel, ringPeople } from "./signals";
 import * as storage from "./storage";
 
 // Deliberately vague: "not found" and "not allowed" look identical, so the
@@ -151,6 +153,7 @@ export async function getConversationDetail(viewer: ParticipantRef, conversation
       canRename: policy.canRename(c, role),
       canLeave: policy.canLeave(viewer, c, !!membership),
     },
+    typingChannel: conversationChannel(c.id),
   };
 }
 
@@ -170,6 +173,40 @@ export async function getMessages(
 
 export async function searchContacts(viewer: ParticipantRef, query: string): Promise<ChatPerson[]> {
   return directory.searchContacts(viewer, query);
+}
+
+/**
+ * Full-text-ish search over every message the viewer can see (substring,
+ * case-insensitive, trigram-indexed). Newest first.
+ */
+export async function searchMessages(viewer: ParticipantRef, query: string): Promise<ChatSearchResult[]> {
+  const q = query.trim();
+  if (q.length < CHAT_LIMITS.minSearchLength) return [];
+
+  // Escape ILIKE wildcards so "50%" searches for a literal percent sign.
+  const pattern = `%${q.replace(/[\\%_]/g, (m) => `\\${m}`)}%`;
+  const rows = await repo.searchMessages(viewer, policy.isStaff(viewer), pattern, CHAT_LIMITS.maxSearchResults);
+  if (!rows.length) return [];
+
+  const conversations = await repo.getConversations([...new Set(rows.map((r) => r.conversation_id))]);
+  const ctx = await buildContext(conversations);
+  const byId = new Map(conversations.map((c) => [c.id, c]));
+
+  return rows.flatMap((r) => {
+    const c = byId.get(r.conversation_id);
+    if (!c) return [];
+    return [
+      {
+        messageId: r.message_id,
+        conversationId: c.id,
+        conversationTitle: presentConversation(viewer, c, ctx).title,
+        conversationKind: c.kind,
+        senderName: r.sender_name,
+        snippet: snippetAround(r.body, q),
+        createdAt: r.created_at,
+      },
+    ];
+  });
 }
 
 export function getRealtimeConfig(viewer: ParticipantRef): ChatRealtimeConfig {

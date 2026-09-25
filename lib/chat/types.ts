@@ -67,6 +67,11 @@ export interface ConversationDetail extends ConversationSummary {
     canRename: boolean;
     canLeave: boolean;
   };
+  /**
+   * Secret, per-conversation Broadcast channel for typing indicators. Only
+   * handed out after an access check, so only members can listen or speak.
+   */
+  typingChannel: string;
 }
 
 export type AttachmentKind = "image" | "video" | "audio" | "file";
@@ -100,6 +105,28 @@ export interface ChatMessage {
   editedAt: string | null;
   deletedAt: string | null;
 }
+
+/** One hit from message search. */
+export interface ChatSearchResult {
+  messageId: string;
+  conversationId: string;
+  conversationTitle: string;
+  conversationKind: ConversationKind;
+  senderName: string | null;
+  /** A short excerpt around the match. */
+  snippet: string;
+  createdAt: string;
+}
+
+/** Payload of a typing-indicator broadcast (client → client). */
+export interface TypingSignal {
+  /** participantKey() of the typist. */
+  key: string;
+  name: string;
+  typing: boolean;
+}
+
+export const TYPING_EVENT = "typing";
 
 /** A page of messages, oldest → newest. */
 export interface MessagePage {

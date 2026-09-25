@@ -132,6 +132,18 @@ export function describeMessage(body: string, attachments: { kind: ChatAttachmen
   return "📎 File";
 }
 
+const SNIPPET_CONTEXT = 50;
+
+/** A one-line excerpt of `body` centred on the first match of `query`. */
+export function snippetAround(body: string, query: string): string {
+  const flat = body.replace(/\s+/g, " ").trim();
+  const at = flat.toLowerCase().indexOf(query.toLowerCase());
+  if (at < 0 || flat.length <= SNIPPET_CONTEXT * 2 + query.length) return flat.slice(0, SNIPPET_CONTEXT * 2 + query.length);
+  const start = Math.max(0, at - SNIPPET_CONTEXT);
+  const end = Math.min(flat.length, at + query.length + SNIPPET_CONTEXT);
+  return `${start > 0 ? "…" : ""}${flat.slice(start, end)}${end < flat.length ? "…" : ""}`;
+}
+
 /**
  * Converts message rows into ChatMessages: attaches files (with fresh
  * signed URLs) and the quoted message for replies. Deleted messages keep

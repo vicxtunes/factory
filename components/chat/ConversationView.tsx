@@ -3,6 +3,7 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { deleteMessage, getConversation, getMessages, markConversationRead } from "@/lib/chat/actions";
+import { describeTyping, useTypingIndicator } from "@/lib/chat/client/useTypingIndicator";
 import { participantKey } from "@/lib/chat/policy";
 import type { ChatMessage, ConversationDetail } from "@/lib/chat/types";
 
@@ -149,6 +150,13 @@ export function ConversationView({
     return seenBy.length === others.length && others.length > 1 ? "Seen by everyone" : `Seen by ${seenBy.map((m) => m.name).join(", ")}`;
   }, [detail, messages, isMine, meKey]);
 
+  const myName = detail?.members.find((m) => participantKey(m) === meKey)?.name ?? null;
+  const typing = useTypingIndicator(
+    detail?.typingChannel ?? null,
+    meKey && myName ? { key: meKey, name: myName } : null,
+  );
+  const typingLabel = describeTyping(typing.typingNames);
+
   const avatarByKey = useMemo(
     () => new Map((detail?.members ?? []).map((m) => [participantKey(m), m.avatarUrl])),
     [detail],
@@ -271,6 +279,12 @@ export function ConversationView({
         {receipt ? <p className="mt-1 px-1 text-right text-[11px] text-muted">{receipt}</p> : null}
       </div>
 
+      {typingLabel ? (
+        <p className="px-4 pb-1 text-xs italic text-muted" aria-live="polite">
+          {typingLabel}
+        </p>
+      ) : null}
+
       {detail.permissions.canPost ? (
         <Composer
           conversationId={conversationId}
@@ -288,6 +302,8 @@ export function ConversationView({
             setEditing(null);
             refresh();
           }}
+          onTyping={typing.notifyTyping}
+          onStoppedTyping={typing.notifyStopped}
         />
       ) : null}
 
