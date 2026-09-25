@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { ChatIcon } from "@/components/chat/icons";
 import { SUPPORT_OWNER_EMAIL } from "@/lib/support/constants";
 import type { AppRole } from "@/lib/types";
 
@@ -192,6 +193,7 @@ const TABS = [
   { href: "/dashboard/workers", label: "Workers", icon: WorkersIcon, role: MANAGER_ROLES, newTab: false },
   { href: "/dashboard/designers", label: "Designers", icon: DesignersIcon, role: MANAGER_ROLES, newTab: false },
   { href: "/dashboard/admins", label: "Admins", icon: AdminsIcon, role: ["boss"], newTab: false },
+  { href: "/chat", label: "Chat", icon: ChatIcon, role: null, newTab: false },
   { href: "/support", label: "Support", icon: SupportIcon, role: null, newTab: false },
   // Signed-in staff now get the display board in the same tab/app session
   // (not a separate browser tab) — no reason to leave the app for it.

@@ -8,6 +8,7 @@ import { Linkify } from "@/components/ui/Linkify";
 import { UrgencyBadge } from "@/components/ui/UrgencyBadge";
 import { AddMediaButton } from "@/components/media/AddMediaButton";
 import { MediaLinks } from "@/components/media/MediaLinks";
+import { OrderChatButton } from "@/components/chat/OrderChatButton";
 import { CancelledNotice, CancelOrderButton } from "@/components/order/CancelOrder";
 import { ItemAttributes } from "@/components/order/ItemAttributes";
 import { NotesThread } from "@/components/order/NotesThread";
@@ -212,6 +213,8 @@ export function OrderDetail({
           ) : null}
         </div>
       </div>
+
+      <OrderChatButton orderId={item.order_id} />
 
       {canViewAudit ? <OrderAuditLog orderId={item.order_id} /> : null}
 

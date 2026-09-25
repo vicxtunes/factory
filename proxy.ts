@@ -19,7 +19,7 @@ const CLIENT_HOST = /^client\./i;
 
 const STAFF_PATHS = ["/factory", "/graphics", "/dashboard", "/display"];
 // Served from the same public path on every host.
-const SHARED_PATHS = ["/support", "/auth", "/api", "/~offline", "/serwist"];
+const SHARED_PATHS = ["/support", "/chat", "/auth", "/api", "/~offline", "/serwist"];
 const CLIENT_BASE = "/client-side";
 
 const within = (pathname: string, base: string) =>

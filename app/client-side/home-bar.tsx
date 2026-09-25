@@ -17,6 +17,7 @@ export function ClientHomeBar() {
         { href: "/support", label: "Support", icon: "support" },
       ]}
       more={[
+        { href: "/chat", label: "Chat", icon: "chat" },
         { href: "/client-side/new", label: "Place Order", icon: "placeOrder" },
         { href: "/client-side/history", label: "History", icon: "history" },
         { href: "/client-side/payment", label: "Payment", icon: "payment" },

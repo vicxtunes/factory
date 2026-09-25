@@ -26,6 +26,7 @@ export function DashboardHomeBar({ role, email }: { role: AppRole; email: string
   ];
 
   const more: HomeBarLink[] = [
+    { href: "/chat", label: "Chat", icon: "chat" },
     ...(isManager
       ? ([
           { href: "/dashboard/clients", label: "Clients", icon: "clients" },
