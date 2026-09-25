@@ -202,7 +202,9 @@ export function ConversationView({
           <span className="block truncate text-xs text-muted">
             {detail.kind === "direct"
               ? (detail.members.find((m) => participantKey(m) !== meKey)?.subtitle ?? "")
-              : `${detail.members.length} members${detail.muted ? " · muted" : ""}`}
+              : detail.kind === "order" || detail.kind === "support"
+                ? `Shared with all staff · ${detail.members.length} following${detail.muted ? " · muted" : ""}`
+                : `${detail.members.length} members${detail.muted ? " · muted" : ""}`}
           </span>
         </button>
         <button

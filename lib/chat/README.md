@@ -62,11 +62,16 @@ All rules live in [`policy.ts`](./policy.ts).
 
 | From \ To  | Staff           | Worker | Designer | Client                        |
 | ---------- | --------------- | ------ | -------- | ----------------------------- |
-| Staff      | DM              | DM     | DM       | → client's support thread     |
+| Staff      | DM              | DM     | DM       | DM (private)                  |
 | Worker     | DM              | DM     | DM       | —                             |
 | Designer   | DM              | DM     | DM       | DM (only on a shared order)   |
-| Client     | → support       | —      | DM (only their order's designer) | —     |
+| Client     | → support team  | —      | DM (only their order's designer) | —     |
 
+- **A DM is always private to its two people.** No one else can read it, including staff and
+  the boss. The only conversations staff share are order and support threads, and the chat
+  header says "Shared with all staff" on those.
+- Clients don't choose an individual staff member. "Support team" opens their shared support
+  thread. They can still reply in a private chat that a staff member started with them.
 - **Groups** are internal only. Clients can't create or join them. Any member can add people,
   only the owner can remove them, and ownership passes on if the owner leaves.
 - **Order threads**: anyone involved in the order can open them (the client, the assigned

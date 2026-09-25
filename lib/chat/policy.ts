@@ -53,12 +53,15 @@ export function isStaff(p: ParticipantRef | ParticipantType): boolean {
  * Who may start a 1-to-1 conversation with whom, by participant type.
  * Read as: row type may message any type in its list.
  *
- * Staff ↔ client is intentionally absent: a client talks to "the team", not
- * one staff member, so that pairing is routed to the client's support thread
- * instead (see routeDirectConversation).
+ * A direct conversation is ALWAYS private to its two members — nobody else,
+ * staff included, can read it. Staff may start a private chat with any
+ * client. Clients don't pick an individual staff member: "message staff"
+ * from a client goes to their shared support thread (see
+ * routeDirectConversation), which every staff member can see and answer.
+ * Clients can of course reply inside a private chat a staff member started.
  */
 const DIRECT_MESSAGE_MATRIX: Record<ParticipantType, readonly ParticipantType[]> = {
-  dashboard_user: ["dashboard_user", "worker", "designer"],
+  dashboard_user: ["dashboard_user", "worker", "designer", "client"],
   worker: ["dashboard_user", "worker", "designer"],
   designer: ["dashboard_user", "worker", "designer", "client"],
   client: ["designer"],
@@ -83,17 +86,14 @@ export type DirectRoute = "direct" | "support" | "forbidden";
  */
 export function routeDirectConversation(from: ParticipantRef, to: ParticipantRef): DirectRoute {
   if (from.type === to.type && from.id === to.id) return "forbidden";
-  if ((from.type === "dashboard_user" && to.type === "client") || (from.type === "client" && to.type === "dashboard_user")) {
-    return "support";
-  }
+  // Client → staff goes to the team; staff → client is a private chat.
+  if (from.type === "client" && to.type === "dashboard_user") return "support";
   return DIRECT_MESSAGE_MATRIX[from.type].includes(to.type) ? "direct" : "forbidden";
 }
 
 /** The types someone may find in "New message" (before relationship checks). */
 export function reachableTypes(from: ParticipantType): ParticipantType[] {
-  const types = new Set<ParticipantType>(DIRECT_MESSAGE_MATRIX[from]);
-  if (from === "dashboard_user") types.add("client"); // → support thread
-  return [...types];
+  return [...DIRECT_MESSAGE_MATRIX[from]];
 }
 
 /** Groups are internal only: clients neither create nor join them. */
