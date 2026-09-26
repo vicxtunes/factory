@@ -421,6 +421,15 @@ export const STATUS_LABELS: Record<ProductionStatus, string> = {
   completed: "Delivered",
 };
 
+// Items past the bench: Ready (for pickup) and Delivered. Work boards (the
+// dashboard's and the designers') treat these as done and hide them from
+// the active list until asked for.
+export const FINISHED_STATUSES: readonly ProductionStatus[] = ["ready_for_pickup", "completed"];
+
+export function isFinishedStatus(status: ProductionStatus): boolean {
+  return FINISHED_STATUSES.includes(status);
+}
+
 // Columns shown on the factory kanban (completed handled separately).
 export const BOARD_COLUMNS: ProductionStatus[] = [
   "not_started",
