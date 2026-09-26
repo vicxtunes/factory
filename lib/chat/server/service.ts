@@ -327,6 +327,43 @@ export async function openOrderThread(viewer: ChatViewer, orderId: string): Prom
   return conversation.id;
 }
 
+/**
+ * The order's client-facing thread: the client, the order's designer and
+ * the staff team, about this one order only. Created on first use.
+ */
+export async function openClientOrderThread(viewer: ChatViewer, orderId: string): Promise<string> {
+  const order = await directory.getOrderContext(orderId);
+  if (!order || !directory.canUseClientOrderThread(viewer, order)) throw new ChatError("Order not found.");
+  if (!order.clientId) throw new ChatError("This order isn't linked to a client account, so there's no one to chat with.");
+
+  const existing = await repo.findClientOrderConversation(orderId);
+  if (existing) {
+    await repo.addParticipants(existing.id, [viewer]);
+    return existing.id;
+  }
+
+  const { conversation, created } = await repo.createConversation(
+    {
+      kind: "client_order",
+      order_id: orderId,
+      client_id: order.clientId,
+      created_by_type: viewer.type,
+      created_by_id: viewer.id,
+    },
+    () => repo.findClientOrderConversation(orderId),
+  );
+
+  const initial: ParticipantRef[] = [viewer];
+  if (created) {
+    // The client and the designer are in it from the start; staff see it
+    // anyway (team thread) and follow it once they read or reply.
+    initial.push({ type: "client", id: order.clientId });
+    if (order.designerId) initial.push({ type: "designer", id: order.designerId });
+  }
+  await repo.addParticipants(conversation.id, dedupeRefs(initial));
+  return conversation.id;
+}
+
 export async function createGroup(viewer: ChatViewer, input: { title: string; members: ParticipantRef[] }): Promise<string> {
   if (!policy.canCreateGroup(viewer)) throw new ChatError("You can't create group chats.");
   const title = validateTitle(input.title);

@@ -84,7 +84,7 @@ const DIRECT_MESSAGE_MATRIX: Record<ParticipantType, readonly ParticipantType[]>
 };
 
 /** The conversation kinds a client may see at all. */
-const CLIENT_KINDS: readonly ConversationKind[] = ["support", "direct"];
+const CLIENT_KINDS: readonly ConversationKind[] = ["support", "client_order", "direct"];
 
 /**
  * Pairs that are type-allowed but also require an existing working
@@ -135,7 +135,7 @@ export function canJoinGroup(person: ParticipantRef): boolean {
  * before they join, so nothing a client writes goes unseen.
  */
 export function isTeamConversation(kind: ConversationKind): boolean {
-  return kind === "order" || kind === "support";
+  return kind === "order" || kind === "client_order" || kind === "support";
 }
 
 /** Can this viewer read (and post to) a conversation? */
@@ -182,7 +182,7 @@ export function canManageMembers(
     case "order":
       // Staff can pull a worker/designer into an order thread.
       return isStaff(viewer);
-    // Direct, support and issue threads have fixed membership.
+    // Direct, client-order, support and issue threads have fixed membership.
     default:
       return false;
   }
@@ -210,12 +210,13 @@ export function canRename(conversation: { kind: ConversationKind }, viewerRole: 
 }
 
 /**
- * Direct threads have fixed membership. Staff may "unfollow" a support
- * thread (they keep implicit access, but stop getting notifications).
+ * Direct threads have fixed membership. Staff may "unfollow" a support or
+ * client-order thread (they keep implicit access, but stop getting
+ * notifications).
  */
 export function canLeave(viewer: ParticipantRef, conversation: { kind: ConversationKind }, isActiveMember: boolean): boolean {
   if (!isActiveMember) return false;
-  if (conversation.kind === "support") return isStaff(viewer);
+  if (conversation.kind === "support" || conversation.kind === "client_order") return isStaff(viewer);
   return conversation.kind === "group" || conversation.kind === "order";
 }
 

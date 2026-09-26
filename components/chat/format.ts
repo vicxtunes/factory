@@ -53,7 +53,8 @@ export function formatDuration(ms: number | null): string {
 export const KIND_LABELS: Record<ConversationKind, string> = {
   direct: "Direct",
   group: "Group",
-  order: "Order",
+  order: "Order · team",
+  client_order: "Order",
   support: "Support",
   issue: "Issue",
 };

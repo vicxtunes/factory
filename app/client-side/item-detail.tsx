@@ -2,7 +2,7 @@
 
 import { useRef } from "react";
 
-import { SupportChat } from "@/components/chat/OrderChat";
+import { ClientOrderChat } from "@/components/chat/OrderChat";
 import { MediaLinks } from "@/components/media/MediaLinks";
 import { Collapsible, PriceHero } from "@/components/order/OrderSummary";
 import { ItemAttributes } from "@/components/order/ItemAttributes";
@@ -128,10 +128,10 @@ export function ClientItemDetail({ item, orderItems }: { item: OrderItemWithOrde
       ) : null}
 
       <Collapsible ref={howToPayRef} title="How to pay" summary="Bank or mobile money">
-        <PaymentMethods orderNo={item.order.order_no} amount={amount} />
+        <PaymentMethods orderNo={item.order.order_no} />
       </Collapsible>
 
-      <SupportChat label="Questions about this order? Chat with support" />
+      <ClientOrderChat orderId={item.order_id} label="Questions about this order? Chat with us" />
     </div>
   );
 }

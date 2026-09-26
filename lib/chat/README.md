@@ -5,7 +5,11 @@ boss), factory workers, graphics designers, and clients.
 
 - **Direct messages**: private, one-to-one.
 - **Groups**: named, several internal members (staff, workers, designers).
-- **Order threads**: one per order, internal only: its designer, anyone pulled in, and all staff.
+- **Order threads (internal)**: one per order: its designer, anyone pulled in, and all staff.
+  The client never sees these.
+- **Client order threads**: one per order with its client: the client, the order's designer
+  and all staff. Opened from the order itself ("Chat about this order" / "Chat with client"),
+  and it only ever holds that order's messages.
 - **Support**: one thread per client with "the team" (all staff).
 - **Issues**: one private thread per support report ("Raise issue" on `/support`), between the
   person who raised it and the developer, with an Open/Resolved status.
@@ -73,9 +77,10 @@ All rules live in [`policy.ts`](./policy.ts).
 | Client     | → support team  | —      | DM (only with an ongoing order) | —                               |
 
 - **Internal communication is open**: staff, workers and designers can all message each other.
-- **Clients only get two things**: their support thread with the team, and private chats with
-  the designers on their *ongoing* orders (not cancelled, with an item not yet completed).
-  Clients aren't in order threads, and staff don't open private chats with clients. "Message
+- **Clients get three things**: a chat per order (the client order thread), their general
+  support thread with the team, and private chats with the designers on their *ongoing* orders
+  (not cancelled, with an item not yet completed). Clients never see internal order threads,
+  and staff don't open private chats with clients. "Message
   this client" opens the client's support thread instead.
 - **A designer–client chat turns read-only** when they no longer share an ongoing order. Both
   can still read the history, but neither can send (the server returns `readOnlyReason`, shown

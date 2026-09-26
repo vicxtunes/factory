@@ -100,7 +100,7 @@ export function ItemDetail({
         </p>
       ) : null}
 
-      <OrderChat orderId={item.order_id} />
+      <OrderChat orderId={item.order_id} label="Team chat (internal)" />
 
       <NotesThread orderId={item.order_id} orderItemId={item.id} title="Item notes" onChanged={onChanged} />
       <NotesThread orderId={item.order_id} orderItemId={null} title="Order notes" onChanged={onChanged} />

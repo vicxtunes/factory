@@ -28,11 +28,13 @@ export interface ChatPerson extends ParticipantRef {
 /**
  * direct  — private 1-to-1.
  * group   — named, several internal members.
- * order   — one thread per order, internal only (designer, workers, joined people + staff).
- * support — one thread per client with the whole staff team.
- * issue   — one private thread per support report: the reporter + the developer.
+ * order        — one thread per order, internal only (designer, workers, joined people + staff).
+ * client_order — one thread per order with its client: the client, the order's
+ *                designer and the whole staff team. Only that order's messages.
+ * support      — one thread per client with the whole staff team (general questions).
+ * issue        — one private thread per support report: the reporter + the developer.
  */
-export type ConversationKind = "direct" | "group" | "order" | "support" | "issue";
+export type ConversationKind = "direct" | "group" | "order" | "client_order" | "support" | "issue";
 
 /** Status of an issue thread's report. Only the developer may change it. */
 export interface IssueState {

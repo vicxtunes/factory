@@ -8,7 +8,7 @@ import { Linkify } from "@/components/ui/Linkify";
 import { UrgencyBadge } from "@/components/ui/UrgencyBadge";
 import { AddMediaButton } from "@/components/media/AddMediaButton";
 import { MediaLinks } from "@/components/media/MediaLinks";
-import { OrderChat } from "@/components/chat/OrderChat";
+import { ClientOrderChat, OrderChat } from "@/components/chat/OrderChat";
 import { CancelledNotice, CancelOrderButton } from "@/components/order/CancelOrder";
 import { ItemAttributes } from "@/components/order/ItemAttributes";
 import { NotesThread } from "@/components/order/NotesThread";
@@ -312,7 +312,11 @@ export function OrderDetail({
         <OrderAmountPanel items={orderItems?.length ? orderItems : [item]} canSet={canManage} onChanged={onChanged} />
       ) : null}
 
-      <OrderChat orderId={item.order_id} />
+      <div className="flex flex-wrap gap-2">
+        {/* Only orders placed by (or linked to) a client account have someone to chat with. */}
+        {item.order.client_id ? <ClientOrderChat orderId={item.order_id} label="Chat with client" /> : null}
+        <OrderChat orderId={item.order_id} label="Team chat (internal)" />
+      </div>
 
       {canViewAudit ? <OrderAuditLog orderId={item.order_id} /> : null}
 

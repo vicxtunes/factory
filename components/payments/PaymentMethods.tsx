@@ -2,15 +2,13 @@
 
 import { useState } from "react";
 
-import { useCurrencySymbol } from "@/lib/currency/CurrencySymbolProvider";
-import { formatMoney } from "@/lib/currency/format";
 import { PAYMENT_METHODS } from "@/lib/payments/details";
 
 // The business's payment details (lib/payments/details.ts) as cards with a
 // copy button on the numbers people type into their banking / mobile money
 // app. Shown on the client portal's Payment page and inside an order's
-// drawer — there, `orderNo` and `amount` are passed so the client sees
-// exactly what to send and what reference to use.
+// drawer — there, `orderNo` is passed so the client sees which payment
+// reference to use (the amount is shown once, at the top of the order).
 
 function CopyButton({ value, label }: { value: string; label: string }) {
   const [copied, setCopied] = useState(false);
@@ -35,26 +33,15 @@ function CopyButton({ value, label }: { value: string; label: string }) {
   );
 }
 
-export function PaymentMethods({ orderNo, amount }: { orderNo?: string; amount?: number | null }) {
-  const symbol = useCurrencySymbol();
-
+// Instructions only. Order screens show the amount once, at the top
+// (components/order/OrderSummary.tsx's PriceHero), not in here.
+export function PaymentMethods({ orderNo }: { orderNo?: string }) {
   return (
     <div className="space-y-3">
-      {amount != null || orderNo ? (
-        <div className="rounded-2xl border border-brand-200 bg-brand-50 p-4 text-sm dark:border-brand-500/30 dark:bg-brand-500/10">
-          {amount != null ? (
-            <>
-              <p className="text-xs uppercase tracking-wide text-muted">Amount to pay</p>
-              <p className="text-2xl font-extrabold tabular-nums">{formatMoney(amount, symbol)}</p>
-            </>
-          ) : null}
-          {orderNo ? (
-            <p className={amount != null ? "mt-2" : undefined}>
-              Use <span className="font-semibold">{orderNo}</span> as the payment reference so we can match it to your
-              order.
-            </p>
-          ) : null}
-        </div>
+      {orderNo ? (
+        <p className="rounded-2xl border border-brand-200 bg-brand-50 p-4 text-sm dark:border-brand-500/30 dark:bg-brand-500/10">
+          Use <span className="font-semibold">{orderNo}</span> as the payment reference so we can match it to your order.
+        </p>
       ) : null}
 
       {PAYMENT_METHODS.map((method) => (

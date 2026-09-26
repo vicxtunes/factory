@@ -398,6 +398,7 @@ export interface OrderItemWithOrder extends OrderItem {
   order: Pick<
     Order,
     | "order_no"
+    | "client_id"
     | "client_name"
     | "client_phone"
     | "delivery_date"

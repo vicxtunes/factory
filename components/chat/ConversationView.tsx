@@ -21,6 +21,27 @@ const GROUPING_WINDOW_MS = 5 * 60 * 1000;
 /** "Near the bottom" threshold for auto-scrolling on new messages. */
 const STICK_TO_BOTTOM_PX = 120;
 
+/** The line under a conversation's title: who's in it, and who can see it. */
+function headerSubtitle(detail: ConversationDetail, meKey: string | null): string {
+  const muted = detail.muted ? " · muted" : "";
+  switch (detail.kind) {
+    case "direct":
+      return detail.members.find((m) => participantKey(m) !== meKey)?.subtitle ?? "";
+    case "client_order":
+      return detail.me.type === "client"
+        ? "About this order · with our team"
+        : `With the client, about this order · all staff can see${muted}`;
+    case "order":
+      return `Internal: the client can't see this · ${detail.members.length} following${muted}`;
+    case "support":
+      return `Shared with all staff · ${detail.members.length} following${muted}`;
+    case "issue":
+      return "Issue report · private to you and the developer";
+    case "group":
+      return `${detail.members.length} members${muted}`;
+  }
+}
+
 function mergeMessages(existing: ChatMessage[], incoming: ChatMessage[]): ChatMessage[] {
   const byId = new Map(existing.map((m) => [m.id, m]));
   for (const m of incoming) byId.set(m.id, m);
@@ -217,13 +238,7 @@ export function ConversationView({
         <button type="button" onClick={() => setInfoOpen(true)} className="min-w-0 flex-1 text-left">
           <span className="block truncate text-sm font-semibold">{detail.title}</span>
           <span className="block truncate text-xs text-muted">
-            {detail.kind === "direct"
-              ? (detail.members.find((m) => participantKey(m) !== meKey)?.subtitle ?? "")
-              : detail.kind === "order" || detail.kind === "support"
-                ? `Shared with all staff · ${detail.members.length} following${detail.muted ? " · muted" : ""}`
-                : detail.kind === "issue"
-                  ? "Issue report · private to you and the developer"
-                  : `${detail.members.length} members${detail.muted ? " · muted" : ""}`}
+            {headerSubtitle(detail, meKey)}
           </span>
         </button>
         {detail.issue ? (
