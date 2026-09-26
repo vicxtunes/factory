@@ -205,6 +205,8 @@ export function HomeBar({
                 ) : null}
                 <Link
                   href={link.href}
+                  // Full prefetch: the page is ready before the tap (see next.config.ts staleTimes).
+                  prefetch={!link.newTab}
                   target={link.newTab ? "_blank" : undefined}
                   rel={link.newTab ? "noopener noreferrer" : undefined}
                   onClick={() => setMoreOpen(false)}
@@ -256,6 +258,8 @@ export function HomeBar({
             <Link
               key={tab.href}
               href={tab.href}
+              // Full prefetch: the page is ready before the tap (see next.config.ts staleTimes).
+              prefetch={!tab.newTab}
               target={tab.newTab ? "_blank" : undefined}
               rel={tab.newTab ? "noopener noreferrer" : undefined}
               aria-current={current ? "page" : undefined}

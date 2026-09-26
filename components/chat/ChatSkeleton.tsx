@@ -1,5 +1,15 @@
 import { Skeleton } from "@/components/ui/Skeleton";
 
+/**
+ * The chat page's box. On desktop it's a card inside the surface's layout;
+ * on phones (below md) it covers the whole screen like WhatsApp, above the
+ * app's header and bottom bar (z-40) but below drawers (z-50) and menus.
+ */
+export const CHAT_FRAME_CLASS =
+  "flex h-[calc(100dvh-13rem)] min-h-[26rem] overflow-hidden rounded-2xl border border-border bg-surface shadow-theme-xs md:h-[calc(100dvh-9rem)] " +
+  "max-md:fixed max-md:inset-0 max-md:z-[45] max-md:h-dvh max-md:min-h-0 max-md:rounded-none max-md:border-0 max-md:shadow-none " +
+  "max-md:pt-[env(safe-area-inset-top)] max-md:pb-[env(safe-area-inset-bottom)]";
+
 // Loading placeholders for chat, shaped like the real thing so nothing
 // jumps when it arrives. Uses the app-wide Skeleton block.
 
@@ -70,10 +80,7 @@ export function ThreadSkeleton() {
  */
 export function ChatSkeleton() {
   return (
-    <div
-      aria-busy="true"
-      className="flex h-[calc(100dvh-13rem)] min-h-[26rem] overflow-hidden rounded-2xl border border-border bg-surface shadow-theme-xs md:h-[calc(100dvh-9rem)]"
-    >
+    <div aria-busy="true" className={CHAT_FRAME_CLASS}>
       <span className="sr-only" role="status">
         Loading chat…
       </span>

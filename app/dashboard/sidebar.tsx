@@ -253,6 +253,7 @@ function NavGroupSection({
             <li key={item.href}>
               <Link
                 href={item.href}
+                prefetch
                 aria-current={active ? "page" : undefined}
                 className={`menu-item text-sm ${active ? "menu-item-active" : "menu-item-inactive"}`}
               >
@@ -303,6 +304,7 @@ export function DashboardSidebar({ role, email }: { role: AppRole; email: string
           <li>
             <Link
               href={HOME.href}
+              prefetch
               aria-current={homeActive ? "page" : undefined}
               className={`menu-item ${homeActive ? "menu-item-active" : "menu-item-inactive"}`}
             >
@@ -313,6 +315,7 @@ export function DashboardSidebar({ role, email }: { role: AppRole; email: string
           <li>
             <Link
               href={CHAT.href}
+              prefetch
               aria-current={chatActive ? "page" : undefined}
               className={`menu-item ${chatActive ? "menu-item-active" : "menu-item-inactive"}`}
             >

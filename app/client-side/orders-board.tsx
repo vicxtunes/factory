@@ -387,7 +387,7 @@ export function ClientOrdersBoard({
               </div>
             </div>
           ) : (
-            <ClientItemDetail item={selectedItem} />
+            <ClientItemDetail item={selectedItem} orderItems={items.filter((i) => i.order_id === selectedItem.order_id)} />
           )
         ) : null}
       </Drawer>
