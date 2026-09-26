@@ -17,12 +17,19 @@ const FILTERS: { value: Filter; label: string }[] = [
   { value: "unread", label: "Unread" },
   { value: "direct", label: "Direct" },
   { value: "group", label: "Groups" },
-  { value: "order", label: "Orders" },
+  { value: "client_order", label: "Orders" },
+  { value: "order", label: "Order teams" },
   { value: "support", label: "Support" },
   { value: "issue", label: "Issues" },
 ];
 
-const KIND_ICONS = { group: GroupIcon, order: OrderIcon, support: SupportIcon, issue: IssueIcon } as const;
+const KIND_ICONS = {
+  group: GroupIcon,
+  order: OrderIcon,
+  client_order: OrderIcon,
+  support: SupportIcon,
+  issue: IssueIcon,
+} as const;
 
 /** Open/Resolved pill for issue threads. */
 export function IssueStatusBadge({ status }: { status: "open" | "resolved" }) {

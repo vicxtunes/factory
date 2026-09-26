@@ -3,7 +3,7 @@
 import { useCallback, useState } from "react";
 import Link from "next/link";
 
-import { openOrderConversation, openSupportConversation } from "@/lib/chat/actions";
+import { openClientOrderConversation, openOrderConversation, openSupportConversation } from "@/lib/chat/actions";
 import type { ChatResult } from "@/lib/chat/types";
 import { useChatSignals, type ChatSignalHandler } from "@/lib/chat/client/useChatSignals";
 import { chatHref } from "@/lib/chat/routes";
@@ -21,8 +21,18 @@ export function OrderChat({ orderId, label = "Order chat" }: { orderId: string; 
 }
 
 /**
- * The signed-in client's support thread with the team, embedded in their
- * order view — clients talk about orders with support, not in order threads.
+ * The order's chat with its client (the client, the order's designer and
+ * the staff team): only this order's messages. On the client's order view
+ * it's how they ask about the order; staff see it next to the internal
+ * OrderChat.
+ */
+export function ClientOrderChat({ orderId, label = "Chat about this order" }: { orderId: string; label?: string }) {
+  return <EmbeddedChat label={label} openThread={() => openClientOrderConversation(orderId)} />;
+}
+
+/**
+ * The signed-in client's general support thread with the team (questions
+ * not about one particular order).
  */
 export function SupportChat({ label = "Chat with support" }: { label?: string }) {
   return <EmbeddedChat label={label} openThread={() => openSupportConversation()} />;
@@ -88,7 +98,9 @@ function EmbeddedChat({ label, openThread }: { label: string; openThread: () => 
   }
 
   return (
-    <section aria-label={label} className="overflow-hidden rounded-[var(--radius)] border border-border bg-surface">
+    // basis-full: when two embedded chats sit side by side (client + internal),
+    // an opened one takes the whole row.
+    <section aria-label={label} className="w-full basis-full overflow-hidden rounded-[var(--radius)] border border-border bg-surface">
       <div className="flex items-center justify-between gap-2 border-b border-border bg-background px-3 py-1.5">
         <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted">
           <ChatIcon className="h-4 w-4" />

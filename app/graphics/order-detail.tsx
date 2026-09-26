@@ -8,7 +8,7 @@ import { Linkify } from "@/components/ui/Linkify";
 import { AddMediaButton } from "@/components/media/AddMediaButton";
 import { MediaLinks } from "@/components/media/MediaLinks";
 import { ItemAttributes } from "@/components/order/ItemAttributes";
-import { OrderChat } from "@/components/chat/OrderChat";
+import { ClientOrderChat, OrderChat } from "@/components/chat/OrderChat";
 import { NotesThread } from "@/components/order/NotesThread";
 import { STATUS_LABELS, type OrderItemWithOrder, type ProductCategory } from "@/lib/types";
 
@@ -197,7 +197,10 @@ export function OrderDetail({
         </div>
       ) : null}
 
-      <OrderChat orderId={order.orderId} />
+      <div className="flex flex-wrap gap-2">
+        {order.items[0]?.order.client_id ? <ClientOrderChat orderId={order.orderId} label="Chat with client" /> : null}
+        <OrderChat orderId={order.orderId} label="Team chat (internal)" />
+      </div>
 
       <NotesThread orderId={order.orderId} orderItemId={null} title="Order notes" onChanged={onChanged} />
 

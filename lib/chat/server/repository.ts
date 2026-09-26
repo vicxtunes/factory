@@ -121,6 +121,7 @@ async function findOne(column: string, value: string, kind: ConversationKind): P
 
 export const findDirectConversation = (key: string) => findOne("direct_key", key, "direct");
 export const findOrderConversation = (orderId: string) => findOne("order_id", orderId, "order");
+export const findClientOrderConversation = (orderId: string) => findOne("order_id", orderId, "client_order");
 export const findSupportConversation = (clientId: string) => findOne("client_id", clientId, "support");
 export const findIssueConversation = (reportId: string) => findOne("support_report_id", reportId, "issue");
 

@@ -55,7 +55,7 @@ export function ConversationInfoDrawer({
     (after ?? onChanged)();
   }
 
-  const leaveLabel = detail.kind === "support" ? "Stop following" : "Leave conversation";
+  const leaveLabel = detail.kind === "support" || detail.kind === "client_order" ? "Stop following" : "Leave conversation";
 
   return (
     <Drawer open={open} onClose={onClose} title={detail.title}>
@@ -160,7 +160,7 @@ export function ConversationInfoDrawer({
               );
             })}
           </ul>
-          {detail.kind === "order" || detail.kind === "support" ? (
+          {detail.kind === "order" || detail.kind === "support" || detail.kind === "client_order" ? (
             <p className="text-xs text-muted">All staff can see this conversation.</p>
           ) : null}
         </section>

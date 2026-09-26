@@ -84,6 +84,11 @@ export async function openOrderConversation(orderId: string): Promise<ChatResult
   return run((v) => service.openOrderThread(v, orderId));
 }
 
+/** The order's chat with its client (client, designer, staff): only that order's messages. */
+export async function openClientOrderConversation(orderId: string): Promise<ChatResult<string>> {
+  return run((v) => service.openClientOrderThread(v, orderId));
+}
+
 export async function createGroupConversation(input: {
   title: string;
   members: ParticipantRef[];

@@ -58,7 +58,9 @@ export async function buildContext(conversations: ConversationLike[]): Promise<P
   }
 
   const refs: ParticipantRef[] = members.map(toRef);
-  for (const c of conversations) if (c.kind === "support" && c.client_id) refs.push({ type: "client", id: c.client_id });
+  for (const c of conversations) {
+    if ((c.kind === "support" || c.kind === "client_order") && c.client_id) refs.push({ type: "client", id: c.client_id });
+  }
 
   const orderIds = conversations.filter((c) => c.order_id).map((c) => c.order_id!);
   const issueIds = conversations.filter((c) => c.kind === "issue").map((c) => c.id);
@@ -98,7 +100,14 @@ export function presentConversation(
       return { title: names.slice(0, 3).join(", ") || "Group", avatarUrl: null };
     }
     case "order":
-      return { title: `Order #${ctx.orderNumbers.get(c.order_id ?? "") ?? "—"}`, avatarUrl: null };
+      return { title: `Order #${ctx.orderNumbers.get(c.order_id ?? "") ?? "—"} · team`, avatarUrl: null };
+    case "client_order": {
+      // The client sees just the order; staff and the designer also see whose order it is.
+      const orderTitle = `Order #${ctx.orderNumbers.get(c.order_id ?? "") ?? "—"}`;
+      if (viewer.type === "client") return { title: orderTitle, avatarUrl: null };
+      const client = c.client_id ? person({ type: "client", id: c.client_id }) : undefined;
+      return { title: client ? `${orderTitle} · ${client.name}` : orderTitle, avatarUrl: null };
+    }
     case "support": {
       if (viewer.type === "client") return { title: "Support team", avatarUrl: null };
       const client = c.client_id ? person({ type: "client", id: c.client_id }) : undefined;

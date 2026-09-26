@@ -233,3 +233,20 @@ export async function isInvolvedInOrder(person: ParticipantRef, order: OrderChat
     }
   }
 }
+
+/**
+ * May this person use the order's client-facing thread? Its client, its
+ * designer, and staff. Workers talk about orders in the internal thread.
+ */
+export function canUseClientOrderThread(person: ParticipantRef, order: OrderChatContext): boolean {
+  switch (person.type) {
+    case "dashboard_user":
+      return true;
+    case "client":
+      return order.clientId === person.id;
+    case "designer":
+      return order.designerId === person.id;
+    case "worker":
+      return false;
+  }
+}
