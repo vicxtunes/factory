@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
 import { Avatar } from "@/components/profile/Avatar";
 import { Linkify } from "@/components/ui/Linkify";
@@ -8,6 +8,7 @@ import type { ChatAttachment, ChatMessage } from "@/lib/chat/types";
 
 import { formatBytes, formatMessageTime } from "./format";
 import { FileIcon } from "./icons";
+import { MessageMenu, type MessageMenuItem } from "./MessageMenu";
 import { VoicePlayer } from "./VoicePlayer";
 
 function AttachmentView({ a, mine }: { a: ChatAttachment; mine: boolean }) {
@@ -64,9 +65,18 @@ export function SystemMessage({ message }: { message: ChatMessage }) {
   );
 }
 
+/** Holding a finger on a message this long opens its menu (phones have no right-click). */
+const LONG_PRESS_MS = 500;
+/** A finger that moves further than this is scrolling, not long-pressing. */
+const LONG_PRESS_SLOP_PX = 10;
+
 /**
  * One chat message. `grouped` hides the avatar/name when the previous
  * message came from the same sender a moment earlier.
+ *
+ * Reply / Copy / Edit / Delete live in a menu opened by right-clicking the
+ * bubble, long-pressing it on touch screens, or the keyboard's menu key
+ * (Shift+F10) when it's focused. Links keep the browser's own menu.
  */
 export function MessageBubble({
   message,
@@ -87,9 +97,49 @@ export function MessageBubble({
   onEdit: () => void;
   onDelete: () => void;
 }) {
-  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const press = useRef<{ timer: number; x: number; y: number } | null>(null);
+  // Stable, so the open menu doesn't re-run its setup when the thread refreshes.
+  const closeMenu = useCallback(() => setMenu(null), []);
   const deleted = !!message.deletedAt;
   const name = message.senderName ?? "Unknown";
+
+  const items: MessageMenuItem[] = deleted
+    ? []
+    : [
+        { label: "Reply", onSelect: onReply },
+        ...(message.body ? [{ label: "Copy text", onSelect: () => void navigator.clipboard?.writeText(message.body) }] : []),
+        ...(mine && message.kind === "text" ? [{ label: "Edit", onSelect: onEdit }] : []),
+        ...(mine ? [{ label: "Delete", onSelect: onDelete, danger: true, confirm: "Delete this message for everyone?" }] : []),
+      ];
+
+  function openMenu(e: React.MouseEvent<HTMLDivElement>) {
+    if (!items.length || (e.target as HTMLElement).closest("a")) return;
+    e.preventDefault();
+    // Keyboard-opened menus report (0, 0): anchor to the bubble instead.
+    if (e.clientX === 0 && e.clientY === 0) {
+      const r = e.currentTarget.getBoundingClientRect();
+      setMenu({ x: r.left, y: r.bottom });
+    } else {
+      setMenu({ x: e.clientX, y: e.clientY });
+    }
+  }
+
+  // Long-press for touch screens. Android also fires contextmenu on a long
+  // press; iOS doesn't, hence the timer. Both routes open the same menu.
+  function cancelPress() {
+    if (press.current) window.clearTimeout(press.current.timer);
+    press.current = null;
+  }
+  function onPointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    if (e.pointerType !== "touch" || !items.length || (e.target as HTMLElement).closest("a, button, [role=slider]")) return;
+    const { clientX: x, clientY: y } = e;
+    press.current = { x, y, timer: window.setTimeout(() => setMenu({ x, y }), LONG_PRESS_MS) };
+  }
+  function onPointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    const p = press.current;
+    if (p && Math.hypot(e.clientX - p.x, e.clientY - p.y) > LONG_PRESS_SLOP_PX) cancelPress();
+  }
 
   return (
     <div className={`group flex items-end gap-2 ${mine ? "flex-row-reverse" : ""} ${grouped ? "mt-0.5" : "mt-3"}`}>
@@ -103,7 +153,14 @@ export function MessageBubble({
         {showSenderName && !mine && !grouped ? <span className="mb-0.5 ml-1 text-[11px] text-muted">{name}</span> : null}
 
         <div
-          className={`rounded-2xl px-3 py-2 text-sm ${
+          tabIndex={items.length ? 0 : undefined}
+          aria-haspopup={items.length ? "menu" : undefined}
+          onContextMenu={openMenu}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={cancelPress}
+          onPointerCancel={cancelPress}
+          className={`rounded-2xl px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-brand-400 [-webkit-touch-callout:none] [@media(hover:none)]:select-none ${
             deleted
               ? "border border-dashed border-border italic text-muted"
               : mine
@@ -147,36 +204,9 @@ export function MessageBubble({
         <div className={`mt-0.5 flex items-center gap-2 px-1 text-[11px] text-muted ${mine ? "flex-row-reverse" : ""}`}>
           <span className="tnum">{formatMessageTime(message.createdAt)}</span>
           {message.editedAt && !deleted ? <span>· edited</span> : null}
-
-          {!deleted ? (
-            <span className="flex gap-2 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100">
-              <button type="button" onClick={onReply} className="hover:text-foreground">
-                Reply
-              </button>
-              {mine && message.kind === "text" ? (
-                <button type="button" onClick={onEdit} className="hover:text-foreground">
-                  Edit
-                </button>
-              ) : null}
-              {mine ? (
-                confirmingDelete ? (
-                  <>
-                    <button type="button" onClick={onDelete} className="font-medium text-[var(--rush)]">
-                      Delete?
-                    </button>
-                    <button type="button" onClick={() => setConfirmingDelete(false)} className="hover:text-foreground">
-                      Keep
-                    </button>
-                  </>
-                ) : (
-                  <button type="button" onClick={() => setConfirmingDelete(true)} className="hover:text-[var(--rush)]">
-                    Delete
-                  </button>
-                )
-              ) : null}
-            </span>
-          ) : null}
         </div>
+
+        {menu ? <MessageMenu x={menu.x} y={menu.y} items={items} onClose={closeMenu} /> : null}
       </div>
     </div>
   );
