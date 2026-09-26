@@ -26,6 +26,7 @@ import {
 } from "@/lib/orders/filters";
 import { sortOrderListItems } from "@/lib/sorting";
 import {
+  FINISHED_STATUSES,
   PRODUCTION_STATUSES,
   STATUS_LABELS,
   URGENCY_LABELS,
@@ -49,8 +50,7 @@ type WorkerLite = Omit<Worker, "pin_hash">;
 const UNCATEGORIZED = "Uncategorized";
 
 // The dashboard board is about work in progress, so items past the bench —
-// Ready for pickup and Completed — are hidden until asked for.
-const FINISHED_STATUSES: ProductionStatus[] = ["ready_for_pickup", "completed"];
+// Ready for pickup and Completed (FINISHED_STATUSES) — are hidden until asked for.
 
 // Supers don't want to see items that aren't in production yet — most of
 // all the ones still sitting with a graphics designer — so those are

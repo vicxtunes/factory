@@ -9,6 +9,7 @@ import {
   type MarketingSlide,
   type NotificationRow,
   type OrderItemWithOrder,
+  type Product,
   type ProductCategory,
   type ShowroomSettings,
   type WorkerPublic,
@@ -281,7 +282,7 @@ const CATALOG_SELECT = `
   id, name, sort_order, active, created_at,
   attributes:category_attributes (id, category_id, name, type, options, required, sort_order, created_at),
   products (
-    id, category_id, name, price, description, active, created_at, display_image_url, preview_video_url,
+    id, category_id, name, slug, price, description, active, created_at, display_image_url, preview_video_url,
     variants:product_variants (id, product_id, name, price, active, created_at),
     media:product_media (id, product_id, kind, file_name, mime_type, storage_path, secure_url, sort_order, created_at)
   )
@@ -328,6 +329,19 @@ export async function fetchProductCatalog(activeOnly = false): Promise<ProductCa
   return categories;
 }
 
+// One active product (in an active category) by its slug, with its
+// category — for the product's own shareable page. Null if not found.
+export async function fetchProductBySlug(
+  slug: string,
+): Promise<{ product: Product; category: ProductCategory } | null> {
+  const catalog = await fetchProductCatalog(true);
+  for (const category of catalog) {
+    const product = category.products.find((p) => p.slug === slug);
+    if (product) return { product, category };
+  }
+  return null;
+}
+
 // Singleton row — always id 1, created by its migration and never deleted,
 // so this can't come back empty.
 export async function fetchShowroomSettings(): Promise<ShowroomSettings> {
@@ -370,7 +384,7 @@ export async function fetchAnnouncements(): Promise<Announcement[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("announcements")
-    .select("id, title, body, audience, active, created_by_name, created_at")
+    .select("id, title, body, audience, active, created_by_id, created_by_name, created_at, approval_status, approved_at, decided_by_name")
     .order("created_at", { ascending: false });
   if (error) throw new Error(error.message);
   return (data ?? []) as unknown as Announcement[];
