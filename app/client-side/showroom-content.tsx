@@ -5,9 +5,9 @@ import Image from "next/image";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/Button";
-import type { Currency, Product, ProductCategory, ShowroomViewMode } from "@/lib/types";
+import type { ProductCategory } from "@/lib/types";
 
-import { ProductShowcase } from "./product-showcase";
+import { productHref } from "./product-page-view";
 
 type Tab = "product" | "packaging" | "lamination";
 
@@ -43,19 +43,16 @@ function isPackagingCategory(category: ProductCategory): boolean {
 function PhotoCard({
   label,
   image,
-  onClick,
+  href,
 }: {
   label: string;
   image?: string | null;
-  onClick?: () => void;
+  /** The product's own page; cards without one (lamination options) aren't links. */
+  href?: string;
 }) {
-  const Tag = onClick ? "button" : "div";
-  return (
-    <Tag
-      type={onClick ? "button" : undefined}
-      onClick={onClick}
-      className="relative h-48 w-40 shrink-0 overflow-hidden rounded-xl text-left shadow-theme-sm sm:h-48 sm:w-40"
-    >
+  const className = "relative block h-48 w-40 shrink-0 overflow-hidden rounded-xl text-left shadow-theme-sm sm:h-48 sm:w-40";
+  const content = (
+    <>
       {/* eslint-disable-next-line @next/next/no-img-element -- Supabase Storage URL, can't be allowlisted for next/image */}
       <img
         src={image ?? "/showroom/placeholder.PNG"}
@@ -64,7 +61,14 @@ function PhotoCard({
       />
       <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
       <p className="absolute inset-x-0 bottom-3 px-2 text-center text-sm font-bold text-white">{label}</p>
-    </Tag>
+    </>
+  );
+  return href ? (
+    <Link href={href} className={className}>
+      {content}
+    </Link>
+  ) : (
+    <div className={className}>{content}</div>
   );
 }
 
@@ -84,27 +88,12 @@ function OptionGallery({ title, options }: { title: string; options: string[] })
 // Visual language lifted from the "Show Room v1" mockup (public/showroom):
 // a full-bleed photo banner, a Product/Packaging/Lamination tab bar, and —
 // under Product — a section per category listing that category's products
-// as photo cards. Clicking a product swaps this whole body for
-// ProductShowcase (see product-showcase.tsx) instead of drilling into
-// variants inline — still rendered inside ClientShell, so the
-// sidebar/topbar stay put; it's deliberately not a full-screen takeover.
+// as photo cards. Clicking a product opens its own page (/{slug}, see
+// [product]/page.tsx), which shows ProductShowcase and can be shared.
 // Falls back to the shared placeholder image for any product without its
 // own uploaded display image yet.
-export function ShowroomContent({
-  catalog,
-  signedIn,
-  viewMode,
-  showPrices,
-  currencies,
-}: {
-  catalog: ProductCategory[];
-  signedIn: boolean;
-  viewMode: ShowroomViewMode;
-  showPrices: boolean;
-  currencies: Currency[];
-}) {
+export function ShowroomContent({ catalog, signedIn }: { catalog: ProductCategory[]; signedIn: boolean }) {
   const [tab, setTab] = useState<Tab>("product");
-  const [selected, setSelected] = useState<{ product: Product; category: ProductCategory } | null>(null);
 
   const packagingCategory = catalog.find(isPackagingCategory) ?? null;
   const laminationOptions = collectAttributeOptions(catalog, "lamination");
@@ -116,19 +105,6 @@ export function ShowroomContent({
       catalog.filter((c) => !isPackagingCategory(c)).sort((a, b) => b.products.length - a.products.length),
     [catalog],
   );
-
-  if (selected) {
-    return (
-      <ProductShowcase
-        product={selected.product}
-        category={selected.category}
-        viewMode={viewMode}
-        showPrices={showPrices}
-        currencies={currencies}
-        onExit={() => setSelected(null)}
-      />
-    );
-  }
 
   return (
     <div className="overflow-x-clip">
@@ -207,7 +183,7 @@ export function ShowroomContent({
                           key={product.id}
                           label={product.name}
                           image={product.display_image_url}
-                          onClick={() => setSelected({ product, category })}
+                          href={productHref(product)}
                         />
                       ))}
                     </div>
@@ -228,7 +204,7 @@ export function ShowroomContent({
                   key={product.id}
                   label={product.name}
                   image={product.display_image_url}
-                  onClick={() => setSelected({ product, category: packagingCategory })}
+                  href={productHref(product)}
                 />
               ))}
             </div>

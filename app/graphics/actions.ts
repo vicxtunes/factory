@@ -17,6 +17,7 @@ import {
 import { buildAndInsertOrder, verifyActiveWorker } from "@/lib/orders/create";
 import { notifyOrderItem } from "@/lib/notifications/notify";
 import { fetchDesignerNotifications } from "@/lib/queries";
+import { fetchResolvedReportNotices, mergeNotices } from "@/lib/support/notices";
 import type {
   ClientDuplicateHit,
   CreateOrderResult,
@@ -71,7 +72,11 @@ export async function logoutDesigner(): Promise<void> {
 export async function getMyNotifications(): Promise<NotificationRow[]> {
   const session = await getDesignerSession();
   if (!session) return [];
-  return fetchDesignerNotifications(session.designer_id, 10);
+  const [rows, notices] = await Promise.all([
+    fetchDesignerNotifications(session.designer_id, 10),
+    fetchResolvedReportNotices({ type: "designer", id: session.designer_id }),
+  ]);
+  return mergeNotices(rows, notices, 10);
 }
 
 // Once every item on an order has moved to the factory, flip the order's

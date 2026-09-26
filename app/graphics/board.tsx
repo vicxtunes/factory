@@ -7,6 +7,7 @@ import { Drawer } from "@/components/ui/Drawer";
 import { SectionLabel } from "@/components/ui/SectionLabel";
 import { createClient } from "@/lib/supabase/browser";
 import { ORDER_ITEM_SELECT } from "@/lib/item-select";
+import { isFinishedStatus } from "@/lib/types";
 import type {
   Agent,
   Client,
@@ -64,15 +65,16 @@ export function Board({
   const supabaseRef = useRef(createClient());
 
   const orders = useMemo(() => groupByOrder(items), [items]);
-  // An order stays in view — and stays editable — until the factory has
-  // actually finished every item on it, not just until it's been sent.
-  // That way a mistake caught late can still be fixed.
+  // Same rule as the dashboard board: once every item on an order is Ready
+  // or Delivered, it leaves the active list for the "Ready & delivered"
+  // section below. It stays editable there until the factory has actually
+  // completed each item, so a mistake caught late can still be fixed.
   const inProgressOrders = useMemo(
-    () => orders.filter((o) => o.items.some((i) => i.production_status !== "completed")),
+    () => orders.filter((o) => o.items.some((i) => !isFinishedStatus(i.production_status))),
     [orders],
   );
   const completedOrders = useMemo(
-    () => orders.filter((o) => o.items.every((i) => i.production_status === "completed")),
+    () => orders.filter((o) => o.items.every((i) => isFinishedStatus(i.production_status))),
     [orders],
   );
   const selectedOrder = orders.find((o) => o.orderId === selectedOrderId) ?? null;
@@ -151,7 +153,7 @@ export function Board({
           onClick={() => setShowCompleted((v) => !v)}
           className="text-sm text-muted underline-offset-2 hover:underline"
         >
-          {showCompleted ? "Hide" : "Show"} delivered ({completedOrders.length})
+          {showCompleted ? "Hide" : "Show"} ready &amp; delivered ({completedOrders.length})
         </button>
         {showCompleted ? (
           <div className="mt-3 grid gap-4 md:grid-cols-2 xl:grid-cols-3">

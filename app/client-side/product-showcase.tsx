@@ -50,6 +50,48 @@ function ArrowButton({ direction, onClick }: { direction: "prev" | "next"; onCli
   );
 }
 
+// Shares the page's own URL: the phone's share sheet where there is one
+// (WhatsApp, SMS, …), otherwise copies the link.
+function ShareButton({ title }: { title: string }) {
+  const [copied, setCopied] = useState(false);
+
+  async function share() {
+    const url = window.location.href;
+    if (navigator.share) {
+      try {
+        await navigator.share({ title, url });
+      } catch {
+        // Closing the share sheet rejects; nothing to do.
+      }
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      window.prompt("Copy this link:", url);
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={share}
+      className="inline-flex items-center gap-1.5 text-sm font-medium text-showroom-ink transition-opacity hover:opacity-70"
+    >
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-4 w-4" aria-hidden="true">
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M7.217 10.907a2.25 2.25 0 1 0 0 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186 9.566-5.314m-9.566 7.5 9.566 5.314m0 0a2.25 2.25 0 1 0 3.935 2.186 2.25 2.25 0 0 0-3.935-2.186Zm0-12.814a2.25 2.25 0 1 0 3.933-2.185 2.25 2.25 0 0 0-3.933 2.185Z"
+        />
+      </svg>
+      <span aria-live="polite">{copied ? "Link copied" : "Share"}</span>
+    </button>
+  );
+}
+
 function BackLink({ onClick }: { onClick: () => void }) {
   return (
     <button
@@ -271,6 +313,7 @@ export function ProductShowcase({
   showPrices,
   currencies,
   onExit,
+  shareable = false,
 }: {
   product: Product;
   category: ProductCategory;
@@ -283,6 +326,8 @@ export function ProductShowcase({
   showPrices: boolean;
   currencies: Currency[];
   onExit: () => void;
+  /** Show a Share button for the page's URL (on the product's own page). */
+  shareable?: boolean;
 }) {
   const currency = useCurrency(currencies);
   const themeIndex = useMemo(() => themeIndexFor(product.id), [product.id]);
@@ -404,7 +449,10 @@ export function ProductShowcase({
         } as React.CSSProperties
       }
     >
-      <BackLink onClick={onExit} />
+      <div className="flex items-center justify-between gap-3">
+        <BackLink onClick={onExit} />
+        {shareable ? <ShareButton title={product.name} /> : null}
+      </div>
 
       <div className="relative z-10 mx-auto mt-4 flex w-full max-w-3xl flex-col gap-8">
         <div className="relative h-72 w-full shrink-0 sm:h-80 lg:h-96">

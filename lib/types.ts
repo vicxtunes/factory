@@ -209,6 +209,9 @@ export interface Product {
   id: string;
   category_id: string;
   name: string;
+  // URL name for the product's own page (client portal /{slug}). Assigned by
+  // the database on insert and kept on rename, so shared links keep working.
+  slug: string;
   // Deliberately not surfaced client-side right now — the boss wants
   // pricing held back from the showroom until further notice. Still
   // recorded so it's ready whenever that changes (see order-form.tsx,
@@ -290,10 +293,15 @@ export interface Designer extends DesignerPublic {
 
 export interface NotificationRow {
   id: string;
-  order_item_id: string;
-  event_type: NotificationEvent;
+  // Null for personal notices that aren't about an order (see below).
+  order_item_id: string | null;
+  // "resolved" = one of the viewer's support reports was resolved. These
+  // aren't stored in `notifications`; lib/support/notices.ts derives them.
+  event_type: NotificationEvent | "resolved";
   message: string;
   created_at: string;
+  // Where tapping the entry goes, when it links anywhere.
+  href?: string;
 }
 
 export type SupportReportStatus = "open" | "resolved";
@@ -344,9 +352,20 @@ export interface Announcement {
   body: string;
   audience: AuditActorType[];
   active: boolean;
+  // The dashboard user who created it; only they may edit, hide or delete
+  // it (lib/announcements/access.ts). Null if their account was removed.
+  created_by_id: string | null;
   created_by_name: string | null;
   created_at: string;
+  // Boss approval: the boss's own go straight to "approved"; a supervisor's
+  // or receptionist's wait as "pending". Only approved ones pop up.
+  approval_status: AnnouncementApproval;
+  approved_at: string | null;
+  // Who approved or rejected it.
+  decided_by_name: string | null;
 }
+
+export type AnnouncementApproval = "pending" | "approved" | "rejected";
 
 export interface OrderAuditEntry {
   id: string;
@@ -423,6 +442,15 @@ export const STATUS_LABELS: Record<ProductionStatus, string> = {
   ready_for_pickup: "Ready",
   completed: "Delivered",
 };
+
+// Items past the bench: Ready (for pickup) and Delivered. Work boards (the
+// dashboard's and the designers') treat these as done and hide them from
+// the active list until asked for.
+export const FINISHED_STATUSES: readonly ProductionStatus[] = ["ready_for_pickup", "completed"];
+
+export function isFinishedStatus(status: ProductionStatus): boolean {
+  return FINISHED_STATUSES.includes(status);
+}
 
 // Columns shown on the factory kanban (completed handled separately).
 export const BOARD_COLUMNS: ProductionStatus[] = [

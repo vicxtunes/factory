@@ -11,6 +11,7 @@ import { notifyActor } from "@/lib/push/send";
 import type { SupportReport } from "@/lib/types";
 
 import { SUPPORT_OWNER_EMAIL } from "./constants";
+import { reportSnippet } from "./notices";
 
 // Each report also has a private chat thread (kind "issue") between the
 // reporter and the owner, where they talk it through. The report row stays
@@ -156,19 +157,26 @@ export async function setSupportReportStatus(id: string, resolved: boolean): Pro
     .from("support_reports")
     .update({ status: resolved ? "resolved" : "open", resolved_at: resolved ? new Date().toISOString() : null })
     .eq("id", id)
-    .select("author_type, author_id")
+    .select("author_type, author_id, body")
     .single();
   if (error) return { ok: false, error: error.message };
   revalidatePath("/dashboard/support");
 
   await chat.announceIssueStatus(id, resolved, owner.name).catch((err) => console.error("issue status note failed:", err));
 
+  // Only the person who raised it is told, and the push opens the issue's
+  // chat. They also see it in their bell for a while (lib/support/notices.ts),
+  // in case push is off.
   if (resolved && data) {
     const threads = await chat.issueThreadIds([id]).catch(() => new Map<string, string>());
     const thread = threads.get(id);
     await notifyActor(
       { type: data.author_type, id: data.author_id },
-      { title: "Your report was resolved", body: "The team marked your report as resolved.", url: thread ? chatHref(thread) : "/" },
+      {
+        title: "Your issue was resolved",
+        body: `"${reportSnippet(data.body)}" was marked as resolved.`,
+        url: thread ? chatHref(thread) : "/support",
+      },
     );
   }
   return { ok: true };

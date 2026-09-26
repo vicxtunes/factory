@@ -14,6 +14,7 @@ import {
   getWorkerSession,
 } from "@/lib/auth/session";
 import { fetchNotifications } from "@/lib/queries";
+import { fetchResolvedReportNotices, mergeNotices } from "@/lib/support/notices";
 
 import { DashboardShell } from "@/app/dashboard/shell";
 import { ClientShell } from "@/app/client-side/shell";
@@ -59,7 +60,11 @@ export default async function SupportPage() {
   // designer, worker, client.
   const dashboardSession = await getDashboardSession();
   if (dashboardSession) {
-    const notifications = await fetchNotifications(10);
+    const [events, notices] = await Promise.all([
+      fetchNotifications(10),
+      fetchResolvedReportNotices({ type: "dashboard_user", id: dashboardSession.userId }),
+    ]);
+    const notifications = mergeNotices(events, notices, 10);
     return (
       <DashboardShell
         email={dashboardSession.email}

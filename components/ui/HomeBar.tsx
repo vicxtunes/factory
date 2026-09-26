@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { Fragment, useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 
@@ -67,6 +67,8 @@ export interface HomeBarLink {
   /** Match only this exact path (for section roots like /dashboard). */
   exact?: boolean;
   newTab?: boolean;
+  /** "More" sheet only: a heading shown above the first link of each section. */
+  section?: string;
 }
 
 function MoreIcon({ className }: { className?: string }) {
@@ -190,25 +192,32 @@ export function HomeBar({
     <div ref={ref} className={`fixed inset-x-0 bottom-0 z-40 ${HIDE_FROM[hideFrom]}`}>
       {moreOpen ? (
         <div className="mb-2 ml-auto mr-3 max-h-[60vh] w-60 overflow-y-auto rounded-2xl border border-border bg-surface p-2 shadow-theme-lg">
-          {more.map((link) => {
+          {more.map((link, i) => {
             const Icon = ICONS[link.icon];
             const active = isActive(pathname, link);
+            const heading = link.section && link.section !== more[i - 1]?.section ? link.section : null;
             return (
-              <Link
-                key={link.href}
-                href={link.href}
-                target={link.newTab ? "_blank" : undefined}
-                rel={link.newTab ? "noopener noreferrer" : undefined}
-                onClick={() => setMoreOpen(false)}
-                className={`flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-medium ${
-                  active
-                    ? "bg-brand-50 text-brand-600 dark:bg-brand-500/15 dark:text-brand-400"
-                    : "text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-white/5"
-                }`}
-              >
-                <Icon className="h-5 w-5" />
-                {link.label}
-              </Link>
+              <Fragment key={link.href}>
+                {heading ? (
+                  <p className={`px-3 pb-1 text-[0.7rem] font-semibold uppercase tracking-wide text-muted ${i > 0 ? "mt-2 border-t border-border pt-3" : "pt-1"}`}>
+                    {heading}
+                  </p>
+                ) : null}
+                <Link
+                  href={link.href}
+                  target={link.newTab ? "_blank" : undefined}
+                  rel={link.newTab ? "noopener noreferrer" : undefined}
+                  onClick={() => setMoreOpen(false)}
+                  className={`flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-medium ${
+                    active
+                      ? "bg-brand-50 text-brand-600 dark:bg-brand-500/15 dark:text-brand-400"
+                      : "text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-white/5"
+                  }`}
+                >
+                  <Icon className="h-5 w-5" />
+                  {link.label}
+                </Link>
+              </Fragment>
             );
           })}
           {logout ? (
