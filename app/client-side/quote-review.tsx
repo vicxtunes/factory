@@ -74,7 +74,7 @@ export function ClientQuoteReview({
             </>
           }
         />
-        <HowToPay orderNo={order.order_no} amount={order.quoted_price} />
+        <HowToPay orderNo={order.order_no} />
       </div>
     );
   }
@@ -117,15 +117,16 @@ export function ClientQuoteReview({
         </div>
       ) : null}
 
-      <HowToPay orderNo={order.order_no} amount={order.quoted_price} />
+      <HowToPay orderNo={order.order_no} />
     </div>
   );
 }
 
-function HowToPay({ orderNo, amount }: { orderNo: string; amount: number | null }) {
+// Instructions only: the price is already shown once, at the top.
+function HowToPay({ orderNo }: { orderNo: string }) {
   return (
     <Collapsible title="How to pay" summary="Bank or mobile money">
-      <PaymentMethods orderNo={orderNo} amount={amount} />
+      <PaymentMethods orderNo={orderNo} />
     </Collapsible>
   );
 }

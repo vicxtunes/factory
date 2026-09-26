@@ -43,30 +43,18 @@ export function PriceHero({
   children?: ReactNode;
 }) {
   return (
+    // Same size and style as the amount card PaymentMethods used to show
+    // inside "How to pay": the price now appears once, here, at the top.
     <section
       aria-label={label}
       className={
         tone === "firm"
-          ? "rounded-2xl border-2 border-brand-500 bg-brand-50 p-4 shadow-theme-sm dark:bg-brand-500/10"
-          : "rounded-2xl border border-border bg-surface p-4"
+          ? "rounded-2xl border border-brand-200 bg-brand-50 p-4 text-sm dark:border-brand-500/30 dark:bg-brand-500/10"
+          : "rounded-2xl border border-border bg-surface p-4 text-sm"
       }
     >
-      <p
-        className={`text-xs font-semibold uppercase tracking-wide ${
-          tone === "firm" ? "text-brand-700 dark:text-brand-400" : "text-muted"
-        }`}
-      >
-        {label}
-      </p>
-      <p
-        className={
-          tone === "firm"
-            ? "mt-1 text-4xl font-extrabold leading-tight tabular-nums text-foreground"
-            : "mt-1 text-lg font-semibold"
-        }
-      >
-        {price}
-      </p>
+      <p className="text-xs uppercase tracking-wide text-muted">{label}</p>
+      <p className={tone === "firm" ? "text-2xl font-extrabold tabular-nums" : "text-base font-semibold"}>{price}</p>
       {note ? <p className="mt-1 text-xs text-muted">{note}</p> : null}
       {children ? <div className="mt-3 flex flex-wrap gap-2">{children}</div> : null}
     </section>

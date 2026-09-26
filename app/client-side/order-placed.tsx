@@ -139,7 +139,7 @@ export function OrderPlaced({
                   ]
             }
           />
-          <PaymentMethods orderNo={orderNo} amount={payNow ? total : undefined} />
+          <PaymentMethods orderNo={orderNo} />
         </div>
       </Collapsible>
 
