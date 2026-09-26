@@ -146,6 +146,7 @@ export function ClientSidebar({ signedIn }: { signedIn: boolean }) {
               <li key={tab.href}>
                 <Link
                   href={tab.href}
+                  prefetch
                   className={`menu-item ${active ? "menu-item-active" : "menu-item-inactive"}`}
                 >
                   <Icon className={`h-5 w-5 ${active ? "menu-item-icon-active" : "menu-item-icon-inactive"}`} />
