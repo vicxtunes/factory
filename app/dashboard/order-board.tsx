@@ -698,6 +698,7 @@ export function OrderBoard({
         {selectedItem ? (
           <OrderDetail
             item={selectedItem}
+            orderItems={items.filter((i) => i.order_id === selectedItem.order_id)}
             workers={workers}
             assignedName={selectedAssignedName}
             canManage={canManage}
