@@ -209,6 +209,9 @@ export interface Product {
   id: string;
   category_id: string;
   name: string;
+  // URL name for the product's own page (client portal /{slug}). Assigned by
+  // the database on insert and kept on rename, so shared links keep working.
+  slug: string;
   // Deliberately not surfaced client-side right now — the boss wants
   // pricing held back from the showroom until further notice. Still
   // recorded so it's ready whenever that changes (see order-form.tsx,
