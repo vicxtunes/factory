@@ -4,6 +4,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { ChatIcon } from "@/components/chat/icons";
+
 // Same shape as app/dashboard/sidebar.tsx — fixed logo header + icon nav
 // list with active-state utilities from app/globals.css. Gated items
 // (everything but Showroom) only render when signed in.
@@ -117,6 +119,7 @@ const TABS: Tab[] = [
   { href: "/client-side/new", label: "Place Order", icon: PlaceOrderIcon, requiresSignIn: true },
   { href: "/client-side/showroom", label: "Showroom", icon: ShowroomIcon, requiresSignIn: false },
   { href: "/client-side/settings", label: "Settings", icon: SettingsIcon, requiresSignIn: true },
+  { href: "/chat", label: "Chat", icon: ChatIcon, requiresSignIn: true },
   { href: "/support", label: "Support", icon: SupportIcon, requiresSignIn: true },
 ];
 

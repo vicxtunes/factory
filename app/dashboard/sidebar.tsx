@@ -5,9 +5,10 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { ChatIcon } from "@/components/chat/icons";
 import type { AppRole } from "@/lib/types";
 
-import { HOME, isCurrent, navFor, type NavGroup } from "./nav";
+import { CHAT, HOME, isCurrent, navFor, type NavGroup } from "./nav";
 
 export function DashboardIcon({ className }: { className?: string }) {
   return (
@@ -287,6 +288,7 @@ export function DashboardSidebar({ role, email }: { role: AppRole; email: string
   }
 
   const homeActive = isCurrent(pathname, HOME.href);
+  const chatActive = isCurrent(pathname, CHAT.href);
 
   return (
     <aside
@@ -306,6 +308,16 @@ export function DashboardSidebar({ role, email }: { role: AppRole; email: string
             >
               <DashboardIcon className={`h-5 w-5 ${homeActive ? "menu-item-icon-active" : "menu-item-icon-inactive"}`} />
               {HOME.label}
+            </Link>
+          </li>
+          <li>
+            <Link
+              href={CHAT.href}
+              aria-current={chatActive ? "page" : undefined}
+              className={`menu-item ${chatActive ? "menu-item-active" : "menu-item-inactive"}`}
+            >
+              <ChatIcon className={`h-5 w-5 ${chatActive ? "menu-item-icon-active" : "menu-item-icon-inactive"}`} />
+              {CHAT.label}
             </Link>
           </li>
           {groups.map((g) => (

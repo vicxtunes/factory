@@ -110,6 +110,7 @@ export default async function SupportPage() {
         <HomeBar
           tabs={[
             { href: "/graphics", label: "Board", icon: "dashboard" },
+            { href: "/chat", label: "Chat", icon: "chat" },
             { href: "/support", label: "Support", icon: "support" },
           ]}
           logout={logoutDesigner}
@@ -151,6 +152,7 @@ export default async function SupportPage() {
         <HomeBar
           tabs={[
             { href: "/factory", label: "Board", icon: "dashboard" },
+            { href: "/chat", label: "Chat", icon: "chat" },
             { href: "/support", label: "Support", icon: "support" },
           ]}
           logout={logoutWorker}

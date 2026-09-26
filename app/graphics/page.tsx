@@ -5,6 +5,7 @@ import { HomeBar } from "@/components/ui/HomeBar";
 import { AnnouncementPopup } from "@/components/announcements/AnnouncementPopup";
 import { InstallGate } from "@/components/pwa/InstallGate";
 import { NotificationGate } from "@/components/pwa/NotificationGate";
+import { ChatLauncher } from "@/components/chat/ChatLauncher";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { InlineProfileTrigger } from "@/components/profile/InlineProfileTrigger";
 import { getDesignerSession } from "@/lib/auth/session";
@@ -63,6 +64,7 @@ export default async function GraphicsPage() {
             >
               Support
             </Link>
+            <ChatLauncher className="relative flex h-9 w-9 items-center justify-center rounded-lg text-white/70 hover:text-white hover:bg-white/10" />
             <NotificationBell
               fetchNotifications={getMyNotifications}
               triggerClassName="relative flex h-9 w-9 items-center justify-center rounded-lg text-white/70 hover:text-white hover:bg-white/10"
@@ -86,6 +88,7 @@ export default async function GraphicsPage() {
       <HomeBar
         tabs={[
           { href: "/graphics", label: "Board", icon: "dashboard" },
+          { href: "/chat", label: "Chat", icon: "chat" },
           { href: "/support", label: "Support", icon: "support" },
         ]}
         logout={logoutDesigner}

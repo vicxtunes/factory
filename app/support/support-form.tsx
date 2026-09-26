@@ -1,11 +1,14 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/Button";
 import { Drawer } from "@/components/ui/Drawer";
 import { TextArea } from "@/components/ui/Field";
 import { Linkify } from "@/components/ui/Linkify";
+import { chatHref } from "@/lib/chat/routes";
 import { getMySupportReports, submitSupportReport } from "@/lib/support/actions";
 import type { SupportReport } from "@/lib/types";
 
@@ -21,7 +24,10 @@ function formatWhen(iso: string): string {
 // Tickets are the primary content — "Raise issue" opens the report form in
 // a slide-in Drawer instead of it sitting inline and always open, same
 // add-something pattern as the dashboard's panels (agent-panel.tsx, etc.).
+// Each ticket is also a private chat with the developer: sending one opens
+// that chat, and every ticket links back to it.
 export function SupportForm() {
+  const router = useRouter();
   const [formOpen, setFormOpen] = useState(false);
   const [body, setBody] = useState("");
   const [pending, start] = useTransition();
@@ -46,6 +52,10 @@ export function SupportForm() {
       }
       setBody("");
       setFormOpen(false);
+      if (res.data.conversationId) {
+        router.push(chatHref(res.data.conversationId));
+        return;
+      }
       loadMine();
     });
   }
@@ -79,11 +89,18 @@ export function SupportForm() {
                   {r.status === "resolved" ? "Resolved" : "Open"}
                 </span>
               </div>
-              <p className="mt-1 text-[11px] text-muted">
-                {r.status === "resolved" && r.resolved_at
-                  ? `Resolved ${formatWhen(r.resolved_at)}`
-                  : `Sent ${formatWhen(r.created_at)}`}
-              </p>
+              <div className="mt-1 flex items-center justify-between gap-2 text-[11px]">
+                <p className="text-muted">
+                  {r.status === "resolved" && r.resolved_at
+                    ? `Resolved ${formatWhen(r.resolved_at)}`
+                    : `Sent ${formatWhen(r.created_at)}`}
+                </p>
+                {r.chat_conversation_id ? (
+                  <Link href={chatHref(r.chat_conversation_id)} className="font-medium text-brand-600 hover:underline">
+                    Open chat
+                  </Link>
+                ) : null}
+              </div>
             </div>
           ))
         )}
@@ -92,7 +109,8 @@ export function SupportForm() {
       <Drawer open={formOpen} onClose={() => setFormOpen(false)} title="Raise an issue">
         <div className="space-y-3">
           <p className="text-xs text-muted">
-            What&apos;s not working, or what&apos;s missing? This goes straight to the team.
+            What&apos;s not working, or what&apos;s missing? This opens a private chat with the developer, where you can
+            follow up and add screenshots or voice notes.
           </p>
           <TextArea
             value={body}

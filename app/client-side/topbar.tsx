@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { ChatLauncher } from "@/components/chat/ChatLauncher";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 
 import { getMyNotifications } from "./actions";
@@ -18,6 +19,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/client-side/showroom": "Showroom",
   "/client-side/settings": "Settings",
   "/support": "Support",
+  "/chat": "Chat",
 };
 
 export function ClientTopbar({
@@ -38,6 +40,7 @@ export function ClientTopbar({
       <div className="relative ml-auto flex items-center gap-3">
         {signedIn && name ? (
           <>
+            <ChatLauncher />
             <NotificationBell fetchNotifications={getMyNotifications} />
             <ClientUserMenu name={name} avatarUrl={avatarUrl} />
           </>

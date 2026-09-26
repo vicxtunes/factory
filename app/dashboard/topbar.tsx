@@ -4,6 +4,8 @@ import { usePathname } from "next/navigation";
 
 import type { NotificationRow } from "@/lib/types";
 
+import { ChatLauncher } from "@/components/chat/ChatLauncher";
+
 import { NotificationMenu } from "./notification-menu";
 import { UserMenu } from "./user-menu";
 
@@ -19,6 +21,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/dashboard/support": "Support reports",
   "/dashboard/announcements": "Announcements",
   "/support": "Support",
+  "/chat": "Chat",
 };
 
 export function DashboardTopbar({
@@ -41,6 +44,7 @@ export function DashboardTopbar({
     <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-4 border-b border-border bg-surface px-4 sm:px-6">
       <h1 className="text-base font-semibold">{title}</h1>
       <div className="relative ml-auto flex items-center gap-3">
+        <ChatLauncher />
         <NotificationMenu initial={notifications} />
         <UserMenu email={email} fullName={fullName} avatarUrl={avatarUrl} role={role} />
       </div>

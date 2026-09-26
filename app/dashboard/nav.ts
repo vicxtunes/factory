@@ -38,6 +38,9 @@ const developer = (v: NavViewer) => v.email === SUPPORT_OWNER_EMAIL;
 /** Top of the menu, outside any group. */
 export const HOME: NavItem = { href: "/dashboard", label: "Dashboard", icon: "dashboard", visible: everyone };
 
+/** Used all day, so it sits right under Dashboard rather than in a group. */
+export const CHAT: NavItem = { href: "/chat", label: "Chat", icon: "chat", visible: everyone };
+
 export const NAV_GROUPS: NavGroup[] = [
   {
     // The two halves of one order lifecycle: a client-portal order sits in

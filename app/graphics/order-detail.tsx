@@ -8,6 +8,7 @@ import { Linkify } from "@/components/ui/Linkify";
 import { AddMediaButton } from "@/components/media/AddMediaButton";
 import { MediaLinks } from "@/components/media/MediaLinks";
 import { ItemAttributes } from "@/components/order/ItemAttributes";
+import { OrderChat } from "@/components/chat/OrderChat";
 import { NotesThread } from "@/components/order/NotesThread";
 import { STATUS_LABELS, type OrderItemWithOrder, type ProductCategory } from "@/lib/types";
 
@@ -195,6 +196,8 @@ export function OrderDetail({
           </div>
         </div>
       ) : null}
+
+      <OrderChat orderId={order.orderId} />
 
       <NotesThread orderId={order.orderId} orderItemId={null} title="Order notes" onChanged={onChanged} />
 

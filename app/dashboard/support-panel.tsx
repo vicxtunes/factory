@@ -6,7 +6,8 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { ExportButtons } from "@/components/ui/ExportButtons";
 import { Linkify } from "@/components/ui/Linkify";
-import { deleteSupportReport, setSupportReportStatus } from "@/lib/support/actions";
+import { chatHref } from "@/lib/chat/routes";
+import { deleteSupportReport, openSupportReportChat, setSupportReportStatus } from "@/lib/support/actions";
 import type { ExportColumn } from "@/lib/export/tableExport";
 import type { SupportReport } from "@/lib/types";
 
@@ -42,6 +43,7 @@ const EXPORT_COLUMNS: ExportColumn<ReportExportRow>[] = [
 ];
 
 function ReportCard({ report, onChanged }: { report: SupportReport; onChanged: () => void }) {
+  const router = useRouter();
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -84,6 +86,23 @@ function ReportCard({ report, onChanged }: { report: SupportReport; onChanged: (
       <Linkify text={report.body} className="mt-2 text-sm" />
 
       <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border pt-3">
+        {/* Joins (or creates) the report's private chat, then opens it. */}
+        <Button
+          variant="secondary"
+          className="min-h-9 text-xs"
+          loading={pending}
+          disabled={pending}
+          onClick={() =>
+            start(async () => {
+              setError(null);
+              const res = await openSupportReportChat(report.id);
+              if (!res.ok) setError(res.error);
+              else router.push(chatHref(res.data.conversationId));
+            })
+          }
+        >
+          Open chat
+        </Button>
         {report.status === "open" ? (
           <Button
             variant="primary"

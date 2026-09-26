@@ -19,6 +19,7 @@ import {
   WorkersIcon,
 } from "@/app/dashboard/sidebar";
 import { HistoryIcon, PaymentIcon, PlaceOrderIcon, SettingsIcon, ShowroomIcon } from "@/app/client-side/sidebar";
+import { ChatIcon } from "@/components/chat/icons";
 
 // Mobile "home bar" shared by every signed-in surface (client portal, staff
 // dashboard, factory floor, graphics). A flat, full-width bar pinned to the
@@ -47,6 +48,7 @@ const ICONS = {
   support: SupportIcon,
   display: DisplayIcon,
   announcements: AnnouncementIcon,
+  chat: ChatIcon,
   history: HistoryIcon,
   payment: PaymentIcon,
   placeOrder: PlaceOrderIcon,

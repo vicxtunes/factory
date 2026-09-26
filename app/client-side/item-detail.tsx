@@ -1,5 +1,6 @@
 "use client";
 
+import { SupportChat } from "@/components/chat/OrderChat";
 import { MediaLinks } from "@/components/media/MediaLinks";
 import { ItemAttributes } from "@/components/order/ItemAttributes";
 import { PaymentMethods } from "@/components/payments/PaymentMethods";
@@ -24,6 +25,8 @@ export function ClientItemDetail({ item }: { item: OrderItemWithOrder }) {
         <p className="text-xs font-semibold uppercase tracking-wide text-muted">Order</p>
         <p className="font-medium">{item.order.order_no}</p>
       </div>
+
+      <SupportChat label="Questions about this order? Chat with support" />
 
       <div className="flex flex-wrap items-center gap-2">
         <UrgencyBadge urgency={item.urgency} />

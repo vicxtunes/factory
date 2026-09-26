@@ -8,6 +8,8 @@ export function Drawer({
   title,
   children,
   size = "md",
+  footer,
+  scrollBody = true,
 }: {
   open: boolean;
   onClose: () => void;
@@ -16,6 +18,13 @@ export function Drawer({
   // "md" (default) for detail panels; "lg" for form-heavy content like the
   // new-order wizard.
   size?: "md" | "lg";
+  // Pinned below the body (never scrolls away) — for a drawer's primary
+  // action, e.g. "Create group".
+  footer?: ReactNode;
+  // false when the content manages its own scrolling (e.g. a search box that
+  // stays put above a scrolling list). The body then fills the space between
+  // header and footer without scrolling itself.
+  scrollBody?: boolean;
 }) {
   useEffect(() => {
     if (!open) return;
@@ -52,7 +61,14 @@ export function Drawer({
             ✕
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto p-4">{children}</div>
+        <div className={scrollBody ? "min-h-0 flex-1 overflow-y-auto p-4" : "flex min-h-0 flex-1 flex-col p-4"}>
+          {children}
+        </div>
+        {footer ? (
+          <div className="shrink-0 border-t border-border bg-surface px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+            {footer}
+          </div>
+        ) : null}
       </aside>
     </>
   );

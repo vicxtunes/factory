@@ -316,6 +316,9 @@ export interface SupportReport {
   status: SupportReportStatus;
   created_at: string;
   resolved_at: string | null;
+  // Its private chat thread with the owner (lib/chat, kind "issue"), when
+  // loaded through lib/support/actions.ts.
+  chat_conversation_id?: string | null;
 }
 
 export interface MarketingSlide {
