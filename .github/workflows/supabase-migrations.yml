@@ -12,17 +12,22 @@
 #     so write migrations that old code can live with (add columns before
 #     code reads them; drop things only after code stops using them).
 #
-# Needs these repository secrets (Settings -> Secrets and variables -> Actions):
+# Needs one repository secret (Settings -> Secrets and variables -> Actions):
 #   SUPABASE_ACCESS_TOKEN  a personal access token (supabase.com/dashboard/account/tokens)
-#   SUPABASE_DB_PASSWORD   the database password of the production project
+# No database password: with only the token, the Supabase CLI signs in to
+# the database through a temporary login role it creates via the API. (A
+# wrong SUPABASE_DB_PASSWORD made every run fail, so it's deliberately not
+# passed in.)
 name: Supabase migrations
 
 on:
+  # Also when this workflow itself changes, so a fix to it is tested on its
+  # PR and catches up on merge.
   pull_request:
-    paths: ["supabase/migrations/**"]
+    paths: ["supabase/migrations/**", ".github/workflows/supabase-migrations.yml"]
   push:
     branches: [main]
-    paths: ["supabase/migrations/**"]
+    paths: ["supabase/migrations/**", ".github/workflows/supabase-migrations.yml"]
   # Run by hand (Actions tab) to catch up if something was missed.
   workflow_dispatch:
 
@@ -37,7 +42,6 @@ permissions:
 env:
   SUPABASE_PROJECT_ID: efefpzzuzblroydxamjq # production project ref (not a secret)
   SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-  SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
 
 jobs:
   check:
@@ -49,7 +53,10 @@ jobs:
       - uses: supabase/setup-cli@v3
       - run: supabase link --project-ref "$SUPABASE_PROJECT_ID"
       - name: List what merging would apply
+        # pipefail: without it, the `| tee` below hid a failed dry run and
+        # the check passed anyway.
         run: |
+          set -o pipefail
           {
             echo "### Migrations this PR applies to production when merged"
             echo '```'
@@ -67,4 +74,6 @@ jobs:
       - run: supabase link --project-ref "$SUPABASE_PROJECT_ID"
       - run: supabase db push
       - name: Show migration status
-        run: supabase migration list | tee -a "$GITHUB_STEP_SUMMARY"
+        run: |
+          set -o pipefail
+          supabase migration list | tee -a "$GITHUB_STEP_SUMMARY"
