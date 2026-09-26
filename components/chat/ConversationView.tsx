@@ -9,6 +9,7 @@ import { setSupportReportStatus } from "@/lib/support/actions";
 import type { ChatMessage, ConversationDetail } from "@/lib/chat/types";
 
 import { Composer } from "./Composer";
+import { ThreadSkeleton } from "./ChatSkeleton";
 import { ConversationInfoDrawer } from "./ConversationInfoDrawer";
 import { ConversationAvatar, IssueStatusBadge } from "./ConversationList";
 import { dayKey, formatDayLabel } from "./format";
@@ -195,13 +196,7 @@ export function ConversationView({
     refresh();
   }
 
-  if (!detail) {
-    return (
-      <div className="flex h-full items-center justify-center" aria-busy="true">
-        <span className="h-6 w-6 animate-spin rounded-full border-2 border-brand-200 border-t-brand-500" />
-      </div>
-    );
-  }
+  if (!detail) return <ThreadSkeleton />;
 
   const showSenderNames = detail.kind !== "direct";
 

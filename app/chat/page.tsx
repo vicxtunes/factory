@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import Link from "next/link";
 
 import { ChatApp } from "@/components/chat/ChatApp";
+import { ChatSkeleton } from "@/components/chat/ChatSkeleton";
 import { AnnouncementPopup } from "@/components/announcements/AnnouncementPopup";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { InstallGate } from "@/components/pwa/InstallGate";
@@ -36,7 +37,7 @@ export const dynamic = "force-dynamic";
 function Chat({ viewer }: { viewer: ParticipantRef }) {
   // ChatApp reads ?c= via useSearchParams, which needs a Suspense boundary.
   return (
-    <Suspense>
+    <Suspense fallback={<ChatSkeleton />}>
       <ChatApp viewer={viewer} />
     </Suspense>
   );

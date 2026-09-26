@@ -7,6 +7,7 @@ import type { ConversationKind, ConversationSummary } from "@/lib/chat/types";
 
 import { formatListTime, KIND_LABELS } from "./format";
 import { GroupIcon, IssueIcon, OrderIcon, PlusIcon, SupportIcon } from "./icons";
+import { ConversationListSkeleton } from "./ChatSkeleton";
 import { MessageSearchResults } from "./MessageSearchResults";
 
 type Filter = "all" | "unread" | ConversationKind;
@@ -132,14 +133,9 @@ export function ConversationList({
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         {loading && !conversations.length ? (
-          <ul className="space-y-1 p-2" aria-busy="true">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <li key={i} className="flex items-center gap-3 p-2">
-                <span className="h-10 w-10 animate-pulse rounded-full bg-gray-100 dark:bg-white/5" />
-                <span className="h-4 flex-1 animate-pulse rounded bg-gray-100 dark:bg-white/5" />
-              </li>
-            ))}
-          </ul>
+          <div aria-busy="true">
+            <ConversationListSkeleton />
+          </div>
         ) : visible.length === 0 ? (
           <p className="p-6 text-center text-sm text-muted">
             {conversations.length === 0 ? "No conversations yet. Start one with New." : "No chats match."}
