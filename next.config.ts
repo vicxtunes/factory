@@ -24,6 +24,16 @@ const nextConfig: NextConfig = {
     // offline stays pending (button disabled) and resolves once the network
     // returns, instead of throwing. See app/dashboard/offline-banner.tsx.
     useOffline: true,
+    // Instant page switching: the router keeps each visited or prefetched
+    // page in memory for 5 minutes, so going back to it shows it at once
+    // instead of a loading skeleton. (Next's default for dynamic pages is 0,
+    // i.e. re-fetch on every visit.) components/navigation/KeepFresh.tsx
+    // then refreshes the data quietly in the background, and any Server
+    // Action that calls revalidatePath/router.refresh clears the copy.
+    staleTimes: {
+      dynamic: 300,
+      static: 300,
+    },
   },
 };
 

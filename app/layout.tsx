@@ -5,6 +5,7 @@ import { OfflineBanner } from "@/components/pwa/OfflineBanner";
 import { InstallCapture } from "@/components/pwa/InstallCapture";
 import { AppSplash } from "@/components/pwa/AppSplash";
 import { NavigationProgress } from "@/components/pwa/NavigationProgress";
+import { KeepFresh } from "@/components/navigation/KeepFresh";
 import { CurrencySymbolProvider } from "@/lib/currency/CurrencySymbolProvider";
 import { DEFAULT_CURRENCY_SYMBOL } from "@/lib/currency/format";
 import { fetchBaseCurrencySymbol } from "@/lib/queries";
@@ -61,6 +62,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
           <InstallCapture />
           <OfflineBanner />
           <NavigationProgress />
+          <KeepFresh />
           <AppSplash />
           <CurrencySymbolProvider symbol={symbol}>{children}</CurrencySymbolProvider>
         </SerwistProvider>
