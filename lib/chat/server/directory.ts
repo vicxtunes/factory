@@ -100,26 +100,31 @@ export async function listStaffRefs(): Promise<ParticipantRef[]> {
 // Relationships (client ↔ designer)
 // ---------------------------------------------------------------------------
 
-/** Designers assigned to at least one of this client's live orders. */
-async function designerIdsForClient(clientId: string): Promise<string[]> {
-  const { data } = await createAdminClient()
+// "Ongoing" = not cancelled, with at least one item not yet completed. Once
+// every item is delivered the designer and client lose the ability to message
+// each other (their chat turns read-only) until another order links them.
+function ongoingOrders(columns: string) {
+  return createAdminClient()
     .from("orders")
-    .select("assigned_designer_id")
-    .eq("client_id", clientId)
+    .select(`${columns}, order_items!inner(id)`)
     .is("cancelled_at", null)
-    .not("assigned_designer_id", "is", null);
-  return [...new Set((data ?? []).map((r) => r.assigned_designer_id as string))];
+    .neq("order_items.production_status", "completed");
 }
 
-/** Clients with at least one live order assigned to this designer. */
+/** Designers assigned to at least one of this client's ongoing orders. */
+async function designerIdsForClient(clientId: string): Promise<string[]> {
+  const { data } = await ongoingOrders("assigned_designer_id")
+    .eq("client_id", clientId)
+    .not("assigned_designer_id", "is", null);
+  return [...new Set(((data ?? []) as unknown as { assigned_designer_id: string }[]).map((r) => r.assigned_designer_id))];
+}
+
+/** Clients with at least one ongoing order assigned to this designer. */
 async function clientIdsForDesigner(designerId: string): Promise<string[]> {
-  const { data } = await createAdminClient()
-    .from("orders")
-    .select("client_id")
+  const { data } = await ongoingOrders("client_id")
     .eq("assigned_designer_id", designerId)
-    .is("cancelled_at", null)
     .not("client_id", "is", null);
-  return [...new Set((data ?? []).map((r) => r.client_id as string))];
+  return [...new Set(((data ?? []) as unknown as { client_id: string }[]).map((r) => r.client_id))];
 }
 
 /** True when two people share the working relationship policy requires. */
@@ -165,7 +170,13 @@ export async function searchContacts(viewer: ParticipantRef, query: string): Pro
       }
 
       const { data } = await req;
-      (data ?? []).forEach((row) => results.push(simplePerson(type, row)));
+      (data ?? []).forEach((row) => {
+        const person = simplePerson(type, row);
+        // Staff picking a client opens the client's support thread, which all
+        // staff share. Say so up front rather than let it look like a private chat.
+        if (type === "client" && viewer.type === "dashboard_user") person.subtitle = "Client · support chat, shared with all staff";
+        results.push(person);
+      });
     }),
   );
 
@@ -208,7 +219,8 @@ export async function isInvolvedInOrder(person: ParticipantRef, order: OrderChat
     case "dashboard_user":
       return true;
     case "client":
-      return order.clientId === person.id;
+      // Clients talk to the team in their support thread, not order threads.
+      return false;
     case "designer":
       return order.designerId === person.id;
     case "worker": {

@@ -5,11 +5,12 @@ import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, use
 import { deleteMessage, getConversation, getMessages, markConversationRead } from "@/lib/chat/actions";
 import { describeTyping, useTypingIndicator } from "@/lib/chat/client/useTypingIndicator";
 import { participantKey } from "@/lib/chat/policy";
+import { setSupportReportStatus } from "@/lib/support/actions";
 import type { ChatMessage, ConversationDetail } from "@/lib/chat/types";
 
 import { Composer } from "./Composer";
 import { ConversationInfoDrawer } from "./ConversationInfoDrawer";
-import { ConversationAvatar } from "./ConversationList";
+import { ConversationAvatar, IssueStatusBadge } from "./ConversationList";
 import { dayKey, formatDayLabel } from "./format";
 import { BackIcon, InfoIcon } from "./icons";
 import { MessageBubble, SystemMessage } from "./MessageBubble";
@@ -56,6 +57,8 @@ export function ConversationView({
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
   const [editing, setEditing] = useState<ChatMessage | null>(null);
   const [infoOpen, setInfoOpen] = useState(false);
+  const [resolving, setResolving] = useState(false);
+  const [resolveError, setResolveError] = useState<string | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const stickToBottom = useRef(true);
@@ -178,6 +181,20 @@ export function ConversationView({
     );
   }
 
+  /** Issue threads: the developer marks the report resolved / reopens it. */
+  async function toggleResolved() {
+    if (!detail?.issue) return;
+    setResolving(true);
+    setResolveError(null);
+    const res = await setSupportReportStatus(detail.issue.reportId, detail.issue.status !== "resolved").catch(() => ({
+      ok: false as const,
+      error: "Couldn't update the issue. Please try again.",
+    }));
+    setResolving(false);
+    if (!res.ok) return setResolveError(res.error);
+    refresh();
+  }
+
   if (!detail) {
     return (
       <div className="flex h-full items-center justify-center" aria-busy="true">
@@ -209,9 +226,29 @@ export function ConversationView({
               ? (detail.members.find((m) => participantKey(m) !== meKey)?.subtitle ?? "")
               : detail.kind === "order" || detail.kind === "support"
                 ? `Shared with all staff · ${detail.members.length} following${detail.muted ? " · muted" : ""}`
-                : `${detail.members.length} members${detail.muted ? " · muted" : ""}`}
+                : detail.kind === "issue"
+                  ? "Issue report · private to you and the developer"
+                  : `${detail.members.length} members${detail.muted ? " · muted" : ""}`}
           </span>
         </button>
+        {detail.issue ? (
+          detail.permissions.canResolve ? (
+            <button
+              type="button"
+              onClick={toggleResolved}
+              disabled={resolving}
+              className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium disabled:opacity-50 ${
+                detail.issue.status === "resolved"
+                  ? "border border-border text-foreground hover:bg-gray-100 dark:hover:bg-white/5"
+                  : "bg-success-600 text-white hover:bg-success-700"
+              }`}
+            >
+              {detail.issue.status === "resolved" ? "Reopen" : "Mark resolved"}
+            </button>
+          ) : (
+            <IssueStatusBadge status={detail.issue.status} />
+          )
+        ) : null}
         <button
           type="button"
           onClick={() => setInfoOpen(true)}
@@ -221,6 +258,8 @@ export function ConversationView({
           <InfoIcon className="h-5 w-5" />
         </button>
       </header>
+
+      {resolveError ? <p className="border-b border-border px-4 py-2 text-xs text-error-600">{resolveError}</p> : null}
 
       <div ref={scrollRef} onScroll={onScroll} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pb-3">
         {cursor ? (
@@ -292,7 +331,11 @@ export function ConversationView({
         </p>
       ) : null}
 
-      {detail.permissions.canPost ? (
+      {!detail.permissions.canPost ? (
+        <p className="border-t border-border px-4 py-3 text-center text-xs text-muted">
+          {detail.permissions.readOnlyReason ?? "You can't send messages here."}
+        </p>
+      ) : (
         <Composer
           conversationId={conversationId}
           replyTo={replyTo}
@@ -312,7 +355,7 @@ export function ConversationView({
           onTyping={typing.notifyTyping}
           onStoppedTyping={typing.notifyStopped}
         />
-      ) : null}
+      )}
 
       <ConversationInfoDrawer
         key={detail.id}

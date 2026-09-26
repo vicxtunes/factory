@@ -55,4 +55,5 @@ export const KIND_LABELS: Record<ConversationKind, string> = {
   group: "Group",
   order: "Order",
   support: "Support",
+  issue: "Issue",
 };

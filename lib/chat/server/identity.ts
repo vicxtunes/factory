@@ -7,6 +7,8 @@ import "server-only";
 // If authentication ever changes, this is the one file to update.
 
 import { resolveActor } from "@/lib/audit/log";
+import { getDashboardSession } from "@/lib/auth/session";
+import { SUPPORT_OWNER_EMAIL } from "@/lib/support/constants";
 
 import type { ParticipantRef, ParticipantType } from "../types";
 
@@ -14,6 +16,8 @@ export interface ChatViewer extends ParticipantRef {
   name: string;
   /** Staff role ("boss", "supervisor", …) when the viewer is a dashboard user. */
   role?: string;
+  /** True for the developer account that owns support reports (may resolve issue threads). */
+  canResolveIssues?: boolean;
 }
 
 const CHAT_TYPES: ReadonlySet<string> = new Set<ParticipantType>(["dashboard_user", "worker", "designer", "client"]);
@@ -22,7 +26,8 @@ const CHAT_TYPES: ReadonlySet<string> = new Set<ParticipantType>(["dashboard_use
 export async function getChatViewer(): Promise<ChatViewer | null> {
   const actor = await resolveActor();
   if (!actor || !CHAT_TYPES.has(actor.type)) return null;
-  return { type: actor.type as ParticipantType, id: actor.id, name: actor.name, role: actor.role };
+  const canResolveIssues = actor.type === "dashboard_user" && (await getDashboardSession())?.email === SUPPORT_OWNER_EMAIL;
+  return { type: actor.type as ParticipantType, id: actor.id, name: actor.name, role: actor.role, canResolveIssues };
 }
 
 /** Like getChatViewer, but throws for anonymous callers. */

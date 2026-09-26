@@ -6,7 +6,7 @@ import { Avatar } from "@/components/profile/Avatar";
 import type { ConversationKind, ConversationSummary } from "@/lib/chat/types";
 
 import { formatListTime, KIND_LABELS } from "./format";
-import { GroupIcon, OrderIcon, PlusIcon, SupportIcon } from "./icons";
+import { GroupIcon, IssueIcon, OrderIcon, PlusIcon, SupportIcon } from "./icons";
 import { MessageSearchResults } from "./MessageSearchResults";
 
 type Filter = "all" | "unread" | ConversationKind;
@@ -18,14 +18,32 @@ const FILTERS: { value: Filter; label: string }[] = [
   { value: "group", label: "Groups" },
   { value: "order", label: "Orders" },
   { value: "support", label: "Support" },
+  { value: "issue", label: "Issues" },
 ];
+
+const KIND_ICONS = { group: GroupIcon, order: OrderIcon, support: SupportIcon, issue: IssueIcon } as const;
+
+/** Open/Resolved pill for issue threads. */
+export function IssueStatusBadge({ status }: { status: "open" | "resolved" }) {
+  return (
+    <span
+      className={`shrink-0 rounded-full px-1.5 py-px text-[10px] font-medium ${
+        status === "resolved"
+          ? "bg-success-50 text-success-700 dark:bg-success-500/15 dark:text-success-500"
+          : "bg-[var(--urgent)]/15 text-[var(--urgent)]"
+      }`}
+    >
+      {status === "resolved" ? "Resolved" : "Open"}
+    </span>
+  );
+}
 
 export function ConversationAvatar({ c }: { c: ConversationSummary }) {
   // People get their photo (or initial); shared threads get a kind icon.
   if (c.kind === "direct" || c.avatarUrl) {
     return <Avatar url={c.avatarUrl} name={c.title} sizeClassName="h-10 w-10 text-sm" />;
   }
-  const Icon = c.kind === "group" ? GroupIcon : c.kind === "order" ? OrderIcon : SupportIcon;
+  const Icon = KIND_ICONS[c.kind];
   return (
     <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-50 text-brand-600 dark:bg-brand-500/10 dark:text-brand-400">
       <Icon className="h-5 w-5" />
@@ -144,7 +162,10 @@ export function ConversationList({
                     <ConversationAvatar c={c} />
                     <span className="min-w-0 flex-1">
                       <span className="flex items-baseline justify-between gap-2">
-                        <span className={`truncate text-sm ${unread ? "font-semibold" : "font-medium"}`}>{c.title}</span>
+                        <span className="flex min-w-0 items-center gap-1.5">
+                          <span className={`truncate text-sm ${unread ? "font-semibold" : "font-medium"}`}>{c.title}</span>
+                          {c.issue ? <IssueStatusBadge status={c.issue.status} /> : null}
+                        </span>
                         <span className={`shrink-0 text-[11px] tnum ${unread ? "text-brand-600" : "text-muted"}`}>
                           {formatListTime(c.lastMessageAt)}
                         </span>

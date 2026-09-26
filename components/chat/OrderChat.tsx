@@ -3,7 +3,8 @@
 import { useCallback, useState } from "react";
 import Link from "next/link";
 
-import { openOrderConversation } from "@/lib/chat/actions";
+import { openOrderConversation, openSupportConversation } from "@/lib/chat/actions";
+import type { ChatResult } from "@/lib/chat/types";
 import { useChatSignals, type ChatSignalHandler } from "@/lib/chat/client/useChatSignals";
 import { chatHref } from "@/lib/chat/routes";
 
@@ -11,16 +12,31 @@ import { ConversationView } from "./ConversationView";
 import { ChatIcon } from "./icons";
 
 /**
- * The order's shared chat thread, embedded right where the order is shown
- * (order drawers on every surface) — no navigation away from the order.
- *
- * Collapsed it's a single "Order chat" button; expanding opens (creating on
- * first use) the thread and renders the full conversation inline, live via
- * the same realtime signals as the /chat page. "Open in Chat" jumps to the
- * full-screen view. The server decides whether this viewer is involved in
- * the order.
+ * The order's internal chat thread, embedded right where the order is shown
+ * (staff, graphics and factory order drawers). The server decides whether
+ * this viewer is involved in the order; clients never are.
  */
 export function OrderChat({ orderId, label = "Order chat" }: { orderId: string; label?: string }) {
+  return <EmbeddedChat label={label} openThread={() => openOrderConversation(orderId)} />;
+}
+
+/**
+ * The signed-in client's support thread with the team, embedded in their
+ * order view — clients talk about orders with support, not in order threads.
+ */
+export function SupportChat({ label = "Chat with support" }: { label?: string }) {
+  return <EmbeddedChat label={label} openThread={() => openSupportConversation()} />;
+}
+
+/**
+ * A chat thread embedded in a page — no navigation away from what's shown.
+ *
+ * Collapsed it's a single button; expanding opens (creating on first use) the
+ * thread via `openThread` and renders the full conversation inline, live via
+ * the same realtime signals as the /chat page. "Open in Chat" jumps to the
+ * full-screen view.
+ */
+function EmbeddedChat({ label, openThread }: { label: string; openThread: () => Promise<ChatResult<string>> }) {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
   const [opening, setOpening] = useState(false);
@@ -43,7 +59,7 @@ export function OrderChat({ orderId, label = "Order chat" }: { orderId: string; 
       return;
     }
     setOpening(true);
-    const res = await openOrderConversation(orderId);
+    const res = await openThread();
     setOpening(false);
     if (!res.ok) {
       setError(res.error);

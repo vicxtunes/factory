@@ -28,10 +28,18 @@ export interface ChatPerson extends ParticipantRef {
 /**
  * direct  — private 1-to-1.
  * group   — named, several internal members.
- * order   — one thread per order (client + designer + joined people + staff).
+ * order   — one thread per order, internal only (designer, workers, joined people + staff).
  * support — one thread per client with the whole staff team.
+ * issue   — one private thread per support report: the reporter + the developer.
  */
-export type ConversationKind = "direct" | "group" | "order" | "support";
+export type ConversationKind = "direct" | "group" | "order" | "support" | "issue";
+
+/** Status of an issue thread's report. Only the developer may change it. */
+export interface IssueState {
+  reportId: string;
+  status: "open" | "resolved";
+  resolvedAt: string | null;
+}
 
 export interface ConversationSummary {
   id: string;
@@ -48,6 +56,8 @@ export interface ConversationSummary {
   muted: boolean;
   /** False for staff looking at a team thread they haven't joined yet. */
   isParticipant: boolean;
+  /** Set for issue threads. */
+  issue: IssueState | null;
 }
 
 export interface ConversationMember extends ChatPerson {
@@ -62,6 +72,10 @@ export interface ConversationDetail extends ConversationSummary {
   /** What the viewer may do here — decided server-side by lib/chat/policy.ts. */
   permissions: {
     canPost: boolean;
+    /** Why canPost is false, shown in place of the message box. */
+    readOnlyReason: string | null;
+    /** Issue threads: may mark the report resolved / reopen it (the developer only). */
+    canResolve: boolean;
     canManageMembers: boolean;
     canRemoveMembers: boolean;
     canRename: boolean;

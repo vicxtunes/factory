@@ -5,9 +5,10 @@ boss), factory workers, graphics designers, and clients.
 
 - **Direct messages**: private, one-to-one.
 - **Groups**: named, several internal members (staff, workers, designers).
-- **Order threads**: one per order, shared by the order's client, its designer, anyone pulled in,
-  and all staff.
+- **Order threads**: one per order, internal only: its designer, anyone pulled in, and all staff.
 - **Support**: one thread per client with "the team" (all staff).
+- **Issues**: one private thread per support report ("Raise issue" on `/support`), between the
+  person who raised it and the developer, with an Open/Resolved status.
 
 Features: realtime delivery, unread badges, read receipts ("Seen"), typing indicators, push
 notifications, voice messages, photo/video/file attachments, replies, edit/delete, mute, member
@@ -21,6 +22,7 @@ lib/chat/
   policy.ts           Every permission rule and limit. Pure; safe on client and server.
   routes.ts           Chat URLs (/chat?c=<id>). Pure.
   actions.ts          "use server" — the ONLY entry point the browser calls.
+  issues.ts           Server-only API for lib/support's issue threads (see "Issue threads").
   server/
     service.ts        Use cases: load, check policy, write, schedule side effects.
     repository.ts     All queries against the chat_* tables. No rules.
@@ -37,7 +39,7 @@ lib/chat/
 
 components/chat/      React UI. Talks only to lib/chat/actions, types, policy, routes.
 app/chat/page.tsx     The /chat route, rendered inside the viewer's own surface chrome.
-supabase/migrations/20260925100000_chat.sql
+supabase/migrations/20260925100000_chat.sql (+ later 2026092*_chat_*.sql)
 ```
 
 ### Dependency rules
@@ -48,8 +50,11 @@ components/chat ──▶ lib/chat/actions ──▶ server/service ──▶ se
         └──▶ lib/chat/{types,policy,routes} ◀───┘
 ```
 
-- The rest of the app uses chat **only** through `actions.ts`, `types.ts`, `routes.ts` and the
-  components in `components/chat/`. Nothing outside `lib/chat` imports from `lib/chat/server`.
+- The rest of the app uses chat **only** through `actions.ts`, `types.ts`, `routes.ts`,
+  `issues.ts` (server code only) and the components in `components/chat/`. Nothing outside
+  `lib/chat` imports from `lib/chat/server`.
+- One UI exception: the conversation header calls `lib/support`'s `setSupportReportStatus` for
+  the Mark resolved button, because support owns report status.
 - Inside chat, the **adapters** are the only files that import app code (`lib/audit`,
   `lib/push`, `lib/supabase`, `lib/storage`, app tables). To change how people, auth, push or
   files work, change one adapter. The service, policy and UI stay the same.
@@ -60,22 +65,31 @@ components/chat ──▶ lib/chat/actions ──▶ server/service ──▶ se
 
 All rules live in [`policy.ts`](./policy.ts).
 
-| From \ To  | Staff           | Worker | Designer | Client                        |
-| ---------- | --------------- | ------ | -------- | ----------------------------- |
-| Staff      | DM              | DM     | DM       | DM (private)                  |
-| Worker     | DM              | DM     | DM       | —                             |
-| Designer   | DM              | DM     | DM       | DM (only on a shared order)   |
-| Client     | → support team  | —      | DM (only their order's designer) | —     |
+| From \ To  | Staff           | Worker | Designer                        | Client                          |
+| ---------- | --------------- | ------ | ------------------------------- | ------------------------------- |
+| Staff      | DM              | DM     | DM                              | → client's support thread       |
+| Worker     | DM              | DM     | DM                              | —                               |
+| Designer   | DM              | DM     | DM                              | DM (only with an ongoing order) |
+| Client     | → support team  | —      | DM (only with an ongoing order) | —                               |
 
+- **Internal communication is open**: staff, workers and designers can all message each other.
+- **Clients only get two things**: their support thread with the team, and private chats with
+  the designers on their *ongoing* orders (not cancelled, with an item not yet completed).
+  Clients aren't in order threads, and staff don't open private chats with clients. "Message
+  this client" opens the client's support thread instead.
+- **A designer–client chat turns read-only** when they no longer share an ongoing order. Both
+  can still read the history, but neither can send (the server returns `readOnlyReason`, shown
+  instead of the message box). It opens again when a new order links them.
 - **A DM is always private to its two people.** No one else can read it, including staff and
   the boss. The only conversations staff share are order and support threads, and the chat
   header says "Shared with all staff" on those.
-- Clients don't choose an individual staff member. "Support team" opens their shared support
-  thread. They can still reply in a private chat that a staff member started with them.
 - **Groups** are internal only. Clients can't create or join them. Any member can add people,
   only the owner can remove them, and ownership passes on if the owner leaves.
-- **Order threads**: anyone involved in the order can open them (the client, the assigned
-  designer, workers with an item assigned, and staff). Staff can add workers and designers.
+- **Order threads**: anyone involved in the order can open them (the assigned designer, workers
+  with an item assigned, and staff). Staff can add workers and designers.
+- **Issue threads** are private to the reporter and the developer (`SUPPORT_OWNER_EMAIL` in
+  `lib/support/constants.ts`); other staff can't see them. Membership is fixed. Only the
+  developer gets **Mark resolved / Reopen** (`permissions.canResolve`). See "Issue threads" below.
 - **Support and order threads** are visible to all staff without joining. A staff member who
   reads or replies "follows" the thread and gets its notifications. If a client writes into a
   thread that no staff member follows yet, every staff member is notified.
@@ -199,3 +213,19 @@ await chat.sendMessage(staffViewer, { conversationId: id, body: "Your order has 
    unguessable; see the security model above.
 3. No new environment variables. Chat uses the existing `APP_SECRET`, Supabase keys and VAPID
    keys.
+
+## Issue threads
+
+`lib/support` owns support reports, including their Open/Resolved status and who may see them.
+Chat only provides the conversation around each report:
+
+- `submitSupportReport` saves the report, then calls `createIssueThread`. That makes a thread with
+  the reporter (role `owner`, which marks who raised it) and the developer, with the report text
+  as the first message. The reporter is taken straight to the thread.
+- `setSupportReportStatus` (from the chat header or `/dashboard/support`) updates the report,
+  then calls `announceIssueStatus`, which posts "… marked this as resolved" / "… reopened this
+  issue" into the thread. The reporter's "resolved" push notification links to the thread.
+- Status is read from `support_reports` via `chat_conversations.support_report_id`. Deleting a
+  report deletes its thread (foreign-key cascade); `removeIssueThreadFiles` clears its uploads first.
+- Reports sent before threads existed were copied into chat by
+  `20260926110000_chat_issues_client_access.sql`, keeping their status.

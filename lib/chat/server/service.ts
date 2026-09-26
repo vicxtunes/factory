@@ -103,6 +103,29 @@ function validateTitle(title: string): string {
   return t;
 }
 
+/**
+ * Why the viewer can't send in this conversation, or null if they can.
+ * Only direct chats can turn read-only: when the two people may no longer
+ * message each other (e.g. a designer and client whose orders together are
+ * all finished). The history stays readable.
+ */
+async function postingBlockedReason(viewer: ParticipantRef, c: repo.ConversationRow): Promise<string | null> {
+  if (c.kind !== "direct" || !c.direct_key) return null;
+  const other = policy.parseDirectKey(c.direct_key).find((p) => !sameParticipant(p, viewer));
+  if (!other) return null;
+  const needsRelationship = policy.requiresRelationship(viewer.type, other.type);
+  const related = needsRelationship ? await directory.haveRelationship(viewer, other) : true;
+  if (policy.canPostDirect(viewer, other, related)) return null;
+  return needsRelationship
+    ? "This chat is read-only because you have no ongoing order together. It reopens when a new order links you."
+    : "You can't send messages in this chat any more.";
+}
+
+async function assertCanPost(viewer: ParticipantRef, c: repo.ConversationRow): Promise<void> {
+  const reason = await postingBlockedReason(viewer, c);
+  if (reason) throw new ChatError(reason);
+}
+
 function dedupeRefs(refs: ParticipantRef[], exclude?: ParticipantRef): ParticipantRef[] {
   const seen = new Map<string, ParticipantRef>();
   for (const r of refs) if (!exclude || !sameParticipant(r, exclude)) seen.set(policy.participantKey(r), r);
@@ -113,21 +136,27 @@ function dedupeRefs(refs: ParticipantRef[], exclude?: ParticipantRef): Participa
 // Reading
 // ---------------------------------------------------------------------------
 
-export async function getInbox(viewer: ParticipantRef): Promise<ConversationSummary[]> {
+/** Inbox rows, minus any kind the viewer isn't allowed to see (e.g. clients in old order threads). */
+async function visibleInbox(viewer: ParticipantRef): Promise<repo.InboxRow[]> {
   const rows = await repo.listInbox(viewer, policy.isStaff(viewer));
+  return rows.filter((r) => policy.canAccessConversation(viewer, r, r.is_participant));
+}
+
+export async function getInbox(viewer: ParticipantRef): Promise<ConversationSummary[]> {
+  const rows = await visibleInbox(viewer);
   const ctx = await buildContext(rows);
   return rows.map((r) => toSummary(viewer, r, ctx));
 }
 
 /** Total unread across all un-muted conversations — for nav badges. */
 export async function getUnreadTotal(viewer: ParticipantRef): Promise<number> {
-  const rows = await repo.listInbox(viewer, policy.isStaff(viewer));
+  const rows = await visibleInbox(viewer);
   return rows.reduce((sum, r) => sum + (r.muted ? 0 : r.unread_count), 0);
 }
 
-export async function getConversationDetail(viewer: ParticipantRef, conversationId: string): Promise<ConversationDetail> {
+export async function getConversationDetail(viewer: ChatViewer, conversationId: string): Promise<ConversationDetail> {
   const { conversation: c, membership } = await loadAccess(viewer, conversationId);
-  const ctx = await buildContext([c]);
+  const [ctx, readOnlyReason] = await Promise.all([buildContext([c]), postingBlockedReason(viewer, c)]);
   const { title, avatarUrl } = presentConversation(viewer, c, ctx);
   const role = membership?.role ?? null;
 
@@ -144,10 +173,13 @@ export async function getConversationDetail(viewer: ParticipantRef, conversation
     unreadCount: 0,
     muted: membership?.muted ?? false,
     isParticipant: !!membership,
+    issue: ctx.issues.get(c.id) ?? null,
     members: toMembers(c.id, ctx),
     me: { type: viewer.type, id: viewer.id },
     permissions: {
-      canPost: true, // access implies posting rights for every kind today
+      canPost: !readOnlyReason,
+      readOnlyReason,
+      canResolve: c.kind === "issue" && !!viewer.canResolveIssues,
       canManageMembers: policy.canManageMembers(viewer, c, role),
       canRemoveMembers: policy.canRemoveMember(viewer, c, role),
       canRename: policy.canRename(c, role),
@@ -188,7 +220,9 @@ export async function searchMessages(viewer: ParticipantRef, query: string): Pro
   const rows = await repo.searchMessages(viewer, policy.isStaff(viewer), pattern, CHAT_LIMITS.maxSearchResults);
   if (!rows.length) return [];
 
-  const conversations = await repo.getConversations([...new Set(rows.map((r) => r.conversation_id))]);
+  const conversations = (await repo.getConversations([...new Set(rows.map((r) => r.conversation_id))])).filter((c) =>
+    policy.canAccessConversation(viewer, c, true),
+  );
   const ctx = await buildContext(conversations);
   const byId = new Map(conversations.map((c) => [c.id, c]));
 
@@ -269,7 +303,7 @@ export async function openSupport(viewer: ChatViewer, clientId?: string): Promis
   return conversation.id;
 }
 
-/** The order's shared thread. Anyone involved in the order may open it. */
+/** The order's internal thread. Anyone involved in the order (never the client) may open it. */
 export async function openOrderThread(viewer: ChatViewer, orderId: string): Promise<string> {
   const order = await directory.getOrderContext(orderId);
   if (!order || !(await directory.isInvolvedInOrder(viewer, order))) throw new ChatError("Order not found.");
@@ -286,11 +320,9 @@ export async function openOrderThread(viewer: ChatViewer, orderId: string): Prom
   );
 
   const initial: ParticipantRef[] = [viewer];
-  if (created) {
-    // Seed with the people the order is about; staff have implicit access.
-    if (order.clientId) initial.push({ type: "client", id: order.clientId });
-    if (order.designerId) initial.push({ type: "designer", id: order.designerId });
-  }
+  // Seed with the order's designer; staff have implicit access. The client
+  // isn't added: clients talk to the team in their support thread.
+  if (created && order.designerId) initial.push({ type: "designer", id: order.designerId });
   await repo.addParticipants(conversation.id, dedupeRefs(initial));
   return conversation.id;
 }
@@ -346,6 +378,7 @@ export async function sendMessage(viewer: ChatViewer, input: SendMessageInput): 
 
   const access = await loadAccess(viewer, input.conversationId);
   const { conversation } = access;
+  await assertCanPost(viewer, conversation);
   await ensureMember(viewer, access);
 
   if (input.replyToId) {
@@ -491,7 +524,8 @@ export async function createAttachmentUpload(
   viewer: ParticipantRef,
   input: { conversationId: string; fileName: string; mimeType: string; sizeBytes: number },
 ): Promise<{ path: string; token: string; bucket: string }> {
-  await loadAccess(viewer, input.conversationId);
+  const { conversation } = await loadAccess(viewer, input.conversationId);
+  await assertCanPost(viewer, conversation);
   if (!input.fileName.trim()) throw new ChatError("Missing file name.");
   if (!policy.isAllowedAttachmentType(input.mimeType)) throw new ChatError(`"${input.fileName}" isn't a supported file type.`);
   if (input.sizeBytes > CHAT_LIMITS.maxAttachmentBytes) {
@@ -580,4 +614,91 @@ export async function setMuted(viewer: ParticipantRef, conversationId: string, m
   const access = await loadAccess(viewer, conversationId);
   await ensureMember(viewer, access);
   await repo.setMuted(conversationId, viewer, muted);
+}
+
+// ---------------------------------------------------------------------------
+// Issue threads
+//
+// Called by lib/support (which owns support reports, their Open/Resolved
+// status and who may see them), not by the browser directly — so these take
+// already-authorised input instead of a viewer to check.
+// ---------------------------------------------------------------------------
+
+export interface IssueThreadInput {
+  reportId: string;
+  reporter: ParticipantRef & { name: string };
+  body: string;
+  /** The developer's account, when it exists. */
+  developer: ParticipantRef | null;
+}
+
+/**
+ * Creates the private thread for a new report: the reporter (role "owner",
+ * which marks them as the one who raised it) and the developer, with the
+ * report text as the first message. Idempotent per report.
+ */
+export async function createIssueThread(input: IssueThreadInput): Promise<string> {
+  const existing = await repo.findIssueConversation(input.reportId);
+  if (existing) return existing.id;
+
+  const { conversation, created } = await repo.createConversation(
+    {
+      kind: "issue",
+      title: input.body.replace(/\s+/g, " ").trim().slice(0, 80),
+      support_report_id: input.reportId,
+      created_by_type: input.reporter.type,
+      created_by_id: input.reporter.id,
+    },
+    () => repo.findIssueConversation(input.reportId),
+  );
+  if (!created) return conversation.id;
+
+  const reporter: ParticipantRef = { type: input.reporter.type, id: input.reporter.id };
+  await repo.addParticipants(conversation.id, [reporter], "owner");
+  if (input.developer) await repo.addParticipants(conversation.id, dedupeRefs([input.developer], reporter));
+
+  const message = await repo.insertMessage({
+    conversation_id: conversation.id,
+    sender_type: reporter.type,
+    sender_id: reporter.id,
+    sender_name: input.reporter.name,
+    kind: "text",
+    body: input.body,
+  });
+  await repo.setLastRead(conversation.id, reporter, message.created_at);
+  ringConversation(conversation, "conversation");
+  return conversation.id;
+}
+
+/**
+ * The issue thread for a report, making sure `person` is in it (e.g. the
+ * developer opening an older report from the dashboard). Null if the report
+ * has no thread.
+ */
+export async function joinIssueThread(reportId: string, person: ParticipantRef): Promise<string | null> {
+  const conversation = await repo.findIssueConversation(reportId);
+  if (!conversation) return null;
+  await repo.addParticipants(conversation.id, [person]);
+  return conversation.id;
+}
+
+/** Thread ids for many reports at once (for linking from report lists). */
+export const issueThreadIds = (reportIds: string[]): Promise<Map<string, string>> => repo.issueConversationIds(reportIds);
+
+/** Posts "Marked as resolved" / "Reopened" into the thread and updates it live. */
+export async function announceIssueStatus(reportId: string, resolved: boolean, byName: string): Promise<void> {
+  const conversation = await repo.findIssueConversation(reportId);
+  if (!conversation) return;
+  await postSystemMessage(conversation, resolved ? `${byName} marked this as resolved` : `${byName} reopened this issue`);
+  ringConversation(conversation, "conversation");
+}
+
+/**
+ * Removes the thread's uploaded files. Call before deleting the report; the
+ * thread itself is deleted with it (foreign key cascade).
+ */
+export async function removeIssueThreadFiles(reportId: string): Promise<void> {
+  const conversation = await repo.findIssueConversation(reportId);
+  if (!conversation) return;
+  await storage.removeObjects(await repo.listAttachmentPaths(conversation.id));
 }

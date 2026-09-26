@@ -21,6 +21,8 @@ export interface ConversationRow {
   order_id: string | null;
   client_id: string | null;
   direct_key: string | null;
+  /** kind = 'issue': the support report this thread discusses. */
+  support_report_id: string | null;
   created_by_type: string;
   created_by_id: string;
   created_at: string;
@@ -120,6 +122,7 @@ async function findOne(column: string, value: string, kind: ConversationKind): P
 export const findDirectConversation = (key: string) => findOne("direct_key", key, "direct");
 export const findOrderConversation = (orderId: string) => findOne("order_id", orderId, "order");
 export const findSupportConversation = (clientId: string) => findOne("client_id", clientId, "support");
+export const findIssueConversation = (reportId: string) => findOne("support_report_id", reportId, "issue");
 
 /**
  * Inserts a conversation. For kinds with a uniqueness rule (direct pair,
@@ -128,7 +131,7 @@ export const findSupportConversation = (clientId: string) => findOne("client_id"
  */
 export async function createConversation(
   row: Pick<ConversationRow, "kind" | "created_by_type" | "created_by_id"> &
-    Partial<Pick<ConversationRow, "title" | "order_id" | "client_id" | "direct_key">>,
+    Partial<Pick<ConversationRow, "title" | "order_id" | "client_id" | "direct_key" | "support_report_id">>,
   refetch?: () => Promise<ConversationRow | null>,
 ): Promise<{ conversation: ConversationRow; created: boolean }> {
   const { data, error } = await db().from("chat_conversations").insert(row).select("*").single<ConversationRow>();
@@ -145,6 +148,54 @@ export async function getConversations(ids: string[]): Promise<ConversationRow[]
   const { data, error } = await db().from("chat_conversations").select("*").in("id", ids);
   if (error) fail("getConversations", error);
   return (data ?? []) as ConversationRow[];
+}
+
+export interface IssueStateRow {
+  conversation_id: string;
+  report_id: string;
+  status: "open" | "resolved";
+  resolved_at: string | null;
+}
+
+/**
+ * The report status behind each issue thread. The status itself lives in
+ * support_reports (owned by lib/support); chat only reads it for display.
+ */
+export async function getIssueStates(conversationIds: string[]): Promise<IssueStateRow[]> {
+  if (!conversationIds.length) return [];
+  const { data, error } = await db()
+    .from("chat_conversations")
+    .select("id, support_reports(id, status, resolved_at)")
+    .in("id", conversationIds)
+    .eq("kind", "issue");
+  if (error) fail("getIssueStates", error);
+  return ((data ?? []) as unknown as { id: string; support_reports: { id: string; status: "open" | "resolved"; resolved_at: string | null } | null }[])
+    .filter((r) => r.support_reports)
+    .map((r) => ({
+      conversation_id: r.id,
+      report_id: r.support_reports!.id,
+      status: r.support_reports!.status,
+      resolved_at: r.support_reports!.resolved_at,
+    }));
+}
+
+/** Issue thread id per support report id. */
+export async function issueConversationIds(reportIds: string[]): Promise<Map<string, string>> {
+  if (!reportIds.length) return new Map();
+  const { data, error } = await db()
+    .from("chat_conversations")
+    .select("id, support_report_id")
+    .eq("kind", "issue")
+    .in("support_report_id", reportIds);
+  if (error) fail("issueConversationIds", error);
+  return new Map((data ?? []).map((r) => [r.support_report_id as string, r.id as string]));
+}
+
+/** Storage paths of every attachment in a conversation (for cleanup before deleting it). */
+export async function listAttachmentPaths(conversationId: string): Promise<string[]> {
+  const { data, error } = await db().from("chat_attachments").select("storage_path").eq("conversation_id", conversationId);
+  if (error) fail("listAttachmentPaths", error);
+  return (data ?? []).map((r) => r.storage_path as string);
 }
 
 export async function updateConversationTitle(id: string, title: string): Promise<void> {

@@ -68,18 +68,23 @@ export function isStaff(p: ParticipantRef | ParticipantType): boolean {
  * Read as: row type may message any type in its list.
  *
  * A direct conversation is ALWAYS private to its two members — nobody else,
- * staff included, can read it. Staff may start a private chat with any
- * client. Clients don't pick an individual staff member: "message staff"
- * from a client goes to their shared support thread (see
- * routeDirectConversation), which every staff member can see and answer.
- * Clients can of course reply inside a private chat a staff member started.
+ * staff included, can read it. Internal people (staff, workers, designers)
+ * may all message each other.
+ *
+ * Clients are deliberately limited to two things: their support thread,
+ * and the designers on their ongoing orders. Staff don't open private chats
+ * with clients: "message this client" opens the client's support thread
+ * (see routeDirectConversation), which every staff member can see and answer.
  */
 const DIRECT_MESSAGE_MATRIX: Record<ParticipantType, readonly ParticipantType[]> = {
-  dashboard_user: ["dashboard_user", "worker", "designer", "client"],
+  dashboard_user: ["dashboard_user", "worker", "designer"],
   worker: ["dashboard_user", "worker", "designer"],
   designer: ["dashboard_user", "worker", "designer", "client"],
   client: ["designer"],
 };
+
+/** The conversation kinds a client may see at all. */
+const CLIENT_KINDS: readonly ConversationKind[] = ["support", "direct"];
 
 /**
  * Pairs that are type-allowed but also require an existing working
@@ -100,14 +105,18 @@ export type DirectRoute = "direct" | "support" | "forbidden";
  */
 export function routeDirectConversation(from: ParticipantRef, to: ParticipantRef): DirectRoute {
   if (from.type === to.type && from.id === to.id) return "forbidden";
-  // Client → staff goes to the team; staff → client is a private chat.
+  // Client ↔ staff always happens in the client's support thread.
   if (from.type === "client" && to.type === "dashboard_user") return "support";
+  if (from.type === "dashboard_user" && to.type === "client") return "support";
   return DIRECT_MESSAGE_MATRIX[from.type].includes(to.type) ? "direct" : "forbidden";
 }
 
-/** The types someone may find in "New message" (before relationship checks). */
+/**
+ * The types someone may find in "New message" (before relationship checks).
+ * Staff can pick a client too; that opens the client's support thread.
+ */
 export function reachableTypes(from: ParticipantType): ParticipantType[] {
-  return [...DIRECT_MESSAGE_MATRIX[from]];
+  return from === "dashboard_user" ? [...DIRECT_MESSAGE_MATRIX[from], "client"] : [...DIRECT_MESSAGE_MATRIX[from]];
 }
 
 /** Groups are internal only: clients neither create nor join them. */
@@ -135,8 +144,28 @@ export function canAccessConversation(
   conversation: { kind: ConversationKind },
   isActiveMember: boolean,
 ): boolean {
+  if (viewer.type === "client" && !CLIENT_KINDS.includes(conversation.kind)) return false;
   if (isActiveMember) return true;
   return isStaff(viewer) && isTeamConversation(conversation.kind);
+}
+
+/**
+ * Whether the viewer may still send in a direct chat with `other`. The chat
+ * stays readable either way; it becomes read-only when the pair may no longer
+ * message each other, e.g. a designer and client with no ongoing order
+ * together (`related` is that relationship check, done by the caller).
+ */
+export function canPostDirect(viewer: ParticipantRef, other: ParticipantRef, related: boolean): boolean {
+  if (routeDirectConversation(viewer, other) !== "direct") return false;
+  return !requiresRelationship(viewer.type, other.type) || related;
+}
+
+/** Parses a direct_key back into its two people. */
+export function parseDirectKey(key: string): ParticipantRef[] {
+  return key.split("|").map((part) => {
+    const at = part.indexOf(":");
+    return { type: part.slice(0, at) as ParticipantType, id: part.slice(at + 1) };
+  });
 }
 
 /** Who may add/remove members. */
@@ -153,6 +182,7 @@ export function canManageMembers(
     case "order":
       // Staff can pull a worker/designer into an order thread.
       return isStaff(viewer);
+    // Direct, support and issue threads have fixed membership.
     default:
       return false;
   }

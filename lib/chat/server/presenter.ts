@@ -13,6 +13,7 @@ import type {
   ConversationKind,
   ConversationMember,
   ConversationSummary,
+  IssueState,
   ParticipantRef,
 } from "../types";
 import * as directory from "./directory";
@@ -33,6 +34,8 @@ export interface PresentationContext {
   membersByConversation: Map<string, repo.ParticipantRow[]>;
   people: Map<string, ChatPerson>;
   orderNumbers: Map<string, string>;
+  /** Issue threads' report status, by conversation id. */
+  issues: Map<string, IssueState>;
 }
 
 export function toRef(row: { participant_type: ParticipantRef["type"]; participant_id: string }): ParticipantRef {
@@ -58,8 +61,16 @@ export async function buildContext(conversations: ConversationLike[]): Promise<P
   for (const c of conversations) if (c.kind === "support" && c.client_id) refs.push({ type: "client", id: c.client_id });
 
   const orderIds = conversations.filter((c) => c.order_id).map((c) => c.order_id!);
-  const [people, orderNumbers] = await Promise.all([directory.resolvePeople(refs), directory.getOrderNumbers(orderIds)]);
-  return { membersByConversation, people, orderNumbers };
+  const issueIds = conversations.filter((c) => c.kind === "issue").map((c) => c.id);
+  const [people, orderNumbers, issueRows] = await Promise.all([
+    directory.resolvePeople(refs),
+    directory.getOrderNumbers(orderIds),
+    repo.getIssueStates(issueIds),
+  ]);
+  const issues = new Map(
+    issueRows.map((r) => [r.conversation_id, { reportId: r.report_id, status: r.status, resolvedAt: r.resolved_at }]),
+  );
+  return { membersByConversation, people, orderNumbers, issues };
 }
 
 /** Viewer-relative title + avatar. */
@@ -93,6 +104,14 @@ export function presentConversation(
       const client = c.client_id ? person({ type: "client", id: c.client_id }) : undefined;
       return { title: client?.name ?? "Client", avatarUrl: client?.avatarUrl ?? null };
     }
+    case "issue": {
+      // Stored title is the start of the report. The developer, who sees
+      // many of these, also gets the reporter's name in front.
+      const summary = c.title ?? "Issue";
+      const reporter = members.find((m) => m.role === "owner");
+      if (!reporter || sameParticipant(toRef(reporter), viewer)) return { title: summary, avatarUrl: null };
+      return { title: `${person(toRef(reporter))?.name ?? "Someone"}: ${summary}`, avatarUrl: null };
+    }
   }
 }
 
@@ -111,6 +130,7 @@ export function toSummary(viewer: ParticipantRef, row: repo.InboxRow, ctx: Prese
     unreadCount: row.unread_count,
     muted: row.muted,
     isParticipant: row.is_participant,
+    issue: ctx.issues.get(row.id) ?? null,
   };
 }
 
