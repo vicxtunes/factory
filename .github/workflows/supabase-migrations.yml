@@ -1,0 +1,70 @@
+# Keeps the production database in step with the code.
+#
+# Why: on 2026-09-26 PR #74 was merged while two of its migrations hadn't
+# been applied. Production's code then asked for columns that didn't exist
+# yet (products.slug, announcements.approval_status), and Orders, Products,
+# the showroom and announcements all broke until the migrations were pushed.
+#
+#   - Pull requests: a dry run lists which migrations the PR would apply
+#     (in the run's summary), so it's visible before merging.
+#   - Merge to main: every pending migration in supabase/migrations is
+#     applied to production, oldest first. Vercel deploys the same merge,
+#     so write migrations that old code can live with (add columns before
+#     code reads them; drop things only after code stops using them).
+#
+# Needs these repository secrets (Settings -> Secrets and variables -> Actions):
+#   SUPABASE_ACCESS_TOKEN  a personal access token (supabase.com/dashboard/account/tokens)
+#   SUPABASE_DB_PASSWORD   the database password of the production project
+name: Supabase migrations
+
+on:
+  pull_request:
+    paths: ["supabase/migrations/**"]
+  push:
+    branches: [main]
+    paths: ["supabase/migrations/**"]
+  # Run by hand (Actions tab) to catch up if something was missed.
+  workflow_dispatch:
+
+# Never run two pushes against the database at once.
+concurrency:
+  group: supabase-migrations-${{ github.event_name == 'pull_request' && github.ref || 'production' }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  SUPABASE_PROJECT_ID: efefpzzuzblroydxamjq # production project ref (not a secret)
+  SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+  SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+
+jobs:
+  check:
+    name: Pending migrations (dry run)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: supabase/setup-cli@v3
+      - run: supabase link --project-ref "$SUPABASE_PROJECT_ID"
+      - name: List what merging would apply
+        run: |
+          {
+            echo "### Migrations this PR applies to production when merged"
+            echo '```'
+            supabase db push --dry-run
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+  apply:
+    name: Apply to production
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: supabase/setup-cli@v3
+      - run: supabase link --project-ref "$SUPABASE_PROJECT_ID"
+      - run: supabase db push
+      - name: Show migration status
+        run: supabase migration list | tee -a "$GITHUB_STEP_SUMMARY"
