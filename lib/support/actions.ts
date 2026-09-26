@@ -9,6 +9,7 @@ import { notifyActor } from "@/lib/push/send";
 import type { SupportReport } from "@/lib/types";
 
 import { SUPPORT_OWNER_EMAIL } from "./constants";
+import { reportSnippet } from "./notices";
 
 type Result = { ok: true } | { ok: false; error: string };
 
@@ -99,15 +100,17 @@ export async function setSupportReportStatus(id: string, resolved: boolean): Pro
     .from("support_reports")
     .update({ status: resolved ? "resolved" : "open", resolved_at: resolved ? new Date().toISOString() : null })
     .eq("id", id)
-    .select("author_type, author_id")
+    .select("author_type, author_id, body")
     .single();
   if (error) return { ok: false, error: error.message };
   revalidatePath("/dashboard/support");
 
+  // Only the person who raised it is told. They also see it in their bell
+  // for a while (lib/support/notices.ts), in case push is off.
   if (resolved && data) {
     await notifyActor(
       { type: data.author_type, id: data.author_id },
-      { title: "Your report was resolved", body: "The team marked your report as resolved.", url: "/" },
+      { title: "Your issue was resolved", body: `"${reportSnippet(data.body)}" was marked as resolved.`, url: "/support" },
     );
   }
   return { ok: true };

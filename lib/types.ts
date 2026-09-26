@@ -290,10 +290,15 @@ export interface Designer extends DesignerPublic {
 
 export interface NotificationRow {
   id: string;
-  order_item_id: string;
-  event_type: NotificationEvent;
+  // Null for personal notices that aren't about an order (see below).
+  order_item_id: string | null;
+  // "resolved" = one of the viewer's support reports was resolved. These
+  // aren't stored in `notifications`; lib/support/notices.ts derives them.
+  event_type: NotificationEvent | "resolved";
   message: string;
   created_at: string;
+  // Where tapping the entry goes, when it links anywhere.
+  href?: string;
 }
 
 export type SupportReportStatus = "open" | "resolved";

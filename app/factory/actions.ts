@@ -9,6 +9,7 @@ import { verifyPin } from "@/lib/auth/pin";
 import { logOrderEvent, resolveActor } from "@/lib/audit/log";
 import { pushOnlyOrderItem, notifyOrderItem } from "@/lib/notifications/notify";
 import { fetchWorkerNotifications } from "@/lib/queries";
+import { fetchResolvedReportNotices, mergeNotices } from "@/lib/support/notices";
 import { BOARD_COLUMNS, STATUS_LABELS, type NotificationRow, type ProductionStatus } from "@/lib/types";
 
 function itemLabel(item: { product: string; product_type: string | null }): string {
@@ -58,7 +59,11 @@ export async function logoutWorker(): Promise<void> {
 export async function getMyNotifications(): Promise<NotificationRow[]> {
   const session = await getWorkerSession();
   if (!session) return [];
-  return fetchWorkerNotifications(session.worker_id, 10);
+  const [rows, notices] = await Promise.all([
+    fetchWorkerNotifications(session.worker_id, 10),
+    fetchResolvedReportNotices({ type: "worker", id: session.worker_id }),
+  ]);
+  return mergeNotices(rows, notices, 10);
 }
 
 // Only the worker a supervisor assigned to an item may move it through the

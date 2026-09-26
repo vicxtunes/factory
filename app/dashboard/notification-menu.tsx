@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 
 import { createClient } from "@/lib/supabase/browser";
 import type { NotificationRow } from "@/lib/types";
@@ -83,21 +84,38 @@ export function NotificationMenu({ initial }: { initial: NotificationRow[] }) {
             <p className="text-sm font-semibold">Notifications</p>
           </div>
           <ul className="flex-1 divide-y divide-border overflow-y-auto">
-            {rows.map((n) => (
-              <li key={n.id} className="px-4 py-3 text-sm">
-                <div className="flex items-center justify-between gap-2">
-                  <span
-                    className={`text-[0.7rem] font-semibold uppercase tracking-wide ${
-                      n.event_type === "delayed" ? "text-error-600" : "text-success-600"
-                    }`}
-                  >
-                    {n.event_type}
-                  </span>
-                  <span className="text-xs text-muted">{relativeTime(n.created_at)}</span>
-                </div>
-                <p className="mt-1">{n.message}</p>
-              </li>
-            ))}
+            {rows.map((n) => {
+              const body = (
+                <>
+                  <div className="flex items-center justify-between gap-2">
+                    <span
+                      className={`text-[0.7rem] font-semibold uppercase tracking-wide ${
+                        n.event_type === "delayed" ? "text-error-600" : "text-success-600"
+                      }`}
+                    >
+                      {n.event_type}
+                    </span>
+                    <span className="text-xs text-muted">{relativeTime(n.created_at)}</span>
+                  </div>
+                  <p className="mt-1">{n.message}</p>
+                </>
+              );
+              return (
+                <li key={n.id} className="text-sm">
+                  {n.href ? (
+                    <Link
+                      href={n.href}
+                      onClick={() => setOpen(false)}
+                      className="block px-4 py-3 hover:bg-gray-50 dark:hover:bg-white/[0.03]"
+                    >
+                      {body}
+                    </Link>
+                  ) : (
+                    <div className="px-4 py-3">{body}</div>
+                  )}
+                </li>
+              );
+            })}
             {rows.length === 0 ? (
               <li className="px-4 py-6 text-center text-sm text-muted">No events yet.</li>
             ) : null}
