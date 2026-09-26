@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 
 import { Button } from "@/components/ui/Button";
 import { Field, TextArea } from "@/components/ui/Field";
+import { Collapsible, PriceHero } from "@/components/order/OrderSummary";
 import { PaymentMethods } from "@/components/payments/PaymentMethods";
 import type { OrderItemWithOrder } from "@/lib/types";
 
@@ -62,24 +63,41 @@ export function ClientQuoteReview({
 
   if (order.approval_status === "approved") {
     return (
-      <div className="space-y-4">
-        <p className="text-sm text-muted">
-          You approved this order at{" "}
-          <span className="font-semibold text-foreground">{formatMoney(order.quoted_price, symbol)}</span> — we&apos;re
-          sending it into production.
-        </p>
+      <div className="space-y-3">
+        <PriceHero
+          label="Amount to pay"
+          price={formatMoney(order.quoted_price, symbol)}
+          note={
+            <>
+              You approved this price, and we&apos;re sending the order into production. Use{" "}
+              <span className="font-semibold text-foreground">{order.order_no}</span> as your payment reference.
+            </>
+          }
+        />
         <HowToPay orderNo={order.order_no} amount={order.quoted_price} />
       </div>
     );
   }
 
-  // awaiting_client_approval
+  // awaiting_client_approval: the price and the decision come first.
   return (
-    <div className="space-y-4">
-      <div>
-        <p className="text-xs uppercase tracking-wide text-muted">Quoted price</p>
-        <p className="text-3xl font-extrabold tabular-nums">{formatMoney(order.quoted_price, symbol)}</p>
-      </div>
+    <div className="space-y-3">
+      <PriceHero
+        label="Quoted price"
+        price={formatMoney(order.quoted_price, symbol)}
+        note={<>For order <span className="font-semibold text-foreground">{order.order_no}</span>. Approve it to start production.</>}
+      >
+        {decliningWithNote ? null : (
+          <>
+            <Button variant="primary" loading={pending} disabled={pending} onClick={() => submit("approve")}>
+              Approve
+            </Button>
+            <Button variant="secondary" loading={pending} disabled={pending} onClick={() => setDecliningWithNote(true)}>
+              Request changes
+            </Button>
+          </>
+        )}
+      </PriceHero>
 
       {error ? <p className="text-sm text-[var(--rush)]">{error}</p> : null}
 
@@ -97,16 +115,7 @@ export function ClientQuoteReview({
             </Button>
           </div>
         </div>
-      ) : (
-        <div className="flex gap-2">
-          <Button variant="primary" loading={pending} disabled={pending} onClick={() => submit("approve")}>
-            Approve
-          </Button>
-          <Button variant="secondary" loading={pending} disabled={pending} onClick={() => setDecliningWithNote(true)}>
-            Request changes
-          </Button>
-        </div>
-      )}
+      ) : null}
 
       <HowToPay orderNo={order.order_no} amount={order.quoted_price} />
     </div>
@@ -115,9 +124,8 @@ export function ClientQuoteReview({
 
 function HowToPay({ orderNo, amount }: { orderNo: string; amount: number | null }) {
   return (
-    <div className="space-y-2 border-t border-border pt-4">
-      <p className="text-xs font-semibold uppercase tracking-wide text-muted">How to pay</p>
+    <Collapsible title="How to pay" summary="Bank or mobile money">
       <PaymentMethods orderNo={orderNo} amount={amount} />
-    </div>
+    </Collapsible>
   );
 }
