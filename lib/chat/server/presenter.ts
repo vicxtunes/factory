@@ -166,6 +166,7 @@ export async function hydrateMessages(rows: repo.MessageRow[]): Promise<ChatMess
       width: a.width,
       height: a.height,
       durationMs: a.duration_ms,
+      waveform: a.waveform,
       url: urls.get(a.storage_path) ?? null,
     });
   }

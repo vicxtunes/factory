@@ -106,3 +106,21 @@ export function TrashIcon({ className }: IconProps) {
 export function SearchIcon({ className }: IconProps) {
   return <Outline className={className} d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />;
 }
+
+// Solid, like a media player's buttons.
+export function PlayIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
+      <path d="M7 4.9v14.2a1 1 0 0 0 1.52.85l11.36-7.1a1 1 0 0 0 0-1.7L8.52 4.05A1 1 0 0 0 7 4.9Z" />
+    </svg>
+  );
+}
+
+export function PauseIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
+      <rect x="6" y="4.5" width="4" height="15" rx="1.25" />
+      <rect x="14" y="4.5" width="4" height="15" rx="1.25" />
+    </svg>
+  );
+}

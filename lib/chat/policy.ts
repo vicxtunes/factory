@@ -18,6 +18,9 @@ export const CHAT_LIMITS = {
   maxSearchResults: 30,
   /** Voice messages stop recording automatically after this long. */
   maxVoiceMessageMs: 5 * 60 * 1000,
+  /** Voice-message waveform: number of bars, each a height from 0 to waveformMax. */
+  waveformBars: 48,
+  waveformMax: 100,
   /** Signed attachment URLs live this long (seconds). */
   attachmentUrlTtl: 60 * 60,
 } as const;
@@ -42,6 +45,17 @@ export const ALLOWED_ATTACHMENT_MIME_PREFIXES = [
 
 export function isAllowedAttachmentType(mimeType: string): boolean {
   return ALLOWED_ATTACHMENT_MIME_PREFIXES.some((p) => mimeType.startsWith(p));
+}
+
+/**
+ * Cleans a browser-supplied voice-message waveform: whole numbers clamped to
+ * 0–waveformMax, at most waveformBars of them. Anything unusable becomes null
+ * (the player then draws flat placeholder bars).
+ */
+export function sanitizeWaveform(input: unknown): number[] | null {
+  if (!Array.isArray(input) || !input.length || input.length > CHAT_LIMITS.waveformBars) return null;
+  if (!input.every((v) => typeof v === "number" && Number.isFinite(v))) return null;
+  return input.map((v: number) => Math.min(CHAT_LIMITS.waveformMax, Math.max(0, Math.round(v))));
 }
 
 /** "Staff" = dashboard accounts (receptionist / supervisor / boss). */

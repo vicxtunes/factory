@@ -66,6 +66,7 @@ export interface AttachmentRow {
   width: number | null;
   height: number | null;
   duration_ms: number | null;
+  waveform: number[] | null;
   created_at: string;
 }
 

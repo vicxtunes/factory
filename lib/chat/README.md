@@ -113,7 +113,7 @@ the browser reaches Supabase as `anon`, and Row Level Security can't tell them a
 | `chat_conversations` | One row per conversation. Keeps a cached last-message preview for the inbox. |
 | `chat_participants`  | Membership, role, `last_read_at` (unread counts + receipts), mute, soft leave. |
 | `chat_messages`      | Text / attachment / system messages, replies, edit and soft-delete markers.  |
-| `chat_attachments`   | Files per message, including `duration_ms` for audio/video.                |
+| `chat_attachments`   | Files per message, including `duration_ms` and `waveform` for audio.       |
 
 Database functions, all callable only with the service-role key:
 
@@ -165,6 +165,11 @@ await chat.sendMessage(staffViewer, { conversationId: id, body: "Your order has 
   is empty), then send or discard. It records WebM/Opus where the browser supports it and
   MP4/AAC on Safari. Recordings stop automatically after `CHAT_LIMITS.maxVoiceMessageMs`
   (5 minutes). Recordings are uploaded like any other attachment with `durationMs` set.
+  Before upload, `lib/chat/client/waveform.ts` measures 48 bar heights (0–100). They're stored
+  in `chat_attachments.waveform` (checked by `sanitizeWaveform`), so
+  `components/chat/VoicePlayer.tsx` can draw a WhatsApp-style waveform without downloading
+  the audio. The player has play/pause, tap or drag to seek, and 1×/1.5×/2× speed, and it
+  plays one message at a time. The audio only downloads on first play.
   Recording needs HTTPS (or localhost) and microphone permission.
 - **Typing indicators**: `lib/chat/client/useTypingIndicator.ts`. Each browser announces
   "typing" at most every 2.5 seconds while keys are pressed, and "stopped" when a message is

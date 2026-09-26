@@ -6,8 +6,9 @@ import { Avatar } from "@/components/profile/Avatar";
 import { Linkify } from "@/components/ui/Linkify";
 import type { ChatAttachment, ChatMessage } from "@/lib/chat/types";
 
-import { formatBytes, formatDuration, formatMessageTime } from "./format";
+import { formatBytes, formatMessageTime } from "./format";
 import { FileIcon } from "./icons";
+import { VoicePlayer } from "./VoicePlayer";
 
 function AttachmentView({ a, mine }: { a: ChatAttachment; mine: boolean }) {
   if (!a.url) {
@@ -32,12 +33,7 @@ function AttachmentView({ a, mine }: { a: ChatAttachment; mine: boolean }) {
     case "video":
       return <video src={a.url} controls preload="metadata" className="max-h-72 max-w-full rounded-lg" />;
     case "audio":
-      return (
-        <div className="flex min-w-56 items-center gap-2">
-          <audio src={a.url} controls preload="metadata" className="h-10 w-full" />
-          {a.durationMs ? <span className="shrink-0 text-[11px] tnum opacity-70">{formatDuration(a.durationMs)}</span> : null}
-        </div>
-      );
+      return <VoicePlayer attachment={a} mine={mine} />;
     default:
       return (
         <a

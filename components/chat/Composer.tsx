@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { editMessage, sendMessage } from "@/lib/chat/actions";
 import { uploadChatAttachment } from "@/lib/chat/client/upload";
+import { measureWaveform } from "@/lib/chat/client/waveform";
 import { CHAT_LIMITS } from "@/lib/chat/policy";
 import type { ChatMessage, UploadedAttachment } from "@/lib/chat/types";
 
@@ -96,7 +97,8 @@ export function Composer({
     setBusy(true);
     setError(null);
     try {
-      const upload = await uploadChatAttachment(conversationId, file, { durationMs });
+      const waveform = await measureWaveform(file);
+      const upload = await uploadChatAttachment(conversationId, file, { durationMs, waveform });
       if (!upload.ok) return setError(upload.error);
       const res = await sendMessage({ conversationId, body: "", replyToId: replyTo?.id ?? null, attachments: [upload.attachment] });
       if (!res.ok) return setError(res.error);

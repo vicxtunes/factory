@@ -86,6 +86,8 @@ export interface ChatAttachment {
   height: number | null;
   /** Audio/video length; set for voice messages. */
   durationMs: number | null;
+  /** Voice-message bar heights (0–100), measured when recorded; null otherwise. */
+  waveform: number[] | null;
   /** Short-lived signed URL, minted after an access check. */
   url: string | null;
 }
@@ -144,6 +146,7 @@ export interface UploadedAttachment {
   width?: number | null;
   height?: number | null;
   durationMs?: number | null;
+  waveform?: number[] | null;
 }
 
 /** Everything a client needs to subscribe to its realtime doorbells. */

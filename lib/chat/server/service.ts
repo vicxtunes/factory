@@ -388,6 +388,7 @@ export async function sendMessage(viewer: ChatViewer, input: SendMessageInput): 
       width: u.width ?? null,
       height: u.height ?? null,
       duration_ms: u.durationMs ?? null,
+      waveform: u.mimeType.startsWith("audio/") ? policy.sanitizeWaveform(u.waveform) : null,
     })),
   );
 

@@ -6,7 +6,8 @@
 //
 // Voice messages: record with MediaRecorder, wrap the Blob in a File
 // (new File([blob], "voice.webm", { type: blob.type })) and pass the
-// recording length as `durationMs` — no other changes are needed.
+// recording length as `durationMs` and its bar heights as `waveform`
+// (see ./waveform.ts).
 
 import { putToSignedUrl } from "@/lib/storage/xhr-upload";
 
@@ -37,7 +38,7 @@ function imageSize(file: File): Promise<{ width: number; height: number } | null
 export async function uploadChatAttachment(
   conversationId: string,
   file: File,
-  options: { durationMs?: number; onProgress?: (fraction: number) => void } = {},
+  options: { durationMs?: number; waveform?: number[] | null; onProgress?: (fraction: number) => void } = {},
 ): Promise<ChatUploadResult> {
   const mimeType = file.type || "application/octet-stream";
   if (!isAllowedAttachmentType(mimeType)) return { ok: false, error: `"${file.name}" isn't a supported file type.` };
@@ -64,6 +65,7 @@ export async function uploadChatAttachment(
       width: size?.width ?? null,
       height: size?.height ?? null,
       durationMs: options.durationMs ?? null,
+      waveform: options.waveform ?? null,
     },
   };
 }
