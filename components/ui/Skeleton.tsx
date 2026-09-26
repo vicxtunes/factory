@@ -1,12 +1,13 @@
-// Frosted-glass shimmer block — the base unit for all page skeletons (see
-// app/dashboard/(app)/*/loading.tsx). Sized/shaped per call site via
-// className; the shimmer/backdrop-blur styling lives in app/globals.css
-// (.skeleton-glass) since it needs a ::after pseudo-element.
-export function Skeleton({ className = "" }: { className?: string }) {
+// Shimmer block — the base unit for all page skeletons (see loading.tsx
+// files and components/skeletons/). Sized/shaped per call site via
+// className; the tint/shimmer styling lives in app/globals.css
+// (.skeleton-glass) since it needs a ::after pseudo-element. `onDark` is for
+// blocks drawn on the navy header strip.
+export function Skeleton({ className = "", onDark = false }: { className?: string; onDark?: boolean }) {
   return (
     <div
       aria-hidden="true"
-      className={`skeleton-glass rounded-[var(--radius)] border border-border/40 ${className}`}
+      className={`skeleton-glass rounded-[var(--radius)] ${onDark ? "skeleton-on-dark" : "border border-border/40"} ${className}`}
     />
   );
 }
