@@ -1,12 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 
 import { Avatar } from "@/components/profile/Avatar";
 import type { ConversationKind, ConversationSummary } from "@/lib/chat/types";
 
 import { formatListTime, KIND_LABELS } from "./format";
-import { GroupIcon, IssueIcon, OrderIcon, PlusIcon, SupportIcon } from "./icons";
+import { BackIcon, GroupIcon, IssueIcon, OrderIcon, PlusIcon, SupportIcon } from "./icons";
 import { ConversationListSkeleton } from "./ChatSkeleton";
 import { MessageSearchResults } from "./MessageSearchResults";
 
@@ -64,12 +65,15 @@ export function ConversationList({
   activeId,
   onSelect,
   onNew,
+  exitHref,
 }: {
   conversations: ConversationSummary[];
   loading: boolean;
   activeId: string | null;
   onSelect: (id: string) => void;
   onNew: () => void;
+  /** Phones only: the full-screen chat's way back to the rest of the app. */
+  exitHref?: string;
 }) {
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
@@ -93,7 +97,18 @@ export function ConversationList({
     <div className="flex h-full min-h-0 flex-col">
       <div className="space-y-3 border-b border-border p-3">
         <div className="flex items-center justify-between gap-2">
-          <h1 className="text-base font-semibold">Chats</h1>
+          <span className="flex min-w-0 items-center gap-1">
+            {exitHref ? (
+              <Link
+                href={exitHref}
+                aria-label="Leave chat"
+                className="-ml-2 inline-flex h-10 w-10 items-center justify-center rounded-full text-muted hover:bg-gray-100 md:hidden dark:hover:bg-white/5"
+              >
+                <BackIcon className="h-5 w-5" />
+              </Link>
+            ) : null}
+            <h1 className="text-base font-semibold">Chats</h1>
+          </span>
           <button
             type="button"
             onClick={onNew}

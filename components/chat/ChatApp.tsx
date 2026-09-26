@@ -10,16 +10,19 @@ import type { ConversationSummary, ParticipantRef } from "@/lib/chat/types";
 
 import { ConversationList } from "./ConversationList";
 import { ConversationView } from "./ConversationView";
+import { CHAT_FRAME_CLASS } from "./ChatSkeleton";
 import { ChatIcon } from "./icons";
 import { NewConversationDrawer } from "./NewConversationDrawer";
 
 /**
  * The complete chat experience, surface-agnostic: drop it into any page
- * inside any shell. Two panes on desktop (inbox + thread); one pane at a
- * time on phones. The open conversation lives in the URL (?c=<id>) so push
- * notifications and "Open order chat" buttons can deep-link into it.
+ * inside any shell. Two panes on desktop (inbox + thread). On phones it takes
+ * over the whole screen like WhatsApp (no app header or bottom bar), one pane
+ * at a time, and `exitHref` is where the inbox's back arrow returns to. The
+ * open conversation lives in the URL (?c=<id>) so push notifications and
+ * "Open order chat" buttons can deep-link into it.
  */
-export function ChatApp({ viewer }: { viewer: ParticipantRef }) {
+export function ChatApp({ viewer, exitHref }: { viewer: ParticipantRef; exitHref?: string }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -71,7 +74,7 @@ export function ChatApp({ viewer }: { viewer: ParticipantRef }) {
   );
 
   return (
-    <div className="flex h-[calc(100dvh-13rem)] min-h-[26rem] overflow-hidden rounded-2xl border border-border bg-surface shadow-theme-xs md:h-[calc(100dvh-9rem)]">
+    <div className={CHAT_FRAME_CLASS}>
       <aside
         className={`w-full shrink-0 border-r border-border md:block md:w-80 lg:w-96 ${activeId ? "hidden" : "block"}`}
       >
@@ -84,6 +87,7 @@ export function ChatApp({ viewer }: { viewer: ParticipantRef }) {
             activeId={activeId}
             onSelect={select}
             onNew={() => setNewOpen(true)}
+            exitHref={exitHref}
           />
         )}
       </aside>

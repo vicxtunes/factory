@@ -34,11 +34,11 @@ export const dynamic = "force-dynamic";
 // matches resolveActor() in lib/audit/log.ts, which the chat module itself
 // uses to identify the caller — so the shell and the data always agree.
 
-function Chat({ viewer }: { viewer: ParticipantRef }) {
+function Chat({ viewer, exitHref }: { viewer: ParticipantRef; exitHref: string }) {
   // ChatApp reads ?c= via useSearchParams, which needs a Suspense boundary.
   return (
     <Suspense fallback={<ChatSkeleton />}>
-      <ChatApp viewer={viewer} />
+      <ChatApp viewer={viewer} exitHref={exitHref} />
     </Suspense>
   );
 }
@@ -113,7 +113,7 @@ export default async function ChatPage() {
         role={dashboard.role}
         notifications={notifications}
       >
-        <Chat viewer={{ type: "dashboard_user", id: dashboard.userId }} />
+        <Chat viewer={{ type: "dashboard_user", id: dashboard.userId }} exitHref="/dashboard" />
       </DashboardShell>
     );
   }
@@ -129,7 +129,7 @@ export default async function ChatPage() {
         logout={logoutDesigner}
         logoutButton={<DesignerLogoutButton />}
       >
-        <Chat viewer={{ type: "designer", id: designer.designer_id }} />
+        <Chat viewer={{ type: "designer", id: designer.designer_id }} exitHref="/graphics" />
       </PinSurfaceChrome>
     );
   }
@@ -145,7 +145,7 @@ export default async function ChatPage() {
         logout={logoutWorker}
         logoutButton={<WorkerLogoutButton />}
       >
-        <Chat viewer={{ type: "worker", id: worker.worker_id }} />
+        <Chat viewer={{ type: "worker", id: worker.worker_id }} exitHref="/factory" />
       </PinSurfaceChrome>
     );
   }
@@ -154,7 +154,7 @@ export default async function ChatPage() {
   if (client) {
     return (
       <ClientShell signedIn name={client.name} avatarUrl={client.avatarUrl}>
-        <Chat viewer={{ type: "client", id: client.client_id }} />
+        <Chat viewer={{ type: "client", id: client.client_id }} exitHref="/client-side" />
       </ClientShell>
     );
   }
