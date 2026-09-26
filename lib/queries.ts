@@ -384,7 +384,7 @@ export async function fetchAnnouncements(): Promise<Announcement[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("announcements")
-    .select("id, title, body, audience, active, created_by_name, created_at")
+    .select("id, title, body, audience, active, created_by_id, created_by_name, created_at, approval_status, approved_at, decided_by_name")
     .order("created_at", { ascending: false });
   if (error) throw new Error(error.message);
   return (data ?? []) as unknown as Announcement[];

@@ -349,9 +349,20 @@ export interface Announcement {
   body: string;
   audience: AuditActorType[];
   active: boolean;
+  // The dashboard user who created it; only they may edit, hide or delete
+  // it (lib/announcements/access.ts). Null if their account was removed.
+  created_by_id: string | null;
   created_by_name: string | null;
   created_at: string;
+  // Boss approval: the boss's own go straight to "approved"; a supervisor's
+  // or receptionist's wait as "pending". Only approved ones pop up.
+  approval_status: AnnouncementApproval;
+  approved_at: string | null;
+  // Who approved or rejected it.
+  decided_by_name: string | null;
 }
+
+export type AnnouncementApproval = "pending" | "approved" | "rejected";
 
 export interface OrderAuditEntry {
   id: string;
