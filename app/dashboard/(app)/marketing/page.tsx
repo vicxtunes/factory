@@ -18,7 +18,7 @@ export default async function MarketingPage() {
 
   return (
     <div className="space-y-6">
-      <SectionLabel>Client portal — Marketing carousel</SectionLabel>
+      <SectionLabel>Marketing — Client portal carousel</SectionLabel>
       {!canManage ? (
         <p className="text-sm text-muted">View only — the marketing carousel is managed by the boss.</p>
       ) : null}

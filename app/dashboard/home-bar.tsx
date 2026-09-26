@@ -1,23 +1,20 @@
 "use client";
 
 import { HomeBar, type HomeBarLink } from "@/components/ui/HomeBar";
-import { SUPPORT_OWNER_EMAIL } from "@/lib/support/constants";
-import type { AppRole } from "@/lib/types";
+import { isManagerRole, type AppRole } from "@/lib/types";
 
 import { signOut } from "./actions";
+import { HOME, navFor } from "./nav";
 
-const MANAGER_ROLES: readonly AppRole[] = ["supervisor", "receptionist", "boss"];
-
-// Staff dashboard. Primary tabs are the daily loop: the overview, the two
-// halves of the order lifecycle (Office Orders and the Client Orders approval
-// queue — see the ORDERS_GROUP note in ./sidebar.tsx), and Support. The
-// admin/catalog screens are set-and-forget, so they live under "more".
-// Role and owner-email gating mirrors the sidebar exactly.
+// Staff dashboard on phones. Primary tabs are the daily loop: the overview,
+// the two halves of the order lifecycle (Office Orders and the Client Orders
+// approval queue) and Support. Everything else sits in "More", in the same
+// groups as the desktop sidebar (both come from ./nav.ts).
 export function DashboardHomeBar({ role, email }: { role: AppRole; email: string | null }) {
-  const isManager = MANAGER_ROLES.includes(role);
+  const isManager = isManagerRole(role);
 
   const tabs: HomeBarLink[] = [
-    { href: "/dashboard", label: "Dashboard", icon: "dashboard", exact: true },
+    { href: HOME.href, label: HOME.label, icon: HOME.icon, exact: true },
     { href: "/dashboard/orders", label: "Office Orders", barLabel: "Orders", icon: "orders" },
     ...(isManager
       ? [{ href: "/dashboard/order-approvals", label: "Client Orders", barLabel: "Approvals", icon: "clients" } as const]
@@ -25,28 +22,12 @@ export function DashboardHomeBar({ role, email }: { role: AppRole; email: string
     { href: "/support", label: "Support", icon: "support" },
   ];
 
-  const more: HomeBarLink[] = [
-    ...(isManager
-      ? ([
-          { href: "/dashboard/clients", label: "Clients", icon: "clients" },
-          { href: "/dashboard/agents", label: "Agents", icon: "agents" },
-          { href: "/dashboard/products", label: "Products", icon: "products" },
-          { href: "/dashboard/marketing", label: "Marketing", icon: "marketing" },
-          { href: "/dashboard/workers", label: "Workers", icon: "workers" },
-          { href: "/dashboard/designers", label: "Designers", icon: "designers" },
-        ] as const)
-      : []),
-    ...(role === "boss" ? ([{ href: "/dashboard/admins", label: "Admins", icon: "admins" }] as const) : []),
-    ...(email === SUPPORT_OWNER_EMAIL
-      ? ([
-          { href: "/dashboard/support", label: "Support Reports", icon: "support" },
-          { href: "/dashboard/announcements", label: "Announcements", icon: "announcements" },
-        ] as const)
-      : []),
-    // Signed-in staff now get the display board in the same tab/app session
-    // (not a separate browser tab) — no reason to leave the app for it.
-    { href: "/display", label: "Display screen", icon: "display" },
-  ];
+  const onBar = new Set(tabs.map((t) => t.href));
+  const more: HomeBarLink[] = navFor({ role, email }).flatMap((group) =>
+    group.items
+      .filter((item) => !onBar.has(item.href))
+      .map((item) => ({ href: item.href, label: item.label, icon: item.icon, section: group.label })),
+  );
 
   return <HomeBar tabs={tabs} more={more} logout={signOut} afterLogout="/dashboard/login" hideFrom="lg" />;
 }

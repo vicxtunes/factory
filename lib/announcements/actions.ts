@@ -5,17 +5,17 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getDashboardSession } from "@/lib/auth/session";
 import { resolveActor } from "@/lib/audit/log";
-import { SUPPORT_OWNER_EMAIL } from "@/lib/support/constants";
 import type { Announcement, AuditActorType } from "@/lib/types";
+
+import { canManageAnnouncements } from "./access";
 
 type Result = { ok: true } | { ok: false; error: string };
 
-// Same owner-by-email gate as lib/support/actions.ts's requireOwner —
-// several accounts can be "boss", only this one manages announcements.
-async function requireOwner(): Promise<void> {
+// The boss (and the developer account) manage announcements — see ./access.ts.
+async function requireManager(): Promise<void> {
   const session = await getDashboardSession();
-  if (!session || session.email !== SUPPORT_OWNER_EMAIL) {
-    throw new Error("Forbidden: owner only");
+  if (!canManageAnnouncements(session)) {
+    throw new Error("Forbidden: only the boss can manage announcements");
   }
 }
 
@@ -85,7 +85,7 @@ export async function createAnnouncement(input: {
   body: string;
   audience: AuditActorType[];
 }): Promise<Result> {
-  await requireOwner();
+  await requireManager();
   const validated = validateAnnouncementInput(input);
   if ("error" in validated) return { ok: false, error: validated.error };
 
@@ -106,7 +106,7 @@ export async function updateAnnouncement(
   id: string,
   input: { title: string; body: string; audience: AuditActorType[] },
 ): Promise<Result> {
-  await requireOwner();
+  await requireManager();
   const validated = validateAnnouncementInput(input);
   if ("error" in validated) return { ok: false, error: validated.error };
 
@@ -121,7 +121,7 @@ export async function updateAnnouncement(
 }
 
 export async function setAnnouncementActive(id: string, active: boolean): Promise<Result> {
-  await requireOwner();
+  await requireManager();
   const admin = createAdminClient();
   const { error } = await admin.from("announcements").update({ active }).eq("id", id);
   if (error) return { ok: false, error: error.message };
@@ -133,7 +133,7 @@ export async function setAnnouncementActive(id: string, active: boolean): Promis
 // cascade`) — nobody's left with a stale "seen" record for a message that
 // no longer exists.
 export async function deleteAnnouncement(id: string): Promise<Result> {
-  await requireOwner();
+  await requireManager();
   const admin = createAdminClient();
   const { error } = await admin.from("announcements").delete().eq("id", id);
   if (error) return { ok: false, error: error.message };

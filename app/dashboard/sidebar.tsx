@@ -1,11 +1,13 @@
 "use client";
 
+import { useMemo, useSyncExternalStore } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-import { SUPPORT_OWNER_EMAIL } from "@/lib/support/constants";
 import type { AppRole } from "@/lib/types";
+
+import { HOME, isCurrent, navFor, type NavGroup } from "./nav";
 
 export function DashboardIcon({ className }: { className?: string }) {
   return (
@@ -156,94 +158,135 @@ export function DisplayIcon({ className }: { className?: string }) {
   );
 }
 
-const MANAGER_ROLES = ["supervisor", "receptionist", "boss"] as const;
-
-interface Tab {
-  href: string;
-  label: string;
-  icon: typeof DashboardIcon;
-  role: readonly AppRole[] | null;
-  newTab: boolean;
+function ChevronIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className={className} aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+    </svg>
+  );
 }
 
-// Office Orders and Client Orders used to be two unrelated top-level tabs
-// ("Orders" and "Order Approvals") — easy to miss that the second one
-// exists at all, and no visual cue that they're two halves of the same
-// order lifecycle (a client-portal order lives in Client Orders until the
-// receptionist quotes + routes it, only then does it show up in Office
-// Orders — see fetchOfficeItems/fetchApprovalQueueItems in lib/queries.ts).
-// Grouped as one non-clickable "Orders" heading with these two as its real
-// links instead, so that relationship is visible in the nav itself.
-const ORDERS_GROUP = {
-  label: "Orders",
-  icon: OrdersIcon,
-  children: [
-    { href: "/dashboard/orders", label: "Office Orders", role: null },
-    { href: "/dashboard/order-approvals", label: "Client Orders", role: MANAGER_ROLES },
-  ],
-} as const;
+const GROUP_ICONS: Record<NavGroup["id"], typeof DashboardIcon> = {
+  orders: OrdersIcon,
+  catalog: ProductsIcon,
+  people: ClientsIcon,
+  help: SupportIcon,
+};
 
-const TABS = [
-  { href: "/dashboard", label: "Dashboard", icon: DashboardIcon, role: null, newTab: false },
-  { href: "/dashboard/clients", label: "Clients", icon: ClientsIcon, role: MANAGER_ROLES, newTab: false },
-  { href: "/dashboard/agents", label: "Agents", icon: AgentsIcon, role: MANAGER_ROLES, newTab: false },
-  { href: "/dashboard/products", label: "Products", icon: ProductsIcon, role: MANAGER_ROLES, newTab: false },
-  { href: "/dashboard/marketing", label: "Marketing", icon: MarketingIcon, role: MANAGER_ROLES, newTab: false },
-  { href: "/dashboard/workers", label: "Workers", icon: WorkersIcon, role: MANAGER_ROLES, newTab: false },
-  { href: "/dashboard/designers", label: "Designers", icon: DesignersIcon, role: MANAGER_ROLES, newTab: false },
-  { href: "/dashboard/admins", label: "Admins", icon: AdminsIcon, role: ["boss"], newTab: false },
-  { href: "/support", label: "Support", icon: SupportIcon, role: null, newTab: false },
-  // Signed-in staff now get the display board in the same tab/app session
-  // (not a separate browser tab) — no reason to leave the app for it.
-  { href: "/display", label: "Display screen", icon: DisplayIcon, role: null, newTab: false },
-] as const satisfies Tab[];
+// Remembers which groups the person opened or closed (this browser only),
+// as a tiny external store over localStorage for useSyncExternalStore.
+const OPEN_GROUPS_KEY = "dashboard-sidebar-open-groups";
+const openGroupsListeners = new Set<() => void>();
 
-function TabLink({ tab, active }: { tab: Tab; active: boolean }) {
-  const Icon = tab.icon;
+function subscribeOpenGroups(onChange: () => void): () => void {
+  openGroupsListeners.add(onChange);
+  window.addEventListener("storage", onChange); // other tabs
+  return () => {
+    openGroupsListeners.delete(onChange);
+    window.removeEventListener("storage", onChange);
+  };
+}
+
+/** The raw stored string: a stable value for React to compare between renders. */
+function readOpenGroupsRaw(): string {
+  try {
+    return window.localStorage.getItem(OPEN_GROUPS_KEY) ?? "{}";
+  } catch {
+    return "{}";
+  }
+}
+
+function writeOpenGroups(value: Record<string, boolean>): void {
+  try {
+    window.localStorage.setItem(OPEN_GROUPS_KEY, JSON.stringify(value));
+  } catch {
+    // Storage blocked (private mode etc.): the choice just isn't remembered.
+  }
+  openGroupsListeners.forEach((l) => l());
+}
+
+function parseOpenGroups(raw: string): Record<string, boolean> {
+  try {
+    const value: unknown = JSON.parse(raw);
+    return value && typeof value === "object" ? (value as Record<string, boolean>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function NavGroupSection({
+  group,
+  pathname,
+  open,
+  onToggle,
+}: {
+  group: NavGroup;
+  pathname: string;
+  open: boolean;
+  onToggle: () => void;
+}) {
+  const Icon = GROUP_ICONS[group.id];
+  const containsCurrent = group.items.some((i) => isCurrent(pathname, i.href));
+  // A closed group holding the current page stays highlighted, so you can
+  // always see where you are.
+  const highlight = containsCurrent && !open;
+  const listId = `nav-group-${group.id}`;
+
   return (
-    <Link
-      href={tab.href}
-      target={tab.newTab ? "_blank" : undefined}
-      rel={tab.newTab ? "noopener noreferrer" : undefined}
-      className={`menu-item ${active ? "menu-item-active" : "menu-item-inactive"}`}
-    >
-      <Icon className={`h-5 w-5 ${active ? "menu-item-icon-active" : "menu-item-icon-inactive"}`} />
-      {tab.label}
-    </Link>
+    <li>
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        aria-controls={listId}
+        className={`menu-item ${highlight ? "menu-item-active" : "menu-item-inactive"}`}
+      >
+        <Icon className={`h-5 w-5 ${highlight ? "menu-item-icon-active" : "menu-item-icon-inactive"}`} />
+        <span className="flex-1 text-left">{group.label}</span>
+        <ChevronIcon className={`h-4 w-4 text-muted transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+      <ul id={listId} hidden={!open} className="ml-8 mt-1 space-y-1 border-l border-border pl-2">
+        {group.items.map((item) => {
+          const active = isCurrent(pathname, item.href);
+          return (
+            <li key={item.href}>
+              <Link
+                href={item.href}
+                aria-current={active ? "page" : undefined}
+                className={`menu-item text-sm ${active ? "menu-item-active" : "menu-item-inactive"}`}
+              >
+                {item.label}
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </li>
   );
 }
 
 // Desktop only (lg+). On phones navigation is the bottom home bar
-// (./home-bar.tsx) — no hamburger, no slide-out drawer.
+// (./home-bar.tsx) — no hamburger, no slide-out drawer. The links and who
+// sees them come from ./nav.ts.
 export function DashboardSidebar({ role, email }: { role: AppRole; email: string | null }) {
   const pathname = usePathname();
-  const tabs: Tab[] = TABS.filter((t) => t.role === null || (t.role as readonly AppRole[]).includes(role));
-  const ordersChildren = ORDERS_GROUP.children.filter(
-    (c) => c.role === null || (c.role as readonly AppRole[]).includes(role),
-  );
-  const ordersActive = ordersChildren.some((c) => pathname === c.href);
-  // Support-report review is gated by email, not role — several accounts can
-  // be "boss", only this one person should see what staff report. Distinct
-  // from the "Support" tab above (everyone's self-service report/opt-in
-  // page at /support) — this is the owner-only inbox of what came in.
-  if (email === SUPPORT_OWNER_EMAIL) {
-    tabs.push(
-      {
-        href: "/dashboard/support",
-        label: "Support Reports",
-        icon: SupportIcon,
-        role: null,
-        newTab: false,
-      },
-      {
-        href: "/dashboard/announcements",
-        label: "Announcements",
-        icon: AnnouncementIcon,
-        role: null,
-        newTab: false,
-      },
-    );
+  const groups = navFor({ role, email });
+
+  // Groups start closed, except the one holding the current page. Choices
+  // the person made before come from localStorage once in the browser (the
+  // server render uses "{}", so hydration always matches).
+  const raw = useSyncExternalStore(subscribeOpenGroups, readOpenGroupsRaw, () => "{}");
+  const remembered = useMemo(() => parseOpenGroups(raw), [raw]);
+
+  // The group holding the current page opens by default; an explicit
+  // open/close choice wins.
+  const isOpen = (g: NavGroup) => remembered[g.id] ?? g.items.some((i) => isCurrent(pathname, i.href));
+
+  function toggle(g: NavGroup) {
+    writeOpenGroups({ ...remembered, [g.id]: !isOpen(g) });
   }
+
+  const homeActive = isCurrent(pathname, HOME.href);
 
   return (
     <aside
@@ -252,45 +295,21 @@ export function DashboardSidebar({ role, email }: { role: AppRole; email: string
       <div className="flex h-16 shrink-0 items-center gap-2 border-b border-border px-5">
         <Image src="/aming-logo-header.png" alt="AMING" width={193} height={40} className="h-7 w-auto" priority />
       </div>
-      <nav className="flex-1 overflow-y-auto px-3 py-4">
+      <nav aria-label="Dashboard" className="flex-1 overflow-y-auto px-3 py-4">
         <p className="mb-2 px-3 text-xs font-semibold uppercase tracking-wide text-muted">Menu</p>
         <ul className="space-y-1">
-          {/* Dashboard first, exactly where it's always been. */}
-          <li key={tabs[0].href}>
-            <TabLink tab={tabs[0]} active={pathname === tabs[0].href} />
-          </li>
-
-          {/* Orders: a non-clickable group heading over its two real
-              workflows — see the ORDERS_GROUP comment above for why these
-              used to be separate top-level tabs and aren't anymore. */}
           <li>
-            <div className={`menu-item cursor-default ${ordersActive ? "menu-item-active" : "menu-item-inactive"}`}>
-              <ORDERS_GROUP.icon
-                className={`h-5 w-5 ${ordersActive ? "menu-item-icon-active" : "menu-item-icon-inactive"}`}
-              />
-              {ORDERS_GROUP.label}
-            </div>
-            <ul className="ml-8 mt-1 space-y-1">
-              {ordersChildren.map((child) => {
-                const active = pathname === child.href;
-                return (
-                  <li key={child.href}>
-                    <Link
-                      href={child.href}
-                                      className={`menu-item text-sm ${active ? "menu-item-active" : "menu-item-inactive"}`}
-                    >
-                      {child.label}
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
+            <Link
+              href={HOME.href}
+              aria-current={homeActive ? "page" : undefined}
+              className={`menu-item ${homeActive ? "menu-item-active" : "menu-item-inactive"}`}
+            >
+              <DashboardIcon className={`h-5 w-5 ${homeActive ? "menu-item-icon-active" : "menu-item-icon-inactive"}`} />
+              {HOME.label}
+            </Link>
           </li>
-
-          {tabs.slice(1).map((tab) => (
-            <li key={tab.href}>
-              <TabLink tab={tab} active={pathname === tab.href} />
-            </li>
+          {groups.map((g) => (
+            <NavGroupSection key={g.id} group={g} pathname={pathname} open={isOpen(g)} onToggle={() => toggle(g)} />
           ))}
         </ul>
       </nav>

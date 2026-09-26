@@ -67,10 +67,12 @@ function AnnouncementRow({
   announcement,
   run,
   pending,
+  canManage,
 }: {
   announcement: Announcement;
   run: (fn: () => Promise<Result>) => void;
   pending: boolean;
+  canManage: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(announcement.title);
@@ -123,41 +125,44 @@ function AnnouncementRow({
           {announcement.active ? "Active" : "Hidden"}
         </span>
       </div>
-      <div className="mt-3 flex flex-wrap gap-3 text-xs">
-        <button type="button" className="text-brand-600" disabled={pending} onClick={() => setEditing(true)}>
-          Edit
-        </button>
-        <button
-          type="button"
-          className="text-muted"
-          disabled={pending}
-          onClick={() => run(() => setAnnouncementActive(announcement.id, !announcement.active))}
-        >
-          {announcement.active ? "Hide" : "Show"}
-        </button>
-        <button
-          type="button"
-          className="text-[var(--rush)]"
-          disabled={pending}
-          onClick={() => {
-            if (window.confirm("Delete this announcement? Anyone who hasn't seen it yet never will.")) {
-              run(() => deleteAnnouncement(announcement.id));
-            }
-          }}
-        >
-          Delete
-        </button>
-      </div>
+      {canManage ? (
+        <div className="mt-3 flex flex-wrap gap-3 text-xs">
+          <button type="button" className="text-brand-600" disabled={pending} onClick={() => setEditing(true)}>
+            Edit
+          </button>
+          <button
+            type="button"
+            className="text-muted"
+            disabled={pending}
+            onClick={() => run(() => setAnnouncementActive(announcement.id, !announcement.active))}
+          >
+            {announcement.active ? "Hide" : "Show"}
+          </button>
+          <button
+            type="button"
+            className="text-[var(--rush)]"
+            disabled={pending}
+            onClick={() => {
+              if (window.confirm("Delete this announcement? Anyone who hasn't seen it yet never will.")) {
+                run(() => deleteAnnouncement(announcement.id));
+              }
+            }}
+          >
+            Delete
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }
 
-// Owner-only (see SUPPORT_OWNER_EMAIL / app/dashboard/(app)/announcements/
-// page.tsx) tool for one-time "what's new" popups — see
+// The Marketing section's tool for one-time "what's new" popups — the boss
+// manages them, other managers see them read-only (canManage=false; see
+// lib/announcements/access.ts). See
 // components/announcements/AnnouncementPopup.tsx for where clients actually
 // see these, and lib/announcements/actions.ts for the "once seen, never
 // again" dismissal tracking.
-export function AnnouncementsPanel({ announcements }: { announcements: Announcement[] }) {
+export function AnnouncementsPanel({ announcements, canManage }: { announcements: Announcement[]; canManage: boolean }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -188,35 +193,39 @@ export function AnnouncementsPanel({ announcements }: { announcements: Announcem
 
   return (
     <div className="space-y-4">
-      <div className="space-y-3 rounded-2xl border border-border bg-surface p-4 shadow-theme-xs">
-        <div>
-          <p className="text-sm font-medium">New announcement</p>
-          <p className="text-xs text-muted">
-            Pops up once for whoever it concerns the next time they open the app, then never again for that person.
-          </p>
+      {canManage ? (
+        <div className="space-y-3 rounded-2xl border border-border bg-surface p-4 shadow-theme-xs">
+          <div>
+            <p className="text-sm font-medium">New announcement</p>
+            <p className="text-xs text-muted">
+              Pops up once for whoever it concerns the next time they open the app, then never again for that person.
+            </p>
+          </div>
+          <TextInput value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title…" />
+          <TextArea value={body} onChange={(e) => setBody(e.target.value)} placeholder="Message…" rows={3} />
+          <div>
+            <p className="mb-1.5 text-xs font-medium text-muted">Who it concerns (none selected = everyone)</p>
+            <AudiencePicker value={audience} onChange={setAudience} />
+          </div>
+          <Button
+            variant="primary"
+            className="text-xs"
+            loading={pending} disabled={pending || !title.trim() || !body.trim()}
+            onClick={publish}
+          >
+            Publish
+          </Button>
         </div>
-        <TextInput value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title…" />
-        <TextArea value={body} onChange={(e) => setBody(e.target.value)} placeholder="Message…" rows={3} />
-        <div>
-          <p className="mb-1.5 text-xs font-medium text-muted">Who it concerns (none selected = everyone)</p>
-          <AudiencePicker value={audience} onChange={setAudience} />
-        </div>
-        <Button
-          variant="primary"
-          className="text-xs"
-          loading={pending} disabled={pending || !title.trim() || !body.trim()}
-          onClick={publish}
-        >
-          Publish
-        </Button>
-        {error ? <p className="text-xs text-error-600">{error}</p> : null}
-      </div>
+      ) : null}
+      {error ? <p className="text-xs text-error-600">{error}</p> : null}
 
       <div className="space-y-2">
         {announcements.length === 0 ? (
           <p className="text-sm text-muted">No announcements yet.</p>
         ) : (
-          announcements.map((a) => <AnnouncementRow key={a.id} announcement={a} run={run} pending={pending} />)
+          announcements.map((a) => (
+            <AnnouncementRow key={a.id} announcement={a} run={run} pending={pending} canManage={canManage} />
+          ))
         )}
       </div>
     </div>
