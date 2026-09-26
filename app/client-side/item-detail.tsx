@@ -128,7 +128,7 @@ export function ClientItemDetail({ item, orderItems }: { item: OrderItemWithOrde
       ) : null}
 
       <Collapsible ref={howToPayRef} title="How to pay" summary="Bank or mobile money">
-        <PaymentMethods orderNo={item.order.order_no} amount={amount} />
+        <PaymentMethods orderNo={item.order.order_no} />
       </Collapsible>
 
       <ClientOrderChat orderId={item.order_id} label="Questions about this order? Chat with us" />
