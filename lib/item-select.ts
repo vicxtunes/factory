@@ -11,6 +11,8 @@ export const ORDER_ITEM_SELECT = `
   assigned_worker_id, media_link, updated_by_worker_id, created_at, updated_at,
   media:order_item_media (id, order_item_id, file_name, mime_type, cloudinary_public_id, storage_path, secure_url, uploaded_at, uploaded_by_type, uploaded_by_id, uploaded_by_name, uploaded_by_role),
   item_notes:order_notes!order_item_id (id, order_id, order_item_id, author_type, author_id, author_name, author_role, body, created_at),
+  catalog_product:products (price),
+  catalog_variant:product_variants (price),
   order:orders!inner (
     order_no, client_name, client_phone, delivery_date, status, stage, assigned_designer_id,
     designer_name, designer_brief, media_link, media_notes,

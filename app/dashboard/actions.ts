@@ -1389,6 +1389,34 @@ export async function createOrder(input: OrderFormPayload): Promise<CreateOrderR
 // app/client-side/actions.ts) -> routeApprovedOrder (receptionist).
 // ---------------------------------------------------------------------------
 
+// Sets (or, with null, clears) the amount a confirmed order costs the
+// client. Without one, the amount comes from catalog prices × quantities
+// (lib/orders/pricing.ts). Orders still in the quote step use quoteOrder
+// instead, so this never interferes with a quote the client is looking at.
+export async function setOrderAmount(orderId: string, amount: number | null): Promise<Result> {
+  await requireManager();
+  if (amount !== null && (!Number.isFinite(amount) || amount <= 0)) return { ok: false, error: "Enter a valid amount." };
+
+  const admin = createAdminClient();
+  const { data: order } = await admin
+    .from("orders")
+    .select("id, approval_status, released_at, cancelled_at")
+    .eq("id", orderId)
+    .maybeSingle();
+  if (!order) return { ok: false, error: "Order not found." };
+  if (order.cancelled_at) return { ok: false, error: "This order was cancelled." };
+  if (order.approval_status !== "approved" || !order.released_at) {
+    return { ok: false, error: "This order is still in the quote step; set its price from Client Orders." };
+  }
+
+  const { error } = await admin.from("orders").update({ quoted_price: amount }).eq("id", orderId);
+  if (error) return { ok: false, error: error.message };
+
+  const actor = await resolveActor();
+  await logOrderEvent({ orderId, actor, action: amount === null ? "amount_cleared" : "amount_set", detail: { amount } });
+  return { ok: true };
+}
+
 // Only valid from pending_review or changes_requested — quoting an order
 // that's already awaiting the client's response, approved, or routed would
 // silently clobber state a human is actively relying on.

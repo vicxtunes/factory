@@ -22,7 +22,11 @@ import {
   type Worker,
 } from "@/lib/types";
 
-import { assignItem, cancelOrder, overrideStatus, updateOrderItem } from "./actions";
+import { useCurrencySymbol } from "@/lib/currency/CurrencySymbolProvider";
+import { formatMoney } from "@/lib/currency/format";
+import { orderAmount } from "@/lib/orders/pricing";
+
+import { assignItem, cancelOrder, overrideStatus, setOrderAmount, updateOrderItem } from "./actions";
 
 type WorkerLite = Omit<Worker, "pin_hash">;
 
@@ -87,6 +91,93 @@ function itemToEditState(item: OrderItemWithOrder): ItemEditState {
   };
 }
 
+/**
+ * The amount the client sees as "Amount to pay" (lib/orders/pricing.ts):
+ * staff's own amount if set, otherwise catalog prices × quantities. Staff
+ * can set their own amount on a confirmed order, or go back to the catalog
+ * price.
+ */
+function OrderAmountPanel({
+  items,
+  canSet,
+  onChanged,
+}: {
+  items: OrderItemWithOrder[];
+  canSet: boolean;
+  onChanged: () => void;
+}) {
+  const symbol = useCurrencySymbol();
+  const { amount, source } = orderAmount(items);
+  const order = items[0].order;
+  const confirmed = order.approval_status === "approved" && order.released_at !== null;
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+
+  function save(next: number | null) {
+    setError(null);
+    start(async () => {
+      const res = await setOrderAmount(items[0].order_id, next);
+      if (!res.ok) return setError(res.error ?? "Couldn't save the amount.");
+      setEditing(false);
+      onChanged();
+    });
+  }
+
+  const sourceLabel =
+    source === "quoted" ? "Set by staff" : source === "catalog" ? "From catalog prices × quantities" : "No price yet";
+
+  return (
+    <section aria-label="Amount to pay" className="rounded-2xl border border-brand-200 bg-brand-50 p-3 dark:border-brand-500/30 dark:bg-brand-500/10">
+      <div className="flex flex-wrap items-end justify-between gap-2">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted">Amount to pay (client sees this)</p>
+          <p className="text-2xl font-extrabold tabular-nums">{amount == null ? "—" : formatMoney(amount, symbol)}</p>
+          <p className="text-[11px] text-muted">
+            {sourceLabel}
+            {items.length > 1 ? ` · whole order, ${items.length} items` : ""}
+          </p>
+        </div>
+        {canSet && confirmed && !editing ? (
+          <div className="flex gap-2">
+            <Button variant="secondary" className="min-h-8 text-xs" onClick={() => { setValue(amount == null ? "" : String(amount)); setEditing(true); }}>
+              Set amount
+            </Button>
+            {source === "quoted" ? (
+              <Button variant="secondary" className="min-h-8 text-xs" loading={pending} disabled={pending} onClick={() => save(null)}>
+                Use catalog price
+              </Button>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+      {editing ? (
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <TextInput
+            type="number"
+            inputMode="decimal"
+            min="0"
+            step="any"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            placeholder="Amount"
+            className="w-40"
+            autoFocus
+          />
+          <Button variant="primary" className="min-h-9 text-xs" loading={pending} disabled={pending || !value} onClick={() => save(Number(value))}>
+            Save
+          </Button>
+          <button type="button" className="text-xs text-muted" onClick={() => setEditing(false)}>
+            Cancel
+          </button>
+        </div>
+      ) : null}
+      {error ? <p className="mt-1 text-xs text-error-600">{error}</p> : null}
+    </section>
+  );
+}
+
 export function OrderDetail({
   item,
   workers,
@@ -97,8 +188,11 @@ export function OrderDetail({
   catalog,
   onChanged,
   onPickCreatedDate,
+  orderItems,
 }: {
   item: OrderItemWithOrder;
+  /** Every item on this item's order, for the order's amount to pay. */
+  orderItems?: OrderItemWithOrder[];
   workers: WorkerLite[];
   assignedName: string | null;
   canManage: boolean;
@@ -213,6 +307,10 @@ export function OrderDetail({
           ) : null}
         </div>
       </div>
+
+      {!cancelled ? (
+        <OrderAmountPanel items={orderItems?.length ? orderItems : [item]} canSet={canManage} onChanged={onChanged} />
+      ) : null}
 
       <OrderChat orderId={item.order_id} />
 

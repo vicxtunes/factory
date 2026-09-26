@@ -391,6 +391,10 @@ export interface Profile {
 export interface OrderItemWithOrder extends OrderItem {
   media: OrderItemMedia[];
   item_notes: OrderNote[];
+  // Catalog prices behind this item, for the order's amount to pay
+  // (lib/orders/pricing.ts). Null when the item isn't linked to the catalog.
+  catalog_product: { price: number | null } | null;
+  catalog_variant: { price: number | null } | null;
   order: Pick<
     Order,
     | "order_no"
