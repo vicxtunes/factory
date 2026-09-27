@@ -341,7 +341,12 @@ export function ClientOrdersBoard({
       ) : (
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {filtered.map((item) => (
-            <ClientOrderCard key={item.id} item={item} onOpen={() => setSelectedId(item.id)} />
+            <ClientOrderCard
+              key={item.id}
+              item={item}
+              orderItems={items.filter((i) => i.order_id === item.order_id)}
+              onOpen={() => setSelectedId(item.id)}
+            />
           ))}
         </div>
       )}

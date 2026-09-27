@@ -34,6 +34,7 @@ import type {
 import { pushOnlyOrderItem, notifyOrderItem } from "@/lib/notifications/notify";
 import { formatMoney } from "@/lib/currency/format";
 import { walletErrorMessage } from "@/lib/wallet/orders";
+import { isOrderInvoiced } from "@/lib/invoices/orders";
 import {
   STATUS_LABELS,
   type AppRole,
@@ -960,6 +961,20 @@ export async function setProductPrice(id: string, price: string): Promise<Result
   return { ok: true };
 }
 
+// The unit shown on invoices ("Pc", "Sheet", "Service"); copied onto an
+// order's lines when it's invoiced (see lib/invoices).
+export async function setProductUnit(id: string, unit: string): Promise<Result> {
+  await requireRole("boss");
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("products")
+    .update({ unit: unit.trim().slice(0, 30) || null })
+    .eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/dashboard/products");
+  return { ok: true };
+}
+
 export async function setProductDescription(id: string, description: string): Promise<Result> {
   await requireRole("boss");
   const admin = createAdminClient();
@@ -1408,6 +1423,9 @@ export async function setOrderAmount(orderId: string, amount: number | null): Pr
   if (order.cancelled_at) return { ok: false, error: "This order was cancelled." };
   if (order.approval_status !== "approved" || !order.released_at) {
     return { ok: false, error: "This order is still in the quote step; set its price from Client Orders." };
+  }
+  if (await isOrderInvoiced(orderId)) {
+    return { ok: false, error: "This order has an invoice — change its prices on the invoice lines." };
   }
 
   const { error } = await admin.from("orders").update({ quoted_price: amount }).eq("id", orderId);

@@ -23,7 +23,7 @@ export interface NavItem {
 }
 
 export interface NavGroup {
-  id: "orders" | "catalog" | "people" | "help";
+  id: "orders" | "payments" | "catalog" | "people" | "help";
   label: string;
   items: NavItem[];
 }
@@ -55,6 +55,17 @@ export const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
+    // Money owed and money held: invoices generated from orders (with their
+    // installments) and clients' prepaid wallet balances. Both read the same
+    // ledger (lib/wallet).
+    id: "payments",
+    label: "Payments",
+    items: [
+      { href: "/dashboard/invoices", label: "Invoices", icon: "invoice", visible: managers },
+      { href: "/dashboard/wallets", label: "Wallets", icon: "payment", visible: managers },
+    ],
+  },
+  {
     // What clients see in the portal: the catalog, the carousel and the
     // one-time announcement popups.
     id: "catalog",
@@ -70,7 +81,6 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "People",
     items: [
       { href: "/dashboard/clients", label: "Clients", icon: "clients", visible: managers },
-      { href: "/dashboard/wallets", label: "Wallets", icon: "payment", visible: managers },
       { href: "/dashboard/agents", label: "Agents", icon: "agents", visible: managers },
       { href: "/dashboard/workers", label: "Workers", icon: "workers", visible: managers },
       { href: "/dashboard/designers", label: "Designers", icon: "designers", visible: managers },

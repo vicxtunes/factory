@@ -37,6 +37,7 @@ import {
   setCurrencySymbol,
   setProductActive,
   setProductDescription,
+  setProductUnit,
   setProductPrice,
   setShowPrices,
   setVariantActive,
@@ -562,6 +563,30 @@ function ProductCard({
               if (e.key === "Enter") e.currentTarget.blur();
             }}
           />
+          {/* Printed on invoices next to the quantity ("2 Pc", "15 Sheet"). */}
+          <span className="ml-2">Unit:</span>
+          <input
+            type="text"
+            list="product-units"
+            maxLength={30}
+            defaultValue={product.unit ?? ""}
+            placeholder="Pc"
+            className="min-h-7 w-20 rounded-[var(--radius)] border border-border bg-surface px-2 text-xs"
+            onBlur={(e) => {
+              if (e.target.value.trim() !== (product.unit ?? "")) {
+                run(() => setProductUnit(product.id, e.target.value));
+              }
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") e.currentTarget.blur();
+            }}
+          />
+          <datalist id="product-units">
+            <option value="Pc" />
+            <option value="Sheet" />
+            <option value="Service" />
+            <option value="Set" />
+          </datalist>
         </div>
       ) : null}
 
