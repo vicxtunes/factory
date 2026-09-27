@@ -1,8 +1,9 @@
 "use client";
 
 import Image from "next/image";
-import { useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 
+import { InfoTip } from "@/components/ui/InfoTip";
 import { useCurrencySymbol } from "@/lib/currency/CurrencySymbolProvider";
 import { formatMoney } from "@/lib/currency/format";
 import { STATUS_LABELS } from "@/lib/invoices/policy";
@@ -35,41 +36,23 @@ export function InvoiceStatusBadge({ status }: { status: InvoiceStatus }) {
   );
 }
 
-function InfoIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className={className} aria-hidden>
-      <circle cx="12" cy="12" r="9" />
-      <path strokeLinecap="round" d="M12 11v5M12 7.5v.01" />
-    </svg>
-  );
-}
-
 /**
  * A line's product name and its catalog description. Wide screens and print
  * show the description under the name; phones have no room for it, so they
- * get an info button that shows it on tap.
+ * get an ⓘ that shows it as a tooltip.
  */
 function LineTitle({ title, description }: { title: string; description: string | null }) {
-  const [open, setOpen] = useState(false);
   return (
     <>
       <p className="font-bold">
         {title}
         {description ? (
-          <button
-            type="button"
-            onClick={() => setOpen((o) => !o)}
-            aria-expanded={open}
-            aria-label={`About ${title}`}
-            className="ml-1 inline-flex h-6 w-6 translate-y-[3px] items-center justify-center rounded-full text-muted hover:text-brand-600 sm:hidden print:hidden"
-          >
-            <InfoIcon className="h-4 w-4" />
-          </button>
+          <InfoTip label={`About ${title}`} className="ml-1 sm:hidden print:hidden">
+            {description}
+          </InfoTip>
         ) : null}
       </p>
-      {description ? (
-        <p className={`text-xs text-muted ${open ? "block" : "hidden"} sm:block print:block`}>{description}</p>
-      ) : null}
+      {description ? <p className="hidden text-xs text-muted sm:block print:block">{description}</p> : null}
     </>
   );
 }
