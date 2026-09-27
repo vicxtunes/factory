@@ -8,6 +8,7 @@ import { Collapsible, PriceHero } from "@/components/order/OrderSummary";
 import { ItemAttributes } from "@/components/order/ItemAttributes";
 import { PaymentMethods } from "@/components/payments/PaymentMethods";
 import { ClientOrderPayment } from "@/components/wallet/OrderPayment";
+import { ClientInvoiceLink } from "@/components/invoices/ClientInvoiceLink";
 import { UrgencyBadge } from "@/components/ui/UrgencyBadge";
 import { useCurrencySymbol } from "@/lib/currency/CurrencySymbolProvider";
 import { formatMoney } from "@/lib/currency/format";
@@ -80,6 +81,7 @@ export function ClientItemDetail({ item, orderItems }: { item: OrderItemWithOrde
             </>
           }
         >
+          <ClientInvoiceLink orderId={item.order_id} />
           <button
             type="button"
             onClick={openHowToPay}

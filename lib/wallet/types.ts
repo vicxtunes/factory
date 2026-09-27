@@ -100,6 +100,20 @@ export interface OrderPaymentState {
   walletBalance: number | null;
 }
 
+/** One line of an order's payment history (e.g. on its invoice). */
+export interface OrderPaymentRecord {
+  id: string;
+  kind: "payment" | "refund";
+  /** Always positive; `kind` says which way it went. */
+  amount: number;
+  /** How it was paid: the payment's method, or "wallet" when it came from the client's existing balance. */
+  method: PaymentMethod | "wallet";
+  reference: string | null;
+  note: string | null;
+  actorName: string;
+  createdAt: string;
+}
+
 /** What every wallet server action returns. `error` is always safe to show. */
 export type WalletResult<T = undefined> = T extends undefined
   ? { ok: true } | { ok: false; error: string }

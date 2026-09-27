@@ -26,6 +26,7 @@ import { useCurrencySymbol } from "@/lib/currency/CurrencySymbolProvider";
 import { formatMoney } from "@/lib/currency/format";
 import { orderAmount } from "@/lib/orders/pricing";
 import { StaffOrderPayment } from "@/components/wallet/OrderPayment";
+import { StaffInvoicePanel } from "@/components/invoices/StaffInvoicePanel";
 
 import { assignItem, cancelOrder, overrideStatus, setOrderAmount, updateOrderItem } from "./actions";
 
@@ -211,6 +212,7 @@ export function OrderDetail({
   const [pending, start] = useTransition();
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [moneyVersion, setMoneyVersion] = useState(0);
   const [deliveryDate, setDeliveryDate] = useState("");
   const [deadlineAt, setDeadlineAt] = useState("");
   const [edit, setEdit] = useState<ItemEditState | null>(null);
@@ -313,7 +315,21 @@ export function OrderDetail({
         <OrderAmountPanel items={orderItems?.length ? orderItems : [item]} canSet={canManage} onChanged={onChanged} />
       ) : null}
       {/* Shows only once something has been paid from the client's wallet — cancelled orders included, in case a refund is still owed. */}
-      {item.order.client_id && canManage ? <StaffOrderPayment key={item.order_id} orderId={item.order_id} /> : null}
+      {item.order.client_id && canManage ? (
+        <StaffOrderPayment key={`${item.order_id}-${moneyVersion}`} orderId={item.order_id} />
+      ) : null}
+      {/* Invoices are for confirmed orders (the price is agreed); cancelled ones keep theirs, shown as Cancelled. */}
+      {canManage && item.order.approval_status === "approved" ? (
+        <StaffInvoicePanel
+          key={item.order_id}
+          orderId={item.order_id}
+          onChanged={() => {
+            // A payment recorded on the invoice changes the "paid" panel above.
+            setMoneyVersion((v) => v + 1);
+            onChanged();
+          }}
+        />
+      ) : null}
 
       <div className="flex flex-wrap gap-2">
         {/* Only orders placed by (or linked to) a client account have someone to chat with. */}
