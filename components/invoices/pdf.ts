@@ -113,7 +113,7 @@ export async function downloadInvoicePdf(invoice: InvoiceView, currencySymbol: s
     title: safe(l.title),
     rest: [l.detail, l.description].filter(Boolean).map((t) => safe(t as string)),
   }));
-  const DESC_W = 88;
+  const DESC_W = 82;
 
   autoTable(doc, {
     startY: y,
@@ -123,7 +123,7 @@ export async function downloadInvoicePdf(invoice: InvoiceView, currencySymbol: s
     body: invoice.lines.map((l, i) => [
       String(i + 1),
       [descriptions[i].title, ...descriptions[i].rest].join("\n"),
-      l.unit ? `${l.qty}\n${safe(l.unit)}` : String(l.qty),
+      l.unit ? `${l.qty} ${safe(l.unit)}` : String(l.qty),
       l.unitPrice != null ? money(l.unitPrice) : "",
       l.lineTotal != null ? money(l.lineTotal) : "",
     ]),
@@ -133,7 +133,8 @@ export async function downloadInvoicePdf(invoice: InvoiceView, currencySymbol: s
     columnStyles: {
       0: { cellWidth: 10 },
       1: { cellWidth: DESC_W },
-      2: { cellWidth: 20, halign: "right" },
+      // Wide enough for "15 Sheet" / "1 Service" on one line.
+      2: { cellWidth: 26, halign: "right", overflow: "visible" },
       3: { cellWidth: 31, halign: "right" },
       4: { cellWidth: 31, halign: "right" },
     },

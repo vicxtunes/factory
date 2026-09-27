@@ -113,9 +113,9 @@ export function InvoiceDocument({ invoice, children }: { invoice: InvoiceView; c
                   ) : null}
                   <p className="text-[11px] text-muted print:hidden">Status: {line.progress}</p>
                 </td>
-                <td className="px-2 py-3 text-right tabular-nums">
+                <td className="whitespace-nowrap px-2 py-3 text-right tabular-nums">
                   {line.qty}
-                  {line.unit ? <span className="block text-xs text-muted">{line.unit}</span> : null}
+                  {line.unit ? <span className="text-muted"> {line.unit}</span> : null}
                 </td>
                 <td className="hidden whitespace-nowrap px-2 py-3 text-right tabular-nums sm:table-cell print:table-cell">
                   {line.unitPrice != null ? money(line.unitPrice) : ""}
