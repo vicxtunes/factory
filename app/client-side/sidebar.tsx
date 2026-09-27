@@ -115,7 +115,7 @@ const TABS: Tab[] = [
   { href: "/client-side", label: "Dashboard", icon: DashboardIcon, requiresSignIn: true },
   { href: "/client-side/orders", label: "Orders", icon: OrdersIcon, requiresSignIn: true },
   { href: "/client-side/history", label: "History", icon: HistoryIcon, requiresSignIn: true },
-  { href: "/client-side/payment", label: "Payment", icon: PaymentIcon, requiresSignIn: true },
+  { href: "/client-side/payment", label: "Wallet", icon: PaymentIcon, requiresSignIn: true },
   { href: "/client-side/new", label: "Place Order", icon: PlaceOrderIcon, requiresSignIn: true },
   { href: "/client-side/showroom", label: "Showroom", icon: ShowroomIcon, requiresSignIn: false },
   { href: "/client-side/settings", label: "Settings", icon: SettingsIcon, requiresSignIn: true },

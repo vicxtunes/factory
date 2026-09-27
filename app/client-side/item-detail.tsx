@@ -7,6 +7,7 @@ import { MediaLinks } from "@/components/media/MediaLinks";
 import { Collapsible, PriceHero } from "@/components/order/OrderSummary";
 import { ItemAttributes } from "@/components/order/ItemAttributes";
 import { PaymentMethods } from "@/components/payments/PaymentMethods";
+import { ClientOrderPayment } from "@/components/wallet/OrderPayment";
 import { UrgencyBadge } from "@/components/ui/UrgencyBadge";
 import { useCurrencySymbol } from "@/lib/currency/CurrencySymbolProvider";
 import { formatMoney } from "@/lib/currency/format";
@@ -88,6 +89,8 @@ export function ClientItemDetail({ item, orderItems }: { item: OrderItemWithOrde
           </button>
         </PriceHero>
       )}
+
+      <ClientOrderPayment key={item.order_id} orderId={item.order_id} />
 
       <StatusLine item={item} />
       {item.is_delayed && item.delay_reason ? (

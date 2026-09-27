@@ -33,6 +33,7 @@ import type {
 } from "@/lib/orders/types";
 import { pushOnlyOrderItem, notifyOrderItem } from "@/lib/notifications/notify";
 import { formatMoney } from "@/lib/currency/format";
+import { walletErrorMessage } from "@/lib/wallet/orders";
 import {
   STATUS_LABELS,
   type AppRole,
@@ -1410,7 +1411,9 @@ export async function setOrderAmount(orderId: string, amount: number | null): Pr
   }
 
   const { error } = await admin.from("orders").update({ quoted_price: amount }).eq("id", orderId);
-  if (error) return { ok: false, error: error.message };
+  // The database refuses a price below what's already been paid from the
+  // client's wallet (see lib/wallet) — say so in words.
+  if (error) return { ok: false, error: walletErrorMessage(error.message) ?? error.message };
 
   const actor = await resolveActor();
   await logOrderEvent({ orderId, actor, action: amount === null ? "amount_cleared" : "amount_set", detail: { amount } });

@@ -25,6 +25,7 @@ import {
 import { useCurrencySymbol } from "@/lib/currency/CurrencySymbolProvider";
 import { formatMoney } from "@/lib/currency/format";
 import { orderAmount } from "@/lib/orders/pricing";
+import { StaffOrderPayment } from "@/components/wallet/OrderPayment";
 
 import { assignItem, cancelOrder, overrideStatus, setOrderAmount, updateOrderItem } from "./actions";
 
@@ -126,7 +127,7 @@ function OrderAmountPanel({
   }
 
   const sourceLabel =
-    source === "quoted" ? "Set by staff" : source === "catalog" ? "From catalog prices × quantities" : "No price yet";
+    source === "quoted" ? "Fixed on the order (staff's price, or locked in when paid)" : source === "catalog" ? "From catalog prices × quantities" : "No price yet";
 
   return (
     <section aria-label="Amount to pay" className="rounded-2xl border border-brand-200 bg-brand-50 p-3 dark:border-brand-500/30 dark:bg-brand-500/10">
@@ -311,6 +312,8 @@ export function OrderDetail({
       {!cancelled ? (
         <OrderAmountPanel items={orderItems?.length ? orderItems : [item]} canSet={canManage} onChanged={onChanged} />
       ) : null}
+      {/* Shows only once something has been paid from the client's wallet — cancelled orders included, in case a refund is still owed. */}
+      {item.order.client_id && canManage ? <StaffOrderPayment key={item.order_id} orderId={item.order_id} /> : null}
 
       <div className="flex flex-wrap gap-2">
         {/* Only orders placed by (or linked to) a client account have someone to chat with. */}

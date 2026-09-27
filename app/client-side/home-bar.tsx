@@ -20,7 +20,7 @@ export function ClientHomeBar() {
         { href: "/chat", label: "Chat", icon: "chat" },
         { href: "/client-side/new", label: "Place Order", icon: "placeOrder" },
         { href: "/client-side/history", label: "History", icon: "history" },
-        { href: "/client-side/payment", label: "Payment", icon: "payment" },
+        { href: "/client-side/payment", label: "Wallet", icon: "payment" },
       ]}
       logout={logoutClient}
       afterLogout="/client-side"

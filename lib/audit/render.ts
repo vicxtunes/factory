@@ -1,3 +1,4 @@
+import { formatMoney } from "@/lib/currency/format";
 import { STATUS_LABELS, type OrderAuditEntry, type ProductionStatus } from "@/lib/types";
 
 // Plain-English clauses for the "Show logs" timeline — no diffs, no JSON, no
@@ -26,10 +27,16 @@ const ACTION_TEMPLATES: Record<string, (d: Record<string, unknown>) => string> =
   note_edited: () => "edited their note",
   note_removed: () => "removed their note",
   order_cancelled: (d) => `cancelled this order — "${str(d.reason)}"`,
+  wallet_payment: (d) => `paid ${money(d.amount)} from the client's wallet`,
+  wallet_refund: (d) => `refunded ${money(d.amount)} to the client's wallet${d.reason ? ` — "${str(d.reason)}"` : ""}`,
 };
 
 function str(v: unknown): string {
   return v == null ? "" : String(v);
+}
+
+function money(v: unknown): string {
+  return formatMoney(Number(v ?? 0));
 }
 
 function statusLabel(v: unknown): string {
@@ -49,6 +56,7 @@ function actorLabel(entry: OrderAuditEntry): string {
     return role ? `${entry.actor_name} (${role})` : entry.actor_name;
   }
   if (entry.actor_type === "designer") return `${entry.actor_name} (Designer)`;
+  if (entry.actor_type === "client") return `${entry.actor_name} (Client)`;
   return `${entry.actor_name} (Worker)`;
 }
 
