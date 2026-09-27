@@ -11,6 +11,7 @@ import { PAYMENT_METHODS } from "@/lib/payments/details";
 import { METHOD_LABELS } from "@/lib/wallet/policy";
 
 import { formatInvoiceDate } from "./format";
+import { documentLabels } from "./labels";
 
 // The invoice itself, as the client sees it on their link and as it prints —
 // laid out like the business's existing invoices: company header, Bill To and
@@ -48,6 +49,8 @@ export function InvoiceDocument({ invoice, children }: { invoice: InvoiceView; c
   const money = (n: number) => formatMoney(n, symbol);
   const { issuer } = invoice;
   const contact = [issuer.phone, issuer.email].filter(Boolean).join(" · ");
+  const labels = documentLabels(invoice);
+  const showPaid = invoice.kind === "invoice" || invoice.paid > 0;
 
   return (
     <article className="space-y-6 rounded-2xl border border-border bg-surface p-5 text-sm shadow-theme-xs sm:p-8 print:border-0 print:p-0 print:shadow-none">
@@ -59,9 +62,15 @@ export function InvoiceDocument({ invoice, children }: { invoice: InvoiceView; c
           {contact ? <p className="break-words text-xs text-muted">{contact}</p> : null}
         </div>
         <div className="col-span-2 flex items-center justify-between gap-2 sm:col-span-1 sm:block sm:text-right">
-          <h1 className="text-xl font-extrabold tracking-wide">INVOICE</h1>
+          <h1 className="text-xl font-extrabold tracking-wide">{labels.title}</h1>
           <div className="sm:mt-1">
-            <InvoiceStatusBadge status={invoice.status} />
+            {invoice.kind === "proforma" ? (
+              <span className="inline-flex rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-semibold text-gray-600 dark:bg-white/5 dark:text-gray-400">
+                Estimate
+              </span>
+            ) : (
+              <InvoiceStatusBadge status={invoice.status} />
+            )}
           </div>
         </div>
       </header>
@@ -74,8 +83,8 @@ export function InvoiceDocument({ invoice, children }: { invoice: InvoiceView; c
           {invoice.client.email ? <p className="text-muted">{invoice.client.email}</p> : null}
         </div>
         <dl className="grid grid-cols-[auto_auto] gap-x-6 gap-y-1 justify-self-start sm:justify-self-end">
-          <MetaRow label="Invoice#" value={invoice.invoiceNo} />
-          <MetaRow label="Invoice Date:" value={formatInvoiceDate(invoice.issuedAt)} />
+          <MetaRow label={labels.number} value={invoice.invoiceNo} />
+          <MetaRow label={labels.date} value={formatInvoiceDate(invoice.issuedAt)} />
           {invoice.dueDate ? <MetaRow label="Due Date:" value={formatInvoiceDate(invoice.dueDate)} /> : null}
           <MetaRow label="Order#" value={invoice.order.orderNo} />
         </dl>
@@ -110,6 +119,8 @@ export function InvoiceDocument({ invoice, children }: { invoice: InvoiceView; c
                   {/* Price moves under the name on phones, where there's no room for its own column. */}
                   {line.unitPrice != null ? (
                     <p className="text-xs text-muted sm:hidden print:hidden">@ {money(line.unitPrice)}</p>
+                  ) : labels.unpriced ? (
+                    <p className="text-xs font-medium text-warning-700 sm:hidden print:hidden dark:text-warning-500">{labels.unpriced}</p>
                   ) : null}
                   <p className="text-[11px] text-muted print:hidden">Status: {line.progress}</p>
                 </td>
@@ -118,24 +129,34 @@ export function InvoiceDocument({ invoice, children }: { invoice: InvoiceView; c
                   {line.unit ? <span className="text-muted"> {line.unit}</span> : null}
                 </td>
                 <td className="hidden whitespace-nowrap px-2 py-3 text-right tabular-nums sm:table-cell print:table-cell">
-                  {line.unitPrice != null ? money(line.unitPrice) : ""}
+                  {line.unitPrice != null ? money(line.unitPrice) : <span className="text-xs text-muted">{labels.unpriced}</span>}
                 </td>
-                <td className="whitespace-nowrap px-2 py-3 text-right tabular-nums">{line.lineTotal != null ? money(line.lineTotal) : ""}</td>
+                <td className="whitespace-nowrap px-2 py-3 text-right tabular-nums">
+                  {line.lineTotal != null ? money(line.lineTotal) : <span className="text-xs text-muted">{labels.unpriced}</span>}
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
 
         <dl className="ml-auto grid max-w-sm grid-cols-[1fr_auto]">
-          <dt className="border-b border-gray-300 bg-gray-100 px-3 py-2 font-bold dark:border-white/10 dark:bg-white/5">GRAND TOTAL</dt>
+          <dt className="border-b border-gray-300 bg-gray-100 px-3 py-2 font-bold dark:border-white/10 dark:bg-white/5">{labels.total}</dt>
           <dd className="border-b border-gray-300 bg-gray-100 px-3 py-2 text-right font-bold tabular-nums dark:border-white/10 dark:bg-white/5">
             {money(invoice.amount)}
           </dd>
-          <dt className="px-3 pt-2 text-muted">Paid</dt>
-          <dd className="px-3 pt-2 text-right tabular-nums">{money(invoice.paid)}</dd>
-          <dt className="px-3 py-1 font-semibold">Balance due</dt>
-          <dd className="px-3 py-1 text-right text-lg font-extrabold tabular-nums">{money(invoice.balance)}</dd>
+          {labels.unpriced ? (
+            <dd className="col-span-2 px-3 pt-1 text-right text-xs text-muted">+ photo books, to be confirmed</dd>
+          ) : null}
+          {showPaid ? (
+            <>
+              <dt className="px-3 pt-2 text-muted">Paid</dt>
+              <dd className="px-3 pt-2 text-right tabular-nums">{money(invoice.paid)}</dd>
+              <dt className="px-3 py-1 font-semibold">Balance due</dt>
+              <dd className="px-3 py-1 text-right text-lg font-extrabold tabular-nums">{money(invoice.balance)}</dd>
+            </>
+          ) : null}
         </dl>
+        {labels.note ? <p className="mt-3 rounded-xl bg-gray-100 p-3 text-xs text-muted dark:bg-white/5">{labels.note}</p> : null}
       </section>
 
       {invoice.payments.length ? (

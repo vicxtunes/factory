@@ -18,6 +18,7 @@ import { InvoiceError } from "./server/errors";
 import { requireBoss, requireClientId, requireStaff } from "./server/identity";
 import * as service from "./server/service";
 import type {
+  ClientOrderDocument,
   DraftLine,
   InvoiceListRow,
   InvoiceResult,
@@ -166,7 +167,9 @@ export async function saveInvoiceSettings(input: InvoiceSettingsInput): Promise<
 
 // --- Client ----------------------------------------------------------------
 
-/** The invoice link for one of the signed-in client's orders, or null when it hasn't been invoiced. */
-export async function getMyInvoiceLink(orderId: string): Promise<InvoiceResult<string | null>> {
+/** For one of the signed-in client's orders: the invoice link, or the pro forma's when not invoiced yet. */
+export async function getMyInvoiceLink(
+  orderId: string,
+): Promise<InvoiceResult<ClientOrderDocument | null>> {
   return run(async () => service.linkForClientOrder(await requireClientId(), orderId));
 }

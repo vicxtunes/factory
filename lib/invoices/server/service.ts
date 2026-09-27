@@ -16,6 +16,7 @@ import type { PaymentMethod } from "@/lib/wallet/types";
 
 import { MAX_NOTES_LENGTH, invoiceBalance, invoiceNumber, invoiceStatus, isWellFormedToken } from "../policy";
 import type {
+  ClientOrderDocument,
   DraftLine,
   InvoiceIssuer,
   InvoiceListRow,
@@ -93,6 +94,8 @@ async function buildView(invoice: repo.InvoiceRow, order: directory.InvoiceOrder
   const paid = paidMap[order.id] ?? 0;
   const amount = order.amount ?? 0;
   return {
+    kind: "invoice",
+    complete: true,
     id: invoice.id,
     invoiceNo: invoice.invoice_no,
     issuedAt: invoice.issued_at,
@@ -302,13 +305,92 @@ export async function list(): Promise<InvoiceListRow[]> {
 
 // --- Client ----------------------------------------------------------------
 
-/** The share link for a signed-in client's own order, or null when it hasn't been invoiced. */
-export async function linkForClientOrder(clientId: string, orderId: string): Promise<string | null> {
-  const invoice = await repo.byOrder(orderId);
-  if (!invoice) return null;
+/**
+ * What a signed-in client can open for their own order: the invoice once
+ * staff have made one, otherwise the pro forma (estimate). Null for someone
+ * else's order or a cancelled, un-invoiced one.
+ */
+export async function linkForClientOrder(
+  clientId: string,
+  orderId: string,
+): Promise<ClientOrderDocument | null> {
   const order = await directory.loadOrder(orderId);
   if (!order || order.clientId !== clientId) return null;
-  return invoiceUrl(invoice.share_token);
+  const invoice = await repo.byOrder(orderId);
+  if (invoice) return { kind: "invoice", href: await invoiceUrl(invoice.share_token), amount: order.amount, complete: true };
+  if (order.cancelled) return null;
+  const pf = await proforma(orderId);
+  if (!pf || !("view" in pf)) return null;
+  return { kind: "proforma", href: `/client-side/proforma/${orderId}`, amount: pf.view.amount, complete: pf.view.complete };
+}
+
+// --- Pro forma (before the order is invoiced) --------------------------------
+
+/**
+ * An estimate in the invoice's layout, for an order that hasn't been invoiced
+ * yet — typically one still waiting for confirmation. Priced from the catalog
+ * except photo books (see directory.ts); a price staff already set (their
+ * quote) wins. Returns the real invoice's link instead once there is one.
+ */
+export async function proforma(orderId: string): Promise<{ view: InvoiceView } | { invoiceUrl: string } | null> {
+  const invoice = await repo.byOrder(orderId);
+  if (invoice) return { invoiceUrl: await invoiceUrl(invoice.share_token) };
+
+  const order = await directory.loadOrder(orderId);
+  if (!order) return null;
+
+  let lines = order.proformaLines;
+  let amount: number;
+  let complete: boolean;
+  const lineSum = lines.reduce((sum, l) => sum + (l.lineTotal ?? 0), 0);
+  if (order.quotedPrice != null) {
+    // Staff have priced the order as a whole: that's the amount. Keep line
+    // prices only if they add up to it; otherwise show the lines unpriced.
+    amount = Math.round(order.quotedPrice);
+    complete = true;
+    if (!lines.every((l) => l.lineTotal != null) || lineSum !== amount) {
+      lines = lines.map((l) => ({ ...l, unitPrice: null, lineTotal: null }));
+    }
+  } else {
+    amount = lineSum;
+    complete = lines.every((l) => l.unitPrice != null);
+  }
+
+  const [paidMap, issuer] = await Promise.all([paidByOrders([order.id]), getIssuer()]);
+  const paid = paidMap[order.id] ?? 0;
+  return {
+    view: {
+      kind: "proforma",
+      complete,
+      id: order.id,
+      invoiceNo: `PF-${order.orderNo}`,
+      issuedAt: new Date().toISOString(),
+      dueDate: null,
+      notes: null,
+      status: invoiceStatus(amount, paid, order.cancelled),
+      amount,
+      paid,
+      balance: invoiceBalance(amount, paid),
+      order: {
+        id: order.id,
+        orderNo: order.orderNo,
+        placedAt: order.placedAt,
+        deliveryDate: order.deliveryDate,
+        cancelled: order.cancelled,
+        cancelReason: order.cancelReason,
+      },
+      client: order.client,
+      issuer,
+      lines,
+      payments: [],
+    },
+  };
+}
+
+/** Whether this client owns the order (for the client's pro forma page). */
+export async function clientOwnsOrder(clientId: string, orderId: string): Promise<boolean> {
+  const order = await directory.loadOrder(orderId);
+  return !!order && order.clientId === clientId;
 }
 
 // --- Public (anyone holding the link) ---------------------------------------

@@ -41,3 +41,16 @@ export async function requireClientId(): Promise<string> {
   if (!session) throw new InvoiceError("Please sign in.");
   return session.client_id;
 }
+
+/** Staff, or null (no throw) — for pages that also let clients in. */
+export async function getStaffOrNull(): Promise<InvoiceStaff | null> {
+  try {
+    return await requireStaff();
+  } catch {
+    return null;
+  }
+}
+
+export async function getClientIdOrNull(): Promise<string | null> {
+  return (await getClientSession())?.client_id ?? null;
+}

@@ -5,7 +5,7 @@ import "server-only";
 // rules. Money (what's been paid, payment history) comes from lib/wallet.
 
 import { CLIENT_STATUS_LABELS, clientStatus } from "@/lib/orders/clientStatus";
-import { catalogUnitPrice, orderAmount } from "@/lib/orders/pricing";
+import { catalogUnitPrice, estimateUnitPrice, orderAmount } from "@/lib/orders/pricing";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { OrderStage, ProductionStatus } from "@/lib/types";
 
@@ -28,6 +28,7 @@ interface ItemRow {
   created_at: string;
   catalog_product: { price: number | null; description: string | null; unit: string | null } | null;
   catalog_variant: { price: number | null } | null;
+  category: { name: string } | null;
 }
 
 interface OrderRow {
@@ -61,6 +62,16 @@ export interface InvoiceOrder {
   lines: InvoiceLine[];
   /** Lines for the staff price editor: agreed price, else catalog price, else empty. */
   draftLines: DraftLine[];
+  /**
+   * Lines for a pro forma (before invoicing): the agreed price if staff set
+   * one, else the catalog price — except photo books, which are only priced
+   * after the client has been called, so they stay "To be confirmed".
+   */
+  proformaLines: InvoiceLine[];
+  /** Whether the order is still in the quote step (not yet approved). */
+  unconfirmed: boolean;
+  /** A price staff set on the order (their quote), if any. */
+  quotedPrice: number | null;
 }
 
 const SELECT = `
@@ -69,7 +80,8 @@ const SELECT = `
   items:order_items (
     id, product, product_type, size, cover_type, lamination_type, box_type, qty, unit_price, unit,
     stage, production_status, assigned_worker_id, created_at,
-    catalog_product:products (price, description, unit), catalog_variant:product_variants (price)
+    catalog_product:products (price, description, unit), catalog_variant:product_variants (price),
+    category:product_categories (name)
   )
 `;
 
@@ -102,6 +114,24 @@ function toOrder(row: OrderRow): InvoiceOrder {
     amount: rawAmount == null ? null : Math.round(rawAmount),
     lines: items.map((i) => {
       const price = i.unit_price == null ? null : Number(i.unit_price);
+      return {
+        itemId: i.id,
+        title: title(i),
+        detail: detail(i),
+        description: i.catalog_product?.description ?? null,
+        qty: i.qty,
+        unit: unit(i),
+        unitPrice: price,
+        lineTotal: price == null ? null : price * i.qty,
+        progress: row.cancelled_at ? "Cancelled" : CLIENT_STATUS_LABELS[clientStatus(i)],
+      };
+    }),
+    unconfirmed: row.approval_status !== "approved",
+    quotedPrice: quoted,
+    proformaLines: items.map((i) => {
+      // Same rule as the client's order cards (lib/orders/pricing.ts).
+      const estimate = estimateUnitPrice(i);
+      const price = estimate == null ? null : Math.round(estimate);
       return {
         itemId: i.id,
         title: title(i),

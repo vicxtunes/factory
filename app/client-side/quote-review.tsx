@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { Field, TextArea } from "@/components/ui/Field";
 import { Collapsible, PriceHero } from "@/components/order/OrderSummary";
 import { PaymentMethods } from "@/components/payments/PaymentMethods";
+import { ClientInvoiceLink, ClientOrderEstimate } from "@/components/invoices/ClientInvoiceLink";
 import type { OrderItemWithOrder } from "@/lib/types";
 
 import { respondToQuote } from "./actions";
@@ -47,7 +48,12 @@ export function ClientQuoteReview({
   }
 
   if (order.approval_status === "pending_review") {
-    return <p className="text-sm text-muted">Thanks! We&apos;ll call you shortly to confirm the details of this order before it goes into production.</p>;
+    return (
+      <div className="space-y-3">
+        <ClientOrderEstimate orderId={orderId} />
+        <p className="text-sm text-muted">Thanks! We&apos;ll call you shortly to confirm the details of this order before it goes into production.</p>
+      </div>
+    );
   }
 
   if (order.approval_status === "changes_requested") {
@@ -57,6 +63,7 @@ export function ClientQuoteReview({
           You asked for changes{order.client_decision_note ? `: "${order.client_decision_note}"` : ""}. We&apos;re
           working on a new quote.
         </p>
+        <ClientInvoiceLink orderId={orderId} />
       </div>
     );
   }
@@ -73,7 +80,9 @@ export function ClientQuoteReview({
               <span className="font-semibold text-foreground">{order.order_no}</span> as your payment reference.
             </>
           }
-        />
+        >
+          <ClientInvoiceLink orderId={orderId} />
+        </PriceHero>
         <HowToPay orderNo={order.order_no} />
       </div>
     );
@@ -98,6 +107,7 @@ export function ClientQuoteReview({
           </>
         )}
       </PriceHero>
+      <ClientInvoiceLink orderId={orderId} />
 
       {error ? <p className="text-sm text-[var(--rush)]">{error}</p> : null}
 

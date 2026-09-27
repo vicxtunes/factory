@@ -12,6 +12,7 @@ import { PAYMENT_METHODS } from "@/lib/payments/details";
 import { METHOD_LABELS } from "@/lib/wallet/policy";
 
 import { formatInvoiceDate } from "./format";
+import { documentLabels } from "./labels";
 
 const PAGE_W = 210;
 const PAGE_H = 297;
@@ -52,6 +53,8 @@ export async function downloadInvoicePdf(invoice: InvoiceView, currencySymbol: s
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const money = (n: number) => safe(formatMoney(n, currencySymbol));
   const { issuer } = invoice;
+  const labels = documentLabels(invoice);
+  const showPaid = invoice.kind === "invoice" || invoice.paid > 0;
   doc.setTextColor(...INK);
 
   // --- Header -----------------------------------------------------------------
@@ -68,9 +71,9 @@ export async function downloadInvoicePdf(invoice: InvoiceView, currencySymbol: s
   if (contact) doc.text(safe(contact), PAGE_W / 2, hy, { align: "center" });
 
   doc.setTextColor(...INK).setFont("helvetica", "bold").setFontSize(15);
-  doc.text("INVOICE", RIGHT, 19, { align: "right" });
+  doc.text(labels.title, RIGHT, 19, { align: "right" });
   doc.setFont("helvetica", "normal").setFontSize(9).setTextColor(...MUTED);
-  doc.text(STATUS_LABELS[invoice.status].toUpperCase(), RIGHT, 25, { align: "right" });
+  doc.text(invoice.kind === "proforma" ? "ESTIMATE" : STATUS_LABELS[invoice.status].toUpperCase(), RIGHT, 25, { align: "right" });
 
   doc.setDrawColor(...RULE).setLineWidth(0.2).line(M, 36, RIGHT, 36);
 
@@ -86,8 +89,8 @@ export async function downloadInvoicePdf(invoice: InvoiceView, currencySymbol: s
   }
 
   const meta: [string, string][] = [
-    ["Invoice#", invoice.invoiceNo],
-    ["Invoice Date:", formatInvoiceDate(invoice.issuedAt)],
+    [labels.number, invoice.invoiceNo],
+    [labels.date, formatInvoiceDate(invoice.issuedAt)],
     ...(invoice.dueDate ? ([["Due Date:", formatInvoiceDate(invoice.dueDate)]] as [string, string][]) : []),
     ["Order#", invoice.order.orderNo],
   ];
@@ -124,8 +127,8 @@ export async function downloadInvoicePdf(invoice: InvoiceView, currencySymbol: s
       String(i + 1),
       [descriptions[i].title, ...descriptions[i].rest].join("\n"),
       l.unit ? `${l.qty} ${safe(l.unit)}` : String(l.qty),
-      l.unitPrice != null ? money(l.unitPrice) : "",
-      l.lineTotal != null ? money(l.lineTotal) : "",
+      l.unitPrice != null ? money(l.unitPrice) : labels.unpriced,
+      l.lineTotal != null ? money(l.lineTotal) : labels.unpriced,
     ]),
     styles: { font: "helvetica", fontSize: 10, textColor: INK, cellPadding: { top: 3, bottom: 3, left: 2, right: 2 }, valign: "top" },
     headStyles: { fontStyle: "bold", fontSize: 9, fillColor: SHADE, lineColor: RULE, lineWidth: { top: 0.3, bottom: 0.3 } },
@@ -180,16 +183,32 @@ export async function downloadInvoicePdf(invoice: InvoiceView, currencySymbol: s
   doc.setFillColor(...SHADE).rect(TX, y, RIGHT - TX, 10, "F");
   doc.setDrawColor(...RULE).line(TX, y + 10, RIGHT, y + 10);
   doc.setFont("helvetica", "bold").setFontSize(11).setTextColor(...INK);
-  doc.text("GRAND TOTAL", TX + 3, y + 6.8);
+  doc.text(labels.total, TX + 3, y + 6.8);
   doc.text(money(invoice.amount), RIGHT - 3, y + 6.8, { align: "right" });
-  y += 16;
-  doc.setFont("helvetica", "normal").setFontSize(10).setTextColor(...MUTED);
-  doc.text("Paid", TX + 3, y);
-  doc.setTextColor(...INK).text(money(invoice.paid), RIGHT - 3, y, { align: "right" });
-  y += 6;
-  doc.setFont("helvetica", "bold").text("Balance due", TX + 3, y);
-  doc.setFontSize(12).text(money(invoice.balance), RIGHT - 3, y, { align: "right" });
   y += 10;
+  if (labels.unpriced) {
+    doc.setFont("helvetica", "normal").setFontSize(9).setTextColor(...MUTED);
+    doc.text("+ photo books, to be confirmed", RIGHT - 3, y + 4, { align: "right" });
+    y += 5;
+  }
+  y += 6;
+  if (showPaid) {
+    doc.setFont("helvetica", "normal").setFontSize(10).setTextColor(...MUTED);
+    doc.text("Paid", TX + 3, y);
+    doc.setTextColor(...INK).text(money(invoice.paid), RIGHT - 3, y, { align: "right" });
+    y += 6;
+    doc.setFont("helvetica", "bold").text("Balance due", TX + 3, y);
+    doc.setFontSize(12).text(money(invoice.balance), RIGHT - 3, y, { align: "right" });
+    y += 10;
+  }
+  if (labels.note) {
+    const lines = doc.setFont("helvetica", "normal").setFontSize(9).splitTextToSize(labels.note, RIGHT - M) as string[];
+    ensure(lines.length * 4.2 + 6);
+    doc.setTextColor(...MUTED);
+    lines.forEach((line, i) => doc.text(line, M, y + i * 4.2));
+    doc.setTextColor(...INK);
+    y += lines.length * 4.2 + 6;
+  }
 
   // --- Payment history --------------------------------------------------------
   if (invoice.payments.length) {

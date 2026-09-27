@@ -29,6 +29,22 @@ Screens: the Invoice panel in the staff order detail, `/dashboard/invoices` (lis
 total and status filters), the public page `/client-side/invoice/<token>` (`client.<domain>/invoice/<token>`
 in production), and "View invoice" on the client's own order in the portal.
 
+## Pro forma (before the invoice)
+
+Until staff generate the invoice, the client can open a **pro forma invoice** for their order
+(`/client-side/proforma/<orderId>`, signed-in owner or staff only): the same layout, titled
+PRO FORMA INVOICE, numbered `PF-<order no>`, marked "Estimate". Prices follow one rule shared with
+the client's order cards (`orderEstimate` / `estimateUnitPrice` in `lib/orders/pricing.ts`):
+
+1. A price staff set on the order (their quote) wins.
+2. Otherwise each line's agreed price, else its catalog price, **except photo books**, which are
+   only priced after the receptionist calls the client ("To be confirmed").
+3. With photo books unpriced, the total is "Estimated total … + photo books, to be confirmed".
+
+Clients see it as "Amount to pay (estimate)" / "Estimate so far" with **View pro forma invoice**
+on an unconfirmed order, and the price in the bottom-right corner of every order card. Once the
+order is invoiced, the same link goes to the real invoice.
+
 ## Where the numbers come from
 
 An invoice row holds only its number, share token, due date and notes. It never stores money or

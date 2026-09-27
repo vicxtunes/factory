@@ -7,6 +7,7 @@ import { CLIENT_STATUS_LABELS, clientStatus, clientStatusColorKey } from "@/lib/
 import type { OrderItemWithOrder } from "@/lib/types";
 import { useCurrencySymbol } from "@/lib/currency/CurrencySymbolProvider";
 import { formatMoney } from "@/lib/currency/format";
+import { orderEstimate } from "@/lib/orders/pricing";
 
 // Same visual card as app/dashboard/order-card.tsx, minus the NoteBadge and
 // the assigned-worker name — order/item notes are internal staff shorthand
@@ -37,14 +38,40 @@ const APPROVAL_BADGE: Record<string, { label: string; className: string }> = {
   },
 };
 
+/**
+ * The order's price for the card's corner: its agreed price once confirmed,
+ * otherwise the estimate (catalog prices; photo books priced after the call).
+ * Same rule as the pro forma invoice (lib/orders/pricing.ts orderEstimate).
+ */
+function CardPrice({ orderItems, confirmed }: { orderItems: OrderItemWithOrder[]; confirmed: boolean }) {
+  const symbol = useCurrencySymbol();
+  const { amount, complete } = orderEstimate(orderItems);
+  const label = confirmed ? (orderItems.length > 1 ? "Order total" : "Total") : "Estimate";
+  return (
+    <span className="ml-auto shrink-0 text-right">
+      <span className="block text-[10px] uppercase tracking-wide">{label}</span>
+      {amount == null ? (
+        <span className="text-xs font-medium">Price to be confirmed</span>
+      ) : (
+        <span className="text-sm font-bold text-foreground tabular-nums">
+          {formatMoney(amount, symbol)}
+          {complete ? null : <span className="block text-[10px] font-normal text-muted">+ photo books</span>}
+        </span>
+      )}
+    </span>
+  );
+}
+
 export function ClientOrderCard({
   item,
+  orderItems,
   onOpen,
 }: {
   item: OrderItemWithOrder;
+  /** Every item of this card's order — the price shown is the whole order's. */
+  orderItems: OrderItemWithOrder[];
   onOpen: () => void;
 }) {
-  const symbol = useCurrencySymbol();
   const isExpress = item.order.order_type === "express";
   const cancelled = item.order.cancelled_at !== null;
   const notReleased = item.order.released_at === null && !cancelled;
@@ -74,7 +101,18 @@ export function ClientOrderCard({
 
         <p className="mt-2 font-medium">{item.product}</p>
 
-        <div className="mt-2 flex items-center gap-2 text-xs text-muted">
+        {notReleased && item.order.approval_status === "awaiting_client_approval" ? (
+          <p className="mt-2 text-xs text-muted">Quote ready — tap to approve or request changes</p>
+        ) : null}
+
+        {!notReleased && !cancelled && item.is_delayed ? (
+          <p className="mt-2 rounded bg-[var(--rush)]/10 px-2 py-1 text-xs text-[var(--rush)]">
+            Delayed{item.delay_reason ? `: ${item.delay_reason}` : ""}
+          </p>
+        ) : null}
+
+        {/* Status on the left, the order's price in the bottom-right corner. */}
+        <div className="mt-2 flex items-end justify-between gap-2 text-xs text-muted">
           {cancelled ? (
             <span className="rounded-full bg-error-50 px-2.5 py-0.5 text-xs font-medium text-error-700 dark:bg-error-500/15 dark:text-error-400">
               Cancelled
@@ -86,19 +124,8 @@ export function ClientOrderCard({
           ) : (
             <StatusGlowBadge status={colorKey} isDelayed={item.is_delayed} label={CLIENT_STATUS_LABELS[cs]} />
           )}
+          {!cancelled ? <CardPrice orderItems={orderItems} confirmed={item.order.approval_status === "approved"} /> : null}
         </div>
-
-        {notReleased && item.order.approval_status === "awaiting_client_approval" ? (
-          <p className="mt-2 text-xs text-muted">
-            {formatMoney(item.order.quoted_price, symbol)} — tap to approve or request changes
-          </p>
-        ) : null}
-
-        {!notReleased && !cancelled && item.is_delayed ? (
-          <p className="mt-2 rounded bg-[var(--rush)]/10 px-2 py-1 text-xs text-[var(--rush)]">
-            Delayed{item.delay_reason ? `: ${item.delay_reason}` : ""}
-          </p>
-        ) : null}
       </button>
     </article>
   );

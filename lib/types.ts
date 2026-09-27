@@ -397,6 +397,10 @@ export interface OrderItemWithOrder extends OrderItem {
   // (lib/orders/pricing.ts). Null when the item isn't linked to the catalog.
   catalog_product: { price: number | null } | null;
   catalog_variant: { price: number | null } | null;
+  /** The item's catalog category — used to spot photo books, which are priced after a call. */
+  category: { name: string } | null;
+  /** The line's agreed price once invoiced (see lib/invoices); null before. */
+  unit_price: number | null;
   order: Pick<
     Order,
     | "order_no"
