@@ -1,29 +1,27 @@
 "use client";
 
-import { HomeBar } from "@/components/ui/HomeBar";
+import { HomeBar, type HomeBarLink } from "@/components/ui/HomeBar";
 
 import { logoutClient } from "./actions";
+import { clientNavFor } from "./nav";
 
-// Client portal: the four places clients live in (Dashboard, Orders,
-// Showroom, Support); placing an order, history and payment details are
-// occasional, so they sit under "more".
+// Client portal on phones: the four places clients live in (Dashboard,
+// Orders, Showroom, Support) on the bar; everything else sits in "More",
+// in the same sections as the desktop sidebar (both come from ./nav.ts).
 export function ClientHomeBar() {
-  return (
-    <HomeBar
-      tabs={[
-        { href: "/client-side", label: "Dashboard", icon: "dashboard", exact: true },
-        { href: "/client-side/orders", label: "Orders", icon: "orders" },
-        { href: "/client-side/showroom", label: "Showroom", icon: "showroom" },
-        { href: "/support", label: "Support", icon: "support" },
-      ]}
-      more={[
-        { href: "/chat", label: "Chat", icon: "chat" },
-        { href: "/client-side/new", label: "Place Order", icon: "placeOrder" },
-        { href: "/client-side/history", label: "History", icon: "history" },
-        { href: "/client-side/payment", label: "Wallet", icon: "payment" },
-      ]}
-      logout={logoutClient}
-      afterLogout="/client-side"
-    />
+  const tabs: HomeBarLink[] = [
+    { href: "/client-side", label: "Dashboard", icon: "dashboard", exact: true },
+    { href: "/client-side/orders", label: "My orders", barLabel: "Orders", icon: "orders" },
+    { href: "/client-side/showroom", label: "Showroom", icon: "showroom" },
+    { href: "/support", label: "Support", icon: "support" },
+  ];
+
+  const onBar = new Set(tabs.map((t) => t.href));
+  const more: HomeBarLink[] = clientNavFor(true).flatMap((section) =>
+    section.items
+      .filter((item) => !onBar.has(item.href))
+      .map((item) => ({ href: item.href, label: item.label, icon: item.icon, section: section.label ?? undefined })),
   );
+
+  return <HomeBar tabs={tabs} more={more} logout={logoutClient} afterLogout="/client-side" />;
 }

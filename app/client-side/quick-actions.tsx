@@ -13,7 +13,7 @@ const ACTIONS = [
 
 export function QuickActions() {
   return (
-    <nav aria-label="Quick actions" className="grid grid-cols-3 gap-3">
+    <nav aria-label="Quick actions" className="grid h-full grid-cols-3 gap-3">
       {ACTIONS.map(({ href, label, icon: Icon, primary }) => (
         <Link
           key={href}

@@ -6,6 +6,8 @@ import { usePathname } from "next/navigation";
 
 import { ChatIcon } from "@/components/chat/icons";
 
+import { clientNavFor, isCurrentClientPage, type ClientNavItem } from "./nav";
+
 // Same shape as app/dashboard/sidebar.tsx — fixed logo header + icon nav
 // list with active-state utilities from app/globals.css. Gated items
 // (everything but Showroom) only render when signed in.
@@ -104,30 +106,26 @@ export function SupportIcon({ className }: { className?: string }) {
   );
 }
 
-interface Tab {
-  href: string;
-  label: string;
-  icon: typeof OrdersIcon;
-  requiresSignIn: boolean;
-}
-
-const TABS: Tab[] = [
-  { href: "/client-side", label: "Dashboard", icon: DashboardIcon, requiresSignIn: true },
-  { href: "/client-side/orders", label: "Orders", icon: OrdersIcon, requiresSignIn: true },
-  { href: "/client-side/history", label: "History", icon: HistoryIcon, requiresSignIn: true },
-  { href: "/client-side/payment", label: "Wallet", icon: PaymentIcon, requiresSignIn: true },
-  { href: "/client-side/new", label: "Place Order", icon: PlaceOrderIcon, requiresSignIn: true },
-  { href: "/client-side/showroom", label: "Showroom", icon: ShowroomIcon, requiresSignIn: false },
-  { href: "/client-side/settings", label: "Settings", icon: SettingsIcon, requiresSignIn: true },
-  { href: "/chat", label: "Chat", icon: ChatIcon, requiresSignIn: true },
-  { href: "/support", label: "Support", icon: SupportIcon, requiresSignIn: true },
-];
+// Sidebar icons for the nav's icon names (./nav.ts uses the home bar's names).
+const ICONS: Partial<Record<ClientNavItem["icon"], typeof OrdersIcon>> = {
+  dashboard: DashboardIcon,
+  orders: OrdersIcon,
+  history: HistoryIcon,
+  payment: PaymentIcon,
+  placeOrder: PlaceOrderIcon,
+  showroom: ShowroomIcon,
+  settings: SettingsIcon,
+  chat: ChatIcon,
+  support: SupportIcon,
+};
 
 // Desktop/tablet only (md+). On phones navigation is the bottom home bar
-// (./home-bar.tsx) — no hamburger, no slide-out drawer.
+// (./home-bar.tsx) — no hamburger, no slide-out drawer. The links and their
+// sections come from ./nav.ts; sections are headed, not collapsible — there
+// are few enough links that everything can stay in view.
 export function ClientSidebar({ signedIn }: { signedIn: boolean }) {
   const pathname = usePathname();
-  const tabs = TABS.filter((t) => signedIn || !t.requiresSignIn);
+  const sections = clientNavFor(signedIn);
 
   return (
     <aside
@@ -136,26 +134,35 @@ export function ClientSidebar({ signedIn }: { signedIn: boolean }) {
       <div className="flex h-16 shrink-0 items-center gap-2 border-b border-border px-5">
         <Image src="/aming-logo-header.png" alt="AMING" width={193} height={40} className="h-7 w-auto" priority />
       </div>
-      <nav className="flex-1 overflow-y-auto px-3 py-4">
-        <p className="mb-2 px-3 text-xs font-semibold uppercase tracking-wide text-muted">Client Portal</p>
-        <ul className="space-y-1">
-          {tabs.map((tab) => {
-            const Icon = tab.icon;
-            const active = pathname === tab.href;
-            return (
-              <li key={tab.href}>
-                <Link
-                  href={tab.href}
-                  prefetch
-                  className={`menu-item ${active ? "menu-item-active" : "menu-item-inactive"}`}
-                >
-                  <Icon className={`h-5 w-5 ${active ? "menu-item-icon-active" : "menu-item-icon-inactive"}`} />
-                  {tab.label}
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
+      <nav aria-label="Client portal" className="flex-1 space-y-5 overflow-y-auto px-3 py-4">
+        {sections.map((section) => (
+          <div key={section.id}>
+            {section.label ? (
+              <p className="mb-1 px-3 text-xs font-semibold uppercase tracking-wide text-muted">{section.label}</p>
+            ) : null}
+            <ul className="space-y-1">
+              {section.items.map((item) => {
+                const Icon = ICONS[item.icon];
+                const active = isCurrentClientPage(pathname, item);
+                return (
+                  <li key={item.href}>
+                    <Link
+                      href={item.href}
+                      prefetch
+                      aria-current={active ? "page" : undefined}
+                      className={`menu-item ${active ? "menu-item-active" : "menu-item-inactive"}`}
+                    >
+                      {Icon ? (
+                        <Icon className={`h-5 w-5 ${active ? "menu-item-icon-active" : "menu-item-icon-inactive"}`} />
+                      ) : null}
+                      {item.label}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ))}
       </nav>
     </aside>
   );
