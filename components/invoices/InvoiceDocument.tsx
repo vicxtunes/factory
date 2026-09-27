@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 import { useCurrencySymbol } from "@/lib/currency/CurrencySymbolProvider";
 import { formatMoney } from "@/lib/currency/format";
@@ -32,6 +32,45 @@ export function InvoiceStatusBadge({ status }: { status: InvoiceStatus }) {
     <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${STATUS_TONES[status]}`}>
       {STATUS_LABELS[status]}
     </span>
+  );
+}
+
+function InfoIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className={className} aria-hidden>
+      <circle cx="12" cy="12" r="9" />
+      <path strokeLinecap="round" d="M12 11v5M12 7.5v.01" />
+    </svg>
+  );
+}
+
+/**
+ * A line's product name and its catalog description. Wide screens and print
+ * show the description under the name; phones have no room for it, so they
+ * get an info button that shows it on tap.
+ */
+function LineTitle({ title, description }: { title: string; description: string | null }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <p className="font-bold">
+        {title}
+        {description ? (
+          <button
+            type="button"
+            onClick={() => setOpen((o) => !o)}
+            aria-expanded={open}
+            aria-label={`About ${title}`}
+            className="ml-1 inline-flex h-6 w-6 translate-y-[3px] items-center justify-center rounded-full text-muted hover:text-brand-600 sm:hidden print:hidden"
+          >
+            <InfoIcon className="h-4 w-4" />
+          </button>
+        ) : null}
+      </p>
+      {description ? (
+        <p className={`text-xs text-muted ${open ? "block" : "hidden"} sm:block print:block`}>{description}</p>
+      ) : null}
+    </>
   );
 }
 
@@ -113,9 +152,8 @@ export function InvoiceDocument({ invoice, children }: { invoice: InvoiceView; c
               <tr key={line.itemId} className="border-b border-border align-top">
                 <td className="px-2 py-3">{i + 1}</td>
                 <td className="px-2 py-3">
-                  <p className="font-bold">{line.title}</p>
+                  <LineTitle title={line.title} description={line.description} />
                   {line.detail ? <p className="text-xs text-muted">{line.detail}</p> : null}
-                  {line.description ? <p className="text-xs text-muted">{line.description}</p> : null}
                   {/* Price moves under the name on phones, where there's no room for its own column. */}
                   {line.unitPrice != null ? (
                     <p className="text-xs text-muted sm:hidden print:hidden">@ {money(line.unitPrice)}</p>
