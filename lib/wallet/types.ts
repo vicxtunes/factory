@@ -62,6 +62,14 @@ export interface WalletView {
   closed: WalletPayment[];
 }
 
+/** Just enough for a balance card (e.g. on the client's home screen). */
+export interface WalletSummary {
+  balance: number;
+  /** Deposits reported but not yet confirmed. */
+  pendingCount: number;
+  pendingAmount: number;
+}
+
 /** One row of the staff wallets list. */
 export interface WalletListRow {
   clientId: string;

@@ -32,6 +32,7 @@ import type {
   WalletEntry,
   WalletListRow,
   WalletPayment,
+  WalletSummary,
   WalletView,
 } from "../types";
 import * as directory from "./directory";
@@ -136,6 +137,18 @@ async function orderState(order: directory.WalletOrder, walletBalance: number | 
 
 export async function getMyWallet(viewer: ClientViewer): Promise<WalletView> {
   return walletView(viewer.id, viewer.name);
+}
+
+export async function getMyWalletSummary(viewer: ClientViewer): Promise<WalletSummary> {
+  const [{ balance }, pending] = await Promise.all([
+    repo.getBalance(viewer.id),
+    repo.listPayments(viewer.id, ["pending"], 50),
+  ]);
+  return {
+    balance,
+    pendingCount: pending.length,
+    pendingAmount: pending.reduce((sum, p) => sum + p.amount, 0),
+  };
 }
 
 export async function reportDeposit(

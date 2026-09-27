@@ -24,6 +24,7 @@ import type {
   WalletListRow,
   WalletPayment,
   WalletResult,
+  WalletSummary,
   WalletView,
 } from "./types";
 
@@ -58,6 +59,11 @@ export interface DepositInput {
 
 export async function getMyWallet(): Promise<WalletResult<WalletView>> {
   return run(async () => service.getMyWallet(await requireClient()));
+}
+
+/** Balance + pending deposits only — cheap enough for the home screen. */
+export async function getMyWalletSummary(): Promise<WalletResult<WalletSummary>> {
+  return run(async () => service.getMyWalletSummary(await requireClient()));
 }
 
 /** "I've sent money": records a deposit for staff to confirm. */

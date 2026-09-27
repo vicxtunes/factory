@@ -17,10 +17,19 @@ import { BalanceCard, EntryLine, MethodOptions, Panel, PaymentLine, parseAmount,
 //
 // `howToPay` is the business's bank / mobile money details, passed in by the
 // page so this module doesn't depend on where those live.
-export function ClientWallet({ wallet, howToPay }: { wallet: WalletView; howToPay: ReactNode }) {
+export function ClientWallet({
+  wallet,
+  howToPay,
+  startAdding = false,
+}: {
+  wallet: WalletView;
+  howToPay: ReactNode;
+  /** Open "Add funds" straight away (the home screen's Add funds button links here with ?add=1). */
+  startAdding?: boolean;
+}) {
   const router = useRouter();
   const addRef = useRef<HTMLDivElement>(null);
-  const [adding, setAdding] = useState(wallet.entries.length === 0 && wallet.pending.length === 0);
+  const [adding, setAdding] = useState(startAdding || (wallet.entries.length === 0 && wallet.pending.length === 0));
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
 

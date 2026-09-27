@@ -1,6 +1,8 @@
 import { Header } from "@/components/ui/Header";
+import { WalletSummaryCard } from "@/components/wallet/WalletSummaryCard";
 import { getClientSession } from "@/lib/auth/session";
 import { fetchClientItems, fetchMarketingSlides } from "@/lib/queries";
+import { getMyWalletSummary } from "@/lib/wallet/actions";
 
 import { AuthGate } from "./auth-gate";
 import { ClientDashboard } from "./dashboard";
@@ -32,15 +34,21 @@ export default async function ClientSidePage({
     );
   }
 
-  const [items, slides] = await Promise.all([
+  const [items, slides, wallet] = await Promise.all([
     fetchClientItems(session.client_id),
     fetchMarketingSlides(true),
+    getMyWalletSummary(),
   ]);
 
   return (
     <ClientShell signedIn name={session.name} avatarUrl={session.avatarUrl}>
       {/* Cancelled orders aren't work in progress — keep them out of the stats. */}
-      <ClientDashboard items={items.filter((i) => !i.order.cancelled_at)} slides={slides} />
+      <ClientDashboard
+        items={items.filter((i) => !i.order.cancelled_at)}
+        slides={slides}
+        // If the wallet can't load, the home screen still works — it just has no balance card.
+        wallet={wallet.ok ? <WalletSummaryCard summary={wallet.data} /> : null}
+      />
     </ClientShell>
   );
 }

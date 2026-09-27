@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import { SectionLabel } from "@/components/ui/SectionLabel";
 import { StatusBarChart, UrgencyDonutChart } from "@/app/dashboard/charts";
 import { StatCard } from "@/app/dashboard/stat-card";
@@ -19,14 +21,18 @@ import { QuickActions } from "./quick-actions";
 export function ClientDashboard({
   items,
   slides,
+  wallet,
 }: {
   items: OrderItemWithOrder[];
   slides: MarketingSlide[];
+  /** The wallet balance card, shown first — the usual spot for a balance in wallet/banking apps. */
+  wallet?: ReactNode;
 }) {
   if (items.length === 0) {
     return (
       <div className="space-y-6">
-        <QuickActions />
+        {wallet}
+      <QuickActions />
         <MarketingCarousel slides={slides} />
         <div className="rounded-2xl border border-dashed border-border bg-surface p-8 text-center">
           <p className="text-sm text-muted">No orders yet — add your first one above.</p>
@@ -51,6 +57,7 @@ export function ClientDashboard({
 
   return (
     <div className="space-y-6">
+      {wallet}
       <QuickActions />
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3 lg:items-start">
       {/* Mobile: DOM order stands as-is, so this renders first — carousel
