@@ -28,6 +28,8 @@ export const CLIENT_NAV: ClientNavSection[] = [
     label: null,
     items: [
       { href: "/client-side", label: "Dashboard", icon: "dashboard", requiresSignIn: true, exact: true },
+      // Used all the time, so it stands alone rather than in a section — same as the staff dashboard.
+      { href: "/chat", label: "Chat", icon: "chat", requiresSignIn: true },
       { href: "/client-side/showroom", label: "Showroom", icon: "showroom", requiresSignIn: false },
     ],
   },
@@ -52,7 +54,6 @@ export const CLIENT_NAV: ClientNavSection[] = [
     id: "help",
     label: "Help",
     items: [
-      { href: "/chat", label: "Chat", icon: "chat", requiresSignIn: true },
       { href: "/support", label: "Support", icon: "support", requiresSignIn: true },
     ],
   },
