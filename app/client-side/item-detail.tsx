@@ -94,11 +94,14 @@ export function ClientItemDetail({ item, orderItems }: { item: OrderItemWithOrde
 
       <ClientOrderPayment key={item.order_id} orderId={item.order_id} />
 
+
       <StatusLine item={item} />
       {item.is_delayed && item.delay_reason ? (
         <p className="rounded bg-[var(--rush)]/10 px-2 py-1 text-xs text-[var(--rush)]">Delayed: {item.delay_reason}</p>
       ) : null}
 
+      <ClientOrderChat orderId={item.order_id} label="Questions about this order? Chat with us" />
+      
       <Collapsible title="Progress" summary={CLIENT_STATUS_LABELS[clientStatus(item)]}>
         <OrderProgressTracker
           status={item.production_status}
@@ -136,7 +139,7 @@ export function ClientItemDetail({ item, orderItems }: { item: OrderItemWithOrde
         <PaymentMethods orderNo={item.order.order_no} />
       </Collapsible>
 
-      <ClientOrderChat orderId={item.order_id} label="Questions about this order? Chat with us" />
+      
     </div>
   );
 }
