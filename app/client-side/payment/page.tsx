@@ -18,7 +18,7 @@ export default async function ClientPaymentPage({ searchParams }: { searchParams
 
   return (
     <ClientShell signedIn name={session.name} avatarUrl={session.avatarUrl}>
-      <div className="mx-auto w-full max-w-lg space-y-5">
+      <div className="mx-12 w-full max-w-lg space-y-5">
         <div>
           <h2 className="text-lg font-semibold">Wallet</h2>
           <p className="mt-1 text-sm text-muted">
