@@ -218,6 +218,8 @@ export interface Product {
   // showroom-content.tsx, product-showcase.tsx).
   price: number | null;
   description: string | null;
+  /** What it's sold in, shown on invoices: "Pc", "Sheet", "Service"… */
+  unit: string | null;
   active: boolean;
   created_at: string;
   display_image_url: string | null;

@@ -43,11 +43,6 @@ export type { WalletActor, OrderPaymentRecord };
 /** Thrown for problems the person should see (not enough balance, order cancelled…). */
 export { WalletError };
 
-/** Fixes an order's price on the order so it can't change later (e.g. when it's invoiced). */
-export async function lockOrderPrice(orderId: string): Promise<void> {
-  await service.lockOrderPrice(orderId);
-}
-
 /** Records money received for an order. Anything above what's due stays in the client's wallet. */
 export async function recordOrderPayment(
   actor: WalletActor,

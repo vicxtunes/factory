@@ -4,7 +4,7 @@ import "server-only";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 
-import { InvoiceError } from "./errors";
+import { InvoiceError, throwInvoiceDbError } from "./errors";
 
 export interface InvoiceRow {
   id: string;
@@ -101,5 +101,48 @@ export async function update(
     .from("invoices")
     .update({ ...patch, updated_at: new Date().toISOString() })
     .eq("id", id);
+  if (error) fail(error);
+}
+
+// --- Lines -------------------------------------------------------------------
+
+/** Sets every line's unit price (and unit) and makes the order's price their sum. Returns the new total. */
+export async function setLines(
+  orderId: string,
+  lines: { itemId: string; unitPrice: number; unit: string | null }[],
+): Promise<number> {
+  const { data, error } = await createAdminClient().rpc("invoice_set_lines", {
+    p_order: orderId,
+    p_lines: lines.map((l) => ({ item_id: l.itemId, unit_price: l.unitPrice, unit: l.unit })),
+  });
+  if (error) throwInvoiceDbError(error);
+  return Number(data);
+}
+
+// --- Settings ----------------------------------------------------------------
+
+export interface SettingsRow {
+  company_name: string;
+  address: string | null;
+  phone: string | null;
+  email: string | null;
+  terms: string | null;
+  signature_company: string | null;
+}
+
+export async function getSettings(): Promise<SettingsRow | null> {
+  const { data, error } = await createAdminClient()
+    .from("invoice_settings")
+    .select("company_name, address, phone, email, terms, signature_company")
+    .eq("id", 1)
+    .maybeSingle<SettingsRow>();
+  if (error) fail(error);
+  return data;
+}
+
+export async function saveSettings(row: SettingsRow): Promise<void> {
+  const { error } = await createAdminClient()
+    .from("invoice_settings")
+    .upsert({ id: 1, ...row, updated_at: new Date().toISOString() });
   if (error) fail(error);
 }

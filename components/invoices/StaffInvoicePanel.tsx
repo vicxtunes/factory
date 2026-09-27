@@ -9,16 +9,20 @@ import { formatMoney } from "@/lib/currency/format";
 import {
   applyWalletToInvoice,
   generateInvoice,
+  getInvoiceDraft,
   getInvoiceForOrder,
   recordInvoicePayment,
   resetInvoiceLink,
   updateInvoice,
+  updateInvoiceLines,
+  type InvoiceLineInput,
 } from "@/lib/invoices/actions";
-import type { StaffInvoiceView } from "@/lib/invoices/types";
+import type { DraftLine, StaffInvoiceView } from "@/lib/invoices/types";
 import { MANUAL_METHODS, METHOD_LABELS } from "@/lib/wallet/policy";
 import type { PaymentMethod } from "@/lib/wallet/types";
 
 import { InvoiceStatusBadge } from "./InvoiceDocument";
+import { downloadInvoicePdf } from "./pdf";
 
 // The invoice section of an order, for staff: generate it, share its link,
 // record installments, apply the client's wallet balance. Dropped into the
@@ -76,7 +80,15 @@ export function StaffInvoicePanel({ orderId, onChanged }: { orderId: string; onC
   }
 
   if (invoice === null) {
-    return <GeneratePanel pending={pending} error={error} onGenerate={(input) => act(() => generateInvoice(orderId, input), setInvoice)} />;
+    return (
+      <GeneratePanel
+        orderId={orderId}
+        money={money}
+        pending={pending}
+        error={error}
+        onGenerate={(input) => act(() => generateInvoice(orderId, input), setInvoice)}
+      />
+    );
   }
 
   const inv = invoice;
@@ -108,15 +120,31 @@ export function StaffInvoicePanel({ orderId, onChanged }: { orderId: string; onC
           </p>
           {inv.dueDate ? <p className="text-xs text-muted">Due {new Date(`${inv.dueDate}T00:00:00`).toLocaleDateString()}</p> : null}
         </div>
-        <a
-          href={inv.shareUrl}
-          target="_blank"
-          rel="noreferrer"
-          className="text-xs font-medium text-brand-600 underline"
-        >
-          Open invoice ↗
-        </a>
+        <div className="flex flex-col items-end gap-1">
+          <a href={inv.shareUrl} target="_blank" rel="noreferrer" className="text-xs font-medium text-brand-600 underline">
+            Open invoice ↗
+          </a>
+          <button
+            type="button"
+            className="text-xs font-medium text-brand-600 underline"
+            onClick={() =>
+              downloadInvoicePdf(inv, symbol).catch((err) => {
+                console.error("invoice pdf failed:", err);
+                setError("Couldn't make the PDF.");
+              })
+            }
+          >
+            Download PDF
+          </button>
+        </div>
       </div>
+
+      {!inv.linesMatchTotal && !inv.order.cancelled ? (
+        <p className="rounded-lg bg-warning-50 p-2 text-xs text-warning-700 dark:bg-warning-500/15 dark:text-warning-500">
+          The line prices don&apos;t add up to the order total (an item may have been added or changed). Open{" "}
+          <span className="font-semibold">Edit</span> and save the line prices.
+        </p>
+      ) : null}
 
       <div className="flex flex-wrap gap-2">
         <Button variant="secondary" className="min-h-9 text-xs" onClick={copy}>
@@ -186,11 +214,19 @@ export function StaffInvoicePanel({ orderId, onChanged }: { orderId: string; onC
       {mode === "edit" ? (
         <EditForm
           invoice={inv}
+          money={money}
           pending={pending}
           onCancel={() => setMode("idle")}
           onSave={(input) =>
             act(
-              () => updateInvoice(inv.id, input),
+              async () => {
+                // Lines first: if the new total is refused (below what's paid), nothing else changes.
+                if (input.lines) {
+                  const res = await updateInvoiceLines(inv.id, input.lines);
+                  if (!res.ok) return res;
+                }
+                return updateInvoice(inv.id, { dueDate: input.dueDate, notes: input.notes });
+              },
               (d) => {
                 setInvoice(d);
                 setMode("idle");
@@ -235,31 +271,161 @@ export function StaffInvoicePanel({ orderId, onChanged }: { orderId: string; onC
   );
 }
 
+interface EditableLine extends DraftLine {
+  /** What's typed in the price box. */
+  priceText: string;
+  unitText: string;
+}
+
+function toEditable(lines: DraftLine[]): EditableLine[] {
+  return lines.map((l) => ({ ...l, priceText: l.unitPrice == null ? "" : String(l.unitPrice), unitText: l.unit ?? "" }));
+}
+
+/** The lines as the server wants them, or an error sentence when a price is missing or invalid. */
+function toInput(lines: EditableLine[]): InvoiceLineInput[] | string {
+  const out: InvoiceLineInput[] = [];
+  for (const l of lines) {
+    const price = parseAmount(l.priceText);
+    if (!Number.isInteger(price) || price < 0) return `Enter a price for "${l.title}".`;
+    out.push({ itemId: l.itemId, unitPrice: price, unit: l.unitText || null });
+  }
+  return out;
+}
+
+function linesTotal(lines: EditableLine[]): number | null {
+  let total = 0;
+  for (const l of lines) {
+    const price = parseAmount(l.priceText);
+    if (!Number.isFinite(price)) return null;
+    total += price * l.qty;
+  }
+  return total;
+}
+
+/** Qty × unit price per line, as on the printed invoice; the total is their sum. */
+function LineEditor({
+  lines,
+  onChange,
+  money,
+}: {
+  lines: EditableLine[];
+  onChange: (lines: EditableLine[]) => void;
+  money: (n: number) => string;
+}) {
+  const total = linesTotal(lines);
+  const set = (i: number, patch: Partial<EditableLine>) => onChange(lines.map((l, j) => (j === i ? { ...l, ...patch } : l)));
+
+  return (
+    <div className="space-y-2">
+      <p className="text-xs font-medium text-muted">Line prices</p>
+      <ul className="divide-y divide-border rounded-xl border border-border">
+        {lines.map((l, i) => {
+          const price = parseAmount(l.priceText);
+          return (
+            <li key={l.itemId} className="space-y-1.5 p-2">
+              <div>
+                <p className="text-sm font-medium">{l.title}</p>
+                {l.detail ? <p className="text-[11px] text-muted">{l.detail}</p> : null}
+              </div>
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                <span className="tabular-nums">{l.qty} ×</span>
+                <TextInput
+                  inputMode="numeric"
+                  aria-label={`Unit price for ${l.title}`}
+                  value={l.priceText}
+                  onChange={(e) => set(i, { priceText: e.target.value })}
+                  placeholder="Unit price"
+                  className="!min-h-9 w-28"
+                />
+                <TextInput
+                  aria-label={`Unit for ${l.title}`}
+                  list="invoice-units"
+                  value={l.unitText}
+                  onChange={(e) => set(i, { unitText: e.target.value })}
+                  placeholder="Unit"
+                  maxLength={30}
+                  className="!min-h-9 w-20"
+                />
+                <span className="ml-auto font-semibold tabular-nums">
+                  {Number.isFinite(price) ? money(price * l.qty) : "—"}
+                </span>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+      <datalist id="invoice-units">
+        <option value="Pc" />
+        <option value="Sheet" />
+        <option value="Service" />
+        <option value="Set" />
+      </datalist>
+      <p className="flex justify-between text-sm font-semibold">
+        <span>Grand total</span>
+        <span className="tabular-nums">{total == null ? "—" : money(total)}</span>
+      </p>
+    </div>
+  );
+}
+
 function GeneratePanel({
+  orderId,
+  money,
   pending,
   error,
   onGenerate,
 }: {
+  orderId: string;
+  money: (n: number) => string;
   pending: boolean;
   error: string | null;
-  onGenerate: (input: { dueDate: string | null; notes: string | null }) => void;
+  onGenerate: (input: { lines: InvoiceLineInput[]; dueDate: string | null; notes: string | null }) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [lines, setLines] = useState<EditableLine[] | null>(null);
+  const [currentAmount, setCurrentAmount] = useState<number | null>(null);
   const [dueDate, setDueDate] = useState("");
   const [notes, setNotes] = useState("");
+  const [localError, setLocalError] = useState<string | null>(null);
+
+  function start() {
+    setOpen(true);
+    setLocalError(null);
+    getInvoiceDraft(orderId).then((res) => {
+      if (!res.ok) return setLocalError(res.error);
+      setLines(toEditable(res.data.lines));
+      setCurrentAmount(res.data.currentAmount);
+    });
+  }
+
+  function submit() {
+    if (!lines) return;
+    const input = toInput(lines);
+    if (typeof input === "string") return setLocalError(input);
+    setLocalError(null);
+    onGenerate({ lines: input, dueDate: dueDate || null, notes: notes || null });
+  }
+
+  const total = lines ? linesTotal(lines) : null;
 
   return (
     <section aria-label="Invoice" className="space-y-2 rounded-2xl border border-dashed border-border p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-muted">No invoice yet.</p>
         {!open ? (
-          <Button variant="secondary" className="min-h-9 text-xs" onClick={() => setOpen(true)}>
+          <Button variant="secondary" className="min-h-9 text-xs" onClick={start}>
             Generate invoice
           </Button>
         ) : null}
       </div>
-      {open ? (
-        <div className="space-y-2">
+      {open && lines ? (
+        <div className="space-y-3">
+          <LineEditor lines={lines} onChange={setLines} money={money} />
+          {currentAmount != null && total != null && total !== currentAmount ? (
+            <p className="text-xs text-warning-700 dark:text-warning-500">
+              The order&apos;s price will change from {money(currentAmount)} to {money(total)} (the sum of the lines).
+            </p>
+          ) : null}
           <Field label="Due date (optional)">
             <TextInput type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
           </Field>
@@ -267,17 +433,18 @@ function GeneratePanel({
             <TextArea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} maxLength={1000} />
           </Field>
           <div className="flex gap-2">
-            <Button className="min-h-9 text-xs" loading={pending} onClick={() => onGenerate({ dueDate: dueDate || null, notes: notes || null })}>
+            <Button className="min-h-9 text-xs" loading={pending} onClick={submit}>
               Generate
             </Button>
             <button type="button" className="text-xs text-muted" onClick={() => setOpen(false)}>
               Cancel
             </button>
           </div>
-          <p className="text-[11px] text-muted">The order&apos;s price is locked once it&apos;s invoiced.</p>
         </div>
+      ) : open ? (
+        <p className="text-xs text-muted">{localError ? null : "Loading…"}</p>
       ) : null}
-      {error ? <p className="text-xs text-error-600">{error}</p> : null}
+      {localError || error ? <p className="text-xs text-error-600">{localError ?? error}</p> : null}
     </section>
   );
 }
@@ -347,30 +514,49 @@ function PaymentForm({
 
 function EditForm({
   invoice,
+  money,
   pending,
   onSave,
   onCancel,
   onResetLink,
 }: {
   invoice: StaffInvoiceView;
+  money: (n: number) => string;
   pending: boolean;
-  onSave: (input: { dueDate: string | null; notes: string | null }) => void;
+  onSave: (input: { lines: InvoiceLineInput[] | null; dueDate: string | null; notes: string | null }) => void;
   onCancel: () => void;
   onResetLink: () => void;
 }) {
+  const [lines, setLines] = useState(() => toEditable(invoice.draftLines));
   const [dueDate, setDueDate] = useState(invoice.dueDate ?? "");
   const [notes, setNotes] = useState(invoice.notes ?? "");
+  const [error, setError] = useState<string | null>(null);
+  const original = JSON.stringify(toEditable(invoice.draftLines));
+
+  function save() {
+    const changed = JSON.stringify(lines) !== original || !invoice.linesMatchTotal;
+    let input: InvoiceLineInput[] | null = null;
+    if (changed) {
+      const parsed = toInput(lines);
+      if (typeof parsed === "string") return setError(parsed);
+      input = parsed;
+    }
+    setError(null);
+    onSave({ lines: input, dueDate: dueDate || null, notes: notes || null });
+  }
 
   return (
-    <div className="space-y-2 rounded-xl border border-border p-3">
+    <div className="space-y-3 rounded-xl border border-border p-3">
+      {!invoice.order.cancelled ? <LineEditor lines={lines} onChange={setLines} money={money} /> : null}
       <Field label="Due date">
         <TextInput type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
       </Field>
       <Field label="Notes on the invoice">
         <TextArea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} maxLength={1000} />
       </Field>
+      {error ? <p className="text-xs text-error-600">{error}</p> : null}
       <div className="flex flex-wrap items-center gap-2">
-        <Button className="min-h-9 text-xs" loading={pending} onClick={() => onSave({ dueDate: dueDate || null, notes: notes || null })}>
+        <Button className="min-h-9 text-xs" loading={pending} onClick={save}>
           Save
         </Button>
         <button type="button" className="text-xs text-muted" onClick={onCancel}>

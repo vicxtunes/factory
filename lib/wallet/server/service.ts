@@ -329,13 +329,6 @@ async function prepareOrderForPayment(orderId: string): Promise<directory.Wallet
   return order as directory.WalletOrder & { clientId: string };
 }
 
-/** Writes the order's current price onto it (if it came from the catalog), so it can't change under an invoice. */
-export async function lockOrderPrice(orderId: string): Promise<void> {
-  const order = await directory.loadOrder(orderId);
-  if (!order) throw new WalletError("Order not found.");
-  await directory.fixOrderPrice(order);
-}
-
 /**
  * Staff record money received for one order (an installment). It's credited
  * to the client's wallet and applied to the order in one transaction;

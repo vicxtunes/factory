@@ -15,9 +15,15 @@ import { WalletError } from "@/lib/wallet/orders";
 import type { PaymentMethod } from "@/lib/wallet/types";
 
 import { InvoiceError } from "./server/errors";
-import { requireClientId, requireStaff } from "./server/identity";
+import { requireBoss, requireClientId, requireStaff } from "./server/identity";
 import * as service from "./server/service";
-import type { InvoiceListRow, InvoiceResult, StaffInvoiceView } from "./types";
+import type {
+  DraftLine,
+  InvoiceListRow,
+  InvoiceResult,
+  InvoiceSettingsInput,
+  StaffInvoiceView,
+} from "./types";
 
 async function run<T>(fn: () => Promise<T>): Promise<InvoiceResult<T>>;
 async function run(fn: () => Promise<void>): Promise<InvoiceResult>;
@@ -55,12 +61,38 @@ export async function getInvoiceForOrder(orderId: string): Promise<InvoiceResult
   });
 }
 
+/** The price editor's starting lines for an order about to be invoiced. */
+export async function getInvoiceDraft(
+  orderId: string,
+): Promise<InvoiceResult<{ lines: DraftLine[]; currentAmount: number | null }>> {
+  return run(async () => {
+    await requireStaff();
+    return service.draft(orderId);
+  });
+}
+
+export interface InvoiceLineInput {
+  itemId: string;
+  unitPrice: number;
+  unit?: string | null;
+}
+
 export async function generateInvoice(
   orderId: string,
-  input: { dueDate?: string | null; notes?: string | null } = {},
+  input: { lines: InvoiceLineInput[]; dueDate?: string | null; notes?: string | null },
 ): Promise<InvoiceResult<StaffInvoiceView>> {
   return run(async () => {
     const invoice = await service.generate(await requireStaff(), orderId, input);
+    refresh();
+    return invoice;
+  });
+}
+
+/** New line prices on an existing invoice; the order's total follows. */
+export async function updateInvoiceLines(invoiceId: string, lines: InvoiceLineInput[]): Promise<InvoiceResult<StaffInvoiceView>> {
+  return run(async () => {
+    await requireStaff();
+    const invoice = await service.updateLines(invoiceId, lines);
     refresh();
     return invoice;
   });
@@ -110,6 +142,25 @@ export async function listInvoices(): Promise<InvoiceResult<InvoiceListRow[]>> {
   return run(async () => {
     await requireStaff();
     return service.list();
+  });
+}
+
+// --- Settings (boss) ---------------------------------------------------------
+
+/** What's printed on every invoice: company details, terms, signature line. */
+export async function getInvoiceSettings(): Promise<InvoiceResult<InvoiceSettingsInput>> {
+  return run(async () => {
+    await requireStaff();
+    return service.getSettings();
+  });
+}
+
+export async function saveInvoiceSettings(input: InvoiceSettingsInput): Promise<InvoiceResult<InvoiceSettingsInput>> {
+  return run(async () => {
+    await requireBoss();
+    const saved = await service.saveSettings(input);
+    refresh();
+    return saved;
   });
 }
 

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { InvoiceDocument } from "@/components/invoices/InvoiceDocument";
-import { PrintButton } from "@/components/invoices/PrintButton";
+import { InvoiceDownloadButtons } from "@/components/invoices/InvoiceDownloadButtons";
 import { PaymentMethods } from "@/components/payments/PaymentMethods";
 import { getInvoiceByToken } from "@/lib/invoices/public";
 import { SUPPORT_PHONE_DISPLAY } from "@/lib/support/constants";
@@ -24,16 +24,16 @@ export default async function InvoicePage({ params }: { params: Promise<{ token:
     <main className="mx-auto w-full max-w-3xl px-4 py-6 sm:py-10 print:max-w-none print:p-0">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2 print:hidden">
         <p className="text-sm text-muted">Questions? Call or WhatsApp {SUPPORT_PHONE_DISPLAY}.</p>
-        <PrintButton />
+        <InvoiceDownloadButtons invoice={invoice} />
       </div>
-      <InvoiceDocument invoice={invoice}>
-        {invoice.balance > 0 && !invoice.order.cancelled ? (
-          <section>
-            <h2 className="mb-2 text-sm font-semibold">How to pay</h2>
-            <PaymentMethods orderNo={invoice.order.orderNo} />
-          </section>
-        ) : null}
-      </InvoiceDocument>
+      <InvoiceDocument invoice={invoice} />
+      {/* On screen only: the same payment details with copy buttons, for paying from a phone. */}
+      {invoice.balance > 0 && !invoice.order.cancelled ? (
+        <section className="mt-4 space-y-2 print:hidden">
+          <h2 className="text-sm font-semibold">Pay now</h2>
+          <PaymentMethods orderNo={invoice.order.orderNo} />
+        </section>
+      ) : null}
       <p className="mt-4 text-center text-sm text-muted print:hidden">
         Have an account?{" "}
         <Link href="/client-side/orders" className="font-medium text-brand-600 underline">

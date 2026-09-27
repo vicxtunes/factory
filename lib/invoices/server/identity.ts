@@ -28,6 +28,13 @@ export async function requireStaff(): Promise<InvoiceStaff> {
   };
 }
 
+/** Company-wide invoice settings are the boss's to change. */
+export async function requireBoss(): Promise<InvoiceStaff> {
+  const staff = await requireStaff();
+  if (staff.role !== "boss") throw new InvoiceError("Only the boss can change invoice settings.");
+  return staff;
+}
+
 /** The signed-in client's id, or throws. */
 export async function requireClientId(): Promise<string> {
   const session = await getClientSession();

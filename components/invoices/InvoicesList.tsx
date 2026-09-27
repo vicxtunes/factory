@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { Button } from "@/components/ui/Button";
 import { Drawer } from "@/components/ui/Drawer";
 import { TextInput } from "@/components/ui/Field";
 import { useCurrencySymbol } from "@/lib/currency/CurrencySymbolProvider";
@@ -11,6 +12,7 @@ import { STATUS_LABELS } from "@/lib/invoices/policy";
 import type { InvoiceListRow, InvoiceStatus } from "@/lib/invoices/types";
 
 import { InvoiceStatusBadge } from "./InvoiceDocument";
+import { InvoiceSettingsDrawer } from "./InvoiceSettingsDrawer";
 import { StaffInvoicePanel } from "./StaffInvoicePanel";
 
 // Staff's Invoices page: every invoice with what's paid and outstanding,
@@ -20,13 +22,14 @@ import { StaffInvoicePanel } from "./StaffInvoicePanel";
 type Filter = "all" | InvoiceStatus;
 const FILTERS: Filter[] = ["all", "unpaid", "partially_paid", "paid", "cancelled"];
 
-export function InvoicesList({ invoices }: { invoices: InvoiceListRow[] }) {
+export function InvoicesList({ invoices, canEditSettings }: { invoices: InvoiceListRow[]; canEditSettings: boolean }) {
   const router = useRouter();
   const symbol = useCurrencySymbol();
   const money = (n: number) => formatMoney(n, symbol);
   const [filter, setFilter] = useState<Filter>("all");
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState<InvoiceListRow | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const q = search.trim().toLowerCase();
   const visible = invoices.filter(
@@ -44,12 +47,19 @@ export function InvoicesList({ invoices }: { invoices: InvoiceListRow[] }) {
           <p className="text-xs uppercase tracking-wide text-muted">Outstanding</p>
           <p className="text-xl font-extrabold tabular-nums">{money(outstanding)}</p>
         </div>
-        <TextInput
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search invoice, order or client"
-          className="max-w-xs"
-        />
+        <div className="flex flex-wrap items-center gap-2">
+          <TextInput
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search invoice, order or client"
+            className="max-w-xs"
+          />
+          {canEditSettings ? (
+            <Button variant="secondary" onClick={() => setSettingsOpen(true)}>
+              Invoice settings
+            </Button>
+          ) : null}
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-2" role="tablist" aria-label="Filter by status">
@@ -117,6 +127,8 @@ export function InvoicesList({ invoices }: { invoices: InvoiceListRow[] }) {
           {invoices.length ? "No invoice matches." : "No invoices yet. Generate one from an order's detail screen."}
         </p>
       )}
+
+      {canEditSettings ? <InvoiceSettingsDrawer open={settingsOpen} onClose={() => setSettingsOpen(false)} /> : null}
 
       <Drawer open={!!open} onClose={() => setOpen(null)} title={open ? `${open.invoiceNo} · ${open.clientName}` : "Invoice"}>
         {open ? <StaffInvoicePanel key={open.orderId} orderId={open.orderId} onChanged={() => router.refresh()} /> : null}

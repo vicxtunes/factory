@@ -7,7 +7,6 @@ import "server-only";
 
 import {
   applyWalletToOrder,
-  lockOrderPrice,
   orderClientBalance,
   orderPaymentHistory,
   paidByOrders,
@@ -16,7 +15,14 @@ import {
 import type { PaymentMethod } from "@/lib/wallet/types";
 
 import { MAX_NOTES_LENGTH, invoiceBalance, invoiceNumber, invoiceStatus, isWellFormedToken } from "../policy";
-import type { InvoiceListRow, InvoiceView, StaffInvoiceView } from "../types";
+import type {
+  DraftLine,
+  InvoiceIssuer,
+  InvoiceListRow,
+  InvoiceSettingsInput,
+  InvoiceView,
+  StaffInvoiceView,
+} from "../types";
 import * as directory from "./directory";
 import { InvoiceError } from "./errors";
 import type { InvoiceStaff } from "./identity";
@@ -38,8 +44,52 @@ function cleanDueDate(value: string | null | undefined): string | null {
   return value;
 }
 
+/** Used until the boss saves settings (the migration seeds them, so this is a safety net). */
+const DEFAULT_ISSUER: InvoiceIssuer = {
+  companyName: "Aming Company",
+  address: null,
+  phone: null,
+  email: null,
+  terms: [],
+  signatureCompany: null,
+};
+
+async function getIssuer(): Promise<InvoiceIssuer> {
+  const row = await repo.getSettings();
+  if (!row) return DEFAULT_ISSUER;
+  return {
+    companyName: row.company_name,
+    address: row.address,
+    phone: row.phone,
+    email: row.email,
+    terms: (row.terms ?? "")
+      .split("\n")
+      .map((t) => t.trim())
+      .filter(Boolean),
+    signatureCompany: row.signature_company,
+  };
+}
+
+/** Checks the price editor's lines: every item once, whole-shilling prices of 0 or more. */
+function cleanLines(order: directory.InvoiceOrder, lines: { itemId: string; unitPrice: number; unit?: string | null }[]) {
+  const ids = new Set(order.draftLines.map((l) => l.itemId));
+  if (lines.length !== ids.size || !lines.every((l) => ids.has(l.itemId))) {
+    throw new InvoiceError("Every item on the order needs a price.");
+  }
+  return lines.map((l) => {
+    if (!Number.isInteger(l.unitPrice) || l.unitPrice < 0) {
+      throw new InvoiceError("Every line needs a price in whole shillings (0 or more).");
+    }
+    return { itemId: l.itemId, unitPrice: l.unitPrice, unit: (l.unit ?? "").trim().slice(0, 30) || null };
+  });
+}
+
 async function buildView(invoice: repo.InvoiceRow, order: directory.InvoiceOrder): Promise<InvoiceView> {
-  const [paidMap, payments] = await Promise.all([paidByOrders([order.id]), orderPaymentHistory(order.id)]);
+  const [paidMap, payments, issuer] = await Promise.all([
+    paidByOrders([order.id]),
+    orderPaymentHistory(order.id),
+    getIssuer(),
+  ]);
   const paid = paidMap[order.id] ?? 0;
   const amount = order.amount ?? 0;
   return {
@@ -61,6 +111,7 @@ async function buildView(invoice: repo.InvoiceRow, order: directory.InvoiceOrder
       cancelReason: order.cancelReason,
     },
     client: order.client,
+    issuer,
     lines: order.lines,
     payments,
   };
@@ -74,7 +125,17 @@ async function staffView(invoice: repo.InvoiceRow): Promise<StaffInvoiceView> {
     invoiceUrl(invoice.share_token),
     orderClientBalance(order.id),
   ]);
-  return { ...view, shareUrl, walletBalance, createdByName: invoice.created_by_name };
+  const lineSum = order.lines.every((l) => l.lineTotal != null)
+    ? order.lines.reduce((sum, l) => sum + (l.lineTotal as number), 0)
+    : null;
+  return {
+    ...view,
+    shareUrl,
+    walletBalance,
+    createdByName: invoice.created_by_name,
+    draftLines: order.draftLines,
+    linesMatchTotal: lineSum === view.amount,
+  };
 }
 
 async function loadInvoice(invoiceId: string): Promise<repo.InvoiceRow> {
@@ -94,15 +155,26 @@ export async function getById(invoiceId: string): Promise<StaffInvoiceView> {
   return staffView(await loadInvoice(invoiceId));
 }
 
+/** The price editor's starting lines for an order that hasn't been invoiced yet. */
+export async function draft(orderId: string): Promise<{ lines: DraftLine[]; currentAmount: number | null }> {
+  const order = await directory.loadOrder(orderId);
+  if (!order) throw new InvoiceError("Order not found.");
+  return { lines: order.draftLines, currentAmount: order.amount };
+}
+
 /**
  * Creates the order's invoice (or returns the existing one — one per order).
- * Fixes the order's price first, so the invoice total can't move if catalog
- * prices change later.
+ * Staff confirm every line's unit price first; the order's price becomes the
+ * sum of the lines, so the invoice total can't move if catalog prices change.
  */
 export async function generate(
   staff: InvoiceStaff,
   orderId: string,
-  input: { dueDate?: string | null; notes?: string | null },
+  input: {
+    lines: { itemId: string; unitPrice: number; unit?: string | null }[];
+    dueDate?: string | null;
+    notes?: string | null;
+  },
 ): Promise<StaffInvoiceView> {
   const existing = await repo.byOrder(orderId);
   if (existing) return staffView(existing);
@@ -111,18 +183,60 @@ export async function generate(
   if (!order) throw new InvoiceError("Order not found.");
   if (order.cancelled) throw new InvoiceError("This order was cancelled.");
   if (!order.approved) throw new InvoiceError("Confirm the order's price with the client first, then invoice it.");
-  if (order.amount == null) throw new InvoiceError("Set the order's amount first — some items have no price.");
+  const dueDate = cleanDueDate(input.dueDate);
 
-  await lockOrderPrice(orderId);
+  await repo.setLines(orderId, cleanLines(order, input.lines));
   const invoice = await repo.insert({
     orderId,
     invoiceNo: invoiceNumber(order.orderNo),
     shareToken: newShareToken(),
-    dueDate: cleanDueDate(input.dueDate),
+    dueDate,
     notes: cleanNotes(input.notes),
     createdBy: staff,
   });
   return staffView(invoice);
+}
+
+/** Changes line prices on an existing invoice; the order's price follows. */
+export async function updateLines(
+  invoiceId: string,
+  lines: { itemId: string; unitPrice: number; unit?: string | null }[],
+): Promise<StaffInvoiceView> {
+  const invoice = await loadInvoice(invoiceId);
+  const order = await directory.loadOrder(invoice.order_id);
+  if (!order) throw new InvoiceError("This invoice's order no longer exists.");
+  if (order.cancelled) throw new InvoiceError("This order was cancelled.");
+  await repo.setLines(order.id, cleanLines(order, lines));
+  return getById(invoice.id);
+}
+
+// --- Settings (boss) ---------------------------------------------------------
+
+export async function getSettings(): Promise<InvoiceSettingsInput> {
+  const issuer = await getIssuer();
+  return {
+    companyName: issuer.companyName,
+    address: issuer.address ?? "",
+    phone: issuer.phone ?? "",
+    email: issuer.email ?? "",
+    terms: issuer.terms.join("\n"),
+    signatureCompany: issuer.signatureCompany ?? "",
+  };
+}
+
+export async function saveSettings(input: InvoiceSettingsInput): Promise<InvoiceSettingsInput> {
+  const text = (v: string, max: number) => v.trim().slice(0, max) || null;
+  const companyName = text(input.companyName, 120);
+  if (!companyName) throw new InvoiceError("The company name is required.");
+  await repo.saveSettings({
+    company_name: companyName,
+    address: text(input.address, 200),
+    phone: text(input.phone, 60),
+    email: text(input.email, 120),
+    terms: text(input.terms, 3000),
+    signature_company: text(input.signatureCompany, 120),
+  });
+  return getSettings();
 }
 
 export async function update(invoiceId: string, input: { dueDate?: string | null; notes?: string | null }): Promise<StaffInvoiceView> {

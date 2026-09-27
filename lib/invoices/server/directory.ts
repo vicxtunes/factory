@@ -9,9 +9,10 @@ import { catalogUnitPrice, orderAmount } from "@/lib/orders/pricing";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { OrderStage, ProductionStatus } from "@/lib/types";
 
-import type { InvoiceLine } from "../types";
+import type { DraftLine, InvoiceLine } from "../types";
 
 interface ItemRow {
+  id: string;
   product: string;
   product_type: string | null;
   size: string | null;
@@ -19,11 +20,13 @@ interface ItemRow {
   lamination_type: string | null;
   box_type: string | null;
   qty: number;
+  unit_price: number | null;
+  unit: string | null;
   stage: OrderStage;
   production_status: ProductionStatus;
   assigned_worker_id: string | null;
   created_at: string;
-  catalog_product: { price: number | null } | null;
+  catalog_product: { price: number | null; description: string | null; unit: string | null } | null;
   catalog_variant: { price: number | null } | null;
 }
 
@@ -56,15 +59,17 @@ export interface InvoiceOrder {
   /** The order's price (what the invoice is for); null while unknown. */
   amount: number | null;
   lines: InvoiceLine[];
+  /** Lines for the staff price editor: agreed price, else catalog price, else empty. */
+  draftLines: DraftLine[];
 }
 
 const SELECT = `
   id, order_no, client_id, client_name, client_phone, client_email, created_at, delivery_date,
   approval_status, quoted_price, cancelled_at, cancel_reason,
   items:order_items (
-    product, product_type, size, cover_type, lamination_type, box_type, qty,
+    id, product, product_type, size, cover_type, lamination_type, box_type, qty, unit_price, unit,
     stage, production_status, assigned_worker_id, created_at,
-    catalog_product:products (price), catalog_variant:product_variants (price)
+    catalog_product:products (price, description, unit), catalog_variant:product_variants (price)
   )
 `;
 
@@ -72,15 +77,17 @@ function toOrder(row: OrderRow): InvoiceOrder {
   const quoted = row.quoted_price == null ? null : Number(row.quoted_price);
   const items = [...row.items].sort((a, b) => a.created_at.localeCompare(b.created_at));
   const { amount: rawAmount } = orderAmount(items.map((i) => ({ ...i, order: { quoted_price: quoted } })));
-  const amount = rawAmount == null ? null : Math.round(rawAmount);
 
-  // Unit prices are only shown when the total really is catalog price ×
-  // quantity; a quoted total (the usual case) isn't split across lines.
-  const units = items.map((i) => catalogUnitPrice(i));
-  const catalogTotal = units.every((u) => u != null)
-    ? Math.round(items.reduce((sum, i, idx) => sum + (units[idx] as number) * i.qty, 0))
-    : null;
-  const showUnits = amount != null && catalogTotal === amount;
+  // Like the business's invoices: the product name in bold, the variant
+  // ("Extra ordinary finishing") and options on the line under it.
+  const title = (i: ItemRow) => i.product;
+  const detail = (i: ItemRow) =>
+    [i.product_type, i.size, i.cover_type, i.lamination_type, i.box_type].filter(Boolean).join(" · ") || null;
+  const unit = (i: ItemRow) => i.unit ?? i.catalog_product?.unit ?? null;
+  const catalog = (i: ItemRow) => {
+    const price = catalogUnitPrice(i);
+    return price == null ? null : Math.round(price);
+  };
 
   return {
     id: row.id,
@@ -92,14 +99,28 @@ function toOrder(row: OrderRow): InvoiceOrder {
     approved: row.approval_status === "approved",
     cancelled: !!row.cancelled_at,
     cancelReason: row.cancel_reason,
-    amount,
-    lines: items.map((i, idx) => ({
-      description: i.product_type ? `${i.product} — ${i.product_type}` : i.product,
-      detail: [i.size, i.cover_type, i.lamination_type, i.box_type].filter(Boolean).join(" · ") || null,
+    amount: rawAmount == null ? null : Math.round(rawAmount),
+    lines: items.map((i) => {
+      const price = i.unit_price == null ? null : Number(i.unit_price);
+      return {
+        itemId: i.id,
+        title: title(i),
+        detail: detail(i),
+        description: i.catalog_product?.description ?? null,
+        qty: i.qty,
+        unit: unit(i),
+        unitPrice: price,
+        lineTotal: price == null ? null : price * i.qty,
+        progress: row.cancelled_at ? "Cancelled" : CLIENT_STATUS_LABELS[clientStatus(i)],
+      };
+    }),
+    draftLines: items.map((i) => ({
+      itemId: i.id,
+      title: title(i),
+      detail: detail(i),
       qty: i.qty,
-      unitPrice: showUnits ? Math.round(units[idx] as number) : null,
-      lineTotal: showUnits ? Math.round((units[idx] as number) * i.qty) : null,
-      progress: row.cancelled_at ? "Cancelled" : CLIENT_STATUS_LABELS[clientStatus(i)],
+      unit: unit(i),
+      unitPrice: i.unit_price != null ? Number(i.unit_price) : catalog(i),
     })),
   };
 }

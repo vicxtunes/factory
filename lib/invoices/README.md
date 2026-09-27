@@ -3,15 +3,24 @@
 Invoices generated from orders, paid in one go or in installments, and shared with the client as a
 link they can open without signing in.
 
-- **Generate** from the staff order screen (or it's already there, one per order). The number is
-  `INV-` + the order number (order `2026-3956` → `INV-2026-3956`). Optional due date and notes.
-  Generating an invoice **locks the order's price** so it can't change under the invoice.
+- **Generate** from the staff order screen (one per order). The number is `INV-` + the order
+  number (order `2026-3956` → `INV-2026-3956`). Staff confirm a **unit price for every line**
+  (pre-filled from the catalog) and optionally a due date and notes. The invoice total, and the
+  order's price, is the **sum of the lines**. Line prices can be changed later from **Edit**,
+  never below what's already been paid.
 - **Record payments**: any number of installments (mobile money, bank, cash, other) with a
   reference and note. Money above the balance goes to the client's wallet as credit, never lost.
 - **Use wallet**: apply the client's prepaid wallet balance to the invoice.
 - **Paid, balance and history** are shown everywhere the invoice appears, and **status** follows
   automatically: Unpaid → Partially paid → Paid (Cancelled if the order is cancelled; what was paid
   is refunded to the wallet, see lib/wallet).
+- **Looks like the business's existing invoices** (sample: INV-1124127): company header, Bill To
+  and invoice details, a `# / Description / Qty (unit) / Price / Total` table with each product's
+  description, Grand Total, Terms & Conditions, Payment Instructions and "For, … / Authorized
+  signature". **Download PDF** makes the same layout as an A4 file (`components/invoices/pdf.ts`).
+- **Invoice settings** (boss, on the Invoices page): company name, address, phone, email, terms
+  (one per line) and the signature line. Seeded from the sample invoice. Payment instructions
+  come from the app's payment details (`lib/payments/details.ts`), the same ones as the Wallet page.
 - **Share**: copy the link or send it on WhatsApp. The client's page shows the invoice, each
   item's progress, payment history, and how to pay, with Print / Save PDF. **Reset link**
   replaces it; the old link stops working.
@@ -27,10 +36,16 @@ status:
 
 | Shown | Comes from |
 | --- | --- |
-| Total | The order's price, `orders.quoted_price` (locked at generation) |
+| Line prices | `order_items.unit_price` and `unit` (set by `invoice_set_lines()`; unit copied from `products.unit`) |
+| Total | The order's price, `orders.quoted_price`, which `invoice_set_lines()` sets to the sum of the lines in the same transaction |
 | Paid, payment history | The wallet ledger: `wallet_transactions` rows for the order (lib/wallet) |
 | Balance | Total − paid, never below 0 |
 | Status | `policy.invoiceStatus(total, paid, cancelled)`, the only place it's decided |
+
+Once an order is invoiced, the order's own "Set amount" is refused: its price is changed through
+the invoice lines, so lines and total can't drift apart. If an item is added or its quantity
+changes after invoicing, the staff panel warns that the lines no longer add up; saving the line
+prices again fixes it.
 
 So an invoice can't disagree with the money: recording a payment on the invoice, paying from the
 wallet in the portal, a refund, or (later) a payment provider all write the same ledger, and every
@@ -58,6 +73,7 @@ lib/invoices/
   policy.ts           Status rule, invoice number, token shape. Pure.
   actions.ts          "use server": the browser's only entry point (staff + the client's "View invoice").
   public.ts           Server-only: invoice by token, for the public page.
+  orders.ts           Server-only: isOrderInvoiced (used to refuse "Set amount" on invoiced orders).
   server/
     service.ts        Use cases. Money goes through lib/wallet/orders.ts only.
     repository.ts     Queries on the invoices table.
@@ -67,11 +83,14 @@ lib/invoices/
     errors.ts         InvoiceError (safe-to-show messages).
 
 components/invoices/
-  InvoiceDocument.tsx     The invoice itself (public page; print-friendly).
-  StaffInvoicePanel.tsx   Generate / share / record payment / use wallet / edit (order detail, list drawer).
-  InvoicesList.tsx        Staff list with outstanding total and filters.
-  ClientInvoiceLink.tsx   "View invoice" on the client's order.
-  PrintButton.tsx
+  InvoiceDocument.tsx          The invoice itself (public page; print-friendly).
+  pdf.ts                       The same layout as an A4 PDF (jspdf, loaded on demand).
+  InvoiceDownloadButtons.tsx   Download PDF / Print.
+  StaffInvoicePanel.tsx        Generate (line prices) / share / record payment / use wallet / edit.
+  InvoiceSettingsDrawer.tsx    Boss: company details, terms, signature line.
+  InvoicesList.tsx             Staff list with outstanding total and filters.
+  ClientInvoiceLink.tsx        "View invoice" on the client's order.
+  format.ts                    Dates as 19-06-2026.
 
 app/client-side/invoice/[token]/page.tsx     Public invoice page.
 app/dashboard/(app)/invoices/page.tsx        Staff list ("Payments → Invoices" in the sidebar).
@@ -87,6 +106,7 @@ money only through `lib/wallet/orders.ts`.
 | Who | Can |
 | --- | --- |
 | Receptionist / supervisor / boss | Everything above (`isManagerRole`, like wallets and clients). |
+| Boss | Invoice settings. |
 | Signed-in client | Get the link for their own orders' invoices. |
 | Anyone with the link | View that invoice. |
 
@@ -95,6 +115,11 @@ account can be invoiced, but payments can't be recorded against it until it's li
 because the money has to belong to someone's wallet.
 
 ## Testing notes
+
+Line pricing and settings were also exercised: catalog prices pre-filled (missing ones left for
+staff), missing / fractional / negative prices refused, total = sum of lines, units and
+descriptions on lines, lines refused below what's paid, the "lines don't add up" flag, and
+settings save. The PDF was generated in a browser and compared page by page with the sample.
 
 Exercised against local Postgres + PostgREST: generation rules (unconfirmed, bad due date), price
 lock, one invoice per order, installments with method and reference in the history, applying the

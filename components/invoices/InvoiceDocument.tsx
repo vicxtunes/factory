@@ -7,12 +7,17 @@ import { useCurrencySymbol } from "@/lib/currency/CurrencySymbolProvider";
 import { formatMoney } from "@/lib/currency/format";
 import { STATUS_LABELS } from "@/lib/invoices/policy";
 import type { InvoiceStatus, InvoiceView } from "@/lib/invoices/types";
+import { PAYMENT_METHODS } from "@/lib/payments/details";
 import { METHOD_LABELS } from "@/lib/wallet/policy";
 
-// The invoice itself, as the client sees it on their link and as it prints.
-// Staff see the same document (so there are no surprises), with their tools
-// around it. Everything after `children` is printed too, so callers pass
-// only content that belongs on paper (e.g. how to pay).
+import { formatInvoiceDate } from "./format";
+
+// The invoice itself, as the client sees it on their link and as it prints —
+// laid out like the business's existing invoices: company header, Bill To and
+// invoice details, a priced line table with the grand total, then what's been
+// paid, terms, payment instructions and the signature line. The PDF
+// (./pdf.ts) follows the same layout. Things only useful on screen (each
+// item's progress) are hidden when printing.
 
 const STATUS_TONES: Record<InvoiceStatus, string> = {
   unpaid: "bg-error-50 text-error-700 dark:bg-error-500/15 dark:text-error-500",
@@ -29,112 +34,114 @@ export function InvoiceStatusBadge({ status }: { status: InvoiceStatus }) {
   );
 }
 
-function date(value: string): string {
-  // A plain "YYYY-MM-DD" (due / delivery date) is a calendar day, not an
-  // instant: read it as local midnight so it never shows as the day before.
-  const d = /^\d{4}-\d{2}-\d{2}$/.test(value) ? new Date(`${value}T00:00:00`) : new Date(value);
-  return d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+function MetaRow({ label, value }: { label: string; value: string }) {
+  return (
+    <>
+      <dt className="text-right font-semibold">{label}</dt>
+      <dd className="text-right tabular-nums">{value}</dd>
+    </>
+  );
 }
 
 export function InvoiceDocument({ invoice, children }: { invoice: InvoiceView; children?: ReactNode }) {
   const symbol = useCurrencySymbol();
   const money = (n: number) => formatMoney(n, symbol);
-  const showUnits = invoice.lines.some((l) => l.unitPrice != null);
+  const { issuer } = invoice;
+  const contact = [issuer.phone, issuer.email].filter(Boolean).join(" · ");
 
   return (
-    <article className="space-y-6 rounded-2xl border border-border bg-surface p-5 shadow-theme-xs sm:p-8 print:border-0 print:p-0 print:shadow-none">
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <Image src="/aming-logo-header.png" alt="AMING" width={193} height={40} className="h-8 w-auto" />
+    <article className="space-y-6 rounded-2xl border border-border bg-surface p-5 text-sm shadow-theme-xs sm:p-8 print:border-0 print:p-0 print:shadow-none">
+      <header className="grid grid-cols-[auto_1fr] items-center gap-4 border-b border-border pb-5 sm:grid-cols-[auto_1fr_auto]">
+        <Image src="/icon-192.png" alt={issuer.companyName} width={64} height={64} className="h-14 w-14 rounded-xl sm:h-16 sm:w-16" />
+        <div className="min-w-0 sm:text-center">
+          <p className="text-lg font-bold">{issuer.companyName}</p>
+          {issuer.address ? <p className="text-xs text-muted">{issuer.address}</p> : null}
+          {contact ? <p className="break-words text-xs text-muted">{contact}</p> : null}
         </div>
-        <div className="text-right">
-          <h1 className="text-2xl font-extrabold tracking-tight">Invoice</h1>
-          <p className="text-sm font-semibold tabular-nums">{invoice.invoiceNo}</p>
-          <div className="mt-1">
+        <div className="col-span-2 flex items-center justify-between gap-2 sm:col-span-1 sm:block sm:text-right">
+          <h1 className="text-xl font-extrabold tracking-wide">INVOICE</h1>
+          <div className="sm:mt-1">
             <InvoiceStatusBadge status={invoice.status} />
           </div>
         </div>
       </header>
 
-      <section className="grid gap-4 text-sm sm:grid-cols-2">
+      <section className="grid gap-4 sm:grid-cols-2">
         <div>
-          <p className="text-xs uppercase tracking-wide text-muted">Billed to</p>
-          <p className="font-semibold">{invoice.client.name}</p>
+          <p className="font-bold">BILL TO</p>
+          <p>{invoice.client.name}</p>
           {invoice.client.phone ? <p className="text-muted">{invoice.client.phone}</p> : null}
           {invoice.client.email ? <p className="text-muted">{invoice.client.email}</p> : null}
         </div>
-        <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 sm:justify-self-end">
-          <dt className="text-muted">Issued</dt>
-          <dd className="text-right tabular-nums">{date(invoice.issuedAt)}</dd>
-          {invoice.dueDate ? (
-            <>
-              <dt className="text-muted">Due</dt>
-              <dd className="text-right tabular-nums">{date(invoice.dueDate)}</dd>
-            </>
-          ) : null}
-          <dt className="text-muted">Order</dt>
-          <dd className="text-right tabular-nums">{invoice.order.orderNo}</dd>
-          {invoice.order.deliveryDate ? (
-            <>
-              <dt className="text-muted">Delivery</dt>
-              <dd className="text-right tabular-nums">{date(invoice.order.deliveryDate)}</dd>
-            </>
-          ) : null}
+        <dl className="grid grid-cols-[auto_auto] gap-x-6 gap-y-1 justify-self-start sm:justify-self-end">
+          <MetaRow label="Invoice#" value={invoice.invoiceNo} />
+          <MetaRow label="Invoice Date:" value={formatInvoiceDate(invoice.issuedAt)} />
+          {invoice.dueDate ? <MetaRow label="Due Date:" value={formatInvoiceDate(invoice.dueDate)} /> : null}
+          <MetaRow label="Order#" value={invoice.order.orderNo} />
         </dl>
       </section>
 
       {invoice.order.cancelled ? (
-        <p className="rounded-xl bg-gray-100 p-3 text-sm dark:bg-white/5">
+        <p className="rounded-xl bg-gray-100 p-3 dark:bg-white/5">
           This order was cancelled{invoice.order.cancelReason ? ` — ${invoice.order.cancelReason}` : ""}. Anything paid
           has been returned to the client&apos;s wallet.
         </p>
       ) : null}
 
       <section>
-        <table className="w-full text-sm">
+        <table className="w-full">
           <thead>
-            <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted">
-              <th className="py-2 font-medium">Item</th>
-              <th className="py-2 text-right font-medium">Qty</th>
-              {showUnits ? <th className="hidden py-2 text-right font-medium sm:table-cell print:table-cell">Unit price</th> : null}
-              {showUnits ? <th className="py-2 text-right font-medium">Amount</th> : null}
+            <tr className="border-y border-gray-300 bg-gray-100 text-left text-xs font-bold uppercase dark:border-white/10 dark:bg-white/5">
+              <th className="px-2 py-2 w-8">#</th>
+              <th className="px-2 py-2">Description</th>
+              <th className="px-2 py-2 text-right">Qty</th>
+              <th className="hidden px-2 py-2 text-right sm:table-cell print:table-cell">Price</th>
+              <th className="px-2 py-2 text-right">Total</th>
             </tr>
           </thead>
           <tbody>
             {invoice.lines.map((line, i) => (
-              <tr key={i} className="border-b border-border align-top">
-                <td className="py-2 pr-2">
-                  <p className="font-medium">{line.description}</p>
+              <tr key={line.itemId} className="border-b border-border align-top">
+                <td className="px-2 py-3">{i + 1}</td>
+                <td className="px-2 py-3">
+                  <p className="font-bold">{line.title}</p>
                   {line.detail ? <p className="text-xs text-muted">{line.detail}</p> : null}
-                  <p className="text-xs text-muted print:hidden">Status: {line.progress}</p>
+                  {line.description ? <p className="text-xs text-muted">{line.description}</p> : null}
+                  {/* Price moves under the name on phones, where there's no room for its own column. */}
+                  {line.unitPrice != null ? (
+                    <p className="text-xs text-muted sm:hidden print:hidden">@ {money(line.unitPrice)}</p>
+                  ) : null}
+                  <p className="text-[11px] text-muted print:hidden">Status: {line.progress}</p>
                 </td>
-                <td className="py-2 text-right tabular-nums">{line.qty}</td>
-                {showUnits ? (
-                  <td className="hidden py-2 text-right tabular-nums sm:table-cell print:table-cell">
-                    {line.unitPrice != null ? money(line.unitPrice) : ""}
-                  </td>
-                ) : null}
-                {showUnits ? <td className="py-2 text-right tabular-nums">{line.lineTotal != null ? money(line.lineTotal) : ""}</td> : null}
+                <td className="px-2 py-3 text-right tabular-nums">
+                  {line.qty}
+                  {line.unit ? <span className="block text-xs text-muted">{line.unit}</span> : null}
+                </td>
+                <td className="hidden whitespace-nowrap px-2 py-3 text-right tabular-nums sm:table-cell print:table-cell">
+                  {line.unitPrice != null ? money(line.unitPrice) : ""}
+                </td>
+                <td className="whitespace-nowrap px-2 py-3 text-right tabular-nums">{line.lineTotal != null ? money(line.lineTotal) : ""}</td>
               </tr>
             ))}
           </tbody>
         </table>
 
-        <dl className="ml-auto mt-3 grid max-w-xs grid-cols-[1fr_auto] gap-x-6 gap-y-1 text-sm">
-          <dt className="text-muted">Total</dt>
-          <dd className="text-right font-semibold tabular-nums">{money(invoice.amount)}</dd>
-          <dt className="text-muted">Paid</dt>
-          <dd className="text-right tabular-nums">{money(invoice.paid)}</dd>
-          <div className="col-span-2 border-t border-border" aria-hidden />
-          <dt className="font-semibold">Balance due</dt>
-          <dd className="text-right text-lg font-extrabold tabular-nums">{money(invoice.balance)}</dd>
+        <dl className="ml-auto grid max-w-sm grid-cols-[1fr_auto]">
+          <dt className="border-b border-gray-300 bg-gray-100 px-3 py-2 font-bold dark:border-white/10 dark:bg-white/5">GRAND TOTAL</dt>
+          <dd className="border-b border-gray-300 bg-gray-100 px-3 py-2 text-right font-bold tabular-nums dark:border-white/10 dark:bg-white/5">
+            {money(invoice.amount)}
+          </dd>
+          <dt className="px-3 pt-2 text-muted">Paid</dt>
+          <dd className="px-3 pt-2 text-right tabular-nums">{money(invoice.paid)}</dd>
+          <dt className="px-3 py-1 font-semibold">Balance due</dt>
+          <dd className="px-3 py-1 text-right text-lg font-extrabold tabular-nums">{money(invoice.balance)}</dd>
         </dl>
       </section>
 
-      <section>
-        <h2 className="mb-1 text-sm font-semibold">Payment history</h2>
-        {invoice.payments.length ? (
-          <ul className="divide-y divide-border text-sm">
+      {invoice.payments.length ? (
+        <section>
+          <h2 className="mb-1 font-bold">Payment history</h2>
+          <ul className="divide-y divide-border">
             {invoice.payments.map((p) => (
               <li key={p.id} className="flex items-start justify-between gap-3 py-2">
                 <div className="min-w-0">
@@ -142,7 +149,7 @@ export function InvoiceDocument({ invoice, children }: { invoice: InvoiceView; c
                     {p.kind === "refund" ? "Refund to wallet" : p.method === "wallet" ? "Paid from wallet" : METHOD_LABELS[p.method]}
                   </p>
                   <p className="break-words text-xs text-muted">
-                    {[date(p.createdAt), p.reference ? `Ref ${p.reference}` : null, p.note].filter(Boolean).join(" · ")}
+                    {[formatInvoiceDate(p.createdAt), p.reference ? `Ref ${p.reference}` : null, p.note].filter(Boolean).join(" · ")}
                   </p>
                 </div>
                 <p className={`shrink-0 font-semibold tabular-nums ${p.kind === "refund" ? "text-muted" : ""}`}>
@@ -152,15 +159,51 @@ export function InvoiceDocument({ invoice, children }: { invoice: InvoiceView; c
               </li>
             ))}
           </ul>
-        ) : (
-          <p className="text-sm text-muted">No payments yet.</p>
-        )}
-      </section>
+        </section>
+      ) : null}
 
       {invoice.notes ? (
         <section>
-          <h2 className="mb-1 text-sm font-semibold">Notes</h2>
-          <p className="whitespace-pre-line text-sm text-muted">{invoice.notes}</p>
+          <h2 className="mb-1 font-bold">Notes</h2>
+          <p className="whitespace-pre-line text-muted">{invoice.notes}</p>
+        </section>
+      ) : null}
+
+      <section className="grid gap-6 sm:grid-cols-[3fr_2fr] print:grid-cols-[3fr_2fr] print:break-inside-avoid">
+        {issuer.terms.length ? (
+          <div>
+            <h2 className="font-bold">Terms &amp; Conditions:</h2>
+            <ul className="mt-1 list-disc space-y-0.5 pl-5">
+              {issuer.terms.map((t, i) => (
+                <li key={i}>{t}</li>
+              ))}
+            </ul>
+          </div>
+        ) : (
+          <div />
+        )}
+        <div>
+          <h2 className="font-bold">Payment Instructions</h2>
+          {PAYMENT_METHODS.map((m) => (
+            <div key={m.id} className="mt-1">
+              <p className="font-medium">{m.title}</p>
+              {m.fields.map((f) => (
+                <p key={f.label} className="text-muted">
+                  {f.label}: <span className="text-foreground tabular-nums">{f.value}</span>
+                </p>
+              ))}
+            </div>
+          ))}
+          <p className="mt-1 text-xs text-muted">Reference: {invoice.order.orderNo}</p>
+        </div>
+      </section>
+
+      {issuer.signatureCompany ? (
+        <section className="flex justify-end print:break-inside-avoid">
+          <div className="text-right">
+            <p className="text-base font-bold">For, {issuer.signatureCompany}</p>
+            <div className="mt-14 border-t border-gray-400 pt-1 text-xs tracking-wide">AUTHORIZED SIGNATURE</div>
+          </div>
         </section>
       ) : null}
 

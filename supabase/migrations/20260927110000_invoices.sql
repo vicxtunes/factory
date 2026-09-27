@@ -5,9 +5,10 @@
 --
 --   * An invoice doesn't hold money. What's been paid comes from the wallet
 --     ledger (wallet_transactions rows with this order_id), and the total is
---     the order's own price (orders.quoted_price, fixed when the invoice is
---     generated). Status — Unpaid / Partially paid / Paid / Cancelled — is
---     worked out from those every time it's shown, so it can't drift.
+--     the order's own price (orders.quoted_price), which is the sum of the
+--     invoice lines (see "Line prices" below). Status — Unpaid / Partially
+--     paid / Paid / Cancelled — is worked out from those every time it's
+--     shown, so it can't drift.
 --   * Installments are `payments` rows with order_id set, settled through
 --     wallet_settle_payment: credited to the client's wallet and applied to
 --     the order in one transaction. Overpaying leaves the rest as wallet
@@ -39,3 +40,108 @@ create table invoices (
 create index invoices_issued_idx on invoices (issued_at desc);
 
 alter table invoices enable row level security;
+
+-- ---------------------------------------------------------------------------
+-- Line prices
+--
+-- Every invoice line shows qty × unit price = line total, and the invoice
+-- total is the sum of the lines. The agreed price of each item is stored on
+-- the item itself (unit_price, whole shillings), with the unit it's sold in
+-- ("Pc", "Sheet", "Service") copied from the product when the invoice is
+-- made. The order's price (orders.quoted_price) is then exactly the sum of
+-- its lines, set by invoice_set_lines() below, so the wallet, the client's
+-- "Amount to pay" and the invoice always agree.
+-- ---------------------------------------------------------------------------
+
+-- The unit a product is sold in, shown on invoices ("Pc", "Sheet", "Service").
+alter table products add column unit text;
+
+alter table order_items
+  add column unit_price bigint check (unit_price is null or unit_price >= 0),
+  add column unit text;
+
+/**
+ * Sets every line's unit price for an order (and its unit, when given) and
+ * makes the order's price their sum, in one transaction. p_lines is
+ * [{ "item_id": uuid, "unit_price": number, "unit": text|null }, …] and must
+ * cover every item of the order. The orders_guard_paid_price trigger (wallet
+ * migration) still applies: the new total can't be below what's been paid.
+ * Returns the new total.
+ */
+create or replace function invoice_set_lines(p_order uuid, p_lines jsonb)
+returns bigint
+language plpgsql
+as $$
+declare
+  v_missing int;
+  v_total bigint;
+begin
+  perform 1 from orders where id = p_order for update;
+  if not found then
+    raise exception 'INVOICE:order_not_found';
+  end if;
+
+  if exists (
+    select 1 from jsonb_array_elements(p_lines) l
+    where (l->>'unit_price') is null
+       or (l->>'unit_price')::numeric < 0
+       or (l->>'unit_price')::numeric <> trunc((l->>'unit_price')::numeric)
+  ) then
+    raise exception 'INVOICE:invalid_price';
+  end if;
+
+  select count(*) into v_missing
+    from order_items i
+   where i.order_id = p_order
+     and not exists (select 1 from jsonb_array_elements(p_lines) l where (l->>'item_id')::uuid = i.id);
+  if v_missing > 0 then
+    raise exception 'INVOICE:lines_incomplete';
+  end if;
+
+  update order_items i
+     set unit_price = (l->>'unit_price')::bigint,
+         unit = coalesce(nullif(trim(l->>'unit'), ''), i.unit)
+    from jsonb_array_elements(p_lines) l
+   where i.order_id = p_order
+     and i.id = (l->>'item_id')::uuid;
+
+  select coalesce(sum(unit_price * qty), 0) into v_total from order_items where order_id = p_order;
+  update orders set quoted_price = v_total where id = p_order;
+  return v_total;
+end;
+$$;
+
+revoke all on function invoice_set_lines(uuid, jsonb) from public, anon, authenticated;
+
+-- ---------------------------------------------------------------------------
+-- Invoice settings: what's printed on every invoice (one row). Seeded from
+-- the business's current invoice; the boss edits it from Payments → Invoices.
+-- Payment instructions aren't here: invoices show the same bank / mobile
+-- money details as the rest of the app (lib/payments/details.ts).
+-- ---------------------------------------------------------------------------
+
+create table invoice_settings (
+  id                 int primary key default 1,
+  company_name       text not null,
+  address            text,
+  phone              text,
+  email              text,
+  -- One term per line; each is printed as a bullet.
+  terms              text,
+  -- "For, <this>" above the signature line.
+  signature_company  text,
+  updated_at         timestamptz not null default now(),
+  constraint invoice_settings_singleton check (id = 1)
+);
+
+insert into invoice_settings (id, company_name, address, phone, email, terms, signature_company) values (
+  1,
+  'Aming Company',
+  'Mukwano Courts, Buganda Road',
+  '+256 700 768312',
+  'amingco.ltd@gmail.com',
+  E'Payment is due by the specified due date.\nGoods/services remain the property of Aming Company until fully paid.\nThe invoice is made strictly for purposes of processing payment by and between Aming and the above-mentioned person or business. No third party involved',
+  'AMING COMPANY'
+);
+
+alter table invoice_settings enable row level security;

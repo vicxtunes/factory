@@ -89,7 +89,7 @@ supabase/migrations/20260927100000_client_wallet.sql
 
 ### Used by invoices
 
-`lib/invoices` reaches money only through `orders.ts`: `lockOrderPrice`, `recordOrderPayment`
+`lib/invoices` reaches money only through `orders.ts`: `recordOrderPayment`
 (an installment: a `payments` row with `order_id`, settled and applied in one transaction, with any
 excess left as wallet credit), `applyWalletToOrder`, `paidByOrders` and `orderPaymentHistory`.
 Order-payment ledger rows keep the `payment_id` they came from, so an order's history can show how

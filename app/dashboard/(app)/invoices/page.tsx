@@ -17,7 +17,7 @@ export default async function InvoicesPage() {
   return (
     <div className="space-y-6">
       <SectionLabel>Invoices</SectionLabel>
-      {invoices.ok ? <InvoicesList invoices={invoices.data} /> : <p className="text-sm text-error-600">{invoices.error}</p>}
+      {invoices.ok ? <InvoicesList invoices={invoices.data} canEditSettings={session.role === "boss"} /> : <p className="text-sm text-error-600">{invoices.error}</p>}
     </div>
   );
 }
