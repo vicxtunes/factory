@@ -3,8 +3,10 @@ import "server-only";
 import { revalidatePath } from "next/cache";
 
 import { logOrderEvent, type AuditActor } from "@/lib/audit/log";
+import { formatMoney } from "@/lib/currency/format";
 import { notifyOrderItem, pushOnlyOrderItem } from "@/lib/notifications/notify";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { refundCancelledOrder } from "@/lib/wallet/orders";
 
 type Result = { ok: true } | { ok: false; error: string };
 
@@ -71,6 +73,9 @@ export async function applyCancellation(params: {
 
   await logOrderEvent({ orderId: order.id, actor, action: "order_cancelled", detail: { reason } });
 
+  // Anything the client paid from their wallet goes back into it.
+  const refunded = order.client_id ? await refundCancelledOrder(order.id, actor) : 0;
+
   // Notification feeds are item-scoped and each recipient's feed joins
   // through the order, so one in-app row (anchored on any item, same trick
   // as quoteOrder in app/dashboard/actions.ts) shows up for the client and
@@ -78,7 +83,9 @@ export async function applyCancellation(params: {
   // feed. Everyone affected also gets a push.
   const anchor = items[0]?.id;
   if (anchor) {
-    const message = `Order ${order.order_no} was cancelled — "${reason}"`;
+    const message =
+      `Order ${order.order_no} was cancelled — "${reason}"` +
+      (refunded > 0 ? ` · ${formatMoney(refunded)} returned to the client's wallet` : "");
     const recipients: { type: "client" | "designer" | "worker"; id: string; url: string }[] = [];
     if (params.notifyClient && order.client_id) {
       recipients.push({ type: "client", id: order.client_id, url: "/client-side/history" });

@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import { SectionLabel } from "@/components/ui/SectionLabel";
 import { StatusBarChart, UrgencyDonutChart } from "@/app/dashboard/charts";
 import { StatCard } from "@/app/dashboard/stat-card";
@@ -16,17 +18,35 @@ import { QuickActions } from "./quick-actions";
 // Same shape as app/dashboard/(app)/page.tsx's overview — the exact
 // StatCard/StatusBarChart/UrgencyDonutChart components, reused as-is,
 // scoped to this one client's own items instead of the whole shop.
+// Phones: the wallet card full-width above the quick actions. Desktop: one
+// row of four equal tiles, the wallet first, instead of a stretched card with
+// a gap in the middle.
+function TopRow({ wallet }: { wallet?: ReactNode }) {
+  if (!wallet) return <QuickActions />;
+  return (
+    <div className="grid gap-3 lg:grid-cols-4">
+      <div className="lg:col-span-1">{wallet}</div>
+      <div className="lg:col-span-3">
+        <QuickActions />
+      </div>
+    </div>
+  );
+}
+
 export function ClientDashboard({
   items,
   slides,
+  wallet,
 }: {
   items: OrderItemWithOrder[];
   slides: MarketingSlide[];
+  /** The wallet balance card, shown first — the usual spot for a balance in wallet/banking apps. */
+  wallet?: ReactNode;
 }) {
   if (items.length === 0) {
     return (
       <div className="space-y-6">
-        <QuickActions />
+        <TopRow wallet={wallet} />
         <MarketingCarousel slides={slides} />
         <div className="rounded-2xl border border-dashed border-border bg-surface p-8 text-center">
           <p className="text-sm text-muted">No orders yet — add your first one above.</p>
@@ -51,7 +71,7 @@ export function ClientDashboard({
 
   return (
     <div className="space-y-6">
-      <QuickActions />
+      <TopRow wallet={wallet} />
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3 lg:items-start">
       {/* Mobile: DOM order stands as-is, so this renders first — carousel
           full-width, then the metric row, then the charts, stacked. Desktop
