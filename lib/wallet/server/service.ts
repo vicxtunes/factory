@@ -26,6 +26,7 @@ import {
   isOrderPayable,
 } from "../policy";
 import type {
+  OrderPaymentRecord,
   OrderPaymentState,
   PaymentMethod,
   PendingDeposit,
@@ -312,4 +313,90 @@ export async function refundOrder(
     await notifier.walletChangedByStaff(order.clientId, refunded, balance, `Refund for order ${order.orderNo}`);
   }
   return refunded;
+}
+
+// --- Order payments (used by lib/invoices through ../orders.ts) -------------
+
+/** Checks an order can take money for its client, and fixes its price. Returns the loaded order. */
+async function prepareOrderForPayment(orderId: string): Promise<directory.WalletOrder & { clientId: string }> {
+  const order = await directory.loadOrder(orderId);
+  if (!order) throw new WalletError("Order not found.");
+  if (!order.clientId) throw new WalletError("This order isn't linked to a client account, so payments can't be recorded on it.");
+  if (!isOrderPayable({ approval_status: order.approvalStatus, cancelled_at: order.cancelledAt })) {
+    throw new WalletError(order.cancelledAt ? "This order was cancelled." : "This order isn't confirmed yet, so it can't be paid.");
+  }
+  await directory.fixOrderPrice(order);
+  return order as directory.WalletOrder & { clientId: string };
+}
+
+/**
+ * Staff record money received for one order (an installment). It's credited
+ * to the client's wallet and applied to the order in one transaction;
+ * anything above what's due stays in the wallet as credit.
+ */
+export async function recordOrderPayment(
+  actor: WalletActor,
+  orderId: string,
+  input: { amount: number; method: PaymentMethod; reference?: string | null; note?: string | null },
+): Promise<{ applied: number; toWallet: number; balance: number }> {
+  checkDepositInput(input, MANUAL_METHODS);
+  const order = await prepareOrderForPayment(orderId);
+
+  const payment = await repo.insertPayment({
+    clientId: order.clientId,
+    amount: input.amount,
+    method: input.method,
+    reference: cleanText(input.reference, MAX_REFERENCE_LENGTH),
+    note: cleanText(input.note, MAX_NOTE_LENGTH),
+    orderId,
+    createdBy: actor,
+  });
+  const result = await repo.settlePayment(payment.id, actor);
+  if (!result.alreadySettled) {
+    if (result.appliedToOrder > 0) {
+      await directory.logOnOrder(orderId, actor, "wallet_payment", { amount: result.appliedToOrder });
+    }
+    const extra = payment.amount - result.appliedToOrder;
+    if (extra > 0) {
+      await notifier.walletChangedByStaff(order.clientId, extra, result.balance, `Credit from a payment on order ${order.orderNo}`);
+    }
+  }
+  return {
+    applied: result.appliedToOrder,
+    toWallet: payment.amount - result.appliedToOrder,
+    balance: result.balance,
+  };
+}
+
+/** Staff apply the client's existing wallet balance to an order (as much as it covers). */
+export async function applyWalletToOrder(actor: WalletActor, orderId: string): Promise<number> {
+  const order = await prepareOrderForPayment(orderId);
+  const { paidNow } = await repo.payOrder(order.clientId, orderId, actor);
+  await directory.logOnOrder(orderId, actor, "wallet_payment", { amount: paidNow });
+  return paidNow;
+}
+
+/** The client's wallet balance for an order's client (null when the order has no client). */
+export async function orderClientBalance(orderId: string): Promise<number | null> {
+  const order = await directory.loadOrder(orderId);
+  if (!order?.clientId) return null;
+  return (await repo.getBalance(order.clientId)).balance;
+}
+
+export async function paidByOrders(orderIds: string[]): Promise<Record<string, number>> {
+  return repo.paidByOrder(orderIds);
+}
+
+export async function orderPaymentHistory(orderId: string): Promise<OrderPaymentRecord[]> {
+  const rows = await repo.listOrderLedger(orderId);
+  return rows.map((r) => ({
+    id: r.id,
+    kind: r.kind === "refund" ? "refund" : "payment",
+    amount: Math.abs(r.amount),
+    method: r.payment?.method ?? "wallet",
+    reference: r.payment?.reference ?? null,
+    note: r.note,
+    actorName: r.actor_name,
+    createdAt: r.created_at,
+  }));
 }

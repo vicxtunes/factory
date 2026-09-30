@@ -11,12 +11,19 @@ import type { PaymentMethod, WalletView } from "@/lib/wallet/types";
 
 import { BalanceCard, EntryLine, MethodOptions, Panel, PaymentLine, parseAmount, useMoney } from "./shared";
 
-// The client's wallet (/client-side/payment): balance first, then "Add
-// funds" — send the money the usual way, then tell us so staff can confirm
-// it — then deposits waiting for confirmation and the full history.
+// The client's wallet: balance first, then "Add funds" — send the money the
+// usual way, then tell us so staff can confirm it — then deposits waiting
+// for confirmation and the full history.
 //
-// `howToPay` is the business's bank / mobile money details, passed in by the
-// page so this module doesn't depend on where those live.
+// Layout: one column on phones and tablets. From `lg` up it becomes a
+// two-column grid — balance + history on the left, the "add funds" flow and
+// pending deposits in a narrower rail on the right.
+//
+// The left column has a hard 20rem floor. If the page shell is narrower than
+// 20rem + 22rem + gap, the grid will overflow rather than crush the balance
+// card — which is the honest signal that the shell needs to be widened.
+// See the page file: the wrapper must be `max-w-5xl` or wider for this to
+// look right on desktop.
 export function ClientWallet({
   wallet,
   howToPay,
@@ -32,6 +39,10 @@ export function ClientWallet({
   const [adding, setAdding] = useState(startAdding || (wallet.entries.length === 0 && wallet.pending.length === 0));
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
+
+  const hasPending = wallet.pending.length > 0;
+  const hasClosed = wallet.closed.length > 0;
+  const showAside = adding || hasPending;
 
   function openAdd() {
     setAdding(true);
@@ -49,68 +60,94 @@ export function ClientWallet({
   }
 
   return (
-    <div className="space-y-4">
-      <BalanceCard balance={wallet.balance}>
-        <Button onClick={openAdd}>Add funds</Button>
-      </BalanceCard>
-      <p className="text-xs text-muted">
-        Pay for any order from your balance: open the order and tap <span className="font-medium">Pay from wallet</span>.
-      </p>
+    <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(20rem,2fr)_22rem] lg:items-start lg:gap-6">
+      {/* Left column — `contents` on phones flattens this so its sections
+          join the outer stack as siblings; from lg up it's a real column. */}
+      <div className="contents lg:flex lg:min-w-0 lg:flex-col lg:gap-4">
+        <div className="order-1 space-y-4">
+          <BalanceCard balance={wallet.balance}>
+            <Button onClick={openAdd}>Add funds</Button>
+          </BalanceCard>
+          <p className="text-xs text-muted">
+            Pay for any order from your balance: open the order and tap{" "}
+            <span className="font-medium">Pay from wallet</span>.
+          </p>
+        </div>
 
-      {wallet.pending.length ? (
-        <Panel title="Waiting for confirmation">
-          <p className="text-xs text-muted">We&apos;ll add these to your balance once we&apos;ve seen the money arrive.</p>
-          <ul className="divide-y divide-border">
-            {wallet.pending.map((p) => (
-              <PaymentLine
-                key={p.id}
-                payment={p}
-                action={
-                  <button
-                    type="button"
-                    disabled={pending}
-                    onClick={() => withdraw(p.id)}
-                    className="text-[11px] text-muted underline hover:text-foreground"
-                  >
-                    Withdraw
-                  </button>
-                }
-              />
-            ))}
-          </ul>
-          {error ? <p className="mt-1 text-xs text-error-600">{error}</p> : null}
-        </Panel>
-      ) : null}
-
-      {adding ? (
-        <div ref={addRef} className="scroll-mt-4 space-y-3">
-          <Panel title="1. Send the money">{howToPay}</Panel>
-          <Panel title="2. Tell us you've sent it">
-            <ReportDepositForm onDone={() => { setAdding(false); router.refresh(); }} />
+        <div className="order-4">
+          <Panel title="History">
+            {wallet.entries.length ? (
+              <ul className="divide-y divide-border">
+                {wallet.entries.map((e) => (
+                  <EntryLine key={e.id} entry={e} />
+                ))}
+              </ul>
+            ) : (
+              <p className="py-3 text-sm text-muted">No wallet activity yet.</p>
+            )}
           </Panel>
         </div>
-      ) : null}
 
-      <Panel title="History">
-        {wallet.entries.length ? (
-          <ul className="divide-y divide-border">
-            {wallet.entries.map((e) => (
-              <EntryLine key={e.id} entry={e} />
-            ))}
-          </ul>
-        ) : (
-          <p className="py-3 text-sm text-muted">No wallet activity yet.</p>
-        )}
-      </Panel>
+        {hasClosed ? (
+          <div className="order-5">
+            <Panel title="Not confirmed">
+              <ul className="divide-y divide-border">
+                {wallet.closed.map((p) => (
+                  <PaymentLine key={p.id} payment={p} />
+                ))}
+              </ul>
+            </Panel>
+          </div>
+        ) : null}
+      </div>
 
-      {wallet.closed.length ? (
-        <Panel title="Not confirmed">
-          <ul className="divide-y divide-border">
-            {wallet.closed.map((p) => (
-              <PaymentLine key={p.id} payment={p} />
-            ))}
-          </ul>
-        </Panel>
+      {/* Right rail — same `contents` trick, ordered so phones still read
+          balance → add funds → waiting → history. */}
+      {showAside ? (
+        <div className="contents lg:flex lg:min-w-0 lg:flex-col lg:gap-4">
+          {adding ? (
+            <div ref={addRef} className="order-2 scroll-mt-4 space-y-3">
+              <Panel title="1. Tell us you&apos;ve sent it">
+                <ReportDepositForm
+                  onDone={() => {
+                    setAdding(false);
+                    router.refresh();
+                  }}
+                />
+              </Panel>
+              <Panel title="2. Send the money">{howToPay}</Panel>
+            </div>
+          ) : null}
+
+          {hasPending ? (
+            <div className="order-3">
+              <Panel title="Waiting for confirmation">
+                <p className="text-xs text-muted">
+                  We&apos;ll add these to your balance once we&apos;ve seen the money arrive.
+                </p>
+                <ul className="divide-y divide-border">
+                  {wallet.pending.map((p) => (
+                    <PaymentLine
+                      key={p.id}
+                      payment={p}
+                      action={
+                        <button
+                          type="button"
+                          disabled={pending}
+                          onClick={() => withdraw(p.id)}
+                          className="text-[11px] text-muted underline hover:text-foreground"
+                        >
+                          Withdraw
+                        </button>
+                      }
+                    />
+                  ))}
+                </ul>
+                {error ? <p className="mt-1 text-xs text-error-600">{error}</p> : null}
+              </Panel>
+            </div>
+          ) : null}
+        </div>
       ) : null}
     </div>
   );
@@ -144,7 +181,12 @@ function ReportDepositForm({ onDone }: { onDone: () => void }) {
   return (
     <form onSubmit={submit} className="space-y-3">
       <Field label="Amount sent" hint={Number.isFinite(preview) && preview > 0 ? money(preview) : undefined}>
-        <TextInput inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="e.g. 200000" />
+        <TextInput
+          inputMode="numeric"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          placeholder="e.g. 200000"
+        />
       </Field>
       <Field label="How you sent it">
         <Select value={method} onChange={(e) => setMethod(e.target.value as PaymentMethod)}>
@@ -153,12 +195,21 @@ function ReportDepositForm({ onDone }: { onDone: () => void }) {
       </Field>
       <Field
         label="Transaction ID / reference"
-        hint={method === "mobile_money" ? "From your mobile money confirmation SMS." : "From your deposit slip or banking app."}
+        hint={
+          method === "mobile_money"
+            ? "From your mobile money confirmation SMS."
+            : "From your deposit slip or banking app."
+        }
       >
         <TextInput value={reference} onChange={(e) => setReference(e.target.value)} maxLength={100} />
       </Field>
       <Field label="Note (optional)">
-        <TextInput value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} placeholder="e.g. sent from my business line" />
+        <TextInput
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          maxLength={500}
+          placeholder="e.g. sent from my business line"
+        />
       </Field>
       {error ? <p className="text-xs text-error-600">{error}</p> : null}
       <Button type="submit" loading={pending} className="w-full">

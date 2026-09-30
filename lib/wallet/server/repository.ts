@@ -154,6 +154,28 @@ export async function paidByOrder(orderIds: string[]): Promise<Record<string, nu
   return paid;
 }
 
+export interface OrderLedgerRow {
+  id: string;
+  kind: "order_payment" | "refund";
+  amount: number;
+  note: string | null;
+  actor_name: string;
+  created_at: string;
+  payment: { method: PaymentMethod; reference: string | null } | null;
+}
+
+/** Every ledger row for one order (payments and refunds), oldest first. */
+export async function listOrderLedger(orderId: string): Promise<OrderLedgerRow[]> {
+  const { data, error } = await createAdminClient()
+    .from("wallet_transactions")
+    .select("id, kind, amount, note, actor_name, created_at, payment:payments (method, reference)")
+    .eq("order_id", orderId)
+    .order("created_at", { ascending: true })
+    .returns<OrderLedgerRow[]>();
+  if (error) throwDbError(error);
+  return (data ?? []).map((r) => ({ ...r, amount: num(r.amount) }));
+}
+
 // --- Writes ----------------------------------------------------------------
 
 export async function insertPayment(input: {

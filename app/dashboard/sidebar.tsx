@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { PaymentIcon } from "@/app/client-side/sidebar";
 import { ChatIcon } from "@/components/chat/icons";
 import type { AppRole } from "@/lib/types";
 
@@ -170,6 +171,7 @@ function ChevronIcon({ className }: { className?: string }) {
 const GROUP_ICONS: Record<NavGroup["id"], typeof DashboardIcon> = {
   orders: OrdersIcon,
   catalog: ProductsIcon,
+  payments: PaymentIcon,
   people: ClientsIcon,
   help: SupportIcon,
 };

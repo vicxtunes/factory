@@ -57,7 +57,7 @@ lib/wallet/
   types.ts            View models. Pure; safe on client and server.
   policy.ts           Limits, labels, input rules. Pure; safe on client and server.
   actions.ts          "use server": the ONLY entry point the browser calls.
-  orders.ts           Server-only API for other order code (cancellation refund, error text).
+  orders.ts           Server-only API for other order code (cancellation refund, error text, invoices).
   server/
     service.ts        Use cases: check input and who's asking, call the repository, side effects.
     repository.ts     All queries against wallets/payments/wallet_transactions + the RPC calls.
@@ -86,6 +86,14 @@ supabase/migrations/20260927100000_client_wallet.sql
   - `app/dashboard/actions.ts` → `setOrderAmount` turns the price-guard error into a sentence.
   - `lib/audit/render.ts` renders `wallet_payment` / `wallet_refund` log lines.
   - The client's order view and the staff order detail render the `OrderPayment` panels.
+
+### Used by invoices
+
+`lib/invoices` reaches money only through `orders.ts`: `recordOrderPayment`
+(an installment: a `payments` row with `order_id`, settled and applied in one transaction, with any
+excess left as wallet credit), `applyWalletToOrder`, `paidByOrders` and `orderPaymentHistory`.
+Order-payment ledger rows keep the `payment_id` they came from, so an order's history can show how
+each amount was paid.
 
 ## Permissions
 

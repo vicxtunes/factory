@@ -203,6 +203,11 @@ create or replace function wallet_apply_to_order(
   p_client uuid,
   p_order uuid,
   p_max bigint,
+  -- The payment this money came from, when it was paid for this order
+  -- specifically (an installment recorded on an invoice); null when it's
+  -- the client's existing balance. Kept on the ledger row so the order's
+  -- payment history can say how each amount was paid.
+  p_payment uuid,
   p_actor_type text,
   p_actor_id text,
   p_actor_name text
@@ -246,7 +251,7 @@ begin
     return 0;
   end if;
 
-  perform wallet_post(p_client, 'order_payment', -v_take, null, p_order, null, p_actor_type, p_actor_id, p_actor_name);
+  perform wallet_post(p_client, 'order_payment', -v_take, p_payment, p_order, null, p_actor_type, p_actor_id, p_actor_name);
   return v_take;
 end;
 $$;
@@ -266,7 +271,7 @@ declare
   v_taken bigint;
   v_price bigint;
 begin
-  v_taken := wallet_apply_to_order(p_client, p_order, null, p_actor_type, p_actor_id, p_actor_name);
+  v_taken := wallet_apply_to_order(p_client, p_order, null, null, p_actor_type, p_actor_id, p_actor_name);
 
   if v_taken = 0 then
     select round(quoted_price)::bigint into v_price from orders where id = p_order;
@@ -336,7 +341,7 @@ begin
   if v_payment.order_id is not null then
     begin
       v_applied := wallet_apply_to_order(
-        v_payment.client_id, v_payment.order_id, v_payment.amount, p_actor_type, p_actor_id, p_actor_name
+        v_payment.client_id, v_payment.order_id, v_payment.amount, v_payment.id, p_actor_type, p_actor_id, p_actor_name
       );
     exception when others then
       -- The order was cancelled / repriced meanwhile: the deposit still
@@ -480,7 +485,7 @@ create trigger orders_guard_paid_price
 
 revoke all on function wallet_order_paid(uuid) from public, anon, authenticated;
 revoke all on function wallet_post(uuid, text, bigint, uuid, uuid, text, text, text, text) from public, anon, authenticated;
-revoke all on function wallet_apply_to_order(uuid, uuid, bigint, text, text, text) from public, anon, authenticated;
+revoke all on function wallet_apply_to_order(uuid, uuid, bigint, uuid, text, text, text) from public, anon, authenticated;
 revoke all on function wallet_pay_order(uuid, uuid, text, text, text) from public, anon, authenticated;
 revoke all on function wallet_settle_payment(uuid, text, text, text) from public, anon, authenticated;
 revoke all on function wallet_close_payment(uuid, text, text, text, text, text) from public, anon, authenticated;

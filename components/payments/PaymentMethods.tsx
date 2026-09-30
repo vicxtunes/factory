@@ -26,7 +26,7 @@ function CopyButton({ value, label }: { value: string; label: string }) {
           // still on screen and selectable, so nothing else to do.
         }
       }}
-      className="inline-flex min-h-9 shrink-0 items-center rounded-lg border border-border px-2.5 text-xs font-medium text-muted hover:bg-gray-50 hover:text-foreground dark:hover:bg-white/5"
+      className="inline-flex min-h-9 shrink-0 items-center rounded-lg border print:hidden border-border px-2.5 text-xs font-medium text-muted hover:bg-gray-50 hover:text-foreground dark:hover:bg-white/5"
     >
       {copied ? "Copied" : "Copy"}
     </button>
