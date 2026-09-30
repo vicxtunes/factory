@@ -1,5 +1,7 @@
 import "server-only";
 
+import { randomUUID } from "node:crypto";
+
 // All reads of the wallet tables and every call to the wallet's database
 // functions. No rules here — those live in service.ts / policy.ts and, for
 // the money moves themselves, in the database functions (see the wallet
@@ -7,7 +9,7 @@ import "server-only";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 
-import type { PaymentMethod, PaymentStatus, WalletEntryKind } from "../types";
+import type { PaymentMethod, PaymentStatus, TransactionHistoryKind, WalletEntryKind } from "../types";
 import { throwDbError } from "./errors";
 import type { WalletActor } from "./identity";
 
@@ -141,15 +143,21 @@ export async function listWallets(): Promise<{ client_id: string; balance: numbe
 /** How much has been paid (net of refunds) for each of these orders. Orders with nothing paid are absent. */
 export async function paidByOrder(orderIds: string[]): Promise<Record<string, number>> {
   if (!orderIds.length) return {};
-  const { data, error } = await createAdminClient()
-    .from("wallet_transactions")
-    .select("order_id, amount")
-    .in("order_id", orderIds);
-  if (error) throwDbError(error);
+  const admin = createAdminClient();
+  const [ledger, receipts] = await Promise.all([
+    admin.from("wallet_transactions").select("order_id, amount").in("order_id", orderIds),
+    admin.from("order_payment_receipts").select("order_id, amount_applied").in("order_id", orderIds),
+  ]);
+  if (ledger.error) throwDbError(ledger.error);
+  if (receipts.error) throwDbError(receipts.error);
+
   const paid: Record<string, number> = {};
-  for (const row of data ?? []) {
+  for (const row of ledger.data ?? []) {
     // order_payment rows are negative, refunds positive (see wallet_order_paid).
     paid[row.order_id as string] = (paid[row.order_id as string] ?? 0) - num(row.amount);
+  }
+  for (const row of receipts.data ?? []) {
+    paid[row.order_id as string] = (paid[row.order_id as string] ?? 0) + num(row.amount_applied);
   }
   return paid;
 }
@@ -158,22 +166,111 @@ export interface OrderLedgerRow {
   id: string;
   kind: "order_payment" | "refund";
   amount: number;
+  payment_id: string | null;
   note: string | null;
   actor_name: string;
   created_at: string;
   payment: { method: PaymentMethod; reference: string | null } | null;
+  amount_received?: number;
+  amount_wallet_credit?: number;
+  amount_physically_refunded?: number;
+}
+
+interface OrderReceiptRow {
+  id: string;
+  order_id: string;
+  client_id: string;
+  amount_received: number;
+  amount_applied: number;
+  amount_wallet_credit: number;
+  amount_physically_refunded: number;
+  method: PaymentMethod;
+  reference: string | null;
+  note: string | null;
+  actor_name: string;
+  created_at: string;
+}
+
+interface TransactionHistoryRow {
+  id: string;
+  client_id: string;
+  client_name: string;
+  client_phone: string | null;
+  order_id: string | null;
+  order_no: string | null;
+  kind: TransactionHistoryKind;
+  amount: number;
+  method: PaymentMethod | "wallet" | null;
+  status: PaymentStatus;
+  reference: string | null;
+  note: string | null;
+  failure_reason: string | null;
+  actor_name: string;
+  created_at: string;
+  balance_after: number | null;
+}
+
+export async function listTransactionHistory(input: {
+  clientId: string | null;
+  search: string | null;
+  kind: TransactionHistoryKind | null;
+  status: PaymentStatus | null;
+  offset: number;
+  limit: number;
+}): Promise<TransactionHistoryRow[]> {
+  const result = await createAdminClient().rpc("wallet_transaction_history", {
+    p_client: input.clientId,
+    p_search: input.search,
+    p_kind: input.kind,
+    p_status: input.status,
+    p_offset: input.offset,
+    p_limit: input.limit,
+  });
+  if (result.error) throwDbError(result.error);
+
+  const rows = (result.data ?? []) as TransactionHistoryRow[];
+  return rows.map((row) => ({
+    ...row,
+    amount: num(row.amount),
+    balance_after: row.balance_after == null ? null : num(row.balance_after),
+  }));
 }
 
 /** Every ledger row for one order (payments and refunds), oldest first. */
 export async function listOrderLedger(orderId: string): Promise<OrderLedgerRow[]> {
-  const { data, error } = await createAdminClient()
-    .from("wallet_transactions")
-    .select("id, kind, amount, note, actor_name, created_at, payment:payments (method, reference)")
-    .eq("order_id", orderId)
-    .order("created_at", { ascending: true })
-    .returns<OrderLedgerRow[]>();
-  if (error) throwDbError(error);
-  return (data ?? []).map((r) => ({ ...r, amount: num(r.amount) }));
+  const admin = createAdminClient();
+  const [ledger, receipts] = await Promise.all([
+    admin
+      .from("wallet_transactions")
+      .select("id, kind, amount, payment_id, note, actor_name, created_at, payment:payments (method, reference)")
+      .eq("order_id", orderId)
+      .order("created_at", { ascending: true })
+      .returns<OrderLedgerRow[]>(),
+    admin
+      .from("order_payment_receipts")
+      .select("id, order_id, client_id, amount_received, amount_applied, amount_wallet_credit, amount_physically_refunded, method, reference, note, actor_name, created_at")
+      .eq("order_id", orderId)
+      .order("created_at", { ascending: true })
+      .returns<OrderReceiptRow[]>(),
+  ]);
+  if (ledger.error) throwDbError(ledger.error);
+  if (receipts.error) throwDbError(receipts.error);
+
+  const legacyRows = (ledger.data ?? []).map((row) => ({ ...row, amount: num(row.amount) }));
+  const receiptRows = (receipts.data ?? []).map((row): OrderLedgerRow => ({
+    id: row.id,
+    kind: "order_payment",
+    amount: -num(row.amount_applied),
+    payment_id: null,
+    note: row.note,
+    actor_name: row.actor_name,
+    created_at: row.created_at,
+    payment: { method: row.method, reference: row.reference },
+    amount_received: num(row.amount_received),
+    amount_wallet_credit: num(row.amount_wallet_credit),
+    amount_physically_refunded: num(row.amount_physically_refunded),
+  }));
+  return [...legacyRows, ...receiptRows].sort((a, b) => a.created_at.localeCompare(b.created_at));
 }
 
 // --- Writes ----------------------------------------------------------------
@@ -223,6 +320,40 @@ export async function settlePayment(
   return {
     alreadySettled: result.already_settled,
     appliedToOrder: num(result.applied_to_order),
+    balance: num(result.balance),
+  };
+}
+
+export async function recordOrderReceipt(input: {
+  orderId: string;
+  amount: number;
+  method: PaymentMethod;
+  reference: string | null;
+  note: string | null;
+  excessDisposition: "wallet" | "physical_refund" | null;
+  actor: WalletActor;
+}): Promise<{ applied: number; toWallet: number; physicallyRefunded: number; balance: number }> {
+  const { data, error } = await createAdminClient().rpc("wallet_record_order_receipt", {
+    p_receipt: randomUUID(),
+    p_order: input.orderId,
+    p_amount: input.amount,
+    p_method: input.method,
+    p_reference: input.reference,
+    p_note: input.note,
+    p_excess_disposition: input.excessDisposition,
+    ...actorArgs(input.actor),
+  });
+  if (error) throwDbError(error);
+  const result = data as {
+    applied: number;
+    wallet_credit: number;
+    physically_refunded: number;
+    balance: number;
+  };
+  return {
+    applied: num(result.applied),
+    toWallet: num(result.wallet_credit),
+    physicallyRefunded: num(result.physically_refunded),
     balance: num(result.balance),
   };
 }

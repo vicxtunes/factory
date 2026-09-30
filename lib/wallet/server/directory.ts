@@ -112,7 +112,7 @@ export async function loadClients(clientIds: string[]): Promise<Record<string, C
 export async function logOnOrder(
   orderId: string,
   actor: WalletActor,
-  action: "wallet_payment" | "wallet_refund",
+  action: "wallet_payment" | "wallet_refund" | "order_payment_received",
   detail: Record<string, unknown>,
 ): Promise<void> {
   if (actor.type === "system" || !actor.id) return;

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/Button";
 import { Field, TextInput } from "@/components/ui/Field";
+import { paymentMethodLabel } from "@/lib/wallet/policy";
 import { getOrderPayment, payOrderFromWallet, refundOrderToWallet } from "@/lib/wallet/actions";
 import type { OrderPaymentState } from "@/lib/wallet/types";
 
@@ -123,6 +124,8 @@ export function StaffOrderPayment({ orderId }: { orderId: string }) {
 
   if (!state || state.paid <= 0) return null;
 
+  const breakdown = state.paymentBreakdown ?? [];
+
   function refund() {
     const value = amount.trim() ? parseAmount(amount) : null;
     if (value != null && (!Number.isInteger(value) || value <= 0 || value > state!.paid)) {
@@ -145,7 +148,11 @@ export function StaffOrderPayment({ orderId }: { orderId: string }) {
     <section aria-label="Payment" className="space-y-2 rounded-2xl border border-border bg-surface p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted">Paid from wallet</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+            {breakdown.length
+              ? breakdown.map((entry) => `${paymentMethodLabel(entry.method, "Payment received")} ${money(entry.amount)}`).join(" · ")
+              : "Payment received"}
+          </p>
           <PaidSummary state={state} />
         </div>
         {!refunding ? (

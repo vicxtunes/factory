@@ -1492,9 +1492,8 @@ export async function quoteOrder(orderId: string, price: number): Promise<Result
   return { ok: true };
 }
 
-// Only valid once the client has approved and the order hasn't already been
-// sent somewhere — the receptionist's deliberate "send it" step, distinct
-// from the client's approval itself.
+// Only valid once staff has approved the order and generated its invoice.
+// Payment may still be outstanding; the explicit routing choice sends it on.
 export async function routeApprovedOrder(
   orderId: string,
   route: OrderRoute,
@@ -1510,8 +1509,9 @@ export async function routeApprovedOrder(
     .maybeSingle();
   if (!order) return { ok: false, error: "Order not found." };
   if (order.cancelled_at) return { ok: false, error: "This order was cancelled." };
-  if (order.approval_status !== "approved") return { ok: false, error: "Client hasn't approved this order yet." };
+  if (order.approval_status !== "approved") return { ok: false, error: "Confirm this order before routing it." };
   if (order.released_at) return { ok: false, error: "This order was already sent to production." };
+  if (!(await isOrderInvoiced(orderId))) return { ok: false, error: "Generate the invoice before routing this order." };
 
   let designer: { id: string; name: string } | null = null;
   if (route === "designer") {
@@ -1580,17 +1580,11 @@ export async function routeApprovedOrder(
   return { ok: true };
 }
 
-// Client-portal orders wait (pending_review, unreleased) for the receptionist
-// to check they're filled in properly — and, for photo books, to phone the
-// client — then receive them and choose where they go. There's no client
-// approval step. Photo books have no catalog price, so the price agreed on
-// that call is entered here (`price`) and becomes the order's quoted_price —
-// what the client portal's "How to pay" shows as the amount to pay. Marks the
-// order received, then sends it on exactly like routeApprovedOrder does.
+// Client-portal orders wait unreleased while staff verify them and prepare
+// the invoice. Routing is a separate action and requires that invoice, but
+// payment is not required before the order is sent to production.
 export async function receiveClientOrder(
   orderId: string,
-  route: OrderRoute,
-  designerId?: string,
   price?: number,
 ): Promise<Result> {
   await requireManager();
@@ -1619,8 +1613,7 @@ export async function receiveClientOrder(
   const actor = await resolveActor();
   await logOrderEvent({ orderId, actor, action: "order_received", detail: price !== undefined ? { price } : {} });
 
-  // Tell the client the agreed price so they can pay — same any-item anchor
-  // trick as quoteOrder above.
+  // Tell the client the agreed photo-book price so they can pay.
   if (price !== undefined && order.client_id) {
     const { data: firstItem } = await admin
       .from("order_items")
@@ -1640,9 +1633,10 @@ export async function receiveClientOrder(
     }
   }
 
-  // If routing fails (e.g. no designer picked) the order is left "approved,
-  // not routed", which the queue already shows with a Send button.
-  return routeApprovedOrder(orderId, route, designerId);
+  revalidatePath("/dashboard/order-approvals");
+  revalidatePath("/dashboard/orders");
+  revalidatePath("/client-side/orders");
+  return { ok: true };
 }
 
 // Boss-only: cancel any order that isn't fully completed yet — before or

@@ -63,6 +63,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/dashboard/invoices", label: "Invoices", icon: "invoice", visible: managers },
       { href: "/dashboard/wallets", label: "Wallets", icon: "payment", visible: managers },
+      { href: "/dashboard/transactions", label: "Transactions", icon: "payment", visible: managers },
     ],
   },
   {

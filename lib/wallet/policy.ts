@@ -24,13 +24,20 @@ export const MANUAL_METHODS: PaymentMethod[] = ["mobile_money", "bank_transfer",
 /** Clients can't hand us cash through the app, so they don't get that option. */
 export const CLIENT_METHODS: PaymentMethod[] = ["mobile_money", "bank_transfer", "other"];
 
-export const METHOD_LABELS: Record<PaymentMethod, string> = {
+export const METHOD_LABELS: Record<PaymentMethod | "wallet", string> = {
   mobile_money: "Mobile money",
   bank_transfer: "Bank transfer / deposit",
   cash: "Cash",
   card: "Card",
   other: "Other",
+  wallet: "Wallet",
 };
+
+export function paymentMethodLabel(method: PaymentMethod | "wallet" | null | undefined, fallback = "Payment received"): string {
+  if (!method) return fallback;
+  if (method === "wallet") return "Wallet";
+  return METHOD_LABELS[method] ?? fallback;
+}
 
 export const STATUS_LABELS: Record<PaymentStatus, string> = {
   pending: "Waiting for confirmation",

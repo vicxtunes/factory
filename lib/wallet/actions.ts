@@ -21,6 +21,8 @@ import type {
   OrderPaymentState,
   PaymentMethod,
   PendingDeposit,
+  TransactionHistoryFilters,
+  TransactionHistoryPage,
   WalletListRow,
   WalletPayment,
   WalletResult,
@@ -43,7 +45,13 @@ async function run<T>(fn: () => Promise<T>): Promise<{ ok: true; data?: T } | { 
 
 /** Every page that shows a balance, a deposit or an order's paid state. */
 function refreshMoneyPages() {
-  for (const path of ["/client-side", "/client-side/payment", "/client-side/orders", "/dashboard/wallets"]) {
+  for (const path of [
+    "/client-side",
+    "/client-side/payment",
+    "/client-side/orders",
+    "/dashboard/wallets",
+    "/dashboard/transactions",
+  ]) {
     revalidatePath(path);
   }
 }
@@ -59,6 +67,12 @@ export interface DepositInput {
 
 export async function getMyWallet(): Promise<WalletResult<WalletView>> {
   return run(async () => service.getMyWallet(await requireClient()));
+}
+
+export async function getMyTransactionHistory(
+  filters: TransactionHistoryFilters = {},
+): Promise<WalletResult<TransactionHistoryPage>> {
+  return run(async () => service.getMyTransactionHistory(await requireClient(), filters));
 }
 
 /** Balance + pending deposits only — cheap enough for the home screen. */
@@ -114,6 +128,15 @@ export async function listPendingDeposits(): Promise<WalletResult<PendingDeposit
   return run(async () => {
     await requireStaff();
     return service.listPendingDeposits();
+  });
+}
+
+export async function getAllTransactionHistory(
+  filters: TransactionHistoryFilters = {},
+): Promise<WalletResult<TransactionHistoryPage>> {
+  return run(async () => {
+    await requireStaff();
+    return service.getAllTransactionHistory(filters);
   });
 }
 

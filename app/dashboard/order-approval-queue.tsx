@@ -5,11 +5,12 @@ import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/Button";
 import { Field, Select, TextInput } from "@/components/ui/Field";
+import { StaffInvoicePanel } from "@/components/invoices/StaffInvoicePanel";
 import { SectionLabel } from "@/components/ui/SectionLabel";
 import type { DesignerPublic, OrderItemWithOrder } from "@/lib/types";
 
 import { CancelOrderButton } from "@/components/order/CancelOrder";
-import { cancelOrder, receiveClientOrder } from "./actions";
+import { cancelOrder, receiveClientOrder, routeApprovedOrder } from "./actions";
 import { useCurrencySymbol } from "@/lib/currency/CurrencySymbolProvider";
 import { formatMoney } from "@/lib/currency/format";
 
@@ -221,15 +222,17 @@ function RouteCard({
   const priceValid = price.trim() !== "" && Number.isFinite(priceValue) && priceValue > 0;
   const [designerId, setDesignerId] = useState("");
   const [sending, startSending] = useTransition();
-  const [sendingTo, setSendingTo] = useState<"factory" | "designer" | null>(null);
+  const [sendingTo, setSendingTo] = useState<"confirm" | "factory" | "designer" | null>(null);
+  const [invoiceReady, setInvoiceReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const confirmed = group.order.approval_status === "approved";
 
   function send(route: "factory" | "designer") {
     setError(null);
     setSendingTo(route);
     startSending(async () => {
       const arg = route === "designer" ? designerId : undefined;
-      const res = await receiveClientOrder(group.orderId, route, arg, call ? priceValue : undefined);
+      const res = await routeApprovedOrder(group.orderId, route, arg);
       if (!res.ok) {
         setError(res.error ?? "Something went wrong.");
         return;
@@ -239,10 +242,23 @@ function RouteCard({
     });
   }
 
+  function confirmOrder() {
+    setError(null);
+    setSendingTo("confirm");
+    startSending(async () => {
+      const res = await receiveClientOrder(group.orderId, call ? priceValue : undefined);
+      if (!res.ok) {
+        setError(res.error ?? "Something went wrong.");
+        return;
+      }
+      router.refresh();
+    });
+  }
+
   return (
     <OrderCard group={group}>
       <OrderDetails order={group.order} items={group.items} />
-      {call ? (
+      {!confirmed && call ? (
         <div className="mb-3 rounded-[var(--radius)] border border-brand-200 bg-brand-50 p-3 text-sm dark:border-brand-500/30 dark:bg-brand-500/10">
           <p className="mb-2 text-xs text-muted">
             This order has a photo book — call {group.clientName} to confirm the details first.
@@ -273,9 +289,23 @@ function RouteCard({
           </div>
         </div>
       ) : null}
-      <Button variant="primary" disabled={call && !priceValid} onClick={() => setOpen(true)}>
-        Confirm order
-      </Button>
+      {!confirmed ? (
+        <Button variant="primary" loading={sending && sendingTo === "confirm"} disabled={sending || (call && !priceValid)} onClick={confirmOrder}>
+          Confirm order
+        </Button>
+      ) : (
+        <div className="space-y-3">
+          <StaffInvoicePanel
+            orderId={group.orderId}
+            onChanged={() => router.refresh()}
+            onInvoiceStatusChange={setInvoiceReady}
+          />
+          <Button variant="primary" disabled={!invoiceReady || sending} onClick={() => setOpen(true)}>
+            Route order
+          </Button>
+          {!invoiceReady ? <p className="text-xs text-muted">Generate the invoice before sending this order to production.</p> : null}
+        </div>
+      )}
       {canCancel ? (
         <span className="ml-2">
           <CancelOrderButton

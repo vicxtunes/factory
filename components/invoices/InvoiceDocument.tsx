@@ -9,7 +9,7 @@ import { formatMoney } from "@/lib/currency/format";
 import { STATUS_LABELS } from "@/lib/invoices/policy";
 import type { InvoiceStatus, InvoiceView } from "@/lib/invoices/types";
 import { PAYMENT_METHODS } from "@/lib/payments/details";
-import { METHOD_LABELS } from "@/lib/wallet/policy";
+import { paymentMethodLabel } from "@/lib/wallet/policy";
 
 import { formatInvoiceDate } from "./format";
 import { documentLabels } from "./labels";
@@ -188,7 +188,7 @@ export function InvoiceDocument({ invoice, children }: { invoice: InvoiceView; c
               <li key={p.id} className="flex items-start justify-between gap-3 py-2">
                 <div className="min-w-0">
                   <p className="font-medium">
-                    {p.kind === "refund" ? "Refund to wallet" : p.method === "wallet" ? "Paid from wallet" : METHOD_LABELS[p.method]}
+                    {p.kind === "refund" ? "Refund to wallet" : paymentMethodLabel(p.method, "Payment received")}
                   </p>
                   <p className="break-words text-xs text-muted">
                     {[formatInvoiceDate(p.createdAt), p.reference ? `Ref ${p.reference}` : null, p.note].filter(Boolean).join(" · ")}
