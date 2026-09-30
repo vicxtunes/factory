@@ -9,7 +9,7 @@ import { formatMoney } from "@/lib/currency/format";
 import { STATUS_LABELS } from "@/lib/invoices/policy";
 import type { InvoiceView } from "@/lib/invoices/types";
 import { PAYMENT_METHODS } from "@/lib/payments/details";
-import { METHOD_LABELS } from "@/lib/wallet/policy";
+import { paymentMethodLabel } from "@/lib/wallet/policy";
 
 import { formatInvoiceDate } from "./format";
 import { documentLabels } from "./labels";
@@ -220,7 +220,7 @@ export async function downloadInvoicePdf(invoice: InvoiceView, currencySymbol: s
       theme: "plain",
       body: invoice.payments.map((p) => [
         formatInvoiceDate(p.createdAt),
-        p.kind === "refund" ? "Refund to wallet" : p.method === "wallet" ? "Paid from wallet" : METHOD_LABELS[p.method],
+        p.kind === "refund" ? "Refund to wallet" : paymentMethodLabel(p.method, "Payment received"),
         safe([p.reference ? `Ref ${p.reference}` : null, p.note].filter(Boolean).join(" · ")),
         `${p.kind === "refund" ? "-" : ""}${money(p.amount)}`,
       ]),

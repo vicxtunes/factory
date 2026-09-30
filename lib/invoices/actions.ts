@@ -12,7 +12,7 @@
 import { revalidatePath } from "next/cache";
 
 import { WalletError } from "@/lib/wallet/orders";
-import type { PaymentMethod } from "@/lib/wallet/types";
+import type { OrderPaymentExcessDisposition, PaymentMethod } from "@/lib/wallet/types";
 
 import { InvoiceError } from "./server/errors";
 import { requireBoss, requireClientId, requireStaff } from "./server/identity";
@@ -50,6 +50,7 @@ export interface InvoicePaymentInput {
   method: PaymentMethod;
   reference?: string | null;
   note?: string | null;
+  excessDisposition?: OrderPaymentExcessDisposition | null;
 }
 
 // --- Staff -----------------------------------------------------------------
@@ -121,7 +122,7 @@ export async function resetInvoiceLink(invoiceId: string): Promise<InvoiceResult
 export async function recordInvoicePayment(
   invoiceId: string,
   input: InvoicePaymentInput,
-): Promise<InvoiceResult<{ applied: number; toWallet: number; invoice: StaffInvoiceView }>> {
+): Promise<InvoiceResult<{ applied: number; toWallet: number; physicallyRefunded: number; invoice: StaffInvoiceView }>> {
   return run(async () => {
     const result = await service.recordPayment(await requireStaff(), invoiceId, input);
     refresh();

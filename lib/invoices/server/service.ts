@@ -12,7 +12,7 @@ import {
   paidByOrders,
   recordOrderPayment,
 } from "@/lib/wallet/orders";
-import type { PaymentMethod } from "@/lib/wallet/types";
+import type { OrderPaymentExcessDisposition, PaymentMethod } from "@/lib/wallet/types";
 
 import { MAX_NOTES_LENGTH, invoiceBalance, invoiceNumber, invoiceStatus, isWellFormedToken } from "../policy";
 import type {
@@ -259,14 +259,20 @@ export async function resetLink(invoiceId: string): Promise<StaffInvoiceView> {
 export async function recordPayment(
   staff: InvoiceStaff,
   invoiceId: string,
-  input: { amount: number; method: PaymentMethod; reference?: string | null; note?: string | null },
-): Promise<{ applied: number; toWallet: number; invoice: StaffInvoiceView }> {
+  input: {
+    amount: number;
+    method: PaymentMethod;
+    reference?: string | null;
+    note?: string | null;
+    excessDisposition?: OrderPaymentExcessDisposition | null;
+  },
+): Promise<{ applied: number; toWallet: number; physicallyRefunded: number; invoice: StaffInvoiceView }> {
   const invoice = await loadInvoice(invoiceId);
   // Money for a settled invoice belongs in the wallet (Wallets → Record deposit), not here.
   const current = await getById(invoice.id);
   if (current.status === "paid") throw new InvoiceError("This invoice is already paid.");
-  const { applied, toWallet } = await recordOrderPayment(staff, invoice.order_id, input);
-  return { applied, toWallet, invoice: await getById(invoice.id) };
+  const { applied, toWallet, physicallyRefunded } = await recordOrderPayment(staff, invoice.order_id, input);
+  return { applied, toWallet, physicallyRefunded, invoice: await getById(invoice.id) };
 }
 
 /** Pays what the client's wallet balance covers. */

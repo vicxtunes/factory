@@ -26,10 +26,14 @@ import {
   isOrderPayable,
 } from "../policy";
 import type {
+  OrderPaymentBreakdown,
+  OrderPaymentExcessDisposition,
   OrderPaymentRecord,
   OrderPaymentState,
   PaymentMethod,
   PendingDeposit,
+  TransactionHistoryFilters,
+  TransactionHistoryPage,
   WalletEntry,
   WalletListRow,
   WalletPayment,
@@ -44,6 +48,7 @@ import * as repo from "./repository";
 
 /** How many rejected/withdrawn deposits a wallet screen shows. */
 const CLOSED_LIMIT = 10;
+const TRANSACTION_PAGE_SIZE = 50;
 
 // --- Mapping ---------------------------------------------------------------
 
@@ -110,6 +115,12 @@ function checkDepositInput(input: { amount: number; method: string }, allowed: P
   if (!allowed.includes(input.method as PaymentMethod)) throw new WalletError("Choose how the money was sent.");
 }
 
+function checkOrderPaymentInput(input: { amount: number; method: string }) {
+  const amountError = checkAmount(input.amount, { min: 1, max: MAX_DEPOSIT, label: "Payment" });
+  if (amountError) throw new WalletError(amountError);
+  if (!MANUAL_METHODS.includes(input.method as PaymentMethod)) throw new WalletError("Choose how the money was received.");
+}
+
 /** Credits a pending payment and tells the client. The one path every deposit takes into a wallet. */
 async function settle(payment: repo.PaymentRow, actor: WalletActor): Promise<number> {
   const result = await repo.settlePayment(payment.id, actor);
@@ -122,19 +133,82 @@ async function settle(payment: repo.PaymentRow, actor: WalletActor): Promise<num
   return result.balance;
 }
 
+function orderPaymentMethod(row: repo.OrderLedgerRow): PaymentMethod | "wallet" {
+  if (row.payment?.method) return row.payment.method;
+  if (row.payment_id == null) return "wallet";
+  return "other";
+}
+
 async function orderState(order: directory.WalletOrder, walletBalance: number | null): Promise<OrderPaymentState> {
-  const paid = (await repo.paidByOrder([order.id]))[order.id] ?? 0;
+  const [paid, ledger] = await Promise.all([repo.paidByOrder([order.id]), repo.listOrderLedger(order.id)]);
+  const paymentBreakdown: OrderPaymentBreakdown[] = ledger
+    .filter((row) => row.kind === "order_payment")
+    .map((row) => ({
+      method: orderPaymentMethod(row),
+      amount: Math.abs(row.amount),
+      reference: row.payment?.reference ?? null,
+    }))
+    .sort((a, b) => b.amount - a.amount);
+
   return {
     orderId: order.id,
     amount: order.amount,
-    paid,
-    due: order.amount == null ? null : Math.max(order.amount - paid, 0),
+    paid: paid[order.id] ?? 0,
+    due: order.amount == null ? null : Math.max(order.amount - (paid[order.id] ?? 0), 0),
     payable: order.amount != null && isOrderPayable({ approval_status: order.approvalStatus, cancelled_at: order.cancelledAt }),
     walletBalance,
+    paymentBreakdown,
   };
 }
 
 // --- Client ----------------------------------------------------------------
+
+export async function getMyTransactionHistory(
+  viewer: ClientViewer,
+  filters: TransactionHistoryFilters = {},
+): Promise<TransactionHistoryPage> {
+  const page = Math.max(1, Number(filters.page ?? 1));
+  const pageSize = TRANSACTION_PAGE_SIZE;
+  const offset = (page - 1) * pageSize;
+  const kind = filters.kind && filters.kind !== "all" ? filters.kind : null;
+  const status = filters.status && filters.status !== "all" ? filters.status : null;
+  const search = filters.search?.trim() || null;
+
+  const rows = await repo.listTransactionHistory({
+    clientId: viewer.id,
+    search,
+    kind,
+    status,
+    offset,
+    limit: pageSize + 1,
+  });
+
+  const items = rows.slice(0, pageSize).map((row) => ({
+    id: row.id,
+    clientId: row.client_id,
+    clientName: row.client_name,
+    clientPhone: row.client_phone,
+    orderId: row.order_id,
+    orderNo: row.order_no,
+    kind: row.kind,
+    amount: row.amount,
+    method: row.method,
+    status: row.status,
+    reference: row.reference,
+    note: row.note,
+    failureReason: row.failure_reason,
+    actorName: row.actor_name,
+    createdAt: row.created_at,
+    balanceAfter: row.balance_after,
+  }));
+
+  return {
+    items,
+    page,
+    pageSize,
+    hasMore: rows.length > pageSize,
+  };
+}
 
 export async function getMyWallet(viewer: ClientViewer): Promise<WalletView> {
   return walletView(viewer.id, viewer.name);
@@ -203,6 +277,50 @@ export async function payOrder(viewer: ClientViewer, orderId: string): Promise<O
 }
 
 // --- Staff -----------------------------------------------------------------
+
+export async function getAllTransactionHistory(filters: TransactionHistoryFilters = {}): Promise<TransactionHistoryPage> {
+  const page = Math.max(1, Number(filters.page ?? 1));
+  const pageSize = TRANSACTION_PAGE_SIZE;
+  const offset = (page - 1) * pageSize;
+  const kind = filters.kind && filters.kind !== "all" ? filters.kind : null;
+  const status = filters.status && filters.status !== "all" ? filters.status : null;
+  const search = filters.search?.trim() || null;
+
+  const rows = await repo.listTransactionHistory({
+    clientId: null,
+    search,
+    kind,
+    status,
+    offset,
+    limit: pageSize + 1,
+  });
+
+  const items = rows.slice(0, pageSize).map((row) => ({
+    id: row.id,
+    clientId: row.client_id,
+    clientName: row.client_name,
+    clientPhone: row.client_phone,
+    orderId: row.order_id,
+    orderNo: row.order_no,
+    kind: row.kind,
+    amount: row.amount,
+    method: row.method,
+    status: row.status,
+    reference: row.reference,
+    note: row.note,
+    failureReason: row.failure_reason,
+    actorName: row.actor_name,
+    createdAt: row.created_at,
+    balanceAfter: row.balance_after,
+  }));
+
+  return {
+    items,
+    page,
+    pageSize,
+    hasMore: rows.length > pageSize,
+  };
+}
 
 export async function listWallets(): Promise<WalletListRow[]> {
   const [wallets, pending] = await Promise.all([repo.listWallets(), repo.listPendingPayments()]);
@@ -330,42 +448,48 @@ async function prepareOrderForPayment(orderId: string): Promise<directory.Wallet
 }
 
 /**
- * Staff record money received for one order (an installment). It's credited
- * to the client's wallet and applied to the order in one transaction;
- * anything above what's due stays in the wallet as credit.
+ * Staff record money received for one order (an installment). Only an excess
+ * explicitly retained as wallet credit changes the client's wallet balance.
  */
 export async function recordOrderPayment(
   actor: WalletActor,
   orderId: string,
-  input: { amount: number; method: PaymentMethod; reference?: string | null; note?: string | null },
-): Promise<{ applied: number; toWallet: number; balance: number }> {
-  checkDepositInput(input, MANUAL_METHODS);
+  input: {
+    amount: number;
+    method: PaymentMethod;
+    reference?: string | null;
+    note?: string | null;
+    excessDisposition?: OrderPaymentExcessDisposition | null;
+  },
+): Promise<{ applied: number; toWallet: number; physicallyRefunded: number; balance: number }> {
+  checkOrderPaymentInput(input);
   const order = await prepareOrderForPayment(orderId);
-
-  const payment = await repo.insertPayment({
-    clientId: order.clientId,
+  const result = await repo.recordOrderReceipt({
+    orderId,
     amount: input.amount,
     method: input.method,
     reference: cleanText(input.reference, MAX_REFERENCE_LENGTH),
     note: cleanText(input.note, MAX_NOTE_LENGTH),
-    orderId,
-    createdBy: actor,
+    excessDisposition: input.excessDisposition ?? null,
+    actor,
   });
-  const result = await repo.settlePayment(payment.id, actor);
-  if (!result.alreadySettled) {
-    if (result.appliedToOrder > 0) {
-      await directory.logOnOrder(orderId, actor, "wallet_payment", { amount: result.appliedToOrder });
-    }
-    const extra = payment.amount - result.appliedToOrder;
-    if (extra > 0) {
-      await notifier.walletChangedByStaff(order.clientId, extra, result.balance, `Credit from a payment on order ${order.orderNo}`);
-    }
+  await directory.logOnOrder(orderId, actor, "order_payment_received", {
+    amount: result.applied,
+    amountReceived: input.amount,
+    amountToWallet: result.toWallet,
+    amountPhysicallyRefunded: result.physicallyRefunded,
+    method: input.method,
+    reference: cleanText(input.reference, MAX_REFERENCE_LENGTH),
+  });
+  if (result.toWallet > 0) {
+    await notifier.walletChangedByStaff(
+      order.clientId,
+      result.toWallet,
+      result.balance,
+      `Excess credit from order ${order.orderNo}`,
+    );
   }
-  return {
-    applied: result.appliedToOrder,
-    toWallet: payment.amount - result.appliedToOrder,
-    balance: result.balance,
-  };
+  return result;
 }
 
 /** Staff apply the client's existing wallet balance to an order (as much as it covers). */
@@ -393,10 +517,13 @@ export async function orderPaymentHistory(orderId: string): Promise<OrderPayment
     id: r.id,
     kind: r.kind === "refund" ? "refund" : "payment",
     amount: Math.abs(r.amount),
-    method: r.payment?.method ?? "wallet",
+    method: orderPaymentMethod(r),
     reference: r.payment?.reference ?? null,
     note: r.note,
     actorName: r.actor_name,
     createdAt: r.created_at,
+    ...(r.amount_received == null ? {} : { amountReceived: r.amount_received }),
+    ...(r.amount_wallet_credit == null ? {} : { amountToWallet: r.amount_wallet_credit }),
+    ...(r.amount_physically_refunded == null ? {} : { amountRefunded: r.amount_physically_refunded }),
   }));
 }

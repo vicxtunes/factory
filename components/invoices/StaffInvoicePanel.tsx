@@ -18,7 +18,7 @@ import {
   type InvoiceLineInput,
 } from "@/lib/invoices/actions";
 import type { DraftLine, StaffInvoiceView } from "@/lib/invoices/types";
-import { MANUAL_METHODS, METHOD_LABELS } from "@/lib/wallet/policy";
+import { MANUAL_METHODS, METHOD_LABELS, paymentMethodLabel } from "@/lib/wallet/policy";
 import type { PaymentMethod } from "@/lib/wallet/types";
 
 import { InvoiceStatusBadge } from "./InvoiceDocument";
@@ -42,7 +42,15 @@ function whatsappNumber(phone: string | null): string {
   return digits;
 }
 
-export function StaffInvoicePanel({ orderId, onChanged }: { orderId: string; onChanged?: () => void }) {
+export function StaffInvoicePanel({
+  orderId,
+  onChanged,
+  onInvoiceStatusChange,
+}: {
+  orderId: string;
+  onChanged?: () => void;
+  onInvoiceStatusChange?: (exists: boolean) => void;
+}) {
   const symbol = useCurrencySymbol();
   const money = (n: number) => formatMoney(n, symbol);
   const [invoice, setInvoice] = useState<StaffInvoiceView | null | undefined>(undefined);
@@ -56,13 +64,16 @@ export function StaffInvoicePanel({ orderId, onChanged }: { orderId: string; onC
     let cancelled = false;
     getInvoiceForOrder(orderId).then((res) => {
       if (cancelled) return;
-      if (res.ok) setInvoice(res.data);
+      if (res.ok) {
+        setInvoice(res.data);
+        onInvoiceStatusChange?.(res.data !== null);
+      }
       else setError(res.error);
     });
     return () => {
       cancelled = true;
     };
-  }, [orderId]);
+  }, [orderId, onInvoiceStatusChange]);
 
   function act<T>(fn: () => Promise<{ ok: true; data: T } | { ok: false; error: string }>, then: (data: T) => void) {
     setError(null);
@@ -86,7 +97,15 @@ export function StaffInvoicePanel({ orderId, onChanged }: { orderId: string; onC
         money={money}
         pending={pending}
         error={error}
-        onGenerate={(input) => act(() => generateInvoice(orderId, input), setInvoice)}
+        onGenerate={(input) =>
+          act(
+            () => generateInvoice(orderId, input),
+            (data) => {
+              setInvoice(data);
+              onInvoiceStatusChange?.(true);
+            },
+          )
+        }
       />
     );
   }
@@ -202,8 +221,10 @@ export function StaffInvoicePanel({ orderId, onChanged }: { orderId: string; onC
                 setMode("idle");
                 setNotice(
                   d.toWallet > 0
-                    ? `${money(d.applied)} recorded on the invoice; ${money(d.toWallet)} added to the client's wallet as credit.`
-                    : `${money(d.applied)} recorded.`,
+                    ? `${money(d.applied)} recorded on the invoice; ${money(d.toWallet)} added to the client's wallet.`
+                    : d.physicallyRefunded > 0
+                      ? `${money(d.applied)} recorded on the invoice; ${money(d.physicallyRefunded)} returned physically and logged.`
+                      : `${money(d.applied)} recorded.`,
                 );
               },
             )
@@ -253,7 +274,10 @@ export function StaffInvoicePanel({ orderId, onChanged }: { orderId: string; onC
             <li key={p.id} className="flex justify-between gap-2 py-1.5">
               <span className="min-w-0 truncate text-muted">
                 {new Date(p.createdAt).toLocaleDateString()} ·{" "}
-                {p.kind === "refund" ? "Refund to wallet" : p.method === "wallet" ? "Wallet" : METHOD_LABELS[p.method]}
+                {p.kind === "refund" ? "Refund to wallet" : paymentMethodLabel(p.method, "Payment received")}
+                {p.amountReceived != null && p.amountReceived > p.amount
+                  ? ` · ${money(p.amountReceived)} received; ${money(p.amountToWallet && p.amountToWallet > 0 ? p.amountToWallet : (p.amountRefunded ?? 0))} ${p.amountToWallet ? "credited" : "returned"}`
+                  : ""}
                 {p.reference ? ` · ${p.reference}` : ""} · {p.actorName}
               </span>
               <span className="shrink-0 font-medium tabular-nums">
@@ -459,13 +483,20 @@ function PaymentForm({
   balance: number;
   money: (n: number) => string;
   pending: boolean;
-  onSubmit: (input: { amount: number; method: PaymentMethod; reference: string; note: string }) => void;
+  onSubmit: (input: {
+    amount: number;
+    method: PaymentMethod;
+    reference: string;
+    note: string;
+    excessDisposition: "wallet" | "physical_refund" | null;
+  }) => void;
   onCancel: () => void;
 }) {
   const [amount, setAmount] = useState(String(balance));
   const [method, setMethod] = useState<PaymentMethod>("mobile_money");
   const [reference, setReference] = useState("");
   const [note, setNote] = useState("");
+  const [excessDisposition, setExcessDisposition] = useState<"wallet" | "physical_refund" | "">("");
   const [error, setError] = useState<string | null>(null);
   const value = parseAmount(amount);
   const extra = Number.isFinite(value) ? value - balance : 0;
@@ -473,17 +504,28 @@ function PaymentForm({
   function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!Number.isInteger(value) || value <= 0) return setError("Enter the amount received.");
-    if (!window.confirm(`Record ${money(value)} received${reference ? ` (ref ${reference})` : ""}?`)) return;
+    if (extra > 0 && !excessDisposition) return setError("Choose what happened to the excess amount.");
+    const excessAction = excessDisposition === "wallet" ? "credit the excess to the client's wallet" : "record the excess as physically returned";
+    if (!window.confirm(`Record ${money(value)} received${reference ? ` (ref ${reference})` : ""}?${extra > 0 ? ` ${money(extra)} will be ${excessAction}.` : ""}`)) return;
     setError(null);
-    onSubmit({ amount: value, method, reference, note });
+    onSubmit({ amount: value, method, reference, note, excessDisposition: extra > 0 && excessDisposition ? excessDisposition : null });
   }
 
   return (
     <form onSubmit={submit} className="space-y-2 rounded-xl border border-border p-3">
       <p className="text-sm font-semibold">Record a payment received</p>
-      <Field label="Amount received" hint={extra > 0 ? `${money(extra)} more than the balance — it will go to the client's wallet as credit.` : undefined}>
+      <Field label="Amount received" hint={extra > 0 ? `${money(extra)} exceeds the invoice balance of ${money(balance)}.` : undefined}>
         <TextInput inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value)} autoFocus />
       </Field>
+      {extra > 0 ? (
+        <Field label="How was the excess handled?">
+          <Select value={excessDisposition} onChange={(e) => setExcessDisposition(e.target.value as "wallet" | "physical_refund" | "")}>
+            <option value="">Choose an option…</option>
+            <option value="wallet">Credit {money(extra)} to the client&apos;s wallet</option>
+            <option value="physical_refund">Return {money(extra)} physically</option>
+          </Select>
+        </Field>
+      ) : null}
       <Field label="Method">
         <Select value={method} onChange={(e) => setMethod(e.target.value as PaymentMethod)}>
           {MANUAL_METHODS.map((m) => (
