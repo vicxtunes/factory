@@ -1,6 +1,6 @@
 // Invoice rules, in one place. Pure; safe on client and server.
 
-import type { InvoiceStatus } from "./types";
+import type { InvoiceLine, InvoiceStatus } from "./types";
 
 export const STATUS_LABELS: Record<InvoiceStatus, string> = {
   unpaid: "Unpaid",
@@ -26,6 +26,14 @@ export function invoiceStatus(amount: number, paid: number, cancelled: boolean):
   if (paid <= 0) return "unpaid";
   if (paid >= amount) return "paid";
   return "partially_paid";
+}
+
+/** Discount given on an invoice's lines: Σ (list − agreed price) × qty over discounted lines. */
+export function invoiceDiscount(lines: Pick<InvoiceLine, "listUnitPrice" | "unitPrice" | "qty">[]): number {
+  return lines.reduce(
+    (sum, l) => sum + (l.listUnitPrice != null && l.unitPrice != null ? (l.listUnitPrice - l.unitPrice) * l.qty : 0),
+    0,
+  );
 }
 
 /** What's still owed; never negative. */

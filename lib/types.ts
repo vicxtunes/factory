@@ -1,3 +1,5 @@
+import type { Offer } from "@/lib/discounts/core/model";
+
 // Hand-written DB row types. Regenerate with:
 //   npx supabase gen types typescript --linked > lib/database.types.ts
 // and swap these for the generated `Database` type once the project is linked.
@@ -187,6 +189,8 @@ export interface ProductVariant {
   // more); null falls back to Product.price. Not shown to clients yet — see
   // Product.price's comment.
   price: number | null;
+  /** The discount running now, if any (lib/discounts); its price replaces `price`. */
+  offer?: Offer | null;
   active: boolean;
   created_at: string;
 }
@@ -217,6 +221,8 @@ export interface Product {
   // recorded so it's ready whenever that changes (see order-form.tsx,
   // showroom-content.tsx, product-showcase.tsx).
   price: number | null;
+  /** The discount running now, if any (lib/discounts); its price replaces `price`. */
+  offer?: Offer | null;
   description: string | null;
   /** What it's sold in, shown on invoices: "Pc", "Sheet", "Service"… */
   unit: string | null;
@@ -397,6 +403,11 @@ export interface OrderItemWithOrder extends OrderItem {
   // (lib/orders/pricing.ts). Null when the item isn't linked to the catalog.
   catalog_product: { price: number | null } | null;
   catalog_variant: { price: number | null } | null;
+  /**
+   * The discount running when the order was placed, if any (lib/discounts):
+   * its price replaces the catalog price.
+   */
+  offer?: Offer | null;
   /** The item's catalog category — used to spot photo books, which are priced after a call. */
   category: { name: string } | null;
   /** The line's agreed price once invoiced (see lib/invoices); null before. */

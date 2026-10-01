@@ -14,15 +14,27 @@ const PAGE_TITLES: Record<string, string> = {
   "/dashboard/orders": "Office Orders",
   "/dashboard/orders/new": "New order",
   "/dashboard/order-approvals": "Client Orders",
-  "/dashboard/marketing": "Marketing carousel",
+  "/dashboard/marketing": "Marketing",
   "/dashboard/workers": "Workers & stations",
   "/dashboard/designers": "Graphics designers",
   "/dashboard/admins": "Dashboard admins",
   "/dashboard/support": "Support reports",
   "/dashboard/announcements": "Announcements",
+  "/dashboard/accounts": "Accounts",
+  "/dashboard/accounts/sales": "Sales",
+  "/dashboard/accounts/clients": "Client accounts",
   "/support": "Support",
   "/chat": "Chat",
 };
+
+// A page without its own title (e.g. one client's account) takes its
+// section's: the longest listed path it sits under.
+function sectionTitle(pathname: string): string {
+  const parent = Object.keys(PAGE_TITLES)
+    .filter((path) => pathname.startsWith(`${path}/`))
+    .sort((a, b) => b.length - a.length)[0];
+  return parent ? PAGE_TITLES[parent] : "Dashboard";
+}
 
 export function DashboardTopbar({
   email,
@@ -38,7 +50,7 @@ export function DashboardTopbar({
   notifications: NotificationRow[];
 }) {
   const pathname = usePathname();
-  const title = PAGE_TITLES[pathname] ?? "Dashboard";
+  const title = PAGE_TITLES[pathname] ?? sectionTitle(pathname);
 
   return (
     <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-4 border-b border-border bg-surface px-4 sm:px-6">

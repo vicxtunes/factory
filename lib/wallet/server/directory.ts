@@ -5,6 +5,7 @@ import "server-only";
 // writes the order audit log.
 
 import { logOrderEvent } from "@/lib/audit/log";
+import type { Offer } from "@/lib/discounts/core/model";
 import { orderAmount } from "@/lib/orders/pricing";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -32,6 +33,7 @@ interface OrderRow {
   quoted_price: number | null;
   items: {
     qty: number;
+    offer: Offer | null;
     catalog_product: { price: number | null } | null;
     catalog_variant: { price: number | null } | null;
   }[];
@@ -41,7 +43,7 @@ export async function loadOrder(orderId: string): Promise<WalletOrder | null> {
   const { data, error } = await createAdminClient()
     .from("orders")
     .select(
-      "id, order_no, client_id, approval_status, cancelled_at, quoted_price, items:order_items (qty, catalog_product:products (price), catalog_variant:product_variants (price))",
+      "id, order_no, client_id, approval_status, cancelled_at, quoted_price, items:order_items (qty, offer:item_offer, catalog_product:products (price), catalog_variant:product_variants (price))",
     )
     .eq("id", orderId)
     .maybeSingle<OrderRow>();

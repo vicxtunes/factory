@@ -26,7 +26,7 @@ export function DashboardHomeBar({ role, email }: { role: AppRole; email: string
   const more: HomeBarLink[] = navFor({ role, email }).flatMap((group) =>
     group.items
       .filter((item) => !onBar.has(item.href))
-      .map((item) => ({ href: item.href, label: item.label, icon: item.icon, section: group.label })),
+      .map((item) => ({ href: item.href, label: item.label, icon: item.icon, exact: item.exact, section: group.label })),
   );
 
   return <HomeBar tabs={tabs} more={more} logout={signOut} afterLogout="/dashboard/login" hideFrom="lg" />;

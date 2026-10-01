@@ -14,7 +14,7 @@ import {
 } from "@/lib/wallet/orders";
 import type { OrderPaymentExcessDisposition, PaymentMethod } from "@/lib/wallet/types";
 
-import { MAX_NOTES_LENGTH, invoiceBalance, invoiceNumber, invoiceStatus, isWellFormedToken } from "../policy";
+import { MAX_NOTES_LENGTH, invoiceBalance, invoiceDiscount, invoiceNumber, invoiceStatus, isWellFormedToken } from "../policy";
 import type {
   ClientOrderDocument,
   DraftLine,
@@ -103,6 +103,7 @@ async function buildView(invoice: repo.InvoiceRow, order: directory.InvoiceOrder
     notes: invoice.notes,
     status: invoiceStatus(amount, paid, order.cancelled),
     amount,
+    discount: invoiceDiscount(order.lines),
     paid,
     balance: invoiceBalance(amount, paid),
     order: {
@@ -355,7 +356,7 @@ export async function proforma(orderId: string): Promise<{ view: InvoiceView } |
     amount = Math.round(order.quotedPrice);
     complete = true;
     if (!lines.every((l) => l.lineTotal != null) || lineSum !== amount) {
-      lines = lines.map((l) => ({ ...l, unitPrice: null, lineTotal: null }));
+      lines = lines.map((l) => ({ ...l, unitPrice: null, listUnitPrice: null, lineTotal: null }));
     }
   } else {
     amount = lineSum;
@@ -375,6 +376,7 @@ export async function proforma(orderId: string): Promise<{ view: InvoiceView } |
       notes: null,
       status: invoiceStatus(amount, paid, order.cancelled),
       amount,
+      discount: invoiceDiscount(lines),
       paid,
       balance: invoiceBalance(amount, paid),
       order: {

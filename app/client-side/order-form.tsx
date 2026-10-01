@@ -573,9 +573,12 @@ function resolveItems(catalog: ProductCategory[], items: OrderItemInput[]) {
     const product: Product | null = category?.products.find((p) => p.id === item.product_id) ?? null;
     const variant = product?.variants.find((v) => v.id === item.variant_id) ?? null;
     // A variant's own price overrides the parent product's — see
-    // ProductVariant.price's comment in lib/types.ts.
-    const unitPrice = variant?.price ?? product?.price ?? null;
-    return { item, category, product, variant, unitPrice };
+    // ProductVariant.price's comment in lib/types.ts. A running discount
+    // (lib/discounts) replaces either; the same one the order will get.
+    const listPrice = variant?.price ?? product?.price ?? null;
+    const offer = (variant ?? product)?.offer ?? null;
+    const unitPrice = offer?.price ?? listPrice;
+    return { item, category, product, variant, unitPrice, offer };
   });
 }
 
@@ -611,7 +614,7 @@ function OrderSummary({
       <SectionLabel>Order summary</SectionLabel>
 
       <div className="space-y-3">
-        {resolved.map(({ item, category, product, variant, unitPrice }, idx) => (
+        {resolved.map(({ item, category, product, variant, unitPrice, offer }, idx) => (
           <div key={idx} className="flex items-center gap-3">
             <Image
               src={product?.display_image_url ?? "/showroom/placeholder.jpg"}
@@ -629,7 +632,12 @@ function OrderSummary({
               </p>
             </div>
             {showPrices && unitPrice != null ? (
-              <span className="shrink-0 text-sm font-medium tabular-nums">
+              <span className="shrink-0 text-right text-sm font-medium tabular-nums">
+                {offer ? (
+                  <span className="block text-xs font-normal text-muted line-through">
+                    {currency.format(offer.listPrice * item.qty)}
+                  </span>
+                ) : null}
                 {currency.format(unitPrice * item.qty)}
               </span>
             ) : null}
