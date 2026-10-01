@@ -6,7 +6,7 @@ import { Drawer } from "@/components/ui/Drawer";
 import { SectionLabel } from "@/components/ui/SectionLabel";
 import { createClient } from "@/lib/supabase/browser";
 import { useLiveOrderItems, type LoadItems } from "@/lib/supabase/useLiveOrderItems";
-import { ORDER_ITEM_SELECT } from "@/lib/item-select";
+import { selectRecentItems } from "@/lib/item-select";
 import { sortItems } from "@/lib/sorting";
 import {
   BOARD_COLUMNS,
@@ -47,9 +47,7 @@ export function Board({
 
   const load = useCallback<LoadItems>(
     async (orderIds) => {
-      let query = supabaseRef.current
-        .from("order_items")
-        .select(ORDER_ITEM_SELECT)
+      let query = selectRecentItems(supabaseRef.current)
         .eq("stage", "factory")
         .not("order.released_at", "is", null)
         .is("order.cancelled_at", null);

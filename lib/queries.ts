@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { ORDER_ITEM_SELECT as ITEM_SELECT } from "@/lib/item-select";
+import { ORDER_ITEM_SELECT as ITEM_SELECT, selectRecentItems } from "@/lib/item-select";
 import {
   type Agent,
   type Announcement,
@@ -10,8 +10,10 @@ import {
   type NotificationRow,
   type OrderItemWithOrder,
   type Product,
+  type ProductionStatus,
   type ProductCategory,
   type ShowroomSettings,
+  type Urgency,
   type WorkerPublic,
 } from "@/lib/types";
 
@@ -20,9 +22,7 @@ import {
 // an item-level check, not an order-level one (see app/graphics/actions.ts).
 export async function fetchBoardItems(): Promise<OrderItemWithOrder[]> {
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("order_items")
-    .select(ITEM_SELECT)
+  const { data, error } = await selectRecentItems(supabase)
     .eq("stage", "factory")
     // Client-portal orders sit unreleased (see lib/orders/create.ts's
     // `releaseImmediately`) until the receptionist routes them post-approval
@@ -91,33 +91,38 @@ export async function fetchApprovalQueueItems(): Promise<OrderItemWithOrder[]> {
   return (data ?? []) as unknown as OrderItemWithOrder[];
 }
 
-// Every item, for the dashboard overview's stats (all order statuses,
-// including a client-portal order still sitting unreleased in the
-// receptionist's quote queue) — kept separate from fetchOfficeItems below so
-// this one page's totals aren't quietly narrowed by that split. Cancelled
-// orders are left out — they're not work, and would inflate "not started".
-export async function fetchAllItems(): Promise<OrderItemWithOrder[]> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("order_items")
-    .select(ITEM_SELECT)
-    .is("order.cancelled_at", null)
-    .order("created_at", { ascending: false });
-  if (error) throw new Error(error.message);
-  return (data ?? []) as unknown as OrderItemWithOrder[];
+// The dashboard home's totals, counted in the database (dashboard_item_stats
+// SQL function) rather than by downloading every item. Covers every order
+// status, including a client-portal order still unreleased in the
+// receptionist's quote queue; cancelled orders are left out — they're not
+// work, and would inflate "not started".
+export interface DashboardItemStats {
+  total: number;
+  delayed: number;
+  completed_today: number;
+  by_status: Partial<Record<ProductionStatus, number>>;
+  by_urgency: Partial<Record<Urgency, number>>;
 }
 
-// The "Office Orders" board (/dashboard/orders): every item, same as
-// fetchAllItems, but only once its order has actually been released —
+export async function fetchDashboardItemStats(todayStart: Date): Promise<DashboardItemStats> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("dashboard_item_stats", {
+    p_today_start: todayStart.toISOString(),
+  });
+  if (error) throw new Error(error.message);
+  return data as DashboardItemStats;
+}
+
+// The "Office Orders" board (/dashboard/orders): recent items (open orders
+// plus the last RECENT_DAYS days, see selectRecentItems), only once their
+// order has actually been released —
 // same filter and reasoning as fetchBoardItems above. A client-portal order
 // still waiting on a quote or the client's approval belongs on the
 // receptionist's "Client Orders" queue (fetchApprovalQueueItems) instead,
 // not mixed in here alongside confirmed work.
 export async function fetchOfficeItems(): Promise<OrderItemWithOrder[]> {
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("order_items")
-    .select(ITEM_SELECT)
+  const { data, error } = await selectRecentItems(supabase)
     .not("order.released_at", "is", null)
     .order("created_at", { ascending: false });
   if (error) throw new Error(error.message);

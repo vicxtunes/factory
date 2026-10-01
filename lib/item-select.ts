@@ -1,3 +1,5 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+
 // Shared order_items select fragment — used by both server-side queries
 // (lib/queries.ts) and client-side Realtime refetches (factory/dashboard
 // boards). Kept in one place so a live board's refetch never drifts from
@@ -24,3 +26,13 @@ export const ORDER_ITEM_SELECT = `
     order_notes:order_notes!order_id (id, order_id, order_item_id, author_type, author_id, author_name, author_role, body, created_at)
   )
 `;
+
+/** Completed or cancelled orders stay on the work boards this many days. */
+export const RECENT_DAYS = 30;
+
+// What a work board loads: open orders plus those active in the last
+// RECENT_DAYS days, whole orders only (the recent_order_items view, which
+// hardcodes the same 30 days). Filter, embed and sort it like order_items.
+export function selectRecentItems(supabase: SupabaseClient) {
+  return supabase.from("recent_order_items").select(ORDER_ITEM_SELECT);
+}
