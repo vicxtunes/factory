@@ -265,13 +265,13 @@ function DetailsOverlay({
           </button>
         </div>
         {videoUrl ? (
-          <video src={videoUrl} controls className="mb-4 w-full rounded-xl" />
+          <video src={videoUrl} controls preload="metadata" className="mb-4 w-full rounded-xl" />
         ) : null}
         <div className="columns-2 gap-3 sm:columns-3">
           {media.map((m, i) => (
             <div key={m.url + i} className="mb-3 break-inside-avoid overflow-hidden rounded-xl bg-white/5">
               {m.kind === "video" ? (
-                <video src={m.url} controls className="w-full" />
+                <video src={m.url} controls preload="metadata" className="w-full" />
               ) : (
                 <button type="button" onClick={() => onOpenLightbox(i)} className="block w-full">
                   <Image
@@ -478,7 +478,7 @@ export function ProductShowcase({
           ) : (
             <div className="absolute inset-0 overflow-hidden rounded-2xl bg-black/5" {...mediaSwipe.bind}>
               {current.kind === "video" ? (
-                <video src={current.url} controls className="h-full w-full object-cover" />
+                <video src={current.url} controls preload="metadata" className="h-full w-full object-cover" />
               ) : (
                 <Image
                   src={current.url}

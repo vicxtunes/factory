@@ -21,6 +21,8 @@ export async function uploadAvatar(
     session.token,
     file,
     onProgress ?? (() => {}),
+    // Re-uploading overwrites the same path, so keep the cache short.
+    3600,
   );
   if (!uploaded.ok) return uploaded;
 

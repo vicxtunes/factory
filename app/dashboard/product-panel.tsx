@@ -749,7 +749,7 @@ function MediaPreview({
       <div className="group relative h-36 overflow-hidden rounded-xl border border-border bg-background">
         {url ? (
           kind === "video" ? (
-            <video src={url} className="h-full w-full object-cover" muted />
+            <video src={url} className="h-full w-full object-cover" muted preload="metadata" />
           ) : (
             <Image src={url} alt="" fill sizes="320px" unoptimized={!canOptimizeImage(url)} className="object-cover" />
           )
@@ -922,7 +922,7 @@ function ProductMediaSection({
                 className="group relative aspect-square overflow-hidden rounded-lg border border-border"
               >
                 {m.kind === "video" ? (
-                  <video src={m.secure_url} className="h-full w-full object-cover" muted />
+                  <video src={m.secure_url} className="h-full w-full object-cover" muted preload="metadata" />
                 ) : (
                   <Image
                     src={m.secure_url}
