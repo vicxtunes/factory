@@ -1,11 +1,11 @@
 import { PanelStackSkeleton } from "@/components/skeletons/blocks";
-import { ClientFrameSkeleton } from "@/components/skeletons/frames";
+import { SidebarFrameSkeleton } from "@/components/skeletons/frames";
 
 // Payment methods.
 export default function ClientPaymentLoading() {
   return (
-    <ClientFrameSkeleton>
+    <SidebarFrameSkeleton>
       <PanelStackSkeleton count={3} />
-    </ClientFrameSkeleton>
+    </SidebarFrameSkeleton>
   );
 }

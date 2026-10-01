@@ -1,12 +1,12 @@
 import { CardGridSkeleton, ChipRowSkeleton } from "@/components/skeletons/blocks";
-import { ClientFrameSkeleton } from "@/components/skeletons/frames";
+import { SidebarFrameSkeleton } from "@/components/skeletons/frames";
 
 // Order history: filters and finished order cards.
 export default function ClientHistoryLoading() {
   return (
-    <ClientFrameSkeleton>
+    <SidebarFrameSkeleton>
       <ChipRowSkeleton />
       <CardGridSkeleton />
-    </ClientFrameSkeleton>
+    </SidebarFrameSkeleton>
   );
 }

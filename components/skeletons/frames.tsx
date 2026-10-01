@@ -21,10 +21,11 @@ function LoadingAnnouncement() {
 }
 
 /**
- * Client portal: sidebar (desktop), sticky topbar and main area — the same
- * shape as app/client-side/shell.tsx.
+ * Sidebar portals (client, graphics): sidebar (desktop), sticky topbar and
+ * main area — the same shape as app/client-side/shell.tsx and
+ * app/graphics/shell.tsx.
  */
-export function ClientFrameSkeleton({ children }: { children: ReactNode }) {
+export function SidebarFrameSkeleton({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen" aria-busy="true">
       <LoadingAnnouncement />
@@ -49,7 +50,7 @@ export function ClientFrameSkeleton({ children }: { children: ReactNode }) {
 }
 
 /**
- * Factory, graphics, support and display: the navy header strip from
+ * Factory, support and display: the navy header strip from
  * components/ui/Header.tsx above a centred content column.
  */
 export function HeaderFrameSkeleton({ children, wide = false }: { children: ReactNode; wide?: boolean }) {

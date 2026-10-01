@@ -22,8 +22,7 @@ import { ClientShell } from "@/app/client-side/shell";
 import { DashboardShell } from "@/app/dashboard/shell";
 import { getMyNotifications as getMyWorkerNotifications, logoutWorker } from "@/app/factory/actions";
 import { LogoutButton as WorkerLogoutButton } from "@/app/factory/logout-button";
-import { getMyNotifications as getMyDesignerNotifications, logoutDesigner } from "@/app/graphics/actions";
-import { LogoutButton as DesignerLogoutButton } from "@/app/graphics/logout-button";
+import { GraphicsShell } from "@/app/graphics/shell";
 
 export const metadata = { title: "Chat — Order Tracker" };
 export const dynamic = "force-dynamic";
@@ -43,7 +42,7 @@ function Chat({ viewer, exitHref }: { viewer: ParticipantRef; exitHref: string }
   );
 }
 
-/** Header + home bar shared by the two PIN surfaces (factory, graphics). */
+/** Header + home bar for the factory PIN surface. */
 function PinSurfaceChrome({
   surface,
   boardHref,
@@ -121,16 +120,9 @@ export default async function ChatPage() {
   const designer = await getDesignerSession();
   if (designer) {
     return (
-      <PinSurfaceChrome
-        surface="Graphics"
-        boardHref="/graphics"
-        name={designer.name}
-        fetchNotifications={getMyDesignerNotifications}
-        logout={logoutDesigner}
-        logoutButton={<DesignerLogoutButton />}
-      >
+      <GraphicsShell name={designer.name} avatarUrl={designer.avatarUrl}>
         <Chat viewer={{ type: "designer", id: designer.designer_id }} exitHref="/graphics" />
-      </PinSurfaceChrome>
+      </GraphicsShell>
     );
   }
 
