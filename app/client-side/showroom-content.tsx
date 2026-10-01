@@ -5,40 +5,18 @@ import Image from "next/image";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/Button";
+import { isOptionCategory, optionCategory, type OptionKind } from "@/lib/catalog-options";
 import type { ProductCategory } from "@/lib/types";
 
 import { productHref } from "./product-page-view";
 
-type Tab = "product" | "packaging" | "lamination";
+type Tab = "product" | OptionKind;
 
 const TABS: { key: Tab; label: string }[] = [
   { key: "product", label: "Product" },
   { key: "packaging", label: "Packaging" },
   { key: "lamination", label: "Lamination" },
 ];
-
-// Every category can define its own custom attributes (see
-// lib/queries.ts's fetchProductCatalog / category_attributes), and some of
-// those happen to be named "Packaging" or "Lamination" — the Packaging/
-// Lamination tabs are a flattened, deduped browse of those attributes'
-// option lists across the whole catalog, not a separate product tree.
-function collectAttributeOptions(catalog: ProductCategory[], nameMatch: string): string[] {
-  const seen = new Set<string>();
-  for (const category of catalog) {
-    for (const attr of category.attributes) {
-      if (!attr.name.toLowerCase().includes(nameMatch)) continue;
-      for (const opt of attr.options ?? []) seen.add(opt);
-    }
-  }
-  return [...seen];
-}
-
-// Packaging is its own product category (so each option carries its own
-// image, video, media and price) shown on the Packaging tab rather than
-// among the Product tab's categories.
-function isPackagingCategory(category: ProductCategory): boolean {
-  return category.name.trim().toLowerCase() === "packaging";
-}
 
 function PhotoCard({
   label,
@@ -47,12 +25,12 @@ function PhotoCard({
 }: {
   label: string;
   image?: string | null;
-  /** The product's own page; cards without one (lamination options) aren't links. */
-  href?: string;
+  /** The product's own page. */
+  href: string;
 }) {
   const className = "relative block h-48 w-40 shrink-0 overflow-hidden rounded-xl text-left shadow-theme-sm sm:h-48 sm:w-40";
-  const content = (
-    <>
+  return (
+    <Link href={href} className={className}>
       {/* eslint-disable-next-line @next/next/no-img-element -- Supabase Storage URL, can't be allowlisted for next/image */}
       <img
         src={image ?? "/showroom/placeholder.PNG"}
@@ -61,27 +39,7 @@ function PhotoCard({
       />
       <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
       <p className="absolute inset-x-0 bottom-3 px-2 text-center text-sm font-bold text-white">{label}</p>
-    </>
-  );
-  return href ? (
-    <Link href={href} className={className}>
-      {content}
     </Link>
-  ) : (
-    <div className={className}>{content}</div>
-  );
-}
-
-function OptionGallery({ title, options }: { title: string; options: string[] }) {
-  if (options.length === 0) {
-    return <p className="text-sm text-muted">No {title.toLowerCase()} options listed yet.</p>;
-  }
-  return (
-    <div className="flex flex-wrap gap-4">
-      {options.map((opt) => (
-        <PhotoCard key={opt} label={opt} />
-      ))}
-    </div>
   );
 }
 
@@ -95,14 +53,14 @@ function OptionGallery({ title, options }: { title: string; options: string[] })
 export function ShowroomContent({ catalog, signedIn }: { catalog: ProductCategory[]; signedIn: boolean }) {
   const [tab, setTab] = useState<Tab>("product");
 
-  const packagingCategory = catalog.find(isPackagingCategory) ?? null;
-  const laminationOptions = collectAttributeOptions(catalog, "lamination");
+  // Packaging and Lamination have their own tabs (lib/catalog-options.ts).
+  const optionProducts = tab === "product" ? [] : (optionCategory(catalog, tab)?.products ?? []);
 
   // Lead with whichever category has the most to show, rather than
   // whatever order the catalog admin panel happens to list them in.
   const categoriesByProductCount = useMemo(
     () =>
-      catalog.filter((c) => !isPackagingCategory(c)).sort((a, b) => b.products.length - a.products.length),
+      catalog.filter((c) => !isOptionCategory(c)).sort((a, b) => b.products.length - a.products.length),
     [catalog],
   );
 
@@ -194,12 +152,12 @@ export function ShowroomContent({ catalog, signedIn }: { catalog: ProductCategor
           )
         ) : null}
 
-        {tab === "packaging" ? (
-          !packagingCategory || packagingCategory.products.length === 0 ? (
-            <p className="text-sm text-muted">No packaging options listed yet.</p>
+        {tab !== "product" ? (
+          optionProducts.length === 0 ? (
+            <p className="text-sm text-muted">No {tab} options listed yet.</p>
           ) : (
             <div className="flex flex-wrap gap-4">
-              {packagingCategory.products.map((product) => (
+              {optionProducts.map((product) => (
                 <PhotoCard
                   key={product.id}
                   label={product.name}
@@ -210,7 +168,6 @@ export function ShowroomContent({ catalog, signedIn }: { catalog: ProductCategor
             </div>
           )
         ) : null}
-        {tab === "lamination" ? <OptionGallery title="Lamination" options={laminationOptions} /> : null}
       </div>
     </div>
   );
