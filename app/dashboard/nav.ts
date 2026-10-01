@@ -4,6 +4,7 @@
 // To add, move or re-gate a page, edit this file only.
 
 import type { HomeBarIcon } from "@/components/ui/HomeBar";
+import { canViewAccounts } from "@/lib/accounting/policy";
 import { canViewAnnouncements } from "@/lib/announcements/access";
 import { SUPPORT_OWNER_EMAIL } from "@/lib/support/constants";
 import { isManagerRole, type AppRole } from "@/lib/types";
@@ -20,10 +21,12 @@ export interface NavItem {
   icon: HomeBarIcon;
   /** Who sees the link. Pages enforce the same rule server-side. */
   visible: (viewer: NavViewer) => boolean;
+  /** Highlight only on this exact path, not on pages under it (section roots). */
+  exact?: boolean;
 }
 
 export interface NavGroup {
-  id: "orders" | "payments" | "catalog" | "people" | "help";
+  id: "orders" | "payments" | "accounts" | "catalog" | "people" | "help";
   label: string;
   items: NavItem[];
 }
@@ -31,12 +34,13 @@ export interface NavGroup {
 const everyone = () => true;
 const managers = (v: NavViewer) => isManagerRole(v.role);
 const boss = (v: NavViewer) => v.role === "boss";
+const accountsViewers = (v: NavViewer) => canViewAccounts(v.role);
 // Support-report review is gated by email, not role: several accounts can
 // be "boss", only this one person should see what staff report.
 const developer = (v: NavViewer) => v.email === SUPPORT_OWNER_EMAIL;
 
 /** Top of the menu, outside any group. */
-export const HOME: NavItem = { href: "/dashboard", label: "Dashboard", icon: "dashboard", visible: everyone };
+export const HOME: NavItem = { href: "/dashboard", label: "Dashboard", icon: "dashboard", visible: everyone, exact: true };
 
 /** Used all day, so it sits right under Dashboard rather than in a group. */
 export const CHAT: NavItem = { href: "/chat", label: "Chat", icon: "chat", visible: everyone };
@@ -64,6 +68,17 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/dashboard/invoices", label: "Invoices", icon: "invoice", visible: managers },
       { href: "/dashboard/wallets", label: "Wallets", icon: "payment", visible: managers },
       { href: "/dashboard/transactions", label: "Transactions", icon: "payment", visible: managers },
+    ],
+  },
+  {
+    // The business's money at a glance: sales, money received, what clients
+    // owe and hold (lib/accounting). Boss and supervisors only.
+    id: "accounts",
+    label: "Accounts",
+    items: [
+      { href: "/dashboard/accounts", label: "Overview", icon: "dashboard", visible: accountsViewers, exact: true },
+      { href: "/dashboard/accounts/sales", label: "Sales", icon: "invoice", visible: accountsViewers },
+      { href: "/dashboard/accounts/clients", label: "Client accounts", icon: "clients", visible: accountsViewers },
     ],
   },
   {
@@ -108,8 +123,8 @@ export function navFor(viewer: NavViewer): NavGroup[] {
   );
 }
 
-/** Whether `href` is the current page (or a page under it; /dashboard itself matches exactly). */
-export function isCurrent(pathname: string, href: string): boolean {
-  if (href === HOME.href) return pathname === href;
-  return pathname === href || pathname.startsWith(`${href}/`);
+/** Whether the item is the current page (or a page under it, unless it's `exact`). */
+export function isCurrent(pathname: string, item: Pick<NavItem, "href" | "exact">): boolean {
+  if (item.exact) return pathname === item.href;
+  return pathname === item.href || pathname.startsWith(`${item.href}/`);
 }
