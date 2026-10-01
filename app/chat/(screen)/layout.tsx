@@ -15,6 +15,7 @@ import {
   getDesignerSession,
   getWorkerSession,
 } from "@/lib/auth/session";
+import { getInbox } from "@/lib/chat/reads";
 import type { ParticipantRef } from "@/lib/chat/types";
 import { fetchNotifications } from "@/lib/queries";
 
@@ -25,19 +26,25 @@ import { LogoutButton as WorkerLogoutButton } from "@/app/factory/logout-button"
 import { GraphicsShell } from "@/app/graphics/shell";
 
 export const metadata = { title: "Chat — Order Tracker" };
-export const dynamic = "force-dynamic";
 
-// One chat page for every surface. Like /support, it renders inside the
+// One chat screen for every surface. Like /support, it renders inside the
 // visitor's own navigation (dashboard sidebar, factory/graphics header, client
 // portal) so nobody is stranded on a chrome-less page. Session precedence
 // matches resolveActor() in lib/audit/log.ts, which the chat module itself
 // uses to identify the caller — so the shell and the data always agree.
+//
+// It's a layout rather than the page so the shell and ChatApp stay mounted
+// while chatting: opening a conversation only changes ?c= (see ChatApp), and
+// the inbox is loaded here with the page instead of after it. It sits in the
+// (screen) group, below app/chat/loading.tsx, so a click on a Chat link shows
+// the skeleton at once and prefetching never runs this layout's queries.
 
-function Chat({ viewer, exitHref }: { viewer: ParticipantRef; exitHref: string }) {
+async function Chat({ viewer, exitHref }: { viewer: ParticipantRef; exitHref: string }) {
+  const inbox = await getInbox();
   // ChatApp reads ?c= via useSearchParams, which needs a Suspense boundary.
   return (
     <Suspense fallback={<ChatSkeleton />}>
-      <ChatApp viewer={viewer} exitHref={exitHref} />
+      <ChatApp viewer={viewer} exitHref={exitHref} initialInbox={inbox.ok ? inbox.data : undefined} />
     </Suspense>
   );
 }
@@ -100,7 +107,7 @@ function PinSurfaceChrome({
   );
 }
 
-export default async function ChatPage() {
+export default async function ChatLayout({ children }: { children: React.ReactNode }) {
   const dashboard = await getDashboardSession();
   if (dashboard) {
     const notifications = await fetchNotifications(10);
@@ -113,6 +120,7 @@ export default async function ChatPage() {
         notifications={notifications}
       >
         <Chat viewer={{ type: "dashboard_user", id: dashboard.userId }} exitHref="/dashboard" />
+        {children}
       </DashboardShell>
     );
   }
@@ -122,6 +130,7 @@ export default async function ChatPage() {
     return (
       <GraphicsShell name={designer.name} avatarUrl={designer.avatarUrl}>
         <Chat viewer={{ type: "designer", id: designer.designer_id }} exitHref="/graphics" />
+        {children}
       </GraphicsShell>
     );
   }
@@ -138,6 +147,7 @@ export default async function ChatPage() {
         logoutButton={<WorkerLogoutButton />}
       >
         <Chat viewer={{ type: "worker", id: worker.worker_id }} exitHref="/factory" />
+        {children}
       </PinSurfaceChrome>
     );
   }
@@ -147,6 +157,7 @@ export default async function ChatPage() {
     return (
       <ClientShell signedIn name={client.name} avatarUrl={client.avatarUrl}>
         <Chat viewer={{ type: "client", id: client.client_id }} exitHref="/client-side" />
+        {children}
       </ClientShell>
     );
   }

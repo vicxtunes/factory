@@ -2,7 +2,8 @@
 
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
-import { deleteMessage, getConversation, getMessages, markConversationRead } from "@/lib/chat/actions";
+import { deleteMessage, markConversationRead, sendMessage } from "@/lib/chat/actions";
+import { getConversation, getMessages } from "@/lib/chat/client/api";
 import { describeTyping, useTypingIndicator } from "@/lib/chat/client/useTypingIndicator";
 import { participantKey } from "@/lib/chat/policy";
 import { setSupportReportStatus } from "@/lib/support/actions";
@@ -48,6 +49,33 @@ function mergeMessages(existing: ChatMessage[], incoming: ChatMessage[]): ChatMe
   return [...byId.values()].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 }
 
+// Threads opened in this tab, so reopening one shows it at once while it
+// refreshes in the background. Keyed by viewer as well as conversation: a
+// different person signing in on the same device never sees someone
+// else's messages, not even for a moment.
+interface CachedThread {
+  detail: ConversationDetail;
+  messages: ChatMessage[];
+  cursor: string | null;
+}
+const threadCache = new Map<string, CachedThread>();
+const MAX_CACHED_THREADS = 20;
+
+function rememberThread(key: string, thread: CachedThread) {
+  threadCache.delete(key);
+  threadCache.set(key, thread);
+  if (threadCache.size > MAX_CACHED_THREADS) threadCache.delete(threadCache.keys().next().value!);
+}
+
+/** A text message shown at once while the server saves it. */
+interface PendingMessage {
+  tempId: string;
+  body: string;
+  replyTo: ChatMessage | null;
+  createdAt: string;
+  failed: boolean;
+}
+
 /**
  * One open conversation: header, scrolling message thread, composer.
  *
@@ -56,24 +84,31 @@ function mergeMessages(existing: ChatMessage[], incoming: ChatMessage[]): ChatMe
  * `refreshKey` changes whenever ChatApp receives a realtime signal for this
  * conversation; the view then re-fetches the conversation and the newest page
  * of messages and merges them into what's already loaded.
+ *
+ * `cacheKey` (the viewer's participantKey) turns on the in-tab thread cache.
  */
 export function ConversationView({
   conversationId,
+  cacheKey,
   refreshKey,
   onBack,
   onRead,
   onLeft,
 }: {
   conversationId: string;
+  cacheKey?: string;
   refreshKey: number;
   /** Omit when embedded (e.g. inside an order drawer): hides the back arrow. */
   onBack?: () => void;
   onRead: () => void;
   onLeft: () => void;
 }) {
-  const [detail, setDetail] = useState<ConversationDetail | null>(null);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [cursor, setCursor] = useState<string | null>(null);
+  const threadKey = cacheKey ? `${cacheKey}:${conversationId}` : null;
+  const [cached] = useState(() => (threadKey ? threadCache.get(threadKey) : undefined));
+  const [detail, setDetail] = useState<ConversationDetail | null>(cached?.detail ?? null);
+  const [messages, setMessages] = useState<ChatMessage[]>(cached?.messages ?? []);
+  const [cursor, setCursor] = useState<string | null>(cached?.cursor ?? null);
+  const [pending, setPending] = useState<PendingMessage[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
@@ -97,7 +132,8 @@ export function ConversationView({
   }, [conversationId]);
 
   // Initial load. ChatApp mounts one ConversationView per conversation
-  // (key={conversationId}), so switching threads starts from fresh state.
+  // (key={conversationId}), so switching threads starts from fresh state —
+  // or from the cache, which this then brings up to date.
   useEffect(() => {
     let cancelled = false;
     Promise.all([getConversation(conversationId), getMessages(conversationId)]).then(([d, page]) => {
@@ -105,13 +141,42 @@ export function ConversationView({
       if (!d.ok) return setError(d.error);
       if (!page.ok) return setError(page.error);
       setDetail(d.data);
-      setMessages(page.data.messages);
-      setCursor(page.data.nextCursor);
+      if (cached) {
+        setMessages((prev) => mergeMessages(prev, page.data.messages));
+      } else {
+        setMessages(page.data.messages);
+        setCursor(page.data.nextCursor);
+      }
     });
     return () => {
       cancelled = true;
     };
-  }, [conversationId]);
+  }, [conversationId, cached]);
+
+  useEffect(() => {
+    if (threadKey && detail) rememberThread(threadKey, { detail, messages, cursor });
+  }, [threadKey, detail, messages, cursor]);
+
+  // Sends a text message, showing it straight away; on failure it stays in
+  // the thread marked "Not sent" with a retry. (While offline the action
+  // just waits — next.config.ts useOffline — and sends on reconnect.)
+  const sendText = useCallback(
+    async (message: PendingMessage) => {
+      stickToBottom.current = true;
+      setPending((prev) => [...prev.filter((p) => p.tempId !== message.tempId), { ...message, failed: false }]);
+      const res = await sendMessage({ conversationId, body: message.body, replyToId: message.replyTo?.id ?? null }).catch(
+        () => ({ ok: false as const }),
+      );
+      if (!res.ok) {
+        setPending((prev) => prev.map((p) => (p.tempId === message.tempId ? { ...p, failed: true } : p)));
+        return;
+      }
+      setPending((prev) => prev.filter((p) => p.tempId !== message.tempId));
+      setMessages((prev) => mergeMessages(prev, [res.data]));
+      onRead();
+    },
+    [conversationId, onRead],
+  );
 
   // Realtime nudges (skip the initial render — the effect above loads).
   const firstKey = useRef(refreshKey);
@@ -142,7 +207,7 @@ export function ConversationView({
     } else if (stickToBottom.current) {
       el.scrollTop = el.scrollHeight;
     }
-  }, [messages]);
+  }, [messages, pending]);
 
   function onScroll() {
     const el = scrollRef.current;
@@ -332,7 +397,46 @@ export function ConversationView({
           );
         })}
 
-        {receipt ? <p className="mt-1 px-1 text-right text-[11px] text-muted">{receipt}</p> : null}
+        {pending.map((p) => (
+          <div key={p.tempId}>
+            {/* Not saved yet, so no reply/edit/delete menu. */}
+            <div className={`pointer-events-none ${p.failed ? "" : "opacity-70"}`}>
+              <MessageBubble
+                message={{
+                  id: p.tempId,
+                  conversationId,
+                  kind: "text",
+                  sender: detail.me,
+                  senderName: myName,
+                  body: p.body,
+                  replyTo: p.replyTo ? { id: p.replyTo.id, senderName: p.replyTo.senderName, body: p.replyTo.body } : null,
+                  attachments: [],
+                  createdAt: p.createdAt,
+                  editedAt: null,
+                  deletedAt: null,
+                }}
+                mine
+                grouped={false}
+                showSenderName={false}
+                senderAvatarUrl={null}
+                onReply={() => {}}
+                onEdit={() => {}}
+                onDelete={() => {}}
+              />
+            </div>
+            <p className="mt-0.5 px-1 text-right text-[11px] text-muted">
+              {p.failed ? (
+                <button type="button" onClick={() => sendText(p)} className="font-medium text-error-600">
+                  Not sent · Retry
+                </button>
+              ) : (
+                "Sending…"
+              )}
+            </p>
+          </div>
+        ))}
+
+        {receipt && !pending.length ? <p className="mt-1 px-1 text-right text-[11px] text-muted">{receipt}</p> : null}
       </div>
 
       {typingLabel ? (
@@ -352,6 +456,10 @@ export function ConversationView({
           editing={editing}
           onCancelReply={() => setReplyTo(null)}
           onCancelEdit={() => setEditing(null)}
+          onSendText={(body, replyTo) => {
+            setReplyTo(null);
+            sendText({ tempId: `pending-${Date.now()}-${Math.random()}`, body, replyTo, createdAt: new Date().toISOString(), failed: false });
+          }}
           onSent={(message) => {
             stickToBottom.current = true;
             setReplyTo(null);

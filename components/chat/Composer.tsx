@@ -23,8 +23,10 @@ const ACCEPT = "image/*,video/*,audio/*,application/pdf,.doc,.docx,.xls,.xlsx,.c
 const MAX_ROWS_PX = 160;
 
 /**
- * Message input. Enter sends, Shift+Enter adds a new line. Files are uploaded
- * straight to storage when Send is pressed, then attached to the message.
+ * Message input. Enter sends, Shift+Enter adds a new line. A text-only
+ * message goes to `onSendText`, which shows it at once and saves it in the
+ * background. Files are uploaded straight to storage when Send is pressed,
+ * then attached to the message (sent here, reported through `onSent`).
  *
  * With an empty draft the Send button becomes a microphone for voice messages.
  * In edit mode it edits `editing` in place instead of sending a new message.
@@ -37,6 +39,7 @@ export function Composer({
   editing,
   onCancelReply,
   onCancelEdit,
+  onSendText,
   onSent,
   onEdited,
   onTyping,
@@ -47,6 +50,7 @@ export function Composer({
   editing: ChatMessage | null;
   onCancelReply: () => void;
   onCancelEdit: () => void;
+  onSendText: (body: string, replyTo: ChatMessage | null) => void;
   onSent: (message: ChatMessage) => void;
   onEdited: () => void;
   /** Called on each keystroke (the caller throttles) — drives typing indicators. */
@@ -113,6 +117,14 @@ export function Composer({
     if (busy || (!body && !files.length)) return;
     if (body.length > CHAT_LIMITS.maxMessageLength) {
       setError(`Messages can be at most ${CHAT_LIMITS.maxMessageLength} characters.`);
+      return;
+    }
+    if (!editing && !files.length) {
+      setText("");
+      setError(null);
+      onStoppedTyping?.();
+      onSendText(body, replyTo);
+      inputRef.current?.focus();
       return;
     }
     setBusy(true);

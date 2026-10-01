@@ -16,10 +16,11 @@ import { useEffect, useRef } from "react";
 
 import { createClient } from "@/lib/supabase/browser";
 
-import { getRealtimeConfig } from "../actions";
+import { getRealtimeConfig } from "./api";
 import { CHAT_SIGNAL_EVENT, type ChatSignal } from "../types";
 
-const FALLBACK_REFRESH_MS = 60_000;
+// Only a safety net: realtime signals do the real work.
+const FALLBACK_REFRESH_MS = 5 * 60_000;
 
 export type ChatSignalHandler = (signal: ChatSignal | { type: "refresh" }) => void;
 

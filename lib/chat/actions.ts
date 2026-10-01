@@ -2,61 +2,27 @@
 
 // Chat server actions — the module's public API for the browser.
 //
-// Each action is a thin shell: resolve who's calling (identity.ts), call one
-// service function, and convert the outcome into a ChatResult. Expected
-// failures (ChatError) are returned as `{ ok: false, error }` with a
-// user-safe message; anything unexpected is logged server-side and replaced
-// with a generic message, so internals never reach the browser.
+// Each action is a thin shell around one service function, run through
+// server/run.ts (who's calling, safe error messages). The read-only calls the
+// chat screen makes most often also have GET Route Handlers (app/api/chat,
+// fetched via client/api.ts): the browser runs Server Actions one at a time,
+// so reads there load in parallel and never wait behind a send.
 //
 // Keep business rules out of this file — they belong in server/service.ts
 // (flow) and policy.ts (permissions).
 
-import { ChatError, requireChatViewer, type ChatViewer } from "./server/identity";
+import { run } from "./server/run";
 import * as service from "./server/service";
 import type {
   ChatMessage,
   ChatPerson,
-  ChatRealtimeConfig,
   ChatResult,
   ChatSearchResult,
-  ConversationDetail,
-  ConversationSummary,
-  MessagePage,
   ParticipantRef,
   UploadedAttachment,
 } from "./types";
 
-async function run<T>(fn: (viewer: ChatViewer) => Promise<T>): Promise<ChatResult<T>>;
-async function run(fn: (viewer: ChatViewer) => Promise<void>): Promise<ChatResult>;
-async function run<T>(fn: (viewer: ChatViewer) => Promise<T>): Promise<{ ok: true; data?: T } | { ok: false; error: string }> {
-  try {
-    const viewer = await requireChatViewer();
-    const data = await fn(viewer);
-    return data === undefined ? { ok: true } : { ok: true, data };
-  } catch (err) {
-    if (err instanceof ChatError) return { ok: false, error: err.message };
-    console.error("chat action failed:", err);
-    return { ok: false, error: "Something went wrong. Please try again." };
-  }
-}
-
 // --- Reading ---------------------------------------------------------------
-
-export async function getInbox(): Promise<ChatResult<ConversationSummary[]>> {
-  return run((v) => service.getInbox(v));
-}
-
-export async function getUnreadTotal(): Promise<ChatResult<number>> {
-  return run((v) => service.getUnreadTotal(v));
-}
-
-export async function getConversation(conversationId: string): Promise<ChatResult<ConversationDetail>> {
-  return run((v) => service.getConversationDetail(v, conversationId));
-}
-
-export async function getMessages(conversationId: string, before?: string | null): Promise<ChatResult<MessagePage>> {
-  return run((v) => service.getMessages(v, conversationId, before));
-}
 
 export async function searchContacts(query: string): Promise<ChatResult<ChatPerson[]>> {
   return run((v) => service.searchContacts(v, query));
@@ -64,10 +30,6 @@ export async function searchContacts(query: string): Promise<ChatResult<ChatPers
 
 export async function searchMessages(query: string): Promise<ChatResult<ChatSearchResult[]>> {
   return run((v) => service.searchMessages(v, query));
-}
-
-export async function getRealtimeConfig(): Promise<ChatResult<ChatRealtimeConfig>> {
-  return run(async (v) => service.getRealtimeConfig(v));
 }
 
 // --- Opening conversations -------------------------------------------------
