@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 
 import { CreateOrderDrawer } from "@/components/order/CreateOrderDrawer";
 import { ExportButtons } from "@/components/order/ExportButtons";
@@ -11,6 +11,7 @@ import { Select, TextInput } from "@/components/ui/Field";
 import { Popover } from "@/components/ui/Popover";
 import { SectionLabel } from "@/components/ui/SectionLabel";
 import { createClient } from "@/lib/supabase/browser";
+import { useLiveOrderItems, type LoadItems } from "@/lib/supabase/useLiveOrderItems";
 import { ORDER_ITEM_SELECT } from "@/lib/item-select";
 import {
   activeChips,
@@ -140,33 +141,30 @@ export function OrderBoard({
     [workerById],
   );
 
-  const refetch = useCallback(async () => {
-    // Same released-orders-only filter as the server-side fetchOfficeItems
-    // this board is initially seeded with — otherwise a Realtime event on
-    // an unreleased client-portal order would sneak it back in here.
-    const { data } = await supabaseRef.current
-      .from("order_items")
-      .select(ORDER_ITEM_SELECT)
-      .not("order.released_at", "is", null)
-      .order("created_at", { ascending: false });
-    if (data) setItems(data as unknown as OrderItemWithOrder[]);
-  }, []);
+  const load = useCallback<LoadItems>(
+    async (orderIds) => {
+      // Same released-orders-only filter as the server-side fetchOfficeItems
+      // this board is initially seeded with — otherwise a Realtime event on
+      // an unreleased client-portal order would sneak it back in here.
+      let query = supabaseRef.current
+        .from("order_items")
+        .select(ORDER_ITEM_SELECT)
+        .not("order.released_at", "is", null)
+        .order("created_at", { ascending: false });
+      if (orderIds) query = query.in("order_id", orderIds);
+      const { data } = await query;
+      return data as unknown as OrderItemWithOrder[] | null;
+    },
+    [],
+  );
 
-  useEffect(() => {
-    const supabase = supabaseRef.current;
-    const channel = supabase
-      .channel("dashboard-items")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "order_items" },
-        () => refetch(),
-      )
-      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, () => refetch())
-      .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [refetch]);
+  // Full reload, after this user's own changes.
+  const refetch = useCallback(async () => {
+    const fresh = await load();
+    if (fresh) setItems(fresh);
+  }, [load]);
+
+  useLiveOrderItems("dashboard-items", items, setItems, load);
 
   // Ready + Delivered and with-designer items are hidden by default — the
   // board tracks work in progress. Checking either toggle switches the whole

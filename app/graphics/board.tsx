@@ -7,6 +7,7 @@ import { Drawer } from "@/components/ui/Drawer";
 import { TextInput } from "@/components/ui/Field";
 import { Tabs } from "@/components/ui/Tabs";
 import { createClient } from "@/lib/supabase/browser";
+import { useLiveOrderItems, type LoadItems } from "@/lib/supabase/useLiveOrderItems";
 import { ORDER_ITEM_SELECT } from "@/lib/item-select";
 import type {
   Agent,
@@ -116,34 +117,27 @@ export function Board({
   const visibleOrders = byTab[tab];
   const selectedOrder = orders.find((o) => o.orderId === selectedOrderId) ?? null;
 
-  const refetch = useCallback(async () => {
-    const { data } = await supabaseRef.current
-      .from("order_items")
-      .select(ORDER_ITEM_SELECT)
-      .eq("order.assigned_designer_id", designerId)
-      .is("order.cancelled_at", null);
-    if (data) setItems(data as unknown as OrderItemWithOrder[]);
-  }, [designerId]);
+  const load = useCallback<LoadItems>(
+    async (orderIds) => {
+      let query = supabaseRef.current
+        .from("order_items")
+        .select(ORDER_ITEM_SELECT)
+        .eq("order.assigned_designer_id", designerId)
+        .is("order.cancelled_at", null);
+      if (orderIds) query = query.in("order_id", orderIds);
+      const { data } = await query;
+      return data as unknown as OrderItemWithOrder[] | null;
+    },
+    [designerId],
+  );
 
-  useEffect(() => {
-    const supabase = supabaseRef.current;
-    const channel = supabase
-      .channel("graphics-board")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "order_items" },
-        () => refetch(),
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "orders" },
-        () => refetch(),
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [refetch]);
+  // Full reload, after this user's own changes.
+  const refetch = useCallback(async () => {
+    const fresh = await load();
+    if (fresh) setItems(fresh);
+  }, [load]);
+
+  useLiveOrderItems("graphics-board", items, setItems, load);
 
   return (
     <div className="mx-auto max-w-6xl">

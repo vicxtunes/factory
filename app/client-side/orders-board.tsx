@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 
 import { CancelledNotice, CancelOrderButton } from "@/components/order/CancelOrder";
 import { ExportButtons } from "@/components/order/ExportButtons";
@@ -10,6 +10,7 @@ import { Drawer } from "@/components/ui/Drawer";
 import { Select, TextInput } from "@/components/ui/Field";
 import { Popover } from "@/components/ui/Popover";
 import { createClient } from "@/lib/supabase/browser";
+import { useLiveOrderItems, type LoadItems } from "@/lib/supabase/useLiveOrderItems";
 import { ORDER_ITEM_SELECT } from "@/lib/item-select";
 import {
   activeChips,
@@ -80,26 +81,30 @@ export function ClientOrdersBoard({
     [workerById],
   );
 
-  const refetch = useCallback(async () => {
-    const { data } = await supabaseRef.current
-      .from("order_items")
-      .select(ORDER_ITEM_SELECT)
-      .eq("order.client_id", clientId)
-      .order("created_at", { ascending: false });
-    if (data) setItems(data as unknown as OrderItemWithOrder[]);
-  }, [clientId]);
+  const load = useCallback<LoadItems>(
+    async (orderIds) => {
+      let query = supabaseRef.current
+        .from("order_items")
+        .select(ORDER_ITEM_SELECT)
+        .eq("order.client_id", clientId)
+        .order("created_at", { ascending: false });
+      if (orderIds) query = query.in("order_id", orderIds);
+      const { data } = await query;
+      return data as unknown as OrderItemWithOrder[] | null;
+    },
+    [clientId],
+  );
 
-  useEffect(() => {
-    const supabase = supabaseRef.current;
-    const channel = supabase
-      .channel(`client-orders-${clientId}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "order_items" }, () => refetch())
-      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, () => refetch())
-      .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [refetch, clientId]);
+  // Full reload, after this user's own changes.
+  const refetch = useCallback(async () => {
+    const fresh = await load();
+    if (fresh) setItems(fresh);
+  }, [load]);
+
+  useLiveOrderItems(`client-orders-${clientId}`, items, setItems, load, {
+    ordersFilter: `client_id=eq.${clientId}`,
+    ignoreUnknownOrders: true,
+  });
 
   // Which orders are fully completed (every item done) — "history" shows
   // only those, "active" shows everything else. Same split the two routes
