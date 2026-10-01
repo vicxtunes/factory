@@ -4,10 +4,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { CreateOrderDrawer } from "@/components/order/CreateOrderDrawer";
 import { Drawer } from "@/components/ui/Drawer";
-import { SectionLabel } from "@/components/ui/SectionLabel";
+import { TextInput } from "@/components/ui/Field";
+import { Tabs } from "@/components/ui/Tabs";
 import { createClient } from "@/lib/supabase/browser";
 import { ORDER_ITEM_SELECT } from "@/lib/item-select";
-import { isFinishedStatus } from "@/lib/types";
 import type {
   Agent,
   Client,
@@ -17,8 +17,9 @@ import type {
 } from "@/lib/types";
 
 import { checkClientDuplicates, createDesignerOrder } from "./actions";
-import { OrderCard, type DesignerOrder } from "./order-card";
+import { OrderCard } from "./order-card";
 import { OrderDetail } from "./order-detail";
+import { isLate, phaseOf, sortForPhase, type DesignerOrder } from "./order-status";
 
 function groupByOrder(items: OrderItemWithOrder[]): DesignerOrder[] {
   const byOrder = new Map<string, DesignerOrder>();
@@ -36,16 +37,37 @@ function groupByOrder(items: OrderItemWithOrder[]): DesignerOrder[] {
       deadlineAt: item.order.deadline_at,
       deliveryDate: item.order.delivery_date,
       brief: item.order.designer_brief,
+      createdAt: item.order.created_at,
       items: [item],
     });
   }
   return Array.from(byOrder.values());
 }
 
+type BoardTab = "all" | "in_design" | "submitted" | "late" | "completed";
+
+function matchesSearch(order: DesignerOrder, query: string): boolean {
+  if (!query) return true;
+  return [order.orderNo, order.clientName, ...order.items.map((i) => i.product)].some((field) =>
+    field?.toLowerCase().includes(query),
+  );
+}
+
+const EMPTY_MESSAGE: Record<BoardTab, string> = {
+  all: "No orders routed to you yet.",
+  in_design: "Nothing waiting on your design right now.",
+  submitted: "Nothing in production from you right now.",
+  late: "Nothing late. Nice work.",
+  completed: "Nothing finished yet.",
+};
+
+// "Late" and "Due today" depend on the clock, so re-check once a minute
+// rather than only when the data changes.
+const CLOCK_TICK_MS = 60_000;
+
 export function Board({
   initialItems,
   designerId,
-  designerName,
   catalog,
   clients,
   agents,
@@ -53,7 +75,6 @@ export function Board({
 }: {
   initialItems: OrderItemWithOrder[];
   designerId: string;
-  designerName: string;
   catalog: ProductCategory[];
   clients: Client[];
   agents: Agent[];
@@ -61,22 +82,38 @@ export function Board({
 }) {
   const [items, setItems] = useState(initialItems);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
-  const [showCompleted, setShowCompleted] = useState(false);
+  const [tab, setTab] = useState<BoardTab>("in_design");
+  const [search, setSearch] = useState("");
+  const [now, setNow] = useState(() => Date.now());
   const supabaseRef = useRef(createClient());
 
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), CLOCK_TICK_MS);
+    return () => window.clearInterval(id);
+  }, []);
+
   const orders = useMemo(() => groupByOrder(items), [items]);
-  // Same rule as the dashboard board: once every item on an order is Ready
-  // or Delivered, it leaves the active list for the "Ready & delivered"
-  // section below. It stays editable there until the factory has actually
-  // completed each item, so a mistake caught late can still be fixed.
-  const inProgressOrders = useMemo(
-    () => orders.filter((o) => o.items.some((i) => !isFinishedStatus(i.production_status))),
-    [orders],
-  );
-  const completedOrders = useMemo(
-    () => orders.filter((o) => o.items.every((i) => isFinishedStatus(i.production_status))),
-    [orders],
-  );
+  // Search narrows every tab, and the counts follow it, so a designer can see
+  // which tab their match landed in. "Late" overlaps In design / Submitted:
+  // it's a cross-cut of the work tabs, not a stage of its own.
+  const query = search.trim().toLowerCase();
+  const byTab = useMemo(() => {
+    const groups: Record<BoardTab, DesignerOrder[]> = { all: [], in_design: [], submitted: [], late: [], completed: [] };
+    for (const order of orders) {
+      if (!matchesSearch(order, query)) continue;
+      groups.all.push(order);
+      groups[phaseOf(order)].push(order);
+      if (isLate(order, now)) groups.late.push(order);
+    }
+    return {
+      all: sortForPhase(groups.all, false),
+      in_design: sortForPhase(groups.in_design, false),
+      submitted: sortForPhase(groups.submitted, false),
+      late: sortForPhase(groups.late, false),
+      completed: sortForPhase(groups.completed, true),
+    };
+  }, [orders, query, now]);
+  const visibleOrders = byTab[tab];
   const selectedOrder = orders.find((o) => o.orderId === selectedOrderId) ?? null;
 
   const refetch = useCallback(async () => {
@@ -109,9 +146,16 @@ export function Board({
   }, [refetch]);
 
   return (
-    <div>
-      <div className="mb-4 flex items-center justify-between gap-2">
-        <span className="text-xs text-muted">Signed in as {designerName}</span>
+    <div className="mx-auto max-w-6xl">
+      <div className="mb-4 flex items-center gap-2">
+        <TextInput
+          type="search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search order no, client or product…"
+          aria-label="Search orders"
+          className="flex-1"
+        />
         <CreateOrderDrawer
           variant="designer"
           clients={clients}
@@ -125,7 +169,7 @@ export function Board({
             <button
               type="button"
               onClick={open}
-              className="inline-flex min-h-9 items-center rounded-[var(--radius)] bg-brand-500 px-3 text-xs font-medium text-white hover:bg-brand-600"
+              className="inline-flex min-h-11 shrink-0 items-center rounded-[var(--radius)] bg-brand-500 px-4 text-sm font-medium text-white hover:bg-brand-600"
             >
               + New order
             </button>
@@ -133,37 +177,28 @@ export function Board({
         />
       </div>
 
-      <div className="mb-2 flex items-baseline justify-between">
-        <SectionLabel>Your orders</SectionLabel>
-        <span className="text-xs text-muted tnum">{inProgressOrders.length}</span>
-      </div>
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {inProgressOrders.map((order) => (
-          <OrderCard key={order.orderId} order={order} onOpen={() => setSelectedOrderId(order.orderId)} />
-        ))}
-        {inProgressOrders.length === 0 ? (
-          <p className="rounded-[var(--radius)] border border-dashed border-border p-3 text-xs text-muted md:col-span-2 xl:col-span-3">
-            Nothing routed to you right now.
-          </p>
-        ) : null}
-      </div>
+      <Tabs
+        label="Order status"
+        value={tab}
+        onChange={setTab}
+        className="mb-4"
+        tabs={[
+          { key: "all", label: "All" },
+          { key: "in_design", label: "In design", count: byTab.in_design.length },
+          { key: "submitted", label: "Submitted", count: byTab.submitted.length },
+          { key: "late", label: "Late", count: byTab.late.length, tone: "warning" },
+          { key: "completed", label: "Completed" },
+        ]}
+      />
 
-      <div className="mt-6">
-        <button
-          onClick={() => setShowCompleted((v) => !v)}
-          className="text-sm text-muted underline-offset-2 hover:underline"
-        >
-          {showCompleted ? "Hide" : "Show"} ready &amp; delivered ({completedOrders.length})
-        </button>
-        {showCompleted ? (
-          <div className="mt-3 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {completedOrders.map((order) => (
-              <OrderCard key={order.orderId} order={order} onOpen={() => setSelectedOrderId(order.orderId)} />
-            ))}
-            {completedOrders.length === 0 ? (
-              <p className="text-xs text-muted">Nothing finished yet.</p>
-            ) : null}
-          </div>
+      <div role="tabpanel" className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {visibleOrders.map((order) => (
+          <OrderCard key={order.orderId} order={order} now={now} onOpen={() => setSelectedOrderId(order.orderId)} />
+        ))}
+        {visibleOrders.length === 0 ? (
+          <p className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted md:col-span-2 xl:col-span-3">
+            {query ? `No orders match “${search.trim()}”.` : EMPTY_MESSAGE[tab]}
+          </p>
         ) : null}
       </div>
 

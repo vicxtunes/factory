@@ -18,7 +18,7 @@ import {
   updateDesignerOrder,
   type DesignerItemEditInput,
 } from "./actions";
-import type { DesignerOrder } from "./order-card";
+import type { DesignerOrder } from "./order-status";
 
 function formatDate(iso: string | null): string {
   if (!iso) return "—";
