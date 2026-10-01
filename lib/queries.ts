@@ -321,8 +321,13 @@ export async function fetchProductCatalog(activeOnly = false): Promise<ProductCa
   return activeOnly ? cachedActiveCatalog() : loadCatalog(await createClient(), false);
 }
 
+// Also refreshed every minute: prices include running discounts (lib/discounts),
+// and a scheduled discount starts or ends on the clock, not on an edit.
+const DISCOUNT_CLOCK_SECONDS = 60;
+
 const cachedActiveCatalog = unstable_cache(() => loadCatalog(createCatalogClient(), true), ["active-catalog"], {
   tags: [CATALOG_TAG],
+  revalidate: DISCOUNT_CLOCK_SECONDS,
 });
 
 async function loadCatalog(supabase: SupabaseClient, activeOnly: boolean): Promise<ProductCategory[]> {

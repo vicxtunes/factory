@@ -5,6 +5,7 @@
 import { revalidatePath } from "next/cache";
 
 import { getDashboardSession } from "@/lib/auth/session";
+import { catalogChanged } from "@/lib/catalog-cache";
 import { resolveTenantScope } from "@/lib/tenancy/server/resolve";
 
 import { factoryStore } from "./adapters/factory/store";
@@ -46,6 +47,8 @@ export async function createDiscount(input: DiscountInput): Promise<DiscountResu
   try {
     const { scope, actor } = await staff(true);
     await service.create(scope, input, actor);
+    // Showroom prices come from the cached catalog (lib/catalog-cache.ts).
+    catalogChanged();
     revalidatePath("/dashboard/marketing");
     return { ok: true, data: await service.list(scope) };
   } catch (err) {
@@ -58,6 +61,8 @@ export async function stopDiscount(id: string): Promise<DiscountResult<DiscountV
   try {
     const { scope, actor } = await staff(true);
     await service.stop(scope, id, actor);
+    // Showroom prices come from the cached catalog (lib/catalog-cache.ts).
+    catalogChanged();
     revalidatePath("/dashboard/marketing");
     return { ok: true, data: await service.list(scope) };
   } catch (err) {
