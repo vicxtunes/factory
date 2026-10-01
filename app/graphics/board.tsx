@@ -73,6 +73,17 @@ export function Board({
     () => orders.filter((o) => o.items.some((i) => !isFinishedStatus(i.production_status))),
     [orders],
   );
+  // In-progress orders split by whose turn it is: "In design" while any item
+  // is still with the designer (a partly-sent order still has work left),
+  // "Submitted" once every item has been sent to the factory.
+  const inDesignOrders = useMemo(
+    () => inProgressOrders.filter((o) => o.items.some((i) => i.stage === "with_designer")),
+    [inProgressOrders],
+  );
+  const submittedOrders = useMemo(
+    () => inProgressOrders.filter((o) => o.items.every((i) => i.stage === "factory")),
+    [inProgressOrders],
+  );
   const completedOrders = useMemo(
     () => orders.filter((o) => o.items.every((i) => isFinishedStatus(i.production_status))),
     [orders],
@@ -133,20 +144,19 @@ export function Board({
         />
       </div>
 
-      <div className="mb-2 flex items-baseline justify-between">
-        <SectionLabel>Your orders</SectionLabel>
-        <span className="text-xs text-muted tnum">{inProgressOrders.length}</span>
-      </div>
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {inProgressOrders.map((order) => (
-          <OrderCard key={order.orderId} order={order} onOpen={() => setSelectedOrderId(order.orderId)} />
-        ))}
-        {inProgressOrders.length === 0 ? (
-          <p className="rounded-[var(--radius)] border border-dashed border-border p-3 text-xs text-muted md:col-span-2 xl:col-span-3">
-            Nothing routed to you right now.
-          </p>
-        ) : null}
-      </div>
+      <OrderSection
+        label="In design"
+        orders={inDesignOrders}
+        empty="Nothing waiting on your design right now."
+        onOpen={setSelectedOrderId}
+      />
+      <OrderSection
+        label="Submitted"
+        orders={submittedOrders}
+        empty="Nothing in production from you right now."
+        onOpen={setSelectedOrderId}
+        className="mt-6"
+      />
 
       <div className="mt-6">
         <button
@@ -177,5 +187,38 @@ export function Board({
         ) : null}
       </Drawer>
     </div>
+  );
+}
+
+function OrderSection({
+  label,
+  orders,
+  empty,
+  onOpen,
+  className,
+}: {
+  label: string;
+  orders: DesignerOrder[];
+  empty: string;
+  onOpen: (orderId: string) => void;
+  className?: string;
+}) {
+  return (
+    <section className={className}>
+      <div className="mb-2 flex items-baseline justify-between">
+        <SectionLabel>{label}</SectionLabel>
+        <span className="text-xs text-muted tnum">{orders.length}</span>
+      </div>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {orders.map((order) => (
+          <OrderCard key={order.orderId} order={order} onOpen={() => onOpen(order.orderId)} />
+        ))}
+        {orders.length === 0 ? (
+          <p className="rounded-[var(--radius)] border border-dashed border-border p-3 text-xs text-muted md:col-span-2 xl:col-span-3">
+            {empty}
+          </p>
+        ) : null}
+      </div>
+    </section>
   );
 }
