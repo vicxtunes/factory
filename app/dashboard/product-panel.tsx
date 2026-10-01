@@ -45,6 +45,7 @@ import {
   updateAttribute,
   type AttributeInput,
 } from "./actions";
+import { CopyLinkButton } from "./share-link";
 
 type MutationResult = { ok: boolean; error?: string };
 
@@ -145,28 +146,6 @@ function CurrencySymbolCard({
         }}
       />
     </div>
-  );
-}
-
-// Copies the product's public showroom page (app/client-side/[product]).
-// On the staff subdomain this /client-side URL redirects to the client
-// subdomain's /{slug} (proxy.ts), so it works wherever it's opened.
-function CopyProductLink({ slug }: { slug: string }) {
-  const [copied, setCopied] = useState(false);
-  async function copy() {
-    const url = `${window.location.origin}/client-side/${encodeURIComponent(slug)}`;
-    try {
-      await navigator.clipboard.writeText(url);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
-    } catch {
-      window.prompt("Copy this link:", url);
-    }
-  }
-  return (
-    <Button variant="secondary" className="min-h-8 text-xs" onClick={copy}>
-      {copied ? "Copied" : "Copy link"}
-    </Button>
   );
 }
 
@@ -511,10 +490,10 @@ function ProductCard({
           </span>
         )}
         {/* Any staff member can share an active product's showroom page. */}
-        {product.active && !canManage ? <CopyProductLink slug={product.slug} /> : null}
+        {product.active && !canManage ? <CopyLinkButton path={`/client-side/${encodeURIComponent(product.slug)}`} /> : null}
         {canManage ? (
           <div className="flex shrink-0 items-center gap-1.5">
-            {product.active ? <CopyProductLink slug={product.slug} /> : null}
+            {product.active ? <CopyLinkButton path={`/client-side/${encodeURIComponent(product.slug)}`} /> : null}
             <Button variant="secondary" className="min-h-8 text-xs" onClick={() => setRenaming(true)}>
               Rename
             </Button>
