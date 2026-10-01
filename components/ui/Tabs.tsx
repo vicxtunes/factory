@@ -12,6 +12,8 @@ export interface TabItem<K extends string> {
   label: string;
   /** Shown as a badge after the label; omit for no badge. */
   count?: number;
+  /** "warning" tints a non-zero badge amber, for counts that need attention (e.g. Late). */
+  tone?: "warning";
 }
 
 export function Tabs<K extends string>({
@@ -69,13 +71,7 @@ export function Tabs<K extends string>({
           >
             {tab.label}
             {tab.count !== undefined ? (
-              <span
-                className={`tnum rounded-full border px-1.5 text-xs leading-5 ${
-                  active
-                    ? "border-brand-200 bg-brand-50 text-brand-700 dark:border-brand-500/30 dark:bg-brand-500/15 dark:text-brand-400"
-                    : "border-border text-muted"
-                }`}
-              >
+              <span className={`tnum min-w-5 rounded-full border px-1.5 text-center text-xs leading-5 ${badgeClasses(tab, active)}`}>
                 {tab.count}
               </span>
             ) : null}
@@ -84,4 +80,14 @@ export function Tabs<K extends string>({
       })}
     </div>
   );
+}
+
+function badgeClasses(tab: TabItem<string>, active: boolean): string {
+  if (tab.tone === "warning" && tab.count) {
+    return "border-warning-100 bg-warning-50 text-warning-700 dark:border-warning-500/30 dark:bg-warning-500/15 dark:text-warning-500";
+  }
+  if (active) {
+    return "border-brand-200 bg-brand-50 text-brand-700 dark:border-brand-500/30 dark:bg-brand-500/15 dark:text-brand-400";
+  }
+  return "border-border text-muted";
 }

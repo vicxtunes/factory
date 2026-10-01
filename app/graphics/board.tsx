@@ -8,7 +8,6 @@ import { TextInput } from "@/components/ui/Field";
 import { Tabs } from "@/components/ui/Tabs";
 import { createClient } from "@/lib/supabase/browser";
 import { ORDER_ITEM_SELECT } from "@/lib/item-select";
-import { isFinishedStatus } from "@/lib/types";
 import type {
   Agent,
   Client,
@@ -18,8 +17,9 @@ import type {
 } from "@/lib/types";
 
 import { checkClientDuplicates, createDesignerOrder } from "./actions";
-import { OrderCard, type DesignerOrder } from "./order-card";
+import { OrderCard } from "./order-card";
 import { OrderDetail } from "./order-detail";
+import { isLate, phaseOf, sortForPhase, type DesignerOrder } from "./order-status";
 
 function groupByOrder(items: OrderItemWithOrder[]): DesignerOrder[] {
   const byOrder = new Map<string, DesignerOrder>();
@@ -37,25 +37,14 @@ function groupByOrder(items: OrderItemWithOrder[]): DesignerOrder[] {
       deadlineAt: item.order.deadline_at,
       deliveryDate: item.order.delivery_date,
       brief: item.order.designer_brief,
+      createdAt: item.order.created_at,
       items: [item],
     });
   }
   return Array.from(byOrder.values());
 }
 
-type BoardTab = "all" | "in_design" | "submitted" | "completed";
-
-// Which tab an order belongs to. Same finished rule as the dashboard board:
-// once every item is Ready or Delivered the order is "Completed" (still
-// editable there until the factory completes each item, so a late mistake
-// can be fixed). Before that it's "In design" while any item is still with
-// the designer — a partly-sent order still has work left — and "Submitted"
-// once every item has gone to the factory.
-function tabOf(order: DesignerOrder): Exclude<BoardTab, "all"> {
-  if (order.items.every((i) => isFinishedStatus(i.production_status))) return "completed";
-  if (order.items.some((i) => i.stage === "with_designer")) return "in_design";
-  return "submitted";
-}
+type BoardTab = "all" | "in_design" | "submitted" | "late" | "completed";
 
 function matchesSearch(order: DesignerOrder, query: string): boolean {
   if (!query) return true;
@@ -68,13 +57,17 @@ const EMPTY_MESSAGE: Record<BoardTab, string> = {
   all: "No orders routed to you yet.",
   in_design: "Nothing waiting on your design right now.",
   submitted: "Nothing in production from you right now.",
+  late: "Nothing late. Nice work.",
   completed: "Nothing finished yet.",
 };
+
+// "Late" and "Due today" depend on the clock, so re-check once a minute
+// rather than only when the data changes.
+const CLOCK_TICK_MS = 60_000;
 
 export function Board({
   initialItems,
   designerId,
-  designerName,
   catalog,
   clients,
   agents,
@@ -82,7 +75,6 @@ export function Board({
 }: {
   initialItems: OrderItemWithOrder[];
   designerId: string;
-  designerName: string;
   catalog: ProductCategory[];
   clients: Client[];
   agents: Agent[];
@@ -92,21 +84,35 @@ export function Board({
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [tab, setTab] = useState<BoardTab>("in_design");
   const [search, setSearch] = useState("");
+  const [now, setNow] = useState(() => Date.now());
   const supabaseRef = useRef(createClient());
+
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), CLOCK_TICK_MS);
+    return () => window.clearInterval(id);
+  }, []);
 
   const orders = useMemo(() => groupByOrder(items), [items]);
   // Search narrows every tab, and the counts follow it, so a designer can see
-  // which tab their match landed in.
+  // which tab their match landed in. "Late" overlaps In design / Submitted:
+  // it's a cross-cut of the work tabs, not a stage of its own.
   const query = search.trim().toLowerCase();
   const byTab = useMemo(() => {
-    const groups: Record<BoardTab, DesignerOrder[]> = { all: [], in_design: [], submitted: [], completed: [] };
+    const groups: Record<BoardTab, DesignerOrder[]> = { all: [], in_design: [], submitted: [], late: [], completed: [] };
     for (const order of orders) {
       if (!matchesSearch(order, query)) continue;
       groups.all.push(order);
-      groups[tabOf(order)].push(order);
+      groups[phaseOf(order)].push(order);
+      if (isLate(order, now)) groups.late.push(order);
     }
-    return groups;
-  }, [orders, query]);
+    return {
+      all: sortForPhase(groups.all, false),
+      in_design: sortForPhase(groups.in_design, false),
+      submitted: sortForPhase(groups.submitted, false),
+      late: sortForPhase(groups.late, false),
+      completed: sortForPhase(groups.completed, true),
+    };
+  }, [orders, query, now]);
   const visibleOrders = byTab[tab];
   const selectedOrder = orders.find((o) => o.orderId === selectedOrderId) ?? null;
 
@@ -140,9 +146,16 @@ export function Board({
   }, [refetch]);
 
   return (
-    <div>
-      <div className="mb-4 flex items-center justify-between gap-2">
-        <span className="text-xs text-muted">Signed in as {designerName}</span>
+    <div className="mx-auto max-w-6xl">
+      <div className="mb-4 flex items-center gap-2">
+        <TextInput
+          type="search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search order no, client or product…"
+          aria-label="Search orders"
+          className="flex-1"
+        />
         <CreateOrderDrawer
           variant="designer"
           clients={clients}
@@ -156,22 +169,13 @@ export function Board({
             <button
               type="button"
               onClick={open}
-              className="inline-flex min-h-9 items-center rounded-[var(--radius)] bg-brand-500 px-3 text-xs font-medium text-white hover:bg-brand-600"
+              className="inline-flex min-h-11 shrink-0 items-center rounded-[var(--radius)] bg-brand-500 px-4 text-sm font-medium text-white hover:bg-brand-600"
             >
               + New order
             </button>
           )}
         />
       </div>
-
-      <TextInput
-        type="search"
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        placeholder="Search order no, client or product…"
-        aria-label="Search orders"
-        className="mb-3"
-      />
 
       <Tabs
         label="Order status"
@@ -182,16 +186,17 @@ export function Board({
           { key: "all", label: "All" },
           { key: "in_design", label: "In design", count: byTab.in_design.length },
           { key: "submitted", label: "Submitted", count: byTab.submitted.length },
+          { key: "late", label: "Late", count: byTab.late.length, tone: "warning" },
           { key: "completed", label: "Completed" },
         ]}
       />
 
       <div role="tabpanel" className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {visibleOrders.map((order) => (
-          <OrderCard key={order.orderId} order={order} onOpen={() => setSelectedOrderId(order.orderId)} />
+          <OrderCard key={order.orderId} order={order} now={now} onOpen={() => setSelectedOrderId(order.orderId)} />
         ))}
         {visibleOrders.length === 0 ? (
-          <p className="rounded-[var(--radius)] border border-dashed border-border p-3 text-xs text-muted md:col-span-2 xl:col-span-3">
+          <p className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted md:col-span-2 xl:col-span-3">
             {query ? `No orders match “${search.trim()}”.` : EMPTY_MESSAGE[tab]}
           </p>
         ) : null}
@@ -209,4 +214,3 @@ export function Board({
     </div>
   );
 }
-
