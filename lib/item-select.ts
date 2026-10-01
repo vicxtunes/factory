@@ -14,6 +14,7 @@ export const ORDER_ITEM_SELECT = `
   unit_price,
   catalog_product:products (price),
   catalog_variant:product_variants (price),
+  offer:item_offer,
   category:product_categories (name),
   order:orders!inner (
     order_no, client_id, client_name, client_phone, delivery_date, status, stage, assigned_designer_id,

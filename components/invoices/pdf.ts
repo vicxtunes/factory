@@ -178,8 +178,16 @@ export async function downloadInvoicePdf(invoice: InvoiceView, currencySymbol: s
   };
 
   // --- Totals -----------------------------------------------------------------
-  ensure(28);
+  ensure(invoice.discount > 0 ? 40 : 28);
   const TX = 110;
+  if (invoice.discount > 0) {
+    doc.setFont("helvetica", "normal").setFontSize(10).setTextColor(...MUTED);
+    doc.text("Subtotal", TX + 3, y + 5);
+    doc.setTextColor(...INK).text(money(invoice.amount + invoice.discount), RIGHT - 3, y + 5, { align: "right" });
+    doc.setTextColor(...MUTED).text("Discount", TX + 3, y + 11);
+    doc.setTextColor(...INK).text(`-${money(invoice.discount)}`, RIGHT - 3, y + 11, { align: "right" });
+    y += 14;
+  }
   doc.setFillColor(...SHADE).rect(TX, y, RIGHT - TX, 10, "F");
   doc.setDrawColor(...RULE).line(TX, y + 10, RIGHT, y + 10);
   doc.setFont("helvetica", "bold").setFontSize(11).setTextColor(...INK);

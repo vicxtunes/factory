@@ -5,6 +5,7 @@ import "server-only";
 // rules. Money (what's been paid, payment history) comes from lib/wallet.
 
 import { CLIENT_STATUS_LABELS, clientStatus } from "@/lib/orders/clientStatus";
+import type { Offer } from "@/lib/discounts/core/model";
 import { catalogUnitPrice, estimateUnitPrice, orderAmount } from "@/lib/orders/pricing";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { OrderStage, ProductionStatus } from "@/lib/types";
@@ -28,6 +29,9 @@ interface ItemRow {
   created_at: string;
   catalog_product: { price: number | null; description: string | null; unit: string | null } | null;
   catalog_variant: { price: number | null } | null;
+  offer: Offer | null;
+  /** The catalog list price kept when the line was first priced (discounts). */
+  list_unit_price: number | null;
   category: { name: string } | null;
 }
 
@@ -81,6 +85,7 @@ const SELECT = `
     id, product, product_type, size, cover_type, lamination_type, box_type, qty, unit_price, unit,
     stage, production_status, assigned_worker_id, created_at,
     catalog_product:products (price, description, unit), catalog_variant:product_variants (price),
+    offer:item_offer, list_unit_price,
     category:product_categories (name)
   )
 `;
@@ -99,6 +104,12 @@ function toOrder(row: OrderRow): InvoiceOrder {
   const catalog = (i: ItemRow) => {
     const price = catalogUnitPrice(i);
     return price == null ? null : Math.round(price);
+  };
+  // The list price to show beside a discounted line: the one kept when it was
+  // first invoiced, else the running offer's. Null unless it's above the price.
+  const listPrice = (i: ItemRow, price: number | null) => {
+    const list = i.list_unit_price != null ? Number(i.list_unit_price) : i.offer ? Number(i.offer.listPrice) : null;
+    return list != null && price != null && list > price ? list : null;
   };
 
   return {
@@ -122,6 +133,7 @@ function toOrder(row: OrderRow): InvoiceOrder {
         qty: i.qty,
         unit: unit(i),
         unitPrice: price,
+        listUnitPrice: listPrice(i, price),
         lineTotal: price == null ? null : price * i.qty,
         progress: row.cancelled_at ? "Cancelled" : CLIENT_STATUS_LABELS[clientStatus(i)],
       };
@@ -140,6 +152,7 @@ function toOrder(row: OrderRow): InvoiceOrder {
         qty: i.qty,
         unit: unit(i),
         unitPrice: price,
+        listUnitPrice: listPrice(i, price),
         lineTotal: price == null ? null : price * i.qty,
         progress: row.cancelled_at ? "Cancelled" : CLIENT_STATUS_LABELS[clientStatus(i)],
       };

@@ -6,6 +6,7 @@ import Link from "next/link";
 
 import { Button } from "@/components/ui/Button";
 import { useCurrency } from "@/lib/currency/useCurrency";
+import { offerBadge } from "@/lib/discounts/core/rules";
 import type { Currency, Product, ProductCategory, ShowroomViewMode } from "@/lib/types";
 
 import type { ShowroomSceneHandle } from "./showroom-scene";
@@ -558,19 +559,34 @@ export function ProductShowcase({
           {(() => {
             const selectedVariant = product.variants.find((v) => v.id === selectedVariantId) ?? null;
             // A selected variant's own price overrides the product's base
-            // price — see ProductVariant.price's comment in lib/types.ts.
-            const effectivePrice = selectedVariant?.price ?? product.price ?? null;
+            // price — see ProductVariant.price's comment in lib/types.ts. A
+            // running discount (lib/discounts) replaces either.
+            const listPrice = selectedVariant?.price ?? product.price ?? null;
+            const offer = (selectedVariant ?? product).offer ?? null;
+            const effectivePrice = offer?.price ?? listPrice;
             if (!showPrices || effectivePrice == null) {
               return <p className="text-lg font-semibold text-showroom-ink/70">Pricing confirmed after review</p>;
             }
             const amount = currency.format(effectivePrice);
             return (
-              <p className="text-2xl font-bold tabular-nums text-brand-600 dark:text-brand-400 sm:text-3xl">
-                {!selectedVariant && product.variants.length > 0 ? (
-                  <span className="mr-2 text-sm font-medium text-showroom-ink/60">From</span>
+              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                <p className="text-2xl font-bold tabular-nums text-brand-600 dark:text-brand-400 sm:text-3xl">
+                  {!selectedVariant && product.variants.length > 0 ? (
+                    <span className="mr-2 text-sm font-medium text-showroom-ink/60">From</span>
+                  ) : null}
+                  {amount}
+                </p>
+                {offer ? (
+                  <>
+                    <span className="text-base tabular-nums text-showroom-ink/50 line-through">
+                      {currency.format(offer.listPrice)}
+                    </span>
+                    <span className="rounded-full bg-error-600 px-2 py-0.5 text-xs font-semibold text-white">
+                      {offerBadge(offer, currency.format)}
+                    </span>
+                  </>
                 ) : null}
-                {amount}
-              </p>
+              </div>
             );
           })()}
 
