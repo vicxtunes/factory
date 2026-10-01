@@ -7,8 +7,6 @@ import { ShareLinks } from "../../share-link";
 // clients. Any staff member can share; the catalog itself is edited under
 // Products. Lists only what clients can see (active categories and products).
 
-export const dynamic = "force-dynamic";
-
 const productPath = (slug: string) => `/client-side/${encodeURIComponent(slug)}`;
 
 export default async function ShowroomSharePage() {

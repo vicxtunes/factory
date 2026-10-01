@@ -1,3 +1,7 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { unstable_cache } from "next/cache";
+
+import { CATALOG_TAG, createCatalogClient } from "@/lib/catalog-cache";
 import { createClient } from "@/lib/supabase/server";
 import { ORDER_ITEM_SELECT as ITEM_SELECT, selectRecentItems } from "@/lib/item-select";
 import {
@@ -311,8 +315,17 @@ export async function fetchMarketingSlides(activeOnly = false): Promise<Marketin
 
 // Nested category -> products -> variants + custom-attribute catalog, used
 // by the intake wizard's item pickers and the supervisor products panel.
+// The active-only catalog (what clients see) is cached across requests,
+// see lib/catalog-cache.ts.
 export async function fetchProductCatalog(activeOnly = false): Promise<ProductCategory[]> {
-  const supabase = await createClient();
+  return activeOnly ? cachedActiveCatalog() : loadCatalog(await createClient(), false);
+}
+
+const cachedActiveCatalog = unstable_cache(() => loadCatalog(createCatalogClient(), true), ["active-catalog"], {
+  tags: [CATALOG_TAG],
+});
+
+async function loadCatalog(supabase: SupabaseClient, activeOnly: boolean): Promise<ProductCategory[]> {
   let query = supabase
     .from("product_categories")
     .select(CATALOG_SELECT)
@@ -348,30 +361,45 @@ export async function fetchProductBySlug(
 }
 
 // Singleton row — always id 1, created by its migration and never deleted,
-// so this can't come back empty.
-export async function fetchShowroomSettings(): Promise<ShowroomSettings> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("showroom_settings")
-    .select("product_view_mode, show_prices")
-    .eq("id", 1)
-    .single();
-  if (error) throw new Error(error.message);
-  return data as unknown as ShowroomSettings;
-}
+// so this can't come back empty. Cached (lib/catalog-cache.ts).
+export const fetchShowroomSettings = unstable_cache(
+  async (): Promise<ShowroomSettings> => {
+    const { data, error } = await createCatalogClient()
+      .from("showroom_settings")
+      .select("product_view_mode, show_prices")
+      .eq("id", 1)
+      .single();
+    if (error) throw new Error(error.message);
+    return data as unknown as ShowroomSettings;
+  },
+  ["showroom-settings"],
+  { tags: [CATALOG_TAG] },
+);
 
 // Boss-managed currencies clients may view prices in — see lib/types.ts's
 // Currency comment. `activeOnly` is what the client-facing showroom/order
 // form want; the dashboard's currency manager passes false to also show
 // currencies the boss has retired (still listed, just not offerable).
-export async function fetchBaseCurrencySymbol(): Promise<string> {
-  const supabase = await createClient();
-  const { data } = await supabase.from("currencies").select("symbol").eq("is_base", true).maybeSingle();
-  return data?.symbol?.trim() || "UGX";
-}
+// The base symbol is read by the root layout on every page, so it's cached
+// with the catalog (lib/catalog-cache.ts), as is the active-only list.
+export const fetchBaseCurrencySymbol = unstable_cache(
+  async (): Promise<string> => {
+    const { data } = await createCatalogClient().from("currencies").select("symbol").eq("is_base", true).maybeSingle();
+    return data?.symbol?.trim() || "UGX";
+  },
+  ["base-currency-symbol"],
+  { tags: [CATALOG_TAG] },
+);
 
 export async function fetchCurrencies(activeOnly = false): Promise<Currency[]> {
-  const supabase = await createClient();
+  return activeOnly ? cachedActiveCurrencies() : loadCurrencies(await createClient(), false);
+}
+
+const cachedActiveCurrencies = unstable_cache(() => loadCurrencies(createCatalogClient(), true), ["active-currencies"], {
+  tags: [CATALOG_TAG],
+});
+
+async function loadCurrencies(supabase: SupabaseClient, activeOnly: boolean): Promise<Currency[]> {
   let query = supabase
     .from("currencies")
     .select("id, code, label, symbol, rate, is_base, active, sort_order")

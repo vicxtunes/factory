@@ -14,8 +14,6 @@ import { ClientShell } from "../shell";
 // dynamic segment, and the database never gives a product one of those slugs
 // (see supabase/migrations/20260926120000_product_slugs.sql).
 
-export const dynamic = "force-dynamic";
-
 // Shared by generateMetadata and the page, so the catalog is read once per request.
 const loadProduct = cache(fetchProductBySlug);
 

@@ -10,7 +10,6 @@ import { ClientShell } from "./shell";
 import { ShowroomView } from "./showroom-view";
 
 export const metadata = { title: "Client Portal — Order Tracker" };
-export const dynamic = "force-dynamic";
 
 export default async function ClientSidePage({
   searchParams,

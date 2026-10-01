@@ -7,7 +7,6 @@ import { ClientShell } from "../shell";
 import { OrderForm } from "../order-form";
 
 export const metadata = { title: "Place Order — Client Portal" };
-export const dynamic = "force-dynamic";
 
 export default async function ClientNewOrderPage({
   searchParams,
