@@ -1,5 +1,6 @@
 import "server-only";
 
+import { cache } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
@@ -19,13 +20,17 @@ import {
   verifyPayload,
 } from "@/lib/auth/cookies";
 
+// Each getter is wrapped in React's cache(): the layout, the page and any
+// helper that asks for the session in the same request share one lookup
+// instead of each going to Supabase again.
+
 export interface WorkerSession {
   worker_id: string;
   name: string;
   avatarUrl: string | null;
 }
 
-export async function getWorkerSession(): Promise<WorkerSession | null> {
+export const getWorkerSession = cache(async (): Promise<WorkerSession | null> => {
   const store = await cookies();
   const session = await verifyPayload<{ worker_id: string }>(store.get(WORKER_COOKIE)?.value);
   if (!session?.worker_id) return null;
@@ -42,7 +47,7 @@ export async function getWorkerSession(): Promise<WorkerSession | null> {
     .maybeSingle();
   if (!data || data.active === false) return null;
   return { worker_id: data.id, name: data.name, avatarUrl: data.avatar_url };
-}
+});
 
 export interface DesignerSession {
   designer_id: string;
@@ -50,7 +55,7 @@ export interface DesignerSession {
   avatarUrl: string | null;
 }
 
-export async function getDesignerSession(): Promise<DesignerSession | null> {
+export const getDesignerSession = cache(async (): Promise<DesignerSession | null> => {
   const store = await cookies();
   const session = await verifyPayload<{ designer_id: string }>(store.get(DESIGNER_COOKIE)?.value);
   if (!session?.designer_id) return null;
@@ -65,7 +70,7 @@ export async function getDesignerSession(): Promise<DesignerSession | null> {
     .maybeSingle();
   if (!data || data.active === false) return null;
   return { designer_id: data.id, name: data.name, avatarUrl: data.avatar_url };
-}
+});
 
 export interface ClientSession {
   client_id: string;
@@ -73,7 +78,7 @@ export interface ClientSession {
   avatarUrl: string | null;
 }
 
-export async function getClientSession(): Promise<ClientSession | null> {
+export const getClientSession = cache(async (): Promise<ClientSession | null> => {
   const store = await cookies();
   const session = await verifyPayload<{ client_id: string }>(store.get(CLIENT_COOKIE)?.value);
   if (!session?.client_id) return null;
@@ -88,7 +93,7 @@ export async function getClientSession(): Promise<ClientSession | null> {
     .maybeSingle();
   if (!data || data.active === false) return null;
   return { client_id: data.id, name: data.name, avatarUrl: data.avatar_url };
-}
+});
 
 export interface DashboardSession {
   userId: string;
@@ -99,17 +104,20 @@ export interface DashboardSession {
 }
 
 // Returns the dashboard session or null (does not redirect).
-export async function getDashboardSession(): Promise<DashboardSession | null> {
+// getClaims() verifies the access token locally (with the project's
+// asymmetric signing keys) instead of asking Supabase Auth on every request.
+// A deleted user's token stays valid until it expires, but deleting a user
+// cascades to their profiles row, so the check below still locks them out.
+export const getDashboardSession = cache(async (): Promise<DashboardSession | null> => {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return null;
+  const { data } = await supabase.auth.getClaims();
+  const claims = data?.claims;
+  if (!claims) return null;
 
   const { data: profile } = await supabase
     .from("profiles")
     .select("role, full_name, avatar_url")
-    .eq("id", user.id)
+    .eq("id", claims.sub)
     .maybeSingle<Pick<Profile, "role" | "full_name" | "avatar_url">>();
   // A Supabase Auth user with no matching profiles row (deleted out from
   // under them, or created outside this app's own createAdminUser, which
@@ -121,13 +129,13 @@ export async function getDashboardSession(): Promise<DashboardSession | null> {
   if (!profile) return null;
 
   return {
-    userId: user.id,
-    email: user.email ?? null,
+    userId: claims.sub,
+    email: claims.email ?? null,
     fullName: profile.full_name,
     avatarUrl: profile.avatar_url,
     role: profile.role,
   };
-}
+});
 
 // Use in dashboard server actions/pages. Redirects to login when unauthenticated.
 export async function requireDashboard(): Promise<DashboardSession> {
