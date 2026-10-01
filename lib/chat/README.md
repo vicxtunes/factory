@@ -25,24 +25,32 @@ lib/chat/
   types.ts            Shared view models. Pure; safe on client and server.
   policy.ts           Every permission rule and limit. Pure; safe on client and server.
   routes.ts           Chat URLs (/chat?c=<id>). Pure.
-  actions.ts          "use server" — the ONLY entry point the browser calls.
+  actions.ts          "use server" — every write the browser makes, plus searches.
+  reads.ts            Server-only reads (inbox, thread, messages, unread, realtime config) for
+                      app/api/chat GET handlers and app/chat. Browser reads go there, not to
+                      Server Actions, which the browser runs one at a time (a send would block them).
   issues.ts           Server-only API for lib/support's issue threads (see "Issue threads").
   server/
     service.ts        Use cases: load, check policy, write, schedule side effects.
     repository.ts     All queries against the chat_* tables. No rules.
     presenter.ts      Rows → view models (viewer-relative titles, signed URLs).
+    run.ts            Shared wrapper: resolve the caller, run a service call, safe errors.
     identity.ts       Adapter: app auth → chat participant.          (touches lib/audit)
     directory.ts      Adapter: people + order tables → names, rules.  (touches app tables)
     storage.ts        Adapter: Supabase Storage for attachments.
     signals.ts        Adapter: Supabase Realtime "doorbells".
     notifier.ts       Adapter: web push.                              (touches lib/push)
   client/
+    api.ts                Browser reads over app/api/chat (same names as the old read actions).
     useChatSignals.ts     Realtime subscription hook (shared, reference-counted).
     useTypingIndicator.ts Typing indicators for the open conversation.
     upload.ts             Direct-to-storage upload with progress.
 
-components/chat/      React UI. Talks only to lib/chat/actions, types, policy, routes.
-app/chat/page.tsx     The /chat route, rendered inside the viewer's own surface chrome.
+components/chat/      React UI. Talks only to lib/chat/actions, client/api, types, policy, routes.
+app/chat/(screen)/layout.tsx  The /chat screen inside the viewer's own surface chrome, with the
+                      inbox loaded server-side. Below app/chat/loading.tsx so links show the
+                      skeleton at once and prefetching never runs its queries.
+app/api/chat/         GET Route Handlers over reads.ts.
 supabase/migrations/20260925100000_chat.sql (+ later 2026092*_chat_*.sql)
 ```
 
@@ -55,7 +63,7 @@ components/chat ──▶ lib/chat/actions ──▶ server/service ──▶ se
 ```
 
 - The rest of the app uses chat **only** through `actions.ts`, `types.ts`, `routes.ts`,
-  `issues.ts` (server code only) and the components in `components/chat/`. Nothing outside
+  `reads.ts` and `issues.ts` (server code only) and the components in `components/chat/`. Nothing outside
   `lib/chat` imports from `lib/chat/server`.
 - One UI exception: the conversation header calls `lib/support`'s `setSupportReportStatus` for
   the Mark resolved button, because support owns report status.
@@ -116,7 +124,7 @@ the browser reaches Supabase as `anon`, and Row Level Security can't tell them a
 2. **Realtime carries no content.** Each person gets a private Broadcast channel whose name is an
    HMAC of their identity with `APP_SECRET`, so it can't be guessed. All staff also share one
    team channel. After a write, the server sends `{ type, conversationId }` to the relevant
-   channels. The browser reacts by re-fetching through access-checked server actions.
+   channels. The browser reacts by re-fetching through the access-checked reads (reads.ts).
 3. **Attachments live in a private bucket** (`chat-attachments`) and are only readable through
    one-hour signed URLs, minted after an access check. Uploads go straight from the browser to
    Storage with a signed token scoped to the conversation's folder. The server then checks that

@@ -14,7 +14,6 @@ import { DesignerLogin } from "./login";
 import { GraphicsShell } from "./shell";
 
 export const metadata = { title: "Graphics — Order Tracker" };
-export const dynamic = "force-dynamic";
 
 export default async function GraphicsPage() {
   const session = await getDesignerSession();

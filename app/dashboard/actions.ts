@@ -5,6 +5,7 @@ import { randomBytes } from "crypto";
 import Papa from "papaparse";
 import { revalidatePath } from "next/cache";
 
+import { catalogChanged } from "@/lib/catalog-cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { fetchBaseCurrencySymbol } from "@/lib/queries";
@@ -884,7 +885,7 @@ export async function createCategory(name: string): Promise<Result> {
   const admin = createAdminClient();
   const { error } = await admin.from("product_categories").insert({ name: trimmed });
   if (error) return uniqueViolation(error, "A category with that name already exists.");
-  revalidatePath("/dashboard/products");
+  catalogChanged();
   return { ok: true };
 }
 
@@ -896,7 +897,7 @@ export async function renameCategory(id: string, name: string): Promise<Result> 
   const admin = createAdminClient();
   const { error } = await admin.from("product_categories").update({ name: trimmed }).eq("id", id);
   if (error) return uniqueViolation(error, "A category with that name already exists.");
-  revalidatePath("/dashboard/products");
+  catalogChanged();
   return { ok: true };
 }
 
@@ -905,7 +906,7 @@ export async function setCategoryActive(id: string, active: boolean): Promise<Re
   const admin = createAdminClient();
   const { error } = await admin.from("product_categories").update({ active }).eq("id", id);
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/dashboard/products");
+  catalogChanged();
   return { ok: true };
 }
 
@@ -919,7 +920,7 @@ export async function createProduct(categoryId: string, name: string): Promise<R
     .from("products")
     .insert({ category_id: categoryId, name: trimmed });
   if (error) return uniqueViolation(error, "A product with that name already exists in this category.");
-  revalidatePath("/dashboard/products");
+  catalogChanged();
   return { ok: true };
 }
 
@@ -931,7 +932,7 @@ export async function renameProduct(id: string, name: string): Promise<Result> {
   const admin = createAdminClient();
   const { error } = await admin.from("products").update({ name: trimmed }).eq("id", id);
   if (error) return uniqueViolation(error, "A product with that name already exists in this category.");
-  revalidatePath("/dashboard/products");
+  catalogChanged();
   return { ok: true };
 }
 
@@ -940,7 +941,7 @@ export async function setProductActive(id: string, active: boolean): Promise<Res
   const admin = createAdminClient();
   const { error } = await admin.from("products").update({ active }).eq("id", id);
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/dashboard/products");
+  catalogChanged();
   return { ok: true };
 }
 
@@ -957,7 +958,7 @@ export async function setProductPrice(id: string, price: string): Promise<Result
   const admin = createAdminClient();
   const { error } = await admin.from("products").update({ price: value }).eq("id", id);
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/dashboard/products");
+  catalogChanged();
   return { ok: true };
 }
 
@@ -971,7 +972,7 @@ export async function setProductUnit(id: string, unit: string): Promise<Result> 
     .update({ unit: unit.trim().slice(0, 30) || null })
     .eq("id", id);
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/dashboard/products");
+  catalogChanged();
   return { ok: true };
 }
 
@@ -983,7 +984,7 @@ export async function setProductDescription(id: string, description: string): Pr
     .update({ description: description.trim() || null })
     .eq("id", id);
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/dashboard/products");
+  catalogChanged();
   revalidatePath("/client-side/showroom");
   return { ok: true };
 }
@@ -998,7 +999,7 @@ export async function createVariant(productId: string, name: string): Promise<Re
     .from("product_variants")
     .insert({ product_id: productId, name: trimmed });
   if (error) return uniqueViolation(error, "A variant with that name already exists for this product.");
-  revalidatePath("/dashboard/products");
+  catalogChanged();
   return { ok: true };
 }
 
@@ -1010,7 +1011,7 @@ export async function renameVariant(id: string, name: string): Promise<Result> {
   const admin = createAdminClient();
   const { error } = await admin.from("product_variants").update({ name: trimmed }).eq("id", id);
   if (error) return uniqueViolation(error, "A variant with that name already exists for this product.");
-  revalidatePath("/dashboard/products");
+  catalogChanged();
   return { ok: true };
 }
 
@@ -1019,7 +1020,7 @@ export async function setVariantActive(id: string, active: boolean): Promise<Res
   const admin = createAdminClient();
   const { error } = await admin.from("product_variants").update({ active }).eq("id", id);
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/dashboard/products");
+  catalogChanged();
   return { ok: true };
 }
 
@@ -1031,7 +1032,7 @@ export async function setShowroomViewMode(mode: ShowroomViewMode): Promise<Resul
   const admin = createAdminClient();
   const { error } = await admin.from("showroom_settings").update({ product_view_mode: mode }).eq("id", 1);
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/dashboard/products");
+  catalogChanged();
   revalidatePath("/client-side/showroom");
   return { ok: true };
 }
@@ -1043,14 +1044,14 @@ export async function setShowPrices(show: boolean): Promise<Result> {
   const admin = createAdminClient();
   const { error } = await admin.from("showroom_settings").update({ show_prices: show }).eq("id", 1);
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/dashboard/products");
+  catalogChanged();
   revalidatePath("/client-side/showroom");
   revalidatePath("/client-side/new");
   return { ok: true };
 }
 
 function revalidateCurrencyViews(): void {
-  revalidatePath("/dashboard/products");
+  catalogChanged();
   revalidatePath("/client-side/showroom");
   revalidatePath("/client-side/new");
 }
@@ -1137,6 +1138,7 @@ export async function setCurrencySymbol(symbol: string): Promise<Result> {
   if (trimmed.length > 8) return { ok: false, error: "Keep the symbol to 8 characters or fewer." };
   const { error } = await createAdminClient().from("currencies").update({ symbol: trimmed }).eq("is_base", true);
   if (error) return { ok: false, error: error.message };
+  catalogChanged();
   revalidatePath("/", "layout");
   return { ok: true };
 }
@@ -1183,7 +1185,7 @@ export async function setVariantPrice(id: string, price: string): Promise<Result
   const admin = createAdminClient();
   const { error } = await admin.from("product_variants").update({ price: value }).eq("id", id);
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/dashboard/products");
+  catalogChanged();
   return { ok: true };
 }
 
@@ -1221,7 +1223,7 @@ export async function createAttribute(categoryId: string, input: AttributeInput)
     .from("category_attributes")
     .insert({ category_id: categoryId, ...normalized });
   if (error) return uniqueViolation(error, "A field with that name already exists in this category.");
-  revalidatePath("/dashboard/products");
+  catalogChanged();
   return { ok: true };
 }
 
@@ -1236,7 +1238,7 @@ export async function updateAttribute(id: string, input: AttributeInput): Promis
   const admin = createAdminClient();
   const { error } = await admin.from("category_attributes").update(normalized).eq("id", id);
   if (error) return uniqueViolation(error, "A field with that name already exists in this category.");
-  revalidatePath("/dashboard/products");
+  catalogChanged();
   return { ok: true };
 }
 
@@ -1245,7 +1247,7 @@ export async function deleteAttribute(id: string): Promise<Result> {
   const admin = createAdminClient();
   const { error } = await admin.from("category_attributes").delete().eq("id", id);
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/dashboard/products");
+  catalogChanged();
   return { ok: true };
 }
 

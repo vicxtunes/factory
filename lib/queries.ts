@@ -1,5 +1,9 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { unstable_cache } from "next/cache";
+
+import { CATALOG_TAG, createCatalogClient } from "@/lib/catalog-cache";
 import { createClient } from "@/lib/supabase/server";
-import { ORDER_ITEM_SELECT as ITEM_SELECT } from "@/lib/item-select";
+import { ORDER_ITEM_SELECT as ITEM_SELECT, selectRecentItems } from "@/lib/item-select";
 import {
   type Agent,
   type Announcement,
@@ -10,8 +14,10 @@ import {
   type NotificationRow,
   type OrderItemWithOrder,
   type Product,
+  type ProductionStatus,
   type ProductCategory,
   type ShowroomSettings,
+  type Urgency,
   type WorkerPublic,
 } from "@/lib/types";
 
@@ -20,9 +26,7 @@ import {
 // an item-level check, not an order-level one (see app/graphics/actions.ts).
 export async function fetchBoardItems(): Promise<OrderItemWithOrder[]> {
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("order_items")
-    .select(ITEM_SELECT)
+  const { data, error } = await selectRecentItems(supabase)
     .eq("stage", "factory")
     // Client-portal orders sit unreleased (see lib/orders/create.ts's
     // `releaseImmediately`) until the receptionist routes them post-approval
@@ -91,33 +95,38 @@ export async function fetchApprovalQueueItems(): Promise<OrderItemWithOrder[]> {
   return (data ?? []) as unknown as OrderItemWithOrder[];
 }
 
-// Every item, for the dashboard overview's stats (all order statuses,
-// including a client-portal order still sitting unreleased in the
-// receptionist's quote queue) — kept separate from fetchOfficeItems below so
-// this one page's totals aren't quietly narrowed by that split. Cancelled
-// orders are left out — they're not work, and would inflate "not started".
-export async function fetchAllItems(): Promise<OrderItemWithOrder[]> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("order_items")
-    .select(ITEM_SELECT)
-    .is("order.cancelled_at", null)
-    .order("created_at", { ascending: false });
-  if (error) throw new Error(error.message);
-  return (data ?? []) as unknown as OrderItemWithOrder[];
+// The dashboard home's totals, counted in the database (dashboard_item_stats
+// SQL function) rather than by downloading every item. Covers every order
+// status, including a client-portal order still unreleased in the
+// receptionist's quote queue; cancelled orders are left out — they're not
+// work, and would inflate "not started".
+export interface DashboardItemStats {
+  total: number;
+  delayed: number;
+  completed_today: number;
+  by_status: Partial<Record<ProductionStatus, number>>;
+  by_urgency: Partial<Record<Urgency, number>>;
 }
 
-// The "Office Orders" board (/dashboard/orders): every item, same as
-// fetchAllItems, but only once its order has actually been released —
+export async function fetchDashboardItemStats(todayStart: Date): Promise<DashboardItemStats> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("dashboard_item_stats", {
+    p_today_start: todayStart.toISOString(),
+  });
+  if (error) throw new Error(error.message);
+  return data as DashboardItemStats;
+}
+
+// The "Office Orders" board (/dashboard/orders): recent items (open orders
+// plus the last RECENT_DAYS days, see selectRecentItems), only once their
+// order has actually been released —
 // same filter and reasoning as fetchBoardItems above. A client-portal order
 // still waiting on a quote or the client's approval belongs on the
 // receptionist's "Client Orders" queue (fetchApprovalQueueItems) instead,
 // not mixed in here alongside confirmed work.
 export async function fetchOfficeItems(): Promise<OrderItemWithOrder[]> {
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("order_items")
-    .select(ITEM_SELECT)
+  const { data, error } = await selectRecentItems(supabase)
     .not("order.released_at", "is", null)
     .order("created_at", { ascending: false });
   if (error) throw new Error(error.message);
@@ -306,8 +315,22 @@ export async function fetchMarketingSlides(activeOnly = false): Promise<Marketin
 
 // Nested category -> products -> variants + custom-attribute catalog, used
 // by the intake wizard's item pickers and the supervisor products panel.
+// The active-only catalog (what clients see) is cached across requests,
+// see lib/catalog-cache.ts.
 export async function fetchProductCatalog(activeOnly = false): Promise<ProductCategory[]> {
-  const supabase = await createClient();
+  return activeOnly ? cachedActiveCatalog() : loadCatalog(await createClient(), false);
+}
+
+// Also refreshed every minute: prices include running discounts (lib/discounts),
+// and a scheduled discount starts or ends on the clock, not on an edit.
+const DISCOUNT_CLOCK_SECONDS = 60;
+
+const cachedActiveCatalog = unstable_cache(() => loadCatalog(createCatalogClient(), true), ["active-catalog"], {
+  tags: [CATALOG_TAG],
+  revalidate: DISCOUNT_CLOCK_SECONDS,
+});
+
+async function loadCatalog(supabase: SupabaseClient, activeOnly: boolean): Promise<ProductCategory[]> {
   let query = supabase
     .from("product_categories")
     .select(CATALOG_SELECT)
@@ -343,30 +366,45 @@ export async function fetchProductBySlug(
 }
 
 // Singleton row — always id 1, created by its migration and never deleted,
-// so this can't come back empty.
-export async function fetchShowroomSettings(): Promise<ShowroomSettings> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("showroom_settings")
-    .select("product_view_mode, show_prices")
-    .eq("id", 1)
-    .single();
-  if (error) throw new Error(error.message);
-  return data as unknown as ShowroomSettings;
-}
+// so this can't come back empty. Cached (lib/catalog-cache.ts).
+export const fetchShowroomSettings = unstable_cache(
+  async (): Promise<ShowroomSettings> => {
+    const { data, error } = await createCatalogClient()
+      .from("showroom_settings")
+      .select("product_view_mode, show_prices")
+      .eq("id", 1)
+      .single();
+    if (error) throw new Error(error.message);
+    return data as unknown as ShowroomSettings;
+  },
+  ["showroom-settings"],
+  { tags: [CATALOG_TAG] },
+);
 
 // Boss-managed currencies clients may view prices in — see lib/types.ts's
 // Currency comment. `activeOnly` is what the client-facing showroom/order
 // form want; the dashboard's currency manager passes false to also show
 // currencies the boss has retired (still listed, just not offerable).
-export async function fetchBaseCurrencySymbol(): Promise<string> {
-  const supabase = await createClient();
-  const { data } = await supabase.from("currencies").select("symbol").eq("is_base", true).maybeSingle();
-  return data?.symbol?.trim() || "UGX";
-}
+// The base symbol is read by the root layout on every page, so it's cached
+// with the catalog (lib/catalog-cache.ts), as is the active-only list.
+export const fetchBaseCurrencySymbol = unstable_cache(
+  async (): Promise<string> => {
+    const { data } = await createCatalogClient().from("currencies").select("symbol").eq("is_base", true).maybeSingle();
+    return data?.symbol?.trim() || "UGX";
+  },
+  ["base-currency-symbol"],
+  { tags: [CATALOG_TAG] },
+);
 
 export async function fetchCurrencies(activeOnly = false): Promise<Currency[]> {
-  const supabase = await createClient();
+  return activeOnly ? cachedActiveCurrencies() : loadCurrencies(await createClient(), false);
+}
+
+const cachedActiveCurrencies = unstable_cache(() => loadCurrencies(createCatalogClient(), true), ["active-currencies"], {
+  tags: [CATALOG_TAG],
+});
+
+async function loadCurrencies(supabase: SupabaseClient, activeOnly: boolean): Promise<Currency[]> {
   let query = supabase
     .from("currencies")
     .select("id, code, label, symbol, rate, is_base, active, sort_order")

@@ -4,6 +4,7 @@ import { randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { catalogChanged } from "@/lib/catalog-cache";
 import { requireRole } from "@/lib/auth/session";
 
 import { PRODUCT_MEDIA_BUCKET, safeStorageSegment } from "./client";
@@ -98,7 +99,7 @@ export async function confirmProductMediaUpload(
     if (error) return { ok: false, error: error.message };
   }
 
-  revalidatePath("/dashboard/products");
+  catalogChanged();
   revalidatePath("/client-side/showroom");
   return { ok: true };
 }
@@ -121,7 +122,7 @@ export async function clearProductDisplayImage(productId: string): Promise<Resul
   if (existing?.display_image_path) {
     await admin.storage.from(PRODUCT_MEDIA_BUCKET).remove([existing.display_image_path]);
   }
-  revalidatePath("/dashboard/products");
+  catalogChanged();
   revalidatePath("/client-side/showroom");
   return { ok: true };
 }
@@ -144,7 +145,7 @@ export async function clearProductPreviewVideo(productId: string): Promise<Resul
   if (existing?.preview_video_path) {
     await admin.storage.from(PRODUCT_MEDIA_BUCKET).remove([existing.preview_video_path]);
   }
-  revalidatePath("/dashboard/products");
+  catalogChanged();
   revalidatePath("/client-side/showroom");
   return { ok: true };
 }
@@ -167,7 +168,7 @@ export async function deleteProductMedia(mediaId: string): Promise<Result> {
   if (media?.storage_path) {
     await admin.storage.from(PRODUCT_MEDIA_BUCKET).remove([media.storage_path]);
   }
-  revalidatePath("/dashboard/products");
+  catalogChanged();
   revalidatePath("/client-side/showroom");
   return { ok: true };
 }

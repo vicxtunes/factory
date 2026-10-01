@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/Button";
@@ -14,6 +15,7 @@ import {
   clearProductPreviewVideo,
   deleteProductMedia,
 } from "@/lib/storage/product-media-actions";
+import { canOptimizeImage } from "@/lib/storage/client";
 import { uploadProductMedia } from "@/lib/storage/product-media-client";
 import type {
   AttributeType,
@@ -747,10 +749,9 @@ function MediaPreview({
       <div className="group relative h-36 overflow-hidden rounded-xl border border-border bg-background">
         {url ? (
           kind === "video" ? (
-            <video src={url} className="h-full w-full object-cover" muted />
+            <video src={url} className="h-full w-full object-cover" muted preload="metadata" />
           ) : (
-            // eslint-disable-next-line @next/next/no-img-element -- Supabase Storage URL, can't be allowlisted for next/image
-            <img src={url} alt="" className="h-full w-full object-cover" />
+            <Image src={url} alt="" fill sizes="320px" unoptimized={!canOptimizeImage(url)} className="object-cover" />
           )
         ) : (
           <div className="flex h-full w-full items-center justify-center text-xs text-muted">
@@ -921,10 +922,16 @@ function ProductMediaSection({
                 className="group relative aspect-square overflow-hidden rounded-lg border border-border"
               >
                 {m.kind === "video" ? (
-                  <video src={m.secure_url} className="h-full w-full object-cover" muted />
+                  <video src={m.secure_url} className="h-full w-full object-cover" muted preload="metadata" />
                 ) : (
-                  // eslint-disable-next-line @next/next/no-img-element -- Supabase Storage URL, can't be allowlisted for next/image
-                  <img src={m.secure_url} alt="" className="h-full w-full object-cover" />
+                  <Image
+                    src={m.secure_url}
+                    alt=""
+                    fill
+                    sizes="128px"
+                    unoptimized={!canOptimizeImage(m.secure_url)}
+                    className="object-cover"
+                  />
                 )}
                 <button
                   type="button"

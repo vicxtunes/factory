@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
 import { Drawer } from "@/components/ui/Drawer";
 import { SectionLabel } from "@/components/ui/SectionLabel";
 import { createClient } from "@/lib/supabase/browser";
-import { ORDER_ITEM_SELECT } from "@/lib/item-select";
+import { useLiveOrderItems, type LoadItems } from "@/lib/supabase/useLiveOrderItems";
+import { selectRecentItems } from "@/lib/item-select";
 import { sortItems } from "@/lib/sorting";
 import {
   BOARD_COLUMNS,
@@ -44,35 +45,26 @@ export function Board({
 
   const selectedItem = items.find((i) => i.id === selectedId) ?? null;
 
-  const refetch = useCallback(async () => {
-    const { data } = await supabaseRef.current
-      .from("order_items")
-      .select(ORDER_ITEM_SELECT)
-      .eq("stage", "factory")
-      .not("order.released_at", "is", null)
-      .is("order.cancelled_at", null);
-    if (data) setItems(data as unknown as OrderItemWithOrder[]);
-  }, []);
+  const load = useCallback<LoadItems>(
+    async (orderIds) => {
+      let query = selectRecentItems(supabaseRef.current)
+        .eq("stage", "factory")
+        .not("order.released_at", "is", null)
+        .is("order.cancelled_at", null);
+      if (orderIds) query = query.in("order_id", orderIds);
+      const { data } = await query;
+      return data as unknown as OrderItemWithOrder[] | null;
+    },
+    [],
+  );
 
-  useEffect(() => {
-    const supabase = supabaseRef.current;
-    const channel = supabase
-      .channel("factory-board")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "order_items" },
-        () => refetch(),
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "orders" },
-        () => refetch(),
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [refetch]);
+  // Full reload, after this user's own changes.
+  const refetch = useCallback(async () => {
+    const fresh = await load();
+    if (fresh) setItems(fresh);
+  }, [load]);
+
+  useLiveOrderItems("factory-board", items, setItems, load);
 
   const visible = mineOnly
     ? items.filter((i) => i.assigned_worker_id === workerId)

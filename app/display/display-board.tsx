@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { ORDER_ITEM_SELECT } from "@/lib/item-select";
+import { selectRecentItems } from "@/lib/item-select";
 import { sortItems } from "@/lib/sorting";
 import { createClient } from "@/lib/supabase/browser";
+import { useLiveOrderItems, type LoadItems } from "@/lib/supabase/useLiveOrderItems";
 import {
   BOARD_COLUMNS,
   STATUS_LABELS,
@@ -41,27 +42,20 @@ export function DisplayBoard({ initialItems }: { initialItems: OrderItemWithOrde
   const supabaseRef = useRef(createClient());
   const now = useClock();
 
-  const refetch = useCallback(async () => {
-    const { data } = await supabaseRef.current
-      .from("order_items")
-      .select(ORDER_ITEM_SELECT)
-      .eq("stage", "factory")
-      .not("order.released_at", "is", null)
-      .is("order.cancelled_at", null);
-    if (data) setItems(data as unknown as OrderItemWithOrder[]);
-  }, []);
+  const load = useCallback<LoadItems>(
+    async (orderIds) => {
+      let query = selectRecentItems(supabaseRef.current)
+        .eq("stage", "factory")
+        .not("order.released_at", "is", null)
+        .is("order.cancelled_at", null);
+      if (orderIds) query = query.in("order_id", orderIds);
+      const { data } = await query;
+      return data as unknown as OrderItemWithOrder[] | null;
+    },
+    [],
+  );
 
-  useEffect(() => {
-    const supabase = supabaseRef.current;
-    const channel = supabase
-      .channel("display-board")
-      .on("postgres_changes", { event: "*", schema: "public", table: "order_items" }, () => refetch())
-      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, () => refetch())
-      .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [refetch]);
+  useLiveOrderItems("display-board", items, setItems, load);
 
   // Delayed is its own category, not a color layered onto whatever status
   // column an item happens to sit in — so a delayed-but-ready item shows up

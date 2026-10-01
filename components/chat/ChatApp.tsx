@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { usePathname, useSearchParams } from "next/navigation";
 
-import { getInbox } from "@/lib/chat/actions";
+import { getInbox } from "@/lib/chat/client/api";
 import { useChatSignals, type ChatSignalHandler } from "@/lib/chat/client/useChatSignals";
+import { participantKey } from "@/lib/chat/policy";
 import { CONVERSATION_PARAM } from "@/lib/chat/routes";
 import type { ConversationSummary, ParticipantRef } from "@/lib/chat/types";
 
@@ -14,6 +15,8 @@ import { CHAT_FRAME_CLASS } from "./ChatSkeleton";
 import { ChatIcon } from "./icons";
 import { NewConversationDrawer } from "./NewConversationDrawer";
 
+const INBOX_BATCH_MS = 1000;
+
 /**
  * The complete chat experience, surface-agnostic: drop it into any page
  * inside any shell. Two panes on desktop (inbox + thread). On phones it takes
@@ -21,15 +24,25 @@ import { NewConversationDrawer } from "./NewConversationDrawer";
  * at a time, and `exitHref` is where the inbox's back arrow returns to. The
  * open conversation lives in the URL (?c=<id>) so push notifications and
  * "Open order chat" buttons can deep-link into it.
+ *
+ * `initialInbox` is loaded by the server with the page (app/chat/layout.tsx),
+ * so the list shows at once; realtime signals keep it fresh from there.
  */
-export function ChatApp({ viewer, exitHref }: { viewer: ParticipantRef; exitHref?: string }) {
-  const router = useRouter();
+export function ChatApp({
+  viewer,
+  exitHref,
+  initialInbox,
+}: {
+  viewer: ParticipantRef;
+  exitHref?: string;
+  initialInbox?: ConversationSummary[];
+}) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const activeId = searchParams.get(CONVERSATION_PARAM);
 
-  const [inbox, setInbox] = useState<ConversationSummary[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [inbox, setInbox] = useState<ConversationSummary[]>(initialInbox ?? []);
+  const [loading, setLoading] = useState(!initialInbox);
   const [error, setError] = useState<string | null>(null);
   const [newOpen, setNewOpen] = useState(false);
   // Bumped when a realtime signal concerns the open conversation.
@@ -49,28 +62,37 @@ export function ChatApp({ viewer, exitHref }: { viewer: ParticipantRef; exitHref
     [],
   );
 
+  const hasInitialInbox = !!initialInbox;
   useEffect(() => {
-    loadInbox();
-  }, [loadInbox]);
+    if (!hasInitialInbox) loadInbox();
+  }, [loadInbox, hasInitialInbox]);
 
+  // A burst of messages sends a burst of signals: the inbox reloads once,
+  // a moment after the last one. The open conversation refreshes at once.
+  const inboxTimer = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(inboxTimer.current), []);
   const onSignal = useCallback<ChatSignalHandler>(
     (signal) => {
-      loadInbox();
+      window.clearTimeout(inboxTimer.current);
+      inboxTimer.current = window.setTimeout(loadInbox, INBOX_BATCH_MS);
       if (signal.type === "refresh" || signal.conversationId === activeId) setThreadRefreshKey((k) => k + 1);
     },
     [loadInbox, activeId],
   );
   useChatSignals(onSignal);
 
+  // Switching conversations only rewrites the URL (Next keeps
+  // useSearchParams in sync with history.replaceState): no server render,
+  // ConversationView loads the thread itself.
   const select = useCallback(
     (id: string | null) => {
       const params = new URLSearchParams(searchParams.toString());
       if (id) params.set(CONVERSATION_PARAM, id);
       else params.delete(CONVERSATION_PARAM);
       const qs = params.toString();
-      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+      window.history.replaceState(null, "", qs ? `${pathname}?${qs}` : pathname);
     },
-    [router, pathname, searchParams],
+    [pathname, searchParams],
   );
 
   return (
@@ -97,6 +119,7 @@ export function ChatApp({ viewer, exitHref }: { viewer: ParticipantRef; exitHref
           <ConversationView
             key={activeId}
             conversationId={activeId}
+            cacheKey={participantKey(viewer)}
             refreshKey={threadRefreshKey}
             onBack={() => select(null)}
             onRead={loadInbox}

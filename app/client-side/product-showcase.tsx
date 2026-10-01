@@ -2,11 +2,13 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
+import Image from "next/image";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/Button";
 import { useCurrency } from "@/lib/currency/useCurrency";
 import { offerBadge } from "@/lib/discounts/core/rules";
+import { canOptimizeImage } from "@/lib/storage/client";
 import type { Currency, Product, ProductCategory, ShowroomViewMode } from "@/lib/types";
 
 import type { ShowroomSceneHandle } from "./showroom-scene";
@@ -199,12 +201,15 @@ function GalleryLightbox({
         </>
       ) : null}
 
-      {/* eslint-disable-next-line @next/next/no-img-element -- Supabase Storage URL, can't be allowlisted for next/image */}
-      <img
+      <Image
         src={media[index].url}
         alt=""
+        width={1600}
+        height={1600}
+        sizes="100vw"
+        unoptimized={!canOptimizeImage(media[index].url)}
         draggable={false}
-        className={`max-h-full max-w-full select-none rounded-xl object-contain ${
+        className={`h-auto max-h-full w-auto max-w-full select-none rounded-xl object-contain ${
           swipe.dragging ? "" : "transition-transform duration-200"
         }`}
         style={{ transform: `translateX(${swipe.offset}px)` }}
@@ -261,17 +266,24 @@ function DetailsOverlay({
           </button>
         </div>
         {videoUrl ? (
-          <video src={videoUrl} controls className="mb-4 w-full rounded-xl" />
+          <video src={videoUrl} controls preload="metadata" className="mb-4 w-full rounded-xl" />
         ) : null}
         <div className="columns-2 gap-3 sm:columns-3">
           {media.map((m, i) => (
             <div key={m.url + i} className="mb-3 break-inside-avoid overflow-hidden rounded-xl bg-white/5">
               {m.kind === "video" ? (
-                <video src={m.url} controls className="w-full" />
+                <video src={m.url} controls preload="metadata" className="w-full" />
               ) : (
                 <button type="button" onClick={() => onOpenLightbox(i)} className="block w-full">
-                  {/* eslint-disable-next-line @next/next/no-img-element -- Supabase Storage URL, can't be allowlisted for next/image */}
-                  <img src={m.url} alt="" className="w-full transition-opacity hover:opacity-90" />
+                  <Image
+                    src={m.url}
+                    alt=""
+                    width={800}
+                    height={800}
+                    sizes="(max-width: 640px) 50vw, 256px"
+                    unoptimized={!canOptimizeImage(m.url)}
+                    className="h-auto w-full transition-opacity hover:opacity-90"
+                  />
                 </button>
               )}
             </div>
@@ -467,14 +479,17 @@ export function ProductShowcase({
           ) : (
             <div className="absolute inset-0 overflow-hidden rounded-2xl bg-black/5" {...mediaSwipe.bind}>
               {current.kind === "video" ? (
-                <video src={current.url} controls className="h-full w-full object-cover" />
+                <video src={current.url} controls preload="metadata" className="h-full w-full object-cover" />
               ) : (
-                // eslint-disable-next-line @next/next/no-img-element -- Supabase Storage URL, can't be allowlisted for next/image
-                <img
+                <Image
                   src={current.url}
                   alt={product.name}
+                  fill
+                  sizes="(max-width: 768px) 100vw, 768px"
+                  loading="eager"
+                  unoptimized={!canOptimizeImage(current.url)}
                   draggable={false}
-                  className={`h-full w-full select-none object-cover ${
+                  className={`select-none object-cover ${
                     mediaSwipe.dragging ? "" : "transition-transform duration-200"
                   }`}
                   style={{ transform: `translateX(${mediaSwipe.offset}px)` }}

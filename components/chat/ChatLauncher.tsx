@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 
-import { getUnreadTotal } from "@/lib/chat/actions";
+import { getUnreadTotal } from "@/lib/chat/client/api";
 import { useChatSignals } from "@/lib/chat/client/useChatSignals";
 import { chatHref } from "@/lib/chat/routes";
 

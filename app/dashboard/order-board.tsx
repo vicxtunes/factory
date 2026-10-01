@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 
 import { CreateOrderDrawer } from "@/components/order/CreateOrderDrawer";
 import { ExportButtons } from "@/components/order/ExportButtons";
@@ -11,7 +11,8 @@ import { Select, TextInput } from "@/components/ui/Field";
 import { Popover } from "@/components/ui/Popover";
 import { SectionLabel } from "@/components/ui/SectionLabel";
 import { createClient } from "@/lib/supabase/browser";
-import { ORDER_ITEM_SELECT } from "@/lib/item-select";
+import { useLiveOrderItems, type LoadItems } from "@/lib/supabase/useLiveOrderItems";
+import { ORDER_ITEM_SELECT, RECENT_DAYS, selectRecentItems } from "@/lib/item-select";
 import {
   activeChips,
   activeFilterCount,
@@ -140,33 +141,51 @@ export function OrderBoard({
     [workerById],
   );
 
+  // The board starts with open orders plus the last RECENT_DAYS days (see
+  // fetchOfficeItems); older finished/cancelled orders load only on request,
+  // and from then on every reload keeps them.
+  const [olderLoaded, setOlderLoaded] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+
+  const load = useCallback<LoadItems>(
+    async (orderIds) => {
+      // Same released-orders-only filter as the server-side fetchOfficeItems
+      // this board is initially seeded with — otherwise a Realtime event on
+      // an unreleased client-portal order would sneak it back in here.
+      let query = (
+        olderLoaded
+          ? supabaseRef.current.from("order_items").select(ORDER_ITEM_SELECT)
+          : selectRecentItems(supabaseRef.current)
+      )
+        .not("order.released_at", "is", null)
+        .order("created_at", { ascending: false });
+      if (orderIds) query = query.in("order_id", orderIds);
+      const { data } = await query;
+      return data as unknown as OrderItemWithOrder[] | null;
+    },
+    [olderLoaded],
+  );
+
+  // Full reload, after this user's own changes.
   const refetch = useCallback(async () => {
-    // Same released-orders-only filter as the server-side fetchOfficeItems
-    // this board is initially seeded with — otherwise a Realtime event on
-    // an unreleased client-portal order would sneak it back in here.
+    const fresh = await load();
+    if (fresh) setItems(fresh);
+  }, [load]);
+
+  useLiveOrderItems("dashboard-items", items, setItems, load);
+
+  async function loadOlder() {
+    setLoadingOlder(true);
     const { data } = await supabaseRef.current
       .from("order_items")
       .select(ORDER_ITEM_SELECT)
       .not("order.released_at", "is", null)
       .order("created_at", { ascending: false });
-    if (data) setItems(data as unknown as OrderItemWithOrder[]);
-  }, []);
-
-  useEffect(() => {
-    const supabase = supabaseRef.current;
-    const channel = supabase
-      .channel("dashboard-items")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "order_items" },
-        () => refetch(),
-      )
-      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, () => refetch())
-      .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [refetch]);
+    setLoadingOlder(false);
+    if (!data) return;
+    setItems(data as unknown as OrderItemWithOrder[]);
+    setOlderLoaded(true);
+  }
 
   // Ready + Delivered and with-designer items are hidden by default — the
   // board tracks work in progress. Checking either toggle switches the whole
@@ -548,6 +567,19 @@ export function OrderBoard({
           Cancelled
           {hiddenCancelled > 0 ? <span className="tnum">({hiddenCancelled})</span> : null}
         </label>
+
+        {/* Looking back (finished, cancelled or a date filter) may need
+            orders older than what the board loads by default. */}
+        {!olderLoaded && (showingFinished || showCancelled || filters.datePreset) ? (
+          <button
+            type="button"
+            onClick={loadOlder}
+            disabled={loadingOlder}
+            className="inline-flex min-h-11 shrink-0 items-center text-xs font-medium text-brand-600 hover:underline disabled:opacity-50"
+          >
+            {loadingOlder ? "Loading…" : `Load orders older than ${RECENT_DAYS} days`}
+          </button>
+        ) : null}
       </div>
 
       {/* 4. Quick-access created-date tabs — the Filters popover's Date

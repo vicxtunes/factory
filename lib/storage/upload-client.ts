@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/browser";
 import { confirmItemUpload, confirmMediaReplace, createUploadSession } from "@/lib/storage/actions";
 import { MEDIA_BUCKET } from "@/lib/storage/client";
+import { IMMUTABLE_CACHE_SECONDS } from "@/lib/storage/xhr-upload";
 
 export type UploadResult = { ok: true } | { ok: false; error: string };
 
@@ -15,7 +16,7 @@ export async function uploadFileToStorage(orderItemId: string, file: File): Prom
 
   const { error } = await createClient()
     .storage.from(MEDIA_BUCKET)
-    .uploadToSignedUrl(session.path, session.token, file);
+    .uploadToSignedUrl(session.path, session.token, file, { cacheControl: String(IMMUTABLE_CACHE_SECONDS) });
   if (error) {
     return { ok: false, error: error.message || `Upload of "${file.name}" failed.` };
   }
@@ -35,7 +36,7 @@ export async function replaceFileInStorage(
 
   const { error } = await createClient()
     .storage.from(MEDIA_BUCKET)
-    .uploadToSignedUrl(session.path, session.token, file);
+    .uploadToSignedUrl(session.path, session.token, file, { cacheControl: String(IMMUTABLE_CACHE_SECONDS) });
   if (error) {
     return { ok: false, error: error.message || `Upload of "${file.name}" failed.` };
   }

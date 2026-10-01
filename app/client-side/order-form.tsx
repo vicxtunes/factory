@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/Button";
@@ -13,6 +14,7 @@ import { useCurrency } from "@/lib/currency/useCurrency";
 import { attributeChoices } from "@/lib/catalog-options";
 import { isPhotobookCategory } from "@/lib/orders/photobook";
 import type { OrderItemInput } from "@/lib/orders/types";
+import { canOptimizeImage } from "@/lib/storage/client";
 import { uploadFileToStorage } from "@/lib/storage/upload-client";
 import type { Currency, OrderType, Product, ProductCategory } from "@/lib/types";
 
@@ -614,10 +616,12 @@ function OrderSummary({
       <div className="space-y-3">
         {resolved.map(({ item, category, product, variant, unitPrice, offer }, idx) => (
           <div key={idx} className="flex items-center gap-3">
-            {/* eslint-disable-next-line @next/next/no-img-element -- Supabase Storage URL, can't be allowlisted for next/image */}
-            <img
+            <Image
               src={product?.display_image_url ?? "/showroom/placeholder.jpg"}
               alt={product?.name ?? "Product"}
+              width={48}
+              height={48}
+              unoptimized={!!product?.display_image_url && !canOptimizeImage(product.display_image_url)}
               className="h-12 w-12 shrink-0 rounded-lg object-cover"
             />
             <div className="min-w-0 flex-1">

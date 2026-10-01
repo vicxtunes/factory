@@ -6,6 +6,7 @@ import Link from "next/link";
 
 import { Button } from "@/components/ui/Button";
 import { isOptionCategory, optionCategory, type OptionKind } from "@/lib/catalog-options";
+import { canOptimizeImage } from "@/lib/storage/client";
 import type { ProductCategory } from "@/lib/types";
 
 import { productHref } from "./product-page-view";
@@ -31,11 +32,13 @@ function PhotoCard({
   const className = "relative block h-48 w-40 shrink-0 overflow-hidden rounded-xl text-left shadow-theme-sm sm:h-48 sm:w-40";
   return (
     <Link href={href} className={className}>
-      {/* eslint-disable-next-line @next/next/no-img-element -- Supabase Storage URL, can't be allowlisted for next/image */}
-      <img
+      <Image
         src={image ?? "/showroom/placeholder.PNG"}
         alt={label}
-        className="absolute inset-0 h-full w-full object-cover"
+        fill
+        sizes="160px"
+        unoptimized={!!image && !canOptimizeImage(image)}
+        className="object-cover"
       />
       <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
       <p className="absolute inset-x-0 bottom-3 px-2 text-center text-sm font-bold text-white">{label}</p>

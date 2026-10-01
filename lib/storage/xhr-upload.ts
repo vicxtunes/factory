@@ -13,16 +13,22 @@ export type XhrUploadResult = { ok: true } | { ok: false; error: string };
 // Shared by lib/storage/product-media-client.ts and
 // lib/storage/marketing-media-client.ts so the wire-format knowledge lives
 // in exactly one place.
+// How long browsers and the CDN may keep an uploaded file. Upload paths
+// contain a UUID, so a file at a given URL never changes: cache it for a
+// year. Pass a short value for a path that gets overwritten (avatars).
+export const IMMUTABLE_CACHE_SECONDS = 60 * 60 * 24 * 365;
+
 export function putToSignedUrl(
   bucket: string,
   path: string,
   token: string,
   file: File,
   onProgress: (fraction: number) => void,
+  cacheSeconds = IMMUTABLE_CACHE_SECONDS,
 ): Promise<XhrUploadResult> {
   return new Promise((resolve) => {
     const form = new FormData();
-    form.append("cacheControl", "3600");
+    form.append("cacheControl", String(cacheSeconds));
     form.append("", file);
 
     const xhr = new XMLHttpRequest();

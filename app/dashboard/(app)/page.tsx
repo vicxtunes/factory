@@ -1,5 +1,5 @@
 import { SectionLabel } from "@/components/ui/SectionLabel";
-import { fetchAllItems } from "@/lib/queries";
+import { fetchDashboardItemStats } from "@/lib/queries";
 import {
   BOARD_COLUMNS,
   STATUS_LABELS,
@@ -12,33 +12,23 @@ import { StatCard } from "../stat-card";
 
 export const dynamic = "force-dynamic";
 
-function isToday(iso: string): boolean {
-  const d = new Date(iso);
-  const now = new Date();
-  return (
-    d.getFullYear() === now.getFullYear() &&
-    d.getMonth() === now.getMonth() &&
-    d.getDate() === now.getDate()
-  );
-}
-
 export default async function DashboardOverviewPage() {
-  const items = await fetchAllItems();
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const stats = await fetchDashboardItemStats(todayStart);
 
-  const inProduction = items.filter((i) => i.production_status === "in_production").length;
-  const delayed = items.filter((i) => i.is_delayed).length;
-  const completedToday = items.filter(
-    (i) => i.production_status === "completed" && isToday(i.updated_at),
-  ).length;
+  const inProduction = stats.by_status.in_production ?? 0;
+  const delayed = stats.delayed;
+  const completedToday = stats.completed_today;
 
   const statusData = [...BOARD_COLUMNS, "completed" as const].map((status) => ({
     label: STATUS_LABELS[status],
-    count: items.filter((i) => i.production_status === status).length,
+    count: stats.by_status[status] ?? 0,
   }));
 
   const urgencyData = (Object.keys(URGENCY_LABELS) as Urgency[]).map((u) => ({
     label: URGENCY_LABELS[u],
-    count: items.filter((i) => i.urgency === u).length,
+    count: stats.by_urgency[u] ?? 0,
   }));
 
   return (
@@ -46,7 +36,7 @@ export default async function DashboardOverviewPage() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           label="Total items"
-          value={items.length}
+          value={stats.total}
           icon={
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1} className="h-16 w-16">
               <path
