@@ -2,6 +2,10 @@ import type { NextConfig } from "next";
 
 import { withSerwist } from "@serwist/turbopack";
 
+// Supabase Storage public URLs (product photos, avatars) go through
+// next/image so phones get resized copies instead of full-size uploads.
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ? new URL(process.env.NEXT_PUBLIC_SUPABASE_URL) : null;
+
 const nextConfig: NextConfig = {
   // "standalone" is for the self-hosted Docker image (see Dockerfile). Vercel
   // has its own serverless output tracing and the two conflict — building
@@ -9,6 +13,22 @@ const nextConfig: NextConfig = {
   // `.next/next-server.js.nft.json` trace file. Skip it when Vercel is doing
   // the build (it sets VERCEL=1).
   output: process.env.VERCEL ? undefined : "standalone",
+  images: {
+    remotePatterns: supabaseUrl
+      ? [
+          {
+            protocol: supabaseUrl.protocol === "http:" ? "http" : "https",
+            hostname: supabaseUrl.hostname,
+            port: supabaseUrl.port,
+            pathname: "/storage/v1/object/public/**",
+          },
+        ]
+      : [],
+    // A storage URL never changes content: product media paths contain a
+    // UUID and avatar URLs a ?v= timestamp, so resized copies can be kept
+    // long (fewer re-optimizations, which Vercel bills).
+    minimumCacheTTL: 60 * 60 * 24 * 31,
+  },
   experimental: {
     serverActions: {
       // Server Actions reject requests whose Origin doesn't match the host.

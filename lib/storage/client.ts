@@ -39,3 +39,10 @@ export function safeStorageSegment(name: string): string {
   const ext = dot > 0 ? clean(name.slice(dot + 1)) : "";
   return ext ? `${stem}.${ext}` : stem;
 }
+
+// next/image only resizes Supabase Storage public URLs (next.config.ts
+// remotePatterns) and the app's own files; anything else (an older or
+// pasted link) must be passed with `unoptimized` or it fails to load.
+export function canOptimizeImage(url: string): boolean {
+  return url.startsWith("/") || url.startsWith(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/`);
+}

@@ -2,10 +2,12 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
+import Image from "next/image";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/Button";
 import { useCurrency } from "@/lib/currency/useCurrency";
+import { canOptimizeImage } from "@/lib/storage/client";
 import type { Currency, Product, ProductCategory, ShowroomViewMode } from "@/lib/types";
 
 import type { ShowroomSceneHandle } from "./showroom-scene";
@@ -198,12 +200,15 @@ function GalleryLightbox({
         </>
       ) : null}
 
-      {/* eslint-disable-next-line @next/next/no-img-element -- Supabase Storage URL, can't be allowlisted for next/image */}
-      <img
+      <Image
         src={media[index].url}
         alt=""
+        width={1600}
+        height={1600}
+        sizes="100vw"
+        unoptimized={!canOptimizeImage(media[index].url)}
         draggable={false}
-        className={`max-h-full max-w-full select-none rounded-xl object-contain ${
+        className={`h-auto max-h-full w-auto max-w-full select-none rounded-xl object-contain ${
           swipe.dragging ? "" : "transition-transform duration-200"
         }`}
         style={{ transform: `translateX(${swipe.offset}px)` }}
@@ -269,8 +274,15 @@ function DetailsOverlay({
                 <video src={m.url} controls className="w-full" />
               ) : (
                 <button type="button" onClick={() => onOpenLightbox(i)} className="block w-full">
-                  {/* eslint-disable-next-line @next/next/no-img-element -- Supabase Storage URL, can't be allowlisted for next/image */}
-                  <img src={m.url} alt="" className="w-full transition-opacity hover:opacity-90" />
+                  <Image
+                    src={m.url}
+                    alt=""
+                    width={800}
+                    height={800}
+                    sizes="(max-width: 640px) 50vw, 256px"
+                    unoptimized={!canOptimizeImage(m.url)}
+                    className="h-auto w-full transition-opacity hover:opacity-90"
+                  />
                 </button>
               )}
             </div>
@@ -468,12 +480,15 @@ export function ProductShowcase({
               {current.kind === "video" ? (
                 <video src={current.url} controls className="h-full w-full object-cover" />
               ) : (
-                // eslint-disable-next-line @next/next/no-img-element -- Supabase Storage URL, can't be allowlisted for next/image
-                <img
+                <Image
                   src={current.url}
                   alt={product.name}
+                  fill
+                  sizes="(max-width: 768px) 100vw, 768px"
+                  loading="eager"
+                  unoptimized={!canOptimizeImage(current.url)}
                   draggable={false}
-                  className={`h-full w-full select-none object-cover ${
+                  className={`select-none object-cover ${
                     mediaSwipe.dragging ? "" : "transition-transform duration-200"
                   }`}
                   style={{ transform: `translateX(${mediaSwipe.offset}px)` }}

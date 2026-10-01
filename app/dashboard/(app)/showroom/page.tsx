@@ -1,5 +1,8 @@
+import Image from "next/image";
+
 import { SectionLabel } from "@/components/ui/SectionLabel";
 import { fetchProductCatalog } from "@/lib/queries";
+import { canOptimizeImage } from "@/lib/storage/client";
 
 import { ShareLinks } from "../../share-link";
 
@@ -33,10 +36,12 @@ export default async function ShowroomSharePage() {
             <ul className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-surface shadow-theme-xs">
               {category.products.map((product) => (
                 <li key={product.id} className="flex flex-wrap items-center gap-3 p-3">
-                  {/* eslint-disable-next-line @next/next/no-img-element -- storage URL thumbnail */}
-                  <img
+                  <Image
                     src={product.display_image_url ?? "/showroom/placeholder.PNG"}
                     alt=""
+                    width={48}
+                    height={48}
+                    unoptimized={!!product.display_image_url && !canOptimizeImage(product.display_image_url)}
                     className="size-12 shrink-0 rounded-lg object-cover"
                   />
                   <span className="min-w-0 flex-1 truncate text-sm font-medium">{product.name}</span>

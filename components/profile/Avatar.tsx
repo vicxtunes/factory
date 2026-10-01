@@ -1,3 +1,7 @@
+import Image from "next/image";
+
+import { canOptimizeImage } from "@/lib/storage/client";
+
 // Shared profile-picture circle — an actual photo when one's set, else the
 // same initial-letter circle every user-menu already used before this
 // existed. sizeClassName carries the width/height/text-size together (not a
@@ -18,10 +22,12 @@ export function Avatar({
 
   if (url) {
     return (
-      // eslint-disable-next-line @next/next/no-img-element -- Supabase Storage URL, can't be allowlisted for next/image
-      <img
+      <Image
         src={url}
         alt=""
+        width={80}
+        height={80}
+        unoptimized={!canOptimizeImage(url)}
         className={`shrink-0 rounded-full object-cover ${sizeClassName} ${className}`}
       />
     );
