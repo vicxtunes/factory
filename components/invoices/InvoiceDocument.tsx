@@ -150,6 +150,9 @@ export function InvoiceDocument({ invoice, children }: { invoice: InvoiceView; c
                   {line.unit ? <span className="text-muted"> {line.unit}</span> : null}
                 </td>
                 <td className="hidden whitespace-nowrap px-2 py-3 text-right tabular-nums sm:table-cell print:table-cell">
+                  {line.listUnitPrice != null ? (
+                    <span className="block text-xs text-muted line-through">{money(line.listUnitPrice)}</span>
+                  ) : null}
                   {line.unitPrice != null ? money(line.unitPrice) : <span className="text-xs text-muted">{labels.unpriced}</span>}
                 </td>
                 <td className="whitespace-nowrap px-2 py-3 text-right tabular-nums">
@@ -161,6 +164,14 @@ export function InvoiceDocument({ invoice, children }: { invoice: InvoiceView; c
         </table>
 
         <dl className="ml-auto grid max-w-sm grid-cols-[1fr_auto]">
+          {invoice.discount > 0 ? (
+            <>
+              <dt className="px-3 py-1 text-muted">Subtotal</dt>
+              <dd className="px-3 py-1 text-right tabular-nums">{money(invoice.amount + invoice.discount)}</dd>
+              <dt className="px-3 py-1 text-muted">Discount</dt>
+              <dd className="px-3 py-1 text-right tabular-nums">−{money(invoice.discount)}</dd>
+            </>
+          ) : null}
           <dt className="border-b border-gray-300 bg-gray-100 px-3 py-2 font-bold dark:border-white/10 dark:bg-white/5">{labels.total}</dt>
           <dd className="border-b border-gray-300 bg-gray-100 px-3 py-2 text-right font-bold tabular-nums dark:border-white/10 dark:bg-white/5">
             {money(invoice.amount)}

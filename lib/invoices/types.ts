@@ -21,6 +21,8 @@ export interface InvoiceLine {
   unit: string | null;
   /** The agreed price per unit; null until priced ("To be confirmed" on a pro forma). */
   unitPrice: number | null;
+  /** The catalog list price per unit, when the agreed price is below it (a discount); else null. */
+  listUnitPrice: number | null;
   lineTotal: number | null;
   /** Where this item is, in the client's words ("Production", "Ready for delivery"…). */
   progress: string;
@@ -64,6 +66,8 @@ export interface InvoiceView {
   notes: string | null;
   status: InvoiceStatus;
   amount: number;
+  /** Discount given on the lines: Σ (list − agreed price) × qty; 0 when none. amount is after it. */
+  discount: number;
   paid: number;
   /** amount − paid, never below 0. */
   balance: number;

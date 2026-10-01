@@ -83,13 +83,13 @@ export const NAV_GROUPS: NavGroup[] = [
   },
   {
     // What clients see in the portal: the catalog, links to share the
-    // showroom, the carousel and the one-time announcement popups.
+    // showroom, the carousel and discounts, and the one-time announcement popups.
     id: "catalog",
     label: "Catalog & Marketing",
     items: [
       { href: "/dashboard/products", label: "Products", icon: "products", visible: managers },
       { href: "/dashboard/showroom", label: "Showroom", icon: "showroom", visible: everyone },
-      { href: "/dashboard/marketing", label: "Carousel", icon: "marketing", visible: managers },
+      { href: "/dashboard/marketing", label: "Carousel & discounts", icon: "marketing", visible: managers },
       { href: "/dashboard/announcements", label: "Announcements", icon: "announcements", visible: canViewAnnouncements },
     ],
   },

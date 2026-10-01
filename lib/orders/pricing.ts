@@ -4,12 +4,14 @@
 //   1. A price staff set on the order (orders.quoted_price) wins. That's the
 //      receptionist's quote for portal orders, or a manual override.
 //   2. Otherwise it's calculated from the catalog: each item's unit price
-//      (its variant's price, else its product's price) × quantity, summed.
+//      (its variant's price, else its product's price, less any discount
+//      running when the order was placed) × quantity, summed.
 //   3. If any item has no catalog price, the amount is unknown rather than
 //      a misleading partial total.
 //
 // The app doesn't track payments, so this is always the full order amount.
 
+import type { Offer } from "@/lib/discounts/core/model";
 import type { OrderItemWithOrder } from "@/lib/types";
 
 import { isPhotobookCategory } from "./photobook";
@@ -21,14 +23,27 @@ export interface OrderAmount {
   source: OrderAmountSource;
 }
 
-type PricedItem = Pick<OrderItemWithOrder, "qty" | "catalog_product" | "catalog_variant"> & {
-  order: Pick<OrderItemWithOrder["order"], "quoted_price">;
-};
+type CatalogPriced = Pick<OrderItemWithOrder, "catalog_product" | "catalog_variant"> & { offer?: Offer | null };
 
-/** An item's catalog unit price: the variant's own price overrides the product's. */
-export function catalogUnitPrice(item: Pick<PricedItem, "catalog_product" | "catalog_variant">): number | null {
+type PricedItem = CatalogPriced &
+  Pick<OrderItemWithOrder, "qty"> & {
+    order: Pick<OrderItemWithOrder["order"], "quoted_price">;
+  };
+
+/** An item's catalog list price, before any discount: the variant's own price overrides the product's. */
+export function catalogListPrice(item: CatalogPriced): number | null {
   const price = item.catalog_variant?.price ?? item.catalog_product?.price ?? null;
   return price == null ? null : Number(price);
+}
+
+/**
+ * What one unit of the item costs from the catalog: the discounted price when
+ * a discount was running as the order was placed (decided by the database,
+ * see lib/discounts), else the list price.
+ */
+export function catalogUnitPrice(item: CatalogPriced): number | null {
+  if (item.offer) return Number(item.offer.price);
+  return catalogListPrice(item);
 }
 
 /** The amount to pay for one order, given all of its items. */
@@ -60,10 +75,11 @@ export function orderAmount(items: PricedItem[]): OrderAmount {
 //      priced after the receptionist has called the client.
 //   3. Lines without a price leave the estimate incomplete ("+ photo books").
 
-type EstimatedItem = Pick<OrderItemWithOrder, "qty" | "catalog_product" | "catalog_variant"> & {
-  unit_price?: number | null;
-  category?: { name: string } | null;
-};
+type EstimatedItem = CatalogPriced &
+  Pick<OrderItemWithOrder, "qty"> & {
+    unit_price?: number | null;
+    category?: { name: string } | null;
+  };
 
 /** A line's estimated unit price, or null while it can't be priced (photo books, no catalog price). */
 export function estimateUnitPrice(item: EstimatedItem): number | null {

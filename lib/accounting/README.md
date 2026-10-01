@@ -27,7 +27,7 @@ Defined once, in `core/figures.ts`:
 | Figure | Definition | Period? |
 | --- | --- | --- |
 | Total sales | Non-cancelled invoiced orders, on the invoice's issue date. An order is a sale once invoiced. | yes |
-| Discounts given | Discount on those sales (0 until invoices record list prices) | yes |
+| Discounts given | Σ max(list − agreed price, 0) × qty over those sales' lines (see lib/discounts) | yes |
 | Payments received | All money that arrived: order receipts net of anything physically handed back, plus wallet top-ups | yes |
 | Received by channel | Payments received per channel: cash, bank transfer, mobile money, card, other | yes |
 | Outstanding | Σ max(total − paid, 0) over non-cancelled sales | as of today |
@@ -78,7 +78,8 @@ All four are read-only, service-role only (`security_invoker` plus revoked grant
 `tenant_id` that the adapter always filters on:
 
 - **`accounting_sale_documents`**: one row per invoice: number, dates, order, client, total
-  (`orders.quoted_price`), paid (`wallet_order_paid()`), cancelled, products.
+  (`orders.quoted_price`), discount (from each line's kept list price), paid (`wallet_order_paid()`),
+  cancelled, products.
 - **`accounting_money_in`**: `order_payment_receipts` net of physical refunds, plus succeeded
   `payments` that aren't a receipt's wallet-credit half. Kind `sale_receipt` or `prepayment`.
 - **`accounting_held_movements`**: wallet ledger rows that move held money (spent on an order,
