@@ -6,14 +6,15 @@ import { logoutClient } from "./actions";
 import { clientNavFor } from "./nav";
 
 // Client portal on phones: the four places clients live in (Dashboard,
-// Orders, Showroom, Support) on the bar; everything else sits in "More",
-// in the same sections as the desktop sidebar (both come from ./nav.ts).
+// Orders, Showroom, Chat) on the bar; everything else, Support included,
+// sits in "More", in the same sections as the desktop sidebar (both come
+// from ./nav.ts).
 export function ClientHomeBar() {
   const tabs: HomeBarLink[] = [
     { href: "/client-side", label: "Dashboard", icon: "dashboard", exact: true },
     { href: "/client-side/orders", label: "My orders", barLabel: "Orders", icon: "orders" },
     { href: "/client-side/showroom", label: "Showroom", icon: "showroom" },
-    { href: "/support", label: "Support", icon: "support" },
+    { href: "/chat", label: "Chat", icon: "chat" },
   ];
 
   const onBar = new Set(tabs.map((t) => t.href));
