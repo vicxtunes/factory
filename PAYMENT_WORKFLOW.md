@@ -24,9 +24,9 @@ The client goes to the wallet page, fills in amount, method, reference and an op
 
 Relevant code:
 
-- `lib/wallet/actions.ts` — `reportDeposit()`
-- `lib/wallet/server/service.ts` — `reportDeposit()`
-- `lib/wallet/policy.ts` — allowed methods and validation rules
+- `packages/lib/wallet/actions.ts` — `reportDeposit()`
+- `packages/lib/wallet/server/service.ts` — `reportDeposit()`
+- `packages/lib/wallet/policy.ts` — allowed methods and validation rules
 
 The client can only choose methods the app allows, and the reference is required.
 
@@ -36,9 +36,9 @@ Staff review the pending queue, check a statement or app, and either confirm or 
 
 Relevant code:
 
-- `lib/wallet/actions.ts` — `confirmDeposit()`, `rejectDeposit()`
-- `lib/wallet/server/service.ts` — `confirmDeposit()`, `rejectDeposit()`
-- `components/wallet/WalletsAdmin.tsx` — the staff queue UI
+- `packages/lib/wallet/actions.ts` — `confirmDeposit()`, `rejectDeposit()`
+- `packages/lib/wallet/server/service.ts` — `confirmDeposit()`, `rejectDeposit()`
+- `packages/ui/wallet/WalletsAdmin.tsx` — the staff queue UI
 
 Confirmed deposits add money to the client wallet. Rejected or withdrawn reports remain visible with a status, but they do not increase the balance.
 
@@ -48,9 +48,9 @@ Finance staff can also record a deposit when they saw the money hit the bank or 
 
 Relevant code:
 
-- `lib/wallet/actions.ts` — `recordDeposit()`
-- `lib/wallet/server/service.ts` — `recordDeposit()`
-- `components/wallet/WalletsAdmin.tsx` — `RecordDepositForm`
+- `packages/lib/wallet/actions.ts` — `recordDeposit()`
+- `packages/lib/wallet/server/service.ts` — `recordDeposit()`
+- `packages/ui/wallet/WalletsAdmin.tsx` — `RecordDepositForm`
 
 This creates a payment record and settles it immediately, so the wallet balance changes in one step.
 
@@ -60,10 +60,10 @@ All orders submitted through the client portal first appear in the staff **Clien
 
 Relevant code:
 
-- `lib/queries.ts` — unreleased client orders in the staff queue
-- `app/dashboard/order-approval-queue.tsx` — review, confirmation, invoice, and routing steps
-- `app/dashboard/actions.ts` — confirmation and server-enforced invoice-before-route check
-- `components/invoices/StaffInvoicePanel.tsx` — invoice generation and installment recording
+- `packages/lib/queries.ts` — unreleased client orders in the staff queue
+- `apps/factory/app/dashboard/order-approval-queue.tsx` — review, confirmation, invoice, and routing steps
+- `apps/factory/app/dashboard/actions.ts` — confirmation and server-enforced invoice-before-route check
+- `packages/ui/invoices/StaffInvoicePanel.tsx` — invoice generation and installment recording
 
 ### 5) Wallet spending on an order
 
@@ -71,9 +71,9 @@ The client can pay an order from their wallet balance if the order is payable an
 
 Relevant code:
 
-- `lib/wallet/actions.ts` — `payOrderFromWallet()`
-- `lib/wallet/server/service.ts` — `payOrder()` and `applyWalletToOrder()`
-- `components/wallet/OrderPayment.tsx` — client payment panel
+- `packages/lib/wallet/actions.ts` — `payOrderFromWallet()`
+- `packages/lib/wallet/server/service.ts` — `payOrder()` and `applyWalletToOrder()`
+- `packages/ui/wallet/OrderPayment.tsx` — client payment panel
 
 This does not create a new outside payment source. It records a wallet ledger row with `kind = 'order_payment'` and a `wallet` method when there is no linked payment row.
 
@@ -83,8 +83,8 @@ When staff record cash, mobile money, or bank money already received for an invo
 
 Relevant code:
 
-- `lib/invoices/server/service.ts` — `recordPayment()`
-- `lib/wallet/server/service.ts` — `recordOrderPayment()`
+- `packages/lib/invoices/server/service.ts` — `recordPayment()`
+- `packages/lib/wallet/server/service.ts` — `recordOrderPayment()`
 - `supabase/migrations/20260930130000_direct_order_payment_receipts.sql` — receipt table, order-paid calculation, and `wallet_record_order_receipt()`
 
 If the receipt exceeds the invoice balance, staff must choose what happened to the excess: record it as physically returned, or credit it to the client's wallet. Only the wallet-credit choice creates a wallet deposit, and only for the excess amount. The gross receipt and its disposition remain auditable.
@@ -128,14 +128,14 @@ Legacy order-linked payments that were historically settled through a wallet dep
 
 ## Files to touch for changes
 
-- `lib/wallet/types.ts` — data models and method labels
-- `lib/wallet/policy.ts` — validation and display names
-- `lib/wallet/actions.ts` — public browser entry points
-- `lib/wallet/server/service.ts` — permission checks and use cases
-- `lib/wallet/server/repository.ts` — queries and database access
+- `packages/lib/wallet/types.ts` — data models and method labels
+- `packages/lib/wallet/policy.ts` — validation and display names
+- `packages/lib/wallet/actions.ts` — public browser entry points
+- `packages/lib/wallet/server/service.ts` — permission checks and use cases
+- `packages/lib/wallet/server/repository.ts` — queries and database access
 - `supabase/migrations/20260927100000_client_wallet.sql` and later wallet migrations — ledger constraints and transactional functions
-- `components/wallet/` — wallet and order payment screens
-- `lib/payments/details.ts` — business payment instructions shown to customers
+- `packages/ui/wallet/` — wallet and order payment screens
+- `packages/lib/payments/details.ts` — business payment instructions shown to customers
 
 ## Verification
 

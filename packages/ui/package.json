@@ -1,0 +1,16 @@
+{
+  "name": "@repo/ui",
+  "private": true,
+  "dependencies": {
+    "@repo/lib": "*",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.8",
+    "recharts": "^3.10.1",
+    "swiper": "^14.2.0"
+  },
+  "peerDependencies": {
+    "next": "16.3.4",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  }
+}
