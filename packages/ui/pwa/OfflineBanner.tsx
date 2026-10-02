@@ -1,11 +1,9 @@
 "use client";
 
 import { useEffect } from "react";
-import { usePathname } from "next/navigation";
 import { useOffline } from "next/offline";
 
 import { startOfflineQueueFlush } from "@repo/lib/offline-queue/flush";
-import { clientPath } from "@repo/lib/client-portal/paths";
 
 // Mounted once in the root layout so it's visible on every surface
 // (dashboard, factory, graphics, display). Server Actions and navigations
@@ -14,21 +12,21 @@ import { clientPath } from "@repo/lib/client-portal/paths";
 // banner just explains why things look stuck. Also the one place the
 // offline media-upload queue's flush listener gets started, since it needs
 // to run regardless of which surface the user is on.
-export function OfflineBanner() {
+//
+// `showBanner={false}` keeps the queue flush but hides the banner — the
+// client portal uses it: its connectivity reading flickers true/false while
+// the client is actually online (their network conditions and the extra
+// Realtime/notification-polling traffic that app carries make useOffline's
+// detection unreliable there), and a banner that contradicts what they can
+// see is working does more harm than good.
+export function OfflineBanner({ showBanner = true }: { showBanner?: boolean }) {
   const isOffline = useOffline();
-  const pathname = usePathname();
-  // The client portal's connectivity reading flickers true/false while the
-  // client is actually online (their network conditions and the extra
-  // Realtime/notification-polling traffic that page carries make
-  // useOffline's detection unreliable there) — don't show a banner that
-  // contradicts what they can see is working.
-  const onClientPortal = pathname.startsWith(clientPath());
 
   useEffect(() => {
     startOfflineQueueFlush();
   }, []);
 
-  if (!isOffline || onClientPortal) return null;
+  if (!isOffline || !showBanner) return null;
 
   return (
     <div

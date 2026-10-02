@@ -154,11 +154,11 @@ export function MarketingPanel({
                 <img src={form.imageUrl} alt="" className="mt-2 h-16 w-28 rounded object-cover" />
               ) : null}
             </Field>
-            <Field label="Link" hint="Optional — where tapping the slide goes (a full URL, or a path like /client-side/showroom)">
+            <Field label="Link" hint="Optional — where tapping the slide goes (a full URL, or a client-portal path like /showroom)">
               <TextInput
                 value={form.linkUrl}
                 onChange={(e) => setForm((f) => ({ ...f, linkUrl: e.target.value }))}
-                placeholder="https://… or /client-side/…"
+                placeholder="https://… or /showroom"
               />
             </Field>
             <Field label="Alt text" hint="Optional — for screen readers, not shown on the slide">

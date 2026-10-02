@@ -22,7 +22,7 @@ const WEEKDAYS = ["S", "M", "T", "W", "T", "F", "S"];
 // day; clicking again before the range is complete restarts it. Mobile
 // keeps the native date inputs (a real date wheel is already the better
 // touch experience there) — see the md:hidden/md:block split at the call
-// site in apps/factory/app/dashboard/order-board.tsx and apps/factory/app/client-side/orders-board.tsx.
+// site in apps/factory/app/dashboard/order-board.tsx and apps/client/app/orders-board.tsx.
 export function DateRangeCalendar({
   from,
   to,

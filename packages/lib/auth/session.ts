@@ -184,7 +184,7 @@ export async function requireOrderAudit(): Promise<DashboardSession> {
 // Media upload/session actions are called from the dashboard (Supabase Auth,
 // order intake + "add more photos"), from /graphics (designer PIN session,
 // attaching design files), from /factory (worker PIN session, attaching
-// finished-item photos), and from /client-side (client session, viewing/
+// finished-item photos), and from the client portal (client session, viewing/
 // downloading their own item's photos) — any signed-in surface may attach
 // or read photos; ownership of *which* item is enforced by each caller.
 export async function requireMediaUploadAccess(): Promise<void> {

@@ -22,7 +22,7 @@ function LoadingAnnouncement() {
 
 /**
  * Sidebar portals (client, graphics): sidebar (desktop), sticky topbar and
- * main area — the same shape as apps/factory/app/client-side/shell.tsx and
+ * main area — the same shape as apps/client/app/shell.tsx and
  * apps/factory/app/graphics/shell.tsx.
  */
 export function SidebarFrameSkeleton({ children }: { children: ReactNode }) {

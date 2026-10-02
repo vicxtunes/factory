@@ -6,7 +6,7 @@ import Link from "next/link";
 import { createClient } from "@repo/lib/supabase/browser";
 import type { NotificationRow } from "@repo/lib/types";
 
-// Generic recipient-scoped bell — used by /client-side, /factory, /graphics
+// Generic recipient-scoped bell — used by the client portal, /factory, /graphics
 // (apps/factory/app/dashboard keeps its own NotificationMenu, which is deliberately
 // unscoped: staff see every order's events, not just ones addressed to
 // them). notifications has no single "who is this for" column, so scoping

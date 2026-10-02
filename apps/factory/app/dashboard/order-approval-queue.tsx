@@ -23,7 +23,7 @@ interface OrderGroup {
 }
 
 // Groups the flat item list into one card per order — same technique
-// app/client-side/orders-board.tsx already uses (there's no order-level
+// apps/client/app/orders-board.tsx already uses (there's no order-level
 // query anywhere in this app; every board is item-scoped and grouped
 // client-side when it needs to reason about a whole order).
 function groupByOrder(items: OrderItemWithOrder[]): OrderGroup[] {

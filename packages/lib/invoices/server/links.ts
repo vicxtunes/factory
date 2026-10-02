@@ -2,15 +2,15 @@ import "server-only";
 
 // Builds the client-facing invoice link and makes new share tokens.
 //
-// The client portal lives on client.<domain> at the root (see proxy.ts), so
-// an invoice shared from the staff app (factory.<domain>) points at
-// client.<domain>/invoice/<token>. Any other host (localhost, previews) uses
-// the plain portal path (clientPath), today /client-side/invoice/<token>.
+// The invoice page lives in the client app, so the link uses its address
+// (clientUrl / NEXT_PUBLIC_CLIENT_ORIGIN) wherever it's made — an invoice is
+// usually shared from the staff app. Without that setting (local dev) it
+// falls back to this request's own origin.
 
 import { randomBytes } from "node:crypto";
 import { headers } from "next/headers";
 
-import { clientPath } from "@repo/lib/client-portal/paths";
+import { clientPath, clientUrl } from "@repo/lib/client-portal/paths";
 
 /** 32 random bytes, base64url — unguessable, and fine in a URL. */
 export function newShareToken(): string {
@@ -18,13 +18,12 @@ export function newShareToken(): string {
 }
 
 export async function invoiceUrl(token: string): Promise<string> {
+  const path = clientPath(`/invoice/${token}`);
+  const url = clientUrl(path);
+  if (!url.startsWith("/")) return url;
+
   const h = await headers();
   const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3000";
   const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
-
-  if (/^(factory|client)\./i.test(host)) {
-    const clientHost = host.replace(/^(factory|client)\./i, "client.");
-    return `${proto}://${clientHost}/invoice/${token}`;
-  }
-  return `${proto}://${host}${clientPath(`/invoice/${token}`)}`;
+  return `${proto}://${host}${path}`;
 }

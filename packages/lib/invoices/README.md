@@ -26,13 +26,12 @@ link they can open without signing in.
   replaces it; the old link stops working.
 
 Screens: the Invoice panel in the staff order detail, `/dashboard/invoices` (list with outstanding
-total and status filters), the public page `/client-side/invoice/<token>` (`client.<domain>/invoice/<token>`
-in production), and "View invoice" on the client's own order in the portal.
+total and status filters), the public page `/invoice/<token>` in the client app (`client.<domain>/invoice/<token>`), and "View invoice" on the client's own order in the portal.
 
 ## Pro forma (before the invoice)
 
 Until staff generate the invoice, the client can open a **pro forma invoice** for their order
-(`/client-side/proforma/<orderId>`, signed-in owner or staff only): the same layout, titled
+(`/proforma/<orderId>` in the client app, signed-in owner or staff only): the same layout, titled
 PRO FORMA INVOICE, numbered `PF-<order no>`, marked "Estimate". Prices follow one rule shared with
 the client's order cards (`orderEstimate` / `estimateUnitPrice` in `packages/lib/orders/pricing.ts`):
 
@@ -78,8 +77,8 @@ the payment's id, which is how the history can say "Mobile money · Ref MP123".
   URL, no wallet balance and no other orders on the public page.
 - The page is `noindex`, and malformed tokens are rejected before any lookup.
 - Staff can **Reset link** if it went to the wrong person.
-- Links built in the staff app (`factory.<domain>`) point at `client.<domain>/invoice/<token>`
-  (see `server/links.ts` and `proxy.ts`). Other hosts (localhost, previews) use `/client-side/invoice/<token>`.
+- Links always point at the client app (`NEXT_PUBLIC_CLIENT_ORIGIN`, e.g. `client.<domain>/invoice/<token>`),
+  wherever they're made (see `server/links.ts`). Without that setting (local dev) they use the current origin.
 
 ## Layout
 
@@ -108,7 +107,7 @@ packages/ui/invoices/
   ClientInvoiceLink.tsx        "View invoice" on the client's order.
   format.ts                    Dates as 19-06-2026.
 
-apps/factory/app/client-side/invoice/[token]/page.tsx     Public invoice page.
+apps/client/app/invoice/[token]/page.tsx     Public invoice page.
 apps/factory/app/dashboard/(app)/invoices/page.tsx        Staff list ("Payments → Invoices" in the sidebar).
 supabase/migrations/20260927110000_invoices.sql
 ```

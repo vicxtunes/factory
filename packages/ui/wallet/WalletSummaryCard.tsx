@@ -11,7 +11,7 @@ const WALLET_URL = clientPath("/payment");
 
 // The client's balance at the top of their home screen: the usual spot
 // in wallet and banking apps (on desktop, a tile beside the quick actions —
-// see apps/factory/app/client-side/dashboard.tsx). The whole card opens the wallet; "Add funds"
+// see apps/client/app/dashboard.tsx). The whole card opens the wallet; "Add funds"
 // jumps straight to topping up.
 export function WalletSummaryCard({ summary }: { summary: WalletSummary }) {
   const money = useMoney();

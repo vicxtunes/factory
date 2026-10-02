@@ -9,7 +9,7 @@ import { getMyNotifications } from "./actions";
 import { GRAPHICS_NAV } from "./nav";
 import { DesignerUserMenu } from "./user-menu";
 
-// Same shape as app/client-side/topbar.tsx. The title is the current page's
+// Same shape as apps/client/app/topbar.tsx. The title is the current page's
 // nav label, so it can't drift from the sidebar.
 const PAGE_TITLES: Record<string, string> = Object.fromEntries(
   GRAPHICS_NAV.flatMap((s) => s.items.map((i) => [i.href, i.label])),

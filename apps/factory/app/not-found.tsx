@@ -1,30 +1,23 @@
-import { headers } from "next/headers";
 import Link from "next/link";
 
 import { Header } from "@repo/ui/Header";
 import { AutoRedirect } from "@repo/ui/AutoRedirect";
 import { Button } from "@repo/ui/Button";
 import {
-  getClientSession,
   getDashboardSession,
   getDesignerSession,
   getWorkerSession,
 } from "@repo/lib/auth/session";
-import { clientPath } from "@repo/lib/client-portal/paths";
 
 export const metadata = { title: "Page not found — AMING" };
 
-// Where this visitor belongs: the client site's own home on client.*, otherwise
-// the surface their session says they work in, otherwise the front page.
+// Where this visitor belongs: the surface their session says they work in,
+// otherwise the front page.
 async function homeFor(): Promise<{ href: string; label: string }> {
-  const host = (await headers()).get("host") ?? "";
-  if (/^client\./i.test(host)) return { href: "/", label: "Back to the showroom" };
-
   try {
     if (await getDashboardSession()) return { href: "/dashboard", label: "Back to the dashboard" };
     if (await getWorkerSession()) return { href: "/factory", label: "Back to the factory board" };
     if (await getDesignerSession()) return { href: "/graphics", label: "Back to the graphics board" };
-    if (await getClientSession()) return { href: clientPath(), label: "Back to your orders" };
   } catch {
     // Session lookup must never break the 404 page itself.
   }

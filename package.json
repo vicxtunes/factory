@@ -7,8 +7,10 @@
   ],
   "scripts": {
     "dev": "npm run dev -w @repo/factory",
-    "build": "npm run build -w @repo/factory",
-    "start": "npm run start -w @repo/factory",
+    "dev:client": "npm run dev -w @repo/client",
+    "build": "npm run build -w @repo/factory -w @repo/client",
+    "build:factory": "npm run build -w @repo/factory",
+    "build:client": "npm run build -w @repo/client",
     "lint": "eslint",
     "test": "node scripts/test.mjs"
   },

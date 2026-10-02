@@ -144,7 +144,7 @@ export async function buildAndInsertOrder(
       order_type: p.orderType,
       delivery_date: clean(p.deliveryDate),
       // clean(), not the raw string: the client portal never collects a
-      // deadline at all (see apps/factory/app/client-side/actions.ts's placeOrder) and
+      // deadline at all (see apps/client/app/actions.ts's placeOrder) and
       // always passes "" here even for express orders — inserting that
       // into a timestamptz column fails outright ("invalid input syntax"),
       // silently failing the whole order. Only the staff dashboard's
