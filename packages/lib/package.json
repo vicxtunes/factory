@@ -1,0 +1,23 @@
+{
+  "name": "@repo/lib",
+  "private": true,
+  "dependencies": {
+    "@supabase/ssr": "^0.12.5",
+    "@supabase/supabase-js": "^2.114.0",
+    "bcryptjs": "^3.0.3",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.8",
+    "jszip": "^3.10.2",
+    "server-only": "^0.0.1",
+    "web-push": "^3.6.7",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/web-push": "^3.6.4"
+  },
+  "peerDependencies": {
+    "next": "16.3.4",
+    "react": "19.2.8"
+  }
+}

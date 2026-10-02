@@ -42,11 +42,11 @@ async function maskableIcon(size, dir, filename) {
   await writePng(buf, dir, filename);
 }
 
-// public/ — referenced by literal URL from app/manifest.ts's icons array.
-await plainIcon(192, "public", "icon-192.png");
-await plainIcon(512, "public", "icon-512.png");
-await maskableIcon(512, "public", "icon-512-maskable.png");
+// apps/factory/public/ — referenced by literal URL from apps/factory/app/manifest.ts's icons array.
+await plainIcon(192, "apps/factory/public", "icon-192.png");
+await plainIcon(512, "apps/factory/public", "icon-512.png");
+await maskableIcon(512, "apps/factory/public", "icon-512-maskable.png");
 
-// app/ — Next's icon/apple-icon file conventions, auto-linked in <head>.
-await plainIcon(192, "app", "icon.png");
-await plainIcon(180, "app", "apple-icon.png");
+// apps/factory/app/ — Next's icon/apple-icon file conventions, auto-linked in <head>.
+await plainIcon(192, "apps/factory/app", "icon.png");
+await plainIcon(180, "apps/factory/app", "apple-icon.png");

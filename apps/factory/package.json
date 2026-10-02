@@ -1,0 +1,30 @@
+{
+  "name": "@repo/factory",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "@repo/lib": "*",
+    "@repo/ui": "*",
+    "@supabase/ssr": "^0.12.5",
+    "googleapis": "^180.0.0",
+    "next": "16.3.4",
+    "papaparse": "^5.7.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "serwist": "^9.5.12"
+  },
+  "devDependencies": {
+    "@serwist/turbopack": "^9.5.12",
+    "@tailwindcss/postcss": "^4",
+    "@types/papaparse": "^5.5.2",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "esbuild-wasm": "^0.28.2",
+    "tailwindcss": "^4"
+  }
+}

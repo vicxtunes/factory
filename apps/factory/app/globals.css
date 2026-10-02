@@ -1,0 +1,4 @@
+@import "tailwindcss";
+@import "@repo/ui/theme.css";
+/* Class names used by the shared packages (monorepo: outside this app). */
+@source "../../../packages";
