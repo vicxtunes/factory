@@ -47,3 +47,10 @@ export interface DiscountInput {
   startsAt: string | null;
   endsAt: string | null;
 }
+
+/** A manager's discount on one line of an order, on top of its catalog price (packages/lib/orders/pricing.ts). */
+export interface LineDiscount {
+  kind: DiscountKind;
+  /** Percent (1–100), or whole currency units off each unit. */
+  value: number;
+}

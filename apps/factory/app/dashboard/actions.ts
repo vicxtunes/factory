@@ -36,6 +36,7 @@ import { pushOnlyOrderItem, notifyOrderItem } from "@repo/lib/notifications/noti
 import { formatMoney } from "@repo/lib/currency/format";
 import { walletErrorMessage } from "@repo/lib/wallet/orders";
 import { isOrderInvoiced } from "@repo/lib/invoices/orders";
+import { validateLineDiscount, type LineDiscount } from "@repo/lib/discounts/core";
 import {
   STATUS_LABELS,
   type AppRole,
@@ -1432,6 +1433,50 @@ export async function setOrderAmount(orderId: string, amount: number | null): Pr
 
   const actor = await resolveActor();
   await logOrderEvent({ orderId, actor, action: amount === null ? "amount_cleared" : "amount_set", detail: { amount } });
+  return { ok: true };
+}
+
+// The database's LINE_DISCOUNT:<code> refusals (order_item_set_discount), as sentences.
+const LINE_DISCOUNT_MESSAGES: Record<string, string> = {
+  invalid: "Enter a valid discount.",
+  not_found: "Item not found.",
+  cancelled: "This order was cancelled.",
+  invoiced: "This order has an invoice — change its prices on the invoice lines.",
+  no_price: "This line has no price yet, so it can't be discounted.",
+};
+
+// Gives (or, with null, removes) a discount on one line of an order, on top
+// of its catalog price (packages/lib/orders/pricing.ts). If the order has a
+// stored price, the database moves it by the change in the line's total.
+export async function setLineDiscount(itemId: string, discount: LineDiscount | null): Promise<Result> {
+  await requireManager();
+  if (discount) {
+    const errors = validateLineDiscount(discount);
+    if (errors.length) return { ok: false, error: errors.join(" ") };
+  }
+
+  const admin = createAdminClient();
+  const { data: item } = await admin.from("order_items").select("order_id").eq("id", itemId).maybeSingle();
+  if (!item) return { ok: false, error: "Item not found." };
+
+  const { error } = await admin.rpc("order_item_set_discount", {
+    p_item: itemId,
+    p_kind: discount?.kind ?? null,
+    p_value: discount?.value ?? null,
+  });
+  if (error) {
+    const code = /LINE_DISCOUNT:(\w+)/.exec(error.message)?.[1];
+    return { ok: false, error: (code && LINE_DISCOUNT_MESSAGES[code]) || walletErrorMessage(error.message) || error.message };
+  }
+
+  const actor = await resolveActor();
+  await logOrderEvent({
+    orderId: item.order_id,
+    orderItemId: itemId,
+    actor,
+    action: discount ? "line_discount_set" : "line_discount_cleared",
+    detail: discount ? { ...discount } : {},
+  });
   return { ok: true };
 }
 

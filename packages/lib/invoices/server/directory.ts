@@ -5,8 +5,8 @@ import "server-only";
 // rules. Money (what's been paid, payment history) comes from packages/lib/wallet.
 
 import { CLIENT_STATUS_LABELS, clientStatus } from "@repo/lib/orders/clientStatus";
-import type { Offer } from "@repo/lib/discounts/core/model";
-import { catalogUnitPrice, estimateUnitPrice, orderAmount } from "@repo/lib/orders/pricing";
+import type { DiscountKind, Offer } from "@repo/lib/discounts/core/model";
+import { catalogListPrice, catalogUnitPrice, estimateUnitPrice, orderAmount } from "@repo/lib/orders/pricing";
 import { createAdminClient } from "@repo/lib/supabase/admin";
 import type { OrderStage, ProductionStatus } from "@repo/lib/types";
 
@@ -32,6 +32,8 @@ interface ItemRow {
   offer: Offer | null;
   /** The catalog list price kept when the line was first priced (discounts). */
   list_unit_price: number | null;
+  line_discount_kind: DiscountKind | null;
+  line_discount_value: number | null;
   category: { name: string } | null;
 }
 
@@ -85,7 +87,7 @@ const SELECT = `
     id, product, product_type, size, cover_type, lamination_type, box_type, qty, unit_price, unit,
     stage, production_status, assigned_worker_id, created_at,
     catalog_product:products (price, description, unit), catalog_variant:product_variants (price),
-    offer:item_offer, list_unit_price,
+    offer:item_offer, list_unit_price, line_discount_kind, line_discount_value,
     category:product_categories (name)
   )
 `;
@@ -106,9 +108,10 @@ function toOrder(row: OrderRow): InvoiceOrder {
     return price == null ? null : Math.round(price);
   };
   // The list price to show beside a discounted line: the one kept when it was
-  // first invoiced, else the running offer's. Null unless it's above the price.
+  // first invoiced, else the catalog's. Null unless it's above the price.
   const listPrice = (i: ItemRow, price: number | null) => {
-    const list = i.list_unit_price != null ? Number(i.list_unit_price) : i.offer ? Number(i.offer.listPrice) : null;
+    const catalogList = catalogListPrice(i);
+    const list = i.list_unit_price != null ? Number(i.list_unit_price) : catalogList == null ? null : Math.round(catalogList);
     return list != null && price != null && list > price ? list : null;
   };
 

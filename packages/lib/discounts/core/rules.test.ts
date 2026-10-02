@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import type { DiscountInput } from "./model";
-import { discountStatus, discountedPrice, offerBadge, parseOffer, validateDiscount } from "./rules";
+import { discountStatus, discountedPrice, lineDiscountOf, offerBadge, parseOffer, validateDiscount, validateLineDiscount } from "./rules";
 
 const NOW = new Date("2026-10-15T09:00:00Z");
 
@@ -57,4 +57,18 @@ test("offers are read defensively", () => {
 test("badges", () => {
   assert.equal(offerBadge({ kind: "percent", value: 10 }, String), "−10%");
   assert.equal(offerBadge({ kind: "amount", value: 5000 }, (n) => `UGX ${n.toLocaleString("en-UG")}`), "−UGX 5,000");
+});
+
+test("line discount: checks the value", () => {
+  assert.deepEqual(validateLineDiscount({ kind: "percent", value: 10 }), []);
+  assert.deepEqual(validateLineDiscount({ kind: "amount", value: 5000 }), []);
+  assert.equal(validateLineDiscount({ kind: "percent", value: 101 }).length, 1);
+  assert.equal(validateLineDiscount({ kind: "amount", value: 0 }).length, 1);
+  assert.equal(validateLineDiscount({ kind: "amount", value: 2.5 }).length, 1);
+});
+
+test("line discount: read from the item's columns (bigints may be strings)", () => {
+  assert.deepEqual(lineDiscountOf({ line_discount_kind: "amount", line_discount_value: "500" }), { kind: "amount", value: 500 });
+  assert.equal(lineDiscountOf({ line_discount_kind: null, line_discount_value: null }), null);
+  assert.equal(lineDiscountOf({}), null);
 });

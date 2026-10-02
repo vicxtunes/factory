@@ -11,6 +11,7 @@ import { MediaLinks } from "@repo/ui/media/MediaLinks";
 import { ClientOrderChat, OrderChat } from "@repo/ui/chat/OrderChat";
 import { CancelledNotice, CancelOrderButton } from "@repo/ui/order/CancelOrder";
 import { ItemAttributes } from "@repo/ui/order/ItemAttributes";
+import { LinePrice } from "@repo/ui/order/LinePrice";
 import { NotesThread } from "@repo/ui/order/NotesThread";
 import { OrderAuditLog } from "./order-audit-log";
 import {
@@ -24,11 +25,13 @@ import {
 
 import { useCurrencySymbol } from "@repo/lib/currency/CurrencySymbolProvider";
 import { formatMoney } from "@repo/lib/currency/format";
-import { orderAmount } from "@repo/lib/orders/pricing";
+import { catalogUnitPrice, orderAmount } from "@repo/lib/orders/pricing";
+import { lineDiscountOf } from "@repo/lib/discounts/core/rules";
+import type { DiscountKind } from "@repo/lib/discounts/core/model";
 import { StaffOrderPayment } from "@repo/ui/wallet/OrderPayment";
 import { StaffInvoicePanel } from "@repo/ui/invoices/StaffInvoicePanel";
 
-import { assignItem, cancelOrder, overrideStatus, setOrderAmount, updateOrderItem } from "./actions";
+import { assignItem, cancelOrder, overrideStatus, setLineDiscount, setOrderAmount, updateOrderItem } from "./actions";
 
 type WorkerLite = Omit<Worker, "pin_hash">;
 
@@ -91,6 +94,88 @@ function itemToEditState(item: OrderItemWithOrder): ItemEditState {
       Object.entries(item.attributes ?? {}).map(([k, v]) => [k, String(v)]),
     ),
   };
+}
+
+/**
+ * This item's price per unit, and the manager's discount on it: a percent or
+ * an amount off each unit, on top of any catalog discount. The amount to pay
+ * follows (packages/lib/orders/pricing.ts). Refused once the order is
+ * invoiced; then prices change on the invoice lines.
+ */
+function LineDiscountPanel({ item, canSet, onChanged }: { item: OrderItemWithOrder; canSet: boolean; onChanged: () => void }) {
+  const current = lineDiscountOf(item);
+  const [editing, setEditing] = useState(false);
+  const [kind, setKind] = useState<DiscountKind>("percent");
+  const [value, setValue] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+  if (catalogUnitPrice(item) == null) return null;
+
+  function save(next: { kind: DiscountKind; value: number } | null) {
+    setError(null);
+    start(async () => {
+      const res = await setLineDiscount(item.id, next);
+      if (!res.ok) return setError(res.error ?? "Couldn't save the discount.");
+      setEditing(false);
+      onChanged();
+    });
+  }
+
+  function startEditing() {
+    setKind(current?.kind ?? "percent");
+    setValue(current ? String(current.value) : "");
+    setEditing(true);
+  }
+
+  return (
+    <section aria-label="Item price" className="rounded-2xl border border-border p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted">{item.product} · price per unit</p>
+          <LinePrice item={item} />
+        </div>
+        {canSet && !editing ? (
+          <div className="flex gap-2">
+            <Button variant="secondary" className="min-h-8 text-xs" onClick={startEditing}>
+              {current ? "Change discount" : "Give discount"}
+            </Button>
+            {current ? (
+              <Button variant="secondary" className="min-h-8 text-xs" loading={pending} disabled={pending} onClick={() => save(null)}>
+                Remove discount
+              </Button>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+      {editing ? (
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <Select value={kind} onChange={(e) => setKind(e.target.value as DiscountKind)} className="w-36">
+            <option value="percent">% off</option>
+            <option value="amount">Amount off each</option>
+          </Select>
+          <TextInput
+            type="number"
+            inputMode="numeric"
+            min="1"
+            max={kind === "percent" ? "100" : undefined}
+            step="1"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            placeholder={kind === "percent" ? "e.g. 10" : "e.g. 5000"}
+            className="w-32"
+            autoFocus
+          />
+          <Button variant="primary" className="min-h-9 text-xs" loading={pending} disabled={pending || !value} onClick={() => save({ kind, value: Number(value) })}>
+            Save
+          </Button>
+          <button type="button" className="text-xs text-muted" onClick={() => setEditing(false)}>
+            Cancel
+          </button>
+        </div>
+      ) : null}
+      {error ? <p className="mt-1 text-xs text-error-600">{error}</p> : null}
+    </section>
+  );
 }
 
 /**
@@ -312,7 +397,10 @@ export function OrderDetail({
       </div>
 
       {!cancelled ? (
-        <OrderAmountPanel items={orderItems?.length ? orderItems : [item]} canSet={canManage} onChanged={onChanged} />
+        <>
+          <OrderAmountPanel items={orderItems?.length ? orderItems : [item]} canSet={canManage} onChanged={onChanged} />
+          <LineDiscountPanel key={item.id} item={item} canSet={canManage} onChanged={onChanged} />
+        </>
       ) : null}
       {/* Shows only once something has been paid from the client's wallet — cancelled orders included, in case a refund is still owed. */}
       {item.order.client_id && canManage ? (

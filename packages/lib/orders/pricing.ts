@@ -5,13 +5,15 @@
 //      receptionist's quote for portal orders, or a manual override.
 //   2. Otherwise it's calculated from the catalog: each item's unit price
 //      (its variant's price, else its product's price, less any discount
-//      running when the order was placed) × quantity, summed.
+//      running when the order was placed, less any discount a manager gave
+//      on that line) × quantity, summed.
 //   3. If any item has no catalog price, the amount is unknown rather than
 //      a misleading partial total.
 //
 // The app doesn't track payments, so this is always the full order amount.
 
-import type { Offer } from "@repo/lib/discounts/core/model";
+import type { DiscountKind, Offer } from "@repo/lib/discounts/core/model";
+import { discountedPrice, lineDiscountOf } from "@repo/lib/discounts/core/rules";
 import type { OrderItemWithOrder } from "@repo/lib/types";
 
 import { isPhotobookCategory } from "./photobook";
@@ -23,7 +25,11 @@ export interface OrderAmount {
   source: OrderAmountSource;
 }
 
-type CatalogPriced = Pick<OrderItemWithOrder, "catalog_product" | "catalog_variant"> & { offer?: Offer | null };
+type CatalogPriced = Pick<OrderItemWithOrder, "catalog_product" | "catalog_variant"> & {
+  offer?: Offer | null;
+  line_discount_kind?: DiscountKind | null;
+  line_discount_value?: number | null;
+};
 
 type PricedItem = CatalogPriced &
   Pick<OrderItemWithOrder, "qty"> & {
@@ -39,11 +45,15 @@ export function catalogListPrice(item: CatalogPriced): number | null {
 /**
  * What one unit of the item costs from the catalog: the discounted price when
  * a discount was running as the order was placed (decided by the database,
- * see packages/lib/discounts), else the list price.
+ * see packages/lib/discounts), else the list price; then less the line's own
+ * discount, if a manager gave one (same arithmetic as the database's
+ * order_item_set_discount).
  */
 export function catalogUnitPrice(item: CatalogPriced): number | null {
-  if (item.offer) return Number(item.offer.price);
-  return catalogListPrice(item);
+  const price = item.offer ? Number(item.offer.price) : catalogListPrice(item);
+  const line = lineDiscountOf(item);
+  if (price == null || !line) return price;
+  return discountedPrice(price, line.kind, line.value);
 }
 
 /** The amount to pay for one order, given all of its items. */
