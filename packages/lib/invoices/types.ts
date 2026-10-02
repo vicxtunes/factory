@@ -1,6 +1,7 @@
 // Invoice view models — what the browser receives. Pure; safe on client and
 // server. Amounts are whole shillings.
 
+import type { LineDiscount, LineDiscountChange } from "@repo/lib/discounts/core/model";
 import type { OrderPaymentRecord, PaymentMethod } from "@repo/lib/wallet/types";
 
 export type { OrderPaymentRecord, PaymentMethod };
@@ -95,6 +96,10 @@ export interface DraftLine {
   unit: string | null;
   /** The price already agreed for this line, else the catalog's, else null (staff must fill it in). */
   unitPrice: number | null;
+  /** The catalog list price per unit, for showing a lower price as a discount; null when the line has none. */
+  listUnitPrice: number | null;
+  /** The discount agreed for this line before the order was confirmed (packages/lib/orders/pricing.ts). */
+  agreedDiscount: LineDiscount | null;
 }
 
 /** The staff version adds the share link and the client's wallet balance. */
@@ -131,6 +136,12 @@ export interface ClientOrderDocument {
   amount: number | null;
   /** Pro forma: false while photo books / unpriced items still await a price. */
   complete: boolean;
+}
+
+/** One change to an order's line discounts, for the staff discount history. Oldest first. */
+export interface DiscountHistoryEntry extends LineDiscountChange {
+  at: string;
+  actorName: string;
 }
 
 /** What every invoice server action returns. `error` is always safe to show. */

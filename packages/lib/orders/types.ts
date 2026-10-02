@@ -1,3 +1,4 @@
+import type { LineDiscount } from "@repo/lib/discounts/core/model";
 import type { OrderType } from "@repo/lib/types";
 import type { ClientMatchReason } from "@repo/lib/clients/match";
 
@@ -17,6 +18,9 @@ export interface OrderItemInput {
   // Optional pasted link (Drive/Dropbox/etc.) — only set by the client-side
   // portal today; staff attach photos via packages/lib/storage instead.
   media_link?: string;
+  // A discount agreed while a manager creates the order (staff order form
+  // only); buildAndInsertOrder ignores it unless the caller allows it.
+  line_discount?: LineDiscount | null;
 }
 
 export interface OrderFormPayload {

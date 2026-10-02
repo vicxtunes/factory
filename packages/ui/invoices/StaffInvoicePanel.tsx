@@ -9,6 +9,7 @@ import { formatMoney } from "@repo/lib/currency/format";
 import {
   applyWalletToInvoice,
   generateInvoice,
+  previewInvoice,
   getInvoiceDraft,
   getInvoiceForOrder,
   recordInvoicePayment,
@@ -17,11 +18,14 @@ import {
   updateInvoiceLines,
   type InvoiceLineInput,
 } from "@repo/lib/invoices/actions";
-import type { DraftLine, StaffInvoiceView } from "@repo/lib/invoices/types";
+import type { DraftLine, InvoiceView, StaffInvoiceView } from "@repo/lib/invoices/types";
 import { MANUAL_METHODS, METHOD_LABELS, paymentMethodLabel } from "@repo/lib/wallet/policy";
 import type { PaymentMethod } from "@repo/lib/wallet/types";
 
-import { InvoiceStatusBadge } from "./InvoiceDocument";
+import { Drawer } from "@repo/ui/Drawer";
+
+import { DiscountHistory } from "./DiscountHistory";
+import { InvoiceDocument, InvoiceStatusBadge } from "./InvoiceDocument";
 import { downloadInvoicePdf } from "./pdf";
 
 // The invoice section of an order, for staff: generate it, share its link,
@@ -289,6 +293,8 @@ export function StaffInvoicePanel({
         </ul>
       ) : null}
 
+      <DiscountHistory key={inv.amount} orderId={inv.order.id} />
+
       {notice ? <p className="text-xs text-success-600 dark:text-success-500">{notice}</p> : null}
       {error ? <p className="text-xs text-error-600">{error}</p> : null}
     </section>
@@ -350,6 +356,7 @@ function LineEditor({
               <div>
                 <p className="text-sm font-medium">{l.title}</p>
                 {l.detail ? <p className="text-[11px] text-muted">{l.detail}</p> : null}
+                <LinePricing line={l} price={price} money={money} />
               </div>
               <div className="flex flex-wrap items-center gap-2 text-xs">
                 <span className="tabular-nums">{l.qty} ×</span>
@@ -392,6 +399,20 @@ function LineEditor({
   );
 }
 
+/** A line's list price and agreed discount, and how far the typed price is below list (shown as a discount on the invoice). */
+function LinePricing({ line, price, money }: { line: EditableLine; price: number; money: (n: number) => string }) {
+  if (line.listUnitPrice == null) return null;
+  const below = Number.isFinite(price) ? line.listUnitPrice - price : 0;
+  const agreed = line.agreedDiscount;
+  return (
+    <p className="text-[11px] text-muted tabular-nums">
+      List {money(line.listUnitPrice)}
+      {agreed ? ` · agreed discount ${agreed.kind === "percent" ? `${agreed.value}%` : money(agreed.value)}` : ""}
+      {below > 0 ? <span className="text-foreground"> · invoice shows −{money(below)} each</span> : null}
+    </p>
+  );
+}
+
 function GeneratePanel({
   orderId,
   money,
@@ -406,6 +427,8 @@ function GeneratePanel({
   onGenerate: (input: { lines: InvoiceLineInput[]; dueDate: string | null; notes: string | null }) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [preview, setPreview] = useState<{ view: InvoiceView; input: { lines: InvoiceLineInput[]; dueDate: string | null; notes: string | null } } | null>(null);
+  const [previewing, startPreview] = useTransition();
   const [lines, setLines] = useState<EditableLine[] | null>(null);
   const [currentAmount, setCurrentAmount] = useState<number | null>(null);
   const [dueDate, setDueDate] = useState("");
@@ -422,12 +445,19 @@ function GeneratePanel({
     });
   }
 
-  function submit() {
+  // Issuing is only possible from the preview, so whoever issues an invoice
+  // has seen exactly what the client will get.
+  function showPreview() {
     if (!lines) return;
-    const input = toInput(lines);
-    if (typeof input === "string") return setLocalError(input);
+    const parsed = toInput(lines);
+    if (typeof parsed === "string") return setLocalError(parsed);
     setLocalError(null);
-    onGenerate({ lines: input, dueDate: dueDate || null, notes: notes || null });
+    const input = { lines: parsed, dueDate: dueDate || null, notes: notes || null };
+    startPreview(async () => {
+      const res = await previewInvoice(orderId, input);
+      if (!res.ok) return setLocalError(res.error);
+      setPreview({ view: res.data, input });
+    });
   }
 
   const total = lines ? linesTotal(lines) : null;
@@ -457,8 +487,8 @@ function GeneratePanel({
             <TextArea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} maxLength={1000} />
           </Field>
           <div className="flex gap-2">
-            <Button className="min-h-9 text-xs" loading={pending} onClick={submit}>
-              Generate
+            <Button className="min-h-9 text-xs" loading={previewing} disabled={previewing} onClick={showPreview}>
+              Preview invoice
             </Button>
             <button type="button" className="text-xs text-muted" onClick={() => setOpen(false)}>
               Cancel
@@ -469,6 +499,35 @@ function GeneratePanel({
         <p className="text-xs text-muted">{localError ? null : "Loading…"}</p>
       ) : null}
       {localError || error ? <p className="text-xs text-error-600">{localError ?? error}</p> : null}
+      <Drawer
+        open={preview !== null}
+        onClose={() => !pending && setPreview(null)}
+        title="Preview — what the client will receive"
+        size="lg"
+        footer={
+          <div className="flex flex-wrap items-center gap-2">
+            <Button className="flex-1" loading={pending} disabled={pending} onClick={() => preview && onGenerate(preview.input)}>
+              Issue invoice
+            </Button>
+            <Button variant="secondary" disabled={pending} onClick={() => setPreview(null)}>
+              Back to prices
+            </Button>
+            {error ? <p className="w-full text-xs text-error-600">{error}</p> : null}
+          </div>
+        }
+      >
+        <div className="space-y-3">
+          <div role="note" className="rounded-xl border border-warning-100 bg-warning-50 p-3 text-xs text-warning-700 dark:border-warning-500/30 dark:bg-warning-500/15 dark:text-warning-500">
+            <p className="font-semibold">Issuing locks this order&apos;s prices and discounts.</p>
+            <p className="mt-0.5">
+              Discounts can&apos;t be added, changed or removed on the order afterwards. Corrections are made by editing the invoice lines, and
+              every change is logged.
+            </p>
+          </div>
+          <DiscountHistory orderId={orderId} />
+          {preview ? <InvoiceDocument invoice={preview.view} /> : null}
+        </div>
+      </Drawer>
     </section>
   );
 }

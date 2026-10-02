@@ -5,12 +5,13 @@ import "server-only";
 // rules. Money (what's been paid, payment history) comes from packages/lib/wallet.
 
 import { CLIENT_STATUS_LABELS, clientStatus } from "@repo/lib/orders/clientStatus";
-import type { DiscountKind, Offer } from "@repo/lib/discounts/core/model";
+import type { DiscountKind, LineDiscountChange, Offer } from "@repo/lib/discounts/core/model";
+import { lineDiscountOf } from "@repo/lib/discounts/core/rules";
 import { catalogListPrice, catalogUnitPrice, estimateUnitPrice, orderAmount } from "@repo/lib/orders/pricing";
 import { createAdminClient } from "@repo/lib/supabase/admin";
 import type { OrderStage, ProductionStatus } from "@repo/lib/types";
 
-import type { DraftLine, InvoiceLine } from "../types";
+import type { DiscountHistoryEntry, DraftLine, InvoiceLine } from "../types";
 
 interface ItemRow {
   id: string;
@@ -160,14 +161,19 @@ function toOrder(row: OrderRow): InvoiceOrder {
         progress: row.cancelled_at ? "Cancelled" : CLIENT_STATUS_LABELS[clientStatus(i)],
       };
     }),
-    draftLines: items.map((i) => ({
-      itemId: i.id,
-      title: title(i),
-      detail: detail(i),
-      qty: i.qty,
-      unit: unit(i),
-      unitPrice: i.unit_price != null ? Number(i.unit_price) : catalog(i),
-    })),
+    draftLines: items.map((i) => {
+      const catalogList = catalogListPrice(i);
+      return {
+        itemId: i.id,
+        title: title(i),
+        detail: detail(i),
+        qty: i.qty,
+        unit: unit(i),
+        unitPrice: i.unit_price != null ? Number(i.unit_price) : catalog(i),
+        listUnitPrice: i.list_unit_price != null ? Number(i.list_unit_price) : catalogList == null ? null : Math.round(catalogList),
+        agreedDiscount: lineDiscountOf(i),
+      };
+    }),
   };
 }
 
@@ -182,4 +188,17 @@ export async function loadOrders(orderIds: string[]): Promise<Record<string, Inv
   const { data, error } = await createAdminClient().from("orders").select(SELECT).in("id", orderIds).returns<OrderRow[]>();
   if (error) throw new Error(error.message);
   return Object.fromEntries((data ?? []).map((o) => [o.id, toOrder(o)]));
+}
+
+/** Every line discount given, changed or removed on the order (from its audit log), oldest first. */
+export async function loadDiscountHistory(orderId: string): Promise<DiscountHistoryEntry[]> {
+  const { data, error } = await createAdminClient()
+    .from("order_audit_log")
+    .select("created_at, actor_name, detail")
+    .eq("order_id", orderId)
+    .eq("action", "line_discount")
+    .order("created_at", { ascending: true })
+    .returns<{ created_at: string; actor_name: string; detail: LineDiscountChange }[]>();
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((r) => ({ ...r.detail, at: r.created_at, actorName: r.actor_name }));
 }

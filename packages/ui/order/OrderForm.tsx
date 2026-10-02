@@ -6,6 +6,10 @@ import { Button } from "@repo/ui/Button";
 import { Field, Select, TextArea, TextInput } from "@repo/ui/Field";
 import { SectionLabel } from "@repo/ui/SectionLabel";
 import { UploadRow } from "@repo/ui/UploadRow";
+import { useCurrencySymbol } from "@repo/lib/currency/CurrencySymbolProvider";
+import { formatMoney } from "@repo/lib/currency/format";
+import type { DiscountKind, LineDiscount, Offer } from "@repo/lib/discounts/core/model";
+import { discountedPrice, validateLineDiscount } from "@repo/lib/discounts/core/rules";
 import { addMediaLink } from "@repo/lib/storage/actions";
 import { uploadFileToStorage } from "@repo/lib/storage/upload-client";
 import type {
@@ -171,6 +175,11 @@ export function OrderForm({
       setError("Add at least one item with a product selected.");
       return;
     }
+    const badDiscount = variant === "manager" ? items.findIndex((it) => it.line_discount && validateLineDiscount(it.line_discount).length) : -1;
+    if (badDiscount >= 0) {
+      setError(`Item ${badDiscount + 1}: ${validateLineDiscount(items[badDiscount].line_discount!).join(" ")}`);
+      return;
+    }
 
     setError(null);
     setConfirmed(null);
@@ -188,13 +197,14 @@ export function OrderForm({
         route: general.route,
         designer_id: variant === "manager" ? general.designerId : "",
         designer_brief: variant === "manager" ? general.designerBrief : "",
-        items: items.map(({ category_id, product_id, variant_id, qty, attributes, item_notes }) => ({
+        items: items.map(({ category_id, product_id, variant_id, qty, attributes, item_notes, line_discount }) => ({
           category_id,
           product_id,
           variant_id,
           qty,
           attributes,
           item_notes,
+          line_discount: variant === "manager" ? (line_discount ?? null) : null,
         })),
       };
 
@@ -282,7 +292,7 @@ export function OrderForm({
           onCheckDuplicates={onCheckDuplicates}
         />
       ) : (
-        <ItemsStep items={items} setItems={setItems} patchItem={patchItem} catalog={catalog} />
+        <ItemsStep items={items} setItems={setItems} patchItem={patchItem} catalog={catalog} discounts={variant === "manager"} />
       )}
 
       {error ? <p className="text-sm text-[var(--rush)]">{error}</p> : null}
@@ -717,16 +727,89 @@ function ClientPicker({
   );
 }
 
+/**
+ * A manager's view of an item's price while creating the order, with the
+ * discount agreed with the client (on top of any running catalog offer).
+ */
+function ItemPricing({
+  listPrice,
+  offer,
+  qty,
+  discount,
+  onChange,
+}: {
+  listPrice: number | null;
+  offer: Offer | null;
+  qty: number;
+  discount: LineDiscount | null;
+  onChange: (next: LineDiscount | null) => void;
+}) {
+  const symbol = useCurrencySymbol();
+  const money = (n: number) => formatMoney(n, symbol);
+  if (listPrice == null) {
+    return <p className="mt-4 border-t border-border pt-4 text-xs text-muted">No catalog price — this item is priced with the client.</p>;
+  }
+  const base = offer ? Number(offer.price) : Math.round(Number(listPrice));
+  const valid = discount && !validateLineDiscount(discount).length;
+  const unit = valid ? discountedPrice(base, discount.kind, discount.value) : base;
+  const count = Number.isFinite(qty) && qty > 0 ? qty : 1;
+
+  return (
+    <div className="mt-4 grid gap-3 border-t border-border pt-4 sm:grid-cols-2">
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted">Price</p>
+        <p className="mt-1 text-sm tabular-nums">
+          {unit < Math.round(Number(listPrice)) ? <span className="mr-2 text-muted line-through">{money(Number(listPrice))}</span> : null}
+          <span className="font-semibold">{money(unit)}</span>
+          <span className="text-muted"> each · {money(unit * count)} total</span>
+        </p>
+        {offer ? <p className="text-[11px] text-muted">Includes the running offer &ldquo;{offer.name}&rdquo;.</p> : null}
+      </div>
+      <Field label="Discount agreed with the client (optional)">
+        <div className="flex gap-2">
+          <Select
+            aria-label="Discount type"
+            value={discount?.kind ?? ""}
+            onChange={(e) => onChange(e.target.value ? { kind: e.target.value as DiscountKind, value: discount?.value ?? 0 } : null)}
+            className="w-40"
+          >
+            <option value="">No discount</option>
+            <option value="percent">% off</option>
+            <option value="amount">Amount off each</option>
+          </Select>
+          {discount ? (
+            <TextInput
+              aria-label="Discount"
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={discount.kind === "percent" ? 100 : undefined}
+              step={1}
+              className="tnum w-28"
+              value={discount.value || ""}
+              onChange={(e) => onChange({ kind: discount.kind, value: Number(e.target.value) })}
+              placeholder={discount.kind === "percent" ? "e.g. 10" : "e.g. 5000"}
+            />
+          ) : null}
+        </div>
+      </Field>
+    </div>
+  );
+}
+
 function ItemsStep({
   items,
   setItems,
   patchItem,
   catalog,
+  discounts,
 }: {
   items: ItemFormState[];
   setItems: (fn: (prev: ItemFormState[]) => ItemFormState[]) => void;
   patchItem: (index: number, patch: Partial<ItemFormState>) => void;
   catalog: ProductCategory[];
+  /** Managers agree discounts while creating the order (their confirmation step). */
+  discounts: boolean;
 }) {
   return (
     <section>
@@ -748,6 +831,7 @@ function ItemsStep({
             index={idx}
             item={item}
             catalog={catalog}
+            discounts={discounts}
             onChange={patchItem}
             onRemove={() => setItems((prev) => prev.filter((_, i) => i !== idx))}
             removable={items.length > 1}
@@ -762,6 +846,7 @@ function ItemRow({
   index,
   item,
   catalog,
+  discounts,
   onChange,
   onRemove,
   removable,
@@ -769,6 +854,7 @@ function ItemRow({
   index: number;
   item: ItemFormState;
   catalog: ProductCategory[];
+  discounts: boolean;
   onChange: (index: number, patch: Partial<ItemFormState>) => void;
   onRemove: () => void;
   removable: boolean;
@@ -777,6 +863,7 @@ function ItemRow({
   const products = category?.products ?? [];
   const product = products.find((p) => p.id === item.product_id) ?? null;
   const variants = product?.variants ?? [];
+  const variant = variants.find((v) => v.id === item.variant_id) ?? null;
   const attributeDefs = category?.attributes ?? [];
 
   function patchAttribute(name: string, value: string) {
@@ -858,6 +945,16 @@ function ItemRow({
           />
         </Field>
       </div>
+
+      {discounts && product ? (
+        <ItemPricing
+          listPrice={variant?.price ?? product.price}
+          offer={(variant ? variant.offer : product.offer) ?? null}
+          qty={item.qty}
+          discount={item.line_discount ?? null}
+          onChange={(line_discount) => onChange(index, { line_discount })}
+        />
+      ) : null}
 
       {attributeDefs.length > 0 ? (
         <div className="mt-4 border-t border-border pt-4">

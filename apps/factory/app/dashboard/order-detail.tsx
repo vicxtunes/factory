@@ -11,6 +11,7 @@ import { MediaLinks } from "@repo/ui/media/MediaLinks";
 import { ClientOrderChat, OrderChat } from "@repo/ui/chat/OrderChat";
 import { CancelledNotice, CancelOrderButton } from "@repo/ui/order/CancelOrder";
 import { ItemAttributes } from "@repo/ui/order/ItemAttributes";
+import { LineDiscountEditor } from "@repo/ui/order/LineDiscountEditor";
 import { LinePrice } from "@repo/ui/order/LinePrice";
 import { NotesThread } from "@repo/ui/order/NotesThread";
 import { OrderAuditLog } from "./order-audit-log";
@@ -27,7 +28,6 @@ import { useCurrencySymbol } from "@repo/lib/currency/CurrencySymbolProvider";
 import { formatMoney } from "@repo/lib/currency/format";
 import { catalogUnitPrice, orderAmount } from "@repo/lib/orders/pricing";
 import { lineDiscountOf } from "@repo/lib/discounts/core/rules";
-import type { DiscountKind } from "@repo/lib/discounts/core/model";
 import { StaffOrderPayment } from "@repo/ui/wallet/OrderPayment";
 import { StaffInvoicePanel } from "@repo/ui/invoices/StaffInvoicePanel";
 
@@ -99,33 +99,15 @@ function itemToEditState(item: OrderItemWithOrder): ItemEditState {
 /**
  * This item's price per unit, and the manager's discount on it: a percent or
  * an amount off each unit, on top of any catalog discount. The amount to pay
- * follows (packages/lib/orders/pricing.ts). Refused once the order is
- * invoiced; then prices change on the invoice lines.
+ * follows (packages/lib/orders/pricing.ts). Discounts are agreed before the
+ * order is confirmed; after that an existing one can be changed or removed,
+ * until the order is invoiced (then prices change on the invoice lines).
  */
 function LineDiscountPanel({ item, canSet, onChanged }: { item: OrderItemWithOrder; canSet: boolean; onChanged: () => void }) {
   const current = lineDiscountOf(item);
+  const confirmed = item.order.approval_status === "approved";
   const [editing, setEditing] = useState(false);
-  const [kind, setKind] = useState<DiscountKind>("percent");
-  const [value, setValue] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [pending, start] = useTransition();
   if (catalogUnitPrice(item) == null) return null;
-
-  function save(next: { kind: DiscountKind; value: number } | null) {
-    setError(null);
-    start(async () => {
-      const res = await setLineDiscount(item.id, next);
-      if (!res.ok) return setError(res.error ?? "Couldn't save the discount.");
-      setEditing(false);
-      onChanged();
-    });
-  }
-
-  function startEditing() {
-    setKind(current?.kind ?? "percent");
-    setValue(current ? String(current.value) : "");
-    setEditing(true);
-  }
 
   return (
     <section aria-label="Item price" className="rounded-2xl border border-border p-3">
@@ -134,46 +116,27 @@ function LineDiscountPanel({ item, canSet, onChanged }: { item: OrderItemWithOrd
           <p className="text-xs font-semibold uppercase tracking-wide text-muted">{item.product} · price per unit</p>
           <LinePrice item={item} />
         </div>
-        {canSet && !editing ? (
-          <div className="flex gap-2">
-            <Button variant="secondary" className="min-h-8 text-xs" onClick={startEditing}>
-              {current ? "Change discount" : "Give discount"}
-            </Button>
-            {current ? (
-              <Button variant="secondary" className="min-h-8 text-xs" loading={pending} disabled={pending} onClick={() => save(null)}>
-                Remove discount
-              </Button>
-            ) : null}
-          </div>
+        {canSet && !editing && (current || !confirmed) ? (
+          <Button variant="secondary" className="min-h-8 text-xs" onClick={() => setEditing(true)}>
+            {current ? "Change discount" : "Give discount"}
+          </Button>
         ) : null}
       </div>
       {editing ? (
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          <Select value={kind} onChange={(e) => setKind(e.target.value as DiscountKind)} className="w-36">
-            <option value="percent">% off</option>
-            <option value="amount">Amount off each</option>
-          </Select>
-          <TextInput
-            type="number"
-            inputMode="numeric"
-            min="1"
-            max={kind === "percent" ? "100" : undefined}
-            step="1"
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            placeholder={kind === "percent" ? "e.g. 10" : "e.g. 5000"}
-            className="w-32"
-            autoFocus
+        <div className="mt-2">
+          <LineDiscountEditor
+            current={current}
+            save={(next) => setLineDiscount(item.id, next)}
+            onDone={() => {
+              setEditing(false);
+              onChanged();
+            }}
           />
-          <Button variant="primary" className="min-h-9 text-xs" loading={pending} disabled={pending || !value} onClick={() => save({ kind, value: Number(value) })}>
-            Save
-          </Button>
-          <button type="button" className="text-xs text-muted" onClick={() => setEditing(false)}>
-            Cancel
-          </button>
         </div>
       ) : null}
-      {error ? <p className="mt-1 text-xs text-error-600">{error}</p> : null}
+      {canSet && confirmed && !current ? (
+        <p className="mt-1 text-[11px] text-muted">No discount was agreed for this item when the order was confirmed.</p>
+      ) : null}
     </section>
   );
 }

@@ -16,13 +16,16 @@ import type { OrderPaymentExcessDisposition, PaymentMethod } from "@repo/lib/wal
 
 import { InvoiceError } from "./server/errors";
 import { requireBoss, requireClientId, requireStaff } from "./server/identity";
+import * as directory from "./server/directory";
 import * as service from "./server/service";
 import type {
   ClientOrderDocument,
+  DiscountHistoryEntry,
   DraftLine,
   InvoiceListRow,
   InvoiceResult,
   InvoiceSettingsInput,
+  InvoiceView,
   StaffInvoiceView,
 } from "./types";
 import { clientPath } from "@repo/lib/client-portal/paths";
@@ -78,6 +81,25 @@ export interface InvoiceLineInput {
   itemId: string;
   unitPrice: number;
   unit?: string | null;
+}
+
+/** Every line discount given, changed or removed on the order, for staff. */
+export async function getDiscountHistory(orderId: string): Promise<InvoiceResult<DiscountHistoryEntry[]>> {
+  return run(async () => {
+    await requireStaff();
+    return directory.loadDiscountHistory(orderId);
+  });
+}
+
+/** The invoice as the client would receive it with these lines, without saving it. */
+export async function previewInvoice(
+  orderId: string,
+  input: { lines: InvoiceLineInput[]; dueDate?: string | null; notes?: string | null },
+): Promise<InvoiceResult<InvoiceView>> {
+  return run(async () => {
+    await requireStaff();
+    return service.preview(orderId, input);
+  });
 }
 
 export async function generateInvoice(

@@ -3,6 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { logOrderEvent, resolveActor } from "@repo/lib/audit/log";
+import { validateLineDiscount, type LineDiscount, type LineDiscountChange } from "@repo/lib/discounts/core";
 import { notifyOrderItem } from "@repo/lib/notifications/notify";
 import type { OrderType } from "@repo/lib/types";
 
@@ -44,6 +45,10 @@ export interface BuildOrderParams {
   // quotes it (client approves) and explicitly routes it — see
   // apps/factory/app/dashboard/actions.ts's quoteOrder/routeApprovedOrder.
   releaseImmediately: boolean;
+  // true only for a manager's createOrder: items' line_discount is kept
+  // (agreed at intake, the staff order's confirmation). Ignored otherwise,
+  // so a designer's or client's payload can't carry a discount in.
+  allowLineDiscounts?: boolean;
 }
 
 export type BuildOrderResult =
@@ -76,10 +81,10 @@ export async function buildAndInsertOrder(
   const [{ data: categories }, { data: products }, { data: variants }, { data: attributeDefs }] =
     await Promise.all([
       admin.from("product_categories").select("id, name").in("id", categoryIds),
-      admin.from("products").select("id, name, category_id").in("id", productIds),
+      admin.from("products").select("id, name, category_id, price").in("id", productIds),
       variantIds.length
-        ? admin.from("product_variants").select("id, name").in("id", variantIds)
-        : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+        ? admin.from("product_variants").select("id, name, price").in("id", variantIds)
+        : Promise.resolve({ data: [] as { id: string; name: string; price: number | null }[] }),
       admin
         .from("category_attributes")
         .select("category_id, name, required")
@@ -115,6 +120,15 @@ export async function buildAndInsertOrder(
       if (value) attributes[def.name] = value;
     }
 
+    const discount = p.allowLineDiscounts ? (item.line_discount ?? null) : null;
+    if (discount) {
+      const errors = validateLineDiscount(discount);
+      if (errors.length) return { ok: false, error: `Item ${formIndex + 1}: ${errors.join(" ")}` };
+      if ((variant?.price ?? product.price) == null) {
+        return { ok: false, error: `Item ${formIndex + 1}: it has no catalog price, so it can't be discounted.` };
+      }
+    }
+
     rows.push({
       category_id: item.category_id,
       product_id: item.product_id,
@@ -127,6 +141,8 @@ export async function buildAndInsertOrder(
       stage,
       assigned_worker_id: p.responsibleWorkerId,
       media_link: clean(item.media_link ?? ""),
+      line_discount_kind: discount?.kind ?? null,
+      line_discount_value: discount?.value ?? null,
     });
   }
 
@@ -218,6 +234,17 @@ export async function buildAndInsertOrder(
     action: "order_created",
     detail: { clientName: p.client.name },
   });
+  // Discounts agreed at intake start the order's discount history.
+  for (const [i, row] of rows.entries()) {
+    if (!row.line_discount_kind) continue;
+    const change: LineDiscountChange = {
+      product: String(row.product),
+      from: null,
+      to: { kind: row.line_discount_kind as LineDiscount["kind"], value: Number(row.line_discount_value) },
+      stage: "order_created",
+    };
+    await logOrderEvent({ orderId: order.id, orderItemId: insertedItems[i].id, actor, action: "line_discount", detail: { ...change } });
+  }
 
   // One order-level "you've been assigned" notification — whichever of
   // designer/worker the order was routed to at creation, not per item. Only

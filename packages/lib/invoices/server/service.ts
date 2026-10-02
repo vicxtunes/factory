@@ -86,7 +86,10 @@ function cleanLines(order: directory.InvoiceOrder, lines: { itemId: string; unit
   });
 }
 
-async function buildView(invoice: repo.InvoiceRow, order: directory.InvoiceOrder): Promise<InvoiceView> {
+async function buildView(
+  invoice: Pick<repo.InvoiceRow, "id" | "invoice_no" | "issued_at" | "due_date" | "notes">,
+  order: directory.InvoiceOrder,
+): Promise<InvoiceView> {
   const [paidMap, payments, issuer] = await Promise.all([
     paidByOrders([order.id]),
     orderPaymentHistory(order.id),
@@ -165,6 +168,50 @@ export async function draft(orderId: string): Promise<{ lines: DraftLine[]; curr
   const order = await directory.loadOrder(orderId);
   if (!order) throw new InvoiceError("Order not found.");
   return { lines: order.draftLines, currentAmount: order.amount };
+}
+
+/**
+ * The invoice exactly as the client would receive it with these line prices,
+ * without saving anything: what staff check before issuing it.
+ */
+export async function preview(
+  orderId: string,
+  input: {
+    lines: { itemId: string; unitPrice: number; unit?: string | null }[];
+    dueDate?: string | null;
+    notes?: string | null;
+  },
+): Promise<InvoiceView> {
+  if (await repo.byOrder(orderId)) throw new InvoiceError("This order already has an invoice.");
+  const order = await directory.loadOrder(orderId);
+  if (!order) throw new InvoiceError("Order not found.");
+  if (order.cancelled) throw new InvoiceError("This order was cancelled.");
+  if (!order.approved) throw new InvoiceError("Confirm the order's price with the client first, then invoice it.");
+
+  const prices = new Map(cleanLines(order, input.lines).map((l) => [l.itemId, l]));
+  const lists = new Map(order.draftLines.map((l) => [l.itemId, l.listUnitPrice]));
+  const lines = order.lines.map((l) => {
+    const line = prices.get(l.itemId)!;
+    const list = lists.get(l.itemId) ?? null;
+    return {
+      ...l,
+      unit: line.unit ?? l.unit,
+      unitPrice: line.unitPrice,
+      listUnitPrice: list != null && list > line.unitPrice ? list : null,
+      lineTotal: line.unitPrice * l.qty,
+    };
+  });
+  const amount = lines.reduce((sum, l) => sum + l.lineTotal, 0);
+  return buildView(
+    {
+      id: "preview",
+      invoice_no: invoiceNumber(order.orderNo),
+      issued_at: new Date().toISOString(),
+      due_date: cleanDueDate(input.dueDate),
+      notes: cleanNotes(input.notes),
+    },
+    { ...order, amount, lines },
+  );
 }
 
 /**
