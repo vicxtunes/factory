@@ -1,14 +1,12 @@
 "use server";
 
 import { randomUUID } from "crypto";
-import { revalidatePath } from "next/cache";
 
 import { createAdminClient } from "@repo/lib/supabase/admin";
 import { catalogChanged } from "@repo/lib/catalog-cache";
 import { requireRole } from "@repo/lib/auth/session";
 
 import { PRODUCT_MEDIA_BUCKET, safeStorageSegment } from "./client";
-import { clientPath } from "@repo/lib/client-portal/paths";
 
 type Result = { ok: true } | { ok: false; error: string };
 type UploadSessionResult = { ok: true; path: string; token: string } | { ok: false; error: string };
@@ -101,7 +99,6 @@ export async function confirmProductMediaUpload(
   }
 
   catalogChanged();
-  revalidatePath(clientPath("/showroom"));
   return { ok: true };
 }
 
@@ -124,7 +121,6 @@ export async function clearProductDisplayImage(productId: string): Promise<Resul
     await admin.storage.from(PRODUCT_MEDIA_BUCKET).remove([existing.display_image_path]);
   }
   catalogChanged();
-  revalidatePath(clientPath("/showroom"));
   return { ok: true };
 }
 
@@ -147,7 +143,6 @@ export async function clearProductPreviewVideo(productId: string): Promise<Resul
     await admin.storage.from(PRODUCT_MEDIA_BUCKET).remove([existing.preview_video_path]);
   }
   catalogChanged();
-  revalidatePath(clientPath("/showroom"));
   return { ok: true };
 }
 
@@ -170,6 +165,5 @@ export async function deleteProductMedia(mediaId: string): Promise<Result> {
     await admin.storage.from(PRODUCT_MEDIA_BUCKET).remove([media.storage_path]);
   }
   catalogChanged();
-  revalidatePath(clientPath("/showroom"));
   return { ok: true };
 }

@@ -16,7 +16,7 @@ Clients who pay upfront keep a balance with us and spend it on orders.
 - **Adjustments.** Staff corrections (±) with a required reason, e.g. cash handed back.
 - **History.** Every movement, who did it, and the balance after it, for the client and staff.
 
-Screens: `/client-side/payment` (client, "Wallet" in the menu), `/dashboard/wallets` (staff),
+Screens: `/payment` in the client app (client, "Wallet" in the menu), `/dashboard/wallets` (staff),
 and a payment panel on the client's and staff's order views.
 
 ## Money model

@@ -6,12 +6,14 @@ the main company system — fed by manual entry at reception. See
 
 ## Surfaces
 
-| Route         | Who                              | Auth                           |
-| ------------- | --------------------------------- | ------------------------------- |
-| `/dashboard`  | Receptionist / Supervisor / Boss  | Supabase Auth (email + pass)   |
-| `/factory`    | Production floor                  | Worker name + personal PIN     |
-| `/graphics`   | Graphic designers                 | Designer name + personal PIN   |
-| `/client-side`| Clients                           | Phone number (+ optional PIN)  |
+Two apps on one database:
+
+| App / route              | Who                              | Auth                           |
+| ------------------------ | --------------------------------- | ------------------------------- |
+| factory: `/dashboard`    | Receptionist / Supervisor / Boss  | Supabase Auth (email + pass)   |
+| factory: `/factory`      | Production floor                  | Worker name + personal PIN     |
+| factory: `/graphics`     | Graphic designers                 | Designer name + personal PIN   |
+| client: `/` (whole app)  | Clients                           | Phone number (+ optional PIN)  |
 
 Clients sign in with just a phone number — a known number logs them straight
 in (or asks for their PIN, if they've set one from Settings); a new number
@@ -39,7 +41,8 @@ One repository, npm workspaces:
 
 ```
 apps/
-  factory/        the Next.js app (staff surfaces + client portal for now)
+  factory/        staff app — dashboard, factory floor, graphics, display  (factory.<domain>)
+  client/         client portal — showroom, orders, wallet, invoices        (client.<domain>)
 packages/
   lib/            @repo/lib — business logic, data access, auth, types
   ui/             @repo/ui  — shared React components and UI primitives
@@ -49,16 +52,20 @@ scripts/          tests and asset generation
 
 Apps import shared code by package name (`@repo/lib/orders/create`,
 `@repo/ui/Button`); `@/` inside an app still means that app's own folder.
-Dependencies point one way: apps → `@repo/ui` → `@repo/lib`. The client
-portal moves into its own app (`apps/client`) in a follow-up.
+Dependencies point one way: apps → `@repo/ui` → `@repo/lib`; the two apps
+never import each other. Where they must talk, they do it over HTTP: the
+factory app links to the client app via `NEXT_PUBLIC_CLIENT_ORIGIN` and tells
+it when the catalog changes (`POST /api/catalog-changed`, `REVALIDATE_SECRET`).
 
 ## Local setup
 
 1. `npm install`
-2. Copy `apps/factory/.env.example` to `apps/factory/.env.local` and fill in:
+2. Copy each app's `.env.example` to `.env.local` (`apps/factory/`, `apps/client/`) and fill in:
    - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`,
      `SUPABASE_SERVICE_ROLE_KEY` — from the Supabase project API settings
-   - `APP_SECRET` — `openssl rand -hex 32`
+   - `APP_SECRET` — `openssl rand -hex 32` (same value in both apps)
+   - `NEXT_PUBLIC_CLIENT_ORIGIN` (factory) — e.g. `http://localhost:3001`
+   - `REVALIDATE_SECRET` — `openssl rand -hex 32` (same value in both apps)
 3. Apply the schema:
    ```bash
    npx supabase link --project-ref <ref>
@@ -72,7 +79,8 @@ portal moves into its own app (`apps/client`) in a follow-up.
    insert into profiles (id, role, full_name) values ('<uuid>', 'supervisor', 'Name');
    insert into profiles (id, role, full_name) values ('<uuid>', 'boss', 'Name');
    ```
-5. `npm run dev` (from the repo root) → http://localhost:3000
+5. From the repo root: `npm run dev` → factory on http://localhost:3000,
+   `npm run dev:client` → client portal on http://localhost:3001
 
 Seeded worker PINs (dev only): Amina `1111`, Kofi `2222`, Lucia `3333`, Sam `4444`.
 Seeded designer PINs (dev only): Tola `5555`, Priya `6666`.
@@ -88,8 +96,8 @@ exposed to the client (`workers_public` view).
 ## Docker
 
 ```bash
-cp apps/factory/.env.local .env   # compose reads .env
-docker compose up --build
+cp apps/factory/.env.local .env   # compose reads .env (add REVALIDATE_SECRET etc.)
+docker compose up --build         # factory on :3000, client on :3001
 ```
 `NEXT_PUBLIC_*` values are build args (inlined at build time); the rest load at
 runtime from `.env`.
@@ -98,7 +106,7 @@ runtime from `.env`.
 
 All run from the repo root:
 
-- `npm run dev` — dev server (factory app)
-- `npm run build` / `npm start` — production build
+- `npm run dev` / `npm run dev:client` — dev server for the factory / client app
+- `npm run build` — production build of both apps (`build:factory`, `build:client` for one)
 - `npm run lint` — ESLint over the whole repo
 - `npm test` — unit tests for the pure `core/` modules in `packages/lib`

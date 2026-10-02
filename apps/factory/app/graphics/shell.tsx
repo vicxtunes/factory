@@ -20,7 +20,7 @@ const barTabs = links.filter((l) => ON_BAR.has(l.href));
 const moreLinks = links.filter((l) => !ON_BAR.has(l.href));
 
 // The signed-in designer's frame: sidebar + sticky topbar + main, the same
-// shape as app/client-side/shell.tsx and app/dashboard/shell.tsx. Used by
+// shape as apps/client/app/shell.tsx and app/dashboard/shell.tsx. Used by
 // /graphics and by /chat and /support for a designer session, so the
 // navigation never changes under them. The signed-out login screen doesn't
 // use it.

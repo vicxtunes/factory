@@ -3,24 +3,23 @@ import Link from "next/link";
 import { ChatScreen } from "@repo/ui/chat/ChatScreen";
 import { Header } from "@repo/ui/Header";
 import {
-  getClientSession,
   getDashboardSession,
   getDesignerSession,
   getWorkerSession,
 } from "@repo/lib/auth/session";
-import { clientPath } from "@repo/lib/client-portal/paths";
+import { clientUrl } from "@repo/lib/client-portal/paths";
 import { fetchNotifications } from "@repo/lib/queries";
 
-import { ClientShell } from "@/app/client-side/shell";
 import { DashboardShell } from "@/app/dashboard/shell";
 import { WorkerChrome } from "@/app/factory/worker-chrome";
 import { GraphicsShell } from "@/app/graphics/shell";
 
 export const metadata = { title: "Chat — Order Tracker" };
 
-// One chat screen for every surface. Like /support, it renders inside the
-// visitor's own navigation (dashboard sidebar, factory/graphics header, client
-// portal) so nobody is stranded on a chrome-less page. Session precedence
+// One chat screen for every staff surface. Like /support, it renders inside
+// the visitor's own navigation (dashboard sidebar, factory/graphics header)
+// so nobody is stranded on a chrome-less page. Clients chat in the client
+// app (apps/client/app/chat). Session precedence
 // matches resolveActor() in packages/lib/audit/log.ts, which the chat module itself
 // uses to identify the caller — so the shell and the data always agree.
 //
@@ -68,23 +67,13 @@ export default async function ChatLayout({ children }: { children: React.ReactNo
     );
   }
 
-  const client = await getClientSession();
-  if (client) {
-    return (
-      <ClientShell signedIn name={client.name} avatarUrl={client.avatarUrl}>
-        <ChatScreen viewer={{ type: "client", id: client.client_id }} exitHref={clientPath()} />
-        {children}
-      </ClientShell>
-    );
-  }
-
   return (
     <>
       <Header surface="Chat" />
       <main className="mx-auto w-full max-w-md flex-1 space-y-3 px-4 py-12 text-center">
         <p className="text-sm text-muted">Sign in to use chat.</p>
         <p className="flex flex-wrap justify-center gap-3 text-sm font-medium text-brand-600">
-          <Link href={clientPath()}>Client portal</Link>
+          <a href={clientUrl()}>Client portal</a>
           <Link href="/dashboard">Staff dashboard</Link>
           <Link href="/factory">Factory</Link>
           <Link href="/graphics">Graphics</Link>

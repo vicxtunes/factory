@@ -1,8 +1,8 @@
 import { PanelStackSkeleton } from "@repo/ui/skeletons/blocks";
 import { ContentSkeleton } from "@repo/ui/skeletons/frames";
 
-// /support renders inside whichever surface the visitor came from (dashboard,
-// graphics, factory, client portal), which isn't known before the page
+// /support renders inside whichever staff surface the visitor came from (dashboard,
+// graphics, factory), which isn't known before the page
 // loads, so this draws only the content: notifications + tickets panels.
 export default function SupportLoading() {
   return (

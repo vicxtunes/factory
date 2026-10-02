@@ -8,7 +8,7 @@ import { ManageProfileModal } from "@repo/ui/profile/ManageProfileModal";
 
 import { logoutDesigner } from "./actions";
 
-// Same shape as app/client-side/user-menu.tsx, for a designer session
+// Same shape as apps/client/app/user-menu.tsx, for a designer session
 // (no settings page on this portal).
 
 function ChevronDownIcon({ className }: { className?: string }) {

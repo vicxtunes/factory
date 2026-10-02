@@ -1,7 +1,6 @@
 import { Header } from "@repo/ui/Header";
 import { PushOptIn } from "@repo/ui/push/PushOptIn";
 import {
-  getClientSession,
   getDashboardSession,
   getDesignerSession,
   getWorkerSession,
@@ -10,8 +9,6 @@ import { fetchNotifications } from "@repo/lib/queries";
 import { fetchResolvedReportNotices, mergeNotices } from "@repo/lib/support/notices";
 
 import { DashboardShell } from "@/app/dashboard/shell";
-import { ClientShell } from "@/app/client-side/shell";
-import { ClientSupportContent } from "@/app/client-side/support-content";
 import { WorkerChrome } from "@/app/factory/worker-chrome";
 import { GraphicsShell } from "@/app/graphics/shell";
 
@@ -48,7 +45,7 @@ function SupportPageContent() {
 
 export default async function SupportPage() {
   // Same precedence as resolveActor() (packages/lib/audit/log.ts): dashboard,
-  // designer, worker, client.
+  // designer, worker. Clients have their own /support in the client app.
   const dashboardSession = await getDashboardSession();
   if (dashboardSession) {
     const [events, notices] = await Promise.all([
@@ -84,15 +81,6 @@ export default async function SupportPage() {
       <WorkerChrome name={workerSession.name}>
         <SupportPageContent />
       </WorkerChrome>
-    );
-  }
-
-  const clientSession = await getClientSession();
-  if (clientSession) {
-    return (
-      <ClientShell signedIn name={clientSession.name} avatarUrl={clientSession.avatarUrl}>
-        <ClientSupportContent />
-      </ClientShell>
     );
   }
 

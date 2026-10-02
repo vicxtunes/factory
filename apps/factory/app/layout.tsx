@@ -9,7 +9,7 @@ import { KeepFresh } from "@repo/ui/navigation/KeepFresh";
 import { CurrencySymbolProvider } from "@repo/lib/currency/CurrencySymbolProvider";
 import { DEFAULT_CURRENCY_SYMBOL } from "@repo/lib/currency/format";
 import { fetchBaseCurrencySymbol } from "@repo/lib/queries";
-import { getAppIdentity } from "@repo/lib/app-identity";
+import { APP_IDENTITY as app } from "./identity";
 import "./globals.css";
 
 const outfit = Outfit({
@@ -22,20 +22,17 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-export async function generateMetadata(): Promise<Metadata> {
-  const app = await getAppIdentity();
-  return {
-    title: "Factory Order Tracker",
-    description: app.description,
-    applicationName: app.shortName,
-    // iOS uses this for the home-screen label.
-    appleWebApp: {
-      capable: true,
-      statusBarStyle: "default",
-      title: app.shortName,
-    },
-  };
-}
+export const metadata: Metadata = {
+  title: "Factory Order Tracker",
+  description: app.description,
+  applicationName: app.shortName,
+  // iOS uses this for the home-screen label.
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: app.shortName,
+  },
+};
 
 export const viewport: Viewport = {
   themeColor: "#f67413",

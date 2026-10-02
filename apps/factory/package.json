@@ -10,17 +10,13 @@
   "dependencies": {
     "@repo/lib": "*",
     "@repo/ui": "*",
-    "@react-three/drei": "^10.7.8",
-    "@react-three/fiber": "^9.7.0",
     "@supabase/ssr": "^0.12.5",
     "googleapis": "^180.0.0",
-    "jszip": "^3.10.2",
     "next": "16.3.4",
     "papaparse": "^5.7.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",
-    "serwist": "^9.5.12",
-    "three": "^0.186.0"
+    "serwist": "^9.5.12"
   },
   "devDependencies": {
     "@serwist/turbopack": "^9.5.12",
@@ -28,7 +24,6 @@
     "@types/papaparse": "^5.5.2",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "@types/three": "^0.186.0",
     "esbuild-wasm": "^0.28.2",
     "tailwindcss": "^4"
   }

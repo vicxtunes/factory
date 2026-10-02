@@ -2,13 +2,19 @@
 
 import { useState, useSyncExternalStore } from "react";
 
+import { clientUrl } from "@repo/lib/client-portal/paths";
 import { Button } from "@repo/ui/Button";
 
 // Copy / share / open buttons for a public client-portal page. `path` is the
-// /client-side path; on the staff subdomain that URL redirects to the client
-// subdomain's clean URL (proxy.ts), so the link works wherever it's opened.
+// page's path in the client app (e.g. "/showroom"); links point at the client
+// app's own address (NEXT_PUBLIC_CLIENT_ORIGIN), since this staff app doesn't
+// serve those pages.
 
-const absolute = (path: string) => `${window.location.origin}${path}`;
+const absolute = (path: string) => {
+  const url = clientUrl(path);
+  // No client origin configured (local dev): best effort on this origin.
+  return url.startsWith("/") ? `${window.location.origin}${url}` : url;
+};
 
 export function CopyLinkButton({ path }: { path: string }) {
   const [copied, setCopied] = useState(false);
@@ -60,7 +66,7 @@ export function ShareLinks({ path, title }: { path: string; title: string }) {
       <CopyLinkButton path={path} />
       <NativeShareButton path={path} title={title} />
       <a
-        href={path}
+        href={clientUrl(path)}
         target="_blank"
         rel="noopener noreferrer"
         className="inline-flex min-h-8 items-center rounded-[var(--radius)] px-2 text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"

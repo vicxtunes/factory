@@ -20,7 +20,7 @@ export interface CancellableOrder {
   assigned_designer_id: string | null;
 }
 
-// Shared by both cancel paths — the client's (apps/factory/app/client-side/actions.ts,
+// Shared by both cancel paths — the client's (apps/client/app/actions.ts,
 // only before the order is confirmed) and the boss's (apps/factory/app/dashboard/actions.ts,
 // any time until it's completed). Each caller does its own permission check
 // first; this just loads the order, records the cancellation, logs it, and

@@ -986,7 +986,6 @@ export async function setProductDescription(id: string, description: string): Pr
     .eq("id", id);
   if (error) return { ok: false, error: error.message };
   catalogChanged();
-  revalidatePath(clientPath("/showroom"));
   return { ok: true };
 }
 
@@ -1026,7 +1025,7 @@ export async function setVariantActive(id: string, active: boolean): Promise<Res
 }
 
 // Which image display the showroom's single-product view uses (see
-// app/client-side/product-showcase.tsx) — the boss's call, since neither
+// apps/client/app/product-showcase.tsx) — the boss's call, since neither
 // is objectively better (3D scene can't show video; carousel can).
 export async function setShowroomViewMode(mode: ShowroomViewMode): Promise<Result> {
   await requireRole("boss");
@@ -1034,7 +1033,6 @@ export async function setShowroomViewMode(mode: ShowroomViewMode): Promise<Resul
   const { error } = await admin.from("showroom_settings").update({ product_view_mode: mode }).eq("id", 1);
   if (error) return { ok: false, error: error.message };
   catalogChanged();
-  revalidatePath(clientPath("/showroom"));
   return { ok: true };
 }
 
@@ -1046,15 +1044,11 @@ export async function setShowPrices(show: boolean): Promise<Result> {
   const { error } = await admin.from("showroom_settings").update({ show_prices: show }).eq("id", 1);
   if (error) return { ok: false, error: error.message };
   catalogChanged();
-  revalidatePath(clientPath("/showroom"));
-  revalidatePath(clientPath("/new"));
   return { ok: true };
 }
 
 function revalidateCurrencyViews(): void {
   catalogChanged();
-  revalidatePath(clientPath("/showroom"));
-  revalidatePath(clientPath("/new"));
 }
 
 // Currencies clients may view prices in, converted from the fixed base
@@ -1405,7 +1399,7 @@ export async function createOrder(input: OrderFormPayload): Promise<CreateOrderR
 // packages/lib/orders/create.ts's `releaseImmediately`. A client-portal order sits
 // with approval_status='pending_review' and released_at=null until this
 // loop resolves: quoteOrder (receptionist) -> respondToQuote (client, in
-// app/client-side/actions.ts) -> routeApprovedOrder (receptionist).
+// apps/client/app/actions.ts) -> routeApprovedOrder (receptionist).
 // ---------------------------------------------------------------------------
 
 // Sets (or, with null, clears) the amount a confirmed order costs the
@@ -1638,7 +1632,6 @@ export async function receiveClientOrder(
 
   revalidatePath("/dashboard/order-approvals");
   revalidatePath("/dashboard/orders");
-  revalidatePath(clientPath("/orders"));
   return { ok: true };
 }
 

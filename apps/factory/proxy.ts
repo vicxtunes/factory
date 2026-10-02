@@ -1,26 +1,17 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-// Two subdomains, one app (see Notion: "Aming Ltd - Multi-Subdomain Routing
-// Architecture"):
-//   factory.<domain> -> staff surfaces (/, /factory, /graphics, /dashboard, /display)
-//   client.<domain> -> the client portal, served from /client-side but shown
-//                       at the root (client.<domain>/orders, not /client-side/orders)
-// Any other host (localhost, Codespaces, previews, the apex domain) is left
-// untouched, so local dev keeps the original path-based URLs.
+// The staff app (factory.<domain>): /, /factory, /graphics, /dashboard,
+// /display, /chat, /support. The client portal is its own app (apps/client);
+// old /client-side links that still land here (bookmarks, shared links) are
+// sent there.
 // Also refreshes the Supabase Auth session cookie on dashboard requests —
 // the only surface that signs in with Supabase Auth (email + password);
-// workers, designers and clients carry their own signed session cookies
+// workers and designers carry their own signed session cookies
 // (see packages/lib/auth/cookies.ts) and don't need this.
 // (Next.js 16 renamed Middleware -> Proxy; runtime is nodejs.)
 
-const FACTORY_HOST = /^factory\./i;
-const CLIENT_HOST = /^client\./i;
-
-const STAFF_PATHS = ["/factory", "/graphics", "/dashboard", "/display"];
-// Served from the same public path on every host.
-const SHARED_PATHS = ["/support", "/chat", "/auth", "/api", "/~offline", "/serwist"];
-const CLIENT_BASE = "/client-side";
+const LEGACY_CLIENT_BASE = "/client-side";
 
 const within = (pathname: string, base: string) =>
   pathname === base || pathname.startsWith(`${base}/`);
@@ -28,45 +19,19 @@ const within = (pathname: string, base: string) =>
 const needsSession = (pathname: string) => within(pathname, "/dashboard");
 
 export async function proxy(request: NextRequest) {
-  const { pathname } = request.nextUrl;
-  const host = request.headers.get("host") ?? request.nextUrl.host;
+  const { pathname, search } = request.nextUrl;
 
-  let internalPath = pathname;
-  let rewriteTo: URL | null = null;
-
-  if (CLIENT_HOST.test(host)) {
-    if (STAFF_PATHS.some((p) => within(pathname, p))) {
-      // Staff tools live on the factory subdomain.
-      const url = request.nextUrl.clone();
-      url.host = host.replace(CLIENT_HOST, "factory.");
-      return NextResponse.redirect(url);
-    }
-    if (within(pathname, CLIENT_BASE)) {
-      // Hard-coded /client-side links (and push-notification URLs) -> clean URL.
-      const url = request.nextUrl.clone();
-      url.pathname = pathname.slice(CLIENT_BASE.length) || "/";
-      return NextResponse.redirect(url);
-    }
-    if (!SHARED_PATHS.some((p) => within(pathname, p))) {
-      internalPath = pathname === "/" ? CLIENT_BASE : `${CLIENT_BASE}${pathname}`;
-      rewriteTo = request.nextUrl.clone();
-      rewriteTo.pathname = internalPath;
-    }
-  } else if (FACTORY_HOST.test(host) && within(pathname, CLIENT_BASE)) {
-    const url = request.nextUrl.clone();
-    url.host = host.replace(FACTORY_HOST, "client.");
-    url.pathname = pathname.slice(CLIENT_BASE.length) || "/";
-    return NextResponse.redirect(url);
+  const clientOrigin = process.env.NEXT_PUBLIC_CLIENT_ORIGIN;
+  if (clientOrigin && within(pathname, LEGACY_CLIENT_BASE)) {
+    const rest = pathname.slice(LEGACY_CLIENT_BASE.length) || "/";
+    return NextResponse.redirect(new URL(`${rest}${search}`, clientOrigin));
   }
 
-  const next = () =>
-    rewriteTo
-      ? NextResponse.rewrite(rewriteTo, { request })
-      : NextResponse.next({ request });
+  const next = () => NextResponse.next({ request });
 
   let response = next();
 
-  if (!needsSession(internalPath)) return response;
+  if (!needsSession(pathname)) return response;
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

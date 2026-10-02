@@ -55,7 +55,7 @@ export async function fetchDesignerItems(designerId: string): Promise<OrderItemW
   return (data ?? []) as unknown as OrderItemWithOrder[];
 }
 
-// Every item ever placed by this client — the /client-side portal's "My
+// Every item ever placed by this client — the client portal's "My
 // Orders" + "History" views split this by whether every item on the order
 // is completed. Same shape/template as fetchDesignerItems above.
 export async function fetchClientItems(clientId: string): Promise<OrderItemWithOrder[]> {
@@ -298,7 +298,7 @@ const CATALOG_SELECT = `
 `;
 
 // Marketing carousel slides for the client-portal dashboard, each pointing
-// at a catalog category. activeOnly=true is what /client-side renders;
+// at a catalog category. activeOnly=true is what the client portal renders;
 // false (all slides, for the boss-only admin panel) is the default so an
 // inactive slide doesn't just vanish from the management list.
 export async function fetchMarketingSlides(activeOnly = false): Promise<MarketingSlide[]> {
