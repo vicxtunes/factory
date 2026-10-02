@@ -10,6 +10,7 @@ import {
   getDesignerSession,
   getWorkerSession,
 } from "@/lib/auth/session";
+import { clientPath } from "@/lib/client-portal/paths";
 
 export const metadata = { title: "Page not found — AMING" };
 
@@ -23,7 +24,7 @@ async function homeFor(): Promise<{ href: string; label: string }> {
     if (await getDashboardSession()) return { href: "/dashboard", label: "Back to the dashboard" };
     if (await getWorkerSession()) return { href: "/factory", label: "Back to the factory board" };
     if (await getDesignerSession()) return { href: "/graphics", label: "Back to the graphics board" };
-    if (await getClientSession()) return { href: "/client-side", label: "Back to your orders" };
+    if (await getClientSession()) return { href: clientPath(), label: "Back to your orders" };
   } catch {
     // Session lookup must never break the 404 page itself.
   }

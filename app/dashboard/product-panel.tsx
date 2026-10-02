@@ -48,6 +48,7 @@ import {
   type AttributeInput,
 } from "./actions";
 import { CopyLinkButton } from "./share-link";
+import { clientPath } from "@/lib/client-portal/paths";
 
 type MutationResult = { ok: boolean; error?: string };
 
@@ -492,10 +493,10 @@ function ProductCard({
           </span>
         )}
         {/* Any staff member can share an active product's showroom page. */}
-        {product.active && !canManage ? <CopyLinkButton path={`/client-side/${encodeURIComponent(product.slug)}`} /> : null}
+        {product.active && !canManage ? <CopyLinkButton path={clientPath(`/${encodeURIComponent(product.slug)}`)} /> : null}
         {canManage ? (
           <div className="flex shrink-0 items-center gap-1.5">
-            {product.active ? <CopyLinkButton path={`/client-side/${encodeURIComponent(product.slug)}`} /> : null}
+            {product.active ? <CopyLinkButton path={clientPath(`/${encodeURIComponent(product.slug)}`)} /> : null}
             <Button variant="secondary" className="min-h-8 text-xs" onClick={() => setRenaming(true)}>
               Rename
             </Button>

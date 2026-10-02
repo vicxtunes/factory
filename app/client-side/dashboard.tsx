@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
 
 import { SectionLabel } from "@/components/ui/SectionLabel";
-import { StatusBarChart, UrgencyDonutChart } from "@/app/dashboard/charts";
-import { StatCard } from "@/app/dashboard/stat-card";
+import { StatusBarChart, UrgencyDonutChart } from "@/components/charts/OrderCharts";
+import { StatCard } from "@/components/ui/StatCard";
 import {
   BOARD_COLUMNS,
   STATUS_LABELS,

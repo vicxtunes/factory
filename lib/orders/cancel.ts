@@ -7,6 +7,7 @@ import { formatMoney } from "@/lib/currency/format";
 import { notifyOrderItem, pushOnlyOrderItem } from "@/lib/notifications/notify";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { refundCancelledOrder } from "@/lib/wallet/orders";
+import { clientPath } from "@/lib/client-portal/paths";
 
 type Result = { ok: true } | { ok: false; error: string };
 
@@ -88,7 +89,7 @@ export async function applyCancellation(params: {
       (refunded > 0 ? ` · ${formatMoney(refunded)} returned to the client's wallet` : "");
     const recipients: { type: "client" | "designer" | "worker"; id: string; url: string }[] = [];
     if (params.notifyClient && order.client_id) {
-      recipients.push({ type: "client", id: order.client_id, url: "/client-side/history" });
+      recipients.push({ type: "client", id: order.client_id, url: clientPath("/history") });
     }
     if (order.released_at && order.assigned_designer_id) {
       recipients.push({ type: "designer", id: order.assigned_designer_id, url: "/graphics" });
@@ -125,9 +126,9 @@ export async function applyCancellation(params: {
     "/factory",
     "/graphics",
     "/display",
-    "/client-side",
-    "/client-side/orders",
-    "/client-side/history",
+    clientPath(),
+    clientPath("/orders"),
+    clientPath("/history"),
   ]) {
     revalidatePath(path);
   }

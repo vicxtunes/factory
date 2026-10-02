@@ -1,12 +1,5 @@
-import Link from "next/link";
-
 import { Header } from "@/components/ui/Header";
-import { HomeBar } from "@/components/ui/HomeBar";
-import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { PushOptIn } from "@/components/push/PushOptIn";
-import { AnnouncementPopup } from "@/components/announcements/AnnouncementPopup";
-import { InstallGate } from "@/components/pwa/InstallGate";
-import { NotificationGate } from "@/components/pwa/NotificationGate";
 import {
   getClientSession,
   getDashboardSession,
@@ -18,11 +11,10 @@ import { fetchResolvedReportNotices, mergeNotices } from "@/lib/support/notices"
 
 import { DashboardShell } from "@/app/dashboard/shell";
 import { ClientShell } from "@/app/client-side/shell";
-import { getMyNotifications as getMyWorkerNotifications, logoutWorker } from "@/app/factory/actions";
-import { LogoutButton as WorkerLogoutButton } from "@/app/factory/logout-button";
+import { ClientSupportContent } from "@/app/client-side/support-content";
+import { WorkerChrome } from "@/app/factory/worker-chrome";
 import { GraphicsShell } from "@/app/graphics/shell";
 
-import { ClientSupportContent } from "./client-support";
 import { SupportForm } from "./support-form";
 
 export const metadata = { title: "Support — Order Tracker" };
@@ -89,42 +81,9 @@ export default async function SupportPage() {
   const workerSession = await getWorkerSession();
   if (workerSession) {
     return (
-      <>
-        <InstallGate />
-        <NotificationGate />
-        <AnnouncementPopup />
-        <Header
-          surface="Factory"
-          right={
-            <>
-              <Link
-                href="/factory"
-                className="hidden text-white/70 hover:text-white text-xs underline-offset-2 hover:underline sm:inline"
-              >
-                Back to board
-              </Link>
-              <NotificationBell
-                fetchNotifications={getMyWorkerNotifications}
-                triggerClassName="relative flex h-9 w-9 items-center justify-center rounded-lg text-white/70 hover:text-white hover:bg-white/10"
-              />
-              <span className="hidden text-white/80 sm:inline">{workerSession.name}</span>
-              <WorkerLogoutButton />
-            </>
-          }
-        />
-        <main className="mx-auto w-full max-w-6xl flex-1 px-3 py-4 pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-4">
-          <SupportPageContent />
-        </main>
-        <HomeBar
-          tabs={[
-            { href: "/factory", label: "Board", icon: "dashboard" },
-            { href: "/chat", label: "Chat", icon: "chat" },
-            { href: "/support", label: "Support", icon: "support" },
-          ]}
-          logout={logoutWorker}
-          afterLogout="/factory"
-        />
-      </>
+      <WorkerChrome name={workerSession.name}>
+        <SupportPageContent />
+      </WorkerChrome>
     );
   }
 

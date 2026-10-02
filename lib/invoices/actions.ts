@@ -25,6 +25,7 @@ import type {
   InvoiceSettingsInput,
   StaffInvoiceView,
 } from "./types";
+import { clientPath } from "@/lib/client-portal/paths";
 
 async function run<T>(fn: () => Promise<T>): Promise<InvoiceResult<T>>;
 async function run(fn: () => Promise<void>): Promise<InvoiceResult>;
@@ -40,7 +41,7 @@ async function run<T>(fn: () => Promise<T>): Promise<{ ok: true; data?: T } | { 
 }
 
 function refresh() {
-  for (const path of ["/dashboard/invoices", "/dashboard/wallets", "/client-side/payment", "/client-side/orders"]) {
+  for (const path of ["/dashboard/invoices", "/dashboard/wallets", clientPath("/payment"), clientPath("/orders")]) {
     revalidatePath(path);
   }
 }

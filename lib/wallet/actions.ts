@@ -29,6 +29,7 @@ import type {
   WalletSummary,
   WalletView,
 } from "./types";
+import { clientPath } from "@/lib/client-portal/paths";
 
 async function run<T>(fn: () => Promise<T>): Promise<WalletResult<T>>;
 async function run(fn: () => Promise<void>): Promise<WalletResult>;
@@ -46,9 +47,9 @@ async function run<T>(fn: () => Promise<T>): Promise<{ ok: true; data?: T } | { 
 /** Every page that shows a balance, a deposit or an order's paid state. */
 function refreshMoneyPages() {
   for (const path of [
-    "/client-side",
-    "/client-side/payment",
-    "/client-side/orders",
+    clientPath(),
+    clientPath("/payment"),
+    clientPath("/orders"),
     "/dashboard/wallets",
     "/dashboard/transactions",
   ]) {

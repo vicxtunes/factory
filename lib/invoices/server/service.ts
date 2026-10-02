@@ -29,6 +29,7 @@ import { InvoiceError } from "./errors";
 import type { InvoiceStaff } from "./identity";
 import { invoiceUrl, newShareToken } from "./links";
 import * as repo from "./repository";
+import { clientPath } from "@/lib/client-portal/paths";
 
 const LIST_LIMIT = 500;
 
@@ -328,7 +329,7 @@ export async function linkForClientOrder(
   if (order.cancelled) return null;
   const pf = await proforma(orderId);
   if (!pf || !("view" in pf)) return null;
-  return { kind: "proforma", href: `/client-side/proforma/${orderId}`, amount: pf.view.amount, complete: pf.view.complete };
+  return { kind: "proforma", href: clientPath(`/proforma/${orderId}`), amount: pf.view.amount, complete: pf.view.complete };
 }
 
 // --- Pro forma (before the order is invoiced) --------------------------------

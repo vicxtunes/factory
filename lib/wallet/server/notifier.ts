@@ -7,8 +7,9 @@ import "server-only";
 import { formatMoney } from "@/lib/currency/format";
 import { notifyActor } from "@/lib/push/send";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { clientPath } from "@/lib/client-portal/paths";
 
-const CLIENT_URL = "/client-side/payment";
+const CLIENT_URL = clientPath("/payment");
 const STAFF_URL = "/dashboard/wallets";
 
 async function pushClient(clientId: string, title: string, body: string): Promise<void> {

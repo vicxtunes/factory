@@ -5,8 +5,9 @@ import Link from "next/link";
 import type { WalletSummary } from "@/lib/wallet/types";
 
 import { useMoney } from "./shared";
+import { clientPath } from "@/lib/client-portal/paths";
 
-const WALLET_URL = "/client-side/payment";
+const WALLET_URL = clientPath("/payment");
 
 // The client's balance at the top of their home screen: the usual spot
 // in wallet and banking apps (on desktop, a tile beside the quick actions —

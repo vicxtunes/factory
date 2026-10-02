@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { OrdersIcon, PlaceOrderIcon, ShowroomIcon } from "./sidebar";
+import { OrdersIcon, PlaceOrderIcon, ShowroomIcon } from "@/components/ui/icons";
 
 // The three things a client most often comes to the portal to do, one tap
 // away at the top of the dashboard (above the metrics and charts). "Add order"
