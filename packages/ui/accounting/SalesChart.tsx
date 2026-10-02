@@ -15,7 +15,7 @@ function compact(value: number): string {
   return new Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: 1 }).format(value);
 }
 
-/** Sales issued vs money received, per month. Same styling as app/dashboard/charts.tsx. */
+/** Sales issued vs money received, per month. Same styling as ../charts/OrderCharts.tsx. */
 export function SalesChart({ series }: { series: MonthPoint[] }) {
   const money = useMoney();
   const data = series.map((p) => ({ ...p, label: monthLabel(p.month) }));
