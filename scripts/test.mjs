@@ -1,7 +1,7 @@
-// Runs the unit tests for pure modules (lib/**/core/*.test.ts).
+// Runs the unit tests for pure modules (packages/lib/**/core/*.test.ts).
 //
 // Each test file is bundled with esbuild (already a dependency, via Next) so
-// the "@/" import alias and extensionless imports work, then run with Node's
+// workspace imports (@repo/lib) and extensionless imports work, then run with Node's
 // built-in test runner. No extra test framework needed.
 
 import { spawnSync } from "node:child_process";
@@ -22,7 +22,7 @@ function findTests(dir) {
   });
 }
 
-const tests = findTests(join(root, "lib"));
+const tests = findTests(join(root, "packages/lib"));
 if (tests.length === 0) {
   console.log("No tests found.");
   process.exit(0);
@@ -40,7 +40,6 @@ for (const file of tests) {
     bundle: true,
     platform: "node",
     format: "esm",
-    alias: { "@": root },
     logLevel: "warning",
   });
   outputs.push(outfile);
