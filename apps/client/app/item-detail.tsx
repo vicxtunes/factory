@@ -14,6 +14,8 @@ import { useCurrencySymbol } from "@repo/lib/currency/CurrencySymbolProvider";
 import { formatMoney } from "@repo/lib/currency/format";
 import { CLIENT_STATUS_LABELS, clientStatus } from "@repo/lib/orders/clientStatus";
 import { orderAmount } from "@repo/lib/orders/pricing";
+import { lineDiscountOf } from "@repo/lib/discounts/core/rules";
+import { LinePrice } from "@repo/ui/order/LinePrice";
 import type { OrderItemWithOrder } from "@repo/lib/types";
 
 import { OrderProgressTracker } from "./progress-tracker";
@@ -91,6 +93,14 @@ export function ClientItemDetail({ item, orderItems }: { item: OrderItemWithOrde
           </button>
         </PriceHero>
       )}
+
+      {/* A discounted line shows its price before and after, so the client sees what they saved. */}
+      {item.offer || lineDiscountOf(item) ? (
+        <p className="flex flex-wrap items-baseline gap-x-2 text-sm">
+          <span className="text-muted">{item.product}:</span>
+          <LinePrice item={item} />
+        </p>
+      ) : null}
 
       <ClientOrderPayment key={item.order_id} orderId={item.order_id} />
 

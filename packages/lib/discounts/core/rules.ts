@@ -1,7 +1,7 @@
 // Discount rules that don't need the database: status, input checks, and
 // reading/presenting an offer. Pure.
 
-import type { Discount, DiscountInput, DiscountStatus, Offer } from "./model";
+import type { Discount, DiscountInput, DiscountStatus, LineDiscount, Offer } from "./model";
 
 export function discountStatus(d: Pick<Discount, "startsAt" | "endsAt">, now: Date): DiscountStatus {
   const t = now.getTime();
@@ -34,6 +34,19 @@ export function discountedPrice(listPrice: number, kind: Discount["kind"], value
   const list = Math.round(listPrice);
   const price = kind === "percent" ? Math.round((list * (100 - value)) / 100) : list - value;
   return Math.max(price, 0);
+}
+
+/** Problems with a line discount, as sentences; empty when it's fine. */
+export function validateLineDiscount(d: LineDiscount): string[] {
+  if (!Number.isInteger(d.value) || d.value <= 0) return ["The discount must be a whole number above 0."];
+  if (d.kind === "percent" && d.value > 100) return ["A percentage can't be more than 100."];
+  return [];
+}
+
+/** A line's stored discount columns as a LineDiscount; null when it has none. */
+export function lineDiscountOf(item: { line_discount_kind?: Discount["kind"] | null; line_discount_value?: number | string | null }): LineDiscount | null {
+  if (!item.line_discount_kind || item.line_discount_value == null) return null;
+  return { kind: item.line_discount_kind, value: Number(item.line_discount_value) };
 }
 
 /** Checks an `offer` the database returned (bigints may arrive as strings); null when there's no valid offer. */

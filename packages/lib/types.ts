@@ -1,4 +1,4 @@
-import type { Offer } from "@repo/lib/discounts/core/model";
+import type { DiscountKind, Offer } from "@repo/lib/discounts/core/model";
 
 // Hand-written DB row types. Regenerate with:
 //   npx supabase gen types typescript --linked > lib/database.types.ts
@@ -412,6 +412,9 @@ export interface OrderItemWithOrder extends OrderItem {
   category: { name: string } | null;
   /** The line's agreed price once invoiced (see packages/lib/invoices); null before. */
   unit_price: number | null;
+  /** A manager's discount on this line, on top of its catalog price (packages/lib/orders/pricing.ts); both null when none. */
+  line_discount_kind: DiscountKind | null;
+  line_discount_value: number | null;
   order: Pick<
     Order,
     | "order_no"
