@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-import { getOrderAuditLog } from "@/app/dashboard/actions";
+import { getOrderAuditLog } from "./actions";
 import { renderAuditEntry } from "@/lib/audit/render";
 import type { OrderAuditEntry } from "@/lib/types";
 

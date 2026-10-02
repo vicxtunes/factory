@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useOffline } from "next/offline";
 
 import { startOfflineQueueFlush } from "@/lib/offline-queue/flush";
+import { clientPath } from "@/lib/client-portal/paths";
 
 // Mounted once in the root layout so it's visible on every surface
 // (dashboard, factory, graphics, display). Server Actions and navigations
@@ -21,7 +22,7 @@ export function OfflineBanner() {
   // Realtime/notification-polling traffic that page carries make
   // useOffline's detection unreliable there) — don't show a banner that
   // contradicts what they can see is working.
-  const onClientPortal = pathname.startsWith("/client-side");
+  const onClientPortal = pathname.startsWith(clientPath());
 
   useEffect(() => {
     startOfflineQueueFlush();

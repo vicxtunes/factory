@@ -44,6 +44,7 @@ import {
   type ProductionStatus,
   type ShowroomViewMode,
 } from "@/lib/types";
+import { clientPath } from "@/lib/client-portal/paths";
 
 type Result = { ok: true } | { ok: false; error: string };
 
@@ -410,13 +411,13 @@ export async function overrideStatus(
         message,
         recipient,
         pushTitle: "Your order is ready",
-        url: "/client-side/orders",
+        url: clientPath("/orders"),
       });
     } else {
       await pushOnlyOrderItem(recipient, {
         title: "Your order was delivered",
         body: message,
-        url: "/client-side/history",
+        url: clientPath("/history"),
       });
     }
   }
@@ -985,7 +986,7 @@ export async function setProductDescription(id: string, description: string): Pr
     .eq("id", id);
   if (error) return { ok: false, error: error.message };
   catalogChanged();
-  revalidatePath("/client-side/showroom");
+  revalidatePath(clientPath("/showroom"));
   return { ok: true };
 }
 
@@ -1033,7 +1034,7 @@ export async function setShowroomViewMode(mode: ShowroomViewMode): Promise<Resul
   const { error } = await admin.from("showroom_settings").update({ product_view_mode: mode }).eq("id", 1);
   if (error) return { ok: false, error: error.message };
   catalogChanged();
-  revalidatePath("/client-side/showroom");
+  revalidatePath(clientPath("/showroom"));
   return { ok: true };
 }
 
@@ -1045,15 +1046,15 @@ export async function setShowPrices(show: boolean): Promise<Result> {
   const { error } = await admin.from("showroom_settings").update({ show_prices: show }).eq("id", 1);
   if (error) return { ok: false, error: error.message };
   catalogChanged();
-  revalidatePath("/client-side/showroom");
-  revalidatePath("/client-side/new");
+  revalidatePath(clientPath("/showroom"));
+  revalidatePath(clientPath("/new"));
   return { ok: true };
 }
 
 function revalidateCurrencyViews(): void {
   catalogChanged();
-  revalidatePath("/client-side/showroom");
-  revalidatePath("/client-side/new");
+  revalidatePath(clientPath("/showroom"));
+  revalidatePath(clientPath("/new"));
 }
 
 // Currencies clients may view prices in, converted from the fixed base
@@ -1485,7 +1486,7 @@ export async function quoteOrder(orderId: string, price: number): Promise<Result
         message: `Your quote for order ${order.order_no} is ready — ${formatMoney(price, await fetchBaseCurrencySymbol())}.`,
         recipient: { type: "client", id: order.client_id },
         pushTitle: "Quote ready",
-        url: "/client-side/orders",
+        url: clientPath("/orders"),
       });
     }
   }
@@ -1630,14 +1631,14 @@ export async function receiveClientOrder(
         message: `Order ${order.order_no} is confirmed — ${formatMoney(price, await fetchBaseCurrencySymbol())}. Open it to see how to pay.`,
         recipient: { type: "client", id: order.client_id },
         pushTitle: "Order confirmed",
-        url: "/client-side/orders",
+        url: clientPath("/orders"),
       });
     }
   }
 
   revalidatePath("/dashboard/order-approvals");
   revalidatePath("/dashboard/orders");
-  revalidatePath("/client-side/orders");
+  revalidatePath(clientPath("/orders"));
   return { ok: true };
 }
 

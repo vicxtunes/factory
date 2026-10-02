@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-import { OrdersIcon, SupportIcon } from "@/app/client-side/sidebar";
+import { OrdersIcon, SupportIcon } from "@/components/ui/icons";
 import { ChatIcon } from "@/components/chat/icons";
 
 import { GRAPHICS_NAV, isCurrentGraphicsPage, type GraphicsNavItem } from "./nav";

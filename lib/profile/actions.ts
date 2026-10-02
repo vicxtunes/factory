@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveActor, type AuditActor } from "@/lib/audit/log";
 import { AVATAR_BUCKET } from "@/lib/storage/client";
 import type { AuditActorType } from "@/lib/types";
+import { clientPath } from "@/lib/client-portal/paths";
 
 // Self-service "manage profile" (display name + picture) shared by every
 // signed-in surface — dashboard staff, clients, workers, designers — each
@@ -42,7 +43,7 @@ async function requireProfileActor(): Promise<
 // so this just needs to invalidate the cached pages, not push data back.
 function revalidateProfileViews(): void {
   revalidatePath("/dashboard");
-  revalidatePath("/client-side");
+  revalidatePath(clientPath());
   revalidatePath("/factory");
   revalidatePath("/graphics");
 }

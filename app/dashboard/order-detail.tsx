@@ -12,7 +12,7 @@ import { ClientOrderChat, OrderChat } from "@/components/chat/OrderChat";
 import { CancelledNotice, CancelOrderButton } from "@/components/order/CancelOrder";
 import { ItemAttributes } from "@/components/order/ItemAttributes";
 import { NotesThread } from "@/components/order/NotesThread";
-import { OrderAuditLog } from "@/components/order/OrderAuditLog";
+import { OrderAuditLog } from "./order-audit-log";
 import {
   PRODUCTION_STATUSES,
   STATUS_LABELS,

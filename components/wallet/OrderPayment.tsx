@@ -11,6 +11,7 @@ import { getOrderPayment, payOrderFromWallet, refundOrderToWallet } from "@/lib/
 import type { OrderPaymentState } from "@/lib/wallet/types";
 
 import { parseAmount, useMoney } from "./shared";
+import { clientPath } from "@/lib/client-portal/paths";
 
 // An order's payment state, dropped into an order screen by order id.
 // Loads its own data, so the order screens don't need to know about wallets.
@@ -101,7 +102,7 @@ export function ClientOrderPayment({ orderId }: { orderId: string }) {
           </>
         ) : (
           <p className="text-xs text-muted">
-            <Link href="/client-side/payment" className="font-medium text-brand-600 underline">
+            <Link href={clientPath("/payment")} className="font-medium text-brand-600 underline">
               Add funds to your wallet
             </Link>{" "}
             to pay {state.paid > 0 ? "the rest of this order" : "for this order"} from your balance.

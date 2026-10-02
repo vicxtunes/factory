@@ -12,13 +12,17 @@ import {
   DashboardIcon,
   DesignersIcon,
   DisplayIcon,
+  HistoryIcon,
   MarketingIcon,
   OrdersIcon,
+  PaymentIcon,
+  PlaceOrderIcon,
   ProductsIcon,
+  SettingsIcon,
+  ShowroomIcon,
   SupportIcon,
   WorkersIcon,
-} from "@/app/dashboard/sidebar";
-import { HistoryIcon, PaymentIcon, PlaceOrderIcon, SettingsIcon, ShowroomIcon } from "@/app/client-side/sidebar";
+} from "./icons";
 import { ChatIcon } from "@/components/chat/icons";
 
 // Mobile "home bar" shared by every signed-in surface (client portal, staff

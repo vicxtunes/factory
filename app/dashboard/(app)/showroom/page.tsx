@@ -5,12 +5,13 @@ import { fetchProductCatalog } from "@/lib/queries";
 import { canOptimizeImage } from "@/lib/storage/client";
 
 import { ShareLinks } from "../../share-link";
+import { clientPath } from "@/lib/client-portal/paths";
 
 // Links to the public showroom and each product's own page, ready to send to
 // clients. Any staff member can share; the catalog itself is edited under
 // Products. Lists only what clients can see (active categories and products).
 
-const productPath = (slug: string) => `/client-side/${encodeURIComponent(slug)}`;
+const productPath = (slug: string) => clientPath(`/${encodeURIComponent(slug)}`);
 
 export default async function ShowroomSharePage() {
   const catalog = (await fetchProductCatalog(true)).filter((c) => c.products.length > 0);
@@ -24,7 +25,7 @@ export default async function ShowroomSharePage() {
           <p className="font-medium">The whole showroom</p>
           <p className="mt-1 text-xs text-muted">Every active product. No login needed to browse.</p>
         </div>
-        <ShareLinks path="/client-side/showroom" title="Showroom" />
+        <ShareLinks path={clientPath("/showroom")} title="Showroom" />
       </div>
 
       {catalog.length === 0 ? (

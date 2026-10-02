@@ -5,10 +5,12 @@ import "server-only";
 // The client portal lives on client.<domain> at the root (see proxy.ts), so
 // an invoice shared from the staff app (factory.<domain>) points at
 // client.<domain>/invoice/<token>. Any other host (localhost, previews) uses
-// the plain path, /client-side/invoice/<token>.
+// the plain portal path (clientPath), today /client-side/invoice/<token>.
 
 import { randomBytes } from "node:crypto";
 import { headers } from "next/headers";
+
+import { clientPath } from "@/lib/client-portal/paths";
 
 /** 32 random bytes, base64url — unguessable, and fine in a URL. */
 export function newShareToken(): string {
@@ -24,5 +26,5 @@ export async function invoiceUrl(token: string): Promise<string> {
     const clientHost = host.replace(/^(factory|client)\./i, "client.");
     return `${proto}://${clientHost}/invoice/${token}`;
   }
-  return `${proto}://${host}/client-side/invoice/${token}`;
+  return `${proto}://${host}${clientPath(`/invoice/${token}`)}`;
 }

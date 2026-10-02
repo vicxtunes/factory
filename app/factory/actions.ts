@@ -11,6 +11,7 @@ import { pushOnlyOrderItem, notifyOrderItem } from "@/lib/notifications/notify";
 import { fetchWorkerNotifications } from "@/lib/queries";
 import { fetchResolvedReportNotices, mergeNotices } from "@/lib/support/notices";
 import { BOARD_COLUMNS, STATUS_LABELS, type NotificationRow, type ProductionStatus } from "@/lib/types";
+import { clientPath } from "@/lib/client-portal/paths";
 
 function itemLabel(item: { product: string; product_type: string | null }): string {
   return item.product_type ? `${item.product} (${item.product_type})` : item.product;
@@ -140,7 +141,7 @@ export async function advanceStatus(itemId: string): Promise<ActionResult> {
       message: `Order ${item.order.order_no}, ${itemLabel(item)}, is now ${STATUS_LABELS[nextStatus]}.`,
       recipient: { type: "client", id: item.order.client_id },
       pushTitle: "Your order is ready",
-      url: "/client-side/orders",
+      url: clientPath("/orders"),
     });
   }
 
@@ -200,7 +201,7 @@ export async function flagDelay(
       {
         title: "Your order was delayed",
         body: `Order ${item.order.order_no}, ${itemLabel(item)}: ${trimmedReason}`,
-        url: "/client-side/orders",
+        url: clientPath("/orders"),
       },
     );
   }

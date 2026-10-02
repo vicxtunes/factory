@@ -7,8 +7,8 @@ import {
   type Urgency,
 } from "@/lib/types";
 
-import { StatusBarChart, UrgencyDonutChart } from "../charts";
-import { StatCard } from "../stat-card";
+import { StatusBarChart, UrgencyDonutChart } from "@/components/charts/OrderCharts";
+import { StatCard } from "@/components/ui/StatCard";
 
 export const dynamic = "force-dynamic";
 
