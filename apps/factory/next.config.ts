@@ -18,6 +18,10 @@ const nextConfig: NextConfig = {
   // Monorepo: shared code lives in ../../packages, so trace the standalone
   // build from the repo root or those files are left out of it.
   outputFileTracingRoot: path.join(import.meta.dirname, "../.."),
+  // The Design Room's Code tab reads its example files at request time.
+  outputFileTracingIncludes: {
+    "/dashboard/design-room/*": ["./app/dashboard/design-room/examples/**/*"],
+  },
   images: {
     remotePatterns: supabaseUrl
       ? [
