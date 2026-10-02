@@ -54,3 +54,15 @@ export interface LineDiscount {
   /** Percent (1–100), or whole currency units off each unit. */
   value: number;
 }
+
+/** When a line discount was agreed or changed, for the discount history. */
+export type LineDiscountStage = "order_created" | "confirmation" | "after_confirmation";
+
+/** One line discount change, as the order's audit log records it (action "line_discount"). */
+export interface LineDiscountChange {
+  /** The line's product name when it changed. */
+  product: string;
+  from: LineDiscount | null;
+  to: LineDiscount | null;
+  stage: LineDiscountStage;
+}

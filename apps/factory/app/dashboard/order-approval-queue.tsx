@@ -4,13 +4,14 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@repo/ui/Button";
-import { Field, Select, TextInput } from "@repo/ui/Field";
+import { Field, Select } from "@repo/ui/Field";
 import { StaffInvoicePanel } from "@repo/ui/invoices/StaffInvoicePanel";
 import { SectionLabel } from "@repo/ui/SectionLabel";
 import type { DesignerPublic, OrderItemWithOrder } from "@repo/lib/types";
 
 import { CancelOrderButton } from "@repo/ui/order/CancelOrder";
-import { cancelOrder, receiveClientOrder, routeApprovedOrder } from "./actions";
+import { cancelOrder, routeApprovedOrder } from "./actions";
+import { AgreedPrices, OrderConfirmation } from "./order-confirmation";
 import { useCurrencySymbol } from "@repo/lib/currency/CurrencySymbolProvider";
 import { formatMoney } from "@repo/lib/currency/format";
 
@@ -180,6 +181,34 @@ function OrderDetails({ order, items }: { order: OrderGroup["order"]; items: Ord
   );
 }
 
+const STEPS = [
+  { key: "confirm", label: "Confirm prices" },
+  { key: "invoice", label: "Issue invoice" },
+  { key: "route", label: "Route to production" },
+] as const;
+
+/** Where this order is in getting it out of the queue. */
+function Steps({ current }: { current: (typeof STEPS)[number]["key"] }) {
+  const at = STEPS.findIndex((s) => s.key === current);
+  return (
+    <ol className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px]" aria-label="Steps">
+      {STEPS.map((s, i) => (
+        <li key={s.key} className="flex items-center gap-2" aria-current={i === at ? "step" : undefined}>
+          <span
+            className={`inline-flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ${
+              i < at ? "bg-success-500 text-white" : i === at ? "bg-brand-500 text-white" : "bg-gray-100 text-muted dark:bg-white/10"
+            }`}
+          >
+            {i < at ? "✓" : i + 1}
+          </span>
+          <span className={i === at ? "font-semibold text-foreground" : "text-muted"}>{s.label}</span>
+          {i < STEPS.length - 1 ? <span className="text-muted">→</span> : null}
+        </li>
+      ))}
+    </ol>
+  );
+}
+
 function OrderCard({ group, children }: { group: OrderGroup; children: React.ReactNode }) {
   return (
     <div className="rounded-[var(--radius)] border border-border bg-surface p-4 shadow-theme-xs">
@@ -208,21 +237,17 @@ function RouteCard({
 }: {
   group: OrderGroup;
   designers: DesignerPublic[];
-  // Photo-book order: show a call-the-client prompt, and require the price
-  // agreed on that call before it can be confirmed — photo books have no
-  // catalog price, and this is what the client is asked to pay.
+  // Photo-book order: confirming needs the price agreed on a call with the
+  // client — photo books have no catalog price (see ./order-confirmation.tsx).
   call?: boolean;
   canCancel?: boolean;
 }) {
   const symbol = useCurrencySymbol();
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [price, setPrice] = useState("");
-  const priceValue = Number(price);
-  const priceValid = price.trim() !== "" && Number.isFinite(priceValue) && priceValue > 0;
   const [designerId, setDesignerId] = useState("");
   const [sending, startSending] = useTransition();
-  const [sendingTo, setSendingTo] = useState<"confirm" | "factory" | "designer" | null>(null);
+  const [sendingTo, setSendingTo] = useState<"factory" | "designer" | null>(null);
   const [invoiceReady, setInvoiceReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const confirmed = group.order.approval_status === "approved";
@@ -242,59 +267,22 @@ function RouteCard({
     });
   }
 
-  function confirmOrder() {
-    setError(null);
-    setSendingTo("confirm");
-    startSending(async () => {
-      const res = await receiveClientOrder(group.orderId, call ? priceValue : undefined);
-      if (!res.ok) {
-        setError(res.error ?? "Something went wrong.");
-        return;
-      }
-      router.refresh();
-    });
-  }
-
   return (
     <OrderCard group={group}>
       <OrderDetails order={group.order} items={group.items} />
-      {!confirmed && call ? (
-        <div className="mb-3 rounded-[var(--radius)] border border-brand-200 bg-brand-50 p-3 text-sm dark:border-brand-500/30 dark:bg-brand-500/10">
-          <p className="mb-2 text-xs text-muted">
-            This order has a photo book — call {group.clientName} to confirm the details first.
-          </p>
-          {group.order.client_phone ? (
-            <a href={`tel:${group.order.client_phone}`}>
-              <Button variant="primary" type="button">
-                Call {group.order.client_phone}
-              </Button>
-            </a>
-          ) : (
-            <p className="text-xs text-muted">No phone number on file for this client.</p>
-          )}
-          <div className="mt-3">
-            <Field label={`Agreed price (${symbol})`}>
-              <TextInput
-                type="number"
-                inputMode="numeric"
-                min={0}
-                step="1"
-                className="tnum w-40"
-                value={price}
-                onChange={(e) => setPrice(e.target.value)}
-                placeholder="0"
-              />
-            </Field>
-            <p className="mt-1 text-xs text-muted">The client is shown this as the amount to pay.</p>
-          </div>
-        </div>
-      ) : null}
+      <Steps current={confirmed ? (invoiceReady ? "route" : "invoice") : "confirm"} />
       {!confirmed ? (
-        <Button variant="primary" loading={sending && sendingTo === "confirm"} disabled={sending || (call && !priceValid)} onClick={confirmOrder}>
-          Confirm order
-        </Button>
+        <OrderConfirmation
+          orderId={group.orderId}
+          orderNo={group.orderNo}
+          clientName={group.clientName}
+          items={group.items}
+          call={call}
+          onChanged={() => router.refresh()}
+        />
       ) : (
         <div className="space-y-3">
+          <AgreedPrices items={group.items} invoiced={invoiceReady} onChanged={() => router.refresh()} />
           <StaffInvoicePanel
             orderId={group.orderId}
             onChanged={() => router.refresh()}
@@ -332,7 +320,7 @@ function RouteCard({
             <h3 className="text-base font-semibold">Where should this order go?</h3>
             <p className="mt-0.5 text-xs text-muted">
               {group.orderNo} · {group.clientName}
-              {call && priceValid ? ` · ${formatMoney(priceValue, symbol)}` : ""}
+              {group.order.quoted_price != null ? ` · ${formatMoney(group.order.quoted_price, symbol)}` : ""}
             </p>
             <div className="mt-4 space-y-3">
               <Button

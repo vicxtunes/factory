@@ -120,3 +120,38 @@ export function orderEstimate(items: (EstimatedItem & { order: Pick<OrderItemWit
   }
   return { amount: priced ? Math.round(total) : null, complete: priced === items.length };
 }
+
+// --- Breakdown (confirming an order) -----------------------------------------
+
+export interface PriceBreakdown {
+  /** Σ list price × qty over the lines with a catalog price. */
+  list: number;
+  /** Taken off by catalog-wide discounts (packages/lib/discounts). */
+  offers: number;
+  /** Taken off by the line discounts agreed with the client. */
+  agreed: number;
+  /** What the priced lines come to: list − offers − agreed. */
+  total: number;
+  /** Lines without a catalog price (photo books before their call). */
+  unpriced: number;
+}
+
+/** How the catalog-priced lines of an order add up, discount by discount. */
+export function priceBreakdown(items: (CatalogPriced & Pick<OrderItemWithOrder, "qty">)[]): PriceBreakdown {
+  const out: PriceBreakdown = { list: 0, offers: 0, agreed: 0, total: 0, unpriced: 0 };
+  for (const item of items) {
+    const list = catalogListPrice(item);
+    const final = catalogUnitPrice(item);
+    if (list == null || final == null) {
+      out.unpriced++;
+      continue;
+    }
+    const offered = item.offer ? Number(item.offer.price) : list;
+    out.list += list * item.qty;
+    out.offers += (list - offered) * item.qty;
+    out.agreed += (offered - final) * item.qty;
+    out.total += final * item.qty;
+  }
+  const round = (n: number) => Math.round(n);
+  return { list: round(out.list), offers: round(out.offers), agreed: round(out.agreed), total: round(out.total), unpriced: out.unpriced };
+}

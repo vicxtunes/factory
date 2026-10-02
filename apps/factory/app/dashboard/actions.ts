@@ -36,7 +36,7 @@ import { pushOnlyOrderItem, notifyOrderItem } from "@repo/lib/notifications/noti
 import { formatMoney } from "@repo/lib/currency/format";
 import { walletErrorMessage } from "@repo/lib/wallet/orders";
 import { isOrderInvoiced } from "@repo/lib/invoices/orders";
-import { validateLineDiscount, type LineDiscount } from "@repo/lib/discounts/core";
+import { lineDiscountOf, validateLineDiscount, type LineDiscount, type LineDiscountChange } from "@repo/lib/discounts/core";
 import {
   STATUS_LABELS,
   type AppRole,
@@ -1387,6 +1387,7 @@ export async function createOrder(input: OrderFormPayload): Promise<CreateOrderR
     responsibleWorkerId: input.responsible_worker_id,
     items: input.items,
     releaseImmediately: true,
+    allowLineDiscounts: true,
   });
   if (!res.ok) return res;
 
@@ -1443,11 +1444,15 @@ const LINE_DISCOUNT_MESSAGES: Record<string, string> = {
   cancelled: "This order was cancelled.",
   invoiced: "This order has an invoice — change its prices on the invoice lines.",
   no_price: "This line has no price yet, so it can't be discounted.",
+  confirmed: "This order is already confirmed. Discounts are agreed before confirming; an existing one can still be changed or removed.",
 };
 
 // Gives (or, with null, removes) a discount on one line of an order, on top
 // of its catalog price (packages/lib/orders/pricing.ts). If the order has a
 // stored price, the database moves it by the change in the line's total.
+// New discounts are agreed before the order is confirmed; after that one can
+// only be changed or removed, until the order is invoiced (the database
+// enforces both). Every change is logged for the discount history.
 export async function setLineDiscount(itemId: string, discount: LineDiscount | null): Promise<Result> {
   await requireManager();
   if (discount) {
@@ -1456,7 +1461,17 @@ export async function setLineDiscount(itemId: string, discount: LineDiscount | n
   }
 
   const admin = createAdminClient();
-  const { data: item } = await admin.from("order_items").select("order_id").eq("id", itemId).maybeSingle();
+  const { data: item } = await admin
+    .from("order_items")
+    .select("order_id, product, line_discount_kind, line_discount_value, order:orders!inner (approval_status)")
+    .eq("id", itemId)
+    .maybeSingle<{
+      order_id: string;
+      product: string;
+      line_discount_kind: LineDiscount["kind"] | null;
+      line_discount_value: number | null;
+      order: { approval_status: string };
+    }>();
   if (!item) return { ok: false, error: "Item not found." };
 
   const { error } = await admin.rpc("order_item_set_discount", {
@@ -1469,14 +1484,14 @@ export async function setLineDiscount(itemId: string, discount: LineDiscount | n
     return { ok: false, error: (code && LINE_DISCOUNT_MESSAGES[code]) || walletErrorMessage(error.message) || error.message };
   }
 
-  const actor = await resolveActor();
-  await logOrderEvent({
-    orderId: item.order_id,
-    orderItemId: itemId,
-    actor,
-    action: discount ? "line_discount_set" : "line_discount_cleared",
-    detail: discount ? { ...discount } : {},
-  });
+  const change: LineDiscountChange = {
+    product: item.product,
+    from: lineDiscountOf(item),
+    to: discount,
+    stage: item.order.approval_status === "approved" ? "after_confirmation" : "confirmation",
+  };
+  await logOrderEvent({ orderId: item.order_id, orderItemId: itemId, actor: await resolveActor(), action: "line_discount", detail: { ...change } });
+  revalidatePath("/dashboard/order-approvals");
   return { ok: true };
 }
 
