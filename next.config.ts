@@ -13,6 +13,10 @@ const nextConfig: NextConfig = {
   // `.next/next-server.js.nft.json` trace file. Skip it when Vercel is doing
   // the build (it sets VERCEL=1).
   output: process.env.VERCEL ? undefined : "standalone",
+  // The Design Room's Code tab reads its example files at request time.
+  outputFileTracingIncludes: {
+    "/dashboard/design-room/*": ["./app/dashboard/design-room/examples/**/*"],
+  },
   images: {
     remotePatterns: supabaseUrl
       ? [
