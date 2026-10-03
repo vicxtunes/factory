@@ -10,7 +10,7 @@ export default async function StudioLayout({ children }: { children: React.React
   const { session } = await requireStudio();
   return (
     <ClientShell signedIn name={session.name} avatarUrl={session.avatarUrl}>
-      <div className="mx-auto max-w-2xl space-y-4">{children}</div>
+      <div className="mx-auto max-w-5xl space-y-4">{children}</div>
     </ClientShell>
   );
 }

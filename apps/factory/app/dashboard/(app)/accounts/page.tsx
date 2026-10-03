@@ -3,7 +3,7 @@ import { PeriodPicker } from "@repo/ui/accounting/PeriodPicker";
 import { accounting, requireAccountsAccess } from "@repo/lib/accounting/index.server";
 import { resolveTenantScope } from "@repo/lib/tenancy/server/resolve";
 
-import { periodFrom } from "./params";
+import { periodFrom } from "@repo/lib/accounting/params";
 
 export const dynamic = "force-dynamic";
 

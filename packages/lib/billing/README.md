@@ -8,7 +8,7 @@ A business's documents to its customers. Built for studios first and generic eno
 | --- | --- |
 | **Quotations** (4a) | Built |
 | **Invoices, payments, receipts** (4b) | Built |
-| The studio's money dashboard (4c) | Next: through packages/lib/accounting with a Billing data source |
+| **The studio's money dashboard** (4c) | Built: packages/lib/accounting over a Billing data source |
 
 ## Quotations
 
@@ -57,10 +57,27 @@ A business's documents to its customers. Built for studios first and generic eno
   and Print / Save as PDF. Reset link kills the old one.
 - A client's page shows their invoices and what they owe in total (`outstanding`).
 
+## The studio's dashboard
+
+`accounting-source.ts` maps billing onto Accounts' port (packages/lib/accounting/ports.ts), so a
+studio gets Aming's money overview over its own data, with no second implementation:
+
+| Billing | Accounts |
+| --- | --- |
+| An invoice | A sale (`orderId`/`orderNo` null); void = cancelled; discount from its lines |
+| A live payment | Money in, a sale receipt, on the day received (start of that day in the studio's zone); its method is the channel |
+| Customers with invoices | Customers (named as on their newest invoice) |
+| — | No held money: studios have no client wallets |
+
+`server.ts` → `studioAccounts` is `createAccountingService(createBillingAccountingSource(invoiceStore))`.
+`/studio` shows it with the period picker, the studio's currency (a `CurrencySymbolProvider` around
+it), links into the studio's pages, and no wallet tile. The boss sees the same on a studio's page.
+
 ## Screens
 
 | Screen | Who | What |
 | --- | --- | --- |
+| `/studio` | Studio owner | Dashboard: sales, received, discounts, outstanding, overdue, by channel, 12 months, who owes most |
 | `/studio/quotations` | Studio owner | All / Open / Accepted / Declined / Expired |
 | `/studio/quotations/new` (`?client=<id>` to preselect) | Studio owner | Client, lines from packages or typed, discounts, valid until, notes; live totals |
 | `/studio/quotations/<id>` | Studio owner | The document; copy link, WhatsApp, reset link; Edit while unanswered |
@@ -71,7 +88,7 @@ A business's documents to its customers. Built for studios first and generic eno
 | `/studio/invoices/new`, `/studio/invoices/<id>/edit` | Studio owner | As quotations, with a due date |
 | `/studio/invoices/<id>` | Studio owner | Record payments, receipts, void a payment; share; void the invoice |
 | `/i/<token>`, `/r/<token>` | Anyone with the link | The invoice / the receipt; Print / Save as PDF |
-| `/dashboard/studios/<id>` (factory app) | Boss | The studio's quotations and invoices, read-only |
+| `/dashboard/studios/<id>` (factory app) | Boss | The studio's money, quotations and invoices, read-only |
 
 ## Security
 
@@ -105,7 +122,8 @@ packages/lib/billing/
                          recordPayment, voidPayment, voidInvoice, resetLink, byLink, receiptByLink.
   *-service.test.ts      Each against in-memory adapters, studio separation included.
   adapters/supabase/quotations.ts, invoices.ts, directory.ts, shared.ts (lines, BILLING:<code> errors).
-  server.ts        The wired services, token generation, quotationUrl / invoiceUrl / receiptUrl.
+  accounting-source.ts   Billing as an Accounts data source (+ .test.ts through Accounts' own service).
+  server.ts        The wired services, studioAccounts, token generation, quotationUrl / invoiceUrl / receiptUrl.
   actions.ts       Quotations: create, update, reset link, respond. Invoices: create, update,
                    from quotation, record / void payment, void invoice, reset link.
 packages/ui/billing/  BillingDocument (shared layout), QuotationDocument, InvoiceDocument,
@@ -117,6 +135,10 @@ supabase/migrations/20261003140000_billing_invoices.sql
 
 ## Testing
 
+- `npm test` (dashboard): Accounts' own service over the billing source: this month's sales,
+  discounts, received by channel, outstanding, overdue, who owes most; void invoices and voided
+  payments never count; the monthly chart; another studio sees nothing. Rechecked on Postgres
+  through the real invoice list.
 - `npm test` (invoices): balances count only live payments, status order (void, paid, overdue,
   partly paid), what each state allows, payment input; the service: payments to paid, never
   above the balance or in the future, edit/void only before money, voiding a payment, overdue,

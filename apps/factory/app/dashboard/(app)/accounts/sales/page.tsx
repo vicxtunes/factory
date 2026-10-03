@@ -3,7 +3,7 @@ import { SalesTable, type SalesFilter } from "@repo/ui/accounting/SalesTable";
 import { accounting, requireAccountsAccess } from "@repo/lib/accounting/index.server";
 import { resolveTenantScope } from "@repo/lib/tenancy/server/resolve";
 
-import { param, periodFrom } from "../params";
+import { param, periodFrom } from "@repo/lib/accounting/params";
 
 export const dynamic = "force-dynamic";
 

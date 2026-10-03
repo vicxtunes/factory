@@ -16,7 +16,7 @@ export async function saveMyStudioProfile(input: unknown): Promise<Result<Studio
   return runAction("studios", async () => {
     const { studio } = await studioOfCaller();
     const saved = await studios.updateProfile(studio.id, parseInput(studioProfileSchema, input));
-    revalidatePath("/studio");
+    revalidatePath("/studio", "layout");
     return saved;
   });
 }

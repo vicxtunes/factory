@@ -62,8 +62,8 @@ export interface InvoiceRecord {
 }
 
 export interface InvoiceStore {
-  /** Newest first, with payments, without lines. */
-  list(scope: TenantScope, filter: { customerId?: string }): Promise<InvoiceRecord[]>;
+  /** Newest first, with payments and lines (the money reports need the lines' discounts). */
+  list(scope: TenantScope, filter: { customerId?: string }): Promise<(InvoiceRecord & { lines: LineInput[] })[]>;
   get(scope: TenantScope, id: string): Promise<(InvoiceRecord & { lines: LineInput[] }) | null>;
   byToken(token: string): Promise<{ tenantId: string; invoice: InvoiceRecord & { lines: LineInput[] } } | null>;
   /** The invoice made from a quotation, if any. */
