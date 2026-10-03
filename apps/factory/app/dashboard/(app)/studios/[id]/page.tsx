@@ -3,7 +3,9 @@ import { notFound } from "next/navigation";
 
 import { CustomersList } from "@repo/ui/customers/CustomersList";
 import { SectionLabel } from "@repo/ui/SectionLabel";
+import { OfferingsList } from "@repo/ui/offerings/OfferingsList";
 import { customers } from "@repo/lib/customers/server";
+import { offerings } from "@repo/lib/offerings/server";
 import { studioIdSchema, studioScope } from "@repo/lib/studios/core";
 import { requireStudiosOversight, studios } from "@repo/lib/studios/server";
 
@@ -15,7 +17,12 @@ export default async function StudioPage({ params }: { params: Promise<{ id: str
   const studio = id.success ? await studios.get(id.data) : null;
   if (!studio) notFound();
   const scope = studioScope(studio);
-  const [active, archived] = await Promise.all([customers.list(scope), customers.list(scope, true)]);
+  const [active, archived, onSale, offSale] = await Promise.all([
+    customers.list(scope),
+    customers.list(scope, true),
+    offerings.list(scope),
+    offerings.list(scope, true),
+  ]);
 
   const details: [string, string | null][] = [
     ["Owner", studio.ownerName],
@@ -43,6 +50,10 @@ export default async function StudioPage({ params }: { params: Promise<{ id: str
       <section>
         <SectionLabel>Clients</SectionLabel>
         <CustomersList active={active} archived={archived} basePath={null} />
+      </section>
+      <section>
+        <SectionLabel>Packages & Services</SectionLabel>
+        <OfferingsList active={onSale} archived={offSale} scope={scope} basePath={null} />
       </section>
     </div>
   );

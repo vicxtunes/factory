@@ -33,6 +33,9 @@ const toCustomer = (r: Row): Customer => ({
   createdAt: r.created_at,
 });
 
+/** The writable columns, named one by one: nothing else a caller passes ever reaches the table. */
+const toColumns = (input: CustomerInput) => ({ name: input.name, phone: input.phone, email: input.email, notes: input.notes });
+
 const UNIQUE_VIOLATION = "23505";
 
 function fail(what: string, error: { code?: string; message: string }): never {
@@ -66,7 +69,7 @@ export const supabaseCustomerStore: CustomerStore = {
 
   async create(scope, input) {
     const { data, error } = await table()
-      .insert({ ...input, tenant_id: scope.tenantId })
+      .insert({ ...toColumns(input), tenant_id: scope.tenantId })
       .select(COLUMNS)
       .single<Row>();
     if (error) fail("save the client", error);
@@ -74,7 +77,7 @@ export const supabaseCustomerStore: CustomerStore = {
   },
 
   async update(scope, id, input) {
-    return write(scope, id, input, "save the client");
+    return write(scope, id, toColumns(input), "save the client");
   },
 
   async setArchived(scope, id, archived) {
@@ -82,7 +85,7 @@ export const supabaseCustomerStore: CustomerStore = {
   },
 };
 
-async function write(scope: TenantScope, id: string, values: Partial<CustomerInput> | { archived_at: string | null }, what: string) {
+async function write(scope: TenantScope, id: string, values: ReturnType<typeof toColumns> | { archived_at: string | null }, what: string) {
   const { data, error } = await table()
     .update(values)
     .eq("tenant_id", scope.tenantId)

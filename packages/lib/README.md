@@ -58,6 +58,9 @@ Also:
   - Tables a studio owns (customers, …): `tenant_id uuid not null references tenants`, **no
     default**, so code that forgets the studio fails instead of filing data under Aming.
 - The service-role client (`supabase/admin.ts`) is used only inside `adapters/`.
+- Adapters name every column they write (`toColumns(input)`), never `insert(input)` or
+  `update(input)` with the object they were given, so a stray field (a `tenant_id`, an owner)
+  can never reach the table, even if a caller skipped the zod schema.
 - Public links (invoices, quotations) use unguessable tokens that staff can reset.
 
 ## Testing
