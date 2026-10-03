@@ -3,9 +3,10 @@ import { notFound } from "next/navigation";
 
 import { CustomersList } from "@repo/ui/customers/CustomersList";
 import { SectionLabel } from "@repo/ui/SectionLabel";
+import { InvoicesList } from "@repo/ui/billing/InvoicesList";
 import { QuotationsList } from "@repo/ui/billing/QuotationsList";
 import { OfferingsList } from "@repo/ui/offerings/OfferingsList";
-import { quotations } from "@repo/lib/billing/server";
+import { invoices, quotations } from "@repo/lib/billing/server";
 import { customers } from "@repo/lib/customers/server";
 import { offerings } from "@repo/lib/offerings/server";
 import { studioIdSchema, studioScope } from "@repo/lib/studios/core";
@@ -19,12 +20,13 @@ export default async function StudioPage({ params }: { params: Promise<{ id: str
   const studio = id.success ? await studios.get(id.data) : null;
   if (!studio) notFound();
   const scope = studioScope(studio);
-  const [active, archived, onSale, offSale, quotes] = await Promise.all([
+  const [active, archived, onSale, offSale, quotes, bills] = await Promise.all([
     customers.list(scope),
     customers.list(scope, true),
     offerings.list(scope),
     offerings.list(scope, true),
     quotations.list(scope),
+    invoices.list(scope),
   ]);
 
   const details: [string, string | null][] = [
@@ -61,6 +63,10 @@ export default async function StudioPage({ params }: { params: Promise<{ id: str
       <section>
         <SectionLabel>Quotations</SectionLabel>
         <QuotationsList quotations={quotes} scope={scope} basePath={null} />
+      </section>
+      <section>
+        <SectionLabel>Invoices</SectionLabel>
+        <InvoicesList invoices={bills} scope={scope} basePath={null} />
       </section>
     </div>
   );

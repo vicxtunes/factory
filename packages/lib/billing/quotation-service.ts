@@ -4,12 +4,12 @@
 // and parse the input first; link callers pass only the token.
 
 import { localDate } from "@repo/lib/accounting/core/period";
-import { validateLineDiscount } from "@repo/lib/discounts/core";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
 import {
   canEditQuotation,
   canRespondToQuotation,
+  linesProblem,
   priceLine,
   quotationStatus,
   totalsOf,
@@ -91,10 +91,8 @@ export class QuotationService {
     if (!customer) throw new BillingError("That client no longer exists.");
     if (customer.archived && input.customerId !== currentCustomerId) throw new BillingError("That client is archived. Restore them first.");
     if (input.validUntil && input.validUntil < this.today(scope)) throw new BillingError("The valid-until date has already passed.");
-    input.lines.forEach((line, i) => {
-      const problem = lineProblem(line);
-      if (problem) throw new BillingError(input.lines.length > 1 ? `Line ${i + 1}: ${problem}` : problem);
-    });
+    const problem = linesProblem(input.lines);
+    if (problem) throw new BillingError(problem);
   }
 
   private totalOf(input: QuotationInput): number {
@@ -104,14 +102,6 @@ export class QuotationService {
   private today(scope: TenantScope): string {
     return localDate(this.clock(), scope.timeZone);
   }
-}
-
-function lineProblem(line: LineInput): string | null {
-  if (!line.discount) return null;
-  const [problem] = validateLineDiscount(line.discount);
-  if (problem) return problem;
-  if (line.discount.kind === "amount" && line.discount.value > line.unitPrice) return "The discount can't be more than the price.";
-  return null;
 }
 
 function summaryOf(r: QuotationRecord, today: string): QuotationSummary {

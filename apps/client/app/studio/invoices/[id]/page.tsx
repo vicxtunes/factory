@@ -1,0 +1,69 @@
+import Link from "next/link";
+import { notFound } from "next/navigation";
+
+import { DocumentShare } from "@repo/ui/billing/DocumentShare";
+import { InvoiceDocument } from "@repo/ui/billing/InvoiceDocument";
+import { VoidInvoiceButton } from "@repo/ui/billing/InvoiceButtons";
+import { PaymentsPanel } from "@repo/ui/billing/PaymentsPanel";
+import { localDate } from "@repo/lib/accounting/core/period";
+import { canEditInvoice, canVoidInvoice, invoiceIdSchema } from "@repo/lib/billing/core";
+import { invoices, invoiceUrl, receiptUrl } from "@repo/lib/billing/server";
+import { requireStudio } from "@repo/lib/studios/server";
+
+export const metadata = { title: "Invoice — My Studio" };
+
+const button =
+  "inline-flex min-h-11 items-center rounded-[var(--radius)] border border-gray-300 bg-white px-4 text-sm text-gray-700 shadow-theme-xs hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300";
+
+export default async function StudioInvoicePage({ params }: { params: Promise<{ id: string }> }) {
+  const { scope, studio } = await requireStudio();
+  // Looked up inside the caller's studio only: another studio's id is "not found".
+  const id = invoiceIdSchema.safeParse((await params).id);
+  const invoice = id.success ? await invoices.get(scope, id.data) : null;
+  if (!invoice) notFound();
+  const state = { voided: !!invoice.voidedAt, paid: invoice.paid };
+
+  return (
+    <>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Link href="/studio/invoices" className="text-xs font-medium text-brand-600 hover:underline">
+          ← Invoices
+        </Link>
+        <div className="flex flex-wrap gap-2">
+          {invoice.sourceId ? (
+            <Link href={`/studio/quotations/${invoice.sourceId}`} className={button}>
+              Quotation
+            </Link>
+          ) : null}
+          {canEditInvoice(state) ? (
+            <Link href={`/studio/invoices/${invoice.id}/edit`} className={button}>
+              Edit
+            </Link>
+          ) : null}
+          {/* The client's view is a standalone document: open it to print or save as PDF. */}
+          <a href={invoiceUrl(invoice.shareToken)} target="_blank" rel="noreferrer" className={button}>
+            Open client view / Print
+          </a>
+        </div>
+      </div>
+      {invoice.voidedAt ? null : (
+        <DocumentShare
+          kind="invoice"
+          documentId={invoice.id}
+          url={invoiceUrl(invoice.shareToken)}
+          number={invoice.number}
+          studioName={studio.name}
+          clientPhone={invoice.billTo.phone}
+        />
+      )}
+      <PaymentsPanel
+        invoice={invoice}
+        receiptUrls={Object.fromEntries(invoice.payments.map((p) => [p.id, receiptUrl(p.shareToken)]))}
+        today={localDate(new Date(), scope.timeZone)}
+        scope={scope}
+      />
+      <InvoiceDocument invoice={invoice} issuer={studio} scope={scope} />
+      {canVoidInvoice(state) ? <VoidInvoiceButton invoiceId={invoice.id} /> : null}
+    </>
+  );
+}

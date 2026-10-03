@@ -4,18 +4,25 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
 import { Button } from "@repo/ui/Button";
-import { resetQuotationLink } from "@repo/lib/billing/actions";
+import { resetInvoiceLink, resetQuotationLink } from "@repo/lib/billing/actions";
 import { whatsappNumber } from "@repo/lib/kernel/core/phone";
 
-/** The studio shares its quotation: copy the link, send it on WhatsApp, or replace the link. */
-export function QuotationShare({
-  quotationId,
+const KINDS = {
+  quotation: { reset: resetQuotationLink, message: (n: string, studio: string, url: string) => `Hello, here is your quotation ${n} from ${studio}. You can view and accept it here: ${url}` },
+  invoice: { reset: resetInvoiceLink, message: (n: string, studio: string, url: string) => `Hello, here is your invoice ${n} from ${studio}. You can view it here: ${url}` },
+};
+
+/** The studio shares a quotation or invoice: copy the link, send it on WhatsApp, or replace the link. */
+export function DocumentShare({
+  kind,
+  documentId,
   url,
   number,
   studioName,
   clientPhone,
 }: {
-  quotationId: string;
+  kind: keyof typeof KINDS;
+  documentId: string;
   url: string;
   number: string;
   studioName: string;
@@ -26,7 +33,7 @@ export function QuotationShare({
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
-  const text = `Hello, here is your quotation ${number} from ${studioName}. You can view and accept it here: ${url}`;
+  const text = KINDS[kind].message(number, studioName, url);
   const waHref = `https://wa.me/${whatsappNumber(clientPhone)}?text=${encodeURIComponent(text)}`;
 
   async function copy() {
@@ -38,7 +45,7 @@ export function QuotationShare({
     if (!window.confirm("Make a new link? The old one will stop working.")) return;
     setError(null);
     start(async () => {
-      const res = await resetQuotationLink(quotationId);
+      const res = await KINDS[kind].reset(documentId);
       if (!res.ok) return setError(res.error);
       setCopied(false);
       router.refresh();

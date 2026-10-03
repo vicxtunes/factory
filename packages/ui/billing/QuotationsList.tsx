@@ -8,7 +8,7 @@ import type { QuotationStatus, QuotationSummary } from "@repo/lib/billing/core";
 import { formatAmount, formatDay } from "@repo/lib/tenancy/format";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
-import { QuotationStatusBadge } from "./QuotationStatusBadge";
+import { QuotationStatusBadge } from "./StatusBadges";
 
 type View = "all" | QuotationStatus;
 

@@ -5,7 +5,7 @@ import type { TenantScope } from "@repo/lib/tenancy/types";
 
 import type { LineInput, QuotationInput } from "./core";
 import { BillingError, type BillingDirectory, type QuotationRecord, type QuotationStore } from "./ports";
-import { QuotationService } from "./service";
+import { QuotationService } from "./quotation-service";
 
 // The service against in-memory adapters that keep tenants apart the way the
 // real ones must: by the scope's tenant id, or the exact token.

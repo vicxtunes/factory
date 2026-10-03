@@ -1,13 +1,15 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { InvoicesList } from "@repo/ui/billing/InvoicesList";
 import { QuotationsList } from "@repo/ui/billing/QuotationsList";
 import { CustomerArchiveButton, CustomerForm } from "@repo/ui/customers/CustomerForm";
 import { SectionLabel } from "@repo/ui/SectionLabel";
-import { quotations } from "@repo/lib/billing/server";
+import { invoices, quotations } from "@repo/lib/billing/server";
 import { customerIdSchema } from "@repo/lib/customers/core";
 import { customers } from "@repo/lib/customers/server";
 import { requireStudio } from "@repo/lib/studios/server";
+import { formatAmount } from "@repo/lib/tenancy/format";
 
 export const metadata = { title: "Client — My Studio" };
 
@@ -17,7 +19,8 @@ export default async function StudioClientPage({ params }: { params: Promise<{ i
   const id = customerIdSchema.safeParse((await params).id);
   const customer = id.success ? await customers.get(scope, id.data) : null;
   if (!customer) notFound();
-  const theirs = await quotations.list(scope, customer.id);
+  const [theirs, billed] = await Promise.all([quotations.list(scope, customer.id), invoices.list(scope, customer.id)]);
+  const owed = billed.reduce((sum, i) => sum + i.balance, 0);
 
   return (
     <>
@@ -29,6 +32,11 @@ export default async function StudioClientPage({ params }: { params: Promise<{ i
           {customer.name}
           {customer.archivedAt ? <span className="ml-2 align-middle text-xs font-normal text-muted">(archived)</span> : null}
         </h2>
+        {owed > 0 ? (
+          <p className="text-sm">
+            Owes <span className="font-semibold tnum">{formatAmount(scope, owed)}</span>
+          </p>
+        ) : null}
       </div>
       <CustomerForm key={customer.id} customer={customer} basePath="/studio/clients" />
       <section>
@@ -41,6 +49,17 @@ export default async function StudioClientPage({ params }: { params: Promise<{ i
           )}
         </div>
         <QuotationsList quotations={theirs} scope={scope} basePath="/studio/quotations" showClient={false} />
+      </section>
+      <section>
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <SectionLabel>Invoices</SectionLabel>
+          {customer.archivedAt ? null : (
+            <Link href={`/studio/invoices/new?client=${customer.id}`} className="text-sm font-medium text-brand-600 hover:underline">
+              New invoice
+            </Link>
+          )}
+        </div>
+        <InvoicesList invoices={billed} scope={scope} basePath="/studio/invoices" showClient={false} />
       </section>
       <CustomerArchiveButton customer={customer} />
     </>
