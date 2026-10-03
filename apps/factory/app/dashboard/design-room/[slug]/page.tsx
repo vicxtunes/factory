@@ -21,13 +21,13 @@ export default async function ComponentPage({ params }: PageProps<"/dashboard/de
   );
 
   return (
-    <div className="max-w-4xl space-y-10">
+    <div className="space-y-10">
       <header>
         <div className="flex items-center gap-3">
           <h1 className="text-2xl font-semibold">{component.name}</h1>
           <StatusPill status={component.status} />
         </div>
-        <p className="mt-1 text-sm text-muted">{component.summary}</p>
+        <p className="mt-1 max-w-3xl text-sm text-muted">{component.summary}</p>
         <p className="mt-2 font-mono text-xs text-muted">{component.source}</p>
       </header>
 
