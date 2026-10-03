@@ -75,7 +75,8 @@ export const supabaseStudioStore: StudioStore = {
   async updateProfile(id, profile) {
     const { data, error } = await createAdminClient()
       .from("tenants")
-      .update(profile)
+      // Named one by one: nothing else a caller passes (an owner, is_default) ever reaches tenants.
+      .update({ name: profile.name, phone: profile.phone, email: profile.email, address: profile.address })
       .eq("id", id)
       .not("owner_client_id", "is", null)
       .select(COLUMNS)
