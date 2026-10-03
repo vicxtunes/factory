@@ -1,7 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { studioIdSchema } from "@repo/lib/studios/core";
+import { CustomersList } from "@repo/ui/customers/CustomersList";
+import { SectionLabel } from "@repo/ui/SectionLabel";
+import { customers } from "@repo/lib/customers/server";
+import { studioIdSchema, studioScope } from "@repo/lib/studios/core";
 import { requireStudiosOversight, studios } from "@repo/lib/studios/server";
 
 export const dynamic = "force-dynamic";
@@ -11,6 +14,8 @@ export default async function StudioPage({ params }: { params: Promise<{ id: str
   const id = studioIdSchema.safeParse((await params).id);
   const studio = id.success ? await studios.get(id.data) : null;
   if (!studio) notFound();
+  const scope = studioScope(studio);
+  const [active, archived] = await Promise.all([customers.list(scope), customers.list(scope, true)]);
 
   const details: [string, string | null][] = [
     ["Owner", studio.ownerName],
@@ -35,6 +40,10 @@ export default async function StudioPage({ params }: { params: Promise<{ id: str
           </div>
         ))}
       </dl>
+      <section>
+        <SectionLabel>Clients</SectionLabel>
+        <CustomersList active={active} archived={archived} basePath={null} />
+      </section>
     </div>
   );
 }

@@ -43,7 +43,8 @@ packages/lib/studios/
   service.test.ts    The service against an in-memory store.
   policy.ts          canViewAllStudios: the boss.
   adapters/supabase/store.ts   Studios as owned rows of `tenants`; Aming's default tenant is never one.
-  server.ts          The wired service + page guards (requireStudioOwner, requireStudiosOversight).
+  server.ts          The wired service; requireStudio (pages), studioOfCaller (actions, any module),
+                     requireStudiosOversight (boss pages).
   actions.ts         saveMyStudioProfile (session → zod → service).
   feature.ts         STUDIOS_ENABLED.
 packages/ui/studios/  StudioProfileForm (client), StudiosTable (boss).
@@ -61,14 +62,21 @@ tenant that isn't the default must have an owner. Additive only: no existing row
 ## Testing
 
 - `npm test`: profile and id schemas, the boss-only policy, and the service (opens once, each
-  client their own, an owner only changes their own, newest first).
+  client their own, saving changes only that studio, newest first).
 - Checked against a local Postgres with every migration applied, through PostgREST:
   constraints (one studio per owner, owner required, lengths, owner can't be deleted), and the
   Supabase store + service: concurrent opens give one studio, profile save, boss list excludes
   Aming, Aming's tenant can't be changed through the store.
 
+## For other modules
+
+Studio-owned modules (customers, …) get the caller's studio from `server.ts`:
+`requireStudio()` on pages and `studioOfCaller()` in actions. Both return `{ session, studio,
+scope }`; pass `scope` (`studioScope(studio)`: the studio's tenant id, currency, locale and time
+zone) to the module. Neither takes an id from the browser.
+
 ## Next
 
-Clients (the studio's own customers), Packages & Services and Quotations take the studio's
+Packages & Services, then Billing (quotations, invoices, payments), take the studio's
 `TenantScope` and store their rows with its tenant id. Studio customers will reach their
 projects, orders and photos through a private link (Customer Portal & Delivery).

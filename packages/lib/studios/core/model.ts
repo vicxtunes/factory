@@ -3,6 +3,8 @@
 // A studio is a tenant (packages/lib/tenancy) owned by one Aming client: the
 // client's own photography business inside the system.
 
+import type { TenantScope } from "@repo/lib/tenancy/types";
+
 /** What the studio shows on its documents and to its customers. */
 export interface StudioProfile {
   name: string;
@@ -15,7 +17,16 @@ export interface Studio extends StudioProfile {
   /** The studio's tenant id: every studio record carries it. */
   id: string;
   ownerClientId: string;
+  /** How the studio's money and dates are shown (see TenantScope). */
+  currency: string;
+  locale: string;
+  timeZone: string;
   createdAt: string;
+}
+
+/** The scope every studio-owned record is read and written in. */
+export function studioScope(studio: Studio): TenantScope {
+  return { tenantId: studio.id, currency: studio.currency, locale: studio.locale, timeZone: studio.timeZone };
 }
 
 /** A studio as the boss sees it in the list of all studios. */

@@ -53,8 +53,10 @@ Every action follows the same steps, in this order:
 
 Also:
 
-- Every query filters by `scope.tenantId`. New tables get
-  `tenant_id uuid not null default default_tenant_id() references tenants` and row-level security.
+- Every query filters by `scope.tenantId`, and new tables get row-level security.
+  - Aming's own tables: `tenant_id uuid not null default default_tenant_id() references tenants`.
+  - Tables a studio owns (customers, …): `tenant_id uuid not null references tenants`, **no
+    default**, so code that forgets the studio fails instead of filing data under Aming.
 - The service-role client (`supabase/admin.ts`) is used only inside `adapters/`.
 - Public links (invoices, quotations) use unguessable tokens that staff can reset.
 
@@ -73,3 +75,5 @@ No database is needed: cores are pure, and services run against in-memory fakes 
 | `AppError` | `kernel/core` | A failure the person should see. Modules subclass it. |
 | `parseInput(schema, input)` | `kernel/core` | zod parse, or an `AppError` listing what's wrong. |
 | `runAction(module, work)` | `kernel/server/action` | Runs an action's work and turns the outcome into a `Result`. |
+| `optionalText`, `optionalEmail`, `optionalPhone` | `kernel/core` | Form fields: trimmed, empty → null; phones stored in one form. |
+| `parsePhone(input)` | `kernel/core` | Validates a phone number and gives the form to store. |

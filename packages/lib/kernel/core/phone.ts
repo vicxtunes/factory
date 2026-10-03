@@ -1,4 +1,6 @@
-// Phone validation for client sign-up/login.
+// Phone numbers: validation, the one form to store, and the forms an
+// existing record might hold. Used by client sign-up/login and by studios'
+// customers (packages/lib/customers). Pure.
 //
 // The DB matcher (norm_client_phone in migration 20260910120000) folds numbers
 // as Ghana (+233): "0700768312" and "+256700768312" — the same Ugandan number —
