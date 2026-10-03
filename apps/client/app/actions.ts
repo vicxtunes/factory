@@ -19,8 +19,10 @@ import { buildAndInsertOrder } from "@repo/lib/orders/create";
 import { applyCancellation, cleanReason, loadCancellableOrder } from "@repo/lib/orders/cancel";
 import { isPhotobookCategory } from "@repo/lib/orders/photobook";
 import type { CreateOrderResult, OrderItemInput } from "@repo/lib/orders/types";
+import { projectIdSchema } from "@repo/lib/projects/core";
 import { notifyActor } from "@repo/lib/push/send";
 import { fetchClientNotifications } from "@repo/lib/queries";
+import { linkPlacedOrder } from "@repo/lib/studio-orders/server";
 import type { NotificationRow, OrderType } from "@repo/lib/types";
 
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 30; // "remembered on device", same as worker/designer sessions
@@ -197,6 +199,8 @@ export interface ClientOrderPayload {
   delivery_date: string;
   order_notes: string;
   items: OrderItemInput[];
+  /** A studio project this order is for (My Studio → project → "Order from Aming"). */
+  project_id?: string | null;
 }
 
 export async function placeOrder(input: ClientOrderPayload): Promise<CreateOrderResult> {
@@ -257,9 +261,18 @@ export async function placeOrder(input: ClientOrderPayload): Promise<CreateOrder
     );
   }
 
+  // Ordered for one of the client's studio projects: link it there. The order
+  // stands either way; a failed link only comes back as a warning.
+  const warnings: string[] = [];
+  const project = input.project_id ? projectIdSchema.safeParse(input.project_id) : null;
+  if (project?.success) {
+    const problem = await linkPlacedOrder(project.data, res.orderId);
+    if (problem) warnings.push(problem);
+  }
+
   revalidatePath("/");
   revalidatePath("/history");
-  return { ...res, warnings: [] };
+  return { ...res, warnings };
 }
 
 // The client's half of the receptionist quote/approval loop (see

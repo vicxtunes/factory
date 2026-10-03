@@ -44,6 +44,7 @@ export interface OrderFormPayload {
 export type CreateOrderResult =
   | {
       ok: true;
+      orderId: string;
       orderNo: string;
       items: { formIndex: number; itemId: string }[];
       warnings: string[];

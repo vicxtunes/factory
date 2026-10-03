@@ -1,6 +1,9 @@
 import { redirect } from "next/navigation";
 
 import { getClientSession } from "@repo/lib/auth/session";
+import { projectIdSchema } from "@repo/lib/projects/core";
+import { projects } from "@repo/lib/projects/server";
+import { studioOfCaller } from "@repo/lib/studios/server";
 import { fetchCurrencies, fetchProductCatalog, fetchShowroomSettings } from "@repo/lib/queries";
 
 import { ClientShell } from "../shell";
@@ -11,7 +14,7 @@ export const metadata = { title: "Place Order — Client Portal" };
 export default async function ClientNewOrderPage({
   searchParams,
 }: {
-  searchParams: Promise<{ category?: string; product?: string; variant?: string }>;
+  searchParams: Promise<{ category?: string; product?: string; variant?: string; project?: string }>;
 }) {
   const session = await getClientSession();
   if (!session) redirect("/?signin=1");
@@ -32,6 +35,7 @@ export default async function ClientNewOrderPage({
   const category = params.category ? catalog.find((c) => c.id === params.category) : undefined;
   const product = category?.products.find((p) => p.id === params.product);
   const variant = product?.variants.find((v) => v.id === params.variant);
+  const project = await projectFor(params.project);
 
   return (
     <ClientShell signedIn name={session.name} avatarUrl={session.avatarUrl}>
@@ -42,7 +46,25 @@ export default async function ClientNewOrderPage({
         initialVariantId={variant?.id}
         showPrices={showroomSettings.show_prices}
         currencies={currencies}
+        project={project}
       />
     </ClientShell>
   );
+}
+
+/**
+ * "Order from Aming" on a studio project passes ?project=<id>. Honoured only
+ * if it's a project of the signed-in client's own studio (and studios are
+ * on); anything else is a plain order.
+ */
+async function projectFor(id: string | undefined): Promise<{ id: string; title: string } | undefined> {
+  const parsed = projectIdSchema.safeParse(id);
+  if (!parsed.success) return undefined;
+  try {
+    const { scope } = await studioOfCaller();
+    const view = await projects.get(scope, parsed.data);
+    return view ? { id: view.project.id, title: view.project.title } : undefined;
+  } catch {
+    return undefined;
+  }
 }
