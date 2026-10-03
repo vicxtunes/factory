@@ -22,8 +22,11 @@ test("next and previous steps", () => {
 });
 
 test("project input", () => {
-  const ok = { customerId: "7d3c9a51-2f3e-4f5b-9a1c-0e8b2d4c6f10", title: " Wedding ", eventDate: null, notes: "" };
-  assert.deepEqual(parseInput(projectInputSchema, ok), { ...ok, title: "Wedding", notes: null });
+  const ok = { customerId: "7d3c9a51-2f3e-4f5b-9a1c-0e8b2d4c6f10", title: " Wedding ", eventDate: null, notes: "", photosUrl: "" };
+  assert.deepEqual(parseInput(projectInputSchema, ok), { ...ok, title: "Wedding", notes: null, photosUrl: null });
+  assert.equal(parseInput(projectInputSchema, { ...ok, photosUrl: " https://drive.google.com/x " }).photosUrl, "https://drive.google.com/x");
+  assert.throws(() => parseInput(projectInputSchema, { ...ok, photosUrl: "drive.google.com/x" }), /starting with https/);
+  assert.throws(() => parseInput(projectInputSchema, { ...ok, photosUrl: "javascript:alert(1)" }), /starting with https/);
   assert.throws(() => parseInput(projectInputSchema, { ...ok, title: "" }), /title/);
   assert.throws(() => parseInput(projectInputSchema, { ...ok, eventDate: "soon" }), /valid date/);
   assert.equal("bookingId" in parseInput(projectInputSchema, { ...ok, bookingId: "x", status: "completed" }), false, "unknown fields dropped");

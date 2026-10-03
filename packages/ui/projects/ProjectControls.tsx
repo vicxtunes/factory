@@ -81,6 +81,7 @@ export function ProjectForm({ project, customers, basePath }: { project?: Projec
     title: project?.title ?? "",
     eventDate: project?.eventDate ?? "",
     notes: project?.notes ?? "",
+    photosUrl: project?.photosUrl ?? "",
   });
   const set = (key: keyof typeof form) => (e: { target: { value: string } }) => setForm((f) => ({ ...f, [key]: e.target.value }));
 
@@ -117,6 +118,9 @@ export function ProjectForm({ project, customers, basePath }: { project?: Projec
       </Field>
       <Field label="Notes" hint="Shot list, delivery details, anything the team needs.">
         <TextArea value={form.notes} onChange={set("notes")} maxLength={4000} rows={5} />
+      </Field>
+      <Field label="Photos link" hint="Paste the link to the finished photos (Google Drive, Dropbox, WeTransfer…). Your client sees a Download button on their page.">
+        <TextInput type="url" value={form.photosUrl} onChange={set("photosUrl")} maxLength={500} placeholder="https://" />
       </Field>
       {error ? <p className="text-sm text-error-600 dark:text-error-400">{error}</p> : null}
       <Button type="submit" loading={pending}>

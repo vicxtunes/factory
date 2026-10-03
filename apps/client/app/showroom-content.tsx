@@ -50,7 +50,7 @@ function PhotoCard({
 // a full-bleed photo banner, a Product/Packaging/Lamination tab bar, and —
 // under Product — a section per category listing that category's products
 // as photo cards. Clicking a product opens its own page (/{slug}, see
-// [product]/page.tsx), which shows ProductShowcase and can be shared.
+// [slug]/page.tsx), which shows ProductShowcase and can be shared.
 // Falls back to the shared placeholder image for any product without its
 // own uploaded display image yet.
 export function ShowroomContent({ catalog, signedIn }: { catalog: ProductCategory[]; signedIn: boolean }) {

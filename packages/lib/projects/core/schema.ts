@@ -13,6 +13,10 @@ export const projectInputSchema = z.object({
   title: z.string("Give the project a title.").trim().min(1, "Give the project a title.").max(120, "Keep the title under 120 characters."),
   eventDate: z.iso.date("Choose a valid date.").nullable(),
   notes: optionalText(4000, "Keep the notes under 4,000 characters."),
+  photosUrl: optionalText(500, "Keep the link under 500 characters.").refine(
+    (v) => v === null || /^https:\/\/[^\s]+$/.test(v),
+    "Paste the full link to the photos, starting with https://.",
+  ),
 }) satisfies z.ZodType<ProjectInput, unknown>;
 
 export const projectStatusSchema = z.enum(["booked", "in_progress", "editing", "review", "delivered", "completed"], "Choose a stage.");
