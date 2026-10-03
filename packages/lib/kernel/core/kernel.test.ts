@@ -3,7 +3,7 @@ import { test } from "node:test";
 
 import { z } from "zod";
 
-import { AppError, failure, GENERIC_ERROR, parseInput } from "./index";
+import { AppError, failure, GENERIC_ERROR, optionalEmail, optionalPhone, optionalText, parseInput } from "./index";
 
 class ThingError extends AppError {}
 
@@ -41,4 +41,20 @@ test("parseInput throws one AppError with each distinct message", () => {
 test("parseInput rejects input that isn't the expected shape", () => {
   assert.throws(() => parseInput(schema, null), AppError);
   assert.throws(() => parseInput(schema, { name: "x", value: "10" }), /Enter a number\./);
+});
+
+test("optional fields trim, and empty becomes null", () => {
+  assert.equal(parseInput(optionalText(10, "Too long."), "  "), null);
+  assert.equal(parseInput(optionalText(10, "Too long."), " hi "), "hi");
+  assert.throws(() => parseInput(optionalText(3, "Too long."), "abcd"), /Too long\./);
+  assert.equal(parseInput(optionalEmail(), ""), null);
+  assert.throws(() => parseInput(optionalEmail(), "nope"), /valid email/);
+});
+
+test("optionalPhone stores one form per number", () => {
+  assert.equal(parseInput(optionalPhone(), ""), null);
+  assert.equal(parseInput(optionalPhone(), "0772 123 456"), "0772123456");
+  assert.equal(parseInput(optionalPhone(), "+256 772 123456"), "0772123456");
+  assert.equal(parseInput(optionalPhone(), "+44 20 7946 0958"), "+442079460958");
+  assert.throws(() => parseInput(optionalPhone(), "call me"), /valid phone number/);
 });

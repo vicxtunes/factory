@@ -16,10 +16,13 @@ interface Row {
   phone: string | null;
   email: string | null;
   address: string | null;
+  currency: string;
+  locale: string;
+  time_zone: string;
   created_at: string;
 }
 
-const COLUMNS = "id, owner_client_id, name, phone, email, address, created_at";
+const COLUMNS = "id, owner_client_id, name, phone, email, address, currency, locale, time_zone, created_at";
 
 const toStudio = (r: Row): Studio => ({
   id: r.id,
@@ -28,6 +31,9 @@ const toStudio = (r: Row): Studio => ({
   phone: r.phone,
   email: r.email,
   address: r.address,
+  currency: r.currency,
+  locale: r.locale,
+  timeZone: r.time_zone,
   createdAt: r.created_at,
 });
 

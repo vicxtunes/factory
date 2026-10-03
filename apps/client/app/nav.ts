@@ -50,7 +50,10 @@ export const CLIENT_NAV: ClientNavSection[] = [
         {
           id: "business",
           label: "My Business",
-          items: [{ href: "/studio", label: "My Studio", icon: "studio" as const, requiresSignIn: true }],
+          items: [
+            { href: "/studio", label: "My Studio", icon: "studio" as const, requiresSignIn: true, exact: true },
+            { href: "/studio/clients", label: "Clients", icon: "clients" as const, requiresSignIn: true },
+          ],
         },
       ]
     : []),

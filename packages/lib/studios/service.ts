@@ -13,10 +13,12 @@ export class StudioService {
     return (await this.store.findByOwner(owner.clientId)) ?? this.store.create(owner);
   }
 
-  /** Changes the owner's own studio. There is no way to name another studio here. */
-  async updateProfile(owner: StudioOwner, profile: StudioProfile): Promise<Studio> {
-    const studio = await this.open(owner);
-    return this.store.updateProfile(studio.id, profile);
+  /**
+   * Changes a studio's profile. Callers pass the id of the caller's own
+   * studio (server.ts → studioOfCaller), never one sent by the browser.
+   */
+  async updateProfile(studioId: string, profile: StudioProfile): Promise<Studio> {
+    return this.store.updateProfile(studioId, profile);
   }
 
   /** Every studio, newest first. Boss only (checked by the caller). */

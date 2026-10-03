@@ -21,6 +21,9 @@ function memoryStore() {
         phone: null,
         email: null,
         address: null,
+        currency: "UGX",
+        locale: "en-UG",
+        timeZone: "Africa/Kampala",
         createdAt: new Date(Date.UTC(2026, 9, 3, 0, 0, clock++)).toISOString(),
       };
       rows.set(studio.id, studio);
@@ -57,20 +60,15 @@ test("each client gets their own studio", async () => {
   assert.notEqual((await service.open(amina)).id, (await service.open(brian)).id);
 });
 
-test("an owner can only change their own studio", async () => {
+test("saving a profile changes only that studio", async () => {
   const { store } = memoryStore();
   const service = new StudioService(store);
+  const aminas = await service.open(amina);
   const brians = await service.open(brian);
-  const saved = await service.updateProfile(amina, profile);
+  const saved = await service.updateProfile(aminas.id, profile);
   assert.equal(saved.ownerClientId, "c-amina");
   assert.equal(saved.name, "Amina Studios");
   assert.equal((await service.get(brians.id))?.name, "Brian");
-});
-
-test("saving a profile opens the studio if it doesn't exist yet", async () => {
-  const { store, rows } = memoryStore();
-  await new StudioService(store).updateProfile(amina, profile);
-  assert.equal(rows.size, 1);
 });
 
 test("the boss's list is newest first", async () => {

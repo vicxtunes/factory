@@ -19,9 +19,20 @@ const PAGE_TITLES: Record<string, string> = {
   "/showroom": "Showroom",
   "/settings": "Settings",
   "/studio": "My Studio",
+  "/studio/clients": "Clients",
+  "/studio/clients/new": "New client",
   "/support": "Support",
   "/chat": "Chat",
 };
+
+// A page without its own title (e.g. one studio client) takes its section's:
+// the longest listed path it sits under.
+function sectionTitle(pathname: string): string {
+  const parent = Object.keys(PAGE_TITLES)
+    .filter((path) => path !== "/" && pathname.startsWith(`${path}/`))
+    .sort((a, b) => b.length - a.length)[0];
+  return parent ? PAGE_TITLES[parent] : "Client Portal";
+}
 
 export function ClientTopbar({
   signedIn,
@@ -33,7 +44,7 @@ export function ClientTopbar({
   avatarUrl: string | null;
 }) {
   const pathname = usePathname();
-  const title = PAGE_TITLES[pathname] ?? "Client Portal";
+  const title = PAGE_TITLES[pathname] ?? sectionTitle(pathname);
 
   return (
     <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-4 border-b border-border bg-surface px-4 sm:px-6">
