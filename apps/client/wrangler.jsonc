@@ -1,0 +1,26 @@
+// Cloudflare Workers config for the client portal (OpenNext: Next.js on
+// Workers). See apps/client/CLOUDFLARE.md for setup, secrets and deploying.
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "aming-client",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-09-01",
+  // nodejs_compat: node:crypto, node:path… (PIN hashing, tokens, signed cookies).
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "services": [
+    // The worker calls itself for cache revalidation; must match "name" above.
+    { "binding": "WORKER_SELF_REFERENCE", "service": "aming-client" }
+  ],
+  // Next's data cache (the cached catalog, packages/lib/queries.ts): stored in R2.
+  "r2_buckets": [{ "binding": "NEXT_INC_CACHE_R2_BUCKET", "bucket_name": "aming-client-cache" }],
+  // Cache tags (revalidateTag "catalog" from /api/catalog-changed): stored in KV.
+  // Replace with the id printed by `npx wrangler kv namespace create aming-client-tags`.
+  "kv_namespaces": [{ "binding": "NEXT_TAG_CACHE_KV", "id": "REPLACE_WITH_KV_NAMESPACE_ID" }],
+  // next/image resizing (product photos, avatars) through Cloudflare Images.
+  "images": { "binding": "IMAGES" },
+  "observability": { "enabled": true }
+}
