@@ -17,6 +17,7 @@ interface Row {
   title: string;
   event_date: string | null;
   notes: string | null;
+  photos_url: string | null;
   status: ProjectStatus;
   created_at: string;
   updated_at: string;
@@ -32,7 +33,7 @@ interface EventRow {
   created_at: string;
 }
 
-const COLUMNS = `id, customer_id, booking_id, title, event_date, notes, status, created_at, updated_at,
+const COLUMNS = `id, customer_id, booking_id, title, event_date, notes, photos_url, status, created_at, updated_at,
   customer:customers!projects_tenant_id_customer_id_fkey (name)`;
 
 const toProject = (r: Row): Project => ({
@@ -43,6 +44,7 @@ const toProject = (r: Row): Project => ({
   title: r.title,
   eventDate: r.event_date,
   notes: r.notes,
+  photosUrl: r.photos_url,
   status: r.status,
   createdAt: r.created_at,
   updatedAt: r.updated_at,
@@ -109,7 +111,7 @@ export const supabaseProjectStore: ProjectStore = {
   async update(scope, id, input: ProjectInput) {
     const { data, error } = await table()
       // Named one by one: nothing else a caller passes reaches the table.
-      .update({ customer_id: input.customerId, title: input.title, event_date: input.eventDate, notes: input.notes })
+      .update({ customer_id: input.customerId, title: input.title, event_date: input.eventDate, notes: input.notes, photos_url: input.photosUrl })
       .eq("tenant_id", scope.tenantId)
       .eq("id", id)
       .select("id");

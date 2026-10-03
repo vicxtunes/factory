@@ -61,7 +61,7 @@ export class ProjectService {
     if (booking.status !== "confirmed" && booking.status !== "completed") {
       throw new ProjectError("Confirm the booking before starting its project.");
     }
-    return this.store.create(scope, { customerId: booking.customerId, title: booking.title, eventDate: booking.date, notes: null, bookingId }, actor.name);
+    return this.store.create(scope, { customerId: booking.customerId, title: booking.title, eventDate: booking.date, notes: null, photosUrl: null, bookingId }, actor.name);
   }
 
   /** A project without a booking. */
