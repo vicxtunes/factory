@@ -89,11 +89,11 @@ const documents = () => createAdminClient().from("billing_documents");
 
 export const supabaseInvoiceStore: InvoiceStore = {
   async list(scope, filter) {
-    let query = documents().select(INVOICE).eq("tenant_id", scope.tenantId).eq("kind", "invoice");
+    let query = documents().select(WITH_LINES).eq("tenant_id", scope.tenantId).eq("kind", "invoice");
     if (filter.customerId) query = query.eq("customer_id", filter.customerId);
-    const { data, error } = await query.order("issued_at", { ascending: false }).returns<InvoiceRow[]>();
+    const { data, error } = await query.order("issued_at", { ascending: false }).returns<WithLines[]>();
     if (error) fail("list invoices", error);
-    return data.map(toRecord);
+    return data.map(withLines);
   },
 
   async get(scope, id) {

@@ -1,4 +1,7 @@
-import type { PeriodInput } from "@repo/lib/accounting/index.server";
+// Reading the reporting period from a page's URL (?period=…&from=…&to=…).
+// Shared by Aming's Accounts pages and a studio's dashboard. Pure.
+
+import type { PeriodInput } from "./service";
 
 type SearchParams = Record<string, string | string[] | undefined>;
 

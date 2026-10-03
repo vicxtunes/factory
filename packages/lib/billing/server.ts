@@ -5,8 +5,10 @@ import "server-only";
 
 import { randomBytes } from "node:crypto";
 
+import { createAccountingService } from "@repo/lib/accounting/service";
 import { clientUrl } from "@repo/lib/client-portal/paths";
 
+import { createBillingAccountingSource } from "./accounting-source";
 import { supabaseBillingDirectory } from "./adapters/supabase/directory";
 import { supabaseInvoiceStore } from "./adapters/supabase/invoices";
 import { supabaseQuotationStore } from "./adapters/supabase/quotations";
@@ -19,6 +21,9 @@ const newToken = () => randomBytes(32).toString("base64url");
 export const quotations = new QuotationService(supabaseQuotationStore, supabaseBillingDirectory, newToken);
 
 export const invoices = new InvoiceService(supabaseInvoiceStore, supabaseQuotationStore, supabaseBillingDirectory, newToken);
+
+/** A studio's money overview: Accounts over its invoices and payments. */
+export const studioAccounts = createAccountingService(createBillingAccountingSource(supabaseInvoiceStore));
 
 /** The customer-facing links, on the client app. */
 export const quotationUrl = (token: string) => clientUrl(`/q/${token}`);

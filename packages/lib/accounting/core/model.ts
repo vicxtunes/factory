@@ -10,13 +10,14 @@ export type Channel = "cash" | "bank_transfer" | "mobile_money" | "card" | "othe
 
 export const CHANNELS: Channel[] = ["cash", "bank_transfer", "mobile_money", "card", "other"];
 
-/** A sale: one invoiced order. Recorded as a sale on its issue date. */
+/** A sale: one invoice (for Aming, an invoiced order). Recorded as a sale on its issue date. */
 export interface SaleDocument {
   id: string;
   /** The invoice number, e.g. "INV-2026-3956". */
   number: string;
-  orderId: string;
-  orderNo: string;
+  /** The order it bills, when it bills one (a studio's invoices don't). */
+  orderId: string | null;
+  orderNo: string | null;
   /** Null for a walk-in sale with no customer account. */
   customerId: string | null;
   customerName: string;
