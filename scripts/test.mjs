@@ -1,4 +1,5 @@
-// Runs the unit tests for pure modules (packages/lib/**/core/*.test.ts).
+// Runs the unit tests under packages/lib (any *.test.ts): pure cores, and
+// services tested against in-memory fakes of their ports.
 //
 // Each test file is bundled with esbuild (already a dependency, via Next) so
 // workspace imports (@repo/lib) and extensionless imports work, then run with Node's
@@ -18,7 +19,7 @@ function findTests(dir) {
   return readdirSync(dir).flatMap((name) => {
     const path = join(dir, name);
     if (statSync(path).isDirectory()) return name === "node_modules" ? [] : findTests(path);
-    return /\/core\/[^/]+\.test\.ts$/.test(path) ? [path] : [];
+    return path.endsWith(".test.ts") ? [path] : [];
   });
 }
 

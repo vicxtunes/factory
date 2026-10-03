@@ -1,24 +1,23 @@
 "use server";
 
-// The browser's only entry point to discounts.
+// The browser's only entry point to discounts. Every action: who's asking →
+// parse the input (zod) → service → Result (packages/lib/kernel).
 
 import { revalidatePath } from "next/cache";
 
 import { getDashboardSession } from "@repo/lib/auth/session";
 import { catalogChanged } from "@repo/lib/catalog-cache";
+import { parseInput, type Result } from "@repo/lib/kernel/core";
+import { runAction } from "@repo/lib/kernel/server/action";
 import { resolveTenantScope } from "@repo/lib/tenancy/server/resolve";
 
 import { factoryStore } from "./adapters/factory/store";
-import type { DiscountInput } from "./core/model";
+import { discountIdSchema, discountInputSchema } from "./core/schema";
 import { canManageDiscounts, canViewDiscounts } from "./policy";
 import { DiscountError } from "./ports";
-import { createDiscountService, type DiscountView } from "./service";
+import { DiscountService, type DiscountView } from "./service";
 
-const service = createDiscountService(factoryStore);
-
-export type DiscountResult<T = undefined> = T extends undefined
-  ? { ok: true } | { ok: false; error: string }
-  : { ok: true; data: T } | { ok: false; error: string };
+const service = new DiscountService(factoryStore);
 
 async function staff(manage: boolean) {
   const session = await getDashboardSession();
@@ -28,44 +27,34 @@ async function staff(manage: boolean) {
   return { actor: { id: session.userId, name: session.fullName ?? session.email ?? "Staff" }, scope: await resolveTenantScope() };
 }
 
-function failure(err: unknown): { ok: false; error: string } {
-  if (err instanceof DiscountError) return { ok: false, error: err.message };
-  console.error("discounts:", err);
-  return { ok: false, error: "Something went wrong. Please try again." };
+/** After a change: showroom prices come from the cached catalog (packages/lib/catalog-cache.ts). */
+function changed() {
+  catalogChanged();
+  revalidatePath("/dashboard/marketing");
 }
 
-export async function listDiscounts(): Promise<DiscountResult<DiscountView[]>> {
-  try {
+export async function listDiscounts(): Promise<Result<DiscountView[]>> {
+  return runAction("discounts", async () => {
     const { scope } = await staff(false);
-    return { ok: true, data: await service.list(scope) };
-  } catch (err) {
-    return failure(err);
-  }
+    return service.list(scope);
+  });
 }
 
-export async function createDiscount(input: DiscountInput): Promise<DiscountResult<DiscountView[]>> {
-  try {
+export async function createDiscount(input: unknown): Promise<Result<DiscountView[]>> {
+  return runAction("discounts", async () => {
     const { scope, actor } = await staff(true);
-    await service.create(scope, input, actor);
-    // Showroom prices come from the cached catalog (packages/lib/catalog-cache.ts).
-    catalogChanged();
-    revalidatePath("/dashboard/marketing");
-    return { ok: true, data: await service.list(scope) };
-  } catch (err) {
-    return failure(err);
-  }
+    await service.create(scope, parseInput(discountInputSchema, input), actor);
+    changed();
+    return service.list(scope);
+  });
 }
 
 /** Ends a running discount now, or removes a scheduled one. */
-export async function stopDiscount(id: string): Promise<DiscountResult<DiscountView[]>> {
-  try {
+export async function stopDiscount(id: unknown): Promise<Result<DiscountView[]>> {
+  return runAction("discounts", async () => {
     const { scope, actor } = await staff(true);
-    await service.stop(scope, id, actor);
-    // Showroom prices come from the cached catalog (packages/lib/catalog-cache.ts).
-    catalogChanged();
-    revalidatePath("/dashboard/marketing");
-    return { ok: true, data: await service.list(scope) };
-  } catch (err) {
-    return failure(err);
-  }
+    await service.stop(scope, parseInput(discountIdSchema, id), actor);
+    changed();
+    return service.list(scope);
+  });
 }

@@ -47,14 +47,18 @@ started can be cancelled (deleted). A new discount and its products are created 
 
 ## Layout
 
+This module is the reference example of the module standard (packages/lib/README.md).
+
 ```
 packages/lib/discounts/
-  core/            Pure: records (Offer, Discount), status, input checks, badge text. Tests: npm test.
-  ports.ts         DiscountStore: what a host app must provide, tenant-scoped.
-  service.ts       list / create / stop (end now, or cancel if scheduled).
+  core/            Pure: records (Offer, Discount), status, business rules, badge text.
+    schema.ts      zod: is the input well-formed (types, choices, uuids, dates)?
+  ports.ts         DiscountStore: what a host app must provide, tenant-scoped. DiscountError.
+  service.ts       class DiscountService: list / create / stop (end now, or cancel if scheduled).
+  service.test.ts  The service against an in-memory store.
   adapters/factory/store.ts   This app's store: the discounts tables + discount_create().
   policy.ts        canManageDiscounts (boss), canViewDiscounts (managers).
-  actions.ts       "use server": listDiscounts, createDiscount, stopDiscount.
+  actions.ts       "use server": listDiscounts, createDiscount, stopDiscount (session → zod → service).
 packages/ui/discounts/DiscountsPanel.tsx    Marketing → Discounts.
 ```
 
@@ -66,7 +70,8 @@ products get `tenant_id`, compare with the product's tenant there (see packages/
 
 ## Testing
 
-- `npm test`: status, input checks, price arithmetic (matches the SQL), offer parsing, badges.
+- `npm test`: status, input checks, input schema, price arithmetic (matches the SQL), offer
+  parsing, badges, and the service (list order, create, stop) against an in-memory store.
 - Run against a throwaway Postgres with every migration applied:
   - **Offers**: overlapping discounts (lowest price wins), variant prices, and orders placed
     before, during and after a discount each getting the right offer.
