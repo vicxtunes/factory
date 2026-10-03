@@ -8,6 +8,7 @@ import { PeriodPicker } from "@repo/ui/accounting/PeriodPicker";
 import { InvoicesList } from "@repo/ui/billing/InvoicesList";
 import { BookingsList } from "@repo/ui/bookings/BookingBits";
 import { ProjectsBoard } from "@repo/ui/projects/ProjectsBoard";
+import { LinkedOrdersList } from "@repo/ui/studio-orders/AmingOrders";
 import { TasksBoard } from "@repo/ui/tasks/TasksBoard";
 import { TeamList } from "@repo/ui/team/TeamList";
 import { QuotationsList } from "@repo/ui/billing/QuotationsList";
@@ -17,6 +18,7 @@ import { localDate } from "@repo/lib/accounting/core/period";
 import { invoices, quotations, studioAccounts } from "@repo/lib/billing/server";
 import { bookings } from "@repo/lib/bookings/server";
 import { projects } from "@repo/lib/projects/server";
+import { studioOrders } from "@repo/lib/studio-orders/server";
 import { tasks } from "@repo/lib/tasks/server";
 import { team } from "@repo/lib/team/server";
 import { CurrencySymbolProvider } from "@repo/lib/currency/CurrencySymbolProvider";
@@ -42,7 +44,7 @@ export default async function StudioPage({
   if (!studio) notFound();
   const scope = studioScope(studio);
   const today = localDate(new Date(), scope.timeZone);
-  const [active, archived, onSale, offSale, quotes, bills, money, upcoming, work, todo, members] = await Promise.all([
+  const [active, archived, onSale, offSale, quotes, bills, money, upcoming, work, todo, members, amingOrders] = await Promise.all([
     customers.list(scope),
     customers.list(scope, true),
     offerings.list(scope),
@@ -54,6 +56,7 @@ export default async function StudioPage({
     projects.list(scope),
     tasks.open(scope),
     team.list(scope),
+    studioOrders.forStudio(scope),
   ]);
   const openTasks: Record<string, number> = {};
   for (const t of todo) if (t.assigneeId) openTasks[t.assigneeId] = (openTasks[t.assigneeId] ?? 0) + 1;
@@ -91,6 +94,10 @@ export default async function StudioPage({
       <section>
         <SectionLabel>Coming up</SectionLabel>
         <BookingsList bookings={upcoming} scope={scope} basePath={null} empty="Nothing booked ahead." />
+      </section>
+      <section>
+        <SectionLabel>Orders placed with Aming for its projects</SectionLabel>
+        <LinkedOrdersList orders={amingOrders} scope={scope} showProject empty="No project orders yet." />
       </section>
       <section>
         <SectionLabel>Projects</SectionLabel>

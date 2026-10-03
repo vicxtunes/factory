@@ -1393,7 +1393,7 @@ export async function createOrder(input: OrderFormPayload): Promise<CreateOrderR
 
   revalidatePath("/dashboard/orders");
   revalidatePath("/dashboard");
-  return { ok: true, orderNo: res.orderNo, items: res.items, warnings };
+  return { ok: true, orderId: res.orderId, orderNo: res.orderNo, items: res.items, warnings };
 }
 
 // ---------------------------------------------------------------------------
