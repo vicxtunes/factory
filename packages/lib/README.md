@@ -57,6 +57,9 @@ Also:
   - Aming's own tables: `tenant_id uuid not null default default_tenant_id() references tenants`.
   - Tables a studio owns (customers, …): `tenant_id uuid not null references tenants`, **no
     default**, so code that forgets the studio fails instead of filing data under Aming.
+  - References between a studio's tables use composite foreign keys, e.g.
+    `foreign key (tenant_id, customer_id) references customers (tenant_id, id)`, so the database
+    itself refuses a row pointing at another studio's data (bookings is the first).
 - The service-role client (`supabase/admin.ts`) is used only inside `adapters/`.
 - Adapters name every column they write (`toColumns(input)`), never `insert(input)` or
   `update(input)` with the object they were given, so a stray field (a `tenant_id`, an owner)
