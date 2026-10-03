@@ -13,6 +13,7 @@ import {
   PlaceOrderIcon,
   SettingsIcon,
   ShowroomIcon,
+  StudioIcon,
   SupportIcon,
 } from "@repo/ui/icons";
 
@@ -30,6 +31,7 @@ const ICONS: Partial<Record<ClientNavItem["icon"], typeof OrdersIcon>> = {
   payment: PaymentIcon,
   placeOrder: PlaceOrderIcon,
   showroom: ShowroomIcon,
+  studio: StudioIcon,
   settings: SettingsIcon,
   chat: ChatIcon,
   support: SupportIcon,

@@ -4,6 +4,7 @@
 // To add, move or re-gate a page, edit this file only.
 
 import type { HomeBarIcon } from "@repo/ui/HomeBar";
+import { STUDIOS_ENABLED } from "@repo/lib/studios/feature";
 
 export interface ClientNavItem {
   href: string;
@@ -42,6 +43,17 @@ export const CLIENT_NAV: ClientNavSection[] = [
       { href: "/history", label: "History", icon: "history", requiresSignIn: true },
     ],
   },
+  // The client's own photography business (packages/lib/studios). Off until
+  // studios are released (NEXT_PUBLIC_STUDIOS).
+  ...(STUDIOS_ENABLED
+    ? [
+        {
+          id: "business",
+          label: "My Business",
+          items: [{ href: "/studio", label: "My Studio", icon: "studio" as const, requiresSignIn: true }],
+        },
+      ]
+    : []),
   {
     id: "account",
     label: "Account",

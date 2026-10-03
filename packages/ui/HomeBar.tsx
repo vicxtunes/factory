@@ -20,6 +20,7 @@ import {
   ProductsIcon,
   SettingsIcon,
   ShowroomIcon,
+  StudioIcon,
   SupportIcon,
   WorkersIcon,
 } from "./icons";
@@ -59,6 +60,7 @@ const ICONS = {
   placeOrder: PlaceOrderIcon,
   settings: SettingsIcon,
   showroom: ShowroomIcon,
+  studio: StudioIcon,
 } as const;
 
 export type HomeBarIcon = keyof typeof ICONS;

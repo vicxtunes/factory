@@ -15,7 +15,12 @@ migration plus one function, not a rewrite.
 - **`resolveTenantScope()`** (`server/resolve.ts`): the tenant for the current request. Today
   it is always the default tenant.
 
-Existing tables (orders, clients, invoices, wallets, …) do **not** have `tenant_id` yet.
+- **Studios** (packages/lib/studios): every other tenant is a client's photography studio,
+  owned by that client (`tenants.owner_client_id`). Studio pages get the studio from the
+  client's session; staff pages still act for the default tenant.
+
+Existing tables (orders, clients, invoices, wallets, …) do **not** have `tenant_id` yet. A table
+gets one when a studio module starts using it, not before.
 
 ## Rules for new code
 
