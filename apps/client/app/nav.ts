@@ -54,6 +54,8 @@ export const CLIENT_NAV: ClientNavSection[] = [
             { href: "/studio", label: "Studio dashboard", icon: "studio" as const, requiresSignIn: true, exact: true },
             { href: "/studio/bookings", label: "Bookings", icon: "history" as const, requiresSignIn: true },
             { href: "/studio/projects", label: "Projects", icon: "orders" as const, requiresSignIn: true },
+            { href: "/studio/tasks", label: "Tasks", icon: "placeOrder" as const, requiresSignIn: true },
+            { href: "/studio/team", label: "Team", icon: "agents" as const, requiresSignIn: true },
             { href: "/studio/clients", label: "Clients", icon: "clients" as const, requiresSignIn: true },
             { href: "/studio/offerings", label: "Packages & Services", icon: "products" as const, requiresSignIn: true },
             { href: "/studio/quotations", label: "Quotations", icon: "invoice" as const, requiresSignIn: true },

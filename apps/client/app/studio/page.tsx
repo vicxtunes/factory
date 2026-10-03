@@ -2,11 +2,13 @@ import { AccountsOverview } from "@repo/ui/accounting/AccountsOverview";
 import { PeriodPicker } from "@repo/ui/accounting/PeriodPicker";
 import { BookingsList } from "@repo/ui/bookings/BookingBits";
 import { ProjectsList } from "@repo/ui/projects/ProjectBits";
+import { TaskRows } from "@repo/ui/tasks/TaskRows";
 import { SectionLabel } from "@repo/ui/SectionLabel";
 import { localDate } from "@repo/lib/accounting/core/period";
 import { periodFrom } from "@repo/lib/accounting/params";
 import { bookings } from "@repo/lib/bookings/server";
 import { projects } from "@repo/lib/projects/server";
+import { tasks } from "@repo/lib/tasks/server";
 import { studioAccounts } from "@repo/lib/billing/server";
 import { CurrencySymbolProvider } from "@repo/lib/currency/CurrencySymbolProvider";
 import { requireStudio } from "@repo/lib/studios/server";
@@ -25,10 +27,12 @@ export default async function StudioDashboardPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { scope, studio } = await requireStudio();
-  const [view, upcoming, inHand] = await Promise.all([
+  const today = localDate(new Date(), scope.timeZone);
+  const [view, upcoming, inHand, todo] = await Promise.all([
     studioAccounts.overview(scope, periodFrom(await searchParams)),
-    bookings.upcoming(scope, localDate(new Date(), scope.timeZone)),
+    bookings.upcoming(scope, today),
     projects.active(scope),
+    tasks.open(scope),
   ]);
 
   return (
@@ -44,6 +48,10 @@ export default async function StudioDashboardPage({
           <ProjectsList projects={inHand.slice(0, 5)} scope={scope} basePath="/studio/projects" empty="No projects in hand." />
         </section>
       </div>
+      <section>
+        <SectionLabel>Tasks to do</SectionLabel>
+        <TaskRows tasks={todo.slice(0, 6)} today={today} scope={scope} editable showProject empty="Nothing to do." />
+      </section>
       {/* Amounts in the studio's own currency. */}
       <CurrencySymbolProvider symbol={scope.currency}>
         <div className="space-y-6">

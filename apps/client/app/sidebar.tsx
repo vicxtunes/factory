@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 
 import { ChatIcon } from "@repo/ui/chat/icons";
 import {
+  AgentsIcon,
   ClientsIcon,
   DashboardIcon,
   HistoryIcon,
@@ -36,6 +37,7 @@ const ICONS: Partial<Record<ClientNavItem["icon"], typeof OrdersIcon>> = {
   showroom: ShowroomIcon,
   studio: StudioIcon,
   clients: ClientsIcon,
+  agents: AgentsIcon,
   products: ProductsIcon,
   invoice: InvoiceIcon,
   settings: SettingsIcon,
