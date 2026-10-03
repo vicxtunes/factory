@@ -1,10 +1,12 @@
 import { AccountsOverview } from "@repo/ui/accounting/AccountsOverview";
 import { PeriodPicker } from "@repo/ui/accounting/PeriodPicker";
 import { BookingsList } from "@repo/ui/bookings/BookingBits";
+import { ProjectsList } from "@repo/ui/projects/ProjectBits";
 import { SectionLabel } from "@repo/ui/SectionLabel";
 import { localDate } from "@repo/lib/accounting/core/period";
 import { periodFrom } from "@repo/lib/accounting/params";
 import { bookings } from "@repo/lib/bookings/server";
+import { projects } from "@repo/lib/projects/server";
 import { studioAccounts } from "@repo/lib/billing/server";
 import { CurrencySymbolProvider } from "@repo/lib/currency/CurrencySymbolProvider";
 import { requireStudio } from "@repo/lib/studios/server";
@@ -23,18 +25,25 @@ export default async function StudioDashboardPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { scope, studio } = await requireStudio();
-  const [view, upcoming] = await Promise.all([
+  const [view, upcoming, inHand] = await Promise.all([
     studioAccounts.overview(scope, periodFrom(await searchParams)),
     bookings.upcoming(scope, localDate(new Date(), scope.timeZone)),
+    projects.active(scope),
   ]);
 
   return (
     <>
       <h2 className="text-xl font-semibold">{studio.name}</h2>
-      <section>
-        <SectionLabel>Coming up</SectionLabel>
-        <BookingsList bookings={upcoming} scope={scope} basePath="/studio/bookings" empty="Nothing booked ahead." />
-      </section>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <section>
+          <SectionLabel>Coming up</SectionLabel>
+          <BookingsList bookings={upcoming} scope={scope} basePath="/studio/bookings" empty="Nothing booked ahead." />
+        </section>
+        <section>
+          <SectionLabel>Projects in hand</SectionLabel>
+          <ProjectsList projects={inHand.slice(0, 5)} scope={scope} basePath="/studio/projects" empty="No projects in hand." />
+        </section>
+      </div>
       {/* Amounts in the studio's own currency. */}
       <CurrencySymbolProvider symbol={scope.currency}>
         <div className="space-y-6">
