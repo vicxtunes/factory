@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { QuotationEditor } from "@repo/ui/billing/QuotationEditor";
+import { DocumentEditor } from "@repo/ui/billing/DocumentEditor";
 import { canEditQuotation, quotationIdSchema } from "@repo/lib/billing/core";
 import { quotations } from "@repo/lib/billing/server";
 import { customers } from "@repo/lib/customers/server";
@@ -36,8 +36,9 @@ export default async function EditQuotationPage({ params }: { params: Promise<{ 
       <Link href={`/studio/quotations/${quotation.id}`} className="text-xs font-medium text-brand-600 hover:underline">
         ← {quotation.number}
       </Link>
-      <QuotationEditor
-        quotation={quotation}
+      <DocumentEditor
+        kind="quotation"
+        document={{ id: quotation.id, customerId: quotation.customerId, date: quotation.validUntil, notes: quotation.notes, lines: quotation.lines }}
         customers={choices.map((c) => ({ id: c.id, name: c.name }))}
         offerings={onSale}
         scope={scope}

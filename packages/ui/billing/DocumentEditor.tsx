@@ -5,8 +5,8 @@ import { useState, useTransition } from "react";
 
 import { Button } from "@repo/ui/Button";
 import { Field, Select, TextArea, TextInput } from "@repo/ui/Field";
-import { createQuotation, updateQuotation } from "@repo/lib/billing/actions";
-import { priceLine, totalsOf, type LineInput, type Quotation } from "@repo/lib/billing/core";
+import { createInvoice, createQuotation, updateInvoice, updateQuotation } from "@repo/lib/billing/actions";
+import { priceLine, totalsOf, type LineInput } from "@repo/lib/billing/core";
 import type { Offering } from "@repo/lib/offerings/core";
 import { formatAmount } from "@repo/lib/tenancy/format";
 import type { TenantScope } from "@repo/lib/tenancy/types";
@@ -47,33 +47,66 @@ const inputOf = (d: Draft): LineInput => ({
   discount: d.discountKind ? { kind: d.discountKind, value: number(d.discountValue) } : null,
 });
 
+/** The document being edited, whichever kind. `date` is its valid-until (quotation) or due date (invoice). */
+export interface EditableDocument {
+  id: string;
+  customerId: string;
+  date: string | null;
+  notes: string | null;
+  lines: LineInput[];
+}
+
+const KINDS = {
+  quotation: {
+    dateLabel: "Valid until",
+    dateHint: "Optional. After this day it can't be accepted.",
+    create: "Create quotation",
+    save: (doc: EditableDocument | undefined, input: { customerId: string; date: string | null; notes: string; lines: LineInput[] }) => {
+      const body = { customerId: input.customerId, validUntil: input.date, notes: input.notes, lines: input.lines };
+      return doc ? updateQuotation(doc.id, body) : createQuotation(body);
+    },
+  },
+  invoice: {
+    dateLabel: "Due date",
+    dateHint: "Optional. Unpaid after this day shows as overdue.",
+    create: "Create invoice",
+    save: (doc: EditableDocument | undefined, input: { customerId: string; date: string | null; notes: string; lines: LineInput[] }) => {
+      const body = { customerId: input.customerId, dueDate: input.date, notes: input.notes, lines: input.lines };
+      return doc ? updateInvoice(doc.id, body) : createInvoice(body);
+    },
+  },
+};
+
 /**
- * Creates a quotation (no `quotation`) or edits an unanswered one: a client,
- * lines copied from packages and services or typed, line discounts, a
- * valid-until date and notes. Totals update as you type, using the same rules
- * the server saves with.
+ * Creates a quotation or invoice (no `document`) or edits one: a client,
+ * lines copied from packages and services or typed, line discounts, a date
+ * and notes. Totals update as you type, using the same rules the server
+ * saves with.
  */
-export function QuotationEditor({
-  quotation,
+export function DocumentEditor({
+  kind,
+  document: doc,
   customers,
   offerings,
   presetCustomerId,
   scope,
   basePath,
 }: {
-  quotation?: Quotation;
+  kind: keyof typeof KINDS;
+  document?: EditableDocument;
   customers: { id: string; name: string }[];
   offerings: Offering[];
   presetCustomerId?: string;
   scope: Pick<TenantScope, "currency" | "locale">;
-  /** Quotation pages live at `${basePath}/${id}`. */
+  /** The document's pages live at `${basePath}/${id}`. */
   basePath: string;
 }) {
   const router = useRouter();
-  const [customerId, setCustomerId] = useState(quotation?.customerId ?? presetCustomerId ?? "");
-  const [validUntil, setValidUntil] = useState(quotation?.validUntil ?? "");
-  const [notes, setNotes] = useState(quotation?.notes ?? "");
-  const [lines, setLines] = useState<Draft[]>(quotation ? quotation.lines.map(draftOf) : []);
+  const k = KINDS[kind];
+  const [customerId, setCustomerId] = useState(doc?.customerId ?? presetCustomerId ?? "");
+  const [date, setDate] = useState(doc?.date ?? "");
+  const [notes, setNotes] = useState(doc?.notes ?? "");
+  const [lines, setLines] = useState<Draft[]>(doc ? doc.lines.map(draftOf) : []);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const money = (n: number) => formatAmount(scope, n);
@@ -100,9 +133,8 @@ export function QuotationEditor({
   function submit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    const input = { customerId, validUntil: validUntil || null, notes, lines: lines.map(inputOf) };
     start(async () => {
-      const res = quotation ? await updateQuotation(quotation.id, input) : await createQuotation(input);
+      const res = await k.save(doc, { customerId, date: date || null, notes, lines: lines.map(inputOf) });
       if (!res.ok) return setError(res.error);
       router.push(`${basePath}/${res.data}`);
       router.refresh();
@@ -122,8 +154,8 @@ export function QuotationEditor({
             ))}
           </Select>
         </Field>
-        <Field label="Valid until" hint="Optional. After this day it can't be accepted.">
-          <TextInput type="date" value={validUntil} onChange={(e) => setValidUntil(e.target.value)} />
+        <Field label={k.dateLabel} hint={k.dateHint}>
+          <TextInput type="date" value={date} onChange={(e) => setDate(e.target.value)} />
         </Field>
       </div>
 
@@ -199,12 +231,12 @@ export function QuotationEditor({
           <dt className="font-semibold">Total</dt>
           <dd className="text-right text-base font-semibold tnum">{money(totals.total)}</dd>
         </dl>
-        <Field label="Notes" hint="Terms, deposit, what happens next. Shown on the quotation.">
+        <Field label="Notes" hint={`Terms, deposit, how to pay. Shown on the ${kind}.`}>
           <TextArea value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={2000} rows={3} />
         </Field>
         {error ? <p className="text-sm text-error-600 dark:text-error-400">{error}</p> : null}
         <Button type="submit" loading={pending}>
-          {quotation ? "Save changes" : "Create quotation"}
+          {doc ? "Save changes" : k.create}
         </Button>
       </div>
     </form>

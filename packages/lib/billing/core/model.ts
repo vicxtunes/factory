@@ -89,3 +89,88 @@ export const QUOTATION_STATUS_LABELS: Record<QuotationStatus, string> = {
   declined: "Declined",
   expired: "Expired",
 };
+
+// ── Invoices, payments, receipts ──────────────────────────────────────────
+
+export interface InvoiceInput {
+  customerId: string;
+  /** Unpaid after this day = overdue; null = no due date. */
+  dueDate: string | null;
+  notes: string | null;
+  lines: LineInput[];
+}
+
+/** As shown. Void wins; then paid; then overdue (past due with something left); then partly or not paid. */
+export type InvoiceStatus = "unpaid" | "partially_paid" | "paid" | "overdue" | "void";
+
+export type PaymentMethod = "cash" | "mobile_money" | "bank_transfer" | "card" | "other";
+
+export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
+  cash: "Cash",
+  mobile_money: "Mobile money",
+  bank_transfer: "Bank transfer",
+  card: "Card",
+  other: "Other",
+};
+
+export interface PaymentInput {
+  amount: number;
+  method: PaymentMethod;
+  /** The day the money arrived. */
+  receivedOn: string;
+  reference: string | null;
+  note: string | null;
+}
+
+export interface Payment extends PaymentInput {
+  id: string;
+  receiptNo: string;
+  shareToken: string;
+  /** Voided payments stay in the history but don't count. */
+  voidedAt: string | null;
+  voidReason: string | null;
+  createdAt: string;
+}
+
+/** An invoice in lists. */
+export interface InvoiceSummary {
+  id: string;
+  number: string;
+  customerId: string;
+  billTo: BillTo;
+  issuedAt: string;
+  dueDate: string | null;
+  status: InvoiceStatus;
+  total: number;
+  /** Σ payments that aren't void. */
+  paid: number;
+  /** What's left (0 for a void invoice). */
+  balance: number;
+}
+
+/** A whole invoice, for its page and its public link. */
+export interface Invoice extends InvoiceSummary, Totals {
+  notes: string | null;
+  /** The accepted quotation it was made from. */
+  sourceId: string | null;
+  voidedAt: string | null;
+  voidReason: string | null;
+  shareToken: string;
+  lines: Line[];
+  /** Newest first, void ones included. */
+  payments: Payment[];
+}
+
+/** A receipt, as its link shows it. */
+export interface Receipt {
+  payment: Payment;
+  invoice: InvoiceSummary;
+}
+
+export const INVOICE_STATUS_LABELS: Record<InvoiceStatus, string> = {
+  unpaid: "Unpaid",
+  partially_paid: "Partially paid",
+  paid: "Paid",
+  overdue: "Overdue",
+  void: "Void",
+};

@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 
-import { PrintButton, QuotationAnswer } from "@repo/ui/billing/QuotationAnswer";
+import { PrintButton } from "@repo/ui/billing/PrintButton";
+import { QuotationAnswer } from "@repo/ui/billing/QuotationAnswer";
 import { QuotationDocument } from "@repo/ui/billing/QuotationDocument";
 import { canRespondToQuotation, shareTokenSchema } from "@repo/lib/billing/core";
 import { quotations } from "@repo/lib/billing/server";

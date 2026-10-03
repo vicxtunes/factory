@@ -8,8 +8,10 @@ import "server-only";
 import { createAdminClient } from "@repo/lib/supabase/admin";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
-import type { LineInput, QuotationResponse } from "../../core/model";
-import { BillingError, type QuotationRecord, type QuotationStore } from "../../ports";
+import type { QuotationResponse } from "../../core/model";
+import type { QuotationRecord, QuotationStore } from "../../ports";
+
+import { fail, LINES, toLineJson, toLines, type LineRow } from "./shared";
 
 interface DocumentRow {
   id: string;
@@ -29,19 +31,9 @@ interface DocumentRow {
   share_token: string;
 }
 
-interface LineRow {
-  offering_id: string | null;
-  description: string;
-  inclusions: string[];
-  quantity: number;
-  unit_price: number | string;
-  discount_kind: "percent" | "amount" | null;
-  discount_value: number | string | null;
-}
-
 const DOCUMENT = `id, tenant_id, number, customer_id, bill_to_name, bill_to_phone, bill_to_email, issued_at,
   valid_until, status, responded_at, decline_reason, notes, total, share_token`;
-const WITH_LINES = `${DOCUMENT}, lines:billing_lines (position, offering_id, description, inclusions, quantity, unit_price, discount_kind, discount_value)`;
+const WITH_LINES = `${DOCUMENT}, ${LINES}`;
 
 const toRecord = (r: DocumentRow): QuotationRecord => ({
   id: r.id,
@@ -59,42 +51,9 @@ const toRecord = (r: DocumentRow): QuotationRecord => ({
   shareToken: r.share_token,
 });
 
-const toLine = (l: LineRow): LineInput => ({
-  offeringId: l.offering_id,
-  description: l.description,
-  inclusions: l.inclusions,
-  quantity: l.quantity,
-  unitPrice: Number(l.unit_price),
-  discount: l.discount_kind && l.discount_value != null ? { kind: l.discount_kind, value: Number(l.discount_value) } : null,
-});
+type WithLines = DocumentRow & { lines: LineRow[] };
 
-type WithLines = DocumentRow & { lines: (LineRow & { position: number })[] };
-
-const withLines = (r: WithLines) => ({
-  ...toRecord(r),
-  lines: [...r.lines].sort((a, b) => a.position - b.position).map(toLine),
-});
-
-/** The writable line fields, named one by one for the save function. */
-const toLineJson = (l: LineInput) => ({
-  offeringId: l.offeringId,
-  description: l.description,
-  inclusions: l.inclusions,
-  quantity: l.quantity,
-  unitPrice: l.unitPrice,
-  discount: l.discount ? { kind: l.discount.kind, value: l.discount.value } : null,
-});
-
-const ERRORS: Record<string, string> = {
-  "BILLING:customer_not_found": "That client no longer exists.",
-  "BILLING:not_editable": "This quotation has been answered, so it can't be changed.",
-};
-
-function fail(what: string, error: { message: string }): never {
-  const known = Object.keys(ERRORS).find((code) => error.message.includes(code));
-  if (known) throw new BillingError(ERRORS[known]);
-  throw new Error(`billing: could not ${what}: ${error.message}`);
-}
+const withLines = (r: WithLines) => ({ ...toRecord(r), lines: toLines(r.lines) });
 
 const documents = () => createAdminClient().from("billing_documents");
 
