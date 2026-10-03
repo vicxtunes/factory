@@ -3,10 +3,12 @@ import { notFound } from "next/navigation";
 
 import { BookingStatusBadge, timeSpan } from "@repo/ui/bookings/BookingBits";
 import { BookingStatusButtons } from "@repo/ui/bookings/BookingStatusButtons";
+import { StartProjectButton } from "@repo/ui/projects/ProjectControls";
 import { InvoiceStatusBadge } from "@repo/ui/billing/StatusBadges";
 import { invoices } from "@repo/lib/billing/server";
 import { bookingIdSchema, canEditBooking } from "@repo/lib/bookings/core";
 import { bookings } from "@repo/lib/bookings/server";
+import { projects } from "@repo/lib/projects/server";
 import { requireStudio } from "@repo/lib/studios/server";
 import { formatAmount, formatDay } from "@repo/lib/tenancy/format";
 
@@ -22,6 +24,7 @@ export default async function StudioBookingPage({ params }: { params: Promise<{ 
   // The money behind it: the invoice made from its quotation, if any.
   const invoiceId = b.quotationId ? await invoices.idForQuotation(scope, b.quotationId) : null;
   const invoice = invoiceId ? await invoices.get(scope, invoiceId) : null;
+  const projectId = await projects.idForBooking(scope, b.id);
 
   const details: [string, React.ReactNode][] = [
     ["Client", <Link key="c" href={`/studio/clients/${b.customerId}`} className="hover:underline">{b.customerName}</Link>],
@@ -98,6 +101,13 @@ export default async function StudioBookingPage({ params }: { params: Promise<{ 
             <span className="text-muted">No invoice yet</span>
           )}
         </section>
+      ) : null}
+      {projectId ? (
+        <Link href={`/studio/projects/${projectId}`} className="text-sm font-medium text-brand-600 hover:underline">
+          View its project
+        </Link>
+      ) : b.status === "confirmed" || b.status === "completed" ? (
+        <StartProjectButton bookingId={b.id} basePath="/studio/projects" />
       ) : null}
       <BookingStatusButtons bookingId={b.id} status={b.status} />
     </>
