@@ -90,6 +90,11 @@ The adapter reads them page by page (PostgREST returns at most 1,000 rows per re
 
 ## Reusing it
 
+Studios already do: packages/lib/billing/accounting-source.ts maps a studio's invoices and payments
+onto `AccountingSource`, and `/studio` renders `AccountsOverview` with the studio's own `links`,
+`showHeld={false}` and its currency. A sale's `orderId` / `orderNo` are null when it doesn't bill
+an order. `params.ts` reads the period from a page's URL for both.
+
 Another app, or a second product on the same database, gets Accounts by:
 
 1. implementing `AccountingSource` (`ports.ts`) over its own data, mapped to the core records;

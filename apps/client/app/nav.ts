@@ -4,6 +4,7 @@
 // To add, move or re-gate a page, edit this file only.
 
 import type { HomeBarIcon } from "@repo/ui/HomeBar";
+import { STUDIOS_ENABLED } from "@repo/lib/studios/feature";
 
 export interface ClientNavItem {
   href: string;
@@ -42,6 +43,28 @@ export const CLIENT_NAV: ClientNavSection[] = [
       { href: "/history", label: "History", icon: "history", requiresSignIn: true },
     ],
   },
+  // The client's own photography business (packages/lib/studios). Off until
+  // studios are released (NEXT_PUBLIC_STUDIOS).
+  ...(STUDIOS_ENABLED
+    ? [
+        {
+          id: "business",
+          label: "My Business",
+          items: [
+            { href: "/studio", label: "Studio dashboard", icon: "studio" as const, requiresSignIn: true, exact: true },
+            { href: "/studio/bookings", label: "Bookings", icon: "history" as const, requiresSignIn: true },
+            { href: "/studio/projects", label: "Projects", icon: "orders" as const, requiresSignIn: true },
+            { href: "/studio/tasks", label: "Tasks", icon: "placeOrder" as const, requiresSignIn: true },
+            { href: "/studio/team", label: "Team", icon: "agents" as const, requiresSignIn: true },
+            { href: "/studio/clients", label: "Clients", icon: "clients" as const, requiresSignIn: true },
+            { href: "/studio/offerings", label: "Packages & Services", icon: "products" as const, requiresSignIn: true },
+            { href: "/studio/quotations", label: "Quotations", icon: "invoice" as const, requiresSignIn: true },
+            { href: "/studio/invoices", label: "Invoices", icon: "payment" as const, requiresSignIn: true },
+            { href: "/studio/profile", label: "Studio profile", icon: "settings" as const, requiresSignIn: true },
+          ],
+        },
+      ]
+    : []),
   {
     id: "account",
     label: "Account",

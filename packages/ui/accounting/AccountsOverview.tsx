@@ -9,7 +9,36 @@ import type { OverviewView } from "@repo/lib/accounting/service";
 import { SalesChart } from "./SalesChart";
 import { CHANNEL_LABELS, Card, EmptyState, FigureTile, useMoney } from "./shared";
 
-export function AccountsOverview({ view }: { view: OverviewView }) {
+/** Where the overview's figures lead. `client` is a prefix: the client's id is appended. Null = no link. */
+export interface OverviewLinks {
+  sales: string | null;
+  overdue: string | null;
+  clients: string | null;
+  client: string | null;
+}
+
+/** The business's own Accounts pages (factory app). */
+const ACCOUNTS_LINKS: OverviewLinks = {
+  sales: "/dashboard/accounts/sales",
+  overdue: "/dashboard/accounts/sales?status=overdue&period=all",
+  clients: "/dashboard/accounts/clients",
+  client: "/dashboard/accounts/clients/",
+};
+
+/**
+ * The money overview for one business. Aming's Accounts uses the defaults; a
+ * studio passes its own `links` and hides the wallet tile (studios have no
+ * client wallets).
+ */
+export function AccountsOverview({
+  view,
+  links = ACCOUNTS_LINKS,
+  showHeld = true,
+}: {
+  view: OverviewView;
+  links?: OverviewLinks;
+  showHeld?: boolean;
+}) {
   const money = useMoney();
   const o = view.overview;
   const channels = CHANNELS.filter((c) => o.receivedByChannel[c] > 0);
@@ -23,7 +52,7 @@ export function AccountsOverview({ view }: { view: OverviewView }) {
             label="Total sales"
             value={money(o.sales)}
             hint={`${o.salesCount} invoice${o.salesCount === 1 ? "" : "s"} issued`}
-            href="/dashboard/accounts/sales"
+            href={links.sales ?? undefined}
           />
           <FigureTile
             label="Payments received"
@@ -41,28 +70,30 @@ export function AccountsOverview({ view }: { view: OverviewView }) {
             label="Outstanding client balances"
             value={money(o.outstanding)}
             hint="Owed on invoices"
-            href="/dashboard/accounts/clients"
+            href={links.clients ?? undefined}
           />
           <FigureTile
             label="Overdue"
             value={money(o.overdue)}
             hint={`${o.overdueCount} invoice${o.overdueCount === 1 ? "" : "s"} past due`}
             tone={o.overdueCount > 0 ? "warning" : undefined}
-            href="/dashboard/accounts/sales?status=overdue&period=all"
+            href={links.overdue ?? undefined}
           />
-          <FigureTile
-            label="Client wallet balance"
-            value={money(o.held)}
-            hint={
-              <span className="inline-flex items-center gap-1">
-                Held for clients, not yet a sale
-                <InfoTip label="About client wallet balance">
-                  Wallet top-ups are money received, but they only become sales when a client spends them on an
-                  invoice. So they count in Payments received and here, never twice in sales.
-                </InfoTip>
-              </span>
-            }
-          />
+          {showHeld ? (
+            <FigureTile
+              label="Client wallet balance"
+              value={money(o.held)}
+              hint={
+                <span className="inline-flex items-center gap-1">
+                  Held for clients, not yet a sale
+                  <InfoTip label="About client wallet balance">
+                    Wallet top-ups are money received, but they only become sales when a client spends them on an
+                    invoice. So they count in Payments received and here, never twice in sales.
+                  </InfoTip>
+                </span>
+              }
+            />
+          ) : null}
         </div>
       </div>
 
@@ -96,9 +127,11 @@ export function AccountsOverview({ view }: { view: OverviewView }) {
       <Card
         title="Clients owing the most"
         aside={
-          <Link href="/dashboard/accounts/clients" className="text-xs font-medium text-brand-600 hover:underline">
-            All client accounts
-          </Link>
+          links.clients ? (
+            <Link href={links.clients} className="text-xs font-medium text-brand-600 hover:underline">
+              All client accounts
+            </Link>
+          ) : null
         }
       >
         {o.topOwing.length === 0 ? (
@@ -107,13 +140,14 @@ export function AccountsOverview({ view }: { view: OverviewView }) {
           <ul className="divide-y divide-border text-sm">
             {o.topOwing.map((row) => (
               <li key={row.customerId ?? row.name} className="flex items-center justify-between gap-2 py-2">
-                {row.customerId ? (
-                  <Link href={`/dashboard/accounts/clients/${row.customerId}`} className="truncate font-medium hover:underline">
+                {row.customerId && links.client ? (
+                  <Link href={`${links.client}${row.customerId}`} className="truncate font-medium hover:underline">
                     {row.name}
                   </Link>
                 ) : (
                   <span className="truncate">
-                    {row.name} <span className="text-xs text-muted">(walk-in)</span>
+                    {row.name}
+                    {row.customerId ? null : <span className="text-xs text-muted"> (walk-in)</span>}
                   </span>
                 )}
                 <span className="tnum font-medium">{money(row.outstanding)}</span>

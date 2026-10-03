@@ -29,7 +29,7 @@ function matches(line: SaleLine, filter: SalesFilter): boolean {
 
 function matchesSearch(line: SaleLine, query: string): boolean {
   if (!query) return true;
-  return [line.number, line.orderNo, line.customerName, line.products].some((f) => f.toLowerCase().includes(query));
+  return [line.number, line.orderNo ?? "", line.customerName, line.products].some((f) => f.toLowerCase().includes(query));
 }
 
 /** Sales (invoiced orders) with status filters, search, totals and export. */
@@ -69,7 +69,7 @@ export function SalesTable({
   const exportRows = visible.map((l) => ({
     date: formatDate(l.issuedAt),
     invoice: l.number,
-    order: l.orderNo,
+    order: l.orderNo ?? "",
     client: l.customerName,
     products: l.products,
     value: l.total,
@@ -146,7 +146,7 @@ export function SalesTable({
                   <td className="whitespace-nowrap px-4 py-2 tnum">{formatDate(l.issuedAt)}</td>
                   <td className="whitespace-nowrap px-4 py-2">
                     <p className="font-medium tnum">{l.number}</p>
-                    <p className="text-xs text-muted tnum">Order {l.orderNo}</p>
+                    {l.orderNo ? <p className="text-xs text-muted tnum">Order {l.orderNo}</p> : null}
                   </td>
                   {showCustomer ? (
                     <td className="px-4 py-2">

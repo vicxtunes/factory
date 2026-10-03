@@ -14,7 +14,7 @@ import {
   resolveOrCreateClient,
   type ClientCandidate,
 } from "@repo/lib/clients/dedupe";
-import { parsePhone } from "@repo/lib/clients/phone";
+import { parsePhone } from "@repo/lib/kernel/core/phone";
 import { buildAndInsertOrder } from "@repo/lib/orders/create";
 import { applyCancellation, cleanReason, loadCancellableOrder } from "@repo/lib/orders/cancel";
 import { isPhotobookCategory } from "@repo/lib/orders/photobook";
@@ -47,7 +47,7 @@ async function setClientCookie(clientId: string, name: string): Promise<void> {
 // or a PIN (returning + PIN enabled).
 
 // The client, if any, that holds this phone number — searched in every format
-// it might be stored in (see packages/lib/clients/phone.ts): the DB matcher folds
+// it might be stored in (see packages/lib/kernel/core/phone.ts): the DB matcher folds
 // numbers as Ghana (+233), so "0700768312" and "+256700768312" — the same
 // Ugandan number — would otherwise look like two different clients.
 async function clientByPhone(
