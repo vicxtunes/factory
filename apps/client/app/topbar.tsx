@@ -23,6 +23,8 @@ const PAGE_TITLES: Record<string, string> = {
   "/studio/clients/new": "New client",
   "/studio/offerings": "Packages & Services",
   "/studio/offerings/new": "New package or service",
+  "/studio/quotations": "Quotations",
+  "/studio/quotations/new": "New quotation",
   "/support": "Support",
   "/chat": "Chat",
 };

@@ -6,6 +6,7 @@ import { Button } from "@repo/ui/Button";
 import { Field, Select, TextArea, TextInput } from "@repo/ui/Field";
 import { useCurrencySymbol } from "@repo/lib/currency/CurrencySymbolProvider";
 import { formatMoney } from "@repo/lib/currency/format";
+import { whatsappNumber } from "@repo/lib/kernel/core/phone";
 import {
   applyWalletToInvoice,
   generateInvoice,
@@ -37,13 +38,6 @@ type Mode = "idle" | "pay" | "edit";
 function parseAmount(text: string): number {
   const cleaned = text.replace(/[,\s]/g, "");
   return cleaned === "" ? NaN : Number(cleaned);
-}
-
-/** wa.me wants the number in international form without "+": 0700… → 256700… */
-function whatsappNumber(phone: string | null): string {
-  const digits = (phone ?? "").replace(/\D/g, "");
-  if (digits.startsWith("0")) return `256${digits.slice(1)}`;
-  return digits;
 }
 
 export function StaffInvoicePanel({
