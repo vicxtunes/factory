@@ -8,6 +8,8 @@ import { PeriodPicker } from "@repo/ui/accounting/PeriodPicker";
 import { InvoicesList } from "@repo/ui/billing/InvoicesList";
 import { BookingsList } from "@repo/ui/bookings/BookingBits";
 import { ProjectsBoard } from "@repo/ui/projects/ProjectsBoard";
+import { TasksBoard } from "@repo/ui/tasks/TasksBoard";
+import { TeamList } from "@repo/ui/team/TeamList";
 import { QuotationsList } from "@repo/ui/billing/QuotationsList";
 import { OfferingsList } from "@repo/ui/offerings/OfferingsList";
 import { periodFrom } from "@repo/lib/accounting/params";
@@ -15,6 +17,8 @@ import { localDate } from "@repo/lib/accounting/core/period";
 import { invoices, quotations, studioAccounts } from "@repo/lib/billing/server";
 import { bookings } from "@repo/lib/bookings/server";
 import { projects } from "@repo/lib/projects/server";
+import { tasks } from "@repo/lib/tasks/server";
+import { team } from "@repo/lib/team/server";
 import { CurrencySymbolProvider } from "@repo/lib/currency/CurrencySymbolProvider";
 import { customers } from "@repo/lib/customers/server";
 import { offerings } from "@repo/lib/offerings/server";
@@ -37,7 +41,8 @@ export default async function StudioPage({
   const studio = id.success ? await studios.get(id.data) : null;
   if (!studio) notFound();
   const scope = studioScope(studio);
-  const [active, archived, onSale, offSale, quotes, bills, money, upcoming, work] = await Promise.all([
+  const today = localDate(new Date(), scope.timeZone);
+  const [active, archived, onSale, offSale, quotes, bills, money, upcoming, work, todo, members] = await Promise.all([
     customers.list(scope),
     customers.list(scope, true),
     offerings.list(scope),
@@ -45,9 +50,13 @@ export default async function StudioPage({
     quotations.list(scope),
     invoices.list(scope),
     studioAccounts.overview(scope, periodFrom(await searchParams)),
-    bookings.upcoming(scope, localDate(new Date(), scope.timeZone), 10),
+    bookings.upcoming(scope, today, 10),
     projects.list(scope),
+    tasks.open(scope),
+    team.list(scope),
   ]);
+  const openTasks: Record<string, number> = {};
+  for (const t of todo) if (t.assigneeId) openTasks[t.assigneeId] = (openTasks[t.assigneeId] ?? 0) + 1;
 
   const details: [string, string | null][] = [
     ["Owner", studio.ownerName],
@@ -86,6 +95,14 @@ export default async function StudioPage({
       <section>
         <SectionLabel>Projects</SectionLabel>
         <ProjectsBoard projects={work} scope={scope} basePath={null} />
+      </section>
+      <section>
+        <SectionLabel>Open tasks</SectionLabel>
+        <TasksBoard tasks={todo} team={members.map((m) => ({ id: m.id, name: m.name }))} today={today} scope={scope} editable={false} projectPath={null} />
+      </section>
+      <section>
+        <SectionLabel>Team</SectionLabel>
+        <TeamList members={members} openTasks={openTasks} basePath={null} />
       </section>
       <section>
         <SectionLabel>Clients</SectionLabel>

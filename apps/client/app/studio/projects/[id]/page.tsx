@@ -6,11 +6,15 @@ import { timeSpan } from "@repo/ui/bookings/BookingBits";
 import { PipelineSteps, ProjectHistory } from "@repo/ui/projects/ProjectBits";
 import { ProjectStatusButtons } from "@repo/ui/projects/ProjectControls";
 import { SectionLabel } from "@repo/ui/SectionLabel";
+import { AddTaskForm, TaskRows } from "@repo/ui/tasks/TaskRows";
+import { localDate } from "@repo/lib/accounting/core/period";
 import { invoices } from "@repo/lib/billing/server";
 import { bookings } from "@repo/lib/bookings/server";
 import { canEditProject, projectIdSchema } from "@repo/lib/projects/core";
 import { projects } from "@repo/lib/projects/server";
 import { requireStudio } from "@repo/lib/studios/server";
+import { tasks } from "@repo/lib/tasks/server";
+import { team } from "@repo/lib/team/server";
 import { formatAmount, formatDay } from "@repo/lib/tenancy/format";
 
 export const metadata = { title: "Project — My Studio" };
@@ -26,6 +30,7 @@ export default async function StudioProjectPage({ params }: { params: Promise<{ 
   const booking = p.bookingId ? (await bookings.get(scope, p.bookingId))?.booking ?? null : null;
   const invoiceId = booking?.quotationId ? await invoices.idForQuotation(scope, booking.quotationId) : null;
   const invoice = invoiceId ? await invoices.get(scope, invoiceId) : null;
+  const [work, members] = await Promise.all([tasks.forProject(scope, p.id), team.active(scope)]);
 
   return (
     <>
@@ -84,6 +89,11 @@ export default async function StudioProjectPage({ params }: { params: Promise<{ 
         </div>
       </section>
 
+      <section className="space-y-3">
+        <SectionLabel>Tasks</SectionLabel>
+        <TaskRows tasks={work} today={localDate(new Date(), scope.timeZone)} scope={scope} editable empty="No tasks yet." />
+        {canEditProject(p.status) ? <AddTaskForm projectId={p.id} team={members.map((m) => ({ id: m.id, name: m.name }))} /> : null}
+      </section>
       {p.notes ? (
         <section>
           <SectionLabel>Notes</SectionLabel>
