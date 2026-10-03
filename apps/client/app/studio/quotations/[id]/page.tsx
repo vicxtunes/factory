@@ -6,6 +6,7 @@ import { DocumentShare } from "@repo/ui/billing/DocumentShare";
 import { CreateInvoiceButton } from "@repo/ui/billing/InvoiceButtons";
 import { canEditQuotation, quotationIdSchema } from "@repo/lib/billing/core";
 import { invoices, quotations, quotationUrl } from "@repo/lib/billing/server";
+import { bookings } from "@repo/lib/bookings/server";
 import { requireStudio } from "@repo/lib/studios/server";
 
 export const metadata = { title: "Quotation — My Studio" };
@@ -16,7 +17,10 @@ export default async function StudioQuotationPage({ params }: { params: Promise<
   const id = quotationIdSchema.safeParse((await params).id);
   const quotation = id.success ? await quotations.get(scope, id.data) : null;
   if (!quotation) notFound();
-  const invoiceId = quotation.status === "accepted" ? await invoices.idForQuotation(scope, quotation.id) : null;
+  const [invoiceId, bookingId] =
+    quotation.status === "accepted"
+      ? await Promise.all([invoices.idForQuotation(scope, quotation.id), bookings.idForQuotation(scope, quotation.id)])
+      : [null, null];
 
   return (
     <>
@@ -47,6 +51,15 @@ export default async function StudioQuotationPage({ params }: { params: Promise<
       {quotation.status === "accepted" ? (
         <section className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-surface p-4 shadow-theme-xs print:hidden">
           <p className="text-sm">Accepted by the client.</p>
+          {bookingId ? (
+            <Link href={`/studio/bookings/${bookingId}`} className="text-sm font-medium text-brand-600 hover:underline">
+              View its booking
+            </Link>
+          ) : (
+            <Link href={`/studio/bookings/new?quotation=${quotation.id}`} className="text-sm font-medium text-brand-600 hover:underline">
+              Book it
+            </Link>
+          )}
           {invoiceId ? (
             <Link href={`/studio/invoices/${invoiceId}`} className="text-sm font-medium text-brand-600 hover:underline">
               View its invoice

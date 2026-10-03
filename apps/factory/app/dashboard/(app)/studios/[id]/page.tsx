@@ -6,10 +6,13 @@ import { SectionLabel } from "@repo/ui/SectionLabel";
 import { AccountsOverview } from "@repo/ui/accounting/AccountsOverview";
 import { PeriodPicker } from "@repo/ui/accounting/PeriodPicker";
 import { InvoicesList } from "@repo/ui/billing/InvoicesList";
+import { BookingsList } from "@repo/ui/bookings/BookingBits";
 import { QuotationsList } from "@repo/ui/billing/QuotationsList";
 import { OfferingsList } from "@repo/ui/offerings/OfferingsList";
 import { periodFrom } from "@repo/lib/accounting/params";
+import { localDate } from "@repo/lib/accounting/core/period";
 import { invoices, quotations, studioAccounts } from "@repo/lib/billing/server";
+import { bookings } from "@repo/lib/bookings/server";
 import { CurrencySymbolProvider } from "@repo/lib/currency/CurrencySymbolProvider";
 import { customers } from "@repo/lib/customers/server";
 import { offerings } from "@repo/lib/offerings/server";
@@ -32,7 +35,7 @@ export default async function StudioPage({
   const studio = id.success ? await studios.get(id.data) : null;
   if (!studio) notFound();
   const scope = studioScope(studio);
-  const [active, archived, onSale, offSale, quotes, bills, money] = await Promise.all([
+  const [active, archived, onSale, offSale, quotes, bills, money, upcoming] = await Promise.all([
     customers.list(scope),
     customers.list(scope, true),
     offerings.list(scope),
@@ -40,6 +43,7 @@ export default async function StudioPage({
     quotations.list(scope),
     invoices.list(scope),
     studioAccounts.overview(scope, periodFrom(await searchParams)),
+    bookings.upcoming(scope, localDate(new Date(), scope.timeZone), 10),
   ]);
 
   const details: [string, string | null][] = [
@@ -71,6 +75,10 @@ export default async function StudioPage({
           <PeriodPicker period={money.period} />
           <AccountsOverview view={money} links={NO_LINKS} showHeld={false} />
         </CurrencySymbolProvider>
+      </section>
+      <section>
+        <SectionLabel>Coming up</SectionLabel>
+        <BookingsList bookings={upcoming} scope={scope} basePath={null} empty="Nothing booked ahead." />
       </section>
       <section>
         <SectionLabel>Clients</SectionLabel>
