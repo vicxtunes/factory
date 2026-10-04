@@ -25,6 +25,8 @@ export interface ProjectInput {
   /** The shoot or event day, "yyyy-mm-dd"; null if there isn't one. */
   eventDate: string | null;
   notes: string | null;
+  /** Where the client downloads their photos (Google Drive, Dropbox, …); shown on their portal page. */
+  photosUrl: string | null;
 }
 
 export interface Project extends ProjectInput {

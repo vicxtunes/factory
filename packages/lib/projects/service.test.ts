@@ -58,7 +58,7 @@ function fakes() {
   return { service: new ProjectService(store, directory), rows };
 }
 
-const direct: ProjectInput = { customerId: "grace", title: "Family portraits", eventDate: null, notes: null };
+const direct: ProjectInput = { customerId: "grace", title: "Family portraits", eventDate: null, notes: null, photosUrl: null };
 
 test("start from a confirmed booking: copied, once, with its history", async () => {
   const { service } = fakes();
