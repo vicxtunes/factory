@@ -15,7 +15,8 @@ import type { TenantScope } from "@repo/lib/tenancy/types";
 export interface ClientPortalView {
   clientName: string;
   studioName: string;
-  projects: (Project & { orders: LinkedOrder[] })[];
+  /** With their Aming orders, and their photos page when the studio has delivered some. */
+  projects: (Project & { orders: LinkedOrder[]; photos: { count: number; href: string } | null })[];
   bookings: Booking[];
   /** With their links (/q/<token>, /i/<token>). */
   quotations: (QuotationSummary & { url: string })[];
@@ -81,11 +82,18 @@ export function ClientPortalHome({ view, scope, today, signOut }: { view: Client
                 {p.eventDate ? <p className="text-sm text-muted">{formatDay(scope, p.eventDate)}</p> : null}
               </div>
               <PipelineSteps status={p.status} />
-              {p.photosUrl ? (
-                <a href={p.photosUrl} target="_blank" rel="noreferrer noopener" className={linkButton}>
-                  Download your photos
-                </a>
-              ) : null}
+              <div className="flex flex-wrap gap-2">
+                {p.photos ? (
+                  <a href={p.photos.href} className={linkButton}>
+                    View your photos ({p.photos.count})
+                  </a>
+                ) : null}
+                {p.photosUrl ? (
+                  <a href={p.photosUrl} target="_blank" rel="noreferrer noopener" className={linkButton}>
+                    Download your photos
+                  </a>
+                ) : null}
+              </div>
               {p.orders.length ? (
                 <div className="space-y-2">
                   <p className="text-xs font-medium text-muted">Prints and albums</p>

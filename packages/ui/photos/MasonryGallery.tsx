@@ -65,7 +65,7 @@ export function MasonryGallery({ photos, downloads = false }: { photos: PhotoVie
             </span>
             <div className="flex items-center gap-4">
               {downloads ? (
-                <a href={current.largeUrl} download className="hover:underline">
+                <a href={current.downloadUrl ?? current.largeUrl} download className="hover:underline">
                   Download
                 </a>
               ) : null}

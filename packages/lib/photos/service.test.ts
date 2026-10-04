@@ -20,6 +20,8 @@ function fakes(quotaBytes = 10 * MB) {
   const albums: (Album & { tenantId: string })[] = [];
   const photos: (Photo & { tenantId: string })[] = [];
   const quotas = new Map([["studio-a", quotaBytes], ["studio-b", quotaBytes]]);
+  const projects = new Set(["studio-a/wedding", "studio-b/graduation"]);
+  const blank = { kind: "portfolio" as const, projectId: null, shareToken: null, shareExpiresOn: null, coverPhotoId: null, photoCount: 0, coverThumbKey: null, coverLargeKey: null };
   let n = 0;
   const objects: ObjectStore = {
     putUrl: async (key, type) => `put://${key}?type=${type}`,
@@ -36,13 +38,29 @@ function fakes(quotaBytes = 10 * MB) {
   const repo: PhotoRepository = {
     usage: async (s) => ({ usedBytes: used(s.tenantId), quotaBytes: quotas.get(s.tenantId)! }),
     setQuota: async (t, q) => !!(quotas.has(t) && quotas.set(t, q)),
-    albums: async (s) => albums.filter((a) => a.tenantId === s.tenantId),
+    albums: async (s) => albums.filter((a) => a.tenantId === s.tenantId && a.kind === "portfolio"),
     album: async (s, id) => mine(s, id) ?? null,
     albumBySlug: async (s, slug) => albums.find((a) => a.tenantId === s.tenantId && a.slug === slug) ?? null,
     albumSlugs: async (s) => albums.filter((a) => a.tenantId === s.tenantId).map((a) => a.slug),
     createAlbum: async (s, a) => {
-      albums.push({ ...a, id: `a${albums.length + 1}`, tenantId: s.tenantId, coverPhotoId: null, position: albums.length + 1, photoCount: 0, coverThumbKey: null, coverLargeKey: null });
+      albums.push({ ...blank, ...a, id: `a${albums.length + 1}`, tenantId: s.tenantId, position: albums.length + 1 });
       return `a${albums.length}`;
+    },
+    deliveryFor: async (s, projectId) => albums.find((a) => a.tenantId === s.tenantId && a.kind === "delivery" && a.projectId === projectId) ?? null,
+    createDelivery: async (s, projectId, a) => {
+      if (!projects.has(`${s.tenantId}/${projectId}`)) throw new PhotoError("That project no longer exists.");
+      albums.push({ ...blank, ...a, isPublic: false, kind: "delivery", projectId, id: `a${albums.length + 1}`, tenantId: s.tenantId, position: 0 });
+      return `a${albums.length}`;
+    },
+    setShare: async (s, id, token, expiresOn) => {
+      const a = mine(s, id);
+      if (!a || a.kind !== "delivery") return false;
+      Object.assign(a, { shareToken: token, shareExpiresOn: token ? expiresOn : null });
+      return true;
+    },
+    albumByShareToken: async (token) => {
+      const a = albums.find((x) => x.kind === "delivery" && x.shareToken === token);
+      return a ? { tenantId: a.tenantId, album: a } : null;
     },
     updateAlbum: async (s, id, a) => !!(mine(s, id) && Object.assign(mine(s, id)!, a)),
     setCover: async (s, id, p) => !!(mine(s, id) && Object.assign(mine(s, id)!, { coverPhotoId: p })),
@@ -70,7 +88,7 @@ function fakes(quotaBytes = 10 * MB) {
       return [p.largeKey, p.thumbKey];
     },
   };
-  const service = new PhotoService(repo, objects, () => `p${++n}`);
+  const service = new PhotoService(repo, objects, () => `p${++n}`, () => `token-${++n}`.padEnd(43, "x"));
   /** What the browser does with a ticket: PUT both copies. */
   const upload = (tenantId: string, photoId: string, large: number, thumb: number) => {
     files.set(`incoming/${tenantId}/${photoId}-l.jpg`, large);
@@ -171,4 +189,36 @@ test("one studio can't use, change or delete another's albums or photos", async 
   await assert.rejects(service.updateAlbum(studioB, album, { title: "X", isPublic: false }), PhotoError);
   assert.deepEqual(await service.photos(studioB, album), []);
   assert.equal(photos.length, 1);
+});
+
+test("a project gets one private delivery gallery, kept out of the portfolio", async () => {
+  const { service } = fakes();
+  const id = await service.openDelivery(studioA, "wedding", "Grace wedding photos");
+  assert.equal(await service.openDelivery(studioA, "wedding", "again"), id, "opening it again gives the same gallery");
+  const album = await service.delivery(studioA, "wedding");
+  assert.deepEqual([album?.kind, album?.isPublic, album?.slug], ["delivery", false, "grace-wedding-photos"]);
+  assert.deepEqual(await service.albums(studioA), [], "not listed with portfolio albums");
+  assert.equal(await service.publicAlbum(studioA, "grace-wedding-photos"), null, "never public");
+  await assert.rejects(service.openDelivery(studioA, "graduation", "x"), /project no longer exists/, "another studio's project");
+});
+
+test("share links: a new one replaces the old, they expire, and work only at their own studio", async () => {
+  const { service } = fakes();
+  const id = await service.openDelivery(studioA, "wedding", "Grace wedding photos");
+  const first = await service.share(studioA, id, null);
+  assert.ok(await service.byShareLink(studioA, first, "2026-10-04"));
+  const second = await service.share(studioA, id, "2026-10-10");
+  assert.equal(await service.byShareLink(studioA, first, "2026-10-04"), null, "the old link stops working");
+  assert.ok(await service.byShareLink(studioA, second, "2026-10-10"), "the last day still works");
+  assert.equal(await service.byShareLink(studioA, second, "2026-10-11"), null, "expired");
+  assert.equal(await service.byShareLink(studioB, second, "2026-10-04"), null, "another studio's address");
+  await service.stopSharing(studioA, id);
+  assert.equal(await service.byShareLink(studioA, second, "2026-10-04"), null, "unshared");
+  await assert.rejects(service.share(studioB, id, null), PhotoError, "another studio can't share it");
+});
+
+test("portfolio albums can't be shared by link", async () => {
+  const { service } = fakes();
+  const album = await service.createAlbum(studioA, { title: "Weddings", isPublic: true });
+  await assert.rejects(service.share(studioA, album, null), /no longer exists/);
 });

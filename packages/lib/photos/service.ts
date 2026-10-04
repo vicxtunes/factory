@@ -34,6 +34,8 @@ export class PhotoService {
     private readonly repo: PhotoRepository,
     private readonly objects: ObjectStore,
     private readonly newId: () => string,
+    /** An unguessable secret for a share link. */
+    private readonly newToken: () => string,
   ) {}
 
   async usage(scope: TenantScope): Promise<Usage> {
@@ -88,12 +90,50 @@ export class PhotoService {
     await this.objects.remove(keys);
   }
 
+  // ── Client delivery ────────────────────────────────────────────────────
+
+  /** A project's delivery gallery, if it has one. */
+  async delivery(scope: TenantScope, projectId: string): Promise<AlbumView | null> {
+    const album = await this.repo.deliveryFor(scope, projectId);
+    return album ? this.withCover(album) : null;
+  }
+
+  /** A project's delivery gallery, made the first time (private: never on the public page). */
+  async openDelivery(scope: TenantScope, projectId: string, title: string): Promise<string> {
+    const existing = await this.repo.deliveryFor(scope, projectId);
+    if (existing) return existing.id;
+    const slug = uniqueSlug(albumSlugFromTitle(title), new Set(await this.repo.albumSlugs(scope)));
+    return this.repo.createDelivery(scope, projectId, { title, slug });
+  }
+
+  /** A new share link for a delivery (any earlier one stops working), optionally ending on a day. */
+  async share(scope: TenantScope, albumId: string, expiresOn: string | null): Promise<string> {
+    const token = this.newToken();
+    if (!(await this.repo.setShare(scope, albumId, token, expiresOn))) throw new PhotoError(NO_ALBUM);
+    return token;
+  }
+
+  async stopSharing(scope: TenantScope, albumId: string): Promise<void> {
+    if (!(await this.repo.setShare(scope, albumId, null, null))) throw new PhotoError(NO_ALBUM);
+  }
+
+  /**
+   * The delivery behind a share link, at this studio's address only, while
+   * the link lasts. `today` is the studio's calendar day.
+   */
+  async byShareLink(scope: TenantScope, token: string, today: string): Promise<{ album: AlbumView; photos: PhotoView[] } | null> {
+    const found = await this.repo.albumByShareToken(token);
+    if (!found || found.tenantId !== scope.tenantId) return null;
+    if (found.album.shareExpiresOn !== null && found.album.shareExpiresOn < today) return null;
+    return { album: await this.withCover(found.album), photos: await this.photos(scope, found.album.id, true) };
+  }
+
   // ── Photos ─────────────────────────────────────────────────────────────
 
-  /** An album's photos, in order, ready to show. */
-  async photos(scope: TenantScope, albumId: string): Promise<PhotoView[]> {
+  /** An album's photos, in order, ready to show; `downloads` adds save-as-file links. */
+  async photos(scope: TenantScope, albumId: string, downloads = false): Promise<PhotoView[]> {
     const photos = (await this.repo.photos(scope, albumId)).sort(byPosition);
-    return Promise.all(photos.map((p) => this.view(p)));
+    return Promise.all(photos.map((p, i) => this.view(p, downloads ? `photo-${String(i + 1).padStart(4, "0")}.jpg` : undefined)));
   }
 
   /**
@@ -170,9 +210,13 @@ export class PhotoService {
     await this.objects.remove(keys);
   }
 
-  private async view(p: Photo): Promise<PhotoView> {
-    const [thumbUrl, largeUrl] = await Promise.all([this.objects.getUrl(p.thumbKey, VIEW_SECONDS), this.objects.getUrl(p.largeKey, VIEW_SECONDS)]);
-    return { ...p, thumbUrl, largeUrl };
+  private async view(p: Photo, downloadAs?: string): Promise<PhotoView> {
+    const [thumbUrl, largeUrl, downloadUrl] = await Promise.all([
+      this.objects.getUrl(p.thumbKey, VIEW_SECONDS),
+      this.objects.getUrl(p.largeKey, VIEW_SECONDS),
+      downloadAs ? this.objects.getUrl(p.largeKey, VIEW_SECONDS, downloadAs) : undefined,
+    ]);
+    return { ...p, thumbUrl, largeUrl, ...(downloadUrl ? { downloadUrl } : {}) };
   }
 
   private async withCover(a: Album): Promise<AlbumView> {

@@ -12,6 +12,10 @@ import { PhotoError, type PhotoRepository } from "../../ports";
 
 interface AlbumRow {
   id: string;
+  kind: Album["kind"];
+  project_id: string | null;
+  share_token: string | null;
+  share_expires_on: string | null;
   title: string;
   slug: string;
   is_public: boolean;
@@ -33,7 +37,8 @@ interface PhotoRow {
 }
 
 // Albums and photos are linked twice (a photo's album, an album's cover): name the one meant.
-const ALBUM = "id, title, slug, is_public, cover_photo_id, position, photos!photos_tenant_id_album_id_fkey (id, thumb_key, large_key, position)";
+const ALBUM =
+  "id, kind, project_id, share_token, share_expires_on, title, slug, is_public, cover_photo_id, position, photos!photos_tenant_id_album_id_fkey (id, thumb_key, large_key, position)";
 const PHOTO = "id, album_id, large_key, thumb_key, width, height, bytes, caption, position";
 
 function toAlbum(r: AlbumRow): Album {
@@ -41,6 +46,10 @@ function toAlbum(r: AlbumRow): Album {
   const cover = ordered.find((p) => p.id === r.cover_photo_id) ?? ordered[0];
   return {
     id: r.id,
+    kind: r.kind,
+    projectId: r.project_id,
+    shareToken: r.share_token,
+    shareExpiresOn: r.share_expires_on,
     title: r.title,
     slug: r.slug,
     isPublic: r.is_public,
@@ -65,7 +74,9 @@ const toPhoto = (r: PhotoRow): Photo => ({
   position: r.position,
 });
 
-function fail(what: string, error: { message: string }): never {
+function fail(what: string, error: { code?: string; message: string }): never {
+  // A project from another studio: the composite key caught it.
+  if (error.code === "23503" && error.message.includes("photo_albums_project_fkey")) throw new PhotoError("That project no longer exists.");
   if (error.message.includes("PHOTOS:over_quota")) throw new PhotoError("Not enough space left for that photo. Delete some photos, or ask Aming for more space.");
   throw new Error(`photos: could not ${what}: ${error.message}`);
 }
@@ -91,7 +102,7 @@ export const supabasePhotoRepository: PhotoRepository = {
   },
 
   async albums(scope) {
-    const { data, error } = await db().from("photo_albums").select(ALBUM).eq("tenant_id", scope.tenantId).returns<AlbumRow[]>();
+    const { data, error } = await db().from("photo_albums").select(ALBUM).eq("tenant_id", scope.tenantId).eq("kind", "portfolio").returns<AlbumRow[]>();
     if (error) fail("list albums", error);
     return data.map(toAlbum);
   },
@@ -131,11 +142,57 @@ export const supabasePhotoRepository: PhotoRepository = {
     return data.id;
   },
 
+  async deliveryFor(scope, projectId) {
+    const { data, error } = await db()
+      .from("photo_albums")
+      .select(ALBUM)
+      .eq("tenant_id", scope.tenantId)
+      .eq("kind", "delivery")
+      .eq("project_id", projectId)
+      .maybeSingle<AlbumRow>();
+    if (error) fail("load the project's photos", error);
+    return data ? toAlbum(data) : null;
+  },
+
+  async createDelivery(scope, projectId, album) {
+    const { data, error } = await db()
+      .from("photo_albums")
+      .insert({ tenant_id: scope.tenantId, kind: "delivery", project_id: projectId, title: album.title, slug: album.slug, is_public: false })
+      .select("id")
+      .single<{ id: string }>();
+    if (error) fail("create the project's gallery", error);
+    return data.id;
+  },
+
+  async setShare(scope, albumId, token, expiresOn) {
+    const { data, error } = await db()
+      .from("photo_albums")
+      .update({ share_token: token, share_expires_on: token ? expiresOn : null })
+      .eq("tenant_id", scope.tenantId)
+      .eq("kind", "delivery")
+      .eq("id", albumId)
+      .select("id");
+    if (error) fail("share the gallery", error);
+    return data.length === 1;
+  },
+
+  async albumByShareToken(token) {
+    const { data, error } = await db()
+      .from("photo_albums")
+      .select(`tenant_id, ${ALBUM}`)
+      .eq("kind", "delivery")
+      .eq("share_token", token)
+      .maybeSingle<AlbumRow & { tenant_id: string }>();
+    if (error) fail("open the gallery", error);
+    return data ? { tenantId: data.tenant_id, album: toAlbum(data) } : null;
+  },
+
   async updateAlbum(scope, id, album) {
     const { data, error } = await db()
       .from("photo_albums")
       .update({ title: album.title, is_public: album.isPublic })
       .eq("tenant_id", scope.tenantId)
+      .eq("kind", "portfolio")
       .eq("id", id)
       .select("id");
     if (error) fail("save the album", error);

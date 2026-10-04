@@ -4,6 +4,7 @@ import { ClientPortalHome } from "@repo/ui/studio-portal/ClientPortalHome";
 import { PortalSignOutButton } from "@repo/ui/studio-portal/PortalForms";
 import { localDate } from "@repo/lib/accounting/core/period";
 import { invoices, invoiceUrl, quotations, quotationUrl } from "@repo/lib/billing/server";
+import { photos } from "@repo/lib/photos/server";
 import { bookings } from "@repo/lib/bookings/server";
 import { projects } from "@repo/lib/projects/server";
 import { studioOrders } from "@repo/lib/studio-orders/server";
@@ -33,6 +34,8 @@ export default async function ClientPortalPage({ params }: { params: Promise<{ s
     invoices.list(scope, id),
     studioOrders.forStudio(scope),
   ]);
+  // Their delivered photos: one gallery per project, if the studio made one.
+  const galleries = await Promise.all(theirProjects.map((p) => photos.delivery(scope, p.id)));
   // Their links: the same quotation and invoice pages the studio shares.
   const [quotes, bills] = await Promise.all([
     Promise.all(quoteList.map(async (q) => ({ ...q, url: quotationUrl((await quotations.get(scope, q.id))!.shareToken) }))),
@@ -44,7 +47,11 @@ export default async function ClientPortalPage({ params }: { params: Promise<{ s
       view={{
         clientName: me.name,
         studioName: at.studio.name,
-        projects: theirProjects.map((p) => ({ ...p, orders: allOrders.filter((o) => o.projectId === p.id) })),
+        projects: theirProjects.map((p, i) => ({
+          ...p,
+          orders: allOrders.filter((o) => o.projectId === p.id),
+          photos: galleries[i] && galleries[i].photoCount > 0 ? { count: galleries[i].photoCount, href: `/${slug}/me/photos/${p.id}` } : null,
+        })),
         bookings: theirBookings,
         quotations: quotes,
         invoices: bills,
