@@ -30,7 +30,7 @@ async function shrink(file: File): Promise<Blob> {
 }
 
 /** Picks, shrinks and uploads the studio's logo (to the photo bucket), then shows it. */
-export function LogoUploader({ logoUrl, onUploaded }: { logoUrl: string | null; onUploaded?: () => void }) {
+export function LogoUploader({ logoUrl, optional, onUploaded }: { logoUrl: string | null; optional?: boolean; onUploaded?: () => void }) {
   const router = useRouter();
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
@@ -75,7 +75,12 @@ export function LogoUploader({ logoUrl, onUploaded }: { logoUrl: string | null; 
           {logoUrl ? "Change logo" : "Upload logo"}
         </Button>
         <p className="text-xs text-muted">A square picture works best. JPG or PNG.</p>
-        {error ? <p className="text-sm text-error-600 dark:text-error-400">{error}</p> : null}
+        {error ? (
+          <p className="text-sm text-error-600 dark:text-error-400">
+            {error}
+            {optional ? " The logo is optional: skip it for now and add it later from Studio profile." : null}
+          </p>
+        ) : null}
       </div>
     </div>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type InputHTMLAttributes } from "react";
+import { useMemo, useState, useSyncExternalStore, type InputHTMLAttributes } from "react";
 
 import {
   countryOfPhone,
@@ -15,6 +15,8 @@ import { TextInput } from "./Field";
 
 // Uganda and its neighbours first; every other country below.
 const NEARBY: CountryCode[] = ["UG", "KE", "TZ", "RW", "SS", "CD", "BI"];
+
+const noopSubscribe = () => () => {};
 
 const flag = (code: string) => String.fromCodePoint(...[...code].map((c) => 0x1f1e6 + c.charCodeAt(0) - 65));
 
@@ -33,6 +35,10 @@ export function PhoneInput({
   "value" | "onChange" | "type"
 >) {
   const countries = useMemo(() => phoneCountries(), []);
+  // Country names come from Intl, which can word them differently on the
+  // server and in the browser: list them only once the page is interactive,
+  // so the server's HTML always matches (the box shows flag + code only).
+  const interactive = useSyncExternalStore(noopSubscribe, () => true, () => false);
   const [state, setState] = useState(() => ({ ...phoneForEditing(value || null), emitted: value }));
   // A value set from outside (a form reset, another record): show that one.
   if (value !== state.emitted) setState({ ...phoneForEditing(value || null), emitted: value });
@@ -76,23 +82,31 @@ export function PhoneInput({
           onChange={(e) => update(text, e.target.value as CountryCode)}
           className="absolute inset-0 cursor-pointer opacity-0"
         >
-          {NEARBY.map((code) => {
-            const c = countries.find((x) => x.code === code)!;
-            return (
-              <option key={code} value={code}>
-                {flag(code)} {c.name} ({c.dial})
-              </option>
-            );
-          })}
-          <optgroup label="All countries">
-            {countries
-              .filter((c) => !NEARBY.includes(c.code))
-              .map((c) => (
-                <option key={c.code} value={c.code}>
-                  {flag(c.code)} {c.name} ({c.dial})
-                </option>
-              ))}
-          </optgroup>
+          {!interactive ? (
+            <option value={country}>
+              {flag(country)} {current?.dial}
+            </option>
+          ) : (
+            <>
+              {NEARBY.map((code) => {
+                const c = countries.find((x) => x.code === code)!;
+                return (
+                  <option key={code} value={code}>
+                    {flag(code)} {c.name} ({c.dial})
+                  </option>
+                );
+              })}
+              <optgroup label="All countries">
+                {countries
+                  .filter((c) => !NEARBY.includes(c.code))
+                  .map((c) => (
+                    <option key={c.code} value={c.code}>
+                      {flag(c.code)} {c.name} ({c.dial})
+                    </option>
+                  ))}
+              </optgroup>
+            </>
+          )}
         </select>
       </div>
     </div>
