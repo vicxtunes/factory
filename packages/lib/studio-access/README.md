@@ -30,7 +30,10 @@ apply: the status only changes if it's still what the boss saw.
    `studios/<tenant>/logo-<id>.jpg`. The old one is deleted. Also on Studio profile.
 4. **Address**: the studio's slug (packages/lib/studio-portal).
 5. **Email**: a **6-digit code** by email (Resend).
-   - It works for **10 minutes** and **5 tries**, and another can be sent after **60 seconds**.
+   - It works for **10 minutes** and **5 tries**.
+   - **One code at a time** (emails cost; Resend's free tier is small): asking again while one is
+     pending sends nothing and points to it. A new one can be sent once it's used (right, or 5
+     wrong tries) or expired.
    - Only an **HMAC** of the code is stored (keyed with `APP_SECRET`, bound to the studio and
      purpose), compared in constant time, and it works once.
 6. **Password**: typed twice.
@@ -74,7 +77,7 @@ packages/lib/studio-access/
   core/
     model.ts       StudioStatus, StudioAccess, EmailCode, StudioForReview, ReviewDecision.
     emails.ts      The emails (Aming Space branded HTML + plain text): code, password changed, review. Edit wording here.
-    rules.ts       Code, password and lock rules; passwordProblem; afterDecision; isUnlocked; maskEmail.
+    rules.ts       Code (one at a time), password and lock rules; passwordProblem; afterDecision; isUnlocked; maskEmail.
     schema.ts      zod: details, email, code, new password (twice), unlock, reset, review, upload key.
   ports.ts         AccessStore, Mailer, AccessSecrets, LogoFiles, OwnerNotifier, AccessError.
   service.ts       class StudioAccessService: set-up, logo, codes, password, unlock, reset, review.

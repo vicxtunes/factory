@@ -8,7 +8,7 @@ import { Field, TextInput } from "@repo/ui/Field";
 import { PasswordInput } from "@repo/ui/PasswordInput";
 import { PhoneInput } from "@repo/ui/PhoneInput";
 import { StudioAddressForm } from "@repo/ui/studio-portal/StudioAddressForm";
-import { CODE_DIGITS, PASSWORD_MIN, RESEND_SECONDS, type OnboardingStep } from "@repo/lib/studio-access/core";
+import { CODE_DIGITS, PASSWORD_MIN, type OnboardingStep } from "@repo/lib/studio-access/core";
 import {
   saveStudioDetails,
   sendStudioEmailCode,
@@ -70,6 +70,9 @@ function firstStep(v: SetupView): Step {
   if (v.status === "onboarding" && !Object.values(done).some(Boolean)) return "welcome";
   return (Object.keys(done) as (keyof typeof done)[]).find((s) => !done[s]) ?? "submit";
 }
+
+/** 540 → "9:00". */
+export const clock = (seconds: number) => `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 
 const ErrorText = ({ error }: { error: string | null }) =>
   error ? <p className="text-sm text-error-600 dark:text-error-400">{error}</p> : null;
@@ -232,6 +235,7 @@ function EmailStep({ view, onDone }: { view: SetupView; onDone: () => void }) {
   const [editing, setEditing] = useState(!view.emailVerified);
   const [email, setEmail] = useState(view.ownerEmail ?? "");
   const [sentTo, setSentTo] = useState<string | null>(null);
+  const [alreadySent, setAlreadySent] = useState(false);
   const [code, setCode] = useState("");
   const [wait, setWait] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -249,8 +253,9 @@ function EmailStep({ view, onDone }: { view: SetupView; onDone: () => void }) {
       const res = await sendStudioEmailCode(email);
       if (!res.ok) return setError(res.error);
       setSentTo(res.data.sentTo);
+      setAlreadySent(res.data.alreadySent);
       setCode("");
-      setWait(res.data.resendIn ?? RESEND_SECONDS);
+      setWait(res.data.resendIn);
     });
 
   if (!editing) {
@@ -286,7 +291,7 @@ function EmailStep({ view, onDone }: { view: SetupView; onDone: () => void }) {
           </Field>
         </div>
         <Button type="submit" variant={sentTo ? "secondary" : "primary"} loading={pending && !code} disabled={wait > 0}>
-          {wait > 0 ? `Send again in ${wait}s` : sentTo ? "Send again" : "Send code"}
+          {wait > 0 ? `New code in ${clock(wait)}` : sentTo ? "Send a new code" : "Send code"}
         </Button>
       </form>
       {sentTo ? (
@@ -303,6 +308,9 @@ function EmailStep({ view, onDone }: { view: SetupView; onDone: () => void }) {
             });
           }}
         >
+          {alreadySent ? (
+            <p className="text-sm text-muted">A code was already sent to {sentTo}. Use that one: a new code can only be sent once it&apos;s used or expired.</p>
+          ) : null}
           <Field label={`Code sent to ${sentTo}`} hint="It works for 10 minutes. Check spam if it isn't there.">
             <TextInput
               value={code}

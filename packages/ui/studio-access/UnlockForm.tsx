@@ -9,7 +9,7 @@ import { PasswordInput } from "@repo/ui/PasswordInput";
 import { CODE_DIGITS } from "@repo/lib/studio-access/core";
 import { resetStudioPassword, sendStudioResetCode, unlockStudio } from "@repo/lib/studio-access/actions";
 
-import { NewPasswordFields } from "./OnboardingWizard";
+import { clock, NewPasswordFields } from "./OnboardingWizard";
 
 /**
  * The studio password, asked on each device every 30 days. "Forgot it?"
@@ -21,6 +21,7 @@ export function UnlockForm({ studioName }: { studioName: string }) {
   const [mode, setMode] = useState<"unlock" | "reset">("unlock");
   const [password, setPassword] = useState("");
   const [sentTo, setSentTo] = useState<string | null>(null);
+  const [alreadySent, setAlreadySent] = useState(false);
   const [code, setCode] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -40,6 +41,7 @@ export function UnlockForm({ studioName }: { studioName: string }) {
       const res = await sendStudioResetCode();
       if (!res.ok) return setError(res.error);
       setSentTo(res.data.sentTo);
+      setAlreadySent(res.data.alreadySent);
       setWait(res.data.resendIn);
     });
 
@@ -53,7 +55,7 @@ export function UnlockForm({ studioName }: { studioName: string }) {
           <p className="text-sm text-muted">We&apos;ll email a code to {studioName}&apos;s verified address. Other devices will be signed out.</p>
         </div>
         <Button variant={sentTo ? "secondary" : "primary"} className="w-full" onClick={sendCode} loading={pending && !sentTo} disabled={wait > 0}>
-          {wait > 0 ? `Send again in ${wait}s` : sentTo ? "Send the code again" : "Email me a code"}
+          {wait > 0 ? `New code in ${clock(wait)}` : sentTo ? "Send a new code" : "Email me a code"}
         </Button>
         {sentTo ? (
           <form
@@ -68,6 +70,9 @@ export function UnlockForm({ studioName }: { studioName: string }) {
               });
             }}
           >
+            {alreadySent ? (
+              <p className="text-sm text-muted">A code was already sent to {sentTo}. Use that one: a new code can only be sent once it&apos;s used or expired.</p>
+            ) : null}
             <Field label={`Code sent to ${sentTo}`} hint="It works for 10 minutes. Check spam if it isn't there.">
               <TextInput
                 value={code}

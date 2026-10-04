@@ -7,13 +7,15 @@ import type { OnboardingStep, ReviewDecision, StudioAccess, StudioStatus } from 
 export const CODE_DIGITS = 6;
 export const CODE_MINUTES = 10;
 export const CODE_MAX_TRIES = 5;
-/** How long before another code can be sent. */
-export const RESEND_SECONDS = 60;
 
-/** Seconds until another code may be sent (0: now). */
-export function resendWait(sentAt: string | null, now: Date): number {
-  if (!sentAt) return 0;
-  return Math.max(0, Math.ceil((Date.parse(sentAt) + RESEND_SECONDS * 1000 - now.getTime()) / 1000));
+/**
+ * One code at a time (emails cost, and Resend's free tier is small): another
+ * can be sent only once the pending one is used up (right, or 5 wrong tries)
+ * or has expired. Returns the seconds until then (0: now).
+ */
+export function codeWait(pending: { expiresAt: string } | null, now: Date): number {
+  if (!pending) return 0;
+  return Math.max(0, Math.ceil((Date.parse(pending.expiresAt) - now.getTime()) / 1000));
 }
 
 // ── The studio password ──

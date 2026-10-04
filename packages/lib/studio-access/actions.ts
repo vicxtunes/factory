@@ -15,6 +15,7 @@ import { ownStudio, studioForSetup } from "@repo/lib/studios/server";
 import { codeSchema, detailsSchema, emailSchema, newPasswordSchema, resetSchema, reviewSchema, unlockSchema, uploadKeySchema } from "./core";
 import { AccessError } from "./ports";
 import { setUnlockCookie, studioAccess } from "./server";
+import type { CodeSent } from "./service";
 
 const run = <T>(work: () => Promise<T>) => runAction("studio-access", work);
 const refresh = () => revalidatePath("/studio", "layout");
@@ -44,7 +45,7 @@ export async function confirmStudioLogo(key: unknown): Promise<Result> {
   });
 }
 
-export async function sendStudioEmailCode(email: unknown): Promise<Result<{ sentTo: string; resendIn: number }>> {
+export async function sendStudioEmailCode(email: unknown): Promise<Result<CodeSent>> {
   return run(async () => {
     const { studio } = await ownStudio();
     return studioAccess.sendVerifyCode(studio.id, parseInput(emailSchema, email));
@@ -86,7 +87,7 @@ export async function unlockStudio(password: unknown): Promise<Result> {
   });
 }
 
-export async function sendStudioResetCode(): Promise<Result<{ sentTo: string; resendIn: number }>> {
+export async function sendStudioResetCode(): Promise<Result<CodeSent>> {
   return run(async () => {
     const { studio } = await ownStudio();
     return studioAccess.sendResetCode(studio.id);

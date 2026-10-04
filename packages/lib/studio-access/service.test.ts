@@ -139,32 +139,40 @@ test("onboarding: every step before submitting; then it waits for review and can
   assert.equal(t.one(B).status, "onboarding", "only that studio");
 });
 
-test("email codes: 6 digits by email, 10 minutes, 5 tries, 60 seconds between sends, stored hashed", async () => {
+test("email codes: 6 digits by email, 10 minutes, 5 tries, one at a time, stored hashed", async () => {
   const t = setup();
-  await t.service.sendVerifyCode(A, "amina@mail.com");
+  const first = await t.service.sendVerifyCode(A, "amina@mail.com");
+  assert.deepEqual(first, { sentTo: "amina@mail.com", resendIn: 600, alreadySent: false });
+  assert.equal(t.sent.length, 1);
   assert.equal(t.sent.at(-1)!.to, "amina@mail.com");
   assert.match(t.sent.at(-1)!.text, /123456/);
   assert.ok(!JSON.stringify([...t.codes.values()]).includes('"123456"'), "only a hash is kept");
-  await assert.rejects(t.service.sendVerifyCode(A, "amina@mail.com"), /Wait 60 seconds/);
-  t.tick(30_000);
-  await assert.rejects(t.service.sendVerifyCode(A, "amina@mail.com"), /Wait 30 seconds/);
+
+  // One code at a time: asking again sends nothing and points to the pending one.
+  t.tick(4 * 60_000);
+  const again = await t.service.sendVerifyCode(A, "other@mail.com");
+  assert.deepEqual(again, { sentTo: maskEmail("amina@mail.com"), resendIn: 360, alreadySent: true });
+  assert.equal(t.sent.length, 1, "no second email");
 
   await assert.rejects(t.service.verifyEmail(B, "123456"), /Ask for a code first/, "a code is for its own studio");
   for (let i = 0; i < 4; i++) await assert.rejects(t.service.verifyEmail(A, "000000"), /code is wrong/);
   await assert.rejects(t.service.verifyEmail(A, "000000"), /Too many wrong codes/);
   await assert.rejects(t.service.verifyEmail(A, "123456"), /Ask for a code first/, "5 wrong tries use it up");
 
-  t.tick(31_000);
+  // Used up: a new one can be sent straight away.
   t.setNextCode("654321");
-  await t.service.sendVerifyCode(A, "amina@mail.com");
+  assert.equal((await t.service.sendVerifyCode(A, "amina@mail.com")).alreadySent, false);
+  assert.equal(t.sent.length, 2);
   t.tick(10 * 60_000);
   await assert.rejects(t.service.verifyEmail(A, "654321"), /expired/);
 
-  t.tick(61_000);
+  // Expired: a new one too.
   await t.service.sendVerifyCode(A, "new@mail.com");
+  assert.equal(t.sent.length, 3);
   await t.service.verifyEmail(A, "654321");
   assert.equal(t.one(A).ownerEmail, "new@mail.com");
   await assert.rejects(t.service.verifyEmail(A, "654321"), /Ask for a code first/, "a code works once");
+  assert.equal((await t.service.sendVerifyCode(A, "new@mail.com")).alreadySent, false, "used: a new one can be sent");
 });
 
 test("the password unlocks a device for 30 days; 5 wrong tries lock it for 15 minutes", async () => {
@@ -192,7 +200,6 @@ test("forgot password: a code to the verified email; the new password signs othe
   await assert.rejects(t.service.sendResetCode(A), /no verified email/);
   await onboard(t);
   const otherDevice = await t.service.unlock(A, "Golden-hour-77");
-  t.tick(61_000);
   t.setNextCode("777777");
   const { sentTo } = await t.service.sendResetCode(A);
   assert.equal(sentTo, maskEmail("amina@mail.com"));
