@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 
 import { HomeBar, type HomeBarLink } from "@repo/ui/HomeBar";
 import { NotificationBell } from "@repo/ui/notifications/NotificationBell";
@@ -47,11 +48,17 @@ const ICONS: Partial<Record<StudioNavItem["icon"], typeof DashboardIcon>> = {
 };
 
 function StudioMark({ brand, size }: { brand: StudioBrand; size: "sm" | "md" }) {
+  const [broken, setBroken] = useState(false);
+  const img = useRef<HTMLImageElement>(null);
+  // A logo that failed before the page was interactive never fires onError.
+  useEffect(() => {
+    if (img.current?.complete && img.current.naturalWidth === 0) setBroken(true);
+  }, []);
   const box = size === "md" ? "h-9 w-9 text-sm" : "h-7 w-7 text-xs";
-  if (brand.logoUrl) {
+  if (brand.logoUrl && !broken) {
     // A studio's own upload (R2): a plain img, so no remote-image config is needed.
     // eslint-disable-next-line @next/next/no-img-element
-    return <img src={brand.logoUrl} alt="" className={`${box} shrink-0 rounded-lg object-cover`} />;
+    return <img ref={img} src={brand.logoUrl} alt="" onError={() => setBroken(true)} className={`${box} shrink-0 rounded-lg object-cover`} />;
   }
   const initials = brand.name
     .split(/\s+/)

@@ -14,7 +14,7 @@ import { customers } from "@repo/lib/customers/server";
 import { parseInput, type Result } from "@repo/lib/kernel/core";
 import { whatsappNumber } from "@repo/lib/kernel/core/phone";
 import { runAction } from "@repo/lib/kernel/server/action";
-import { studioOfCaller } from "@repo/lib/studios/server";
+import { studioForSetup, studioOfCaller } from "@repo/lib/studios/server";
 
 import { INVITE_DAYS, inviteTokenSchema, pinSchema, signInSchema, slugSchema } from "./core";
 import { PortalError } from "./ports";
@@ -54,7 +54,7 @@ export async function portalSignOut(slug: unknown): Promise<Result> {
 /** The studio owner sets their studio's address. The old one keeps redirecting. */
 export async function setStudioSlug(slug: unknown): Promise<Result> {
   return runAction("studio-portal", async () => {
-    const { scope } = await studioOfCaller();
+    const { scope } = await studioForSetup();
     await portal.setSlug(scope, parseInput(slugSchema, slug));
     revalidatePath("/studio", "layout");
   });

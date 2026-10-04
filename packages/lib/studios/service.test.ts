@@ -25,6 +25,9 @@ function memoryStore() {
         locale: "en-UG",
         timeZone: "Africa/Kampala",
         createdAt: new Date(Date.UTC(2026, 9, 3, 0, 0, clock++)).toISOString(),
+        status: "onboarding",
+        logoKey: null,
+        passwordSetAt: null,
       };
       rows.set(studio.id, studio);
       return studio;

@@ -5,6 +5,7 @@ import { CustomersList } from "@repo/ui/customers/CustomersList";
 import { QuotaForm } from "@repo/ui/photos/QuotaForm";
 import { UsageBar } from "@repo/ui/photos/UsageBar";
 import { SectionLabel } from "@repo/ui/SectionLabel";
+import { ReviewCard } from "@repo/ui/studio-access/ReviewCard";
 import { AccountsOverview } from "@repo/ui/accounting/AccountsOverview";
 import { PeriodPicker } from "@repo/ui/accounting/PeriodPicker";
 import { InvoicesList } from "@repo/ui/billing/InvoicesList";
@@ -22,6 +23,7 @@ import { bookings } from "@repo/lib/bookings/server";
 import { projects } from "@repo/lib/projects/server";
 import { photos } from "@repo/lib/photos/server";
 import { studioOrders } from "@repo/lib/studio-orders/server";
+import { studioAccess } from "@repo/lib/studio-access/server";
 import { portal, studioUrl } from "@repo/lib/studio-portal/server";
 import { tasks } from "@repo/lib/tasks/server";
 import { team } from "@repo/lib/team/server";
@@ -48,6 +50,7 @@ export default async function StudioPage({
   if (!studio) notFound();
   const scope = studioScope(studio);
   const today = localDate(new Date(), scope.timeZone);
+  const review = await studioAccess.reviewOne(studio.id);
   const [active, archived, onSale, offSale, quotes, bills, money, upcoming, work, todo, members, amingOrders, slug, usage] = await Promise.all([
     customers.list(scope),
     customers.list(scope, true),
@@ -83,6 +86,13 @@ export default async function StudioPage({
         </Link>
         <h2 className="mt-1 text-xl font-semibold">{studio.name}</h2>
       </div>
+      {review ? (
+        <ReviewCard
+          studio={review}
+          publicUrl={slug ? studioUrl(slug) : null}
+          dateFormat={new Intl.DateTimeFormat(scope.locale, { timeZone: scope.timeZone, day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" })}
+        />
+      ) : null}
       <dl className="grid gap-4 rounded-2xl border border-border bg-surface p-4 shadow-theme-xs sm:grid-cols-2 sm:p-5">
         {details.map(([label, value]) => (
           <div key={label}>

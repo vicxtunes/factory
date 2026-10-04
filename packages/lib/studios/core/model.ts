@@ -3,6 +3,7 @@
 // A studio is a tenant (packages/lib/tenancy) owned by one Aming client: the
 // client's own photography business inside the system.
 
+import type { StudioStatus } from "@repo/lib/studio-access/core";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
 /** What the studio shows on its documents and to its customers. */
@@ -22,6 +23,11 @@ export interface Studio extends StudioProfile {
   locale: string;
   timeZone: string;
   createdAt: string;
+  /** Where it is in onboarding and review (packages/lib/studio-access). Only an active studio works. */
+  status: StudioStatus;
+  logoKey: string | null;
+  /** When the studio password was set: a device's unlock must carry the same. */
+  passwordSetAt: string | null;
 }
 
 /** The scope every studio-owned record is read and written in. */
