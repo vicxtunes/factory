@@ -23,7 +23,7 @@ test("slug rules", () => {
 test("PINs are exactly 4 digits; phones are stored in one form", () => {
   assert.equal(parseInput(pinSchema, "0420"), "0420");
   for (const bad of ["123", "12345", "12a4", ""]) assert.throws(() => parseInput(pinSchema, bad), /4-digit/);
-  assert.equal(parseInput(signInSchema, { phone: "+256 772 123 456", pin: "1234" }).phone, "0772123456");
+  assert.equal(parseInput(signInSchema, { phone: "+256 772 123 456", pin: "1234" }).phone, "+256772123456");
   assert.throws(() => parseInput(signInSchema, { phone: "call me", pin: "1234" }), /valid phone/);
 });
 
