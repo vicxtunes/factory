@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 export default async function StudioLayout({ children }: { children: React.ReactNode }) {
   const { session } = await requireStudio();
   return (
-    <ClientShell session={session}>
+    <ClientShell signedIn name={session.name} avatarUrl={session.avatarUrl}>
       <div className="mx-auto max-w-5xl space-y-4">{children}</div>
     </ClientShell>
   );

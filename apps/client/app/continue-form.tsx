@@ -8,20 +8,18 @@ import { Field, TextInput } from "@repo/ui/Field";
 import { PasswordInput } from "@repo/ui/PasswordInput";
 
 import { checkAccount, continueLogin } from "./actions";
-import { NameFields } from "./confirm-name";
 
 type Step = { kind: "phone" } | { kind: "new"; phone: string } | { kind: "pin"; phone: string };
 
 // Phone-first, single entry point: no PIN is required by default (security
 // is opt-in — see /settings). Enter a phone number; a match with
 // no PIN set logs straight in, a match with a PIN set asks for it, and no
-// match at all asks for their first and last name to create the account.
+// match at all asks for a name to create the account.
 export function ContinueForm() {
   const router = useRouter();
   const [step, setStep] = useState<Step>({ kind: "phone" });
   const [phone, setPhone] = useState("");
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [pin, setPin] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -48,7 +46,7 @@ export function ContinueForm() {
   function submitNew() {
     setError(null);
     start(async () => {
-      const res = await continueLogin({ phone, firstName, lastName, email });
+      const res = await continueLogin({ phone, name, email });
       if (res.ok) router.refresh();
       else setError(res.error);
     });
@@ -65,8 +63,7 @@ export function ContinueForm() {
 
   function useDifferentNumber() {
     setStep({ kind: "phone" });
-    setFirstName("");
-    setLastName("");
+    setName("");
     setEmail("");
     setPin("");
     setError(null);
@@ -84,7 +81,9 @@ export function ContinueForm() {
         <p className="text-sm text-muted">
           We don&apos;t have an account for {step.phone} yet — what&apos;s your name?
         </p>
-        <NameFields firstName={firstName} lastName={lastName} onFirstName={setFirstName} onLastName={setLastName} />
+        <Field label="Your name">
+          <TextInput value={name} onChange={(e) => setName(e.target.value)} required autoFocus />
+        </Field>
         <Field label="Email" hint="Optional">
           <TextInput type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
         </Field>

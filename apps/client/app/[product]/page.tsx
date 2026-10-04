@@ -45,7 +45,7 @@ export default async function ProductPage({ params }: Params) {
   if (!found) notFound();
 
   return (
-    <ClientShell session={session}>
+    <ClientShell signedIn={!!session} name={session?.name ?? null} avatarUrl={session?.avatarUrl ?? null}>
       <ProductPageView
         product={found.product}
         category={found.category}

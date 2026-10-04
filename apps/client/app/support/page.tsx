@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 export default async function SupportPage() {
   const session = await getClientSession();
   return (
-    <ClientShell session={session}>
+    <ClientShell signedIn={!!session} name={session?.name ?? null} avatarUrl={session?.avatarUrl ?? null}>
       <ClientSupportContent />
     </ClientShell>
   );
