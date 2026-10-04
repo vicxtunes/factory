@@ -19,7 +19,7 @@ export interface Email {
 
 /** Where the emails' links and logo point. */
 export interface EmailLinks {
-  /** The studio workspace. */
+  /** The studio workspace: a full https address. Anything else (e.g. "/studio" when the app's address isn't set) is left out of the email rather than sent as a dead link. */
   workspace: string;
   /** The logo's image source: `cid:${LOGO_CID}` (embedded by the mailer), a public https address, or null for the name only. */
   logo: string | null;
@@ -34,6 +34,9 @@ const paragraphs = (text: string) =>
     .map((p) => `<p style="margin:0 0 16px;font-size:15px;line-height:1.55;color:#374151">${escape(p).replace(/\n/g, "<br>")}</p>`)
     .join("");
 
+/** A link only if it's a full address: a bare path is dead in an email. */
+const absolute = (href: string) => /^https?:\/\//.test(href);
+
 const FOOTER = `This is an automatic email from ${BRAND}. Replies to it aren't read.`;
 
 /** The frame every email shares: the brand, a white card, the footer. */
@@ -41,7 +44,7 @@ function layout(links: EmailLinks, body: string, button?: { label: string; href:
   const logo = links.logo
     ? `<img src="${escape(links.logo)}" width="32" height="32" alt="" style="display:inline-block;vertical-align:middle;border-radius:8px;border:0">&nbsp;&nbsp;`
     : "";
-  const cta = button
+  const cta = button && absolute(button.href)
     ? `<p style="margin:24px 0 8px"><a href="${escape(button.href)}" style="display:inline-block;background:${ORANGE};color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;padding:12px 22px;border-radius:10px">${escape(button.label)}</a></p>`
     : "";
   return `<!doctype html>
@@ -80,7 +83,7 @@ export function passwordChangedEmail(links: EmailLinks, studio: string): Email {
   const body = `The password for ${studio} was just changed, and every other device was signed out.\n\nIf this wasn't you, reset it again now and contact ${BRAND}.`;
   return {
     subject: `Your ${studio} password was changed`,
-    text: `${body}\n\nOpen your studio: ${links.workspace}\n\n${FOOTER}`,
+    text: `${body}${absolute(links.workspace) ? `\n\nOpen your studio: ${links.workspace}` : ""}\n\n${FOOTER}`,
     html: layout(links, heading("Your studio password was changed") + paragraphs(body), { label: "Open your studio", href: links.workspace }),
   };
 }
@@ -107,7 +110,7 @@ export function reviewEmail(links: EmailLinks, studio: string, decision: ReviewD
   }[decision];
   return {
     subject: content.subject,
-    text: `${content.body}\n\n${content.button}: ${links.workspace}\n\n${FOOTER}`,
+    text: `${content.body}${absolute(links.workspace) ? `\n\n${content.button}: ${links.workspace}` : ""}\n\n${FOOTER}`,
     html: layout(links, heading(content.subject) + paragraphs(content.body), { label: content.button, href: links.workspace }),
   };
 }

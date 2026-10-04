@@ -279,3 +279,14 @@ test("emails: Aming Space branding, a plain-text copy, and names can't inject HT
   assert.ok(email.html.includes("&lt;b&gt;Amina&lt;/b&gt; &amp; Co") && !email.html.includes("<b>Amina</b>"));
   assert.match(email.html, /Replies to it aren't read|Replies to it aren&#39;t read/);
 });
+
+test("emails never carry a dead link: a bare path (the app's address not set) is left out", async () => {
+  const { reviewEmail, passwordChangedEmail } = await import("./core");
+  const bare = { workspace: "/studio", logo: null };
+  for (const email of [reviewEmail(bare, "Amina Studio", "send_back", "Change the logo"), passwordChangedEmail(bare, "Amina Studio")]) {
+    assert.ok(!email.text.includes("/studio") && !email.html.includes('href="/studio"'), email.subject);
+  }
+  const full = reviewEmail({ workspace: "https://www.amingspace.com/studio", logo: null }, "Amina Studio", "send_back", "Change the logo");
+  assert.match(full.text, /Make the changes: https:\/\/www\.amingspace\.com\/studio/);
+  assert.match(full.html, /href="https:\/\/www\.amingspace\.com\/studio"/);
+});
