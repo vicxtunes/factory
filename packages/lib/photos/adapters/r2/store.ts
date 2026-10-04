@@ -25,10 +25,11 @@ function settings() {
 /** A key as a URL path: each segment encoded, slashes kept. */
 const path = (key: string) => key.split("/").map(encodeURIComponent).join("/");
 
-async function presign(method: "GET" | "PUT", key: string, expires: number, headers: Record<string, string> = {}): Promise<string> {
+async function presign(method: "GET" | "PUT", key: string, expires: number, headers: Record<string, string> = {}, params: Record<string, string> = {}): Promise<string> {
   const { base, client } = settings();
   const url = new URL(`${base}/${path(key)}`);
   url.searchParams.set("X-Amz-Expires", String(expires));
+  for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
   // allHeaders: sign the headers given too (an upload's content type), not just the host.
   const signed = await client.sign(new Request(url, { method, headers }), { aws: { signQuery: true, allHeaders: true } });
   return signed.url;
@@ -43,7 +44,9 @@ export const r2ObjectStore: ObjectStore = {
   // The content type is signed, so the upload must use it.
   putUrl: (key, contentType, expires) => presign("PUT", key, expires, { "content-type": contentType }),
 
-  getUrl: (key, expires) => presign("GET", key, expires),
+  // response-content-disposition is signed too: the browser saves the file instead of opening it.
+  getUrl: (key, expires, downloadAs) =>
+    presign("GET", key, expires, {}, downloadAs ? { "response-content-disposition": `attachment; filename="${downloadAs.replace(/[^\w.-]/g, "_")}"` } : {}),
 
   async size(key) {
     const res = await call("HEAD", key);

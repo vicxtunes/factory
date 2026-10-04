@@ -12,9 +12,23 @@ import { parseInput, type Result } from "@repo/lib/kernel/core";
 import { runAction } from "@repo/lib/kernel/server/action";
 import { studioIdSchema } from "@repo/lib/studios/core";
 import { canViewAllStudios } from "@repo/lib/studios/policy";
+import { projects } from "@repo/lib/projects/server";
+import { portal, studioUrl } from "@repo/lib/studio-portal/server";
 import { studioOfCaller } from "@repo/lib/studios/server";
 
-import { albumIdSchema, albumInputSchema, captionSchema, photoIdSchema, quotaGbSchema, uploadConfirmSchema, uploadStartSchema, type UploadTicket } from "./core";
+import { projectIdSchema } from "@repo/lib/projects/core";
+
+import {
+  albumIdSchema,
+  albumInputSchema,
+  captionSchema,
+  photoIdSchema,
+  quotaGbSchema,
+  shareExpirySchema,
+  uploadConfirmSchema,
+  uploadStartSchema,
+  type UploadTicket,
+} from "./core";
 import { PhotoError } from "./ports";
 import { photos } from "./server";
 
@@ -83,6 +97,39 @@ export async function deletePhoto(id: unknown): Promise<Result> {
   return runAction("photos", async () => {
     const { scope } = await studioOfCaller();
     await photos.deletePhoto(scope, parseInput(photoIdSchema, id));
+    touched();
+  });
+}
+
+/** A project's photo gallery for its client, made the first time. */
+export async function openProjectGallery(projectId: unknown): Promise<Result<string>> {
+  return runAction("photos", async () => {
+    const { scope } = await studioOfCaller();
+    const id = parseInput(projectIdSchema, projectId);
+    const view = await projects.get(scope, id);
+    if (!view) throw new PhotoError("That project no longer exists.");
+    const albumId = await photos.openDelivery(scope, id, `${view.project.title} photos`);
+    touched();
+    return albumId;
+  });
+}
+
+/** A new share link for a project's gallery (the old one stops working), with an optional last day. */
+export async function shareProjectGallery(albumId: unknown, expiresOn: unknown): Promise<Result<string>> {
+  return runAction("photos", async () => {
+    const { scope } = await studioOfCaller();
+    const slug = await portal.currentSlug(scope.tenantId);
+    if (!slug) throw new PhotoError("Choose your studio's address first, on Studio profile.");
+    const token = await photos.share(scope, parseInput(albumIdSchema, albumId), parseInput(shareExpirySchema, expiresOn));
+    touched();
+    return studioUrl(`${slug}/g/${token}`);
+  });
+}
+
+export async function stopSharingProjectGallery(albumId: unknown): Promise<Result> {
+  return runAction("photos", async () => {
+    const { scope } = await studioOfCaller();
+    await photos.stopSharing(scope, parseInput(albumIdSchema, albumId));
     touched();
   });
 }

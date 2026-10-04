@@ -5,6 +5,7 @@ import { InvoiceStatusBadge } from "@repo/ui/billing/StatusBadges";
 import { timeSpan } from "@repo/ui/bookings/BookingBits";
 import { PipelineSteps, ProjectHistory } from "@repo/ui/projects/ProjectBits";
 import { ProjectStatusButtons } from "@repo/ui/projects/ProjectControls";
+import { ProjectGalleryPanel } from "@repo/ui/photos/ProjectGalleryPanel";
 import { SectionLabel } from "@repo/ui/SectionLabel";
 import { LinkedOrdersList, OrderFromAming } from "@repo/ui/studio-orders/AmingOrders";
 import { AddTaskForm, TaskRows } from "@repo/ui/tasks/TaskRows";
@@ -13,7 +14,10 @@ import { invoices } from "@repo/lib/billing/server";
 import { bookings } from "@repo/lib/bookings/server";
 import { canEditProject, projectIdSchema } from "@repo/lib/projects/core";
 import { projects } from "@repo/lib/projects/server";
+import { customers } from "@repo/lib/customers/server";
+import { photos } from "@repo/lib/photos/server";
 import { studioOrders } from "@repo/lib/studio-orders/server";
+import { portal, studioUrl } from "@repo/lib/studio-portal/server";
 import { requireStudio } from "@repo/lib/studios/server";
 import { tasks } from "@repo/lib/tasks/server";
 import { team } from "@repo/lib/team/server";
@@ -32,12 +36,17 @@ export default async function StudioProjectPage({ params }: { params: Promise<{ 
   const booking = p.bookingId ? (await bookings.get(scope, p.bookingId))?.booking ?? null : null;
   const invoiceId = booking?.quotationId ? await invoices.idForQuotation(scope, booking.quotationId) : null;
   const invoice = invoiceId ? await invoices.get(scope, invoiceId) : null;
-  const [work, members, amingOrders, choices] = await Promise.all([
+  const [work, members, amingOrders, choices, gallery, usage, slug, client] = await Promise.all([
     tasks.forProject(scope, p.id),
     team.active(scope),
     studioOrders.forProject(scope, p.id),
     studioOrders.choices(scope, studio.ownerClientId),
+    photos.delivery(scope, p.id),
+    photos.usage(scope),
+    portal.currentSlug(scope.tenantId),
+    customers.get(scope, p.customerId),
   ]);
+  const galleryPhotos = gallery ? await photos.photos(scope, gallery.id) : [];
 
   return (
     <>
@@ -100,6 +109,17 @@ export default async function StudioProjectPage({ params }: { params: Promise<{ 
         <SectionLabel>Tasks</SectionLabel>
         <TaskRows tasks={work} today={localDate(new Date(), scope.timeZone)} scope={scope} editable empty="No tasks yet." />
         {canEditProject(p.status) ? <AddTaskForm projectId={p.id} team={members.map((m) => ({ id: m.id, name: m.name }))} /> : null}
+      </section>
+      <section className="space-y-3">
+        <SectionLabel>Client photos</SectionLabel>
+        <ProjectGalleryPanel
+          projectId={p.id}
+          album={gallery}
+          photos={galleryPhotos}
+          usage={usage}
+          shareUrl={gallery?.shareToken && slug ? studioUrl(`${slug}/g/${gallery.shareToken}`) : null}
+          clientPhone={client?.phone ?? null}
+        />
       </section>
       <section className="space-y-3">
         <SectionLabel>Aming orders</SectionLabel>

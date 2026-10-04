@@ -24,6 +24,25 @@ Generic and tenant-scoped.
 - **Private bucket:** pages show photos through signed links that expire after an hour.
 - **Deleting a photo or an album deletes its files** and frees the space at once.
 
+## Client photo delivery (7b-2)
+
+A project's finished photos go in a private **delivery album**: the same photos, storage and
+allowance as portfolio albums, but **never public** (the database enforces it).
+- **The studio** (a project's page → **Client photos**):
+  - **Create photo gallery** (one per project), upload, manage.
+  - **Share by link**: a new secret each time, so making a new link kills the old one, with an
+    optional last day, **Send on WhatsApp**, and **Stop sharing**.
+- **The client** sees **View your photos (N)** on their portal page (`/<studio>/me`), opening
+  `/<studio>/me/photos/<project>`: only their own projects, signed in with phone + PIN.
+- **Anyone with the link** opens `/<studio>/g/<secret>`. It needs no sign-in, works only at that
+  studio's address and until its last day (the studio's calendar).
+- **Downloads:**
+  - Each photo's **Download** link is signed with `response-content-disposition: attachment`, so
+    browsers save `photo-0001.jpg` instead of opening it.
+  - **Download all** zips in the browser, in parts of 50 photos, nothing recompressed. A whole
+    wedding is too big for one server function or one phone download.
+- A pasted **Photos link** (Google Drive…) on a project still works alongside.
+
 ## The allowance
 
 - Every studio starts with **1 GB** (`tenants.storage_quota_bytes`). The boss sets it per studio
@@ -40,6 +59,9 @@ Generic and tenant-scoped.
 | `/studio/showroom/<album>` | Studio owner | Name, public or hidden, shareable address, delete; upload (progress per photo); cover, caption, delete per photo |
 | `/<studio>` (public page) | Anyone | **3D showroom** of the public albums' covers (scroll or swipe), "Our work" album grid |
 | `/<studio>/gallery/<album>` | Anyone | The album as a standalone **masonry** page: tap for full screen, swipe, keyboard |
+| A project's page → **Client photos** | Studio owner | Create the gallery, upload, manage, share by link (expiry, WhatsApp, stop) |
+| `/<studio>/me/photos/<project>` | The signed-in client | Their photos: masonry, full screen, Download, Download all |
+| `/<studio>/g/<secret>` | Anyone with the link | The same, without signing in, while the link lasts |
 | Staff app → People → Studios → a studio | Boss | The studio's usage, and its allowance (GB) |
 
 The 3D scene is Aming's own `apps/client/app/showroom-scene.tsx`, unchanged: it already takes any
@@ -97,9 +119,11 @@ packages/lib/photos/
   adapters/r2/store.ts               R2 over its S3 API, signed with aws4fetch (no AWS SDK).
   adapters/supabase/repository.ts    photo_albums, photos, photos_record().
   server.ts, actions.ts
-packages/ui/photos/  browser.ts (resize, signed PUT), PhotoUploader, UsageBar, AlbumControls,
+packages/ui/photos/  browser.ts (resize, signed PUT), PhotoUploader, UsageBar, AlbumControls, DownloadAll,
+                     ProjectGalleryPanel,
                      MasonryGallery (+ full-screen viewer), QuotaForm.
 supabase/migrations/20261003200000_studio_photos.sql
+supabase/migrations/20261004100000_photo_deliveries.sql   delivery albums, share links
 ```
 
 ## Testing
@@ -121,3 +145,9 @@ supabase/migrations/20261003200000_studio_photos.sql
   - **an ambiguous album ↔ photos link** (album and cover), so the relationship is now named;
   - **upload links that didn't sign the content type**, now signed (`allHeaders`).
 - moto doesn't check signatures, so the content-type enforcement itself is R2's.
+- Deliveries (`npm test` and the same Postgres + moto run):
+  - One private gallery per project; another studio's project refused by the database.
+  - Kept out of the portfolio and never public; a portfolio album can't be shared.
+  - The same allowance; download links really save as files.
+  - Share links expire, are replaced by a new one, and work only at their own studio.
+  - Studio B refused.

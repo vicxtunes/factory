@@ -37,5 +37,11 @@ export const uploadConfirmSchema = z.object({
 
 export const captionSchema = optionalText(200, "Keep the caption under 200 characters.");
 
+/** A share link's last day, or none. */
+export const shareExpirySchema = z.iso.date("Choose a valid date.").nullable();
+
+/** A delivery's share link secret as made by the server: base64url, 43 characters for 32 bytes. */
+export const shareTokenSchema = z.string().regex(/^[A-Za-z0-9_-]{32,128}$/, "This link isn't valid.");
+
 /** The boss sets a studio's allowance in whole GB. */
 export const quotaGbSchema = z.number("Enter a number of GB.").int("Use whole GB.").min(0, "Can't be negative.").max(1000, "That's more than 1 TB.");

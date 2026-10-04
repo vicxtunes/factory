@@ -4,8 +4,18 @@
 // within a storage allowance. Every photo is two files, both resized in the
 // browser: a large copy for full screen and a small one for grids.
 
+/** A portfolio album (the studio's own work, maybe public) or a delivery (a project's photos for its client; never public). */
+export type AlbumKind = "portfolio" | "delivery";
+
 export interface Album {
   id: string;
+  kind: AlbumKind;
+  /** A delivery's project. */
+  projectId: string | null;
+  /** A delivery's share link secret; null = not shared. */
+  shareToken: string | null;
+  /** The share link's last day ("yyyy-mm-dd", the studio's calendar); null = no end. */
+  shareExpiresOn: string | null;
   title: string;
   /** Its address under the business's: /<studio>/gallery/<slug>. Never changes. */
   slug: string;
@@ -35,6 +45,8 @@ export interface Photo {
 export interface PhotoView extends Photo {
   thumbUrl: string;
   largeUrl: string;
+  /** The large copy, saved as a file rather than opened (deliveries only). */
+  downloadUrl?: string;
 }
 
 /** An album ready to show, with its cover's links (small for grids, large for the 3D showroom). */
