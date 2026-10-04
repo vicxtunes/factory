@@ -8,6 +8,8 @@ import {
   AdminsIcon,
   AgentsIcon,
   AnnouncementIcon,
+  BackIcon,
+  CalendarIcon,
   ClientsIcon,
   DashboardIcon,
   DesignersIcon,
@@ -23,6 +25,7 @@ import {
   ShowroomIcon,
   StudioIcon,
   SupportIcon,
+  TasksIcon,
   WorkersIcon,
 } from "./icons";
 import { ChatIcon } from "@repo/ui/chat/icons";
@@ -62,6 +65,9 @@ const ICONS = {
   settings: SettingsIcon,
   showroom: ShowroomIcon,
   studio: StudioIcon,
+  calendar: CalendarIcon,
+  tasks: TasksIcon,
+  back: BackIcon,
 } as const;
 
 export type HomeBarIcon = keyof typeof ICONS;
