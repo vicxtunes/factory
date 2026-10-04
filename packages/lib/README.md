@@ -82,4 +82,4 @@ No database is needed: cores are pure, and services run against in-memory fakes 
 | `parseInput(schema, input)` | `kernel/core` | zod parse, or an `AppError` listing what's wrong. |
 | `runAction(module, work)` | `kernel/server/action` | Runs an action's work and turns the outcome into a `Result`. |
 | `optionalText`, `optionalEmail`, `optionalPhone` | `kernel/core` | Form fields: trimmed, empty → null; phones stored in one form. |
-| `parsePhone(input)` | `kernel/core` | Validates a phone number and gives the form to store. |
+| `parsePhone(input, country?)` | `kernel/core/phone` | Validates a phone number (libphonenumber-js) and gives the one form to store, `+256703360688`. Without a `+` it's read as Ugandan unless another country is given. `PhoneInput` (`@repo/ui`) is the matching field, with a country picker. |

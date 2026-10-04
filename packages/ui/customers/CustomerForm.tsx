@@ -6,6 +6,7 @@ import { useState, useTransition } from "react";
 
 import { Button } from "@repo/ui/Button";
 import { Field, TextArea, TextInput } from "@repo/ui/Field";
+import { PhoneInput } from "@repo/ui/PhoneInput";
 import { createCustomer, setCustomerArchived, updateCustomer } from "@repo/lib/customers/actions";
 import type { Customer, SaveOutcome } from "@repo/lib/customers/core";
 
@@ -53,7 +54,7 @@ export function CustomerForm({ customer, basePath }: { customer?: Customer; base
       </Field>
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Phone">
-          <TextInput type="tel" value={form.phone} onChange={set("phone")} maxLength={20} placeholder="0772 123 456" autoComplete="off" />
+          <PhoneInput value={form.phone} onChange={(phone) => set("phone")({ target: { value: phone } })} autoComplete="off" />
         </Field>
         <Field label="Email">
           <TextInput type="email" value={form.email} onChange={set("email")} maxLength={120} autoComplete="off" />

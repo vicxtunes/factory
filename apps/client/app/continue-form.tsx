@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 import { Button } from "@repo/ui/Button";
 import { Field, TextInput } from "@repo/ui/Field";
+import { PhoneInput } from "@repo/ui/PhoneInput";
 import { PasswordInput } from "@repo/ui/PasswordInput";
 
 import { checkAccount, continueLogin } from "./actions";
@@ -29,6 +30,10 @@ export function ContinueForm() {
     setError(null);
     start(async () => {
       const res = await checkAccount(phone);
+      if (res.error) {
+        setError(res.error);
+        return;
+      }
       if (!res.exists) {
         setStep({ kind: "new", phone });
         return;
@@ -147,15 +152,7 @@ export function ContinueForm() {
       }}
     >
       <Field label="Phone number">
-        <TextInput
-          type="tel"
-          inputMode="tel"
-          autoComplete="tel"
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
-          required
-          autoFocus
-        />
+        <PhoneInput value={phone} onChange={setPhone} required autoFocus />
       </Field>
       {error ? <p className="text-sm text-[var(--rush)]">{error}</p> : null}
       <Button variant="primary" type="submit" className="w-full" disabled={pending}>

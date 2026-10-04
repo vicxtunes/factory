@@ -10,7 +10,7 @@ const ok = { name: "Grace", phone: "", email: "", notes: "" };
 test("input is trimmed; empty fields become null; phones get one stored form", () => {
   assert.deepEqual(parseInput(customerInputSchema, { name: " Grace ", phone: "+256 772 123456", email: " g@mail.com ", notes: " " }), {
     name: "Grace",
-    phone: "0772123456",
+    phone: "+256772123456",
     email: "g@mail.com",
     notes: null,
   });

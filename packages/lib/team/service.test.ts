@@ -29,7 +29,7 @@ function memoryStore() {
 }
 
 test("team input: phone stored in one form, role optional", () => {
-  assert.deepEqual(parseInput(teamMemberInputSchema, { name: " Joel ", phone: "+256 700 111 222", role: "" }), { name: "Joel", phone: "0700111222", role: null });
+  assert.deepEqual(parseInput(teamMemberInputSchema, { name: " Joel ", phone: "+256 700 111 222", role: "" }), { name: "Joel", phone: "+256700111222", role: null });
   assert.throws(() => parseInput(teamMemberInputSchema, { name: "", phone: "", role: "" }), /Enter their name/);
 });
 

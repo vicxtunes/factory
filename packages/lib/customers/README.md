@@ -7,7 +7,7 @@ module itself is generic, so a future product (vendors, service providers) reuse
 Every customer belongs to exactly one tenant, and every read and write is scoped to it.
 
 - **One profile per person.** A phone number is saved once per studio, in one stored form
-  (`0772…` for Uganda, `+…` otherwise; `kernel/core/phone.ts`), so `0772 123 456` and
+  (international, `+256772123456`; `kernel/core/phone.ts`), so `0772 123 456` and
   `+256 772 123456` are the same person. Saving a number another client already has is refused
   with a link to them. Customers without a phone are never duplicates.
 - **Archive, don't delete.** Quotations, invoices, bookings and projects will refer to customers,

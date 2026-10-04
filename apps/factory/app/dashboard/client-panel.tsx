@@ -7,6 +7,7 @@ import { Button } from "@repo/ui/Button";
 import { Drawer } from "@repo/ui/Drawer";
 import { ExportButtons } from "@repo/ui/ExportButtons";
 import { Field, TextInput } from "@repo/ui/Field";
+import { PhoneInput } from "@repo/ui/PhoneInput";
 import { UploadRow } from "@repo/ui/UploadRow";
 import type { ExportColumn } from "@repo/lib/export/tableExport";
 import type { Client } from "@repo/lib/types";
@@ -173,7 +174,7 @@ export function ClientPanel({
             <TextInput type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
           </Field>
           <Field label="Phone">
-            <TextInput value={phone} onChange={(e) => setPhone(e.target.value)} />
+            <PhoneInput value={phone} onChange={setPhone} />
           </Field>
           <Button variant="primary" type="submit" loading={pending} disabled={pending} className="w-full">
             Add client
@@ -277,11 +278,7 @@ export function ClientPanel({
                       />
                     </td>
                     <td className="px-5 py-3">
-                      <input
-                        value={editPhone}
-                        onChange={(e) => setEditPhone(e.target.value)}
-                        className="min-h-9 w-full rounded-[var(--radius)] border border-border bg-surface px-2 text-sm"
-                      />
+                      <PhoneInput value={editPhone} onChange={setEditPhone} aria-label="Phone" />
                     </td>
                     <td className="px-5 py-3" />
                     <td className="px-5 py-3" />
