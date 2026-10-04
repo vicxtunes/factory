@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 
 import { Button } from "@repo/ui/Button";
 import { Field, TextArea, TextInput } from "@repo/ui/Field";
+import { PhoneInput } from "@repo/ui/PhoneInput";
 import { saveMyStudioProfile } from "@repo/lib/studios/actions";
 import type { StudioProfile } from "@repo/lib/studios/core";
 
@@ -43,7 +44,7 @@ export function StudioProfileForm({ profile }: { profile: StudioProfile }) {
       </Field>
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Phone">
-          <TextInput type="tel" value={form.phone} onChange={set("phone")} maxLength={40} autoComplete="tel" />
+          <PhoneInput value={form.phone} onChange={(phone) => set("phone")({ target: { value: phone } })} />
         </Field>
         <Field label="Email">
           <TextInput type="email" value={form.email} onChange={set("email")} maxLength={120} autoComplete="email" />

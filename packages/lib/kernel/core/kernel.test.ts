@@ -53,8 +53,8 @@ test("optional fields trim, and empty becomes null", () => {
 
 test("optionalPhone stores one form per number", () => {
   assert.equal(parseInput(optionalPhone(), ""), null);
-  assert.equal(parseInput(optionalPhone(), "0772 123 456"), "0772123456");
-  assert.equal(parseInput(optionalPhone(), "+256 772 123456"), "0772123456");
+  assert.equal(parseInput(optionalPhone(), "0772 123 456"), "+256772123456");
+  assert.equal(parseInput(optionalPhone(), "+256 772 123456"), "+256772123456");
   assert.equal(parseInput(optionalPhone(), "+44 20 7946 0958"), "+442079460958");
   assert.throws(() => parseInput(optionalPhone(), "call me"), /valid phone number/);
 });

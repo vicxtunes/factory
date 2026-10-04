@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 import { Button } from "@repo/ui/Button";
 import { Field, TextInput } from "@repo/ui/Field";
+import { PhoneInput } from "@repo/ui/PhoneInput";
 import { PasswordInput } from "@repo/ui/PasswordInput";
 
 import { checkAccount, continueLogin } from "./actions";
@@ -14,7 +15,7 @@ type Step = { kind: "phone" } | { kind: "new"; phone: string } | { kind: "pin"; 
 // Phone-first, single entry point: no PIN is required by default (security
 // is opt-in — see /settings). Enter a phone number; a match with
 // no PIN set logs straight in, a match with a PIN set asks for it, and no
-// match at all asks for a name to create the account.
+// match at all asks for their full name or studio name to create the account.
 export function ContinueForm() {
   const router = useRouter();
   const [step, setStep] = useState<Step>({ kind: "phone" });
@@ -29,6 +30,10 @@ export function ContinueForm() {
     setError(null);
     start(async () => {
       const res = await checkAccount(phone);
+      if (res.error) {
+        setError(res.error);
+        return;
+      }
       if (!res.exists) {
         setStep({ kind: "new", phone });
         return;
@@ -79,10 +84,11 @@ export function ContinueForm() {
         }}
       >
         <p className="text-sm text-muted">
-          We don&apos;t have an account for {step.phone} yet — what&apos;s your name?
+          We don&apos;t have an account for {step.phone} yet. Tell us who you are so our reception knows who
+          they&apos;re dealing with.
         </p>
-        <Field label="Your name">
-          <TextInput value={name} onChange={(e) => setName(e.target.value)} required autoFocus />
+        <Field label="Full name or studio name">
+          <TextInput value={name} onChange={(e) => setName(e.target.value)} maxLength={100} required autoFocus />
         </Field>
         <Field label="Email" hint="Optional">
           <TextInput type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
@@ -146,15 +152,7 @@ export function ContinueForm() {
       }}
     >
       <Field label="Phone number">
-        <TextInput
-          type="tel"
-          inputMode="tel"
-          autoComplete="tel"
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
-          required
-          autoFocus
-        />
+        <PhoneInput value={phone} onChange={setPhone} required autoFocus />
       </Field>
       {error ? <p className="text-sm text-[var(--rush)]">{error}</p> : null}
       <Button variant="primary" type="submit" className="w-full" disabled={pending}>

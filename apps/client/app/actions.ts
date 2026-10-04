@@ -48,19 +48,13 @@ async function setClientCookie(clientId: string, name: string): Promise<void> {
 // form know, after the phone step, whether to ask for a name (new account)
 // or a PIN (returning + PIN enabled).
 
-// The client, if any, that holds this phone number — searched in every format
-// it might be stored in (see packages/lib/kernel/core/phone.ts): the DB matcher folds
-// numbers as Ghana (+233), so "0700768312" and "+256700768312" — the same
-// Ugandan number — would otherwise look like two different clients.
+// The client, if any, that holds this phone number. The database matches it
+// however the record was typed (0703…, +256703…; norm_client_phone).
 async function clientByPhone(
   admin: ReturnType<typeof createAdminClient>,
-  variants: string[],
+  phone: string,
 ): Promise<ClientCandidate | null> {
-  const seen = new Map<string, ClientCandidate>();
-  for (const phone of variants) {
-    for (const c of await findClientCandidates(admin, { phone })) seen.set(c.id, c);
-  }
-  return exactClientMatch([...seen.values()]);
+  return exactClientMatch(await findClientCandidates(admin, { phone }));
 }
 
 export async function checkAccount(phone: string): Promise<{ exists: boolean; pinRequired: boolean; error?: string }> {
@@ -68,7 +62,7 @@ export async function checkAccount(phone: string): Promise<{ exists: boolean; pi
   if (!parsed.ok) return { exists: false, pinRequired: false, error: parsed.error };
 
   const admin = createAdminClient();
-  const match = await clientByPhone(admin, parsed.variants);
+  const match = await clientByPhone(admin, parsed.store);
   if (!match || !match.active) return { exists: false, pinRequired: false };
 
   const { data: cred } = await admin
@@ -89,7 +83,7 @@ export async function continueLogin(input: {
   if (!parsed.ok) return { ok: false, error: parsed.error };
 
   const admin = createAdminClient();
-  const match = await clientByPhone(admin, parsed.variants);
+  const match = await clientByPhone(admin, parsed.store);
 
   if (match) {
     if (!match.active) return { ok: false, error: "This account is inactive — contact us for help." };
@@ -108,8 +102,12 @@ export async function continueLogin(input: {
     return { ok: true };
   }
 
-  const name = input.name?.trim();
-  if (!name) return { ok: false, error: "Name is required." };
+  // A new number: their full name or studio name, so reception knows who
+  // they're dealing with. At least two letters, so a number or "." won't do.
+  const name = input.name?.trim().replace(/\s+/g, " ");
+  if (!name || (name.match(/\p{L}/gu)?.length ?? 0) < 2) {
+    return { ok: false, error: "Enter your full name or studio name." };
+  }
   if (name.length > NAME_MAX) return { ok: false, error: `Name must be ${NAME_MAX} characters or fewer.` };
 
   const resolved = await resolveOrCreateClient(admin, {

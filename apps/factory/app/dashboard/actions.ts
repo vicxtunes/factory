@@ -18,6 +18,7 @@ import {
 import { hashPin, isValidPinFormat } from "@repo/lib/auth/pin";
 import { logOrderEvent, resolveActor } from "@repo/lib/audit/log";
 import {
+  clientPhone,
   exactClientMatch,
   findClientCandidates,
   matchReasonLabel,
@@ -635,10 +636,14 @@ export async function addClient(input: {
   const name = input.name.trim();
   if (!name) return { ok: false, error: "Name is required." };
 
+  const checked = clientPhone(input.phone);
+  if (!checked.ok) return checked;
+  const phone = checked.phone;
+
   const admin = createAdminClient();
 
   const dupe = exactClientMatch(
-    await findClientCandidates(admin, { name, email: input.email, phone: input.phone }),
+    await findClientCandidates(admin, { name, email: input.email, phone }),
   );
   if (dupe) {
     return {
@@ -650,7 +655,7 @@ export async function addClient(input: {
   const { error } = await admin.from("clients").insert({
     name,
     email: input.email.trim() || null,
-    phone: input.phone.trim() || null,
+    phone,
   });
   if (error) {
     if ((error as { code?: string }).code === "23505") {
@@ -672,13 +677,17 @@ export async function updateClient(input: {
   const name = input.name.trim();
   if (!name) return { ok: false, error: "Name is required." };
 
+  const checked = clientPhone(input.phone);
+  if (!checked.ok) return checked;
+  const phone = checked.phone;
+
   const admin = createAdminClient();
 
   const dupe = exactClientMatch(
     await findClientCandidates(admin, {
       name,
       email: input.email,
-      phone: input.phone,
+      phone,
       excludeId: input.id,
     }),
   );
@@ -694,7 +703,7 @@ export async function updateClient(input: {
     .update({
       name,
       email: input.email.trim() || null,
-      phone: input.phone.trim() || null,
+      phone,
     })
     .eq("id", input.id);
   if (error) {
@@ -797,8 +806,12 @@ export async function bulkImportClients(
 
     const nameKey = row.name.toLowerCase().replace(/\s+/g, " ").trim();
     const emailKey = row.email.toLowerCase().trim();
-    const phoneDigits = row.phone.replace(/\D/g, "");
-    const phoneKey = phoneDigits.length >= 7 ? phoneDigits.slice(-9) : "";
+    const checked = clientPhone(row.phone);
+    if (!checked.ok) {
+      errors.push({ row: row.sheetRow, message: checked.error });
+      continue;
+    }
+    const phoneKey = checked.phone ?? "";
 
     const priorRow =
       (phoneKey ? seenPhone.get(phoneKey) : undefined) ??

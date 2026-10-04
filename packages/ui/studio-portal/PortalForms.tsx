@@ -5,6 +5,7 @@ import { useState, useTransition } from "react";
 
 import { Button } from "@repo/ui/Button";
 import { Field, TextInput } from "@repo/ui/Field";
+import { PhoneInput } from "@repo/ui/PhoneInput";
 import { portalSetPin, portalSignIn, portalSignOut } from "@repo/lib/studio-portal/actions";
 
 const pinInput = {
@@ -36,7 +37,7 @@ export function PortalSignIn({ slug }: { slug: string }) {
   return (
     <form onSubmit={submit} className="space-y-3">
       <Field label="Phone number">
-        <TextInput type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} required autoComplete="tel" placeholder="0772 123 456" />
+        <PhoneInput value={phone} onChange={setPhone} required />
       </Field>
       <Field label="PIN">
         <TextInput type="password" value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))} required {...pinInput} />

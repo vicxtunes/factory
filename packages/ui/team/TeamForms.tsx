@@ -5,6 +5,7 @@ import { useState, useTransition } from "react";
 
 import { Button } from "@repo/ui/Button";
 import { Field, TextInput } from "@repo/ui/Field";
+import { PhoneInput } from "@repo/ui/PhoneInput";
 import { createTeamMember, setTeamMemberArchived, updateTeamMember } from "@repo/lib/team/actions";
 import type { TeamMember } from "@repo/lib/team/core";
 
@@ -42,7 +43,7 @@ export function TeamMemberForm({ member }: { member?: TeamMember }) {
           <TextInput value={form.role} onChange={set("role")} maxLength={60} placeholder="Second shooter" />
         </Field>
         <Field label="Phone">
-          <TextInput type="tel" value={form.phone} onChange={set("phone")} maxLength={20} />
+          <PhoneInput value={form.phone} onChange={(phone) => set("phone")({ target: { value: phone } })} autoComplete="off" />
         </Field>
       </div>
       {error ? <p className="text-sm text-error-600 dark:text-error-400">{error}</p> : null}

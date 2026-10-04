@@ -2,6 +2,8 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { parsePhone } from "@repo/lib/kernel/core/phone";
+
 import type { ClientMatchReason } from "./match";
 
 // Client de-duplication helper. One matcher (`find_client_candidates`, see
@@ -25,6 +27,14 @@ export interface ClientIdentityInput {
   name?: string | null;
   email?: string | null;
   phone?: string | null;
+}
+
+/** A client's phone as typed, checked and in the one stored form ("+256703360688"); empty is none. */
+export function clientPhone(input: string | null | undefined): { ok: true; phone: string | null } | { ok: false; error: string } {
+  const raw = input?.trim();
+  if (!raw) return { ok: true, phone: null };
+  const parsed = parsePhone(raw);
+  return parsed.ok ? { ok: true, phone: parsed.store } : parsed;
 }
 
 // Rank existing clients against an incoming (name, email, phone). Exact
@@ -75,8 +85,10 @@ export async function resolveOrCreateClient(
 ): Promise<{ ok: true; client: ResolvedClient } | { ok: false; error: string }> {
   const name = input.name?.trim() ?? "";
   const email = input.email?.trim() || null;
-  const phone = input.phone?.trim() || null;
   if (!name) return { ok: false, error: "Client name is required." };
+  const checked = clientPhone(input.phone);
+  if (!checked.ok) return checked;
+  const phone = checked.phone;
 
   const reuse = (c: ClientCandidate): { ok: true; client: ResolvedClient } => ({
     ok: true,

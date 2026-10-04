@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 
 import { Button } from "@repo/ui/Button";
 import { Field, Select, TextArea, TextInput } from "@repo/ui/Field";
+import { PhoneInput } from "@repo/ui/PhoneInput";
 import { SectionLabel } from "@repo/ui/SectionLabel";
 import { UploadRow } from "@repo/ui/UploadRow";
 import { useCurrencySymbol } from "@repo/lib/currency/CurrencySymbolProvider";
@@ -389,11 +390,9 @@ function GeneralStep({
               />
             </Field>
             <Field label="Phone">
-              <TextInput
+              <PhoneInput
                 value={general.newClient.phone}
-                onChange={(e) =>
-                  setGeneral({ ...general, newClient: { ...general.newClient, phone: e.target.value } })
-                }
+                onChange={(phone) => setGeneral({ ...general, newClient: { ...general.newClient, phone } })}
               />
             </Field>
             <DuplicateHint
