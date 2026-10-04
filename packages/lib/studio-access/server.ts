@@ -33,6 +33,11 @@ const secrets: AccessSecrets = {
   newId: randomUUID,
 };
 
+const workspace = clientUrl("/studio");
+if (!workspace.startsWith("http")) {
+  console.warn("studio-access: NEXT_PUBLIC_CLIENT_ORIGIN isn't set, so studio emails go out without a link to the studio.");
+}
+
 export const studioAccess = new StudioAccessService(
   supabaseAccessStore,
   resendMailer,
@@ -40,7 +45,7 @@ export const studioAccess = new StudioAccessService(
   r2ObjectStore,
   { notify: (clientId, message) => notifyActor({ type: "client", id: clientId }, message) },
   {
-    workspace: clientUrl("/studio"),
+    workspace,
     // Embedded in each email by the Resend mailer, so it shows even where outside images are hidden.
     logo: `cid:${LOGO_CID}`,
   },
