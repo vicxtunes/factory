@@ -24,7 +24,10 @@ export interface SetupView {
   status: "onboarding" | "changes_requested";
   /** Why Aming sent it back, when it did. */
   reviewNote: string | null;
+  /** The form's starting values: saved ones, else suggestions from the owner's Aming account. */
   details: { name: string; ownerFirstName: string; ownerLastName: string; phone: string };
+  /** Whether the details have been saved (suggestions alone don't count). */
+  detailsSaved: boolean;
   logoUrl: string | null;
   slug: string | null;
   suggestedSlug: string;
@@ -55,9 +58,8 @@ const BENEFITS = [
 ];
 
 function doneSteps(v: SetupView): Record<Exclude<OnboardingStep, "submit">, boolean> {
-  const d = v.details;
   return {
-    details: !!(d.name && d.ownerFirstName && d.ownerLastName && d.phone),
+    details: v.detailsSaved,
     logo: !!v.logoUrl,
     address: !!v.slug,
     email: v.emailVerified,
@@ -68,7 +70,8 @@ function doneSteps(v: SetupView): Record<Exclude<OnboardingStep, "submit">, bool
 function firstStep(v: SetupView): Step {
   const done = doneSteps(v);
   if (v.status === "onboarding" && !Object.values(done).some(Boolean)) return "welcome";
-  return (Object.keys(done) as (keyof typeof done)[]).find((s) => !done[s]) ?? "submit";
+  // The logo is optional: resume at the first required step that's missing.
+  return (Object.keys(done) as (keyof typeof done)[]).find((s) => s !== "logo" && !done[s]) ?? "submit";
 }
 
 /** 540 → "9:00". */
@@ -149,7 +152,7 @@ export function OnboardingWizard({ view }: { view: SetupView }) {
         {step === "logo" ? (
           <>
             <StepTitle title="Your logo" text="It shows on your public page, your documents and your workspace." />
-            <LogoUploader logoUrl={view.logoUrl} />
+            <LogoUploader logoUrl={view.logoUrl} optional />
             <div className="flex justify-end gap-2">
               <Button variant={view.logoUrl ? "primary" : "secondary"} onClick={() => next("logo")}>
                 {view.logoUrl ? "Continue" : "Skip for now"}

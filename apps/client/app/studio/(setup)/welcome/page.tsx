@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { OnboardingWizard } from "@repo/ui/studio-access/OnboardingWizard";
 import { clientUrl } from "@repo/lib/client-portal/paths";
 import { studioAccess } from "@repo/lib/studio-access/server";
+import { stepsDone } from "@repo/lib/studio-access/core";
 import { slugFromName } from "@repo/lib/studio-portal/core";
 import { requireOwnStudio } from "@repo/lib/studios/server";
 
@@ -49,6 +50,7 @@ export default async function StudioWelcomePage() {
           ownerLastName: a.ownerLastName ?? rest.join(" "),
           phone: a.phone ?? a.client.phone ?? "",
         },
+        detailsSaved: stepsDone(a).details,
         logoUrl: await studioAccess.logoUrl(a.logoKey),
         slug: a.slug,
         suggestedSlug: slugFromName(a.name),
