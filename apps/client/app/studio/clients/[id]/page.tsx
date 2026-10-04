@@ -7,13 +7,15 @@ import { ProjectsList } from "@repo/ui/projects/ProjectBits";
 import { QuotationsList } from "@repo/ui/billing/QuotationsList";
 import { CustomerArchiveButton, CustomerForm } from "@repo/ui/customers/CustomerForm";
 import { SectionLabel } from "@repo/ui/SectionLabel";
+import { ClientPortalPanel } from "@repo/ui/studio-portal/ClientPortalPanel";
+import { portal } from "@repo/lib/studio-portal/server";
 import { invoices, quotations } from "@repo/lib/billing/server";
 import { bookings } from "@repo/lib/bookings/server";
 import { projects } from "@repo/lib/projects/server";
 import { customerIdSchema } from "@repo/lib/customers/core";
 import { customers } from "@repo/lib/customers/server";
 import { requireStudio } from "@repo/lib/studios/server";
-import { formatAmount } from "@repo/lib/tenancy/format";
+import { formatAmount, formatDay } from "@repo/lib/tenancy/format";
 
 export const metadata = { title: "Client — My Studio" };
 
@@ -23,11 +25,13 @@ export default async function StudioClientPage({ params }: { params: Promise<{ i
   const id = customerIdSchema.safeParse((await params).id);
   const customer = id.success ? await customers.get(scope, id.data) : null;
   if (!customer) notFound();
-  const [theirs, billed, booked, work] = await Promise.all([
+  const [theirs, billed, booked, work, access, address] = await Promise.all([
     quotations.list(scope, customer.id),
     invoices.list(scope, customer.id),
     bookings.forCustomer(scope, customer.id),
     projects.list(scope, customer.id),
+    portal.status(scope, customer.id),
+    portal.currentSlug(scope.tenantId),
   ]);
   const owed = billed.reduce((sum, i) => sum + i.balance, 0);
 
@@ -48,6 +52,14 @@ export default async function StudioClientPage({ params }: { params: Promise<{ i
         ) : null}
       </div>
       <CustomerForm key={customer.id} customer={customer} basePath="/studio/clients" />
+      {access ? (
+        <ClientPortalPanel
+          customerId={customer.id}
+          status={access}
+          hasAddress={address !== null}
+          lastSignedIn={access.signedInAt ? formatDay(scope, access.signedInAt) : null}
+        />
+      ) : null}
       <section>
         <SectionLabel>Projects</SectionLabel>
         <ProjectsList projects={work} scope={scope} basePath="/studio/projects" />

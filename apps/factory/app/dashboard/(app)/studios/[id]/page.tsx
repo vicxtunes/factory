@@ -2,6 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { CustomersList } from "@repo/ui/customers/CustomersList";
+import { QuotaForm } from "@repo/ui/photos/QuotaForm";
+import { UsageBar } from "@repo/ui/photos/UsageBar";
 import { SectionLabel } from "@repo/ui/SectionLabel";
 import { AccountsOverview } from "@repo/ui/accounting/AccountsOverview";
 import { PeriodPicker } from "@repo/ui/accounting/PeriodPicker";
@@ -18,7 +20,9 @@ import { localDate } from "@repo/lib/accounting/core/period";
 import { invoices, quotations, studioAccounts } from "@repo/lib/billing/server";
 import { bookings } from "@repo/lib/bookings/server";
 import { projects } from "@repo/lib/projects/server";
+import { photos } from "@repo/lib/photos/server";
 import { studioOrders } from "@repo/lib/studio-orders/server";
+import { portal, studioUrl } from "@repo/lib/studio-portal/server";
 import { tasks } from "@repo/lib/tasks/server";
 import { team } from "@repo/lib/team/server";
 import { CurrencySymbolProvider } from "@repo/lib/currency/CurrencySymbolProvider";
@@ -44,7 +48,7 @@ export default async function StudioPage({
   if (!studio) notFound();
   const scope = studioScope(studio);
   const today = localDate(new Date(), scope.timeZone);
-  const [active, archived, onSale, offSale, quotes, bills, money, upcoming, work, todo, members, amingOrders] = await Promise.all([
+  const [active, archived, onSale, offSale, quotes, bills, money, upcoming, work, todo, members, amingOrders, slug, usage] = await Promise.all([
     customers.list(scope),
     customers.list(scope, true),
     offerings.list(scope),
@@ -57,6 +61,8 @@ export default async function StudioPage({
     tasks.open(scope),
     team.list(scope),
     studioOrders.forStudio(scope),
+    portal.currentSlug(studio.id),
+    photos.usage(scope),
   ]);
   const openTasks: Record<string, number> = {};
   for (const t of todo) if (t.assigneeId) openTasks[t.assigneeId] = (openTasks[t.assigneeId] ?? 0) + 1;
@@ -66,6 +72,7 @@ export default async function StudioPage({
     ["Phone", studio.phone],
     ["Email", studio.email],
     ["Address", studio.address],
+    ["Public page", slug ? studioUrl(slug) : "Not chosen yet"],
   ];
 
   return (
@@ -84,6 +91,11 @@ export default async function StudioPage({
           </div>
         ))}
       </dl>
+      <section className="space-y-3 rounded-2xl border border-border bg-surface p-4 shadow-theme-xs">
+        <SectionLabel>Photo storage</SectionLabel>
+        <UsageBar usage={usage} />
+        <QuotaForm studioId={studio.id} quotaGb={Math.round(usage.quotaBytes / 1024 ** 3)} />
+      </section>
       <section className="space-y-4">
         <SectionLabel>Money</SectionLabel>
         <CurrencySymbolProvider symbol={scope.currency}>
