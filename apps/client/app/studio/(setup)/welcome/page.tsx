@@ -2,8 +2,10 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { OnboardingWizard } from "@repo/ui/studio-access/OnboardingWizard";
+import { SetupFrame } from "@repo/ui/studio-access/SetupLayouts";
 import { clientUrl } from "@repo/lib/client-portal/paths";
 import { studioAccess } from "@repo/lib/studio-access/server";
+import { stepsDone } from "@repo/lib/studio-access/core";
 import { slugFromName } from "@repo/lib/studio-portal/core";
 import { requireOwnStudio } from "@repo/lib/studios/server";
 
@@ -49,6 +51,7 @@ export default async function StudioWelcomePage() {
           ownerLastName: a.ownerLastName ?? rest.join(" "),
           phone: a.phone ?? a.client.phone ?? "",
         },
+        detailsSaved: stepsDone(a).details,
         logoUrl: await studioAccess.logoUrl(a.logoKey),
         slug: a.slug,
         suggestedSlug: slugFromName(a.name),
@@ -63,9 +66,11 @@ export default async function StudioWelcomePage() {
 
 function Notice({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="space-y-3 rounded-2xl border border-border bg-surface p-6 text-sm shadow-theme-xs">
-      <h1 className="text-lg font-semibold">{title}</h1>
-      {children}
-    </div>
+    <SetupFrame>
+      <div className="space-y-3 rounded-2xl border border-border bg-surface p-6 text-sm leading-relaxed shadow-theme-xs">
+        <h1 className="text-lg font-semibold">{title}</h1>
+        {children}
+      </div>
+    </SetupFrame>
   );
 }

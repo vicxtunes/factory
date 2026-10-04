@@ -1,5 +1,8 @@
 import type { ComponentType } from "react";
 
+import SetupSplitDesktop from "./examples/studio-setup/split-desktop";
+import SetupSplitPhone from "./examples/studio-setup/split-phone";
+import SetupSplitWelcomePhone from "./examples/studio-setup/split-welcome-phone";
 import ActivityFeedCommentsOnly from "./examples/activity-feed/comments-only";
 import ActivityFeedEmpty from "./examples/activity-feed/empty";
 import ActivityFeedMixed from "./examples/activity-feed/mixed";
@@ -104,7 +107,7 @@ import WorkloadViewTeam from "./examples/workload-view/team";
 // an entry here. Flip status to "live" once a real page uses it. Sample
 // data shared across several examples lives in ./examples/_data/.
 
-export const CATEGORIES = ["Actions", "Inputs", "Navigation", "Overlays", "Feedback", "Data display", "Project management", "Media"] as const;
+export const CATEGORIES = ["Flows", "Actions", "Inputs", "Navigation", "Overlays", "Feedback", "Data display", "Project management", "Media"] as const;
 
 export type RoomStatus = "live" | "draft";
 
@@ -121,6 +124,19 @@ export interface RoomComponent {
 }
 
 export const COMPONENTS: RoomComponent[] = [
+  {
+    slug: "studio-setup",
+    name: "Studio set-up",
+    category: "Flows",
+    status: "live",
+    source: "packages/ui/studio-access/SetupLayouts.tsx (SetupSplit, SetupWelcome, SetupActions)",
+    summary: "A new studio's set-up (chose the split panel): the steps in a navy panel beside the form; on phones a compact step header and buttons pinned to the bottom. Click through it.",
+    examples: [
+      { title: "Desktop", file: "studio-setup/split-desktop.tsx", Demo: SetupSplitDesktop },
+      { title: "Phone", file: "studio-setup/split-phone.tsx", Demo: SetupSplitPhone },
+      { title: "Welcome, phone", file: "studio-setup/split-welcome-phone.tsx", Demo: SetupSplitWelcomePhone },
+    ],
+  },
   {
     slug: "button",
     name: "Button",
