@@ -18,28 +18,11 @@ const PAGE_TITLES: Record<string, string> = {
   "/new": "Place order",
   "/showroom": "Showroom",
   "/settings": "Settings",
-  "/studio": "Studio dashboard",
-  "/studio/profile": "Studio profile",
-  "/studio/bookings": "Bookings",
-  "/studio/bookings/new": "New booking",
-  "/studio/projects": "Projects",
-  "/studio/projects/new": "New project",
-  "/studio/tasks": "Tasks",
-  "/studio/team": "Team",
-  "/studio/clients": "Clients",
-  "/studio/clients/new": "New client",
-  "/studio/offerings": "Packages & Services",
-  "/studio/offerings/new": "New package or service",
-  "/studio/showroom": "Showroom",
-  "/studio/quotations": "Quotations",
-  "/studio/quotations/new": "New quotation",
-  "/studio/invoices": "Invoices",
-  "/studio/invoices/new": "New invoice",
   "/support": "Support",
   "/chat": "Chat",
 };
 
-// A page without its own title (e.g. one studio client) takes its section's:
+// A page without its own title (e.g. one order) takes its section's:
 // the longest listed path it sits under.
 function sectionTitle(pathname: string): string {
   const parent = Object.keys(PAGE_TITLES)
