@@ -38,7 +38,7 @@ export default async function ClientNewOrderPage({
   const project = await projectFor(params.project);
 
   return (
-    <ClientShell signedIn name={session.name} avatarUrl={session.avatarUrl}>
+    <ClientShell session={session}>
       <OrderForm
         catalog={catalog}
         initialCategoryId={category?.id}

@@ -19,7 +19,7 @@ export default async function ClientHistoryPage() {
   ]);
 
   return (
-    <ClientShell signedIn name={session.name} avatarUrl={session.avatarUrl}>
+    <ClientShell session={session}>
       <ClientOrdersBoard initialItems={items} clientId={session.client_id} workers={workers} bucket="history" />
     </ClientShell>
   );

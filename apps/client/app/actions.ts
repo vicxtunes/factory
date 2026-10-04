@@ -23,12 +23,18 @@ import { projectIdSchema } from "@repo/lib/projects/core";
 import { notifyActor } from "@repo/lib/push/send";
 import { fetchClientNotifications } from "@repo/lib/queries";
 import { linkPlacedOrder } from "@repo/lib/studio-orders/server";
+import { fullName, identitySchema, type Identity } from "@repo/lib/clients/core/identity";
+import { saveClientIdentity } from "@repo/lib/clients/identity";
 import type { NotificationRow, OrderType } from "@repo/lib/types";
 
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 30; // "remembered on device", same as worker/designer sessions
-const NAME_MAX = 100;
-
 type ActionResult = { ok: true } | { ok: false; error: string };
+
+function readIdentity(input: unknown): { ok: true; identity: Identity } | { ok: false; error: string } {
+  const parsed = identitySchema.safeParse(input);
+  if (parsed.success) return { ok: true, identity: parsed.data };
+  return { ok: false, error: [...new Set(parsed.error.issues.map((i) => i.message))].join(" ") };
+}
 
 async function setClientCookie(clientId: string, name: string): Promise<void> {
   const store = await cookies();
@@ -81,7 +87,8 @@ export async function checkAccount(phone: string): Promise<{ exists: boolean; pi
 
 export async function continueLogin(input: {
   phone: string;
-  name?: string;
+  firstName?: string;
+  lastName?: string;
   email?: string;
   pin?: string;
 }): Promise<ActionResult> {
@@ -108,18 +115,36 @@ export async function continueLogin(input: {
     return { ok: true };
   }
 
-  const name = input.name?.trim();
-  if (!name) return { ok: false, error: "Name is required." };
-  if (name.length > NAME_MAX) return { ok: false, error: `Name must be ${NAME_MAX} characters or fewer.` };
+  // New clients give their real first and last name (packages/lib/clients/core/identity.ts).
+  const named = readIdentity({ firstName: input.firstName, lastName: input.lastName });
+  if (!named.ok) return named;
 
   const resolved = await resolveOrCreateClient(admin, {
-    name,
+    name: fullName(named.identity),
     phone: parsed.store,
     email: input.email,
   });
   if (!resolved.ok) return { ok: false, error: resolved.error };
+  // An existing client matched by email keeps their record; they confirm
+  // their name on their next screen like any existing client.
+  if (!resolved.client.reused) await saveClientIdentity(admin, resolved.client.id, named.identity);
 
   await setClientCookie(resolved.client.id, resolved.client.name);
+  return { ok: true };
+}
+
+// Existing clients (often added by staff under a nickname) confirm their real
+// first and last name once before using the portal: ClientShell shows
+// ConfirmName until they have.
+export async function confirmMyName(input: unknown): Promise<ActionResult> {
+  const session = await getClientSession();
+  if (!session) return { ok: false, error: "Not signed in." };
+  const named = readIdentity(input);
+  if (!named.ok) return named;
+
+  await saveClientIdentity(createAdminClient(), session.client_id, named.identity);
+  await setClientCookie(session.client_id, fullName(named.identity));
+  revalidatePath("/", "layout");
   return { ok: true };
 }
 
@@ -206,6 +231,7 @@ export interface ClientOrderPayload {
 export async function placeOrder(input: ClientOrderPayload): Promise<CreateOrderResult> {
   const session = await getClientSession();
   if (!session) return { ok: false, error: "Not signed in." };
+  if (!session.identity) return { ok: false, error: "Confirm your name first." };
 
   if (!input.delivery_date) return { ok: false, error: "Delivery date is required." };
 

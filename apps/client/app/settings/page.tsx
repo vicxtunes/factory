@@ -21,7 +21,7 @@ export default async function ClientSettingsPage() {
     .maybeSingle();
 
   return (
-    <ClientShell signedIn name={session.name} avatarUrl={session.avatarUrl}>
+    <ClientShell session={session}>
       <PinSettings hasPin={!!cred} />
     </ClientShell>
   );

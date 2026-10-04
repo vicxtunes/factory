@@ -17,7 +17,7 @@ export default async function ClientPaymentPage({ searchParams }: { searchParams
   const [wallet, params] = await Promise.all([getMyWallet(), searchParams]);
 
   return (
-    <ClientShell signedIn name={session.name} avatarUrl={session.avatarUrl}>
+    <ClientShell session={session}>
       <div className="mx-auto lg:mx-12 w-full max-w-lg space-y-5">
         <div>
           <h2 className="text-lg font-semibold">Wallet</h2>

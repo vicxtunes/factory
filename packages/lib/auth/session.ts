@@ -42,7 +42,7 @@ export const getWorkerSession = cache(async (): Promise<WorkerSession | null> =>
   const admin = createAdminClient();
   const { data } = await admin
     .from("workers")
-    .select("id, name, avatar_url, active")
+    .select("id, name, avatar_url, active, first_name, last_name, identity_confirmed_at")
     .eq("id", session.worker_id)
     .maybeSingle();
   if (!data || data.active === false) return null;
@@ -65,7 +65,7 @@ export const getDesignerSession = cache(async (): Promise<DesignerSession | null
   const admin = createAdminClient();
   const { data } = await admin
     .from("designers")
-    .select("id, name, avatar_url, active")
+    .select("id, name, avatar_url, active, first_name, last_name, identity_confirmed_at")
     .eq("id", session.designer_id)
     .maybeSingle();
   if (!data || data.active === false) return null;
@@ -76,6 +76,8 @@ export interface ClientSession {
   client_id: string;
   name: string;
   avatarUrl: string | null;
+  /** Their real first and last name, once given (null until then). */
+  identity: { firstName: string; lastName: string } | null;
 }
 
 export const getClientSession = cache(async (): Promise<ClientSession | null> => {
@@ -88,11 +90,16 @@ export const getClientSession = cache(async (): Promise<ClientSession | null> =>
   const admin = createAdminClient();
   const { data } = await admin
     .from("clients")
-    .select("id, name, avatar_url, active")
+    .select("id, name, avatar_url, active, first_name, last_name, identity_confirmed_at")
     .eq("id", session.client_id)
     .maybeSingle();
   if (!data || data.active === false) return null;
-  return { client_id: data.id, name: data.name, avatarUrl: data.avatar_url };
+  return {
+    client_id: data.id,
+    name: data.name,
+    avatarUrl: data.avatar_url,
+    identity: data.identity_confirmed_at ? { firstName: data.first_name, lastName: data.last_name } : null,
+  };
 });
 
 export interface DashboardSession {

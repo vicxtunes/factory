@@ -10,7 +10,7 @@ export async function ShowroomView() {
   const [session, catalog] = await Promise.all([getClientSession(), fetchProductCatalog(true)]);
 
   return (
-    <ClientShell signedIn={!!session} name={session?.name ?? null} avatarUrl={session?.avatarUrl ?? null}>
+    <ClientShell session={session}>
       <ShowroomContent catalog={catalog} signedIn={!!session} />
     </ClientShell>
   );

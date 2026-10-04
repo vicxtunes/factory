@@ -17,7 +17,7 @@ export default async function ChatLayout({ children }: { children: React.ReactNo
   if (!client) redirect("/?signin=1");
 
   return (
-    <ClientShell signedIn name={client.name} avatarUrl={client.avatarUrl}>
+    <ClientShell session={client}>
       <ChatScreen viewer={{ type: "client", id: client.client_id }} exitHref="/" />
       {children}
     </ClientShell>
