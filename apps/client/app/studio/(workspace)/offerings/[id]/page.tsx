@@ -6,7 +6,7 @@ import { OFFERING_KIND_LABELS, offeringIdSchema } from "@repo/lib/offerings/core
 import { offerings } from "@repo/lib/offerings/server";
 import { requireStudio } from "@repo/lib/studios/server";
 
-export const metadata = { title: "Package or service — My Studio" };
+export const metadata = { title: "Package or service · My Studio" };
 
 export default async function StudioOfferingPage({ params }: { params: Promise<{ id: string }> }) {
   const { scope } = await requireStudio();

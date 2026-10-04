@@ -6,7 +6,7 @@ import { calendarViewSchema, viewRange } from "@repo/lib/bookings/core";
 import { bookings } from "@repo/lib/bookings/server";
 import { requireStudio } from "@repo/lib/studios/server";
 
-export const metadata = { title: "Bookings — My Studio" };
+export const metadata = { title: "Bookings · My Studio" };
 
 export default async function StudioBookingsPage({ searchParams }: { searchParams: Promise<{ view?: string; date?: string }> }) {
   const { scope } = await requireStudio();

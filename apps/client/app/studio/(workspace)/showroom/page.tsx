@@ -5,7 +5,7 @@ import { UsageBar } from "@repo/ui/photos/UsageBar";
 import { photos } from "@repo/lib/photos/server";
 import { requireStudio } from "@repo/lib/studios/server";
 
-export const metadata = { title: "Showroom — My Studio" };
+export const metadata = { title: "Showroom · My Studio" };
 
 export default async function StudioShowroomPage() {
   const { scope } = await requireStudio();

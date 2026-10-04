@@ -9,7 +9,7 @@ import { fetchCurrencies, fetchProductCatalog, fetchShowroomSettings } from "@re
 import { ClientShell } from "../shell";
 import { OrderForm } from "../order-form";
 
-export const metadata = { title: "Place Order — Client Portal" };
+export const metadata = { title: "Place order" };
 
 export default async function ClientNewOrderPage({
   searchParams,

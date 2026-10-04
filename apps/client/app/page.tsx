@@ -9,7 +9,6 @@ import { ClientDashboard } from "./dashboard";
 import { ClientShell } from "./shell";
 import { ShowroomView } from "./showroom-view";
 
-export const metadata = { title: "Client Portal — Order Tracker" };
 
 export default async function ClientSidePage({
   searchParams,
