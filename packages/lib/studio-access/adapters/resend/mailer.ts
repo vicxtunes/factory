@@ -9,7 +9,9 @@ import "server-only";
 
 import { AppError } from "@repo/lib/kernel/core";
 
+import { LOGO_CID } from "../../core";
 import type { Mailer } from "../../ports";
+import { LOGO_PNG_BASE64 } from "./logo";
 
 export const resendMailer: Mailer = {
   async send({ to, subject, text, html }) {
@@ -25,7 +27,17 @@ export const resendMailer: Mailer = {
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { authorization: `Bearer ${key}`, "content-type": "application/json" },
-      body: JSON.stringify({ from, to: [to], subject, text, html }),
+      body: JSON.stringify({
+        from,
+        to: [to],
+        subject,
+        text,
+        html,
+        // The logo travels inside the email (src="cid:…"), so it shows without loading outside images.
+        attachments: html.includes(`cid:${LOGO_CID}`)
+          ? [{ filename: "aming-space.png", content: LOGO_PNG_BASE64, content_type: "image/png", content_id: LOGO_CID }]
+          : undefined,
+      }),
     });
     if (!response.ok) {
       console.error("resend: send failed", response.status, await response.text());

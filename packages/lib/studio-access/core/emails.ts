@@ -6,6 +6,8 @@ import { CODE_MINUTES } from "./rules";
 import type { ReviewDecision } from "./model";
 
 export const BRAND = "Aming Space";
+/** The logo embedded in each email (the mailer attaches it under this id). */
+export const LOGO_CID = "aming-space-logo";
 const ORANGE = "#f67413";
 const NAVY = "#1f2a4d";
 
@@ -19,7 +21,7 @@ export interface Email {
 export interface EmailLinks {
   /** The studio workspace. */
   workspace: string;
-  /** The app icon at a public address, or null to show the name only. */
+  /** The logo's image source: `cid:${LOGO_CID}` (embedded by the mailer), a public https address, or null for the name only. */
   logo: string | null;
 }
 

@@ -14,7 +14,7 @@ import { notifyActor } from "@repo/lib/push/send";
 
 import { resendMailer } from "./adapters/resend/mailer";
 import { supabaseAccessStore } from "./adapters/supabase/store";
-import { CODE_DIGITS, UNLOCK_DAYS, type DeviceUnlock } from "./core";
+import { CODE_DIGITS, LOGO_CID, UNLOCK_DAYS, type DeviceUnlock } from "./core";
 import type { AccessSecrets } from "./ports";
 import { StudioAccessService } from "./service";
 
@@ -41,8 +41,8 @@ export const studioAccess = new StudioAccessService(
   { notify: (clientId, message) => notifyActor({ type: "client", id: clientId }, message) },
   {
     workspace: clientUrl("/studio"),
-    // Email apps only load images from a public https address.
-    logo: clientUrl("/icon-192.png").startsWith("https://") ? clientUrl("/icon-192.png") : null,
+    // Embedded in each email by the Resend mailer, so it shows even where outside images are hidden.
+    logo: `cid:${LOGO_CID}`,
   },
 );
 
