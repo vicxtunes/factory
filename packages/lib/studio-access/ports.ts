@@ -41,7 +41,8 @@ export interface AccessStore {
 }
 
 export interface Mailer {
-  send(email: { to: string; subject: string; text: string }): Promise<void>;
+  /** `html` is the designed version; `text` is for mail apps that don't show designs. */
+  send(email: { to: string; subject: string; text: string; html: string }): Promise<void>;
 }
 
 /** Randomness and hashing, kept out of the service so its rules can be tested. */

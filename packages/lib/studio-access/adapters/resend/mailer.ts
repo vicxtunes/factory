@@ -12,7 +12,7 @@ import { AppError } from "@repo/lib/kernel/core";
 import type { Mailer } from "../../ports";
 
 export const resendMailer: Mailer = {
-  async send({ to, subject, text }) {
+  async send({ to, subject, text, html }) {
     const key = process.env.RESEND_API_KEY;
     const from = process.env.EMAIL_FROM;
     if (!key || !from) {
@@ -25,7 +25,7 @@ export const resendMailer: Mailer = {
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { authorization: `Bearer ${key}`, "content-type": "application/json" },
-      body: JSON.stringify({ from, to: [to], subject, text }),
+      body: JSON.stringify({ from, to: [to], subject, text, html }),
     });
     if (!response.ok) {
       console.error("resend: send failed", response.status, await response.text());

@@ -39,7 +39,11 @@ export const studioAccess = new StudioAccessService(
   secrets,
   r2ObjectStore,
   { notify: (clientId, message) => notifyActor({ type: "client", id: clientId }, message) },
-  { workspace: clientUrl("/studio") },
+  {
+    workspace: clientUrl("/studio"),
+    // Email apps only load images from a public https address.
+    logo: clientUrl("/icon-192.png").startsWith("https://") ? clientUrl("/icon-192.png") : null,
+  },
 );
 
 // ── This device's unlock ──

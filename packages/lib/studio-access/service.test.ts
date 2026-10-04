@@ -31,7 +31,7 @@ function blank(tenantId: string, name: string): StudioAccess {
 function setup() {
   const studios = new Map<string, StudioAccess>([[A, blank(A, "Amina Studio")], [B, blank(B, "Bright Studio")]]);
   const codes = new Map<string, EmailCode>();
-  const sent: { to: string; subject: string; text: string }[] = [];
+  const sent: { to: string; subject: string; text: string; html: string }[] = [];
   const pushed: { clientId: string; title: string }[] = [];
   const objects = new Map<string, number>();
   let clock = new Date("2026-10-04T10:00:00Z");
@@ -88,7 +88,7 @@ function setup() {
     secrets,
     files,
     { notify: async (clientId, m) => void pushed.push({ clientId, title: m.title }) },
-    { workspace: "https://client.test/studio" },
+    { workspace: "https://client.test/studio", logo: "https://client.test/icon-192.png" },
     () => clock,
   );
   return {
@@ -224,6 +224,7 @@ test("review: approve, send back with a reason, suspend; the owner is told", asy
   assert.equal(t.one(A).status, "active");
   assert.equal(t.one(A).reviewNote, null);
   assert.match(t.sent.at(-1)!.subject, /is approved/);
+  assert.match(t.sent.at(-1)!.html, /Open your studio/);
   await assert.rejects(t.service.review(A, "approve", ""), /isn't waiting/);
 
   await assert.rejects(t.service.review(A, "suspend", " "), /Tell the studio why/);
@@ -256,4 +257,18 @@ test("logo: uploaded to a signed link, checked, moved; the old one is deleted", 
   t.objects.set(third.key, 50_000);
   await t.service.confirmLogo(A, third.key);
   assert.ok(!t.objects.has(kept), "the old logo is deleted");
+});
+
+test("emails: Aming Space branding, a plain-text copy, and names can't inject HTML", async () => {
+  const t = setup();
+  t.one(A).name = "<b>Amina</b> & Co";
+  await t.service.sendVerifyCode(A, "amina@mail.com");
+  const email = t.sent.at(-1)!;
+  assert.equal(email.subject, "123456 is your <b>Amina</b> & Co code", "subjects are plain text");
+  assert.match(email.text, /123456/);
+  assert.match(email.text, /Aming Space/);
+  assert.match(email.html, /Aming <span[^>]*>Space<\/span>/);
+  assert.match(email.html, /icon-192\.png/);
+  assert.ok(email.html.includes("&lt;b&gt;Amina&lt;/b&gt; &amp; Co") && !email.html.includes("<b>Amina</b>"));
+  assert.match(email.html, /Replies to it aren't read|Replies to it aren&#39;t read/);
 });

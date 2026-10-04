@@ -73,6 +73,7 @@ Each step saves as it's done, so leaving and coming back resumes at the first mi
 packages/lib/studio-access/
   core/
     model.ts       StudioStatus, StudioAccess, EmailCode, StudioForReview, ReviewDecision.
+    emails.ts      The emails (Aming Space branded HTML + plain text): code, password changed, review. Edit wording here.
     rules.ts       Code, password and lock rules; passwordProblem; afterDecision; isUnlocked; maskEmail.
     schema.ts      zod: details, email, code, new password (twice), unlock, reset, review, upload key.
   ports.ts         AccessStore, Mailer, AccessSecrets, LogoFiles, OwnerNotifier, AccessError.
@@ -96,4 +97,5 @@ On both Vercel projects (the factory app emails review decisions):
 - `EMAIL_FROM`: the sender on a domain verified in Resend, e.g. `Aming <studio@yourdomain.com>`.
 
 Without a key outside production, emails are printed in the server log, so codes can be tried
-locally. The factory app also needs the `R2_*` settings to show logos on the review page.
+locally. The emails' logo is the client app's `/icon-192.png` at `NEXT_PUBLIC_CLIENT_ORIGIN`
+(email apps only load https images); without it they show the name only. The factory app also needs the `R2_*` settings to show logos on the review page.

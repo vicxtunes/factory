@@ -9,6 +9,7 @@ import {
   afterWrongPassword,
   CODE_MAX_TRIES,
   CODE_MINUTES,
+  codeEmail,
   deviceUnlock,
   isLocked,
   isSettingUp,
@@ -16,22 +17,21 @@ import {
   maskEmail,
   missingForSubmit,
   needsReason,
+  passwordChangedEmail,
   passwordProblem,
   RESEND_SECONDS,
   resendWait,
+  reviewEmail,
   type DeviceUnlock,
+  type Email,
   type EmailCode,
+  type EmailLinks,
   type ReviewDecision,
   type StudioAccess,
   type StudioDetails,
   type StudioForReview,
 } from "./core";
 import { AccessError, type AccessSecrets, type AccessStore, type LogoFiles, type Mailer, type OwnerNotifier } from "./ports";
-
-export interface AccessLinks {
-  /** The studio workspace, for emails and notifications. */
-  workspace: string;
-}
 
 const minutesLeft = (until: string, now: Date) => Math.max(1, Math.ceil((Date.parse(until) - now.getTime()) / 60_000));
 
@@ -42,7 +42,7 @@ export class StudioAccessService {
     private readonly secrets: AccessSecrets,
     private readonly files: LogoFiles,
     private readonly notifier: OwnerNotifier,
-    private readonly links: AccessLinks,
+    private readonly links: EmailLinks,
     private readonly now: () => Date = () => new Date(),
   ) {}
 
@@ -171,10 +171,7 @@ export class StudioAccessService {
     if (problem) throw new AccessError(problem);
     await this.useCode(tenantId, "reset", code);
     const unlock = await this.storePassword(access, password);
-    await this.tell(access, {
-      subject: "Your studio password was changed",
-      text: `The password for ${access.name} was just changed, and every other device was signed out.\n\nIf this wasn't you, reset it again at ${this.links.workspace} and contact Aming.`,
-    });
+    await this.tell(access, passwordChangedEmail(this.links, access.name));
     return unlock;
   }
 
@@ -209,14 +206,11 @@ export class StudioAccessService {
         title: `${access.name} is approved`,
         body: "Your studio is open: your public page is live and your clients can sign in.",
       },
-      send_back: { title: `${access.name} needs a few changes`, body: `Aming asks: ${reason}` },
-      suspend: { title: `${access.name} is suspended`, body: `Aming says: ${reason}` },
+      send_back: { title: `${access.name} needs a few changes`, body: `Aming Space asks: ${reason}` },
+      suspend: { title: `${access.name} is suspended`, body: `Aming Space says: ${reason}` },
     }[decision];
     await this.notifier.notify(access.ownerClientId, { ...message, url: this.links.workspace });
-    await this.tell(access, {
-      subject: message.title,
-      text: `${message.body}\n\nOpen your studio: ${this.links.workspace}`,
-    });
+    await this.tell(access, reviewEmail(this.links, access.name, decision, reason));
   }
 
   // ── Internals ──
@@ -249,12 +243,7 @@ export class StudioAccessService {
       sentAt: now.toISOString(),
       expiresAt: new Date(now.getTime() + CODE_MINUTES * 60_000).toISOString(),
     });
-    const what = purpose === "verify" ? "verify this email for" : "reset the password of";
-    await this.mailer.send({
-      to: email,
-      subject: `${code} is your ${access.name} code`,
-      text: `Your code to ${what} ${access.name} on Aming is:\n\n${code}\n\nIt works for ${CODE_MINUTES} minutes. If you didn't ask for it, ignore this email.`,
-    });
+    await this.mailer.send({ to: email, ...codeEmail(this.links, access.name, purpose, code) });
   }
 
   /** Checks a code (10 minutes, 5 tries) and uses it up. Returns the email it was sent to. */
@@ -279,7 +268,7 @@ export class StudioAccessService {
   }
 
   /** Emails the owner, when they have a verified address. Best effort: never undoes what happened. */
-  private async tell(access: StudioAccess, email: { subject: string; text: string }): Promise<void> {
+  private async tell(access: StudioAccess, email: Email): Promise<void> {
     if (!access.ownerEmail || !access.ownerEmailVerifiedAt) return;
     try {
       await this.mailer.send({ to: access.ownerEmail, ...email });
