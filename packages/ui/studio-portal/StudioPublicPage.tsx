@@ -1,7 +1,9 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 
 import { whatsappNumber } from "@repo/lib/kernel/core/phone";
 import type { Offering } from "@repo/lib/offerings/core";
+import type { AlbumView } from "@repo/lib/photos/core";
 import type { Studio } from "@repo/lib/studios/core";
 import { formatAmount } from "@repo/lib/tenancy/format";
 import type { TenantScope } from "@repo/lib/tenancy/types";
@@ -21,6 +23,8 @@ export function StudioPublicPage({
   offerings,
   scope,
   signedInAs,
+  albums,
+  showroom,
 }: {
   studio: Studio;
   slug: string;
@@ -28,6 +32,10 @@ export function StudioPublicPage({
   scope: Pick<TenantScope, "currency" | "locale">;
   /** The client signed in at this studio on this device, if any. */
   signedInAs: string | null;
+  /** Public albums, linked to their own pages. */
+  albums: AlbumView[];
+  /** The 3D showroom of album covers (rendered by the app, which owns the scene). */
+  showroom: ReactNode;
 }) {
   const wa = studio.phone ? `https://wa.me/${whatsappNumber(studio.phone)}` : null;
   const book = wa ? `${wa}?text=${encodeURIComponent(`Hello ${studio.name}, I'd like to book a shoot.`)}` : null;
@@ -55,6 +63,27 @@ export function StudioPublicPage({
           ) : null}
         </div>
       </header>
+
+      {showroom}
+
+      {albums.length ? (
+        <section className="space-y-3">
+          <h2 className="text-lg font-semibold">Our work</h2>
+          <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            {albums.map((a) => (
+              <li key={a.id}>
+                <Link href={`/${slug}/gallery/${a.slug}`} className="block overflow-hidden rounded-2xl border border-border bg-surface shadow-theme-xs hover:bg-background">
+                  {a.coverUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element -- signed storage link, already resized
+                    <img src={a.coverUrl} alt="" loading="lazy" className="aspect-[4/3] w-full object-cover" />
+                  ) : null}
+                  <p className="p-3 font-medium">{a.title}</p>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       <div className="grid gap-6 md:grid-cols-[1fr_20rem]">
         <section className={card}>
