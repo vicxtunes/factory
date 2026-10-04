@@ -6,17 +6,10 @@ import { Button } from "@repo/ui/Button";
 import { Field, TextInput } from "@repo/ui/Field";
 import { PasswordInput } from "@repo/ui/PasswordInput";
 import { PhoneInput } from "@repo/ui/PhoneInput";
-import {
-  SetupActions,
-  SetupChecklist,
-  SetupFocused,
-  SetupSplit,
-  SetupWelcome,
-  type SetupStep,
-} from "@repo/ui/studio-access/SetupLayouts";
+import { SetupActions, SetupSplit, SetupWelcome, type SetupStep } from "@repo/ui/studio-access/SetupLayouts";
 
-// A clickable studio set-up for comparing the three layouts. The forms are
-// stand-ins (nothing is saved); the frames are the real drafts.
+// A clickable studio set-up in the real frame (SetupSplit). The forms are
+// stand-ins: nothing is saved (the real steps are in OnboardingWizard).
 
 const STEPS = [
   { id: "details", label: "Studio details", hint: "Name, owner and phone", title: "Your studio", description: "Your clients and Aming see these. We filled them in from your Aming account: change anything that isn't right." },
@@ -118,21 +111,20 @@ function StepForm({ id }: { id: StepId }) {
 const stepsAt = (index: number): SetupStep[] =>
   STEPS.map((s, i) => ({ id: s.id, label: s.label, hint: s.hint, optional: "optional" in s, state: i < index ? "done" : i === index ? "current" : "todo" }));
 
-/** A or B: welcome first, then one step at a time. */
-export function SteppedDemo({ layout, start = -1 }: { layout: "split" | "focused"; start?: number }) {
+/** Welcome first, then one step at a time. */
+export function SteppedDemo({ start = -1 }: { start?: number }) {
   const [index, setIndex] = useState(start);
-  const Frame = layout === "split" ? SetupSplit : SetupFocused;
   if (index < 0) {
     return (
-      <Frame steps={stepsAt(-1)} title="" description="">
+      <SetupSplit steps={stepsAt(-1)} title="Set up your studio" description="Run your photography business from one place, next to your Aming orders. It takes about 5 minutes; Aming then reviews your studio before it opens.">
         <SetupWelcome onStart={() => setIndex(0)} />
-      </Frame>
+      </SetupSplit>
     );
   }
   const step = STEPS[index]!;
   const last = index === STEPS.length - 1;
   return (
-    <Frame steps={stepsAt(index)} title={step.title} description={step.description}>
+    <SetupSplit steps={stepsAt(index)} title={step.title} description={step.description} onSelect={(id) => setIndex(STEPS.findIndex((s) => s.id === id))}>
       <StepForm id={step.id} />
       <SetupActions back={{ onClick: () => setIndex(index - 1) }}>
         {step.id === "logo" ? (
@@ -142,49 +134,6 @@ export function SteppedDemo({ layout, start = -1 }: { layout: "split" | "focused
         ) : null}
         <Button onClick={() => setIndex(last ? 0 : index + 1)}>{last ? "Submit for review" : step.id === "email" ? "Verify" : "Save and continue"}</Button>
       </SetupActions>
-    </Frame>
-  );
-}
-
-/** C: every step on one page. */
-export function ChecklistDemo() {
-  const [done, setDone] = useState<string[]>(["details"]);
-  const [open, setOpen] = useState<string | null>("logo");
-  const steps: SetupStep[] = STEPS.filter((s) => s.id !== "review").map((s) => ({
-    id: s.id,
-    label: s.label,
-    hint: s.hint,
-    optional: "optional" in s,
-    state: done.includes(s.id) ? "done" : "todo",
-  }));
-  const ready = steps.every((s) => s.optional || s.state === "done");
-  return (
-    <SetupChecklist
-      steps={steps}
-      open={open}
-      onOpen={setOpen}
-      renderStep={(id) => (
-        <div className="space-y-4">
-          <p className="text-sm text-muted">{STEPS.find((s) => s.id === id)!.description}</p>
-          <StepForm id={id as StepId} />
-          <div className="flex justify-end">
-            <Button
-              onClick={() => {
-                setDone((d) => [...new Set([...d, id])]);
-                setOpen(steps.find((s) => s.id !== id && s.state !== "done" && !done.includes(s.id))?.id ?? null);
-              }}
-            >
-              Save
-            </Button>
-          </div>
-        </div>
-      )}
-      footer={
-        <div className="flex flex-col gap-3 rounded-2xl border border-border bg-surface p-4 @md:flex-row @md:items-center @md:justify-between">
-          <p className="text-sm text-muted">{ready ? "All set. Aming will review your studio." : "Finish the required steps to submit."}</p>
-          <Button disabled={!ready}>Submit for review</Button>
-        </div>
-      }
-    />
+    </SetupSplit>
   );
 }

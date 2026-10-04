@@ -1,13 +1,14 @@
 "use client";
 
+import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { CalendarIcon, ClientsIcon, InvoiceIcon, PlaceOrderIcon, ShowroomIcon } from "@repo/ui/icons";
 
-// Frames for a studio's set-up, in three styles (Design Room drafts: A split
-// panel, B focused steps, C checklist). They lay out with container queries
-// (@container), not screen breakpoints, so they adapt to the space they're
-// given: a phone, a laptop, or a Design Room device frame.
+// The frames for a studio's set-up (chosen in the Design Room: "A · Split
+// panel"). They lay out with container queries (@container), not screen
+// breakpoints, so they adapt to the space they're given: a phone, a laptop,
+// or a Design Room device frame.
 
 export type SetupStepState = "done" | "current" | "todo";
 
@@ -38,14 +39,18 @@ function CheckIcon({ className }: { className?: string }) {
   );
 }
 
+const BackToAming = ({ className }: { className: string }) => (
+  <Link href="/" className={className}>
+    ← Back to Aming
+  </Link>
+);
+
 /** A step's marker: a tick when done, its number otherwise. */
-function StepMarker({ step, index, tone }: { step: SetupStep; index: number; tone: "light" | "dark" }) {
+function StepMarker({ step, index }: { step: SetupStep; index: number }) {
   const base = "grid h-7 w-7 shrink-0 place-items-center rounded-full text-xs font-semibold";
   if (step.state === "done") return <span className={`${base} bg-success-500 text-white`}><CheckIcon className="h-4 w-4" /></span>;
   if (step.state === "current") return <span className={`${base} bg-brand-500 text-white`}>{index + 1}</span>;
-  return (
-    <span className={`${base} border ${tone === "dark" ? "border-white/30 text-white/70" : "border-border text-muted"}`}>{index + 1}</span>
-  );
+  return <span className={`${base} border border-white/30 text-white/70`}>{index + 1}</span>;
 }
 
 /** "Step 2 of 6" with a segmented bar; nothing before set-up has started (no current step). */
@@ -80,15 +85,6 @@ export function SetupActions({ back, children }: { back?: { label?: string; onCl
   );
 }
 
-function StepHeading({ title, description }: { title: string; description?: string }) {
-  return (
-    <header className="mb-6 space-y-1.5">
-      <h1 className="text-xl font-semibold tracking-tight @2xl:text-2xl">{title}</h1>
-      {description ? <p className="text-sm leading-relaxed text-muted">{description}</p> : null}
-    </header>
-  );
-}
-
 // ── Welcome: what the studio gets, and what set-up needs. A list, not tiles. ──
 
 const GETS = [
@@ -104,7 +100,6 @@ const NEEDS = ["Your studio's phone number", "An email you can open now (for a c
 export function SetupWelcome({ onStart }: { onStart: () => void }) {
   return (
     <div className="space-y-8">
-      <StepHeading title="Set up your studio" description="Run your photography business from one place, next to your Aming orders. It takes about 5 minutes; Aming then reviews your studio before it opens." />
       <ul className="divide-y divide-border">
         {GETS.map(({ Icon, title, text }) => (
           <li key={title} className="flex gap-4 py-3.5 first:pt-0">
@@ -138,41 +133,76 @@ export function SetupWelcome({ onStart }: { onStart: () => void }) {
   );
 }
 
-// ── A · Split panel ──
-
-/** A navy panel with the steps beside the form (wide); a compact step header above it (narrow). */
-export function SetupSplit({ steps, title, description, children }: { steps: SetupStep[]; title: string; description?: string; children: ReactNode }) {
+/**
+ * Set-up's frame: a navy panel with the steps beside the form (wide), a
+ * compact step header above it (narrow). `onSelect` lets the owner jump to a
+ * step from the panel; `notice` sits above the heading (e.g. Aming's reason
+ * for sending the studio back).
+ */
+export function SetupSplit({
+  steps,
+  title,
+  description,
+  notice,
+  onSelect,
+  children,
+}: {
+  steps: SetupStep[];
+  title: string;
+  description?: string;
+  notice?: ReactNode;
+  onSelect?: (id: string) => void;
+  children: ReactNode;
+}) {
   return (
-    <div className="@container flex min-h-full flex-col bg-surface">
+    <div className="@container flex min-h-dvh flex-col bg-surface">
       <div className="flex-1 @3xl:grid @3xl:grid-cols-[300px_1fr]">
         <aside className={`hidden ${NAVY} p-8 text-white @3xl:flex @3xl:flex-col`}>
           <Wordmark inverted />
           <p className="mt-10 text-lg font-semibold">Set up your studio</p>
           <p className="mt-1 text-sm text-white/60">About 5 minutes. Aming reviews every studio before it opens.</p>
-          <ol className="mt-8 space-y-0">
+          <ol className="mt-8">
             {steps.map((s, i) => (
-              <li key={s.id} className="relative flex gap-3 pb-6 last:pb-0">
+              <li key={s.id} className="relative pb-6 last:pb-0">
                 {i < steps.length - 1 ? <span className="absolute left-3.5 top-8 h-[calc(100%-2.25rem)] w-px bg-white/15" aria-hidden /> : null}
-                <StepMarker step={s} index={i} tone="dark" />
-                <div className="pt-0.5">
-                  <p className={`text-sm font-medium ${s.state === "todo" ? "text-white/60" : ""}`}>
-                    {s.label}
-                    {s.optional ? <span className="ml-1.5 text-xs font-normal text-white/40">Optional</span> : null}
-                  </p>
-                  {s.state === "current" ? <p className="mt-0.5 text-xs text-white/60">{s.hint}</p> : null}
-                </div>
+                <button
+                  type="button"
+                  disabled={!onSelect}
+                  onClick={() => onSelect?.(s.id)}
+                  aria-current={s.state === "current" ? "step" : undefined}
+                  className="flex w-full gap-3 rounded-lg text-left enabled:hover:opacity-90"
+                >
+                  <StepMarker step={s} index={i} />
+                  <span className="pt-0.5">
+                    <span className={`block text-sm font-medium ${s.state === "todo" ? "text-white/60" : ""}`}>
+                      {s.label}
+                      {s.optional ? <span className="ml-1.5 text-xs font-normal text-white/40">Optional</span> : null}
+                    </span>
+                    {s.state === "current" ? <span className="mt-0.5 block text-xs text-white/60">{s.hint}</span> : null}
+                  </span>
+                </button>
               </li>
             ))}
           </ol>
-          <p className="mt-auto pt-8 text-xs text-white/40">Need help? Message Aming from Chat.</p>
+          <div className="mt-auto space-y-2 pt-8 text-xs text-white/50">
+            <BackToAming className="block font-medium text-white/80 hover:text-white" />
+            <p>Need help? Message Aming from Chat.</p>
+          </div>
         </aside>
         <section className="flex flex-col px-4 py-6 @2xl:px-12 @2xl:py-12">
           <div className="mb-8 space-y-5 @3xl:hidden">
-            <Wordmark />
+            <div className="flex items-center justify-between">
+              <Wordmark />
+              <BackToAming className="text-sm font-medium text-brand-600" />
+            </div>
             <StepProgress steps={steps} />
           </div>
           <div className="w-full max-w-xl flex-1">
-            <StepHeading title={title} description={description} />
+            {notice}
+            <header className="mb-6 space-y-1.5">
+              <h1 className="text-xl font-semibold tracking-tight @2xl:text-2xl">{title}</h1>
+              {description ? <p className="text-sm leading-relaxed text-muted">{description}</p> : null}
+            </header>
             {children}
           </div>
         </section>
@@ -181,86 +211,15 @@ export function SetupSplit({ steps, title, description, children }: { steps: Set
   );
 }
 
-// ── B · Focused steps ──
-
-/** One task per screen in a centred column, with a segmented progress bar. */
-export function SetupFocused({ steps, title, description, children }: { steps: SetupStep[]; title: string; description?: string; children: ReactNode }) {
+/** A plain centred frame for set-up's other screens: being reviewed, suspended, unlock. */
+export function SetupFrame({ children }: { children: ReactNode }) {
   return (
-    <div className="@container flex min-h-full flex-col bg-background">
-      <header className="flex h-14 items-center justify-between border-b border-border bg-surface px-4 @2xl:px-8">
+    <div className="flex min-h-dvh flex-col bg-background">
+      <header className="flex h-16 items-center justify-between border-b border-border bg-surface px-4 sm:px-6">
         <Wordmark />
-        <span className="text-xs text-muted">Saved as you go</span>
+        <BackToAming className="text-sm font-medium text-brand-600 hover:underline" />
       </header>
-      <div className="mx-auto w-full max-w-lg px-4 py-6 @2xl:py-12">
-        <div className="mb-8">
-          <StepProgress steps={steps} />
-        </div>
-        <div className="@2xl:rounded-2xl @2xl:border @2xl:border-border @2xl:bg-surface @2xl:p-8 @2xl:shadow-theme-xs">
-          <StepHeading title={title} description={description} />
-          {children}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── C · Checklist ──
-
-/** Every step on one page, each opening in place; done ones can be reopened. */
-export function SetupChecklist({
-  steps,
-  open,
-  onOpen,
-  renderStep,
-  footer,
-}: {
-  steps: SetupStep[];
-  open: string | null;
-  onOpen: (id: string | null) => void;
-  renderStep: (id: string) => ReactNode;
-  footer: ReactNode;
-}) {
-  const required = steps.filter((s) => !s.optional);
-  const done = required.filter((s) => s.state === "done").length;
-  return (
-    <div className="@container min-h-full bg-background">
-      <div className="mx-auto w-full max-w-2xl px-4 py-6 @2xl:py-12">
-        <Wordmark />
-        <div className="mt-8 flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight @2xl:text-2xl">Set up your studio</h1>
-            <p className="mt-1 text-sm text-muted">Finish the required steps, then submit for Aming&apos;s review.</p>
-          </div>
-          <p className="text-sm font-medium tnum">
-            {done} of {required.length} done
-          </p>
-        </div>
-        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-gray-200 dark:bg-white/10" aria-hidden>
-          <div className="h-full rounded-full bg-brand-500 transition-all" style={{ width: `${(done / required.length) * 100}%` }} />
-        </div>
-        <ol className="mt-6 divide-y divide-border overflow-hidden rounded-2xl border border-border bg-surface shadow-theme-xs">
-          {steps.map((s, i) => {
-            const isOpen = open === s.id;
-            return (
-              <li key={s.id}>
-                <button type="button" onClick={() => onOpen(isOpen ? null : s.id)} aria-expanded={isOpen} className="flex w-full items-center gap-3 px-4 py-4 text-left hover:bg-gray-50 @2xl:px-5 dark:hover:bg-white/5">
-                  <StepMarker step={{ ...s, state: s.state === "done" ? "done" : isOpen ? "current" : "todo" }} index={i} tone="light" />
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-sm font-medium">
-                      {s.label}
-                      {s.optional ? <span className="ml-1.5 text-xs font-normal text-muted">Optional</span> : null}
-                    </span>
-                    <span className="block truncate text-xs text-muted">{s.hint}</span>
-                  </span>
-                  <span className={`text-xs font-medium ${s.state === "done" ? "text-success-600" : "text-brand-600"}`}>{s.state === "done" ? "Done" : isOpen ? "" : "Start"}</span>
-                </button>
-                {isOpen ? <div className="border-t border-border bg-gray-50/50 px-4 py-5 @2xl:px-5 dark:bg-white/[0.02]">{renderStep(s.id)}</div> : null}
-              </li>
-            );
-          })}
-        </ol>
-        <div className="mt-6">{footer}</div>
-      </div>
+      <main className="mx-auto w-full max-w-md flex-1 px-4 py-10 sm:py-16">{children}</main>
     </div>
   );
 }

@@ -5,7 +5,7 @@ import { SteppedDemo } from "./demo";
 export default function SetupSplitPhone() {
   return (
     <DeviceFrame device="mobile" chrome={false} className="mx-auto w-72">
-      <SteppedDemo layout="split" start={0} />
+      <SteppedDemo start={0} />
     </DeviceFrame>
   );
 }
