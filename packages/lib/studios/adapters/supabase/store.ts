@@ -20,9 +20,12 @@ interface Row {
   locale: string;
   time_zone: string;
   created_at: string;
+  status: Studio["status"];
+  logo_key: string | null;
+  password_set_at: string | null;
 }
 
-const COLUMNS = "id, owner_client_id, name, phone, email, address, currency, locale, time_zone, created_at";
+const COLUMNS = "id, owner_client_id, name, phone, email, address, currency, locale, time_zone, created_at, status, logo_key, password_set_at";
 
 const toStudio = (r: Row): Studio => ({
   id: r.id,
@@ -35,6 +38,9 @@ const toStudio = (r: Row): Studio => ({
   locale: r.locale,
   timeZone: r.time_zone,
   createdAt: r.created_at,
+  status: r.status,
+  logoKey: r.logo_key,
+  passwordSetAt: r.password_set_at,
 });
 
 type ListingRow = Row & { owner: { name: string } | null };

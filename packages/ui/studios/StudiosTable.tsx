@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { StudioStatusBadge } from "@repo/ui/studio-access/StatusBadge";
 import type { StudioListing } from "@repo/lib/studios/core";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
@@ -16,10 +17,11 @@ export function StudiosTable({ studios, scope }: { studios: StudioListing[]; sco
 
   return (
     <div className="overflow-x-auto rounded-2xl border border-border bg-surface shadow-theme-xs">
-      <table className="w-full min-w-[640px] text-sm">
+      <table className="w-full min-w-[720px] text-sm">
         <thead>
           <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted">
             <th className="px-4 py-2 font-medium">Studio</th>
+            <th className="px-4 py-2 font-medium">Status</th>
             <th className="px-4 py-2 font-medium">Owner</th>
             <th className="px-4 py-2 font-medium">Contact</th>
             <th className="px-4 py-2 font-medium">Opened</th>
@@ -32,6 +34,9 @@ export function StudiosTable({ studios, scope }: { studios: StudioListing[]; sco
                 <Link href={`/dashboard/studios/${s.id}`} className="font-medium hover:underline">
                   {s.name}
                 </Link>
+              </td>
+              <td className="px-4 py-2">
+                <StudioStatusBadge status={s.status} />
               </td>
               <td className="px-4 py-2">{s.ownerName}</td>
               <td className="px-4 py-2 text-muted">

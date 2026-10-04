@@ -22,6 +22,7 @@ import type { CreateOrderResult, OrderItemInput } from "@repo/lib/orders/types";
 import { projectIdSchema } from "@repo/lib/projects/core";
 import { notifyActor } from "@repo/lib/push/send";
 import { fetchClientNotifications } from "@repo/lib/queries";
+import { clearUnlockCookie } from "@repo/lib/studio-access/server";
 import { linkPlacedOrder } from "@repo/lib/studio-orders/server";
 import type { NotificationRow, OrderType } from "@repo/lib/types";
 
@@ -190,6 +191,8 @@ export async function removePin(currentPin: string): Promise<ActionResult> {
 export async function logoutClient(): Promise<void> {
   const store = await cookies();
   store.delete(CLIENT_COOKIE);
+  // Signing out of Aming locks My Studio on this device too.
+  await clearUnlockCookie();
 }
 
 export interface ClientOrderPayload {

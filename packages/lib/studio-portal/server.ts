@@ -59,13 +59,17 @@ export interface StudioAtSlug {
   redirectTo: string | null;
 }
 
-/** The studio at a slug (current or old), or null (unknown slug, or studios are off). */
+/**
+ * The studio at a slug (current or old), or null: unknown slug, studios off,
+ * or a studio Aming hasn't approved (or has suspended). So its public page,
+ * client sign-in and shared galleries are all off until it's active.
+ */
 export const studioAtSlug = cache(async (slug: string): Promise<StudioAtSlug | null> => {
   if (!STUDIOS_ENABLED) return null;
   const found = await portal.resolve(slug);
   if (!found) return null;
   const studio = await studios.get(found.tenantId);
-  if (!studio) return null;
+  if (!studio || studio.status !== "active") return null;
   return { studio, scope: studioScope(studio), redirectTo: found.redirectTo };
 });
 
