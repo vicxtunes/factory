@@ -3,10 +3,12 @@ import { PeriodPicker } from "@repo/ui/accounting/PeriodPicker";
 import { BookingsList } from "@repo/ui/bookings/BookingBits";
 import { ProjectsList } from "@repo/ui/projects/ProjectBits";
 import { TaskRows } from "@repo/ui/tasks/TaskRows";
+import { UsageBar } from "@repo/ui/photos/UsageBar";
 import { SectionLabel } from "@repo/ui/SectionLabel";
 import { localDate } from "@repo/lib/accounting/core/period";
 import { periodFrom } from "@repo/lib/accounting/params";
 import { bookings } from "@repo/lib/bookings/server";
+import { photos } from "@repo/lib/photos/server";
 import { projects } from "@repo/lib/projects/server";
 import { tasks } from "@repo/lib/tasks/server";
 import { studioAccounts } from "@repo/lib/billing/server";
@@ -28,16 +30,18 @@ export default async function StudioDashboardPage({
 }) {
   const { scope, studio } = await requireStudio();
   const today = localDate(new Date(), scope.timeZone);
-  const [view, upcoming, inHand, todo] = await Promise.all([
+  const [view, upcoming, inHand, todo, usage] = await Promise.all([
     studioAccounts.overview(scope, periodFrom(await searchParams)),
     bookings.upcoming(scope, today),
     projects.active(scope),
     tasks.open(scope),
+    photos.usage(scope),
   ]);
 
   return (
     <>
       <h2 className="text-xl font-semibold">{studio.name}</h2>
+      <UsageBar usage={usage} />
       <div className="grid gap-4 lg:grid-cols-2">
         <section>
           <SectionLabel>Coming up</SectionLabel>

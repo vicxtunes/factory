@@ -5,10 +5,13 @@ import { notFound, permanentRedirect } from "next/navigation";
 import { StudioPublicPage } from "@repo/ui/studio-portal/StudioPublicPage";
 import { getClientSession } from "@repo/lib/auth/session";
 import { offerings } from "@repo/lib/offerings/server";
+import { PhotoError } from "@repo/lib/photos/ports";
+import { photos } from "@repo/lib/photos/server";
 import { fetchCurrencies, fetchProductBySlug, fetchShowroomSettings } from "@repo/lib/queries";
 import { portalClient, studioAtSlug } from "@repo/lib/studio-portal/server";
 
 import { ProductPageView } from "../product-page-view";
+import { StudioShowroom } from "../studio-showroom";
 import { ClientShell } from "../shell";
 
 // The client portal's top-level addresses, client.<domain>/{slug}: shared
@@ -57,8 +60,26 @@ export default async function SlugPage({ params }: Params) {
   const at = await studioAtSlug(slug);
   if (!at) notFound();
   if (at.redirectTo) permanentRedirect(`/${at.redirectTo}`);
-  const [onSale, signedIn] = await Promise.all([offerings.list(at.scope), portalClient(at.studio.id)]);
-  return <StudioPublicPage studio={at.studio} slug={slug} offerings={onSale} scope={at.scope} signedInAs={signedIn?.name ?? null} />;
+  const [onSale, signedIn, albums] = await Promise.all([
+    offerings.list(at.scope),
+    portalClient(at.studio.id),
+    // Until photo storage is set up the page still shows, without albums; any other failure surfaces.
+    photos.albums(at.scope, true).catch((err) => {
+      if (err instanceof PhotoError) return [];
+      throw err;
+    }),
+  ]);
+  return (
+    <StudioPublicPage
+      studio={at.studio}
+      slug={slug}
+      offerings={onSale}
+      scope={at.scope}
+      signedInAs={signedIn?.name ?? null}
+      albums={albums}
+      showroom={<StudioShowroom albums={albums} slug={slug} />}
+    />
+  );
 }
 
 async function ProductPage({ found }: { found: NonNullable<Awaited<ReturnType<typeof fetchProductBySlug>>> }) {
