@@ -3,7 +3,9 @@
 // already-installed copy of the app.
 export const APP_IDENTITY = {
   id: "/client",
-  name: "AMING Client",
-  shortName: "AMING Client",
-  description: "Browse the showroom, place orders and track them to delivery.",
+  name: "Aming Space",
+  shortName: "Aming Space",
+  /** The home page's title; other pages are "<page> - Aming Space". */
+  title: "Aming Space - Creativity Meets Business",
+  description: "Prints, photobooks and frames for photographers, and a studio workspace to run your photography business.",
 };

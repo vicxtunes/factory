@@ -5,7 +5,7 @@ import { Button } from "@repo/ui/Button";
 import { Header } from "@repo/ui/Header";
 import { getClientSession } from "@repo/lib/auth/session";
 
-export const metadata = { title: "Page not found — AMING" };
+export const metadata = { title: "Page not found" };
 
 // Signed-in clients go back to their orders, everyone else to the showroom
 // (the portal's front door, served at /).

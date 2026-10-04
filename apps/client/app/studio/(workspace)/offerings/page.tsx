@@ -4,7 +4,7 @@ import { OfferingsList } from "@repo/ui/offerings/OfferingsList";
 import { offerings } from "@repo/lib/offerings/server";
 import { requireStudio } from "@repo/lib/studios/server";
 
-export const metadata = { title: "Packages & Services — My Studio" };
+export const metadata = { title: "Packages & Services · My Studio" };
 
 export default async function StudioOfferingsPage() {
   const { scope } = await requireStudio();

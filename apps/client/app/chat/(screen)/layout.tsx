@@ -5,7 +5,7 @@ import { getClientSession } from "@repo/lib/auth/session";
 
 import { ClientShell } from "../../shell";
 
-export const metadata = { title: "Chat — AMING" };
+export const metadata = { title: "Chat" };
 
 // The client's chat, inside the portal's own frame. A layout rather than the
 // page so the shell and ChatApp stay mounted while chatting: opening a

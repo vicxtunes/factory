@@ -28,7 +28,7 @@ function sectionTitle(pathname: string): string {
   const parent = Object.keys(PAGE_TITLES)
     .filter((path) => path !== "/" && pathname.startsWith(`${path}/`))
     .sort((a, b) => b.length - a.length)[0];
-  return parent ? PAGE_TITLES[parent] : "Client Portal";
+  return parent ? PAGE_TITLES[parent] : "Aming Space";
 }
 
 export function ClientTopbar({

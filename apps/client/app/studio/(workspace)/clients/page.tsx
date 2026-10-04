@@ -4,7 +4,7 @@ import { CustomersList } from "@repo/ui/customers/CustomersList";
 import { customers } from "@repo/lib/customers/server";
 import { requireStudio } from "@repo/lib/studios/server";
 
-export const metadata = { title: "Clients — My Studio" };
+export const metadata = { title: "Clients · My Studio" };
 
 export default async function StudioClientsPage() {
   const { scope } = await requireStudio();

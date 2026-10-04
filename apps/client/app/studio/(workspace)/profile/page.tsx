@@ -7,7 +7,7 @@ import { slugFromName } from "@repo/lib/studio-portal/core";
 import { portal } from "@repo/lib/studio-portal/server";
 import { requireStudio } from "@repo/lib/studios/server";
 
-export const metadata = { title: "Studio profile — My Studio" };
+export const metadata = { title: "Studio profile · My Studio" };
 
 export default async function StudioProfilePage() {
   const { studio } = await requireStudio();

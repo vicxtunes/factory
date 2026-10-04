@@ -10,7 +10,7 @@ import { canEditInvoice, canVoidInvoice, invoiceIdSchema } from "@repo/lib/billi
 import { invoices, invoiceUrl, receiptUrl } from "@repo/lib/billing/server";
 import { requireStudio } from "@repo/lib/studios/server";
 
-export const metadata = { title: "Invoice — My Studio" };
+export const metadata = { title: "Invoice · My Studio" };
 
 const button =
   "inline-flex min-h-11 items-center rounded-[var(--radius)] border border-gray-300 bg-white px-4 text-sm text-gray-700 shadow-theme-xs hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300";

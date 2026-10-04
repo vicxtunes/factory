@@ -18,7 +18,8 @@ const noopSubscribe = () => () => {};
 // which exist during SSR — read through useSyncExternalStore (server
 // snapshot: false) rather than a useState lazy initializer, so the server
 // and first client render agree and there's no hydration-mismatch pop-in.
-export function InstallGate() {
+/** `appName`: what the app is called on the home screen (the client app is "Aming Space"). */
+export function InstallGate({ appName = "AMING" }: { appName?: string }) {
   const shouldShow = useSyncExternalStore(
     noopSubscribe,
     () => !isRunningStandalone() && !sessionStorage.getItem(DISMISSED_KEY),
@@ -65,7 +66,7 @@ export function InstallGate() {
       <div className="w-full max-w-sm rounded-2xl border border-border bg-surface p-6 text-center shadow-theme-xl">
         <p className="text-lg font-semibold">Install the app!</p>
         <p className="mt-2 text-sm text-muted">
-          Add AMING to this device for quicker access and fewer interruptions.
+          Add {appName} to this device for quicker access and fewer interruptions.
         </p>
 
         {isIos() ? (

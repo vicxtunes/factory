@@ -22,10 +22,16 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+// Links in share previews (WhatsApp, Facebook, …) must be full addresses: the
+// portal's own, from NEXT_PUBLIC_CLIENT_ORIGIN (https://www.amingspace.com).
+const origin = process.env.NEXT_PUBLIC_CLIENT_ORIGIN;
+
 export const metadata: Metadata = {
-  title: app.name,
+  ...(origin ? { metadataBase: new URL(origin) } : {}),
+  title: { default: app.title, template: `%s - ${app.name}` },
   description: app.description,
   applicationName: app.shortName,
+  openGraph: { siteName: app.name, title: app.title, description: app.description, type: "website" },
   // iOS uses this for the home-screen label.
   appleWebApp: {
     capable: true,

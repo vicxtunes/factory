@@ -17,7 +17,7 @@ import { customers } from "@repo/lib/customers/server";
 import { requireStudio } from "@repo/lib/studios/server";
 import { formatAmount, formatDay } from "@repo/lib/tenancy/format";
 
-export const metadata = { title: "Client — My Studio" };
+export const metadata = { title: "Client · My Studio" };
 
 export default async function StudioClientPage({ params }: { params: Promise<{ id: string }> }) {
   const { scope } = await requireStudio();

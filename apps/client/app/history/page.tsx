@@ -6,7 +6,7 @@ import { fetchActiveWorkersPublic, fetchClientItems } from "@repo/lib/queries";
 import { ClientShell } from "../shell";
 import { ClientOrdersBoard } from "../orders-board";
 
-export const metadata = { title: "History — Client Portal" };
+export const metadata = { title: "History" };
 export const dynamic = "force-dynamic";
 
 export default async function ClientHistoryPage() {
