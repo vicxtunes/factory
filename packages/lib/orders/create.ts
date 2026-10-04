@@ -52,7 +52,7 @@ export interface BuildOrderParams {
 }
 
 export type BuildOrderResult =
-  | { ok: true; orderNo: string; items: { formIndex: number; itemId: string }[] }
+  | { ok: true; orderId: string; orderNo: string; items: { formIndex: number; itemId: string }[] }
   | { ok: false; error: string };
 
 // The shared body of order creation: server-side catalog validation, the
@@ -275,6 +275,7 @@ export async function buildAndInsertOrder(
 
   return {
     ok: true,
+    orderId: order.id,
     orderNo: order.order_no,
     items: candidateItems.map(({ formIndex }, i) => ({ formIndex, itemId: insertedItems[i].id })),
   };

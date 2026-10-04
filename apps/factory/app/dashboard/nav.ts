@@ -6,6 +6,7 @@
 import type { HomeBarIcon } from "@repo/ui/HomeBar";
 import { canViewAccounts } from "@repo/lib/accounting/policy";
 import { canViewAnnouncements } from "@repo/lib/announcements/access";
+import { canViewAllStudios } from "@repo/lib/studios/policy";
 import { SUPPORT_OWNER_EMAIL } from "@repo/lib/support/constants";
 import { isManagerRole, type AppRole } from "@repo/lib/types";
 
@@ -35,6 +36,7 @@ const everyone = () => true;
 const managers = (v: NavViewer) => isManagerRole(v.role);
 const boss = (v: NavViewer) => v.role === "boss";
 const accountsViewers = (v: NavViewer) => canViewAccounts(v.role);
+const studiosOverseers = (v: NavViewer) => canViewAllStudios(v.role);
 // Support-report review is gated by email, not role: several accounts can
 // be "boss", only this one person should see what staff report.
 const developer = (v: NavViewer) => v.email === SUPPORT_OWNER_EMAIL;
@@ -98,6 +100,8 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "People",
     items: [
       { href: "/dashboard/clients", label: "Clients", icon: "clients", visible: managers },
+      // Clients' own photography studios (packages/lib/studios). The boss oversees them all.
+      { href: "/dashboard/studios", label: "Studios", icon: "studio", visible: studiosOverseers },
       { href: "/dashboard/agents", label: "Agents", icon: "agents", visible: managers },
       { href: "/dashboard/workers", label: "Workers", icon: "workers", visible: managers },
       { href: "/dashboard/designers", label: "Designers", icon: "designers", visible: managers },

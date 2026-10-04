@@ -1,6 +1,7 @@
 // What a host app must provide to store discounts. This app's implementation
 // is ./adapters/factory/store.ts. Every method is scoped to one tenant.
 
+import { AppError } from "@repo/lib/kernel/core";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
 import type { Discount, DiscountInput } from "./core/model";
@@ -21,4 +22,4 @@ export interface DiscountStore {
 }
 
 /** A problem the person should see (the message is safe to show). */
-export class DiscountError extends Error {}
+export class DiscountError extends AppError {}

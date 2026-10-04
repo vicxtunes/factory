@@ -97,6 +97,7 @@ export function OrderForm({
   initialVariantId,
   showPrices,
   currencies,
+  project,
 }: {
   catalog: ProductCategory[];
   // Set when arriving from the showroom's "Place an order" button — left
@@ -108,11 +109,13 @@ export function OrderForm({
   // Boss-configurable (dashboard Products page) — see ShowroomSettings.
   showPrices: boolean;
   currencies: Currency[];
+  /** Ordering for a studio project: linked to it once placed (packages/lib/studio-orders). */
+  project?: { id: string; title: string };
 }) {
   const router = useRouter();
   const [orderType, setOrderType] = useState<OrderType>("normal");
   const [expressWarningOpen, setExpressWarningOpen] = useState(false);
-  const [orderNotes, setOrderNotes] = useState("");
+  const [orderNotes, setOrderNotes] = useState(project ? `For project: ${project.title}` : "");
   const [items, setItems] = useState<ClientItemForm[]>(() => [
     emptyItem(initialCategoryId, initialProductId, initialVariantId),
   ]);
@@ -181,6 +184,7 @@ export function OrderForm({
         order_type: hasPhotobookItem ? orderType : "normal",
         delivery_date: deliveryDate,
         order_notes: orderNotes,
+        project_id: project?.id ?? null,
         // Strip `files` before this crosses the Server Action boundary —
         // passing the raw File objects through would encode their bytes
         // into the action's request body, blowing straight through Next's
@@ -206,7 +210,7 @@ export function OrderForm({
       // Staged files have no upload target until the items actually exist
       // — upload them now that placeOrder handed back real item ids,
       // same order as packages/ui/order/OrderForm.tsx's staff-side flow.
-      const warnings: string[] = [];
+      const warnings: string[] = [...res.warnings];
       for (const { formIndex, itemId } of res.items) {
         const files = items[formIndex]?.files ?? [];
         for (const file of files) {
@@ -231,12 +235,20 @@ export function OrderForm({
 
   if (receipt) {
     return (
-      <OrderPlaced
-        orderNo={receipt.orderNo}
-        total={receipt.total}
-        needsReview={receipt.needsReview}
-        uploadWarnings={uploadWarnings}
-      />
+      <>
+        {project ? (
+          <Link href={`/studio/projects/${project.id}`} className="mb-3 inline-flex items-center gap-1.5 text-sm font-medium text-brand-600 hover:underline">
+            <ArrowLeftIcon className="h-4 w-4" />
+            Back to {project.title}
+          </Link>
+        ) : null}
+        <OrderPlaced
+          orderNo={receipt.orderNo}
+          total={receipt.total}
+          needsReview={receipt.needsReview}
+          uploadWarnings={uploadWarnings}
+        />
+      </>
     );
   }
 
@@ -249,12 +261,17 @@ export function OrderForm({
       }}
     >
       <Link
-        href="/showroom"
+        href={project ? `/studio/projects/${project.id}` : "/showroom"}
         className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-600 hover:underline"
       >
         <ArrowLeftIcon className="h-4 w-4" />
-        Back to showroom
+        {project ? `Back to ${project.title}` : "Back to showroom"}
       </Link>
+      {project ? (
+        <p className="rounded-[var(--radius)] bg-brand-50 px-3 py-2 text-sm text-brand-700 dark:bg-brand-500/15 dark:text-brand-300">
+          Ordering for your project <span className="font-semibold">{project.title}</span>. It will show on the project once placed.
+        </p>
+      ) : null}
 
       <h1 className="mt-3 text-2xl font-bold sm:text-3xl">Place order</h1>
 

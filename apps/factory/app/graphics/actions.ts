@@ -484,7 +484,7 @@ export async function createDesignerOrder(
   revalidatePath("/graphics");
   revalidatePath("/factory");
   revalidatePath("/dashboard");
-  return { ok: true, orderNo: res.orderNo, items: res.items, warnings };
+  return { ok: true, orderId: res.orderId, orderNo: res.orderNo, items: res.items, warnings };
 }
 
 // Designer-session equivalent of the dashboard's lookupClientDuplicates —

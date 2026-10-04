@@ -14,13 +14,16 @@ import {
   resolveOrCreateClient,
   type ClientCandidate,
 } from "@repo/lib/clients/dedupe";
-import { parsePhone } from "@repo/lib/clients/phone";
+import { parsePhone } from "@repo/lib/kernel/core/phone";
 import { buildAndInsertOrder } from "@repo/lib/orders/create";
 import { applyCancellation, cleanReason, loadCancellableOrder } from "@repo/lib/orders/cancel";
 import { isPhotobookCategory } from "@repo/lib/orders/photobook";
 import type { CreateOrderResult, OrderItemInput } from "@repo/lib/orders/types";
+import { projectIdSchema } from "@repo/lib/projects/core";
 import { notifyActor } from "@repo/lib/push/send";
 import { fetchClientNotifications } from "@repo/lib/queries";
+import { clearUnlockCookie } from "@repo/lib/studio-access/server";
+import { linkPlacedOrder } from "@repo/lib/studio-orders/server";
 import type { NotificationRow, OrderType } from "@repo/lib/types";
 
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 30; // "remembered on device", same as worker/designer sessions
@@ -46,19 +49,13 @@ async function setClientCookie(clientId: string, name: string): Promise<void> {
 // form know, after the phone step, whether to ask for a name (new account)
 // or a PIN (returning + PIN enabled).
 
-// The client, if any, that holds this phone number — searched in every format
-// it might be stored in (see packages/lib/clients/phone.ts): the DB matcher folds
-// numbers as Ghana (+233), so "0700768312" and "+256700768312" — the same
-// Ugandan number — would otherwise look like two different clients.
+// The client, if any, that holds this phone number. The database matches it
+// however the record was typed (0703…, +256703…; norm_client_phone).
 async function clientByPhone(
   admin: ReturnType<typeof createAdminClient>,
-  variants: string[],
+  phone: string,
 ): Promise<ClientCandidate | null> {
-  const seen = new Map<string, ClientCandidate>();
-  for (const phone of variants) {
-    for (const c of await findClientCandidates(admin, { phone })) seen.set(c.id, c);
-  }
-  return exactClientMatch([...seen.values()]);
+  return exactClientMatch(await findClientCandidates(admin, { phone }));
 }
 
 export async function checkAccount(phone: string): Promise<{ exists: boolean; pinRequired: boolean; error?: string }> {
@@ -66,7 +63,7 @@ export async function checkAccount(phone: string): Promise<{ exists: boolean; pi
   if (!parsed.ok) return { exists: false, pinRequired: false, error: parsed.error };
 
   const admin = createAdminClient();
-  const match = await clientByPhone(admin, parsed.variants);
+  const match = await clientByPhone(admin, parsed.store);
   if (!match || !match.active) return { exists: false, pinRequired: false };
 
   const { data: cred } = await admin
@@ -87,7 +84,7 @@ export async function continueLogin(input: {
   if (!parsed.ok) return { ok: false, error: parsed.error };
 
   const admin = createAdminClient();
-  const match = await clientByPhone(admin, parsed.variants);
+  const match = await clientByPhone(admin, parsed.store);
 
   if (match) {
     if (!match.active) return { ok: false, error: "This account is inactive — contact us for help." };
@@ -106,8 +103,12 @@ export async function continueLogin(input: {
     return { ok: true };
   }
 
-  const name = input.name?.trim();
-  if (!name) return { ok: false, error: "Name is required." };
+  // A new number: their full name or studio name, so reception knows who
+  // they're dealing with. At least two letters, so a number or "." won't do.
+  const name = input.name?.trim().replace(/\s+/g, " ");
+  if (!name || (name.match(/\p{L}/gu)?.length ?? 0) < 2) {
+    return { ok: false, error: "Enter your full name or studio name." };
+  }
   if (name.length > NAME_MAX) return { ok: false, error: `Name must be ${NAME_MAX} characters or fewer.` };
 
   const resolved = await resolveOrCreateClient(admin, {
@@ -190,6 +191,8 @@ export async function removePin(currentPin: string): Promise<ActionResult> {
 export async function logoutClient(): Promise<void> {
   const store = await cookies();
   store.delete(CLIENT_COOKIE);
+  // Signing out of Aming locks My Studio on this device too.
+  await clearUnlockCookie();
 }
 
 export interface ClientOrderPayload {
@@ -197,6 +200,8 @@ export interface ClientOrderPayload {
   delivery_date: string;
   order_notes: string;
   items: OrderItemInput[];
+  /** A studio project this order is for (My Studio → project → "Order from Aming"). */
+  project_id?: string | null;
 }
 
 export async function placeOrder(input: ClientOrderPayload): Promise<CreateOrderResult> {
@@ -257,9 +262,18 @@ export async function placeOrder(input: ClientOrderPayload): Promise<CreateOrder
     );
   }
 
+  // Ordered for one of the client's studio projects: link it there. The order
+  // stands either way; a failed link only comes back as a warning.
+  const warnings: string[] = [];
+  const project = input.project_id ? projectIdSchema.safeParse(input.project_id) : null;
+  if (project?.success) {
+    const problem = await linkPlacedOrder(project.data, res.orderId);
+    if (problem) warnings.push(problem);
+  }
+
   revalidatePath("/");
   revalidatePath("/history");
-  return { ...res, warnings: [] };
+  return { ...res, warnings };
 }
 
 // The client's half of the receptionist quote/approval loop (see
