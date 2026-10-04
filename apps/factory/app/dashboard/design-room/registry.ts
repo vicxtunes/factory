@@ -1,5 +1,13 @@
 import type { ComponentType } from "react";
 
+import SetupChecklistDesktop from "./examples/studio-setup/checklist-desktop";
+import SetupChecklistPhone from "./examples/studio-setup/checklist-phone";
+import SetupFocusedDesktop from "./examples/studio-setup/focused-desktop";
+import SetupFocusedPhone from "./examples/studio-setup/focused-phone";
+import SetupFocusedWelcomePhone from "./examples/studio-setup/focused-welcome-phone";
+import SetupSplitDesktop from "./examples/studio-setup/split-desktop";
+import SetupSplitPhone from "./examples/studio-setup/split-phone";
+import SetupSplitWelcomePhone from "./examples/studio-setup/split-welcome-phone";
 import ActivityFeedCommentsOnly from "./examples/activity-feed/comments-only";
 import ActivityFeedEmpty from "./examples/activity-feed/empty";
 import ActivityFeedMixed from "./examples/activity-feed/mixed";
@@ -104,7 +112,7 @@ import WorkloadViewTeam from "./examples/workload-view/team";
 // an entry here. Flip status to "live" once a real page uses it. Sample
 // data shared across several examples lives in ./examples/_data/.
 
-export const CATEGORIES = ["Actions", "Inputs", "Navigation", "Overlays", "Feedback", "Data display", "Project management", "Media"] as const;
+export const CATEGORIES = ["Flows", "Actions", "Inputs", "Navigation", "Overlays", "Feedback", "Data display", "Project management", "Media"] as const;
 
 export type RoomStatus = "live" | "draft";
 
@@ -121,6 +129,44 @@ export interface RoomComponent {
 }
 
 export const COMPONENTS: RoomComponent[] = [
+  {
+    slug: "studio-setup-split",
+    name: "Studio set-up · A · Split panel",
+    category: "Flows",
+    status: "draft",
+    source: "packages/ui/studio-access/SetupLayouts.tsx (SetupSplit)",
+    summary: "Steps in a navy brand panel beside the form; on phones a compact step header and buttons pinned to the bottom. Click through it.",
+    examples: [
+      { title: "Desktop", file: "studio-setup/split-desktop.tsx", Demo: SetupSplitDesktop },
+      { title: "Phone", file: "studio-setup/split-phone.tsx", Demo: SetupSplitPhone },
+      { title: "Welcome, phone", file: "studio-setup/split-welcome-phone.tsx", Demo: SetupSplitWelcomePhone },
+    ],
+  },
+  {
+    slug: "studio-setup-focused",
+    name: "Studio set-up · B · Focused steps",
+    category: "Flows",
+    status: "draft",
+    source: "packages/ui/studio-access/SetupLayouts.tsx (SetupFocused)",
+    summary: "One task per screen in a centred column with a segmented progress bar; the same on desktop and phone. Click through it.",
+    examples: [
+      { title: "Desktop", file: "studio-setup/focused-desktop.tsx", Demo: SetupFocusedDesktop },
+      { title: "Phone", file: "studio-setup/focused-phone.tsx", Demo: SetupFocusedPhone },
+      { title: "Welcome, phone", file: "studio-setup/focused-welcome-phone.tsx", Demo: SetupFocusedWelcomePhone },
+    ],
+  },
+  {
+    slug: "studio-setup-checklist",
+    name: "Studio set-up · C · Checklist",
+    category: "Flows",
+    status: "draft",
+    source: "packages/ui/studio-access/SetupLayouts.tsx (SetupChecklist)",
+    summary: "Every step on one page with its status; each opens in place, in any order. Submit unlocks when the required ones are done.",
+    examples: [
+      { title: "Desktop", file: "studio-setup/checklist-desktop.tsx", Demo: SetupChecklistDesktop },
+      { title: "Phone", file: "studio-setup/checklist-phone.tsx", Demo: SetupChecklistPhone },
+    ],
+  },
   {
     slug: "button",
     name: "Button",
