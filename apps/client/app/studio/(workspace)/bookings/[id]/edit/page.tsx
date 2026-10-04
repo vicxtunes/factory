@@ -8,7 +8,7 @@ import { customers } from "@repo/lib/customers/server";
 import { offerings } from "@repo/lib/offerings/server";
 import { requireStudio } from "@repo/lib/studios/server";
 
-export const metadata = { title: "Edit booking — My Studio" };
+export const metadata = { title: "Edit booking · My Studio" };
 
 export default async function EditBookingPage({ params }: { params: Promise<{ id: string }> }) {
   const { scope } = await requireStudio();

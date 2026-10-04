@@ -9,7 +9,7 @@ import { invoices, quotations, quotationUrl } from "@repo/lib/billing/server";
 import { bookings } from "@repo/lib/bookings/server";
 import { requireStudio } from "@repo/lib/studios/server";
 
-export const metadata = { title: "Quotation — My Studio" };
+export const metadata = { title: "Quotation · My Studio" };
 
 export default async function StudioQuotationPage({ params }: { params: Promise<{ id: string }> }) {
   const { scope, studio } = await requireStudio();

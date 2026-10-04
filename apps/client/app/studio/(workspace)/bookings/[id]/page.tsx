@@ -12,7 +12,7 @@ import { projects } from "@repo/lib/projects/server";
 import { requireStudio } from "@repo/lib/studios/server";
 import { formatAmount, formatDay } from "@repo/lib/tenancy/format";
 
-export const metadata = { title: "Booking — My Studio" };
+export const metadata = { title: "Booking · My Studio" };
 
 export default async function StudioBookingPage({ params }: { params: Promise<{ id: string }> }) {
   const { scope } = await requireStudio();

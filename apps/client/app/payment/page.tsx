@@ -7,7 +7,7 @@ import { getMyWallet } from "@repo/lib/wallet/actions";
 
 import { ClientShell } from "../shell";
 
-export const metadata = { title: "Wallet — Client Portal" };
+export const metadata = { title: "Wallet" };
 export const dynamic = "force-dynamic";
 
 export default async function ClientPaymentPage({ searchParams }: { searchParams: Promise<{ add?: string }> }) {

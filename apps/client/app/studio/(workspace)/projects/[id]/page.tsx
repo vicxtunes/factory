@@ -23,7 +23,7 @@ import { tasks } from "@repo/lib/tasks/server";
 import { team } from "@repo/lib/team/server";
 import { formatAmount, formatDay } from "@repo/lib/tenancy/format";
 
-export const metadata = { title: "Project — My Studio" };
+export const metadata = { title: "Project · My Studio" };
 
 export default async function StudioProjectPage({ params }: { params: Promise<{ id: string }> }) {
   const { scope, studio } = await requireStudio();

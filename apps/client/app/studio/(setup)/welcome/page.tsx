@@ -7,7 +7,7 @@ import { studioAccess } from "@repo/lib/studio-access/server";
 import { slugFromName } from "@repo/lib/studio-portal/core";
 import { requireOwnStudio } from "@repo/lib/studios/server";
 
-export const metadata = { title: "My Studio — AMING" };
+export const metadata = { title: "My Studio" };
 
 // Where My Studio goes until the studio works: set-up (first time, or after
 // Aming sent it back), waiting for review, or suspended.

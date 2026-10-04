@@ -40,7 +40,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
     const image = product.display_image_url ?? "/showroom/placeholder.PNG";
     // Title, description and picture used by WhatsApp, Facebook, X, etc. when the link is shared.
     return {
-      title: `${product.name} — Showroom`,
+      title: `${product.name} · Showroom`,
       description,
       openGraph: { title: product.name, description, images: [image], type: "website" },
       twitter: { card: "summary_large_image", title: product.name, description, images: [image] },

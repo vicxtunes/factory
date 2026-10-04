@@ -5,6 +5,7 @@ import { InstallGate } from "@repo/ui/pwa/InstallGate";
 import { NotificationGate } from "@repo/ui/pwa/NotificationGate";
 
 import { ClientHomeBar } from "./home-bar";
+import { APP_IDENTITY } from "./identity";
 import { ClientSidebar } from "./sidebar";
 import { ClientTopbar } from "./topbar";
 
@@ -29,7 +30,7 @@ export function ClientShell({
           screens (InstallGate/NotificationGate's own docs). */}
       {signedIn ? (
         <>
-          <InstallGate />
+          <InstallGate appName={APP_IDENTITY.name} />
           <NotificationGate />
           <AnnouncementPopup />
         </>

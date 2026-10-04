@@ -4,7 +4,7 @@ import { ProjectsBoard } from "@repo/ui/projects/ProjectsBoard";
 import { projects } from "@repo/lib/projects/server";
 import { requireStudio } from "@repo/lib/studios/server";
 
-export const metadata = { title: "Projects — My Studio" };
+export const metadata = { title: "Projects · My Studio" };
 
 export default async function StudioProjectsPage() {
   const { scope } = await requireStudio();

@@ -6,7 +6,7 @@ import { getClientSession } from "@repo/lib/auth/session";
 import { ClientShell } from "../shell";
 import { PinSettings } from "../pin-settings";
 
-export const metadata = { title: "Settings — Client Portal" };
+export const metadata = { title: "Settings" };
 export const dynamic = "force-dynamic";
 
 export default async function ClientSettingsPage() {

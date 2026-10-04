@@ -15,7 +15,7 @@ import { studioAccounts } from "@repo/lib/billing/server";
 import { CurrencySymbolProvider } from "@repo/lib/currency/CurrencySymbolProvider";
 import { requireStudio } from "@repo/lib/studios/server";
 
-export const metadata = { title: "My Studio — Client Portal" };
+export const metadata = { title: "My Studio" };
 
 /** Where the studio's figures lead. */
 const LINKS = { sales: "/studio/invoices", overdue: "/studio/invoices", clients: "/studio/clients", client: "/studio/clients/" };
