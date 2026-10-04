@@ -108,8 +108,12 @@ export async function continueLogin(input: {
     return { ok: true };
   }
 
-  const name = input.name?.trim();
-  if (!name) return { ok: false, error: "Name is required." };
+  // A new number: their full name or studio name, so reception knows who
+  // they're dealing with. At least two letters, so a number or "." won't do.
+  const name = input.name?.trim().replace(/\s+/g, " ");
+  if (!name || (name.match(/\p{L}/gu)?.length ?? 0) < 2) {
+    return { ok: false, error: "Enter your full name or studio name." };
+  }
   if (name.length > NAME_MAX) return { ok: false, error: `Name must be ${NAME_MAX} characters or fewer.` };
 
   const resolved = await resolveOrCreateClient(admin, {
