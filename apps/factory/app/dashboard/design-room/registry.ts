@@ -3,6 +3,23 @@ import type { ComponentType } from "react";
 import SetupSplitDesktop from "./examples/studio-setup/split-desktop";
 import SetupSplitPhone from "./examples/studio-setup/split-phone";
 import SetupSplitWelcomePhone from "./examples/studio-setup/split-welcome-phone";
+import ChatAttachmentsThread from "./examples/chat-attachments/thread";
+import MasonryGalleryClient from "./examples/masonry-gallery/client";
+import MasonryGalleryDownloads from "./examples/masonry-gallery/downloads";
+import ProjectGalleryDelivery from "./examples/project-gallery/delivery";
+import AddMediaButtonOrderItem from "./examples/add-media-button/order-item";
+import DownloadAllInParts from "./examples/download-all/in-parts";
+import DownloadAllOneZip from "./examples/download-all/one-zip";
+import LogoUploaderNoLogo from "./examples/logo-uploader/no-logo";
+import LogoUploaderWithLogo from "./examples/logo-uploader/with-logo";
+import MediaLinksFiles from "./examples/media-links/files";
+import MediaLinksLegacyLink from "./examples/media-links/legacy-link";
+import MediaLinksPrinting from "./examples/media-links/printing";
+import PhotoUploaderAlbum from "./examples/photo-uploader/album";
+import UploadRowStates from "./examples/upload-row/states";
+import UploadThumbsStates from "./examples/upload-thumbs/states";
+import UploadThumbsTryIt from "./examples/upload-thumbs/try-it";
+import UploadRowTryIt from "./examples/upload-row/try-it";
 import ActivityFeedCommentsOnly from "./examples/activity-feed/comments-only";
 import ActivityFeedEmpty from "./examples/activity-feed/empty";
 import ActivityFeedMixed from "./examples/activity-feed/mixed";
@@ -47,6 +64,7 @@ import LabelChipsEditable from "./examples/label-chips/editable";
 import LabelChipsMany from "./examples/label-chips/many";
 import LabelChipsReadOnly from "./examples/label-chips/read-only";
 import LightboxBasic from "./examples/lightbox/basic";
+import InvoiceViewerStaff from "./examples/invoice-viewer/staff";
 import PasswordInputBasic from "./examples/password-input/basic";
 import PhotoCarouselBasic from "./examples/photo-carousel/basic";
 import PhotoCarouselMobile from "./examples/photo-carousel/mobile";
@@ -107,7 +125,7 @@ import WorkloadViewTeam from "./examples/workload-view/team";
 // an entry here. Flip status to "live" once a real page uses it. Sample
 // data shared across several examples lives in ./examples/_data/.
 
-export const CATEGORIES = ["Flows", "Actions", "Inputs", "Navigation", "Overlays", "Feedback", "Data display", "Project management", "Media"] as const;
+export const CATEGORIES = ["Flows", "Actions", "Inputs", "Navigation", "Overlays", "Feedback", "Data display", "Project management", "Media", "Uploads & downloads"] as const;
 
 export type RoomStatus = "live" | "draft";
 
@@ -571,6 +589,17 @@ export const COMPONENTS: RoomComponent[] = [
     ],
   },
   {
+    slug: "invoice-viewer",
+    name: "Invoice viewer",
+    category: "Overlays",
+    status: "draft",
+    source: "packages/ui/invoices/InvoiceViewer.tsx",
+    summary: "Opening an invoice: the real PDF, large, full screen; share actions as icons; what's owed and Record payment on the side.",
+    examples: [
+      { title: "Staff opening an invoice", file: "invoice-viewer/staff.tsx", Demo: InvoiceViewerStaff },
+    ],
+  },
+  {
     slug: "photo-carousel",
     name: "Photo carousel",
     category: "Media",
@@ -605,5 +634,114 @@ export const COMPONENTS: RoomComponent[] = [
       { title: "Album grid", file: "album-card/grid.tsx", Demo: AlbumCardGrid },
       { title: "Single album", file: "album-card/single.tsx", Demo: AlbumCardSingle },
     ],
+  },
+  {
+    slug: "upload-row",
+    name: "Upload row",
+    category: "Uploads & downloads",
+    status: "live",
+    source: "packages/ui/UploadRow.tsx",
+    summary: "The shared \"Choose file\" row: button plus its own drop target, with a progress bar when the upload reports one. Used for order, product, marketing and client uploads.",
+    examples: [
+      { title: "Try it (pretend upload)", file: "upload-row/try-it.tsx", Demo: UploadRowTryIt },
+      { title: "States", file: "upload-row/states.tsx", Demo: UploadRowStates },
+    ],
+  },
+  {
+    slug: "upload-thumbs",
+    name: "Upload thumbnails",
+    category: "Uploads & downloads",
+    status: "live",
+    source: "packages/ui/UploadThumbs.tsx",
+    summary: "Goes under an Upload row: every picked file shows at once as a small preview, with ✕ to drop it before sending, a progress ring while it uploads, a tick when it's in, and Retry if it failed. Used by order forms, Add media and album uploads.",
+    examples: [
+      { title: "Try it (pretend upload)", file: "upload-thumbs/try-it.tsx", Demo: UploadThumbsTryIt },
+      { title: "States", file: "upload-thumbs/states.tsx", Demo: UploadThumbsStates },
+    ],
+  },
+  {
+    slug: "add-media-button",
+    name: "Add media to an order item",
+    category: "Uploads & downloads",
+    status: "live",
+    source: "packages/ui/media/AddMediaButton.tsx",
+    summary: "Adds files to an existing order item, or a pasted link instead: thumbnails with progress for each file, Retry on failure, and queued uploads while offline.",
+    examples: [{ title: "Order item", file: "add-media-button/order-item.tsx", Demo: AddMediaButtonOrderItem }],
+  },
+  {
+    slug: "photo-uploader",
+    name: "Album photo uploader",
+    category: "Uploads & downloads",
+    status: "live",
+    source: "packages/ui/photos/PhotoUploader.tsx",
+    summary: "Studio album uploads (Cloudflare R2): an Upload row plus thumbnails; each photo is shrunk in the browser and sent three at a time, with progress on its thumbnail.",
+    examples: [{ title: "Album", file: "photo-uploader/album.tsx", Demo: PhotoUploaderAlbum }],
+  },
+  {
+    slug: "logo-uploader",
+    name: "Logo uploader",
+    category: "Uploads & downloads",
+    status: "live",
+    source: "packages/ui/studio-access/LogoUploader.tsx",
+    summary: "A studio's logo: preview box plus upload button; shrinks the picture to 512px first. Spinner only, no progress.",
+    examples: [
+      { title: "No logo yet", file: "logo-uploader/no-logo.tsx", Demo: LogoUploaderNoLogo },
+      { title: "With a logo", file: "logo-uploader/with-logo.tsx", Demo: LogoUploaderWithLogo },
+    ],
+  },
+  {
+    slug: "media-links",
+    name: "Order item files",
+    category: "Uploads & downloads",
+    status: "live",
+    source: "packages/ui/media/MediaLinks.tsx",
+    summary: "An order item's attachments: photo thumbnails with a viewer, file and link buttons, one-by-one downloads (Save As on Chrome) and a server-made zip. On staff screens a photo isn't fetched until someone presses its cloud button, and downloaded files show a tick (hover to download again) with who and when.",
+    examples: [
+      { title: "Staff, while printing", file: "media-links/printing.tsx", Demo: MediaLinksPrinting },
+      { title: "Photos, a PDF and a link", file: "media-links/files.tsx", Demo: MediaLinksFiles },
+      { title: "Old orders: pasted link only", file: "media-links/legacy-link.tsx", Demo: MediaLinksLegacyLink },
+    ],
+  },
+  {
+    slug: "download-all",
+    name: "Download album",
+    category: "Uploads & downloads",
+    status: "live",
+    source: "packages/ui/photos/DownloadAll.tsx",
+    summary: "Downloads a whole album, zipped in the browser in parts of 50 so a phone can manage it.",
+    examples: [
+      { title: "One zip", file: "download-all/one-zip.tsx", Demo: DownloadAllOneZip },
+      { title: "In parts", file: "download-all/in-parts.tsx", Demo: DownloadAllInParts },
+    ],
+  },
+  {
+    slug: "project-gallery",
+    name: "Project gallery (studio)",
+    category: "Uploads & downloads",
+    status: "live",
+    source: "packages/ui/photos/ProjectGalleryPanel.tsx",
+    summary: "A studio's delivered photos on a project: storage used, the album uploader, the uploaded photos to manage, and the share link for the client.",
+    examples: [{ title: "Delivery", file: "project-gallery/delivery.tsx", Demo: ProjectGalleryDelivery }],
+  },
+  {
+    slug: "masonry-gallery",
+    name: "Client gallery",
+    category: "Uploads & downloads",
+    status: "live",
+    source: "packages/ui/photos/MasonryGallery.tsx",
+    summary: "How clients and share-link visitors see delivered photos: a masonry grid of small copies and a full-screen viewer, with per-photo downloads on deliveries.",
+    examples: [
+      { title: "Gallery", file: "masonry-gallery/client.tsx", Demo: MasonryGalleryClient },
+      { title: "With downloads", file: "masonry-gallery/downloads.tsx", Demo: MasonryGalleryDownloads },
+    ],
+  },
+  {
+    slug: "chat-attachments",
+    name: "Chat attachments",
+    category: "Uploads & downloads",
+    status: "live",
+    source: "packages/ui/chat/MessageBubble.tsx (AttachmentView) + packages/ui/chat/VoicePlayer.tsx",
+    summary: "Files sent in chat: photos open in a new tab, files download, voice notes play inline. Shows \"(unavailable)\" when the link couldn't be made.",
+    examples: [{ title: "In a thread", file: "chat-attachments/thread.tsx", Demo: ChatAttachmentsThread }],
   },
 ];

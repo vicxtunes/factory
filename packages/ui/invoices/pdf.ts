@@ -1,15 +1,18 @@
 // Builds the invoice as an A4 PDF in the browser, laid out like the
-// business's existing invoices (and like ./InvoiceDocument.tsx): header,
-// Bill To + invoice details, a priced line table with the grand total, paid
-// and balance, payment history, terms, payment instructions and the
-// signature line, with "Page X of Y" on every page. jspdf is loaded only when
-// someone downloads, like the other exports (packages/lib/export/tableExport.ts).
+// business's existing invoices: header, Bill To + invoice details, a priced
+// line table with the grand total, paid and balance, payment history, terms,
+// payment instructions and the signature line, with "Page X of Y" on every
+// page. This is the invoice's only layout: the pages show it as paper
+// (./InvoicePdf.tsx) and download the same file. jspdf is loaded only when
+// needed, like the other exports (packages/lib/export/tableExport.ts).
 
 import { formatMoney } from "@repo/lib/currency/format";
 import { STATUS_LABELS } from "@repo/lib/invoices/policy";
 import type { InvoiceView } from "@repo/lib/invoices/types";
 import { PAYMENT_METHODS } from "@repo/lib/payments/details";
 import { paymentMethodLabel } from "@repo/lib/wallet/policy";
+
+import { pdfText as safe } from "@repo/ui/pdf/files";
 
 import { formatInvoiceDate } from "./format";
 import { documentLabels } from "./labels";
@@ -23,42 +26,42 @@ const MUTED: [number, number, number] = [100, 108, 120];
 const SHADE: [number, number, number] = [240, 243, 247];
 const RULE: [number, number, number] = [200, 205, 212];
 
-async function loadLogo(): Promise<string | null> {
+/** An image's bytes, or null when it can't be fetched (the PDF then does without it). */
+async function loadImage(url: string): Promise<Uint8Array | null> {
   try {
-    const res = await fetch("/icon-192.png");
-    if (!res.ok) return null;
-    const blob = await res.blob();
-    return await new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : null);
-      reader.onerror = () => resolve(null);
-      reader.readAsDataURL(blob);
-    });
+    const res = await fetch(url);
+    return res.ok ? new Uint8Array(await res.arrayBuffer()) : null;
   } catch {
     return null;
   }
 }
 
-/** Standard PDF fonts can't draw every Unicode character; swap the few we use for safe ones. */
-function safe(text: string): string {
-  return text.replace(/−/g, "-").replace(/[‘’]/g, "'").replace(/[“”]/g, '"');
-}
-
-export async function downloadInvoicePdf(invoice: InvoiceView, currencySymbol: string): Promise<void> {
-  const [{ default: jsPDF }, { default: autoTable }, logo] = await Promise.all([
+/** The invoice (or pro forma) as an A4 PDF file. */
+export async function invoicePdf(invoice: InvoiceView, currencySymbol: string): Promise<Blob> {
+  const { issuer } = invoice;
+  const [{ default: jsPDF }, { default: autoTable }, logo, signature] = await Promise.all([
     import("jspdf"),
     import("jspdf-autotable"),
-    loadLogo(),
+    // The logo from Invoice settings, else the app icon.
+    loadImage(issuer.logoUrl ?? "/icon-192.png"),
+    issuer.signatureUrl ? loadImage(issuer.signatureUrl) : null,
   ]);
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const money = (n: number) => safe(formatMoney(n, currencySymbol));
-  const { issuer } = invoice;
+  /** Draws an image as large as fits `w` × `h` (keeping its shape), against the right edge `x` + `w` when `right`. */
+  const fit = (image: Uint8Array, x: number, y: number, w: number, h: number, right = false) => {
+    const { width, height } = doc.getImageProperties(image);
+    const scale = Math.min(w / width, h / height);
+    const dw = width * scale;
+    doc.addImage(image, "PNG", right ? x + w - dw : x, y + h - height * scale, dw, height * scale);
+  };
   const labels = documentLabels(invoice);
   const showPaid = invoice.kind === "invoice" || invoice.paid > 0;
   doc.setTextColor(...INK);
 
   // --- Header -----------------------------------------------------------------
-  if (logo) doc.addImage(logo, "PNG", M, 10, 22, 22);
+  // Up to 40 × 22 mm: room for a wide logo without reaching the centred company name.
+  if (logo) fit(logo, M, 10, 40, 22);
   doc.setFont("helvetica", "bold").setFontSize(14);
   doc.text(safe(issuer.companyName), PAGE_W / 2, 17, { align: "center" });
   doc.setFont("helvetica", "normal").setFontSize(9).setTextColor(...MUTED);
@@ -117,6 +120,7 @@ export async function downloadInvoicePdf(invoice: InvoiceView, currencySymbol: s
     rest: [l.detail, l.description].filter(Boolean).map((t) => safe(t as string)),
   }));
   const DESC_W = 82;
+  const struck = (i: number) => invoice.lines[i].unitPrice != null && invoice.lines[i].listUnitPrice != null;
 
   autoTable(doc, {
     startY: y,
@@ -127,7 +131,8 @@ export async function downloadInvoicePdf(invoice: InvoiceView, currencySymbol: s
       String(i + 1),
       [descriptions[i].title, ...descriptions[i].rest].join("\n"),
       l.unit ? `${l.qty} ${safe(l.unit)}` : String(l.qty),
-      l.unitPrice != null ? money(l.unitPrice) : labels.unpriced,
+      // A discounted price sits under its crossed-out list price (drawn in didDrawCell).
+      l.unitPrice == null ? labels.unpriced : l.listUnitPrice != null ? `${money(l.listUnitPrice)}\n${money(l.unitPrice)}` : money(l.unitPrice),
       l.lineTotal != null ? money(l.lineTotal) : labels.unpriced,
     ]),
     styles: { font: "helvetica", fontSize: 10, textColor: INK, cellPadding: { top: 3, bottom: 3, left: 2, right: 2 }, valign: "top" },
@@ -145,10 +150,23 @@ export async function downloadInvoicePdf(invoice: InvoiceView, currencySymbol: s
       if (data.section === "head" && data.column.index >= 2) data.cell.styles.halign = "right";
     },
     willDrawCell: (data) => {
-      if (data.section === "body" && data.column.index === 1) data.cell.text = [];
+      if (data.section !== "body") return;
+      if (data.column.index === 1 || (data.column.index === 3 && struck(data.row.index))) data.cell.text = [];
     },
     didDrawCell: (data) => {
-      if (data.section !== "body" || data.column.index !== 1) return;
+      if (data.section !== "body") return;
+      if (data.column.index === 3 && struck(data.row.index)) {
+        const line = invoice.lines[data.row.index];
+        const x = data.cell.x + data.cell.width - 2;
+        const ty = data.cell.y + 3 + 3.5;
+        const list = money(line.listUnitPrice!);
+        doc.setFont("helvetica", "normal").setFontSize(9).setTextColor(...MUTED);
+        doc.text(list, x, ty, { align: "right" });
+        doc.setDrawColor(...MUTED).setLineWidth(0.2).line(x - doc.getTextWidth(list), ty - 1.1, x, ty - 1.1);
+        doc.setFontSize(10).setTextColor(...INK).text(money(line.unitPrice!), x, ty + 4.6, { align: "right" });
+        return;
+      }
+      if (data.column.index !== 1) return;
       const d = descriptions[data.row.index];
       const x = data.cell.x + 2;
       let ty = data.cell.y + 3 + 3.5;
@@ -263,7 +281,7 @@ export async function downloadInvoicePdf(invoice: InvoiceView, currencySymbol: s
   }));
   const termsHeight = 6 + termLines.reduce((h, l) => h + l.length * 4.2, 0);
   const payHeight = 6 + payLines.reduce((h, m) => h + 5.4 + m.fields.reduce((fh, f) => fh + f.length * 4.2, 0), 0) + 5;
-  const signatureHeight = issuer.signatureCompany ? 34 : 0;
+  const signatureHeight = issuer.signatureCompany || signature ? 34 : 0;
   ensure(Math.max(termsHeight, payHeight) + 8 + signatureHeight);
 
   if (termLines.length) {
@@ -295,9 +313,11 @@ export async function downloadInvoicePdf(invoice: InvoiceView, currencySymbol: s
   y += Math.max(termsHeight, payHeight) + 8;
 
   // --- Signature ----------------------------------------------------------------
-  if (issuer.signatureCompany) {
+  if (issuer.signatureCompany || signature) {
     doc.setTextColor(...INK).setFont("helvetica", "bold").setFontSize(12);
-    doc.text(safe(`For, ${issuer.signatureCompany}`), RIGHT, y, { align: "right" });
+    if (issuer.signatureCompany) doc.text(safe(`For, ${issuer.signatureCompany}`), RIGHT, y, { align: "right" });
+    // The signature from Invoice settings sits on the line; without one it's left blank to sign by hand.
+    if (signature) fit(signature, RIGHT - 55, y + 3, 55, 16.5, true);
     doc.setDrawColor(...MUTED).setLineWidth(0.2).line(RIGHT - 55, y + 20, RIGHT, y + 20);
     doc.setFont("helvetica", "normal").setFontSize(9).text("AUTHORIZED SIGNATURE", RIGHT, y + 25, { align: "right" });
   }
@@ -310,5 +330,5 @@ export async function downloadInvoicePdf(invoice: InvoiceView, currencySymbol: s
     doc.text(`Page ${i} of ${pages}`, RIGHT, PAGE_H - 8, { align: "right" });
   }
 
-  doc.save(`${invoice.invoiceNo}.pdf`);
+  return doc.output("blob");
 }

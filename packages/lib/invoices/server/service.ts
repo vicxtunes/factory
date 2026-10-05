@@ -5,6 +5,8 @@ import "server-only";
 // been paid, the payment history — goes through packages/lib/wallet's server API, so
 // invoices, the wallet, and (later) a payment provider share one ledger.
 
+import { randomUUID } from "crypto";
+
 import {
   applyWalletToOrder,
   orderClientBalance,
@@ -54,6 +56,8 @@ const DEFAULT_ISSUER: InvoiceIssuer = {
   email: null,
   terms: [],
   signatureCompany: null,
+  logoUrl: null,
+  signatureUrl: null,
 };
 
 async function getIssuer(): Promise<InvoiceIssuer> {
@@ -69,6 +73,8 @@ async function getIssuer(): Promise<InvoiceIssuer> {
       .map((t) => t.trim())
       .filter(Boolean),
     signatureCompany: row.signature_company,
+    logoUrl: row.logo_url,
+    signatureUrl: row.signature_url,
   };
 }
 
@@ -273,6 +279,8 @@ export async function getSettings(): Promise<InvoiceSettingsInput> {
     email: issuer.email ?? "",
     terms: issuer.terms.join("\n"),
     signatureCompany: issuer.signatureCompany ?? "",
+    logoUrl: issuer.logoUrl,
+    signatureUrl: issuer.signatureUrl,
   };
 }
 
@@ -287,8 +295,32 @@ export async function saveSettings(input: InvoiceSettingsInput): Promise<Invoice
     email: text(input.email, 120),
     terms: text(input.terms, 3000),
     signature_company: text(input.signatureCompany, 120),
+    logo_url: settingsImage(input.logoUrl),
+    signature_url: settingsImage(input.signatureUrl),
   });
   return getSettings();
+}
+
+/** Where a settings image is uploaded: a fresh name each time, so a URL never changes content. */
+const IMAGE_PATH = /^invoice\/(logo|signature)-[0-9a-f-]{36}\.png$/;
+
+/** Only images uploaded through startImageUpload are kept; anything else is refused. */
+function settingsImage(url: string | null): string | null {
+  if (!url) return null;
+  const prefix = repo.imageUrl("");
+  if (!url.startsWith(prefix) || !IMAGE_PATH.test(url.slice(prefix.length))) throw new InvoiceError("Upload the image again.");
+  return url;
+}
+
+/** A signed link the browser uploads the (already shrunk) PNG to. */
+export async function startImageUpload(kind: "logo" | "signature") {
+  return repo.startImageUpload(`invoice/${kind}-${randomUUID()}.png`);
+}
+
+/** Checks the upload arrived; its public URL goes into the settings form (saved with Save). */
+export async function confirmImageUpload(path: string): Promise<string> {
+  if (!IMAGE_PATH.test(path) || !(await repo.imageExists(path))) throw new InvoiceError("The image didn't arrive. Try uploading it again.");
+  return repo.imageUrl(path);
 }
 
 export async function update(invoiceId: string, input: { dueDate?: string | null; notes?: string | null }): Promise<StaffInvoiceView> {

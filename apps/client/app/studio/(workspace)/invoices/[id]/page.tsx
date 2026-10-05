@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { DocumentShare } from "@repo/ui/billing/DocumentShare";
-import { InvoiceDocument } from "@repo/ui/billing/InvoiceDocument";
+import { InvoicePdf } from "@repo/ui/billing/DocumentPdf";
 import { VoidInvoiceButton } from "@repo/ui/billing/InvoiceButtons";
 import { PaymentsPanel } from "@repo/ui/billing/PaymentsPanel";
 import { localDate } from "@repo/lib/accounting/core/period";
@@ -40,10 +40,6 @@ export default async function StudioInvoicePage({ params }: { params: Promise<{ 
               Edit
             </Link>
           ) : null}
-          {/* The client's view is a standalone document: open it to print or save as PDF. */}
-          <a href={invoiceUrl(invoice.shareToken)} target="_blank" rel="noreferrer" className={button}>
-            Open client view / Print
-          </a>
         </div>
       </div>
       {invoice.voidedAt ? null : (
@@ -62,7 +58,11 @@ export default async function StudioInvoicePage({ params }: { params: Promise<{ 
         today={localDate(new Date(), scope.timeZone)}
         scope={scope}
       />
-      <InvoiceDocument invoice={invoice} issuer={studio} scope={scope} />
+      <InvoicePdf
+        invoice={invoice}
+        issuer={{ name: studio.name, phone: studio.phone, email: studio.email, address: studio.address }}
+        scope={{ currency: scope.currency, locale: scope.locale, timeZone: scope.timeZone }}
+      />
       {canVoidInvoice(state) ? <VoidInvoiceButton invoiceId={invoice.id} /> : null}
     </>
   );

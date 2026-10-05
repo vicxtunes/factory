@@ -606,7 +606,7 @@ export function OrderDetail({
 
       <div className="space-y-2">
         <p className="text-xs uppercase tracking-wide text-muted">Photos</p>
-        <MediaLinks media={item.media} legacyLink={photoLink} editable onChanged={onChanged} />
+        <MediaLinks media={item.media} legacyLink={photoLink} editable trackDownloads onChanged={onChanged} />
         <AddMediaButton orderItemId={item.id} onUploaded={onChanged} />
       </div>
 

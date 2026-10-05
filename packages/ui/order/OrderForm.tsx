@@ -7,6 +7,7 @@ import { Field, Select, TextArea, TextInput } from "@repo/ui/Field";
 import { PhoneInput } from "@repo/ui/PhoneInput";
 import { SectionLabel } from "@repo/ui/SectionLabel";
 import { UploadRow } from "@repo/ui/UploadRow";
+import { UploadThumbs, uploadKey } from "@repo/ui/UploadThumbs";
 import { useCurrencySymbol } from "@repo/lib/currency/CurrencySymbolProvider";
 import { formatMoney } from "@repo/lib/currency/format";
 import type { DiscountKind, LineDiscount, Offer } from "@repo/lib/discounts/core/model";
@@ -221,7 +222,9 @@ export function OrderForm({
         const files = items[formIndex]?.files ?? [];
         for (const file of files) {
           setUploadStatus(`Uploading "${file.name}"…`);
-          const uploadRes = await uploadFileToStorage(itemId, file);
+          const uploadRes = await uploadFileToStorage(itemId, file, (p) =>
+            setUploadStatus(`Uploading "${file.name}" — ${Math.round(p * 100)}%`),
+          );
           if (!uploadRes.ok) warnings.push(uploadRes.error);
         }
 
@@ -991,19 +994,22 @@ function ItemRow({
       ) : null}
 
       <div className="mt-4 grid gap-4 border-t border-border pt-4 sm:grid-cols-2">
-        <div>
-          <p className="mb-1.5 text-xs font-medium text-muted">Photos</p>
+        <div className="space-y-2">
+          <p className="text-xs font-medium text-muted">Photos</p>
           <UploadRow
             label="Add photos"
-            hint={
-              item.files.length > 0
-                ? `${item.files.length} file(s) selected — uploaded once the order is created`
-                : "Uploaded once the order is created"
-            }
+            hint="Uploaded once the order is created"
             accept="image/*,application/pdf"
             multiple
             disabled={false}
-            onFiles={(files) => onChange(index, { files: Array.from(files) })}
+            onFiles={(files) => {
+              const known = new Set(item.files.map(uploadKey));
+              onChange(index, { files: [...item.files, ...Array.from(files).filter((f) => !known.has(uploadKey(f)))] });
+            }}
+          />
+          <UploadThumbs
+            items={item.files.map((file) => ({ key: uploadKey(file), file, state: "selected" as const }))}
+            onRemove={(key) => onChange(index, { files: item.files.filter((f) => uploadKey(f) !== key) })}
           />
         </div>
         <Field label="Or paste links" hint="Drive, Dropbox, etc. — one per line">

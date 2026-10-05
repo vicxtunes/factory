@@ -1,11 +1,18 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import Image from "next/image";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+
+import { ActionMenu, type ActionMenuEntry } from "@repo/ui/ActionMenu";
+import { Spinner } from "@repo/ui/Spinner";
 
 import { getCurrentActor } from "@repo/lib/notes/actions";
-import { deleteOrderItemMedia, updateMediaLink } from "@repo/lib/storage/actions";
+import { deleteOrderItemMedia, markMediaDownloaded, updateMediaLink } from "@repo/lib/storage/actions";
+import { canOptimizeImage } from "@repo/lib/storage/client";
 import { replaceFileInStorage } from "@repo/lib/storage/upload-client";
 import type { OrderItemMedia } from "@repo/lib/types";
+
+import { CheckCircleIcon, CheckIcon, CloseIcon, CloudDownloadIcon, DocumentIcon, DownloadIcon, ExternalIcon, LinkIcon } from "./icons";
 
 // Chromium-only File System Access API — feature-detected. Where it's not
 // available (Firefox/Safari) downloads still work, just via the browser's
@@ -32,12 +39,13 @@ function filenameFromContentDisposition(header: string | null, fallback: string)
 // Fetches the file ourselves (rather than a plain <a href> navigation) so we
 // can prompt "Save As" via the File System Access API when the browser
 // supports it — a plain download link always saves silently to the default
-// Downloads folder with no way for a site to ask for a location.
+// Downloads folder with no way for a site to ask for a location. Resolves
+// false when the person cancelled the Save As picker.
 async function downloadWithPicker(
   url: string,
   fallbackName: string,
   fileType?: { description: string; accept: Record<string, string[]> },
-): Promise<void> {
+): Promise<boolean> {
   const res = await fetch(url);
   if (!res.ok) throw new Error("Download failed.");
   const filename = filenameFromContentDisposition(res.headers.get("Content-Disposition"), fallbackName);
@@ -52,9 +60,9 @@ async function downloadWithPicker(
       const writable = await handle.createWritable();
       await writable.write(blob);
       await writable.close();
-      return;
+      return true;
     } catch (err) {
-      if (err instanceof DOMException && err.name === "AbortError") return; // user cancelled the picker
+      if (err instanceof DOMException && err.name === "AbortError") return false; // user cancelled the picker
       // Fall through to the plain-link fallback below on any other failure.
     }
   }
@@ -67,6 +75,7 @@ async function downloadWithPicker(
   a.click();
   a.remove();
   URL.revokeObjectURL(blobUrl);
+  return true;
 }
 
 const IMAGE_EXTENSION = /\.(jpe?g|png|gif|webp|bmp|svg)(\?.*)?$/i;
@@ -164,29 +173,64 @@ function isPastedLink(file: OrderItemMedia): boolean {
   return !file.storage_path && !file.cloudinary_public_id;
 }
 
-type Preview = { url: string; name: string; downloadHref: string };
+type Preview = { url: string; name: string; downloadHref: string; onSaved?: () => void };
+
+/** Whether staff have downloaded a file yet (only where downloads are tracked). */
+type DownloadState = { at: string; by: string | null } | null;
+
+function formatDownloadedAt(iso: string): string {
+  const d = new Date(iso);
+  const time = d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  if (d.toDateString() === new Date().toDateString()) return time;
+  return `${d.toLocaleDateString(undefined, { day: "numeric", month: "short" })}, ${time}`;
+}
+
+function fileExtension(name: string): string {
+  const dot = name.lastIndexOf(".");
+  return dot > 0 ? name.slice(dot + 1).toUpperCase().slice(0, 4) : "FILE";
+}
+
+function hostOf(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return "Link";
+  }
+}
+
+/** Runs a download and reports back; `busy` drives the tile's spinner. */
+function useDownload(href: string, name: string, onSaved?: () => void) {
+  const [busy, setBusy] = useState(false);
+  async function start() {
+    if (busy) return;
+    setBusy(true);
+    try {
+      if (await downloadWithPicker(href, name)) onSaved?.();
+    } catch {
+      // best-effort: the tile stays pending, so it's clear it didn't save
+    } finally {
+      setBusy(false);
+    }
+  }
+  return { busy, start };
+}
 
 // "Replace" for an uploaded file re-runs the same signed-upload flow and
 // swaps the file at this row's existing id; for a pasted link it's a quick
 // inline URL edit. "Delete" removes the row (and the Storage object, if
 // any). Only the person who added this file — or the boss — can do either;
 // the server enforces this too (see canManageMedia in packages/lib/storage/actions),
-// this is just the matching UI gate so the buttons don't even appear when
-// they'd be refused.
-function MediaActions({ file, onChanged }: { file: OrderItemMedia; onChanged?: () => void }) {
+// this is just the matching UI gate so the menu doesn't even appear when
+// it'd be refused.
+type Viewer = { type: string; id: string; role?: string };
+
+function useMediaActions(file: OrderItemMedia, actor: Viewer | null, onChanged?: () => void) {
   const [busy, setBusy] = useState(false);
   const [editingLink, setEditingLink] = useState(false);
   const [linkValue, setLinkValue] = useState(file.secure_url);
   const [error, setError] = useState<string | null>(null);
-  const [actor, setActor] = useState<{ type: string; id: string; role?: string } | null | undefined>(
-    undefined,
-  );
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isLink = isPastedLink(file);
-
-  useEffect(() => {
-    getCurrentActor().then(setActor);
-  }, []);
 
   const canManage =
     !!actor &&
@@ -224,208 +268,270 @@ function MediaActions({ file, onChanged }: { file: OrderItemMedia; onChanged?: (
     onChanged?.();
   }
 
-  if (actor === undefined) return null; // still resolving who's viewing
+  const menu: ActionMenuEntry[] = canManage
+    ? [
+        {
+          label: isLink ? "Change link" : "Replace",
+          disabled: busy,
+          onSelect: () => {
+            if (isLink) {
+              setLinkValue(file.secure_url);
+              setEditingLink(true);
+            } else {
+              fileInputRef.current?.click();
+            }
+          },
+        },
+        { label: "Delete", disabled: busy, onSelect: handleDelete },
+      ]
+    : [];
 
-  if (!canManage) {
-    return file.uploaded_by_name ? (
-      <p className="mt-1 text-[0.65rem] text-muted">Added by {file.uploaded_by_name}</p>
-    ) : null;
-  }
-
-  if (editingLink) {
-    return (
-      <div className="mt-1 flex items-center gap-1 text-[0.65rem]">
+  const extras: ReactNode = (
+    <>
+      {canManage && !isLink ? (
         <input
-          type="url"
-          value={linkValue}
-          onChange={(e) => setLinkValue(e.target.value)}
-          className="min-w-0 flex-1 rounded border border-border bg-surface px-1.5 py-0.5"
+          ref={fileInputRef}
+          type="file"
+          accept="image/*,application/pdf"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) handleReplaceFile(f);
+            e.target.value = "";
+          }}
         />
-        <button type="button" disabled={busy} onClick={saveLink} className="text-brand-600">
-          Save
-        </button>
-        <button type="button" onClick={() => setEditingLink(false)} className="text-muted">
-          Cancel
-        </button>
-      </div>
+      ) : null}
+      {editingLink ? (
+        <div className="mt-1.5 flex items-center gap-1.5 text-xs">
+          <input
+            type="url"
+            value={linkValue}
+            onChange={(e) => setLinkValue(e.target.value)}
+            className="min-w-0 flex-1 rounded-md border border-border bg-surface px-2 py-1"
+          />
+          <button type="button" disabled={busy} onClick={saveLink} className="font-medium text-brand-600">
+            Save
+          </button>
+          <button type="button" onClick={() => setEditingLink(false)} className="text-muted">
+            Cancel
+          </button>
+        </div>
+      ) : null}
+      {error ? <p className="mt-1 text-xs text-[var(--rush)]">{error}</p> : null}
+    </>
+  );
+
+  return { menu, busy, extras };
+}
+
+const CORNER_BUTTON =
+  "inline-flex h-7 w-7 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-sm transition hover:bg-black/65 focus-visible:outline-2 focus-visible:outline-white";
+
+/** A small copy for the tile (resized by the app), never the full original. */
+function TileImage({ file, alt, onDone }: { file: OrderItemMedia; alt: string; onDone?: () => void }) {
+  const src = resolveThumbUrl(file);
+  return (
+    <Image
+      src={src}
+      alt={alt}
+      fill
+      sizes="160px"
+      // next/image won't resize SVGs; pass those (and non-storage links) through as they are.
+      unoptimized={!canOptimizeImage(src) || file.mime_type === "image/svg+xml" || /\.svg(\?|$)/i.test(src)}
+      onLoad={onDone}
+      onError={onDone}
+      className="object-cover"
+    />
+  );
+}
+
+// One file on an order item, as a square tile. Where downloads are tracked
+// (staff), a photo isn't fetched at all until someone presses the cloud
+// button on it — nobody sees or prints it by accident, and an order with
+// many photos opens fast. Once shown it can be opened full screen, and the
+// corner download saves it (that's what marks it downloaded). A downloaded
+// file shows a tick there, which turns back into a download on hover.
+function MediaTile({
+  file,
+  tracked,
+  state,
+  editable,
+  actor,
+  onSaved,
+  onOpen,
+  onChanged,
+}: {
+  file: OrderItemMedia;
+  tracked: boolean;
+  state: DownloadState;
+  editable: boolean;
+  actor: Viewer | null;
+  onSaved?: () => void;
+  onOpen: () => void;
+  onChanged?: () => void;
+}) {
+  const name = resolveDisplayName(file);
+  const link = isPastedLink(file);
+  const image = !link && isImage(file.secure_url, file.mime_type);
+  const [shown, setShown] = useState(!tracked || !!state);
+  const [loading, setLoading] = useState(false);
+  const download = useDownload(resolveDownloadUrl(file), name, onSaved);
+  const actions = useMediaActions(file, actor, onChanged);
+  const working = download.busy || actions.busy;
+  const title = [name, file.uploaded_by_name ? `Added by ${file.uploaded_by_name}` : null].filter(Boolean).join(" · ");
+
+  let body: ReactNode;
+  if (link) {
+    body = (
+      <a
+        href={file.secure_url}
+        target="_blank"
+        rel="noopener noreferrer"
+        title={file.secure_url}
+        className="flex h-full w-full flex-col items-center justify-center gap-1.5 bg-background px-2 text-center text-muted hover:text-foreground"
+      >
+        <LinkIcon className="h-6 w-6" />
+        <span className="w-full truncate text-[11px] font-medium">{hostOf(file.secure_url)}</span>
+        <span className="inline-flex items-center gap-1 text-[10px] text-brand-600">
+          Open <ExternalIcon className="h-3 w-3" />
+        </span>
+      </a>
+    );
+  } else if (image && !shown) {
+    // Not fetched yet: a soft placeholder and the cloud button that loads it.
+    body = (
+      <button
+        type="button"
+        onClick={() => {
+          setLoading(true);
+          setShown(true);
+        }}
+        aria-label={`Show ${name}`}
+        className="group/load flex h-full w-full flex-col items-center justify-center gap-1.5 bg-gradient-to-br from-gray-200 via-gray-100 to-gray-300 text-gray-700 dark:from-white/10 dark:via-white/5 dark:to-white/15 dark:text-gray-200"
+      >
+        <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white shadow-theme-xs transition group-hover/load:scale-105 dark:bg-gray-800">
+          <CloudDownloadIcon className="h-[18px] w-[18px]" />
+        </span>
+        <span className="text-[10px] font-medium">Show photo</span>
+      </button>
+    );
+  } else if (image) {
+    body = (
+      <button type="button" onClick={onOpen} aria-label={`View ${name}`} className="relative block h-full w-full">
+        <TileImage file={file} alt={name} onDone={() => setLoading(false)} />
+        {loading ? (
+          <span className="absolute inset-0 flex items-center justify-center bg-gray-100 text-muted dark:bg-white/5">
+            <Spinner className="h-5 w-5" />
+          </span>
+        ) : null}
+      </button>
+    );
+  } else {
+    body = (
+      <button
+        type="button"
+        onClick={download.start}
+        disabled={working}
+        aria-label={`Download ${name}`}
+        className="flex h-full w-full flex-col items-center justify-center gap-1.5 bg-background px-2 text-muted hover:text-foreground"
+      >
+        {download.busy ? <Spinner className="h-6 w-6" /> : <DocumentIcon className="h-7 w-7" />}
+        <span className="rounded bg-surface px-1.5 py-0.5 text-[10px] font-semibold tracking-wide">{fileExtension(name)}</span>
+        <span className="w-full truncate text-center text-[11px]">{name}</span>
+      </button>
     );
   }
 
-  return (
-    <div className="mt-1 flex flex-col gap-0.5 text-[0.65rem]">
-      <div className="flex items-center gap-2">
-        {isLink ? (
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => {
-              setLinkValue(file.secure_url);
-              setEditingLink(true);
-            }}
-            className="text-brand-600"
-          >
-            Replace
-          </button>
-        ) : (
+  // The corner save button: download, or — once downloaded — a tick that
+  // turns back into a download on hover, for saving it again.
+  const save =
+    !link && (shown || !image) ? (
+      <button
+        type="button"
+        onClick={download.start}
+        disabled={working}
+        aria-label={tracked && state ? `Downloaded — download ${name} again` : `Download ${name}`}
+        title={tracked && state ? "Downloaded · download again" : "Download"}
+        className={`group/save ${CORNER_BUTTON} ${tracked && state ? "bg-success-500/90 hover:bg-black/65" : ""}`}
+      >
+        {download.busy ? (
+          <Spinner className="h-3.5 w-3.5" />
+        ) : tracked && state ? (
           <>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => fileInputRef.current?.click()}
-              className="text-brand-600"
-            >
-              {busy ? "Replacing…" : "Replace"}
-            </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*,application/pdf"
-              className="hidden"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) handleReplaceFile(f);
-                e.target.value = "";
-              }}
-            />
+            <CheckIcon className="h-3.5 w-3.5 group-hover/save:hidden group-focus-visible/save:hidden" />
+            <DownloadIcon className="hidden h-3.5 w-3.5 group-hover/save:block group-focus-visible/save:block" />
           </>
+        ) : (
+          <DownloadIcon className="h-3.5 w-3.5" />
         )}
-        <button type="button" disabled={busy} onClick={handleDelete} className="text-[var(--rush)]">
-          Delete
-        </button>
+      </button>
+    ) : null;
+
+  return (
+    <div className="min-w-0">
+      {/* The tile itself doesn't clip (so the ⋯ menu can open over its
+          neighbours); the picture layer inside it does. focus-within lifts
+          the tile above the next ones while its menu is open. */}
+      <div title={title} className="group relative aspect-square rounded-xl shadow-theme-xs focus-within:z-20">
+        <div className="absolute inset-0 overflow-hidden rounded-xl border border-border bg-background">
+          {body}
+
+          {/* Downloaded: who and when, on a soft shade along the bottom. */}
+          {tracked && state && shown ? (
+            <div
+              className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center gap-1 bg-gradient-to-t from-black/75 to-transparent px-2 pb-1.5 pt-5 text-[10px] text-white"
+              title={`Downloaded ${new Date(state.at).toLocaleString()}`}
+            >
+              <span className="truncate">
+                {state.by ? `${state.by} · ` : ""}
+                {formatDownloadedAt(state.at)}
+              </span>
+            </div>
+          ) : null}
+          {actions.busy ? (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/40 text-white">
+              <Spinner className="h-5 w-5" />
+            </div>
+          ) : null}
+        </div>
+
+        {/* Top-right: save (always there once there's something to save) and the ⋯ menu (on hover). */}
+        <div className="absolute right-1.5 top-1.5 z-10 flex gap-1">
+          {editable && actions.menu.length > 0 ? (
+            <span className="opacity-100 transition-opacity md:opacity-0 md:group-focus-within:opacity-100 md:group-hover:opacity-100">
+              <ActionMenu
+                label={`Actions for ${name}`}
+                focusKey={file.id}
+                items={actions.menu}
+                triggerClassName={CORNER_BUTTON}
+                compact
+              />
+            </span>
+          ) : null}
+          {save}
+        </div>
       </div>
-      {error ? <p className="text-[var(--rush)]">{error}</p> : null}
+      {editable ? actions.extras : null}
     </div>
   );
 }
 
-function Thumbnail({
-  thumbUrl,
-  downloadHref,
-  name,
-  onOpen,
+// The zip of an item's files (all of them, or only `ids`). Fetched by hand
+// (see downloadWithPicker) so Chromium can offer Save As for the zip too.
+function ZipButton({
+  orderItemId,
+  label,
+  ids,
+  primary,
+  onSaved,
 }: {
-  thumbUrl: string;
-  downloadHref: string;
-  name: string;
-  onOpen: () => void;
+  orderItemId: string;
+  label: string;
+  /** Zip only these files; all of the item's files when omitted. */
+  ids?: string[];
+  primary?: boolean;
+  onSaved?: () => void;
 }) {
-  const [downloading, setDownloading] = useState(false);
-
-  async function handleDownload(e: React.MouseEvent) {
-    e.stopPropagation();
-    setDownloading(true);
-    try {
-      await downloadWithPicker(downloadHref, name);
-    } catch {
-      // best-effort — this tile has no room for an inline error message
-    } finally {
-      setDownloading(false);
-    }
-  }
-
-  return (
-    <div className="group relative h-16 w-16 shrink-0">
-      <button
-        type="button"
-        onClick={onOpen}
-        title={name}
-        className="h-16 w-16 overflow-hidden rounded-[var(--radius)] border border-border"
-      >
-        {/* eslint-disable-next-line @next/next/no-img-element -- arbitrary remote hosts (Cloudinary/Supabase Storage/pasted links), can't be allowlisted for next/image */}
-        <img src={thumbUrl} alt={name} loading="lazy" className="h-full w-full object-cover" />
-      </button>
-      <button
-        type="button"
-        onClick={handleDownload}
-        disabled={downloading}
-        title={`Download ${name}`}
-        className="absolute bottom-0.5 right-0.5 inline-flex h-5 w-5 items-center justify-center rounded bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100 disabled:opacity-100"
-      >
-        <svg viewBox="0 0 16 16" width="10" height="10" fill="currentColor" aria-hidden="true">
-          <path d="M8 1a1 1 0 0 1 1 1v6.086l1.793-1.793a1 1 0 1 1 1.414 1.414l-3.5 3.5a1 1 0 0 1-1.414 0l-3.5-3.5a1 1 0 1 1 1.414-1.414L7 8.086V2a1 1 0 0 1 1-1zM2 13a1 1 0 0 1 1-1h10a1 1 0 1 1 0 2H3a1 1 0 0 1-1-1z" />
-        </svg>
-      </button>
-    </div>
-  );
-}
-
-// Both single-file affordances below go through downloadWithPicker too, so
-// "Save As" behaves the same everywhere in this component instead of only
-// on the "Download all" zip — a plain <a download> never prompts for a
-// location, which read as inconsistent/disorganized next to the zip flow.
-function FileDownloadLink({ href, name }: { href: string; name: string }) {
-  const [downloading, setDownloading] = useState(false);
-
-  async function handleClick() {
-    setDownloading(true);
-    try {
-      await downloadWithPicker(href, name);
-    } catch {
-      // best-effort
-    } finally {
-      setDownloading(false);
-    }
-  }
-
-  return (
-    <button
-      type="button"
-      onClick={handleClick}
-      disabled={downloading}
-      className="inline-flex min-h-11 items-center rounded-[var(--radius)] border border-border px-3 text-xs disabled:opacity-60"
-    >
-      {downloading ? "Downloading…" : name}
-    </button>
-  );
-}
-
-// A pasted third-party link renders as a plain navigation, not a download —
-// see isPastedLink. Browsers can't be asked to force-save an arbitrary
-// cross-origin page anyway; this just opens it in a new tab like any link.
-function OpenLink({ href, name }: { href: string; name: string }) {
-  return (
-    <a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="inline-flex min-h-11 items-center rounded-[var(--radius)] border border-border px-3 text-xs text-blue-600 underline underline-offset-2 dark:text-blue-400"
-    >
-      {name}
-    </a>
-  );
-}
-
-function LightboxDownloadButton({ href, name }: { href: string; name: string }) {
-  const [downloading, setDownloading] = useState(false);
-
-  async function handleClick(e: React.MouseEvent) {
-    e.stopPropagation();
-    setDownloading(true);
-    try {
-      await downloadWithPicker(href, name);
-    } catch {
-      // best-effort
-    } finally {
-      setDownloading(false);
-    }
-  }
-
-  return (
-    <button
-      type="button"
-      onClick={handleClick}
-      disabled={downloading}
-      className="inline-flex min-h-11 items-center rounded-[var(--radius)] bg-white px-3 text-xs font-medium text-gray-900 disabled:opacity-60"
-    >
-      {downloading ? "Downloading…" : "Download"}
-    </button>
-  );
-}
-
-// Fetches the zip itself (see downloadWithPicker) instead of a plain link,
-// so Chromium browsers can prompt "Save As" for a location instead of
-// always silently landing in the default Downloads folder.
-function DownloadAllButton({ orderItemId, count }: { orderItemId: string; count: number }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -433,140 +539,232 @@ function DownloadAllButton({ orderItemId, count }: { orderItemId: string; count:
     setBusy(true);
     setError(null);
     try {
-      await downloadWithPicker(`/api/order-items/${orderItemId}/media-zip`, "media.zip", {
+      const query = ids ? `?ids=${ids.join(",")}` : "";
+      const saved = await downloadWithPicker(`/api/order-items/${orderItemId}/media-zip${query}`, "media.zip", {
         description: "Zip archive",
         accept: { "application/zip": [".zip"] },
       });
+      if (saved) onSaved?.();
     } catch {
-      setError("Could not download the zip.");
+      setError("Couldn't make the zip. Try again.");
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <div className="flex flex-col items-start gap-1">
+    <span className="inline-flex flex-col items-end gap-1">
       <button
         type="button"
         onClick={handleClick}
         disabled={busy}
-        className="inline-flex min-h-11 w-fit items-center rounded-[var(--radius)] border border-border px-3 text-xs"
+        className={`inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-xs font-medium transition disabled:opacity-60 ${
+          primary
+            ? "bg-brand-500 text-white shadow-theme-xs hover:bg-brand-600"
+            : "border border-border bg-surface text-foreground hover:bg-background"
+        }`}
       >
-        {busy ? "Preparing…" : `Download all (${count})`}
+        {busy ? <Spinner className="h-3.5 w-3.5" /> : <DownloadIcon className="h-4 w-4" />}
+        {busy ? "Preparing zip…" : label}
       </button>
-      {error ? <p className="text-xs text-[var(--rush)]">{error}</p> : null}
-    </div>
+      {error ? <span className="text-xs text-[var(--rush)]">{error}</span> : null}
+    </span>
   );
 }
 
 function Lightbox({ preview, onClose }: { preview: Preview; onClose: () => void }) {
+  const download = useDownload(preview.downloadHref, preview.name, preview.onSaved);
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const barButton =
+    "inline-flex h-9 items-center gap-1.5 rounded-lg bg-white/10 px-3 text-xs font-medium text-white backdrop-blur hover:bg-white/20 disabled:opacity-60";
+
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-6"
-      onClick={onClose}
-    >
-      {/* eslint-disable-next-line @next/next/no-img-element -- arbitrary remote hosts, can't be allowlisted for next/image */}
-      <img
-        src={preview.url}
-        alt={preview.name}
-        className="max-h-full max-w-full rounded-[var(--radius)] object-contain"
-        onClick={(e) => e.stopPropagation()}
-      />
-      <div className="absolute bottom-6 right-6 flex gap-2">
-        <LightboxDownloadButton href={preview.downloadHref} name={preview.name} />
-        <a
-          href={preview.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={(e) => e.stopPropagation()}
-          className="inline-flex min-h-11 items-center rounded-[var(--radius)] bg-white px-3 text-xs font-medium text-gray-900"
-        >
-          Open original
+    <div className="fixed inset-0 z-50 flex flex-col bg-black/90" onClick={onClose} role="dialog" aria-modal aria-label={preview.name}>
+      <div className="flex items-center gap-2 px-4 py-3" onClick={(e) => e.stopPropagation()}>
+        <p className="min-w-0 flex-1 truncate text-sm font-medium text-white">{preview.name}</p>
+        <button type="button" onClick={download.start} disabled={download.busy} className={barButton}>
+          {download.busy ? <Spinner className="h-3.5 w-3.5" /> : <DownloadIcon className="h-4 w-4" />}
+          <span className="hidden sm:inline">{download.busy ? "Downloading…" : "Download"}</span>
+        </button>
+        <a href={preview.url} target="_blank" rel="noopener noreferrer" className={barButton}>
+          <ExternalIcon className="h-4 w-4" />
+          <span className="hidden sm:inline">Original</span>
         </a>
+        <button type="button" onClick={onClose} aria-label="Close" className={barButton}>
+          <CloseIcon className="h-4 w-4" />
+        </button>
       </div>
-      <button
-        type="button"
-        onClick={onClose}
-        className="absolute right-6 top-6 inline-flex min-h-11 items-center rounded-[var(--radius)] bg-white px-3 text-xs font-medium text-gray-900"
-      >
-        Close
-      </button>
+      <div className="flex min-h-0 flex-1 items-center justify-center p-4 pt-0">
+        {/* eslint-disable-next-line @next/next/no-img-element -- arbitrary remote hosts, can't be allowlisted for next/image */}
+        <img
+          src={preview.url}
+          alt={preview.name}
+          className="max-h-full max-w-full rounded-lg object-contain"
+          onClick={(e) => e.stopPropagation()}
+        />
+      </div>
     </div>
   );
 }
 
-// Renders an item's uploaded files (image previews, other file types as a
-// plain link) and falls back to the legacy pasted media_link (item-level,
-// then order-level) for orders created before this feature existed, so old
-// rows keep working with no data migration. Uploaded rows may come from
-// either backend the app has used over time (Cloudinary or Supabase
-// Storage, distinguished by which of cloudinary_public_id/storage_path is
-// set) or be a plain pasted link (neither set) — resolveThumbUrl/
-// resolveDownloadUrl pick the right URL strategy per row.
+// Renders an item's uploaded files as a grid of tiles and falls back to the
+// legacy pasted media_link (item-level, then order-level) for orders created
+// before this feature existed, so old rows keep working with no data
+// migration. Uploaded rows may come from either backend the app has used
+// over time (Cloudinary or Supabase Storage, distinguished by which of
+// cloudinary_public_id/storage_path is set) or be a plain pasted link
+// (neither set) — resolveThumbUrl/resolveDownloadUrl pick the right URL
+// strategy per row.
 export function MediaLinks({
   media,
   legacyLink,
   editable = false,
+  trackDownloads = false,
   onChanged,
 }: {
   media: OrderItemMedia[];
   legacyLink?: string | null;
   editable?: boolean;
+  /**
+   * Staff screens: photos stay blurred until someone downloads them, and each
+   * file shows who downloaded it and when (for printing). Viewing never counts.
+   */
+  trackDownloads?: boolean;
   onChanged?: () => void;
 }) {
   const [preview, setPreview] = useState<Preview | null>(null);
+  // Who's viewing, asked once for the whole item (not per tile): it decides
+  // who may replace or delete each file.
+  const [actor, setActor] = useState<Viewer | null>(null);
+  useEffect(() => {
+    if (editable) getCurrentActor().then(setActor);
+  }, [editable]);
+  // Downloads made on this screen, shown at once instead of waiting for a refetch.
+  const [saved, setSaved] = useState<Record<string, { at: string; by: string }>>({});
 
-  let content: React.ReactNode = null;
+  const downloadState = (file: OrderItemMedia): DownloadState =>
+    saved[file.id] ?? (file.downloaded_at ? { at: file.downloaded_at, by: file.downloaded_by_name } : null);
+
+  async function recordDownload(ids: string[]) {
+    if (!trackDownloads || ids.length === 0) return;
+    const res = await markMediaDownloaded(media[0].order_item_id, ids);
+    if (!res.ok) return; // e.g. a client's own download: nothing to show
+    setSaved((prev) => ({ ...prev, ...Object.fromEntries(ids.map((id) => [id, { at: res.at, by: res.by }])) }));
+    onChanged?.();
+  }
+
+  let content: ReactNode = null;
 
   if (media.length > 0) {
+    const files = media.filter((file) => !isPastedLink(file));
+    const pending = trackDownloads ? files.filter((file) => !downloadState(file)) : [];
+    const done = files.length - pending.length;
+    const showHeader = (trackDownloads && files.length > 0) || files.length > 1;
+
     content = (
-      <div className="flex flex-col gap-2">
-        {media.length > 1 ? (
-          <DownloadAllButton orderItemId={media[0].order_item_id} count={media.length} />
-        ) : null}
-        <div className="flex flex-wrap gap-3">
-          {media.map((file) => (
-            <div key={file.id} className="flex flex-col items-start">
-              {isImage(file.secure_url, file.mime_type) ? (
-                <Thumbnail
-                  thumbUrl={resolveThumbUrl(file)}
-                  downloadHref={resolveDownloadUrl(file)}
-                  name={resolveDisplayName(file)}
-                  onOpen={() =>
-                    setPreview({
-                      url: file.secure_url,
-                      name: resolveDisplayName(file),
-                      downloadHref: resolveDownloadUrl(file),
-                    })
-                  }
+      <div className="space-y-3">
+        {showHeader ? (
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            {trackDownloads && files.length > 0 ? (
+              <div className="min-w-0">
+                <p className="flex items-center gap-1.5 text-xs font-medium text-foreground">
+                  {pending.length === 0 ? (
+                    <>
+                      <CheckCircleIcon className="h-4 w-4 text-success-500" /> All {files.length} downloaded
+                    </>
+                  ) : (
+                    <>
+                      {done} of {files.length} downloaded
+                      <span className="font-normal text-muted">· {pending.length} pending</span>
+                    </>
+                  )}
+                </p>
+                <div className="mt-1.5 h-1 w-40 overflow-hidden rounded-full bg-border">
+                  <div
+                    className={`h-full rounded-full transition-[width] ${pending.length === 0 ? "bg-success-500" : "bg-brand-500"}`}
+                    style={{ width: `${(done / files.length) * 100}%` }}
+                  />
+                </div>
+              </div>
+            ) : (
+              <span />
+            )}
+            <div className="flex flex-wrap gap-2">
+              {pending.length > 0 && done > 0 ? (
+                <ZipButton
+                  orderItemId={media[0].order_item_id}
+                  label={`Download ${pending.length} pending`}
+                  ids={pending.map((file) => file.id)}
+                  primary
+                  onSaved={() => recordDownload(pending.map((file) => file.id))}
                 />
-              ) : isPastedLink(file) ? (
-                <OpenLink href={file.secure_url} name={file.file_name} />
-              ) : (
-                <FileDownloadLink href={resolveDownloadUrl(file)} name={resolveDisplayName(file)} />
-              )}
-              {editable ? <MediaActions file={file} onChanged={onChanged} /> : null}
+              ) : null}
+              {files.length > 1 ? (
+                <ZipButton
+                  orderItemId={media[0].order_item_id}
+                  label={`Download all ${files.length}`}
+                  primary={trackDownloads && done === 0}
+                  onSaved={() => recordDownload(files.map((file) => file.id))}
+                />
+              ) : null}
             </div>
-          ))}
+          </div>
+        ) : null}
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(6.5rem,1fr))] gap-2.5">
+          {media.map((file) => {
+            const tracked = trackDownloads && !isPastedLink(file);
+            const onSaved = tracked ? () => recordDownload([file.id]) : undefined;
+            return (
+              <MediaTile
+                key={file.id}
+                file={file}
+                tracked={tracked}
+                state={tracked ? downloadState(file) : null}
+                editable={editable}
+                actor={actor}
+                onSaved={onSaved}
+                onChanged={onChanged}
+                onOpen={() =>
+                  setPreview({
+                    url: file.secure_url,
+                    name: resolveDisplayName(file),
+                    downloadHref: resolveDownloadUrl(file),
+                    onSaved,
+                  })
+                }
+              />
+            );
+          })}
         </div>
       </div>
     );
   } else if (legacyLink) {
     content = isImage(legacyLink) ? (
-      <Thumbnail
-        thumbUrl={legacyLink}
-        downloadHref={legacyLink}
-        name="Photo"
-        onOpen={() => setPreview({ url: legacyLink, name: "Photo", downloadHref: legacyLink })}
-      />
+      <button
+        type="button"
+        onClick={() => setPreview({ url: legacyLink, name: "Photo", downloadHref: legacyLink })}
+        className="block h-28 w-28 overflow-hidden rounded-xl border border-border shadow-theme-xs"
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element -- arbitrary remote hosts, can't be allowlisted for next/image */}
+        <img src={legacyLink} alt="Photo" loading="lazy" className="h-full w-full object-cover" />
+      </button>
     ) : (
       <a
         href={legacyLink}
         target="_blank"
         rel="noopener noreferrer"
-        className="inline-flex min-h-11 items-center rounded-[var(--radius)] border border-border px-3 text-xs"
+        className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-surface px-3 text-xs font-medium hover:bg-background"
       >
-        View photos
+        <LinkIcon className="h-4 w-4" /> View photos
+        <ExternalIcon className="h-3.5 w-3.5 text-muted" />
       </a>
     );
   }
