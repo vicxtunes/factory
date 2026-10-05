@@ -53,8 +53,12 @@ export function albumPhotos(count: number): PhotoView[] {
   });
 }
 
-/** The same attachments as staff see them while printing: one photo already downloaded. */
+/** An order item as staff see it while printing: eight photos and a PDF, two photos already downloaded. */
 export const ORDER_MEDIA_PRINTING: OrderItemMedia[] = [
-  { ...ORDER_MEDIA[0], downloaded_at: "2026-10-05T07:32:00Z", downloaded_by_name: "Kofi" },
-  ...ORDER_MEDIA.slice(1),
+  ...PHOTOS.slice(0, 8).map((p, i) => ({
+    ...file(`p${i}`, `${p.key}.jpg`, p.src, "image/svg+xml", `design-room/${p.key}.jpg`),
+    ...(i < 2 ? { downloaded_at: "2026-10-05T07:32:00Z", downloaded_by_name: i === 0 ? "Kofi" : "Amina" } : {}),
+  })),
+  ORDER_MEDIA[2],
+  ORDER_MEDIA[3],
 ];

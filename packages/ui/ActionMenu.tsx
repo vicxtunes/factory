@@ -3,15 +3,25 @@
 import { useEffect, useRef, useState } from "react";
 
 // Small "⋯" dropdown of actions — KanbanBoard's and SubtaskChecklist's move
-// menus. Its clicks don't reach whatever it sits on (a clickable card or
+// menus, and Replace/Delete on order files (media/MediaLinks.tsx). Its clicks don't reach whatever it sits on (a clickable card or
 // row), so opening it never also opens the item. Escape closes it and puts
 // focus back on the button. `focusKey` lands on the button as
 // data-focus-key, so a parent can re-focus it after the item moves.
-// Draft — lives in the Design Room until a page adopts it.
 
 export type ActionMenuEntry = { label: string; onSelect: () => void; disabled?: boolean } | { heading: string };
 
-export function ActionMenu({ label, focusKey, items }: { label: string; focusKey: string; items: ActionMenuEntry[] }) {
+export function ActionMenu({
+  label,
+  focusKey,
+  items,
+  triggerClassName,
+}: {
+  label: string;
+  focusKey: string;
+  items: ActionMenuEntry[];
+  /** Replaces the plain list-row trigger look, e.g. a round button floating on a photo. */
+  triggerClassName?: string;
+}) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLSpanElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -35,7 +45,7 @@ export function ActionMenu({ label, focusKey, items }: { label: string; focusKey
   }, [open]);
 
   return (
-    <span ref={rootRef} className="relative -my-2.5 -mr-2 shrink-0" onClick={(e) => e.stopPropagation()}>
+    <span ref={rootRef} className={`relative shrink-0 ${triggerClassName ? "" : "-my-2.5 -mr-2"}`} onClick={(e) => e.stopPropagation()}>
       <button
         ref={triggerRef}
         type="button"
@@ -44,7 +54,7 @@ export function ActionMenu({ label, focusKey, items }: { label: string; focusKey
         aria-expanded={open}
         data-focus-key={focusKey}
         onClick={() => setOpen((o) => !o)}
-        className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg text-muted hover:text-foreground"
+        className={triggerClassName ?? "inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg text-muted hover:text-foreground"}
       >
         <svg aria-hidden viewBox="0 0 16 16" fill="currentColor" className="size-4">
           <circle cx="3" cy="8" r="1.4" />
