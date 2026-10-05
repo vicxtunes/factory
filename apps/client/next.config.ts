@@ -42,6 +42,8 @@ const nextConfig: NextConfig = {
         "*.app.github.dev",
         "*.githubpreview.dev",
         "localhost:3000",
+        // This app's own dev port (package.json), e.g. opened through VS Code's port forwarding.
+        "localhost:3001",
         "localhost:3911",
       ],
     },

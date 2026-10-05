@@ -180,6 +180,24 @@ export async function getInvoiceSettings(): Promise<InvoiceResult<InvoiceSetting
   });
 }
 
+/** Starts uploading the invoice's logo or signature (a PNG): where the browser puts it. */
+export async function startInvoiceImageUpload(
+  kind: "logo" | "signature",
+): Promise<InvoiceResult<{ bucket: string; path: string; token: string }>> {
+  return run(async () => {
+    await requireBoss();
+    return service.startImageUpload(kind === "signature" ? "signature" : "logo");
+  });
+}
+
+/** The uploaded image's URL, for the settings form; it's kept when the settings are saved. */
+export async function confirmInvoiceImageUpload(path: string): Promise<InvoiceResult<string>> {
+  return run(async () => {
+    await requireBoss();
+    return service.confirmImageUpload(path);
+  });
+}
+
 export async function saveInvoiceSettings(input: InvoiceSettingsInput): Promise<InvoiceResult<InvoiceSettingsInput>> {
   return run(async () => {
     await requireBoss();

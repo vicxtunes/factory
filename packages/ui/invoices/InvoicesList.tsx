@@ -11,7 +11,7 @@ import { formatMoney } from "@repo/lib/currency/format";
 import { STATUS_LABELS } from "@repo/lib/invoices/policy";
 import type { InvoiceListRow, InvoiceStatus } from "@repo/lib/invoices/types";
 
-import { InvoiceStatusBadge } from "./InvoiceDocument";
+import { InvoiceStatusBadge } from "./InvoiceStatusBadge";
 import { InvoiceSettingsDrawer } from "./InvoiceSettingsDrawer";
 import { StaffInvoicePanel } from "./StaffInvoicePanel";
 

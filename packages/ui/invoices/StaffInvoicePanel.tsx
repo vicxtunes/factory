@@ -26,8 +26,11 @@ import type { PaymentMethod } from "@repo/lib/wallet/types";
 import { Drawer } from "@repo/ui/Drawer";
 
 import { DiscountHistory } from "./DiscountHistory";
-import { InvoiceDocument, InvoiceStatusBadge } from "./InvoiceDocument";
-import { downloadInvoicePdf } from "./pdf";
+import { savePdf } from "@repo/ui/pdf/files";
+
+import { InvoicePdf } from "./InvoicePdf";
+import { InvoiceStatusBadge } from "./InvoiceStatusBadge";
+import { invoicePdf } from "./pdf";
 
 // The invoice section of an order, for staff: generate it, share its link,
 // record installments, apply the client's wallet balance. Dropped into the
@@ -145,7 +148,9 @@ export function StaffInvoicePanel({
             type="button"
             className="text-xs font-medium text-brand-600 underline"
             onClick={() =>
-              downloadInvoicePdf(inv, symbol).catch((err) => {
+              invoicePdf(inv, symbol)
+                .then((pdf) => savePdf(pdf, `${inv.invoiceNo}.pdf`))
+                .catch((err) => {
                 console.error("invoice pdf failed:", err);
                 setError("Couldn't make the PDF.");
               })
@@ -519,7 +524,7 @@ function GeneratePanel({
             </p>
           </div>
           <DiscountHistory orderId={orderId} />
-          {preview ? <InvoiceDocument invoice={preview.view} /> : null}
+          {preview ? <InvoicePdf invoice={preview.view} draft /> : null}
         </div>
       </Drawer>
     </section>

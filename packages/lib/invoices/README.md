@@ -19,10 +19,13 @@ link they can open without signing in.
   description, Grand Total, Terms & Conditions, Payment Instructions and "For, … / Authorized
   signature". **Download PDF** makes the same layout as an A4 file (`packages/ui/invoices/pdf.ts`).
 - **Invoice settings** (boss, on the Invoices page): company name, address, phone, email, terms
-  (one per line) and the signature line. Seeded from the sample invoice. Payment instructions
+  (one per line), the signature line, a **logo** (else the app icon) and a **signature** image,
+  uploaded or drawn on a pad, printed on the signature line (else left blank to sign by hand).
+  Images are PNGs in the public `marketing-media` bucket under `invoice/`. Seeded from the sample invoice. Payment instructions
   come from the app's payment details (`packages/lib/payments/details.ts`), the same ones as the Wallet page.
-- **Share**: copy the link or send it on WhatsApp. The client's page shows the invoice, each
-  item's progress, payment history, and how to pay, with Print / Save PDF. **Reset link**
+- **Share**: copy the link or send it on WhatsApp. The client's page shows the invoice, its
+  payment history and how to pay. The invoice shows as its PDF, page by page, exactly as it
+  downloads and prints; each item's progress is in the client portal. **Reset link**
   replaces it; the old link stops working.
 
 Screens: the Invoice panel in the staff order detail, `/dashboard/invoices` (list with outstanding
@@ -98,11 +101,12 @@ packages/lib/invoices/
     errors.ts         InvoiceError (safe-to-show messages).
 
 packages/ui/invoices/
-  InvoiceDocument.tsx          The invoice itself (public page; print-friendly).
-  pdf.ts                       The same layout as an A4 PDF (jspdf, loaded on demand).
-  InvoiceDownloadButtons.tsx   Download PDF / Print.
+  pdf.ts                       The invoice itself: an A4 PDF (jspdf, loaded on demand). Its only layout.
+  InvoicePdf.tsx               That PDF shown as paper on the page (packages/ui/pdf/PdfPreview.tsx) + Download.
+  InvoiceStatusBadge.tsx       Unpaid / Partially paid / Paid / Cancelled.
   StaffInvoicePanel.tsx        Generate (line prices) / share / record payment / use wallet / edit.
-  InvoiceSettingsDrawer.tsx    Boss: company details, terms, signature line.
+  InvoiceSettingsDrawer.tsx    Boss: company details, logo, terms, signature line and image.
+  SignaturePad.tsx             Sign with a finger or mouse → a cropped transparent PNG.
   InvoicesList.tsx             Staff list with outstanding total and filters.
   ClientInvoiceLink.tsx        "View invoice" on the client's order.
   format.ts                    Dates as 19-06-2026.
@@ -110,6 +114,7 @@ packages/ui/invoices/
 apps/client/app/invoice/[token]/page.tsx     Public invoice page.
 apps/factory/app/dashboard/(app)/invoices/page.tsx        Staff list ("Payments → Invoices" in the sidebar).
 supabase/migrations/20260927110000_invoices.sql
+supabase/migrations/20261005120000_invoice_logo_signature.sql
 ```
 
 Dependency rules follow packages/lib/wallet's: outside code uses `actions.ts`, `types.ts`, `policy.ts`,
