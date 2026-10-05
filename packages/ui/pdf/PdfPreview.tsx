@@ -22,11 +22,12 @@ type Result = { build: () => Promise<Blob> } & ({ status: "ready"; pdf: Blob; pa
 async function renderPages(pdf: Blob): Promise<string[]> {
   // The legacy build: the modern one needs very recent browsers (Chrome 140+, Safari 18.2+), and older phones are common.
   const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
-  if (!pdfjs.GlobalWorkerOptions.workerPort) {
-    pdfjs.GlobalWorkerOptions.workerPort = new Worker(new URL("pdfjs-dist/legacy/build/pdf.worker.min.mjs", import.meta.url), {
-      type: "module",
-    });
-  }
+  // The worker's address as a plain static file, for pdf.js to start itself.
+  // Not `new Worker(new URL(...))`: Turbopack then starts it through a
+  // bootstrap that reads its config from the URL's #hash, which the service
+  // worker's cached copy doesn't have, so the worker died ("Missing worker
+  // bootstrap config") and the preview loaded forever.
+  pdfjs.GlobalWorkerOptions.workerSrc ||= new URL("pdfjs-dist/legacy/build/pdf.worker.min.mjs", import.meta.url).href;
   const task = pdfjs.getDocument({ data: new Uint8Array(await pdf.arrayBuffer()) });
   try {
     const doc = await task.promise;
