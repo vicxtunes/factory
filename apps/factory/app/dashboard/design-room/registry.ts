@@ -64,6 +64,7 @@ import LabelChipsEditable from "./examples/label-chips/editable";
 import LabelChipsMany from "./examples/label-chips/many";
 import LabelChipsReadOnly from "./examples/label-chips/read-only";
 import LightboxBasic from "./examples/lightbox/basic";
+import InvoiceViewerStaff from "./examples/invoice-viewer/staff";
 import PasswordInputBasic from "./examples/password-input/basic";
 import PhotoCarouselBasic from "./examples/photo-carousel/basic";
 import PhotoCarouselMobile from "./examples/photo-carousel/mobile";
@@ -585,6 +586,17 @@ export const COMPONENTS: RoomComponent[] = [
     summary: "Full-screen photo viewer — prev / next, arrow keys, swipe, counter, thumbnail strip, optional Pick toggle.",
     examples: [
       { title: "Viewer", file: "lightbox/basic.tsx", Demo: LightboxBasic },
+    ],
+  },
+  {
+    slug: "invoice-viewer",
+    name: "Invoice viewer",
+    category: "Overlays",
+    status: "draft",
+    source: "packages/ui/invoices/InvoiceViewer.tsx",
+    summary: "Opening an invoice: the real PDF, large, full screen; share actions as icons; what's owed and Record payment on the side.",
+    examples: [
+      { title: "Staff opening an invoice", file: "invoice-viewer/staff.tsx", Demo: InvoiceViewerStaff },
     ],
   },
   {

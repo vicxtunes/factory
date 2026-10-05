@@ -37,14 +37,6 @@ export default async function StudioQuotationPage({ params }: { params: Promise<
               Edit
             </Link>
           ) : null}
-          <a
-            href={quotationUrl(quotation.shareToken)}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex min-h-11 items-center rounded-[var(--radius)] border border-gray-300 bg-white px-4 text-sm text-gray-700 shadow-theme-xs hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300"
-          >
-            Open client view
-          </a>
         </div>
       </div>
       {quotation.status === "accepted" ? (

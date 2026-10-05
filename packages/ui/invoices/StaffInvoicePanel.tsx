@@ -23,18 +23,23 @@ import type { DraftLine, InvoiceView, StaffInvoiceView } from "@repo/lib/invoice
 import { MANUAL_METHODS, METHOD_LABELS, paymentMethodLabel } from "@repo/lib/wallet/policy";
 import type { PaymentMethod } from "@repo/lib/wallet/types";
 
+import { ActionMenu, type ActionMenuEntry } from "@repo/ui/ActionMenu";
 import { Drawer } from "@repo/ui/Drawer";
+import { CheckCircleIcon, DocumentIcon, DownloadIcon, LinkIcon } from "@repo/ui/media/icons";
 
 import { DiscountHistory } from "./DiscountHistory";
 import { savePdf } from "@repo/ui/pdf/files";
 
 import { InvoicePdf } from "./InvoicePdf";
 import { InvoiceStatusBadge } from "./InvoiceStatusBadge";
+import { InvoiceViewer, ViewerAction, ViewerLoading } from "./InvoiceViewer";
 import { invoicePdf } from "./pdf";
 
-// The invoice section of an order, for staff: generate it, share its link,
-// record installments, apply the client's wallet balance. Dropped into the
-// order detail (and the Invoices list's drawer) by order id; loads its own data.
+// The invoice section of an order, for staff: generate it, then a card that
+// opens the invoice itself full screen (./InvoiceViewer.tsx) to share it,
+// record installments, apply the client's wallet balance or edit it.
+// Dropped into the order detail by order id (the Invoices list opens the
+// viewer directly with `asViewer`); loads its own data.
 
 type Mode = "idle" | "pay" | "edit";
 
@@ -47,10 +52,13 @@ export function StaffInvoicePanel({
   orderId,
   onChanged,
   onInvoiceStatusChange,
+  asViewer,
 }: {
   orderId: string;
   onChanged?: () => void;
   onInvoiceStatusChange?: (exists: boolean) => void;
+  /** Show the invoice straight away, full screen, with no card (the Invoices list); `onClose` when it's closed. */
+  asViewer?: { onClose: () => void };
 }) {
   const symbol = useCurrencySymbol();
   const money = (n: number) => formatMoney(n, symbol);
@@ -59,6 +67,7 @@ export function StaffInvoicePanel({
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [viewing, setViewing] = useState(!!asViewer);
   const [pending, start] = useTransition();
 
   useEffect(() => {
@@ -88,7 +97,7 @@ export function StaffInvoicePanel({
   }
 
   if (invoice === undefined) {
-    return error ? <p className="text-xs text-error-600">{error}</p> : null;
+    return asViewer ? <ViewerLoading error={error} onClose={asViewer.onClose} /> : error ? <p className="text-xs text-error-600">{error}</p> : null;
   }
 
   if (invoice === null) {
@@ -125,90 +134,98 @@ export function StaffInvoicePanel({
   }
 
   const waText = `Hello ${inv.client.name}, here is your invoice ${inv.invoiceNo} for order ${inv.order.orderNo}: ${inv.shareUrl}`;
-  const waHref = `https://wa.me/${whatsappNumber(inv.client.phone)}?text=${encodeURIComponent(waText)}`;
+  const sendOnWhatsApp = () => window.open(`https://wa.me/${whatsappNumber(inv.client.phone)}?text=${encodeURIComponent(waText)}`, "_blank", "noopener");
 
-  return (
-    <section aria-label="Invoice" className="space-y-3 rounded-2xl border border-border bg-surface p-3">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted">Invoice</p>
-          <p className="flex items-center gap-2 text-sm font-semibold">
-            {inv.invoiceNo} <InvoiceStatusBadge status={inv.status} />
-          </p>
-          <p className="text-xs text-muted tabular-nums">
-            Total {money(inv.amount)} · Paid {money(inv.paid)} · <span className="font-semibold text-foreground">Balance {money(inv.balance)}</span>
-          </p>
-          {inv.dueDate ? <p className="text-xs text-muted">Due {new Date(`${inv.dueDate}T00:00:00`).toLocaleDateString()}</p> : null}
+  function download() {
+    invoicePdf(inv, symbol)
+      .then((pdf) => savePdf(pdf, `${inv.invoiceNo}.pdf`))
+      .catch((err) => {
+        console.error("invoice pdf failed:", err);
+        setError("Couldn't make the PDF.");
+      });
+  }
+
+  function resetLink() {
+    if (!window.confirm("Make a new link? The old link will stop working — send the new one to the client.")) return;
+    act(
+      () => resetInvoiceLink(inv.id),
+      (d) => {
+        setInvoice(d);
+        setNotice("New link created. The old one no longer works.");
+      },
+    );
+  }
+
+  function view(next: Mode = "idle") {
+    setMode(next);
+    setViewing(true);
+  }
+
+  function closeViewer() {
+    setMode("idle");
+    if (asViewer) asViewer.onClose();
+    else setViewing(false);
+  }
+
+  const messages = (
+    <>
+      {notice ? <p className="text-xs text-success-600 dark:text-success-500">{notice}</p> : null}
+      {error ? <p className="text-xs text-error-600">{error}</p> : null}
+    </>
+  );
+
+  // The viewer's side panel: what's owed, taking money, editing, the payment history.
+  const manage = (
+    <div className="space-y-4">
+      <dl className="divide-y divide-border rounded-xl border border-border text-sm">
+        <div className="flex justify-between gap-3 px-3 py-2">
+          <dt className="text-muted">Total</dt>
+          <dd className="tabular-nums">{money(inv.amount)}</dd>
         </div>
-        <div className="flex flex-col items-end gap-1">
-          <a href={inv.shareUrl} target="_blank" rel="noreferrer" className="text-xs font-medium text-brand-600 underline">
-            Open invoice ↗
-          </a>
-          <button
-            type="button"
-            className="text-xs font-medium text-brand-600 underline"
-            onClick={() =>
-              invoicePdf(inv, symbol)
-                .then((pdf) => savePdf(pdf, `${inv.invoiceNo}.pdf`))
-                .catch((err) => {
-                console.error("invoice pdf failed:", err);
-                setError("Couldn't make the PDF.");
-              })
-            }
-          >
-            Download PDF
-          </button>
+        <div className="flex justify-between gap-3 px-3 py-2">
+          <dt className="text-muted">Paid</dt>
+          <dd className="tabular-nums">{money(inv.paid)}</dd>
         </div>
-      </div>
+        <div className="flex items-baseline justify-between gap-3 px-3 py-2.5">
+          <dt className="font-semibold">Balance due</dt>
+          <dd className="text-lg font-bold tabular-nums">{money(inv.balance)}</dd>
+        </div>
+      </dl>
 
       {!inv.linesMatchTotal && !inv.order.cancelled ? (
-        <p className="rounded-lg bg-warning-50 p-2 text-xs text-warning-700 dark:bg-warning-500/15 dark:text-warning-500">
-          The line prices don&apos;t add up to the order total (an item may have been added or changed). Open{" "}
-          <span className="font-semibold">Edit</span> and save the line prices.
+        <p className="rounded-xl bg-warning-50 p-3 text-xs text-warning-700 dark:bg-warning-500/15 dark:text-warning-500">
+          The line prices don&apos;t add up to the order total (an item may have been added or changed). Choose{" "}
+          <span className="font-semibold">Edit invoice</span> in the ⋯ menu and save the line prices.
         </p>
       ) : null}
 
-      <div className="flex flex-wrap gap-2">
-        <Button variant="secondary" className="min-h-9 text-xs" onClick={copy}>
-          {copied ? "Link copied" : "Copy link"}
-        </Button>
-        <a
-          href={waHref}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex min-h-9 items-center rounded-[var(--radius)] border border-gray-300 px-3 text-xs font-medium hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-white/[0.03]"
-        >
-          Send on WhatsApp
-        </a>
-        {canTakeMoney ? (
-          <Button className="min-h-9 text-xs" onClick={() => setMode(mode === "pay" ? "idle" : "pay")}>
+      {mode === "idle" && canTakeMoney ? (
+        <div className="space-y-2">
+          <Button className="w-full" onClick={() => setMode("pay")}>
             Record payment
           </Button>
-        ) : null}
-        {canTakeMoney && (inv.walletBalance ?? 0) > 0 ? (
-          <Button
-            variant="secondary"
-            className="min-h-9 text-xs"
-            loading={pending && mode === "idle"}
-            onClick={() => {
-              const take = Math.min(inv.walletBalance ?? 0, inv.balance);
-              if (!window.confirm(`Take ${money(take)} from ${inv.client.name}'s wallet for this invoice?`)) return;
-              act(
-                () => applyWalletToInvoice(inv.id),
-                (d) => {
-                  setInvoice(d.invoice);
-                  setNotice(`${money(d.applied)} paid from the wallet.`);
-                },
-              );
-            }}
-          >
-            Use wallet ({money(inv.walletBalance ?? 0)})
-          </Button>
-        ) : null}
-        <Button variant="ghost" className="min-h-9 text-xs" onClick={() => setMode(mode === "edit" ? "idle" : "edit")}>
-          Edit
-        </Button>
-      </div>
+          {(inv.walletBalance ?? 0) > 0 ? (
+            <Button
+              variant="secondary"
+              className="w-full"
+              loading={pending}
+              onClick={() => {
+                const take = Math.min(inv.walletBalance ?? 0, inv.balance);
+                if (!window.confirm(`Take ${money(take)} from ${inv.client.name}'s wallet for this invoice?`)) return;
+                act(
+                  () => applyWalletToInvoice(inv.id),
+                  (d) => {
+                    setInvoice(d.invoice);
+                    setNotice(`${money(d.applied)} paid from the wallet.`);
+                  },
+                );
+              }}
+            >
+              Use wallet ({money(inv.walletBalance ?? 0)})
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
 
       {mode === "pay" ? (
         <PaymentForm
@@ -257,46 +274,149 @@ export function StaffInvoicePanel({
               },
             )
           }
-          onResetLink={() => {
-            if (!window.confirm("Make a new link? The old link will stop working — send the new one to the client.")) return;
-            act(
-              () => resetInvoiceLink(inv.id),
-              (d) => {
-                setInvoice(d);
-                setMode("idle");
-                setNotice("New link created. The old one no longer works.");
-              },
-            );
-          }}
         />
       ) : null}
 
-      {inv.payments.length ? (
-        <ul className="divide-y divide-border border-t border-border text-xs">
-          {inv.payments.map((p) => (
-            <li key={p.id} className="flex justify-between gap-2 py-1.5">
-              <span className="min-w-0 truncate text-muted">
-                {new Date(p.createdAt).toLocaleDateString()} ·{" "}
-                {p.kind === "refund" ? "Refund to wallet" : paymentMethodLabel(p.method, "Payment received")}
-                {p.amountReceived != null && p.amountReceived > p.amount
-                  ? ` · ${money(p.amountReceived)} received; ${money(p.amountToWallet && p.amountToWallet > 0 ? p.amountToWallet : (p.amountRefunded ?? 0))} ${p.amountToWallet ? "credited" : "returned"}`
-                  : ""}
-                {p.reference ? ` · ${p.reference}` : ""} · {p.actorName}
-              </span>
-              <span className="shrink-0 font-medium tabular-nums">
-                {p.kind === "refund" ? "−" : ""}
-                {money(p.amount)}
-              </span>
-            </li>
-          ))}
-        </ul>
-      ) : null}
+      {messages}
+
+      <section>
+        <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted">Payments</h3>
+        {inv.payments.length ? (
+          <ul className="divide-y divide-border text-xs">
+            {inv.payments.map((p) => (
+              <li key={p.id} className="flex justify-between gap-2 py-2">
+                <span className="min-w-0 text-muted">
+                  {new Date(p.createdAt).toLocaleDateString()} ·{" "}
+                  {p.kind === "refund" ? "Refund to wallet" : paymentMethodLabel(p.method, "Payment received")}
+                  {p.amountReceived != null && p.amountReceived > p.amount
+                    ? ` · ${money(p.amountReceived)} received; ${money(p.amountToWallet && p.amountToWallet > 0 ? p.amountToWallet : (p.amountRefunded ?? 0))} ${p.amountToWallet ? "credited" : "returned"}`
+                    : ""}
+                  {p.reference ? ` · ${p.reference}` : ""} · {p.actorName}
+                </span>
+                <span className="shrink-0 font-medium tabular-nums text-foreground">
+                  {p.kind === "refund" ? "−" : ""}
+                  {money(p.amount)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-xs text-muted">None yet.</p>
+        )}
+      </section>
 
       <DiscountHistory key={inv.amount} orderId={inv.order.id} />
 
-      {notice ? <p className="text-xs text-success-600 dark:text-success-500">{notice}</p> : null}
-      {error ? <p className="text-xs text-error-600">{error}</p> : null}
+      <p className="text-[11px] text-muted">Issued by {inv.createdByName}.</p>
+    </div>
+  );
+
+  const menu: ActionMenuEntry[] = [
+    { label: "Edit invoice", onSelect: () => setMode("edit") },
+    { label: "Make a new link", onSelect: resetLink },
+  ];
+
+  const viewer = viewing ? (
+    <InvoiceViewer
+      invoice={inv}
+      onClose={closeViewer}
+      heading={
+        <div className="flex min-w-0 flex-col items-start gap-0.5 sm:flex-row sm:items-center sm:gap-2">
+          <p className="max-w-full truncate text-sm font-semibold">{inv.invoiceNo}</p>
+          <span className="whitespace-nowrap">
+            <InvoiceStatusBadge status={inv.status} />
+          </span>
+          <p className="hidden truncate text-sm text-white/60 md:block">· {inv.client.name}</p>
+        </div>
+      }
+      actions={
+        <>
+          <ViewerAction label="Download PDF" onClick={download}>
+            <DownloadIcon className="size-5" />
+          </ViewerAction>
+          <ViewerAction label={copied ? "Link copied" : "Copy link"} onClick={copy}>
+            {copied ? <CheckCircleIcon className="size-5 text-success-500" /> : <LinkIcon className="size-5" />}
+          </ViewerAction>
+          <ViewerAction label="Send on WhatsApp" onClick={sendOnWhatsApp}>
+            <ChatIcon className="size-5" />
+          </ViewerAction>
+          <ActionMenu
+            label="More invoice actions"
+            focusKey={`invoice-${inv.id}`}
+            items={menu}
+            triggerClassName="inline-flex size-11 items-center justify-center rounded-full text-white/80 hover:bg-white/10 hover:text-white"
+          />
+        </>
+      }
+      aside={manage}
+    />
+  ) : null;
+
+  if (asViewer) return viewer;
+
+  // On the order: the invoice at a glance; opening it shows the invoice itself.
+  return (
+    <section aria-label="Invoice" className="space-y-3 rounded-2xl border border-border bg-surface p-3">
+      <button
+        type="button"
+        onClick={() => view()}
+        className="group flex w-full items-center gap-3 rounded-xl text-left"
+      >
+        <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-600 dark:bg-brand-500/15 dark:text-brand-400">
+          <DocumentIcon className="size-5" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="flex items-center gap-2 text-sm font-semibold">
+            {inv.invoiceNo} <InvoiceStatusBadge status={inv.status} />
+          </span>
+          <span className="block text-xs text-muted tabular-nums">
+            Total {money(inv.amount)} · Paid {money(inv.paid)} ·{" "}
+            <span className="font-semibold text-foreground">Balance {money(inv.balance)}</span>
+          </span>
+          {inv.dueDate ? <span className="block text-xs text-muted">Due {new Date(`${inv.dueDate}T00:00:00`).toLocaleDateString()}</span> : null}
+        </span>
+      </button>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <Button variant="secondary" className="min-h-9 text-xs" onClick={() => view()}>
+          View invoice
+        </Button>
+        {canTakeMoney ? (
+          <Button className="min-h-9 text-xs" onClick={() => view("pay")}>
+            Record payment
+          </Button>
+        ) : null}
+        <span className="ml-auto">
+          <ActionMenu
+            label="Invoice actions"
+            focusKey={`invoice-card-${inv.id}`}
+            items={[
+              { label: copied ? "Link copied" : "Copy link", onSelect: copy },
+              { label: "Send on WhatsApp", onSelect: sendOnWhatsApp },
+              { label: "Download PDF", onSelect: download },
+              { label: "Edit invoice", onSelect: () => view("edit") },
+              { label: "Make a new link", onSelect: resetLink },
+            ]}
+          />
+        </span>
+      </div>
+
+      {messages}
+      {viewer}
     </section>
+  );
+}
+
+/** Speech bubble, for "Send on WhatsApp" (Heroicons chat-bubble-oval-left, outline). */
+function ChatIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className={className} aria-hidden>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M12 20.25c4.97 0 9-3.694 9-8.25s-4.03-8.25-9-8.25S3 7.444 3 12c0 2.104.859 4.023 2.273 5.48.432.447.74 1.04.586 1.641a4.483 4.483 0 0 1-.923 1.785A5.969 5.969 0 0 0 6 21c1.282 0 2.47-.402 3.445-1.087.81.22 1.668.337 2.555.337Z"
+      />
+    </svg>
   );
 }
 
@@ -524,7 +644,7 @@ function GeneratePanel({
             </p>
           </div>
           <DiscountHistory orderId={orderId} />
-          {preview ? <InvoicePdf invoice={preview.view} draft /> : null}
+          {preview ? <InvoicePdf invoice={preview.view} download={false} /> : null}
         </div>
       </Drawer>
     </section>
@@ -618,14 +738,12 @@ function EditForm({
   pending,
   onSave,
   onCancel,
-  onResetLink,
 }: {
   invoice: StaffInvoiceView;
   money: (n: number) => string;
   pending: boolean;
   onSave: (input: { lines: InvoiceLineInput[] | null; dueDate: string | null; notes: string | null }) => void;
   onCancel: () => void;
-  onResetLink: () => void;
 }) {
   const [lines, setLines] = useState(() => toEditable(invoice.draftLines));
   const [dueDate, setDueDate] = useState(invoice.dueDate ?? "");
@@ -659,16 +777,10 @@ function EditForm({
         <Button className="min-h-9 text-xs" loading={pending} onClick={save}>
           Save
         </Button>
-        <button type="button" className="text-xs text-muted" onClick={onCancel}>
+        <Button variant="ghost" className="min-h-9 text-xs" onClick={onCancel}>
           Cancel
-        </button>
-        <button type="button" className="ml-auto text-xs text-error-600 underline" onClick={onResetLink}>
-          Reset link
-        </button>
+        </Button>
       </div>
-      <p className="text-[11px] text-muted">
-        Reset the link if it was sent to the wrong person — the old one stops working. Issued by {invoice.createdByName}.
-      </p>
     </div>
   );
 }

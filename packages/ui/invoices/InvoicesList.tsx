@@ -4,7 +4,6 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@repo/ui/Button";
-import { Drawer } from "@repo/ui/Drawer";
 import { TextInput } from "@repo/ui/Field";
 import { useCurrencySymbol } from "@repo/lib/currency/CurrencySymbolProvider";
 import { formatMoney } from "@repo/lib/currency/format";
@@ -16,8 +15,8 @@ import { InvoiceSettingsDrawer } from "./InvoiceSettingsDrawer";
 import { StaffInvoicePanel } from "./StaffInvoicePanel";
 
 // Staff's Invoices page: every invoice with what's paid and outstanding,
-// filterable by status. Opening one shows the same invoice panel as the
-// order screen (record a payment, share the link…).
+// filterable by status. Opening one shows the invoice itself full screen,
+// with the same actions as on the order (record a payment, share the link…).
 
 type Filter = "all" | InvoiceStatus;
 const FILTERS: Filter[] = ["all", "unpaid", "partially_paid", "paid", "cancelled"];
@@ -130,9 +129,9 @@ export function InvoicesList({ invoices, canEditSettings }: { invoices: InvoiceL
 
       {canEditSettings ? <InvoiceSettingsDrawer open={settingsOpen} onClose={() => setSettingsOpen(false)} /> : null}
 
-      <Drawer open={!!open} onClose={() => setOpen(null)} title={open ? `${open.invoiceNo} · ${open.clientName}` : "Invoice"}>
-        {open ? <StaffInvoicePanel key={open.orderId} orderId={open.orderId} onChanged={() => router.refresh()} /> : null}
-      </Drawer>
+      {open ? (
+        <StaffInvoicePanel key={open.orderId} orderId={open.orderId} onChanged={() => router.refresh()} asViewer={{ onClose: () => setOpen(null) }} />
+      ) : null}
     </div>
   );
 }
