@@ -1,5 +1,5 @@
-// Wording shared by the web invoice (./InvoiceDocument.tsx) and the PDF
-// (./pdf.ts), which differs between a real invoice and a pro forma.
+// The invoice PDF's (./pdf.ts) wording that differs between a real invoice
+// and a pro forma.
 
 import type { InvoiceView } from "@repo/lib/invoices/types";
 

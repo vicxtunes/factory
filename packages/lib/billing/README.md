@@ -30,8 +30,8 @@ A business's documents to its customers. Built for studios first and generic eno
 - **The link** (`/q/<token>` on the client app): no sign-in. Holding the link is the permission.
   It shows that one quotation with the studio's details, and accepts only an answer (accept, or
   decline with an optional reason) while it's open and in date. **Reset link** replaces the token,
-  and the old link stops working. The page is standalone and print-friendly, so the browser's
-  "Print / Save as PDF" makes the document.
+  and the old link stops working. The quotation shows as its PDF, page by page, exactly as it
+  downloads and prints (`packages/ui/billing/pdf.ts`).
 
 ## Invoices, payments and receipts
 
@@ -54,7 +54,7 @@ A business's documents to its customers. Built for studios first and generic eno
   live payments and isn't void, both in the service and in `billing_save_invoice()` (which locks
   the row).
 - **The invoice link** (`/i/<token>`): view only. The invoice, what's been paid and what's left,
-  and Print / Save as PDF. Reset link kills the old one.
+  shown as its PDF, with Download. Reset link kills the old one.
 - A client's page shows their invoices and what they owe in total (`outstanding`).
 
 ## The studio's dashboard
@@ -82,12 +82,12 @@ it), links into the studio's pages, and no wallet tile. The boss sees the same o
 | `/studio/quotations/new` (`?client=<id>` to preselect) | Studio owner | Client, lines from packages or typed, discounts, valid until, notes; live totals |
 | `/studio/quotations/<id>` | Studio owner | The document; copy link, WhatsApp, reset link; Edit while unanswered |
 | `/studio/clients/<id>` | Studio owner | That client's quotations; New quotation |
-| `/q/<token>` | Anyone with the link | The quotation; Accept / Decline; Print / Save as PDF |
+| `/q/<token>` | Anyone with the link | The quotation (as its PDF); Download; Accept / Decline |
 | `/studio/quotations/<id>` (accepted) | Studio owner | Create invoice, or view the one made from it |
 | `/studio/invoices` | Studio owner | What clients owe; All / Unpaid / Partially paid / Overdue / Paid / Void |
 | `/studio/invoices/new`, `/studio/invoices/<id>/edit` | Studio owner | As quotations, with a due date |
 | `/studio/invoices/<id>` | Studio owner | Record payments, receipts, void a payment; share; void the invoice |
-| `/i/<token>`, `/r/<token>` | Anyone with the link | The invoice / the receipt; Print / Save as PDF |
+| `/i/<token>`, `/r/<token>` | Anyone with the link | The invoice / the receipt, as its PDF; Download |
 | `/dashboard/studios/<id>` (factory app) | Boss | The studio's money, quotations and invoices, read-only |
 
 ## Security
@@ -126,9 +126,11 @@ packages/lib/billing/
   server.ts        The wired services, studioAccounts, token generation, quotationUrl / invoiceUrl / receiptUrl.
   actions.ts       Quotations: create, update, reset link, respond. Invoices: create, update,
                    from quotation, record / void payment, void invoice, reset link.
-packages/ui/billing/  BillingDocument (shared layout), QuotationDocument, InvoiceDocument,
-                      ReceiptDocument, QuotationsList, InvoicesList, DocumentEditor, DocumentShare,
-                      PaymentsPanel, InvoiceButtons, QuotationAnswer, PrintButton, StatusBadges.
+packages/ui/billing/  pdf.ts (the quotation, invoice and receipt as A4 PDFs: their only layout),
+                      DocumentPdf (those PDFs shown as paper + Download), QuotationsList,
+                      InvoicesList, DocumentEditor, DocumentShare, PaymentsPanel, InvoiceButtons,
+                      QuotationAnswer, StatusBadges.
+packages/ui/pdf/      PdfPreview (any PDF as paper, via pdf.js), files (savePdf, pdfText).
 supabase/migrations/20261003130000_billing_quotations.sql
 supabase/migrations/20261003140000_billing_invoices.sql
 ```

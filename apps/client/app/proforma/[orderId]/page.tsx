@@ -1,8 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
-import { InvoiceDocument } from "@repo/ui/invoices/InvoiceDocument";
-import { InvoiceDownloadButtons } from "@repo/ui/invoices/InvoiceDownloadButtons";
+import { InvoicePdf } from "@repo/ui/invoices/InvoicePdf";
 import { PaymentMethods } from "@repo/ui/payments/PaymentMethods";
 import { getProformaForViewer } from "@repo/lib/invoices/public";
 import { SUPPORT_PHONE_DISPLAY } from "@repo/lib/support/constants";
@@ -25,13 +24,10 @@ export default async function ProformaPage({ params }: { params: Promise<{ order
 
   return (
     <main className="mx-auto w-full max-w-3xl px-4 py-6 sm:py-10 print:max-w-none print:p-0">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-2 print:hidden">
-        <Link href="/orders" className="text-sm font-medium text-brand-600 underline">
-          ← Back to orders
-        </Link>
-        <InvoiceDownloadButtons invoice={invoice} />
-      </div>
-      <InvoiceDocument invoice={invoice} />
+      <Link href="/orders" className="mb-3 inline-block text-sm font-medium text-brand-600 underline print:hidden">
+        ← Back to orders
+      </Link>
+      <InvoicePdf invoice={invoice} />
       {/* Paying early is fine when the estimate is complete (no photo books waiting for a price). */}
       {invoice.complete && invoice.balance > 0 && !invoice.order.cancelled ? (
         <section className="mt-4 space-y-2 print:hidden">

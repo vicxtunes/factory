@@ -1,12 +1,11 @@
 import { notFound } from "next/navigation";
 
-import { PrintButton } from "@repo/ui/billing/PrintButton";
-import { ReceiptDocument } from "@repo/ui/billing/ReceiptDocument";
+import { ReceiptPdf } from "@repo/ui/billing/DocumentPdf";
 import { shareTokenSchema } from "@repo/lib/billing/core";
 import { invoices } from "@repo/lib/billing/server";
 
 // A payment's receipt link (client.<domain>/r/<token>). No sign-in: holding
-// the link is the permission, and it shows only this one receipt. View only.
+// the link is the permission, and it shows only this one receipt, as its PDF. View only.
 
 export const dynamic = "force-dynamic";
 // Private to whoever holds the link: keep it out of search engines.
@@ -16,13 +15,11 @@ export default async function ReceiptLinkPage({ params }: { params: Promise<{ to
   const parsed = shareTokenSchema.safeParse((await params).token);
   const found = parsed.success ? await invoices.receiptByLink(parsed.data) : null;
   if (!found) notFound();
+  const { currency, locale, timeZone } = found.scope;
 
   return (
-    <main className="mx-auto w-full max-w-xl space-y-4 px-4 py-6 sm:py-10 print:max-w-none print:p-0">
-      <div className="flex justify-end print:hidden">
-        <PrintButton />
-      </div>
-      <ReceiptDocument receipt={found.receipt} issuer={found.issuer} scope={found.scope} />
+    <main className="mx-auto w-full max-w-3xl px-4 py-6 sm:py-10">
+      <ReceiptPdf receipt={found.receipt} issuer={found.issuer} scope={{ currency, locale, timeZone }} />
     </main>
   );
 }
