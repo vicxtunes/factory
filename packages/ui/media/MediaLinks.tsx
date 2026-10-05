@@ -432,28 +432,35 @@ function MediaTile({
 
   return (
     <div className="min-w-0">
-      <div
-        title={title}
-        className="group relative aspect-square overflow-hidden rounded-xl border border-border bg-background shadow-theme-xs"
-      >
-        {body}
+      {/* The tile itself doesn't clip (so the ⋯ menu can open over its
+          neighbours); the picture layer inside it does. focus-within lifts
+          the tile above the next ones while its menu is open. */}
+      <div title={title} className="group relative aspect-square rounded-xl shadow-theme-xs focus-within:z-20">
+        <div className="absolute inset-0 overflow-hidden rounded-xl border border-border bg-background">
+          {body}
 
-        {/* Downloaded: who and when, on a soft shade along the bottom. */}
-        {tracked && state ? (
-          <div
-            className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center gap-1 bg-gradient-to-t from-black/75 to-transparent px-2 pb-1.5 pt-5 text-[10px] text-white"
-            title={`Downloaded ${new Date(state.at).toLocaleString()}`}
-          >
-            <CheckCircleIcon className="h-3.5 w-3.5 shrink-0 text-success-400" />
-            <span className="truncate">
-              {state.by ? `${state.by} · ` : ""}
-              {formatDownloadedAt(state.at)}
-            </span>
-          </div>
-        ) : null}
+          {/* Downloaded: who and when, on a soft shade along the bottom. */}
+          {tracked && state ? (
+            <div
+              className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center gap-1 bg-gradient-to-t from-black/75 to-transparent px-2 pb-1.5 pt-5 text-[10px] text-white"
+              title={`Downloaded ${new Date(state.at).toLocaleString()}`}
+            >
+              <CheckCircleIcon className="h-3.5 w-3.5 shrink-0 text-success-400" />
+              <span className="truncate">
+                {state.by ? `${state.by} · ` : ""}
+                {formatDownloadedAt(state.at)}
+              </span>
+            </div>
+          ) : null}
+          {actions.busy ? (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/40 text-white">
+              <Spinner className="h-5 w-5" />
+            </div>
+          ) : null}
+        </div>
 
         {/* Top-right controls: a quick download on viewable tiles, and the ⋯ menu. */}
-        <div className="absolute right-1.5 top-1.5 flex gap-1 opacity-100 transition-opacity md:opacity-0 md:group-focus-within:opacity-100 md:group-hover:opacity-100">
+        <div className="absolute right-1.5 top-1.5 z-10 flex gap-1 opacity-100 transition-opacity md:opacity-0 md:group-focus-within:opacity-100 md:group-hover:opacity-100">
           {!link && !pending && image ? (
             <button
               type="button"
@@ -475,11 +482,6 @@ function MediaTile({
             />
           ) : null}
         </div>
-        {actions.busy ? (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/40 text-white">
-            <Spinner className="h-5 w-5" />
-          </div>
-        ) : null}
       </div>
       {editable ? actions.extras : null}
     </div>
