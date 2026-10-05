@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { getCurrentActor } from "@repo/lib/notes/actions";
-import { deleteOrderItemMedia, updateMediaLink } from "@repo/lib/storage/actions";
+import { deleteOrderItemMedia, markMediaDownloaded, updateMediaLink } from "@repo/lib/storage/actions";
 import { replaceFileInStorage } from "@repo/lib/storage/upload-client";
 import type { OrderItemMedia } from "@repo/lib/types";
 
@@ -32,12 +32,13 @@ function filenameFromContentDisposition(header: string | null, fallback: string)
 // Fetches the file ourselves (rather than a plain <a href> navigation) so we
 // can prompt "Save As" via the File System Access API when the browser
 // supports it — a plain download link always saves silently to the default
-// Downloads folder with no way for a site to ask for a location.
+// Downloads folder with no way for a site to ask for a location. Resolves
+// false when the person cancelled the Save As picker.
 async function downloadWithPicker(
   url: string,
   fallbackName: string,
   fileType?: { description: string; accept: Record<string, string[]> },
-): Promise<void> {
+): Promise<boolean> {
   const res = await fetch(url);
   if (!res.ok) throw new Error("Download failed.");
   const filename = filenameFromContentDisposition(res.headers.get("Content-Disposition"), fallbackName);
@@ -52,9 +53,9 @@ async function downloadWithPicker(
       const writable = await handle.createWritable();
       await writable.write(blob);
       await writable.close();
-      return;
+      return true;
     } catch (err) {
-      if (err instanceof DOMException && err.name === "AbortError") return; // user cancelled the picker
+      if (err instanceof DOMException && err.name === "AbortError") return false; // user cancelled the picker
       // Fall through to the plain-link fallback below on any other failure.
     }
   }
@@ -67,6 +68,7 @@ async function downloadWithPicker(
   a.click();
   a.remove();
   URL.revokeObjectURL(blobUrl);
+  return true;
 }
 
 const IMAGE_EXTENSION = /\.(jpe?g|png|gif|webp|bmp|svg)(\?.*)?$/i;
@@ -164,7 +166,28 @@ function isPastedLink(file: OrderItemMedia): boolean {
   return !file.storage_path && !file.cloudinary_public_id;
 }
 
-type Preview = { url: string; name: string; downloadHref: string };
+type Preview = { url: string; name: string; downloadHref: string; onSaved?: () => void };
+
+/** Whether staff have downloaded a file yet (shown only where downloads are tracked). */
+type DownloadState = { at: string; by: string | null } | null;
+
+function formatDownloadedAt(iso: string): string {
+  const d = new Date(iso);
+  const time = d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  if (d.toDateString() === new Date().toDateString()) return time;
+  return `${d.toLocaleDateString(undefined, { day: "numeric", month: "short" })}, ${time}`;
+}
+
+function DownloadMark({ state }: { state: DownloadState }) {
+  if (!state) {
+    return <p className="mt-1 text-[0.65rem] font-medium text-[var(--urgent)]">Pending download</p>;
+  }
+  return (
+    <p className="mt-1 text-[0.65rem] text-success-600 dark:text-success-400" title={new Date(state.at).toLocaleString()}>
+      ✓ Downloaded{state.by ? ` · ${state.by}` : ""} · {formatDownloadedAt(state.at)}
+    </p>
+  );
+}
 
 // "Replace" for an uploaded file re-runs the same signed-upload flow and
 // swaps the file at this row's existing id; for a pasted link it's a quick
@@ -303,11 +326,16 @@ function Thumbnail({
   downloadHref,
   name,
   onOpen,
+  mark,
+  onSaved,
 }: {
   thumbUrl: string;
   downloadHref: string;
   name: string;
   onOpen: () => void;
+  /** Where downloads are tracked: an amber ring until it's downloaded, a green tick after. */
+  mark?: "pending" | "done";
+  onSaved?: () => void;
 }) {
   const [downloading, setDownloading] = useState(false);
 
@@ -315,7 +343,7 @@ function Thumbnail({
     e.stopPropagation();
     setDownloading(true);
     try {
-      await downloadWithPicker(downloadHref, name);
+      if (await downloadWithPicker(downloadHref, name)) onSaved?.();
     } catch {
       // best-effort — this tile has no room for an inline error message
     } finally {
@@ -329,11 +357,21 @@ function Thumbnail({
         type="button"
         onClick={onOpen}
         title={name}
-        className="h-16 w-16 overflow-hidden rounded-[var(--radius)] border border-border"
+        className={`h-16 w-16 overflow-hidden rounded-[var(--radius)] border ${
+          mark === "pending" ? "border-2 border-[var(--urgent)]" : "border-border"
+        }`}
       >
         {/* eslint-disable-next-line @next/next/no-img-element -- arbitrary remote hosts (Cloudinary/Supabase Storage/pasted links), can't be allowlisted for next/image */}
         <img src={thumbUrl} alt={name} loading="lazy" className="h-full w-full object-cover" />
       </button>
+      {mark === "done" ? (
+        <span
+          aria-label="Downloaded"
+          className="absolute left-0.5 top-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full bg-success-500 text-[0.6rem] text-white"
+        >
+          ✓
+        </span>
+      ) : null}
       <button
         type="button"
         onClick={handleDownload}
@@ -353,13 +391,13 @@ function Thumbnail({
 // "Save As" behaves the same everywhere in this component instead of only
 // on the "Download all" zip — a plain <a download> never prompts for a
 // location, which read as inconsistent/disorganized next to the zip flow.
-function FileDownloadLink({ href, name }: { href: string; name: string }) {
+function FileDownloadLink({ href, name, onSaved }: { href: string; name: string; onSaved?: () => void }) {
   const [downloading, setDownloading] = useState(false);
 
   async function handleClick() {
     setDownloading(true);
     try {
-      await downloadWithPicker(href, name);
+      if (await downloadWithPicker(href, name)) onSaved?.();
     } catch {
       // best-effort
     } finally {
@@ -395,14 +433,14 @@ function OpenLink({ href, name }: { href: string; name: string }) {
   );
 }
 
-function LightboxDownloadButton({ href, name }: { href: string; name: string }) {
+function LightboxDownloadButton({ href, name, onSaved }: { href: string; name: string; onSaved?: () => void }) {
   const [downloading, setDownloading] = useState(false);
 
   async function handleClick(e: React.MouseEvent) {
     e.stopPropagation();
     setDownloading(true);
     try {
-      await downloadWithPicker(href, name);
+      if (await downloadWithPicker(href, name)) onSaved?.();
     } catch {
       // best-effort
     } finally {
@@ -425,7 +463,20 @@ function LightboxDownloadButton({ href, name }: { href: string; name: string }) 
 // Fetches the zip itself (see downloadWithPicker) instead of a plain link,
 // so Chromium browsers can prompt "Save As" for a location instead of
 // always silently landing in the default Downloads folder.
-function DownloadAllButton({ orderItemId, count }: { orderItemId: string; count: number }) {
+function DownloadAllButton({
+  orderItemId,
+  label,
+  ids,
+  primary,
+  onSaved,
+}: {
+  orderItemId: string;
+  label: string;
+  /** Zip only these files; all of the item's files when omitted. */
+  ids?: string[];
+  primary?: boolean;
+  onSaved?: () => void;
+}) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -433,10 +484,12 @@ function DownloadAllButton({ orderItemId, count }: { orderItemId: string; count:
     setBusy(true);
     setError(null);
     try {
-      await downloadWithPicker(`/api/order-items/${orderItemId}/media-zip`, "media.zip", {
+      const query = ids ? `?ids=${ids.join(",")}` : "";
+      const saved = await downloadWithPicker(`/api/order-items/${orderItemId}/media-zip${query}`, "media.zip", {
         description: "Zip archive",
         accept: { "application/zip": [".zip"] },
       });
+      if (saved) onSaved?.();
     } catch {
       setError("Could not download the zip.");
     } finally {
@@ -450,9 +503,11 @@ function DownloadAllButton({ orderItemId, count }: { orderItemId: string; count:
         type="button"
         onClick={handleClick}
         disabled={busy}
-        className="inline-flex min-h-11 w-fit items-center rounded-[var(--radius)] border border-border px-3 text-xs"
+        className={`inline-flex min-h-11 w-fit items-center rounded-[var(--radius)] px-3 text-xs ${
+          primary ? "bg-brand-500 font-medium text-white hover:bg-brand-600" : "border border-border"
+        }`}
       >
-        {busy ? "Preparing…" : `Download all (${count})`}
+        {busy ? "Preparing…" : label}
       </button>
       {error ? <p className="text-xs text-[var(--rush)]">{error}</p> : null}
     </div>
@@ -473,7 +528,7 @@ function Lightbox({ preview, onClose }: { preview: Preview; onClose: () => void 
         onClick={(e) => e.stopPropagation()}
       />
       <div className="absolute bottom-6 right-6 flex gap-2">
-        <LightboxDownloadButton href={preview.downloadHref} name={preview.name} />
+        <LightboxDownloadButton href={preview.downloadHref} name={preview.name} onSaved={preview.onSaved} />
         <a
           href={preview.url}
           target="_blank"
@@ -507,47 +562,102 @@ export function MediaLinks({
   media,
   legacyLink,
   editable = false,
+  trackDownloads = false,
   onChanged,
 }: {
   media: OrderItemMedia[];
   legacyLink?: string | null;
   editable?: boolean;
+  /**
+   * Staff screens: record who downloads each file and show which are still
+   * pending download (for printing). Viewing a preview never counts.
+   */
+  trackDownloads?: boolean;
   onChanged?: () => void;
 }) {
   const [preview, setPreview] = useState<Preview | null>(null);
+  // Downloads made on this screen, shown at once instead of waiting for a refetch.
+  const [saved, setSaved] = useState<Record<string, { at: string; by: string }>>({});
+
+  const downloadState = (file: OrderItemMedia): DownloadState =>
+    saved[file.id] ?? (file.downloaded_at ? { at: file.downloaded_at, by: file.downloaded_by_name } : null);
+
+  async function recordDownload(ids: string[]) {
+    if (!trackDownloads || ids.length === 0) return;
+    const res = await markMediaDownloaded(media[0].order_item_id, ids);
+    if (!res.ok) return; // e.g. a client's own download: nothing to show
+    setSaved((prev) => ({ ...prev, ...Object.fromEntries(ids.map((id) => [id, { at: res.at, by: res.by }])) }));
+    onChanged?.();
+  }
 
   let content: React.ReactNode = null;
 
   if (media.length > 0) {
+    const files = media.filter((file) => !isPastedLink(file));
+    const pending = trackDownloads ? files.filter((file) => !downloadState(file)) : [];
+    const someDone = pending.length < files.length;
+
     content = (
       <div className="flex flex-col gap-2">
-        {media.length > 1 ? (
-          <DownloadAllButton orderItemId={media[0].order_item_id} count={media.length} />
+        {trackDownloads && files.length > 0 ? (
+          <p className="text-xs text-muted">
+            {pending.length === 0
+              ? `All ${files.length} downloaded`
+              : `${files.length - pending.length} of ${files.length} downloaded · ${pending.length} pending`}
+          </p>
         ) : null}
+        <div className="flex flex-wrap gap-2">
+          {trackDownloads && pending.length > 0 && someDone ? (
+            <DownloadAllButton
+              orderItemId={media[0].order_item_id}
+              label={`Download pending (${pending.length})`}
+              ids={pending.map((file) => file.id)}
+              primary
+              onSaved={() => recordDownload(pending.map((file) => file.id))}
+            />
+          ) : null}
+          {files.length > 1 ? (
+            <DownloadAllButton
+              orderItemId={media[0].order_item_id}
+              label={`Download all (${files.length})`}
+              primary={trackDownloads && !someDone}
+              onSaved={() => recordDownload(files.map((file) => file.id))}
+            />
+          ) : null}
+        </div>
         <div className="flex flex-wrap gap-3">
-          {media.map((file) => (
-            <div key={file.id} className="flex flex-col items-start">
-              {isImage(file.secure_url, file.mime_type) ? (
-                <Thumbnail
-                  thumbUrl={resolveThumbUrl(file)}
-                  downloadHref={resolveDownloadUrl(file)}
-                  name={resolveDisplayName(file)}
-                  onOpen={() =>
-                    setPreview({
-                      url: file.secure_url,
-                      name: resolveDisplayName(file),
-                      downloadHref: resolveDownloadUrl(file),
-                    })
-                  }
-                />
-              ) : isPastedLink(file) ? (
-                <OpenLink href={file.secure_url} name={file.file_name} />
-              ) : (
-                <FileDownloadLink href={resolveDownloadUrl(file)} name={resolveDisplayName(file)} />
-              )}
-              {editable ? <MediaActions file={file} onChanged={onChanged} /> : null}
-            </div>
-          ))}
+          {media.map((file) => {
+            const tracked = trackDownloads && !isPastedLink(file);
+            const state = tracked ? downloadState(file) : null;
+            const onSaved = tracked ? () => recordDownload([file.id]) : undefined;
+            return (
+              <div key={file.id} className="flex flex-col items-start">
+                {isImage(file.secure_url, file.mime_type) ? (
+                  <Thumbnail
+                    thumbUrl={resolveThumbUrl(file)}
+                    downloadHref={resolveDownloadUrl(file)}
+                    name={resolveDisplayName(file)}
+                    mark={tracked ? (state ? "done" : "pending") : undefined}
+                    onSaved={onSaved}
+                    onOpen={() =>
+                      setPreview({
+                        url: file.secure_url,
+                        name: resolveDisplayName(file),
+                        downloadHref: resolveDownloadUrl(file),
+                        onSaved,
+                      })
+                    }
+                  />
+                ) : isPastedLink(file) ? (
+                  <OpenLink href={file.secure_url} name={file.file_name} />
+                ) : (
+                  <FileDownloadLink href={resolveDownloadUrl(file)} name={resolveDisplayName(file)} onSaved={onSaved} />
+                )}
+                {tracked ? <DownloadMark state={state} /> : null}
+                {editable ? <MediaActions file={file} onChanged={onChanged} /> : null}
+              </div>
+            );
+          })}
         </div>
       </div>
     );

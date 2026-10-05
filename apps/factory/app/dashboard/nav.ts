@@ -114,6 +114,8 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/support", label: "Support", icon: "support", visible: everyone },
       { href: "/dashboard/support", label: "Support Reports", icon: "support", visible: developer },
+      // Private component workbench; the room itself 404s for anyone else.
+      { href: "/dashboard/design-room", label: "Design Room", icon: "designers", visible: developer },
       // Signed-in staff get the display board in the same tab/app session.
       { href: "/display", label: "Display screen", icon: "display", visible: everyone },
     ],

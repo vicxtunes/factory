@@ -270,6 +270,11 @@ export async function confirmMediaReplace(mediaId: string, path: string): Promis
       storage_path: path,
       secure_url: pub.publicUrl,
       cloudinary_public_id: null,
+      // A new file hasn't been downloaded yet: back to pending.
+      downloaded_at: null,
+      downloaded_by_type: null,
+      downloaded_by_id: null,
+      downloaded_by_name: null,
     })
     .eq("id", mediaId);
   if (error) return { ok: false, error: error.message };
@@ -348,4 +353,44 @@ export async function updateMediaLink(mediaId: string, url: string): Promise<Res
   revalidatePath("/factory");
   revalidatePath("/graphics");
   return { ok: true };
+}
+
+// Marks files as downloaded (for printing) after staff saved them, so the
+// item shows which are done and which are still pending. Clients downloading
+// their own files don't count. Pasted links are never marked: nothing was
+// downloaded from us.
+export async function markMediaDownloaded(
+  orderItemId: string,
+  mediaIds: string[],
+): Promise<{ ok: true; at: string; by: string } | { ok: false; error: string }> {
+  await requireMediaUploadAccess();
+  const actor = await resolveActor();
+  if (!actor || actor.type === "client" || actor.type === "system") {
+    return { ok: false, error: "Only staff downloads are recorded." };
+  }
+  if (!orderItemId || mediaIds.length === 0) return { ok: false, error: "Nothing to mark." };
+
+  const at = new Date().toISOString();
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("order_item_media")
+    .update({ downloaded_at: at, downloaded_by_type: actor.type, downloaded_by_id: actor.id, downloaded_by_name: actor.name })
+    .eq("order_item_id", orderItemId)
+    .in("id", mediaIds)
+    .or("storage_path.not.is.null,cloudinary_public_id.not.is.null")
+    .select("file_name");
+  if (error) return { ok: false, error: error.message };
+
+  const context = await fetchOrderAndLabel(admin, orderItemId);
+  if (context && data?.length) {
+    await logOrderEvent({
+      orderId: context.orderId,
+      orderItemId,
+      actor,
+      action: "media_downloaded",
+      detail: { itemLabel: context.label, count: data.length, fileName: data.length === 1 ? data[0].file_name : null },
+    });
+  }
+
+  return { ok: true, at, by: actor.name };
 }
