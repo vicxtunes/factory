@@ -15,12 +15,15 @@ export function ActionMenu({
   focusKey,
   items,
   triggerClassName,
+  compact = false,
 }: {
   label: string;
   focusKey: string;
   items: ActionMenuEntry[];
   /** Replaces the plain list-row trigger look, e.g. a round button floating on a photo. */
   triggerClassName?: string;
+  /** A small menu (short labels, tight rows) — for a ⋯ on a photo tile. */
+  compact?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLSpanElement>(null);
@@ -66,7 +69,9 @@ export function ActionMenu({
         <div
           role="menu"
           aria-label={label}
-          className="absolute right-0 top-full z-30 mt-1 w-52 rounded-[var(--radius)] border border-border bg-surface py-1 text-left shadow-theme-xl"
+          className={`absolute right-0 top-full z-30 mt-1 rounded-[var(--radius)] border border-border bg-surface text-left shadow-theme-xl ${
+            compact ? "w-max min-w-28 py-0.5" : "w-52 py-1"
+          }`}
         >
           {items.map((item) =>
             "heading" in item ? (
@@ -86,7 +91,9 @@ export function ActionMenu({
                   setOpen(false);
                   item.onSelect();
                 }}
-                className="flex min-h-10 w-full items-center px-3 text-left text-sm hover:bg-background disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+                className={`flex w-full items-center text-left hover:bg-background disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent ${
+                  compact ? "min-h-7 px-2.5 text-xs" : "min-h-10 px-3 text-sm"
+                }`}
               >
                 {item.label}
               </button>

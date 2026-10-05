@@ -695,7 +695,7 @@ export const COMPONENTS: RoomComponent[] = [
     category: "Uploads & downloads",
     status: "live",
     source: "packages/ui/media/MediaLinks.tsx",
-    summary: "An order item's attachments: photo thumbnails with a viewer, file and link buttons, one-by-one downloads (Save As on Chrome) and a server-made zip. On staff screens each file shows Pending download until someone presses Download, then who and when.",
+    summary: "An order item's attachments: photo thumbnails with a viewer, file and link buttons, one-by-one downloads (Save As on Chrome) and a server-made zip. On staff screens a photo isn't fetched until someone presses its cloud button, and downloaded files show a tick (hover to download again) with who and when.",
     examples: [
       { title: "Staff, while printing", file: "media-links/printing.tsx", Demo: MediaLinksPrinting },
       { title: "Photos, a PDF and a link", file: "media-links/files.tsx", Demo: MediaLinksFiles },

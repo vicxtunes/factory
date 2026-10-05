@@ -14,6 +14,14 @@ export function DownloadIcon({ className }: IconProps) {
   return <Outline className={className} d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />;
 }
 
+export function CloudDownloadIcon({ className }: IconProps) {
+  return <Outline className={className} d="M12 9.75v6.75m0 0-3-3m3 3 3-3m-8.25 6a4.5 4.5 0 0 1-1.41-8.775 5.25 5.25 0 0 1 10.233-2.33 3 3 0 0 1 3.758 3.848A3.752 3.752 0 0 1 18 19.5H6.75Z" />;
+}
+
+export function CheckIcon({ className }: IconProps) {
+  return <Outline className={className} d="m4.5 12.75 6 6 9-13.5" />;
+}
+
 export function CheckCircleIcon({ className }: IconProps) {
   return <Outline className={className} d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />;
 }
