@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { ActionMenu, type ActionMenuEntry } from "@repo/ui/ActionMenu";
@@ -7,10 +8,11 @@ import { Spinner } from "@repo/ui/Spinner";
 
 import { getCurrentActor } from "@repo/lib/notes/actions";
 import { deleteOrderItemMedia, markMediaDownloaded, updateMediaLink } from "@repo/lib/storage/actions";
+import { canOptimizeImage } from "@repo/lib/storage/client";
 import { replaceFileInStorage } from "@repo/lib/storage/upload-client";
 import type { OrderItemMedia } from "@repo/lib/types";
 
-import { CheckCircleIcon, CloseIcon, DocumentIcon, DownloadIcon, ExternalIcon, LinkIcon } from "./icons";
+import { CheckCircleIcon, CheckIcon, CloseIcon, CloudDownloadIcon, DocumentIcon, DownloadIcon, ExternalIcon, LinkIcon } from "./icons";
 
 // Chromium-only File System Access API — feature-detected. Where it's not
 // available (Firefox/Safari) downloads still work, just via the browser's
@@ -220,18 +222,15 @@ function useDownload(href: string, name: string, onSaved?: () => void) {
 // the server enforces this too (see canManageMedia in packages/lib/storage/actions),
 // this is just the matching UI gate so the menu doesn't even appear when
 // it'd be refused.
-function useMediaActions(file: OrderItemMedia, editable: boolean, onChanged?: () => void) {
+type Viewer = { type: string; id: string; role?: string };
+
+function useMediaActions(file: OrderItemMedia, actor: Viewer | null, onChanged?: () => void) {
   const [busy, setBusy] = useState(false);
   const [editingLink, setEditingLink] = useState(false);
   const [linkValue, setLinkValue] = useState(file.secure_url);
   const [error, setError] = useState<string | null>(null);
-  const [actor, setActor] = useState<{ type: string; id: string; role?: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isLink = isPastedLink(file);
-
-  useEffect(() => {
-    if (editable) getCurrentActor().then(setActor);
-  }, [editable]);
 
   const canManage =
     !!actor &&
@@ -272,7 +271,7 @@ function useMediaActions(file: OrderItemMedia, editable: boolean, onChanged?: ()
   const menu: ActionMenuEntry[] = canManage
     ? [
         {
-          label: isLink ? "Change link" : "Replace file",
+          label: isLink ? "Change link" : "Replace",
           disabled: busy,
           onSelect: () => {
             if (isLink) {
@@ -325,18 +324,39 @@ function useMediaActions(file: OrderItemMedia, editable: boolean, onChanged?: ()
   return { menu, busy, extras };
 }
 
-const OVERLAY_BUTTON =
-  "inline-flex h-8 w-8 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-sm transition hover:bg-black/65 focus-visible:outline-2 focus-visible:outline-white";
+const CORNER_BUTTON =
+  "inline-flex h-7 w-7 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-sm transition hover:bg-black/65 focus-visible:outline-2 focus-visible:outline-white";
+
+/** A small copy for the tile (resized by the app), never the full original. */
+function TileImage({ file, alt, onDone }: { file: OrderItemMedia; alt: string; onDone?: () => void }) {
+  const src = resolveThumbUrl(file);
+  return (
+    <Image
+      src={src}
+      alt={alt}
+      fill
+      sizes="160px"
+      // next/image won't resize SVGs; pass those (and non-storage links) through as they are.
+      unoptimized={!canOptimizeImage(src) || file.mime_type === "image/svg+xml" || /\.svg(\?|$)/i.test(src)}
+      onLoad={onDone}
+      onError={onDone}
+      className="object-cover"
+    />
+  );
+}
 
 // One file on an order item, as a square tile. Where downloads are tracked
-// (staff), a photo stays blurred behind a download button until someone
-// downloads it — nobody sees or prints it by accident — then shows clear
-// with who downloaded it and when.
+// (staff), a photo isn't fetched at all until someone presses the cloud
+// button on it — nobody sees or prints it by accident, and an order with
+// many photos opens fast. Once shown it can be opened full screen, and the
+// corner download saves it (that's what marks it downloaded). A downloaded
+// file shows a tick there, which turns back into a download on hover.
 function MediaTile({
   file,
   tracked,
   state,
   editable,
+  actor,
   onSaved,
   onOpen,
   onChanged,
@@ -345,6 +365,7 @@ function MediaTile({
   tracked: boolean;
   state: DownloadState;
   editable: boolean;
+  actor: Viewer | null;
   onSaved?: () => void;
   onOpen: () => void;
   onChanged?: () => void;
@@ -352,9 +373,10 @@ function MediaTile({
   const name = resolveDisplayName(file);
   const link = isPastedLink(file);
   const image = !link && isImage(file.secure_url, file.mime_type);
-  const pending = tracked && !state;
+  const [shown, setShown] = useState(!tracked || !!state);
+  const [loading, setLoading] = useState(false);
   const download = useDownload(resolveDownloadUrl(file), name, onSaved);
-  const actions = useMediaActions(file, editable, onChanged);
+  const actions = useMediaActions(file, actor, onChanged);
   const working = download.busy || actions.busy;
   const title = [name, file.uploaded_by_name ? `Added by ${file.uploaded_by_name}` : null].filter(Boolean).join(" · ");
 
@@ -375,43 +397,33 @@ function MediaTile({
         </span>
       </a>
     );
-  } else if (pending) {
+  } else if (image && !shown) {
+    // Not fetched yet: a soft placeholder and the cloud button that loads it.
     body = (
       <button
         type="button"
-        onClick={download.start}
-        disabled={working}
-        aria-label={`Download ${name}`}
-        className="group/pending relative flex h-full w-full items-center justify-center overflow-hidden bg-gray-900"
+        onClick={() => {
+          setLoading(true);
+          setShown(true);
+        }}
+        aria-label={`Show ${name}`}
+        className="group/load flex h-full w-full flex-col items-center justify-center gap-1.5 bg-gradient-to-br from-gray-200 via-gray-100 to-gray-300 text-gray-700 dark:from-white/10 dark:via-white/5 dark:to-white/15 dark:text-gray-200"
       >
-        {image ? (
-          // eslint-disable-next-line @next/next/no-img-element -- arbitrary remote hosts (Cloudinary/Supabase Storage), can't be allowlisted for next/image
-          <img
-            src={resolveThumbUrl(file)}
-            alt=""
-            loading="lazy"
-            className="absolute inset-0 h-full w-full scale-125 object-cover blur-xl brightness-75"
-          />
-        ) : (
-          <span className="absolute inset-0 flex items-center justify-center bg-background text-muted/40">
-            <DocumentIcon className="h-12 w-12" />
-          </span>
-        )}
-        <span className="relative flex flex-col items-center gap-1.5">
-          <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white text-gray-900 shadow-lg transition group-hover/pending:scale-105">
-            {download.busy ? <Spinner className="h-4 w-4" /> : <DownloadIcon className="h-5 w-5" />}
-          </span>
-          <span className={`text-[11px] font-medium ${image ? "text-white" : "text-foreground"}`}>
-            {download.busy ? "Downloading…" : image ? "Download" : fileExtension(name)}
-          </span>
+        <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white shadow-theme-xs transition group-hover/load:scale-105 dark:bg-gray-800">
+          <CloudDownloadIcon className="h-[18px] w-[18px]" />
         </span>
+        <span className="text-[10px] font-medium">Show photo</span>
       </button>
     );
   } else if (image) {
     body = (
-      <button type="button" onClick={onOpen} aria-label={`View ${name}`} className="block h-full w-full">
-        {/* eslint-disable-next-line @next/next/no-img-element -- arbitrary remote hosts (Cloudinary/Supabase Storage/pasted links), can't be allowlisted for next/image */}
-        <img src={resolveThumbUrl(file)} alt={name} loading="lazy" className="h-full w-full object-cover" />
+      <button type="button" onClick={onOpen} aria-label={`View ${name}`} className="relative block h-full w-full">
+        <TileImage file={file} alt={name} onDone={() => setLoading(false)} />
+        {loading ? (
+          <span className="absolute inset-0 flex items-center justify-center bg-gray-100 text-muted dark:bg-white/5">
+            <Spinner className="h-5 w-5" />
+          </span>
+        ) : null}
       </button>
     );
   } else {
@@ -430,6 +442,31 @@ function MediaTile({
     );
   }
 
+  // The corner save button: download, or — once downloaded — a tick that
+  // turns back into a download on hover, for saving it again.
+  const save =
+    !link && (shown || !image) ? (
+      <button
+        type="button"
+        onClick={download.start}
+        disabled={working}
+        aria-label={tracked && state ? `Downloaded — download ${name} again` : `Download ${name}`}
+        title={tracked && state ? "Downloaded · download again" : "Download"}
+        className={`group/save ${CORNER_BUTTON} ${tracked && state ? "bg-success-500/90 hover:bg-black/65" : ""}`}
+      >
+        {download.busy ? (
+          <Spinner className="h-3.5 w-3.5" />
+        ) : tracked && state ? (
+          <>
+            <CheckIcon className="h-3.5 w-3.5 group-hover/save:hidden group-focus-visible/save:hidden" />
+            <DownloadIcon className="hidden h-3.5 w-3.5 group-hover/save:block group-focus-visible/save:block" />
+          </>
+        ) : (
+          <DownloadIcon className="h-3.5 w-3.5" />
+        )}
+      </button>
+    ) : null;
+
   return (
     <div className="min-w-0">
       {/* The tile itself doesn't clip (so the ⋯ menu can open over its
@@ -440,12 +477,11 @@ function MediaTile({
           {body}
 
           {/* Downloaded: who and when, on a soft shade along the bottom. */}
-          {tracked && state ? (
+          {tracked && state && shown ? (
             <div
               className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center gap-1 bg-gradient-to-t from-black/75 to-transparent px-2 pb-1.5 pt-5 text-[10px] text-white"
               title={`Downloaded ${new Date(state.at).toLocaleString()}`}
             >
-              <CheckCircleIcon className="h-3.5 w-3.5 shrink-0 text-success-400" />
               <span className="truncate">
                 {state.by ? `${state.by} · ` : ""}
                 {formatDownloadedAt(state.at)}
@@ -459,28 +495,20 @@ function MediaTile({
           ) : null}
         </div>
 
-        {/* Top-right controls: a quick download on viewable tiles, and the ⋯ menu. */}
-        <div className="absolute right-1.5 top-1.5 z-10 flex gap-1 opacity-100 transition-opacity md:opacity-0 md:group-focus-within:opacity-100 md:group-hover:opacity-100">
-          {!link && !pending && image ? (
-            <button
-              type="button"
-              onClick={download.start}
-              disabled={working}
-              aria-label={`Download ${name}`}
-              title="Download"
-              className={OVERLAY_BUTTON}
-            >
-              {download.busy ? <Spinner className="h-3.5 w-3.5" /> : <DownloadIcon className="h-4 w-4" />}
-            </button>
-          ) : null}
+        {/* Top-right: save (always there once there's something to save) and the ⋯ menu (on hover). */}
+        <div className="absolute right-1.5 top-1.5 z-10 flex gap-1">
           {editable && actions.menu.length > 0 ? (
-            <ActionMenu
-              label={`Actions for ${name}`}
-              focusKey={file.id}
-              items={actions.menu}
-              triggerClassName={OVERLAY_BUTTON}
-            />
+            <span className="opacity-100 transition-opacity md:opacity-0 md:group-focus-within:opacity-100 md:group-hover:opacity-100">
+              <ActionMenu
+                label={`Actions for ${name}`}
+                focusKey={file.id}
+                items={actions.menu}
+                triggerClassName={CORNER_BUTTON}
+                compact
+              />
+            </span>
           ) : null}
+          {save}
         </div>
       </div>
       {editable ? actions.extras : null}
@@ -613,6 +641,12 @@ export function MediaLinks({
   onChanged?: () => void;
 }) {
   const [preview, setPreview] = useState<Preview | null>(null);
+  // Who's viewing, asked once for the whole item (not per tile): it decides
+  // who may replace or delete each file.
+  const [actor, setActor] = useState<Viewer | null>(null);
+  useEffect(() => {
+    if (editable) getCurrentActor().then(setActor);
+  }, [editable]);
   // Downloads made on this screen, shown at once instead of waiting for a refetch.
   const [saved, setSaved] = useState<Record<string, { at: string; by: string }>>({});
 
@@ -695,6 +729,7 @@ export function MediaLinks({
                 tracked={tracked}
                 state={tracked ? downloadState(file) : null}
                 editable={editable}
+                actor={actor}
                 onSaved={onSaved}
                 onChanged={onChanged}
                 onOpen={() =>

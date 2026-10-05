@@ -64,7 +64,6 @@ import LabelChipsEditable from "./examples/label-chips/editable";
 import LabelChipsMany from "./examples/label-chips/many";
 import LabelChipsReadOnly from "./examples/label-chips/read-only";
 import LightboxBasic from "./examples/lightbox/basic";
-import InvoiceViewerStaff from "./examples/invoice-viewer/staff";
 import PasswordInputBasic from "./examples/password-input/basic";
 import PhotoCarouselBasic from "./examples/photo-carousel/basic";
 import PhotoCarouselMobile from "./examples/photo-carousel/mobile";
@@ -589,17 +588,6 @@ export const COMPONENTS: RoomComponent[] = [
     ],
   },
   {
-    slug: "invoice-viewer",
-    name: "Invoice viewer",
-    category: "Overlays",
-    status: "draft",
-    source: "packages/ui/invoices/InvoiceViewer.tsx",
-    summary: "Opening an invoice: the real PDF, large, full screen; share actions as icons; what's owed and Record payment on the side.",
-    examples: [
-      { title: "Staff opening an invoice", file: "invoice-viewer/staff.tsx", Demo: InvoiceViewerStaff },
-    ],
-  },
-  {
     slug: "photo-carousel",
     name: "Photo carousel",
     category: "Media",
@@ -695,7 +683,7 @@ export const COMPONENTS: RoomComponent[] = [
     category: "Uploads & downloads",
     status: "live",
     source: "packages/ui/media/MediaLinks.tsx",
-    summary: "An order item's attachments: photo thumbnails with a viewer, file and link buttons, one-by-one downloads (Save As on Chrome) and a server-made zip. On staff screens each file shows Pending download until someone presses Download, then who and when.",
+    summary: "An order item's attachments: photo thumbnails with a viewer, file and link buttons, one-by-one downloads (Save As on Chrome) and a server-made zip. On staff screens a photo isn't fetched until someone presses its cloud button, and downloaded files show a tick (hover to download again) with who and when.",
     examples: [
       { title: "Staff, while printing", file: "media-links/printing.tsx", Demo: MediaLinksPrinting },
       { title: "Photos, a PDF and a link", file: "media-links/files.tsx", Demo: MediaLinksFiles },

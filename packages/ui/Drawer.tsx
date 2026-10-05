@@ -35,6 +35,17 @@ export function Drawer({
     return () => document.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
+  // While open, the page behind stays put: scrolling the drawer never scrolls the board.
+  useEffect(() => {
+    if (!open) return;
+    const root = document.body;
+    const before = root.style.overflow;
+    root.style.overflow = "hidden";
+    return () => {
+      root.style.overflow = before;
+    };
+  }, [open]);
+
   return (
     <>
       <div
@@ -61,7 +72,7 @@ export function Drawer({
             ✕
           </button>
         </div>
-        <div className={scrollBody ? "min-h-0 flex-1 overflow-y-auto p-4" : "flex min-h-0 flex-1 flex-col p-4"}>
+        <div className={scrollBody ? "min-h-0 flex-1 overflow-y-auto overscroll-contain p-4" : "flex min-h-0 flex-1 flex-col p-4"}>
           {children}
         </div>
         {footer ? (
