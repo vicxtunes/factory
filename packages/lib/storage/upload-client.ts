@@ -1,7 +1,6 @@
-import { createClient } from "@repo/lib/supabase/browser";
 import { confirmItemUpload, confirmMediaReplace, createUploadSession } from "@repo/lib/storage/actions";
 import { MEDIA_BUCKET } from "@repo/lib/storage/client";
-import { IMMUTABLE_CACHE_SECONDS } from "@repo/lib/storage/xhr-upload";
+import { putToSignedUrl } from "@repo/lib/storage/xhr-upload";
 
 export type UploadResult = { ok: true } | { ok: false; error: string };
 
@@ -10,16 +9,16 @@ export type UploadResult = { ok: true } | { ok: false; error: string };
 // straight to Supabase's Storage API (never through our server/Vercel,
 // avoiding its request body size limit — the actual fix for Cloudinary's
 // ~20MB cap), then ask the server to verify and record it.
-export async function uploadFileToStorage(orderItemId: string, file: File): Promise<UploadResult> {
+export async function uploadFileToStorage(
+  orderItemId: string,
+  file: File,
+  onProgress?: (fraction: number) => void,
+): Promise<UploadResult> {
   const session = await createUploadSession(orderItemId, file.name);
   if (!session.ok) return session;
 
-  const { error } = await createClient()
-    .storage.from(MEDIA_BUCKET)
-    .uploadToSignedUrl(session.path, session.token, file, { cacheControl: String(IMMUTABLE_CACHE_SECONDS) });
-  if (error) {
-    return { ok: false, error: error.message || `Upload of "${file.name}" failed.` };
-  }
+  const uploaded = await putToSignedUrl(MEDIA_BUCKET, session.path, session.token, file, onProgress ?? (() => {}));
+  if (!uploaded.ok) return uploaded;
 
   return confirmItemUpload(orderItemId, session.path);
 }
@@ -34,12 +33,8 @@ export async function replaceFileInStorage(
   const session = await createUploadSession(orderItemId, file.name);
   if (!session.ok) return session;
 
-  const { error } = await createClient()
-    .storage.from(MEDIA_BUCKET)
-    .uploadToSignedUrl(session.path, session.token, file, { cacheControl: String(IMMUTABLE_CACHE_SECONDS) });
-  if (error) {
-    return { ok: false, error: error.message || `Upload of "${file.name}" failed.` };
-  }
+  const uploaded = await putToSignedUrl(MEDIA_BUCKET, session.path, session.token, file, () => {});
+  if (!uploaded.ok) return uploaded;
 
   return confirmMediaReplace(mediaId, session.path);
 }

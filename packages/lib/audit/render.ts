@@ -22,6 +22,10 @@ const ACTION_TEMPLATES: Record<string, (d: Record<string, unknown>) => string> =
   photo_uploaded: (d) => `added a photo to ${str(d.itemLabel)}${d.fileName ? ` (${str(d.fileName)})` : ""}`,
   link_added: (d) => `added a link to ${str(d.itemLabel)}`,
   media_removed: (d) => `removed a photo/link from ${str(d.itemLabel)}`,
+  media_downloaded: (d) =>
+    d.fileName
+      ? `downloaded ${str(d.fileName)} from ${str(d.itemLabel)}`
+      : `downloaded ${str(d.count)} files from ${str(d.itemLabel)}`,
   media_replaced: (d) => `replaced a photo/link on ${str(d.itemLabel)}`,
   note_added: (d) => (d.itemLabel ? `added a note on ${str(d.itemLabel)}` : "added a note on the order"),
   note_edited: () => "edited their note",

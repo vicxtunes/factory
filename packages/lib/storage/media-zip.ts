@@ -9,7 +9,8 @@ import { createAdminClient } from "@repo/lib/supabase/admin";
 // MediaLinks.tsx only offers one-file-at-a-time downloads, which gets
 // tedious once an item has more than a couple of photos attached. Served at
 // /api/order-items/<id>/media-zip by both apps (staff and client portal).
-export async function mediaZipResponse(orderItemId: string): Promise<Response> {
+// `onlyIds` limits it to those files (staff's "download the pending ones").
+export async function mediaZipResponse(orderItemId: string, onlyIds?: string[]): Promise<Response> {
   try {
     await requireMediaUploadAccess();
   } catch {
@@ -24,10 +25,12 @@ export async function mediaZipResponse(orderItemId: string): Promise<Response> {
     .eq("id", orderItemId)
     .single<{ product: string; order: { order_no: string } }>();
 
-  const { data: media, error } = await admin
+  let query = admin
     .from("order_item_media")
     .select("file_name, secure_url, cloudinary_public_id, storage_path")
     .eq("order_item_id", orderItemId);
+  if (onlyIds?.length) query = query.in("id", onlyIds);
+  const { data: media, error } = await query;
 
   if (error || !media || media.length === 0) {
     return new Response("No files found.", { status: 404 });
