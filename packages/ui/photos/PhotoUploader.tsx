@@ -1,15 +1,16 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useState } from "react";
 
-import { Button } from "@repo/ui/Button";
+import { UploadRow } from "@repo/ui/UploadRow";
+import { UploadThumbs } from "@repo/ui/UploadThumbs";
 import { confirmPhotoUpload, startPhotoUpload } from "@repo/lib/photos/actions";
 import { MAX_FILES_PER_BATCH } from "@repo/lib/photos/core";
 
 import { putSigned, resizeForUpload } from "./browser";
 
-type Status = { name: string; state: "waiting" | "resizing" | "uploading" | "done" | "failed"; progress: number; error?: string };
+type Status = { file: File; state: "waiting" | "resizing" | "uploading" | "done" | "failed"; progress: number; error?: string };
 
 /** Runs `work` over `items`, `limit` at a time. */
 async function pool<T>(items: T[], limit: number, work: (item: T, i: number) => Promise<void>) {
@@ -29,7 +30,6 @@ async function pool<T>(items: T[], limit: number, work: (item: T, i: number) => 
  */
 export function PhotoUploader({ albumId }: { albumId: string }) {
   const router = useRouter();
-  const input = useRef<HTMLInputElement>(null);
   const [statuses, setStatuses] = useState<Status[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -39,7 +39,7 @@ export function PhotoUploader({ albumId }: { albumId: string }) {
   async function upload(files: File[]) {
     setBusy(true);
     setError(null);
-    setStatuses(files.map((f) => ({ name: f.name, state: "waiting", progress: 0 })));
+    setStatuses(files.map((f) => ({ file: f, state: "waiting", progress: 0 })));
     for (let start = 0; start < files.length; start += MAX_FILES_PER_BATCH) {
       const batch = files.slice(start, start + MAX_FILES_PER_BATCH);
       // Resize the batch first: the server checks the allowance against these sizes.
@@ -83,47 +83,29 @@ export function PhotoUploader({ albumId }: { albumId: string }) {
       router.refresh();
     }
     setBusy(false);
-    if (input.current) input.current.value = "";
   }
-
-  const done = statuses.filter((s) => s.state === "done").length;
 
   return (
     <section className="space-y-3 rounded-2xl border border-border bg-surface p-4 shadow-theme-xs">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm font-semibold">Add photos</p>
-        <input
-          ref={input}
-          type="file"
-          accept="image/*"
-          multiple
-          className="hidden"
-          onChange={(e) => e.target.files && e.target.files.length && upload([...e.target.files])}
-        />
-        <Button type="button" onClick={() => input.current?.click()} loading={busy}>
-          {busy ? `Uploading ${done}/${statuses.length}…` : "Choose photos"}
-        </Button>
-      </div>
-      <p className="text-xs text-muted">Photos are resized for the web before they upload, so they take far less space.</p>
+      <UploadRow
+        label="Add photos"
+        hint="Resized for the web before they upload, so they take far less space — or drop them here"
+        accept="image/*"
+        multiple
+        disabled={busy}
+        onFiles={(files) => upload([...files])}
+      />
       {error ? <p className="text-sm text-error-600 dark:text-error-400">{error}</p> : null}
-      {statuses.length ? (
-        <ul className="max-h-48 space-y-1 overflow-y-auto text-xs">
-          {statuses.map((s, i) => (
-            <li key={i} className="flex items-center gap-2">
-              <span className="min-w-0 flex-1 truncate">{s.name}</span>
-              {s.state === "failed" ? (
-                <span className="text-error-600 dark:text-error-400">{s.error}</span>
-              ) : s.state === "done" ? (
-                <span className="text-success-600 dark:text-success-400">Done</span>
-              ) : (
-                <span className="w-24 overflow-hidden rounded-full bg-gray-100 dark:bg-white/10">
-                  <span className="block h-1.5 bg-brand-500 transition-[width]" style={{ width: `${Math.round(s.progress * 100)}%` }} />
-                </span>
-              )}
-            </li>
-          ))}
-        </ul>
-      ) : null}
+      <UploadThumbs
+        items={statuses.map((s, i) => ({
+          key: String(i),
+          file: s.file,
+          // Waiting and resizing show as an empty ring: it's on its way.
+          state: s.state === "done" ? "done" : s.state === "failed" ? "failed" : "uploading",
+          progress: s.progress,
+          error: s.error,
+        }))}
+      />
     </section>
   );
 }

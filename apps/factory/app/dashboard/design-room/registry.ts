@@ -17,6 +17,8 @@ import MediaLinksLegacyLink from "./examples/media-links/legacy-link";
 import MediaLinksPrinting from "./examples/media-links/printing";
 import PhotoUploaderAlbum from "./examples/photo-uploader/album";
 import UploadRowStates from "./examples/upload-row/states";
+import UploadThumbsStates from "./examples/upload-thumbs/states";
+import UploadThumbsTryIt from "./examples/upload-thumbs/try-it";
 import UploadRowTryIt from "./examples/upload-row/try-it";
 import ActivityFeedCommentsOnly from "./examples/activity-feed/comments-only";
 import ActivityFeedEmpty from "./examples/activity-feed/empty";
@@ -634,12 +636,24 @@ export const COMPONENTS: RoomComponent[] = [
     ],
   },
   {
+    slug: "upload-thumbs",
+    name: "Upload thumbnails",
+    category: "Uploads & downloads",
+    status: "live",
+    source: "packages/ui/UploadThumbs.tsx",
+    summary: "Goes under an Upload row: every picked file shows at once as a small preview, with ✕ to drop it before sending, a progress ring while it uploads, a tick when it's in, and Retry if it failed. Used by order forms, Add media and album uploads.",
+    examples: [
+      { title: "Try it (pretend upload)", file: "upload-thumbs/try-it.tsx", Demo: UploadThumbsTryIt },
+      { title: "States", file: "upload-thumbs/states.tsx", Demo: UploadThumbsStates },
+    ],
+  },
+  {
     slug: "add-media-button",
     name: "Add media to an order item",
     category: "Uploads & downloads",
     status: "live",
     source: "packages/ui/media/AddMediaButton.tsx",
-    summary: "Adds files to an existing order item, or a pasted link instead. Queues uploads while offline. No progress bar: the order upload doesn't report one yet.",
+    summary: "Adds files to an existing order item, or a pasted link instead: thumbnails with progress for each file, Retry on failure, and queued uploads while offline.",
     examples: [{ title: "Order item", file: "add-media-button/order-item.tsx", Demo: AddMediaButtonOrderItem }],
   },
   {
@@ -648,7 +662,7 @@ export const COMPONENTS: RoomComponent[] = [
     category: "Uploads & downloads",
     status: "live",
     source: "packages/ui/photos/PhotoUploader.tsx",
-    summary: "Studio album uploads (Cloudflare R2): each photo shrunk in the browser, three at a time, with a progress bar per photo. Has its own button rather than the upload row.",
+    summary: "Studio album uploads (Cloudflare R2): an Upload row plus thumbnails; each photo is shrunk in the browser and sent three at a time, with progress on its thumbnail.",
     examples: [{ title: "Album", file: "photo-uploader/album.tsx", Demo: PhotoUploaderAlbum }],
   },
   {

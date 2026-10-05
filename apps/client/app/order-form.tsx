@@ -10,6 +10,7 @@ import { CurrencySelect } from "@repo/ui/CurrencySelect";
 import { Field, Select, TextArea, TextInput } from "@repo/ui/Field";
 import { SectionLabel } from "@repo/ui/SectionLabel";
 import { UploadRow } from "@repo/ui/UploadRow";
+import { UploadThumbs, uploadKey } from "@repo/ui/UploadThumbs";
 import { useCurrency } from "@repo/lib/currency/useCurrency";
 import { attributeChoices } from "@repo/lib/catalog-options";
 import { isPhotobookCategory } from "@repo/lib/orders/photobook";
@@ -215,7 +216,9 @@ export function OrderForm({
         const files = items[formIndex]?.files ?? [];
         for (const file of files) {
           setUploadStatus(`Uploading "${file.name}"…`);
-          const uploadRes = await uploadFileToStorage(itemId, file);
+          const uploadRes = await uploadFileToStorage(itemId, file, (p) =>
+            setUploadStatus(`Uploading "${file.name}" — ${Math.round(p * 100)}%`),
+          );
           if (!uploadRes.ok) warnings.push(uploadRes.error);
         }
       }
@@ -525,18 +528,23 @@ function ItemRow({
           />
         </Field>
         {allowDirectUpload ? (
-          <UploadRow
-            label="Add photos"
-            hint={
-              item.files.length > 0
-                ? `${item.files.length} file(s) selected — uploaded once the order is placed`
-                : "Optional — uploaded once the order is placed"
-            }
-            accept="image/*,application/pdf"
-            multiple
-            disabled={false}
-            onFiles={(files) => onChange({ files: Array.from(files) })}
-          />
+          <div className="space-y-2">
+            <UploadRow
+              label="Add photos"
+              hint="Optional — uploaded once the order is placed"
+              accept="image/*,application/pdf"
+              multiple
+              disabled={false}
+              onFiles={(files) => {
+                const known = new Set(item.files.map(uploadKey));
+                onChange({ files: [...item.files, ...Array.from(files).filter((f) => !known.has(uploadKey(f)))] });
+              }}
+            />
+            <UploadThumbs
+              items={item.files.map((file) => ({ key: uploadKey(file), file, state: "selected" as const }))}
+              onRemove={(key) => onChange({ files: item.files.filter((f) => uploadKey(f) !== key) })}
+            />
+          </div>
         ) : null}
       </div>
     </div>
