@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { QuotationDocument } from "@repo/ui/billing/QuotationDocument";
+import { QuotationPdf } from "@repo/ui/billing/DocumentPdf";
 import { DocumentShare } from "@repo/ui/billing/DocumentShare";
 import { CreateInvoiceButton } from "@repo/ui/billing/InvoiceButtons";
 import { canEditQuotation, quotationIdSchema } from "@repo/lib/billing/core";
@@ -37,14 +37,13 @@ export default async function StudioQuotationPage({ params }: { params: Promise<
               Edit
             </Link>
           ) : null}
-          {/* The client's view is a standalone document: open it to print or save as PDF. */}
           <a
             href={quotationUrl(quotation.shareToken)}
             target="_blank"
             rel="noreferrer"
             className="inline-flex min-h-11 items-center rounded-[var(--radius)] border border-gray-300 bg-white px-4 text-sm text-gray-700 shadow-theme-xs hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300"
           >
-            Open client view / Print
+            Open client view
           </a>
         </div>
       </div>
@@ -77,7 +76,17 @@ export default async function StudioQuotationPage({ params }: { params: Promise<
         studioName={studio.name}
         clientPhone={quotation.billTo.phone}
       />
-      <QuotationDocument quotation={quotation} issuer={studio} scope={scope} />
+      {quotation.status === "declined" ? (
+        <section className="rounded-2xl border border-border bg-surface p-4 text-sm shadow-theme-xs">
+          <p className="font-medium">Declined by the client</p>
+          {quotation.declineReason ? <p className="mt-1 whitespace-pre-line text-muted">{quotation.declineReason}</p> : null}
+        </section>
+      ) : null}
+      <QuotationPdf
+        quotation={quotation}
+        issuer={{ name: studio.name, phone: studio.phone, email: studio.email, address: studio.address }}
+        scope={{ currency: scope.currency, locale: scope.locale, timeZone: scope.timeZone }}
+      />
     </>
   );
 }

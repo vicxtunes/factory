@@ -1,15 +1,18 @@
 // Builds the invoice as an A4 PDF in the browser, laid out like the
-// business's existing invoices (and like ./InvoiceDocument.tsx): header,
-// Bill To + invoice details, a priced line table with the grand total, paid
-// and balance, payment history, terms, payment instructions and the
-// signature line, with "Page X of Y" on every page. jspdf is loaded only when
-// someone downloads, like the other exports (packages/lib/export/tableExport.ts).
+// business's existing invoices: header, Bill To + invoice details, a priced
+// line table with the grand total, paid and balance, payment history, terms,
+// payment instructions and the signature line, with "Page X of Y" on every
+// page. This is the invoice's only layout: the pages show it as paper
+// (./InvoicePdf.tsx) and download the same file. jspdf is loaded only when
+// needed, like the other exports (packages/lib/export/tableExport.ts).
 
 import { formatMoney } from "@repo/lib/currency/format";
 import { STATUS_LABELS } from "@repo/lib/invoices/policy";
 import type { InvoiceView } from "@repo/lib/invoices/types";
 import { PAYMENT_METHODS } from "@repo/lib/payments/details";
 import { paymentMethodLabel } from "@repo/lib/wallet/policy";
+
+import { pdfText as safe } from "@repo/ui/pdf/files";
 
 import { formatInvoiceDate } from "./format";
 import { documentLabels } from "./labels";
@@ -39,12 +42,8 @@ async function loadLogo(): Promise<string | null> {
   }
 }
 
-/** Standard PDF fonts can't draw every Unicode character; swap the few we use for safe ones. */
-function safe(text: string): string {
-  return text.replace(/−/g, "-").replace(/[‘’]/g, "'").replace(/[“”]/g, '"');
-}
-
-export async function downloadInvoicePdf(invoice: InvoiceView, currencySymbol: string): Promise<void> {
+/** The invoice (or pro forma) as an A4 PDF file. */
+export async function invoicePdf(invoice: InvoiceView, currencySymbol: string): Promise<Blob> {
   const [{ default: jsPDF }, { default: autoTable }, logo] = await Promise.all([
     import("jspdf"),
     import("jspdf-autotable"),
@@ -117,6 +116,7 @@ export async function downloadInvoicePdf(invoice: InvoiceView, currencySymbol: s
     rest: [l.detail, l.description].filter(Boolean).map((t) => safe(t as string)),
   }));
   const DESC_W = 82;
+  const struck = (i: number) => invoice.lines[i].unitPrice != null && invoice.lines[i].listUnitPrice != null;
 
   autoTable(doc, {
     startY: y,
@@ -127,7 +127,8 @@ export async function downloadInvoicePdf(invoice: InvoiceView, currencySymbol: s
       String(i + 1),
       [descriptions[i].title, ...descriptions[i].rest].join("\n"),
       l.unit ? `${l.qty} ${safe(l.unit)}` : String(l.qty),
-      l.unitPrice != null ? money(l.unitPrice) : labels.unpriced,
+      // A discounted price sits under its crossed-out list price (drawn in didDrawCell).
+      l.unitPrice == null ? labels.unpriced : l.listUnitPrice != null ? `${money(l.listUnitPrice)}\n${money(l.unitPrice)}` : money(l.unitPrice),
       l.lineTotal != null ? money(l.lineTotal) : labels.unpriced,
     ]),
     styles: { font: "helvetica", fontSize: 10, textColor: INK, cellPadding: { top: 3, bottom: 3, left: 2, right: 2 }, valign: "top" },
@@ -145,10 +146,23 @@ export async function downloadInvoicePdf(invoice: InvoiceView, currencySymbol: s
       if (data.section === "head" && data.column.index >= 2) data.cell.styles.halign = "right";
     },
     willDrawCell: (data) => {
-      if (data.section === "body" && data.column.index === 1) data.cell.text = [];
+      if (data.section !== "body") return;
+      if (data.column.index === 1 || (data.column.index === 3 && struck(data.row.index))) data.cell.text = [];
     },
     didDrawCell: (data) => {
-      if (data.section !== "body" || data.column.index !== 1) return;
+      if (data.section !== "body") return;
+      if (data.column.index === 3 && struck(data.row.index)) {
+        const line = invoice.lines[data.row.index];
+        const x = data.cell.x + data.cell.width - 2;
+        const ty = data.cell.y + 3 + 3.5;
+        const list = money(line.listUnitPrice!);
+        doc.setFont("helvetica", "normal").setFontSize(9).setTextColor(...MUTED);
+        doc.text(list, x, ty, { align: "right" });
+        doc.setDrawColor(...MUTED).setLineWidth(0.2).line(x - doc.getTextWidth(list), ty - 1.1, x, ty - 1.1);
+        doc.setFontSize(10).setTextColor(...INK).text(money(line.unitPrice!), x, ty + 4.6, { align: "right" });
+        return;
+      }
+      if (data.column.index !== 1) return;
       const d = descriptions[data.row.index];
       const x = data.cell.x + 2;
       let ty = data.cell.y + 3 + 3.5;
@@ -310,5 +324,5 @@ export async function downloadInvoicePdf(invoice: InvoiceView, currencySymbol: s
     doc.text(`Page ${i} of ${pages}`, RIGHT, PAGE_H - 8, { align: "right" });
   }
 
-  doc.save(`${invoice.invoiceNo}.pdf`);
+  return doc.output("blob");
 }
