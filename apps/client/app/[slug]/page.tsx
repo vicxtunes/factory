@@ -61,7 +61,7 @@ export default async function SlugPage({ params }: Params) {
   if (!at) notFound();
   if (at.redirectTo) permanentRedirect(`/${at.redirectTo}`);
   const [onSale, signedIn, albums] = await Promise.all([
-    offerings.list(at.scope),
+    offerings.catalog(at.scope),
     portalClient(at.studio.id),
     // Until photo storage is set up the page still shows, without albums; any other failure surfaces.
     photos.albums(at.scope, true).catch((err) => {
@@ -73,7 +73,7 @@ export default async function SlugPage({ params }: Params) {
     <StudioPublicPage
       studio={at.studio}
       slug={slug}
-      offerings={onSale}
+      services={onSale}
       scope={at.scope}
       signedInAs={signedIn?.name ?? null}
       albums={albums}

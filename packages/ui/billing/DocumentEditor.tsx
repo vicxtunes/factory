@@ -7,7 +7,7 @@ import { Button } from "@repo/ui/Button";
 import { Field, Select, TextArea, TextInput } from "@repo/ui/Field";
 import { createInvoice, createQuotation, updateInvoice, updateQuotation } from "@repo/lib/billing/actions";
 import { priceLine, totalsOf, type LineInput } from "@repo/lib/billing/core";
-import type { Offering } from "@repo/lib/offerings/core";
+import { offeringLabel, type Offering } from "@repo/lib/offerings/core";
 import { formatAmount } from "@repo/lib/tenancy/format";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
@@ -119,7 +119,7 @@ export function DocumentEditor({
     if (!o) return;
     setLines((ls) => [
       ...ls,
-      draftOf({ offeringId: o.id, description: o.name, inclusions: o.inclusions, quantity: 1, unitPrice: o.price, discount: null }),
+      draftOf({ offeringId: o.id, description: offeringLabel(o), inclusions: o.inclusions, quantity: 1, unitPrice: o.price, discount: null }),
     ]);
   }
 
@@ -203,13 +203,21 @@ export function DocumentEditor({
 
         <div className="flex flex-wrap gap-2">
           {offerings.length ? (
-            <Select value="" onChange={(e) => addOffering(e.target.value)} aria-label="Add a package or service" className="sm:max-w-xs">
-              <option value="">+ Add a package or service…</option>
-              {offerings.map((o) => (
-                <option key={o.id} value={o.id}>
-                  {o.name} · {money(o.price)}
-                </option>
-              ))}
+            <Select value="" onChange={(e) => addOffering(e.target.value)} aria-label="Add a package" className="sm:max-w-xs">
+              <option value="">+ Add a package…</option>
+              {/* Grouped by service; `offerings` comes in service order. */}
+              {[...new Set(offerings.map((o) => o.serviceId))].map((serviceId) => {
+                const tiers = offerings.filter((o) => o.serviceId === serviceId);
+                return (
+                  <optgroup key={serviceId} label={tiers[0].serviceName}>
+                    {tiers.map((o) => (
+                      <option key={o.id} value={o.id}>
+                        {o.name} · {money(o.price)}
+                      </option>
+                    ))}
+                  </optgroup>
+                );
+              })}
             </Select>
           ) : null}
           <Button type="button" variant="secondary" onClick={addCustom}>

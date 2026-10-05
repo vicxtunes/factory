@@ -17,6 +17,8 @@ import { portal, studioUrl } from "@repo/lib/studio-portal/server";
 import { studioOfCaller } from "@repo/lib/studios/server";
 
 import { projectIdSchema } from "@repo/lib/projects/core";
+import { serviceIdSchema } from "@repo/lib/offerings/core";
+import { offerings } from "@repo/lib/offerings/server";
 
 import {
   albumIdSchema,
@@ -27,6 +29,8 @@ import {
   shareExpirySchema,
   uploadConfirmSchema,
   uploadStartSchema,
+  videoUploadConfirmSchema,
+  videoUploadStartSchema,
   type UploadTicket,
 } from "./core";
 import { PhotoError } from "./ports";
@@ -111,6 +115,43 @@ export async function openProjectGallery(projectId: unknown): Promise<Result<str
     const albumId = await photos.openDelivery(scope, id, `${view.project.title} photos`);
     touched();
     return albumId;
+  });
+}
+
+/** A service's media album (cover, gallery, preview video), made the first time. Returns its id. */
+export async function openServiceGallery(serviceId: unknown): Promise<Result<string>> {
+  return runAction("photos", async () => {
+    const { scope } = await studioOfCaller();
+    const service = await offerings.service(scope, parseInput(serviceIdSchema, serviceId));
+    if (!service) throw new PhotoError("That service no longer exists.");
+    const albumId = await photos.openServiceGallery(scope, service.id, service.name);
+    touched();
+    return albumId;
+  });
+}
+
+/** An upload link for a service's preview video, if it fits the allowance. */
+export async function startVideoUpload(input: unknown): Promise<Result<{ videoId: string; url: string }>> {
+  return runAction("photos", async () => {
+    const { scope } = await studioOfCaller();
+    return photos.startVideoUpload(scope, parseInput(videoUploadStartSchema, input));
+  });
+}
+
+/** After the browser uploaded the video: checks it and makes it the service's preview video. */
+export async function confirmVideoUpload(input: unknown): Promise<Result> {
+  return runAction("photos", async () => {
+    const { scope } = await studioOfCaller();
+    await photos.confirmVideoUpload(scope, parseInput(videoUploadConfirmSchema, input));
+    touched();
+  });
+}
+
+export async function removeServiceVideo(albumId: unknown): Promise<Result> {
+  return runAction("photos", async () => {
+    const { scope } = await studioOfCaller();
+    await photos.removeVideo(scope, parseInput(albumIdSchema, albumId));
+    touched();
   });
 }
 

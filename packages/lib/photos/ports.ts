@@ -34,13 +34,25 @@ export interface PhotoRepository {
   deliveryFor(scope: TenantScope, projectId: string): Promise<Album | null>;
   /** Creates a project's delivery album. Throws PhotoError when the project isn't this tenant's. */
   createDelivery(scope: TenantScope, projectId: string, album: { title: string; slug: string }): Promise<string>;
+  /** A service's album, if it has one. */
+  serviceAlbumFor(scope: TenantScope, serviceId: string): Promise<Album | null>;
+  /** Creates a service's album. Throws PhotoError when the service isn't this tenant's. */
+  createServiceAlbum(scope: TenantScope, serviceId: string, album: { title: string; slug: string }): Promise<string>;
+  /**
+   * Sets a service album's preview video, if it fits the allowance with the
+   * old one's space freed (checked in the database). Returns the old video's
+   * key, or null. Throws PhotoError when it doesn't fit or there's no such album.
+   */
+  setVideo(scope: TenantScope, albumId: string, key: string, bytes: number): Promise<string | null>;
+  /** Removes a service album's preview video; returns its key, or null when it had none. */
+  clearVideo(scope: TenantScope, albumId: string): Promise<string | null>;
   /** Sets (or clears, token null) a delivery's share link. False when there's no such delivery in this tenant. */
   setShare(scope: TenantScope, albumId: string, token: string | null, expiresOn: string | null): Promise<boolean>;
   /** The delivery behind a share link, with its tenant. */
   albumByShareToken(token: string): Promise<{ tenantId: string; album: Album } | null>;
   updateAlbum(scope: TenantScope, id: string, album: { title: string; isPublic: boolean }): Promise<boolean>;
   setCover(scope: TenantScope, albumId: string, photoId: string | null): Promise<boolean>;
-  /** Deletes the album and its photos' records; returns their file keys. Null when it isn't this tenant's. */
+  /** Deletes the album and its photos' records; returns their file keys (and its video's). Null when it isn't this tenant's. */
   deleteAlbum(scope: TenantScope, id: string): Promise<string[] | null>;
 
   photos(scope: TenantScope, albumId: string): Promise<Photo[]>;

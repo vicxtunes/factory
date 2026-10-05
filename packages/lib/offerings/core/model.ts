@@ -1,13 +1,29 @@
 // The offerings module's records. Pure; safe on client and server.
 //
-// An offering is something a business sells: a package (a bundle, with what
-// it includes) or a single service. Every offering belongs to one tenant.
+// What a business sells: services ("Wedding Photography"), each with
+// packages as its tiers ("Gold", "Silver", "Bronze", "Custom"), every
+// package with its own price, description and what's included. Every
+// service and package belongs to one tenant.
 
-export type OfferingKind = "package" | "service";
+/** What the business fills in for a service. */
+export interface ServiceInput {
+  name: string;
+  description: string | null;
+}
 
-/** What the business fills in. */
+export interface Service extends ServiceInput {
+  id: string;
+  /** Its page's address under the business's: /<studio>/s/<slug>. Never changes. */
+  slug: string;
+  /** The showroom's order, smallest first. */
+  position: number;
+  /** Archived services (and their packages) are off sale but kept for what already used them. */
+  archivedAt: string | null;
+  createdAt: string;
+}
+
+/** What the business fills in for a package. */
 export interface OfferingInput {
-  kind: OfferingKind;
   name: string;
   description: string | null;
   /** Whole units of the tenant's currency. */
@@ -16,14 +32,24 @@ export interface OfferingInput {
   inclusions: string[];
 }
 
+/** A package: one tier of a service. Quotations, invoices and bookings are built from these. */
 export interface Offering extends OfferingInput {
   id: string;
-  /** Archived offerings are off sale but kept for what already used them. */
+  serviceId: string;
+  serviceName: string;
+  /** Its order within the service, smallest first. */
+  position: number;
+  /** Archived packages are off sale but kept for what already used them. */
   archivedAt: string | null;
   createdAt: string;
 }
 
-/** What saving led to: saved, or another active offering already has that name. */
-export type OfferingSaveOutcome = { saved: Offering } | { duplicateOf: Offering };
+/** A service with its packages. */
+export interface ServiceWithPackages extends Service {
+  packages: Offering[];
+}
 
-export const OFFERING_KIND_LABELS: Record<OfferingKind, string> = { package: "Package", service: "Service" };
+/** What saving led to: saved, or another one on sale already has that name. */
+export type SaveOutcome<T> = { saved: T } | { duplicateOf: T };
+export type OfferingSaveOutcome = SaveOutcome<Offering>;
+export type ServiceSaveOutcome = SaveOutcome<Service>;

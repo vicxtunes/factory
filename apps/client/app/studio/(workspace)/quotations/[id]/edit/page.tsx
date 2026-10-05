@@ -25,7 +25,7 @@ export default async function EditQuotationPage({ params }: { params: Promise<{ 
       </p>
     );
   }
-  const [clients, onSale] = await Promise.all([customers.list(scope), offerings.list(scope)]);
+  const [clients, onSale] = await Promise.all([customers.list(scope), offerings.onSale(scope)]);
   // Keep the quotation's own client selectable even if they've since been archived.
   const choices = clients.some((c) => c.id === quotation.customerId)
     ? clients

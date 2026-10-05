@@ -2,4 +2,5 @@
 // imports (enforced by eslint.config.mjs).
 
 export * from "./model";
+export * from "./rules";
 export * from "./schema";

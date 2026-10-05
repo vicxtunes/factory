@@ -1,18 +1,19 @@
 import Link from "next/link";
 
-import { OfferingForm } from "@repo/ui/offerings/OfferingForm";
+import { ServiceForm } from "@repo/ui/offerings/ServiceForm";
 import { requireStudio } from "@repo/lib/studios/server";
 
-export const metadata = { title: "New package or service · My Studio" };
+export const metadata = { title: "New service · My Studio" };
 
-export default async function NewStudioOfferingPage() {
-  const { scope } = await requireStudio();
+export default async function NewStudioServicePage() {
+  await requireStudio();
   return (
     <>
       <Link href="/studio/offerings" className="text-xs font-medium text-brand-600 hover:underline">
         ← Packages & Services
       </Link>
-      <OfferingForm basePath="/studio/offerings" currency={scope.currency} />
+      <p className="text-sm text-muted">Name the service, e.g. Wedding Photography. You&apos;ll add its packages and photos next.</p>
+      <ServiceForm basePath="/studio/offerings" />
     </>
   );
 }

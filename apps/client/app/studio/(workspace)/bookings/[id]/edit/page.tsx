@@ -5,6 +5,7 @@ import { BookingForm } from "@repo/ui/bookings/BookingForm";
 import { bookingIdSchema, canEditBooking } from "@repo/lib/bookings/core";
 import { bookings } from "@repo/lib/bookings/server";
 import { customers } from "@repo/lib/customers/server";
+import { offeringLabel } from "@repo/lib/offerings/core";
 import { offerings } from "@repo/lib/offerings/server";
 import { requireStudio } from "@repo/lib/studios/server";
 
@@ -26,7 +27,7 @@ export default async function EditBookingPage({ params }: { params: Promise<{ id
       </p>
     );
   }
-  const [clients, onSale] = await Promise.all([customers.list(scope), offerings.list(scope)]);
+  const [clients, onSale] = await Promise.all([customers.list(scope), offerings.onSale(scope)]);
   // Keep the booking's own client selectable even if they've since been archived.
   const choices = clients.some((c) => c.id === b.customerId) ? clients : [...clients, { id: b.customerId, name: `${b.customerName} (archived)` }];
 
@@ -38,7 +39,7 @@ export default async function EditBookingPage({ params }: { params: Promise<{ id
       <BookingForm
         booking={b}
         customers={choices.map((c) => ({ id: c.id, name: c.name }))}
-        packages={onSale.map((o) => o.name)}
+        packages={onSale.map(offeringLabel)}
         currency={scope.currency}
         basePath="/studio/bookings"
       />

@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { whatsappNumber } from "@repo/lib/kernel/core/phone";
-import type { Offering } from "@repo/lib/offerings/core";
+import type { ServiceWithPackages } from "@repo/lib/offerings/core";
 import type { AlbumView } from "@repo/lib/photos/core";
 import type { Studio } from "@repo/lib/studios/core";
 import { formatAmount } from "@repo/lib/tenancy/format";
@@ -20,7 +20,7 @@ const card = "rounded-2xl border border-border bg-surface p-5 shadow-theme-xs";
 export function StudioPublicPage({
   studio,
   slug,
-  offerings,
+  services,
   scope,
   signedInAs,
   albums,
@@ -28,7 +28,8 @@ export function StudioPublicPage({
 }: {
   studio: Studio;
   slug: string;
-  offerings: Offering[];
+  /** Its services on sale, each with its packages. */
+  services: ServiceWithPackages[];
   scope: Pick<TenantScope, "currency" | "locale">;
   /** The client signed in at this studio on this device, if any. */
   signedInAs: string | null;
@@ -88,27 +89,35 @@ export function StudioPublicPage({
       <div className="grid gap-6 md:grid-cols-[1fr_20rem]">
         <section className={card}>
           <h2 className="mb-3 text-lg font-semibold">Packages & services</h2>
-          {offerings.length === 0 ? (
+          {services.length === 0 ? (
             <p className="text-sm text-muted">Ask us about our packages.</p>
           ) : (
-            <ul className="divide-y divide-border">
-              {offerings.map((o) => (
-                <li key={o.id} className="py-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <p className="font-medium">{o.name}</p>
-                    <p className="shrink-0 font-medium tnum">{formatAmount(scope, o.price)}</p>
-                  </div>
-                  {o.description ? <p className="text-sm text-muted">{o.description}</p> : null}
-                  {o.inclusions.length ? (
-                    <ul className="mt-1 list-disc pl-5 text-sm text-muted">
-                      {o.inclusions.map((item, i) => (
-                        <li key={i}>{item}</li>
-                      ))}
-                    </ul>
-                  ) : null}
-                </li>
+            <div className="space-y-5">
+              {services.map((s) => (
+                <div key={s.id}>
+                  <h3 className="font-semibold">{s.name}</h3>
+                  {s.description ? <p className="text-sm text-muted">{s.description}</p> : null}
+                  <ul className="divide-y divide-border">
+                    {s.packages.map((o) => (
+                      <li key={o.id} className="py-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <p className="font-medium">{o.name}</p>
+                          <p className="shrink-0 font-medium tnum">{formatAmount(scope, o.price)}</p>
+                        </div>
+                        {o.description ? <p className="text-sm text-muted">{o.description}</p> : null}
+                        {o.inclusions.length ? (
+                          <ul className="mt-1 list-disc pl-5 text-sm text-muted">
+                            {o.inclusions.map((item, i) => (
+                              <li key={i}>{item}</li>
+                            ))}
+                          </ul>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               ))}
-            </ul>
+            </div>
           )}
         </section>
 

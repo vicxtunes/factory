@@ -14,6 +14,11 @@ export const LARGE_EDGE = 2400;
 export const THUMB_EDGE = 600;
 /** Every copy is a JPEG: every browser can make one. */
 export const PHOTO_CONTENT_TYPE = "image/jpeg";
+/** A service's preview video: uploaded as it is (no resizing in the browser), so kept short. */
+export const MAX_VIDEO_BYTES = 200 * 1024 ** 2;
+/** The video types every browser plays, and their files' extensions. */
+export const VIDEO_TYPES = { "video/mp4": "mp4", "video/webm": "webm", "video/quicktime": "mov" } as const;
+export type VideoContentType = keyof typeof VIDEO_TYPES;
 
 export function usageShare(usedBytes: number, quotaBytes: number): number {
   return quotaBytes <= 0 ? 1 : usedBytes / quotaBytes;
@@ -49,6 +54,12 @@ export function photoKeys(tenantId: string, albumId: string, photoId: string) {
     large: `studios/${tenantId}/albums/${albumId}/${photoId}-l.jpg`,
     thumb: `studios/${tenantId}/albums/${albumId}/${photoId}-s.jpg`,
   };
+}
+
+/** Where a service's preview video goes: incoming/ first, like photos (see photoKeys). */
+export function videoKeys(tenantId: string, albumId: string, videoId: string, contentType: VideoContentType) {
+  const file = `${videoId}.${VIDEO_TYPES[contentType]}`;
+  return { incoming: `incoming/${tenantId}/${file}`, final: `studios/${tenantId}/albums/${albumId}/video-${file}` };
 }
 
 /** An album's address from its title: "Weddings 2026!" → "weddings-2026". */

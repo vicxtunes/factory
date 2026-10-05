@@ -32,11 +32,11 @@ export async function resizeForUpload(file: File): Promise<{ large: Blob; thumb:
 }
 
 /** PUTs a file to a signed link (its content type is part of the signature), reporting progress. */
-export function putSigned(url: string, blob: Blob, onProgress: (fraction: number) => void): Promise<void> {
+export function putSigned(url: string, blob: Blob, onProgress: (fraction: number) => void, contentType: string = PHOTO_CONTENT_TYPE): Promise<void> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("PUT", url);
-    xhr.setRequestHeader("content-type", PHOTO_CONTENT_TYPE);
+    xhr.setRequestHeader("content-type", contentType);
     xhr.upload.onprogress = (e) => e.lengthComputable && onProgress(e.loaded / e.total);
     xhr.onload = () => (xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error(`Upload failed (${xhr.status}).`)));
     xhr.onerror = () => reject(new Error("Upload failed: check the connection."));

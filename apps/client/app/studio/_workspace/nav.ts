@@ -59,7 +59,7 @@ const TITLES: Record<string, string> = {
   "/studio/bookings/new": "New booking",
   "/studio/projects/new": "New project",
   "/studio/clients/new": "New client",
-  "/studio/offerings/new": "New package or service",
+  "/studio/offerings/new": "New service",
   "/studio/quotations/new": "New quotation",
   "/studio/invoices/new": "New invoice",
 };

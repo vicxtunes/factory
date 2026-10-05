@@ -25,7 +25,7 @@ export default async function EditInvoicePage({ params }: { params: Promise<{ id
       </p>
     );
   }
-  const [clients, onSale] = await Promise.all([customers.list(scope), offerings.list(scope)]);
+  const [clients, onSale] = await Promise.all([customers.list(scope), offerings.onSale(scope)]);
   // Keep the invoice's own client selectable even if they've since been archived.
   const choices = clients.some((c) => c.id === invoice.customerId)
     ? clients

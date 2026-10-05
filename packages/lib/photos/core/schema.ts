@@ -4,7 +4,7 @@ import { z } from "zod";
 
 import { optionalText } from "@repo/lib/kernel/core";
 
-import { MAX_FILES_PER_BATCH, MAX_LARGE_BYTES, MAX_THUMB_BYTES } from "./rules";
+import { formatBytes, MAX_FILES_PER_BATCH, MAX_LARGE_BYTES, MAX_THUMB_BYTES, MAX_VIDEO_BYTES, VIDEO_TYPES, type VideoContentType } from "./rules";
 
 export const albumIdSchema = z.uuid("That album doesn't exist.");
 export const photoIdSchema = z.uuid("That photo doesn't exist.");
@@ -33,6 +33,20 @@ export const uploadConfirmSchema = z.object({
   width: z.number().int().positive().max(20_000),
   height: z.number().int().positive().max(20_000),
   caption: optionalText(200, "Keep the caption under 200 characters."),
+});
+
+const videoTypeSchema = z.enum(Object.keys(VIDEO_TYPES) as [VideoContentType, ...VideoContentType[]], "Choose an MP4, WebM or MOV video.");
+
+export const videoUploadStartSchema = z.object({
+  albumId: albumIdSchema,
+  bytes: z.number().int().positive().max(MAX_VIDEO_BYTES, `Choose a video under ${formatBytes(MAX_VIDEO_BYTES)}.`),
+  contentType: videoTypeSchema,
+});
+
+export const videoUploadConfirmSchema = z.object({
+  albumId: albumIdSchema,
+  videoId: z.uuid("That upload didn't finish. Try the video again."),
+  contentType: videoTypeSchema,
 });
 
 export const captionSchema = optionalText(200, "Keep the caption under 200 characters.");
