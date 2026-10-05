@@ -40,9 +40,6 @@ export default async function StudioInvoicePage({ params }: { params: Promise<{ 
               Edit
             </Link>
           ) : null}
-          <a href={invoiceUrl(invoice.shareToken)} target="_blank" rel="noreferrer" className={button}>
-            Open client view
-          </a>
         </div>
       </div>
       {invoice.voidedAt ? null : (
