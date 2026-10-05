@@ -26,17 +26,11 @@ const MUTED: [number, number, number] = [100, 108, 120];
 const SHADE: [number, number, number] = [240, 243, 247];
 const RULE: [number, number, number] = [200, 205, 212];
 
-async function loadLogo(): Promise<string | null> {
+/** An image's bytes, or null when it can't be fetched (the PDF then does without it). */
+async function loadImage(url: string): Promise<Uint8Array | null> {
   try {
-    const res = await fetch("/icon-192.png");
-    if (!res.ok) return null;
-    const blob = await res.blob();
-    return await new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : null);
-      reader.onerror = () => resolve(null);
-      reader.readAsDataURL(blob);
-    });
+    const res = await fetch(url);
+    return res.ok ? new Uint8Array(await res.arrayBuffer()) : null;
   } catch {
     return null;
   }
@@ -44,20 +38,30 @@ async function loadLogo(): Promise<string | null> {
 
 /** The invoice (or pro forma) as an A4 PDF file. */
 export async function invoicePdf(invoice: InvoiceView, currencySymbol: string): Promise<Blob> {
-  const [{ default: jsPDF }, { default: autoTable }, logo] = await Promise.all([
+  const { issuer } = invoice;
+  const [{ default: jsPDF }, { default: autoTable }, logo, signature] = await Promise.all([
     import("jspdf"),
     import("jspdf-autotable"),
-    loadLogo(),
+    // The logo from Invoice settings, else the app icon.
+    loadImage(issuer.logoUrl ?? "/icon-192.png"),
+    issuer.signatureUrl ? loadImage(issuer.signatureUrl) : null,
   ]);
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const money = (n: number) => safe(formatMoney(n, currencySymbol));
-  const { issuer } = invoice;
+  /** Draws an image as large as fits `w` × `h` (keeping its shape), against the right edge `x` + `w` when `right`. */
+  const fit = (image: Uint8Array, x: number, y: number, w: number, h: number, right = false) => {
+    const { width, height } = doc.getImageProperties(image);
+    const scale = Math.min(w / width, h / height);
+    const dw = width * scale;
+    doc.addImage(image, "PNG", right ? x + w - dw : x, y + h - height * scale, dw, height * scale);
+  };
   const labels = documentLabels(invoice);
   const showPaid = invoice.kind === "invoice" || invoice.paid > 0;
   doc.setTextColor(...INK);
 
   // --- Header -----------------------------------------------------------------
-  if (logo) doc.addImage(logo, "PNG", M, 10, 22, 22);
+  // Up to 40 × 22 mm: room for a wide logo without reaching the centred company name.
+  if (logo) fit(logo, M, 10, 40, 22);
   doc.setFont("helvetica", "bold").setFontSize(14);
   doc.text(safe(issuer.companyName), PAGE_W / 2, 17, { align: "center" });
   doc.setFont("helvetica", "normal").setFontSize(9).setTextColor(...MUTED);
@@ -277,7 +281,7 @@ export async function invoicePdf(invoice: InvoiceView, currencySymbol: string): 
   }));
   const termsHeight = 6 + termLines.reduce((h, l) => h + l.length * 4.2, 0);
   const payHeight = 6 + payLines.reduce((h, m) => h + 5.4 + m.fields.reduce((fh, f) => fh + f.length * 4.2, 0), 0) + 5;
-  const signatureHeight = issuer.signatureCompany ? 34 : 0;
+  const signatureHeight = issuer.signatureCompany || signature ? 34 : 0;
   ensure(Math.max(termsHeight, payHeight) + 8 + signatureHeight);
 
   if (termLines.length) {
@@ -309,9 +313,11 @@ export async function invoicePdf(invoice: InvoiceView, currencySymbol: string): 
   y += Math.max(termsHeight, payHeight) + 8;
 
   // --- Signature ----------------------------------------------------------------
-  if (issuer.signatureCompany) {
+  if (issuer.signatureCompany || signature) {
     doc.setTextColor(...INK).setFont("helvetica", "bold").setFontSize(12);
-    doc.text(safe(`For, ${issuer.signatureCompany}`), RIGHT, y, { align: "right" });
+    if (issuer.signatureCompany) doc.text(safe(`For, ${issuer.signatureCompany}`), RIGHT, y, { align: "right" });
+    // The signature from Invoice settings sits on the line; without one it's left blank to sign by hand.
+    if (signature) fit(signature, RIGHT - 55, y + 3, 55, 16.5, true);
     doc.setDrawColor(...MUTED).setLineWidth(0.2).line(RIGHT - 55, y + 20, RIGHT, y + 20);
     doc.setFont("helvetica", "normal").setFontSize(9).text("AUTHORIZED SIGNATURE", RIGHT, y + 25, { align: "right" });
   }

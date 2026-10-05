@@ -2,6 +2,7 @@ import "server-only";
 
 // All queries against the invoices table. No rules here.
 
+import { MARKETING_MEDIA_BUCKET } from "@repo/lib/storage/client";
 import { createAdminClient } from "@repo/lib/supabase/admin";
 
 import { InvoiceError, throwInvoiceDbError } from "./errors";
@@ -128,12 +129,14 @@ export interface SettingsRow {
   email: string | null;
   terms: string | null;
   signature_company: string | null;
+  logo_url: string | null;
+  signature_url: string | null;
 }
 
 export async function getSettings(): Promise<SettingsRow | null> {
   const { data, error } = await createAdminClient()
     .from("invoice_settings")
-    .select("company_name, address, phone, email, terms, signature_company")
+    .select("company_name, address, phone, email, terms, signature_company, logo_url, signature_url")
     .eq("id", 1)
     .maybeSingle<SettingsRow>();
   if (error) fail(error);
@@ -145,4 +148,25 @@ export async function saveSettings(row: SettingsRow): Promise<void> {
     .from("invoice_settings")
     .upsert({ id: 1, ...row, updated_at: new Date().toISOString() });
   if (error) fail(error);
+}
+
+// --- Settings images (logo, signature) ----------------------------------------
+// Public, like the marketing slides: the PDF is drawn in the client's browser.
+
+export async function startImageUpload(path: string): Promise<{ bucket: string; path: string; token: string }> {
+  const { data, error } = await createAdminClient().storage.from(MARKETING_MEDIA_BUCKET).createSignedUploadUrl(path);
+  if (error || !data) throw new InvoiceError("Couldn't start the upload. Try again.");
+  return { bucket: MARKETING_MEDIA_BUCKET, path: data.path, token: data.token };
+}
+
+export async function imageExists(path: string): Promise<boolean> {
+  const slash = path.lastIndexOf("/");
+  const { data, error } = await createAdminClient()
+    .storage.from(MARKETING_MEDIA_BUCKET)
+    .list(path.slice(0, slash), { search: path.slice(slash + 1), limit: 10 });
+  return !error && !!data?.some((f) => f.name === path.slice(slash + 1));
+}
+
+export function imageUrl(path: string): string {
+  return createAdminClient().storage.from(MARKETING_MEDIA_BUCKET).getPublicUrl(path).data.publicUrl;
 }

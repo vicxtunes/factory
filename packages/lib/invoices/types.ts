@@ -39,6 +39,10 @@ export interface InvoiceIssuer {
   terms: string[];
   /** "For, <signatureCompany>" above the signature line. */
   signatureCompany: string | null;
+  /** Top-left of every invoice; null = the app icon. */
+  logoUrl: string | null;
+  /** Above the signature line; null = left blank to sign by hand. */
+  signatureUrl: string | null;
 }
 
 /** The settings form's fields (terms as one line per term). */
@@ -49,6 +53,9 @@ export interface InvoiceSettingsInput {
   email: string;
   terms: string;
   signatureCompany: string;
+  /** Set by uploading (startInvoiceImageUpload / confirmInvoiceImageUpload); null removes it. */
+  logoUrl: string | null;
+  signatureUrl: string | null;
 }
 
 export interface InvoiceView {
