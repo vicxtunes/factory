@@ -15,7 +15,8 @@ import { runAction } from "@repo/lib/kernel/server/action";
 import { studioOfCaller } from "@repo/lib/studios/server";
 
 import {
-  amingProductIdSchema,
+  amingCategoryIdSchema,
+  amingProductIdsSchema,
   categoryIdSchema,
   hiddenMediaSchema,
   categoryNameSchema,
@@ -33,7 +34,7 @@ import {
   type ShowroomSettings,
 } from "./core";
 import { OfferingError } from "./ports";
-import { amingProducts, offerings } from "./server";
+import { amingCategories, amingProducts, offerings } from "./server";
 
 /** Runs one change in the caller's studio and refreshes its Packages & Services and Products pages. */
 function change<T>(work: (scope: Awaited<ReturnType<typeof studioOfCaller>>["scope"]) => Promise<T>): Promise<Result<T>> {
@@ -90,18 +91,40 @@ export async function moveService(id: unknown, categoryId: unknown): Promise<Res
 
 // --- Products from Aming --------------------------------------------------------
 
-/** Adds one of Aming's products on sale to a products category, with Aming's sizes on sale. */
-export async function pickAmingProduct(categoryId: unknown, productId: unknown): Promise<Result<SaveOutcome<Service>>> {
+/** Adds one of Aming's product categories on sale, with Aming's name, to pick its products from. */
+export async function addAmingCategory(id: unknown): Promise<Result<SaveOutcome<Category>>> {
   return change(async (scope) => {
-    const product = (await amingProducts()).get(parseInput(amingProductIdSchema, productId));
-    if (!product) throw new OfferingError("Aming no longer offers that product.");
-    return offerings.pickFromAming(scope, parseInput(categoryIdSchema, categoryId), {
-      // Within the studio catalog's limits (a service's name and description, a package's name).
-      productId: product.id,
-      name: product.name.trim().slice(0, 80),
-      description: product.description?.trim().slice(0, 2000) || null,
-      sizes: product.variants.map((v) => v.name.trim().slice(0, 80)),
-    });
+    const source = (await amingCategories()).find((c) => c.id === parseInput(amingCategoryIdSchema, id));
+    if (!source) throw new OfferingError("Aming no longer offers that category.");
+    // Within a category name's limit.
+    return offerings.addAmingCategory(scope, { id: source.id, name: source.name.trim().slice(0, 60) });
+  });
+}
+
+/**
+ * Adds Aming's products on sale to the category added from theirs, each with
+ * Aming's sizes on sale. Ones already added are skipped. Returns how many
+ * were added.
+ */
+export async function pickAmingProducts(categoryId: unknown, productIds: unknown): Promise<Result<{ added: number }>> {
+  return change(async (scope) => {
+    const category = parseInput(categoryIdSchema, categoryId);
+    const onSale = await amingProducts();
+    let added = 0;
+    for (const id of new Set(parseInput(amingProductIdsSchema, productIds))) {
+      const product = onSale.get(id);
+      if (!product) throw new OfferingError("Aming no longer offers one of those products. Refresh and choose again.");
+      const outcome = await offerings.pickFromAming(scope, category, {
+        // Within the studio catalog's limits (a service's name and description, a package's name).
+        productId: product.id,
+        categoryId: product.category_id,
+        name: product.name.trim().slice(0, 80),
+        description: product.description?.trim().slice(0, 2000) || null,
+        sizes: product.variants.map((v) => v.name.trim().slice(0, 80)),
+      });
+      if ("saved" in outcome) added++;
+    }
+    return { added };
   });
 }
 

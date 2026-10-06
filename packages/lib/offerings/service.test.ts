@@ -36,9 +36,9 @@ function memoryStore() {
       const c = categories.find((r) => r.tenantId === scope.tenantId && r.kind === kind && !r.archivedAt && lower(r.name) === lower(name));
       return c ? strip(c) : null;
     },
-    createCategory: async (scope, kind, name) => {
+    createCategory: async (scope, kind, name, sourceCategoryId) => {
       const position = categories.filter((c) => c.tenantId === scope.tenantId).length + 1;
-      const row = { id: `c${categories.length + 1}`, tenantId: scope.tenantId, kind, name, position, archivedAt: null, createdAt: "2026-10-07T00:00:00Z" };
+      const row = { id: `c${categories.length + 1}`, tenantId: scope.tenantId, kind, name, sourceCategoryId, position, archivedAt: null, createdAt: "2026-10-07T00:00:00Z" };
       categories.push(row);
       return strip(row);
     },
@@ -280,7 +280,8 @@ test("a service's showroom page: by its address, on sale only, with its packages
 
 // --- Products --------------------------------------------------------------------
 
-const photobook = { productId: "aming-1", name: "Photobook", description: "Lay-flat pages.", sizes: ["8x12", "12x18"] };
+const photobook = { productId: "aming-1", categoryId: "aming-books", name: "Photobook", description: "Lay-flat pages.", sizes: ["8x12", "12x18"] };
+const amingBooks = { id: "aming-books", name: "Photobooks" };
 
 test("products live in categories of their own, and show and sell apart from services", async () => {
   const service = new OfferingService(memoryStore().store);
@@ -299,12 +300,32 @@ test("products live in categories of their own, and show and sell apart from ser
   assert.equal(await service.publicService(studioA, "canvas-print", "service"), null, "not bookable as a service");
   assert.equal(await service.publicService(studioA, "wedding-photography", "product"), null);
   await assert.rejects(service.moveService(studioA, canvas.id, weddings.id), /products category/);
-  await assert.rejects(service.pickFromAming(studioA, weddings.id, photobook), /products category/);
+  await assert.rejects(service.pickFromAming(studioA, weddings.id, photobook), /category you added/);
+  await assert.rejects(service.pickFromAming(studioA, books.id, photobook), /category you added/, "not in a category of the studio's own");
+});
+
+test("Aming's categories: added with Aming's name, once; they hold Aming's products from there only", async () => {
+  const service = new OfferingService(memoryStore().store);
+  const books = saved(await service.addAmingCategory(studioA, amingBooks));
+  assert.deepEqual([books.name, books.kind, books.sourceCategoryId], ["Photobooks", "product", "aming-books"]);
+  assert.ok("duplicateOf" in (await service.addAmingCategory(studioA, amingBooks)), "added once");
+  await assert.rejects(service.renameCategory(studioA, books.id, "Our books"), /Aming's/);
+
+  const frames = saved(await service.addAmingCategory(studioA, { id: "aming-frames", name: "Frames" }));
+  await assert.rejects(service.pickFromAming(studioA, frames.id, photobook), /category you added/, "a product goes in its own category's");
+  const picked = saved(await service.pickFromAming(studioA, books.id, photobook));
+  await assert.rejects(service.moveService(studioA, picked.id, frames.id), /stays in Aming's category/);
+
+  // The studio's own products stay in categories of its own.
+  await assert.rejects(service.createService(studioA, books.id, "Canvas print"), /category of your own/);
+  const prints = saved(await service.createCategory(studioA, "product", "Prints"));
+  const canvas = saved(await service.createService(studioA, prints.id, "Canvas print"));
+  await assert.rejects(service.moveService(studioA, canvas.id, books.id), /category of your own/);
 });
 
 test("picking from Aming: Aming's name, description and sizes, priced on request until the studio sets its prices", async () => {
   const service = new OfferingService(memoryStore().store);
-  const books = saved(await service.createCategory(studioA, "product", "Photobooks"));
+  const books = saved(await service.addAmingCategory(studioA, amingBooks));
   const picked = saved(await service.pickFromAming(studioA, books.id, photobook));
   assert.deepEqual([picked.name, picked.description, picked.sourceProductId, picked.slug], ["Photobook", "Lay-flat pages.", "aming-1", "photobook"]);
   const sizes = (await service.manage(studioA, "product"))[0].services[0].packages;
@@ -324,8 +345,8 @@ test("picking from Aming: Aming's name, description and sizes, priced on request
 
 test("a product from Aming without sizes gets one, named after it; sizes differing only in case are one", async () => {
   const service = new OfferingService(memoryStore().store);
-  const frames = saved(await service.createCategory(studioA, "product", "Frames"));
-  const frame = saved(await service.pickFromAming(studioA, frames.id, { productId: "aming-2", name: "Frame", description: null, sizes: [] }));
+  const frames = saved(await service.addAmingCategory(studioA, amingBooks));
+  const frame = saved(await service.pickFromAming(studioA, frames.id, { productId: "aming-2", categoryId: "aming-books", name: "Frame", description: null, sizes: [] }));
   const book = saved(await service.pickFromAming(studioA, frames.id, { ...photobook, sizes: ["8x12", "8X12"] }));
   const sizes = (await service.manage(studioA, "product"))[0].services.map((x) => x.packages.map((p) => p.name));
   assert.deepEqual(sizes, [["Frame"], ["8x12"]]);
@@ -335,9 +356,10 @@ test("a product from Aming without sizes gets one, named after it; sizes differi
 
 test("leaving Aming's photos out: only for a product from Aming, in this studio only", async () => {
   const service = new OfferingService(memoryStore().store);
-  const books = saved(await service.createCategory(studioA, "product", "Photobooks"));
+  const books = saved(await service.addAmingCategory(studioA, amingBooks));
   const picked = saved(await service.pickFromAming(studioA, books.id, photobook));
-  const own = saved(await service.createService(studioA, books.id, "Canvas print"));
+  const prints = saved(await service.createCategory(studioA, "product", "Prints"));
+  const own = saved(await service.createService(studioA, prints.id, "Canvas print"));
   assert.deepEqual((await service.setHiddenMedia(studioA, picked.id, ["video", "m1", "m1"])).hiddenMedia, ["video", "m1"]);
   await assert.rejects(service.setHiddenMedia(studioA, own.id, ["cover"]), /from Aming/);
   await assert.rejects(service.setHiddenMedia(studioB, picked.id, []), OfferingError);

@@ -4,7 +4,7 @@ import "server-only";
 // studios' products see it. Pages and actions import from here.
 
 import { fetchProductCatalog } from "@repo/lib/queries";
-import type { Product } from "@repo/lib/types";
+import type { Product, ProductCategory } from "@repo/lib/types";
 
 import { supabaseOfferingStore } from "./adapters/supabase/store";
 import { OfferingService } from "./service";
@@ -18,4 +18,9 @@ export const offerings = new OfferingService(supabaseOfferingStore);
  */
 export async function amingProducts(): Promise<Map<string, Product>> {
   return new Map((await fetchProductCatalog(true)).flatMap((c) => c.products.map((p) => [p.id, p] as const)));
+}
+
+/** Aming's product categories on sale with products on sale in them: what a studio adds its products categories from. */
+export async function amingCategories(): Promise<ProductCategory[]> {
+  return (await fetchProductCatalog(true)).filter((c) => c.products.length > 0);
 }

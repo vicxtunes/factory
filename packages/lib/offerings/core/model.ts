@@ -16,6 +16,11 @@ export interface Category {
   id: string;
   kind: OfferingKind;
   name: string;
+  /**
+   * The Aming product category it was added from (its name is Aming's, and
+   * it holds Aming's products from there only), or null for the business's own.
+   */
+  sourceCategoryId: string | null;
   /** The showroom's order, smallest first. */
   position: number;
   /** Deactivated categories (and their services) are off sale but kept. */
@@ -95,6 +100,8 @@ export interface CategoryWithServices extends Category {
 /** What picking an Aming product copies: its name and description, and its sizes' names (none: one size, named after it). */
 export interface AmingPick {
   productId: string;
+  /** Its category at Aming: the business's category it goes in must have been added from it. */
+  categoryId: string;
   name: string;
   description: string | null;
   sizes: string[];

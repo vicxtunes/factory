@@ -16,6 +16,8 @@ export const offeringIdSchema = z.uuid("That package doesn't exist.");
 export const serviceIdSchema = z.uuid("That service doesn't exist.");
 export const categoryIdSchema = z.uuid("That category doesn't exist.");
 export const amingProductIdSchema = z.uuid("That product isn't in Aming's catalog.");
+export const amingProductIdsSchema = z.array(amingProductIdSchema).min(1, "Choose at least one product.").max(200, "Too many at once.");
+export const amingCategoryIdSchema = z.uuid("That category isn't in Aming's catalog.");
 
 export const offeringKindSchema = z.enum(["service", "product"], "Choose services or products.");
 

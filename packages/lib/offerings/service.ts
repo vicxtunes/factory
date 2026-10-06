@@ -28,6 +28,7 @@ const CATEGORY_GONE = "That category no longer exists.";
 const SERVICE_GONE = "That service no longer exists.";
 const PACKAGE_GONE = "That package no longer exists.";
 const FROM_AMING = "This product's name and sizes are Aming's. Set your prices and description instead.";
+const AMING_CATEGORY = "This category is Aming's: it holds Aming's products from there. Add your own products in a category of your own.";
 
 const byPosition = <T extends { position: number; name: string }>(a: T, b: T) =>
   a.position - b.position || a.name.localeCompare(b.name);
@@ -111,12 +112,24 @@ export class OfferingService {
   async createCategory(scope: TenantScope, kind: OfferingKind, name: string): Promise<SaveOutcome<Category>> {
     const duplicate = await this.duplicateCategory(scope, kind, name);
     if (duplicate) return { duplicateOf: duplicate };
-    return { saved: await this.store.createCategory(scope, kind, name) };
+    return { saved: await this.store.createCategory(scope, kind, name, null) };
+  }
+
+  /**
+   * Adds one of Aming's product categories, with Aming's name, to pick its
+   * products from. Unless a products category on sale already has that name
+   * (added before, say).
+   */
+  async addAmingCategory(scope: TenantScope, source: { id: string; name: string }): Promise<SaveOutcome<Category>> {
+    const duplicate = await this.duplicateCategory(scope, "product", source.name);
+    if (duplicate) return { duplicateOf: duplicate };
+    return { saved: await this.store.createCategory(scope, "product", source.name, source.id) };
   }
 
   async renameCategory(scope: TenantScope, id: string, name: string): Promise<SaveOutcome<Category>> {
     const category = await this.store.category(scope, id);
     if (!category) throw new OfferingError(CATEGORY_GONE);
+    if (category.sourceCategoryId) throw new OfferingError("This category's name is Aming's.");
     const duplicate = await this.duplicateCategory(scope, category.kind, name, id);
     if (duplicate) return { duplicateOf: duplicate };
     const saved = await this.store.renameCategory(scope, id, name);
@@ -140,23 +153,25 @@ export class OfferingService {
 
   // --- Services ----------------------------------------------------------------
 
-  /** Adds a service (or, to a products category, a product of the business's own) by name to an active category, unless one on sale already has the name. */
+  /** Adds a service (or, to a products category of its own, a product of its own) by name to an active category, unless one on sale already has the name. */
   async createService(scope: TenantScope, categoryId: string, name: string): Promise<SaveOutcome<Service>> {
     const category = await this.activeCategory(scope, categoryId);
+    if (category.sourceCategoryId) throw new OfferingError(AMING_CATEGORY);
     const duplicate = await this.duplicateService(scope, name);
     if (duplicate) return { duplicateOf: duplicate };
     return { saved: await this.store.createService(scope, { name, description: null, slug: await this.newSlug(scope, name), categoryId, kind: category.kind, sourceProductId: null }) };
   }
 
   /**
-   * Adds one of Aming's products to an active products category: Aming's
+   * Adds one of Aming's products to the active category added from its
+   * category at Aming: Aming's
    * name and description, and its sizes (none: one, named after it), each
    * priced 0 ("Price on request") until the business sets its own prices.
    * Unless something on sale already has that name (picked before, say).
    */
   async pickFromAming(scope: TenantScope, categoryId: string, pick: AmingPick): Promise<SaveOutcome<Service>> {
     const category = await this.activeCategory(scope, categoryId);
-    if (category.kind !== "product") throw new OfferingError("Aming's products go in a products category.");
+    if (category.sourceCategoryId !== pick.categoryId) throw new OfferingError("Aming's products go in the category you added from theirs.");
     const duplicate = await this.duplicateService(scope, pick.name);
     if (duplicate) return { duplicateOf: duplicate };
     const product = await this.store.createService(scope, {
@@ -195,11 +210,13 @@ export class OfferingService {
     return this.updateService(scope, id, { description });
   }
 
-  /** Moves a service to another active category (a product to another products category). */
+  /** Moves a service to another active category (a product of the business's own to another of its own products categories). */
   async moveService(scope: TenantScope, id: string, categoryId: string): Promise<Service> {
     const [service, category] = await Promise.all([this.store.service(scope, id), this.activeCategory(scope, categoryId)]);
     if (!service) throw new OfferingError(SERVICE_GONE);
     if (service.kind !== category.kind) throw new OfferingError(service.kind === "product" ? "Move it to a products category." : "Move it to a services category.");
+    if (service.sourceProductId) throw new OfferingError("A product from Aming stays in Aming's category.");
+    if (category.sourceCategoryId) throw new OfferingError(AMING_CATEGORY);
     return this.updateService(scope, id, { categoryId });
   }
 
