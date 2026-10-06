@@ -18,7 +18,7 @@ import { PortalError, type PortalSecrets, type PortalStore } from "./ports";
 
 /** Always the same answer, so a wrong number and a wrong PIN look alike. */
 const WRONG = "That phone number or PIN is wrong.";
-const BAD_LINK = "This link has expired or was already used. Ask the studio for a new one.";
+const BAD_LINK = "This link has expired or was already used. Ask the business for a new one.";
 
 export class StudioPortalService {
   constructor(
@@ -109,7 +109,7 @@ export class StudioPortalService {
       throw new PortalError(WRONG);
     }
     if (isLocked(customer.lockedUntil, now)) {
-      throw new PortalError(`Too many wrong PINs. Try again in ${LOCK_MINUTES} minutes, or ask the studio for a reset link.`);
+      throw new PortalError(`Too many wrong PINs. Try again in ${LOCK_MINUTES} minutes, or ask the business for a reset link.`);
     }
     if (!(await this.secrets.verifyPin(pin, customer.pinHash))) {
       const next = afterWrongPin(customer.failedAttempts, now);

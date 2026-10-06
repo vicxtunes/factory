@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 
 import { SectionLabel } from "@repo/ui/SectionLabel";
+import { RowsSkeleton } from "@repo/ui/skeletons/blocks";
+import { Loading } from "@repo/ui/skeletons/Loading";
 import { WalletsAdmin } from "@repo/ui/wallet/WalletsAdmin";
 import { getDashboardSession } from "@repo/lib/auth/session";
 import { fetchClients } from "@repo/lib/queries";
@@ -13,19 +15,26 @@ export default async function WalletsPage() {
   const session = await getDashboardSession();
   if (!session || !isManagerRole(session.role)) redirect("/dashboard");
 
+  return (
+    <div className="space-y-6">
+      <SectionLabel>Client wallets</SectionLabel>
+      <Loading skeleton={<RowsSkeleton />}>
+        <Wallets />
+      </Loading>
+    </div>
+  );
+}
+
+async function Wallets() {
   const [pending, wallets, clients] = await Promise.all([listPendingDeposits(), listWallets(), fetchClients(true)]);
   if (!pending.ok || !wallets.ok) {
     return <p className="text-sm text-error-600">{!pending.ok ? pending.error : !wallets.ok ? wallets.error : null}</p>;
   }
-
   return (
-    <div className="space-y-6">
-      <SectionLabel>Client wallets</SectionLabel>
-      <WalletsAdmin
-        pending={pending.data}
-        wallets={wallets.data}
-        clients={clients.map((c) => ({ id: c.id, name: c.name, phone: c.phone }))}
-      />
-    </div>
+    <WalletsAdmin
+      pending={pending.data}
+      wallets={wallets.data}
+      clients={clients.map((c) => ({ id: c.id, name: c.name, phone: c.phone }))}
+    />
   );
 }

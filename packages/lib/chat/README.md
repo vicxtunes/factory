@@ -47,9 +47,8 @@ packages/lib/chat/
     upload.ts             Direct-to-storage upload with progress.
 
 packages/ui/chat/      React UI. Talks only to packages/lib/chat/actions, client/api, types, policy, routes.
-apps/factory/app/chat/(screen)/layout.tsx  The /chat screen inside the viewer's own surface chrome, with the
-                      inbox loaded server-side. Below apps/factory/app/chat/loading.tsx so links show the
-                      skeleton at once and prefetching never runs its queries.
+apps/factory/app/chat/(screen)/layout.tsx  The /chat screen inside the viewer's own surface chrome, which shows
+                      at once; the chat is a skeleton until its inbox has loaded server-side.
 apps/factory/app/api/chat/         GET Route Handlers over reads.ts.
 supabase/migrations/20260925100000_chat.sql (+ later 2026092*_chat_*.sql)
 ```

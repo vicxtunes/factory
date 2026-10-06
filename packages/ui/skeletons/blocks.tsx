@@ -1,7 +1,8 @@
 import { Skeleton } from "@repo/ui/Skeleton";
 
-// Content shapes shared by the loading.tsx files. Each roughly matches the
-// real content that will replace it, so the page doesn't jump when it loads.
+// Content shapes for the parts of a page that load data (its Suspense
+// fallbacks). Each roughly matches the real content that will replace it, so
+// the page doesn't jump when it loads.
 
 /** A heading line with an optional action button on the right. */
 export function TitleRowSkeleton({ action = true }: { action?: boolean }) {
@@ -19,6 +20,23 @@ export function ChipRowSkeleton({ count = 4 }: { count?: number }) {
     <div className="mb-4 flex flex-wrap gap-2">
       {Array.from({ length: count }).map((_, i) => (
         <Skeleton key={i} className="h-9 w-24 rounded-full" />
+      ))}
+    </div>
+  );
+}
+
+/** A list of rows in a bordered box: name and detail lines plus a status pill. */
+export function RowsSkeleton({ rows = 6 }: { rows?: number }) {
+  return (
+    <div className="overflow-hidden rounded-2xl border border-border">
+      {Array.from({ length: rows }).map((_, i) => (
+        <div key={i} className="flex items-center justify-between gap-4 border-b border-border p-4 last:border-b-0">
+          <div className="min-w-0 flex-1 space-y-2">
+            <Skeleton className="h-3.5 w-1/3" />
+            <Skeleton className="h-3 w-1/4" />
+          </div>
+          <Skeleton className="h-6 w-16 shrink-0 rounded-full" />
+        </div>
       ))}
     </div>
   );

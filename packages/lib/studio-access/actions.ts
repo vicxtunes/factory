@@ -109,7 +109,7 @@ export async function resetStudioPassword(input: unknown): Promise<Result> {
 export async function reviewStudio(input: unknown): Promise<Result> {
   return run(async () => {
     const session = await getDashboardSession();
-    if (!session || !canViewAllStudios(session.role)) throw new AccessError("Only the boss can review studios.");
+    if (!session || !canViewAllStudios(session.role)) throw new AccessError("Only the boss can review businesses.");
     const { studioId, decision, note } = parseInput(reviewSchema, input);
     await studioAccess.review(studioId, decision, note);
     revalidatePath("/dashboard/studios", "layout");

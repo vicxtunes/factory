@@ -95,7 +95,7 @@ const GETS = [
   { Icon: PlaceOrderIcon, title: "Prints and albums from Aming", text: "Order for a project and follow production in one place." },
 ];
 
-const NEEDS = ["Your studio's phone number", "An email you can open now (for a code)", "Your logo, if you have one: you can add it later"];
+const NEEDS = ["Your business's phone number", "An email you can open now (for a code)", "Your logo, if you have one: you can add it later"];
 
 export function SetupWelcome({ onStart }: { onStart: () => void }) {
   return (
@@ -159,8 +159,8 @@ export function SetupSplit({
       <div className="flex-1 @3xl:grid @3xl:grid-cols-[300px_1fr]">
         <aside className={`hidden ${NAVY} p-8 text-white @3xl:flex @3xl:flex-col`}>
           <Wordmark inverted />
-          <p className="mt-10 text-lg font-semibold">Set up your studio</p>
-          <p className="mt-1 text-sm text-white/60">About 5 minutes. Aming reviews every studio before it opens.</p>
+          <p className="mt-10 text-lg font-semibold">Set up your business</p>
+          <p className="mt-1 text-sm text-white/60">About 5 minutes. Aming reviews every business before it opens.</p>
           <ol className="mt-8">
             {steps.map((s, i) => (
               <li key={s.id} className="relative pb-6 last:pb-0">

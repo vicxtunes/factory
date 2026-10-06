@@ -1,7 +1,7 @@
 # Bookings module
 
 A business's appointments with its customers: shoots, sessions, events. For studios it's
-**My Studio → Bookings**, with a calendar. Generic and tenant-scoped, so a future product
+**My Business → Bookings**, with a calendar. Generic and tenant-scoped, so a future product
 (vendors, service providers) reuses it.
 
 - **A booking has:** a client, a title, a day, a time span (or all day), a location, what was

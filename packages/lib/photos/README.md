@@ -1,7 +1,7 @@
 # Photos module (studio showroom and galleries)
 
 A business's photos, in albums, stored in **Cloudflare R2** within a **storage allowance**. For
-studios it's **My Studio → Showroom**: their best work, shown on their public page in the **same
+studios it's **My Business → Showroom**: their best work, shown on their public page in the **same
 showroom layout as Aming's** (its "Our work" tab), with each album also a standalone **Pinterest-style** page.
 Generic and tenant-scoped.
 
@@ -66,7 +66,7 @@ never shared by link: it's shown through the service's page. Managed on the serv
 
 | Screen | Who | What |
 | --- | --- | --- |
-| My Studio → **Showroom** (`/studio/showroom`) | Studio owner | Usage, albums (cover, count, public or hidden), create an album |
+| My Business → **Showroom** (`/studio/showroom`) | Studio owner | Usage, albums (cover, count, public or hidden), create an album |
 | `/studio/showroom/<album>` | Studio owner | Name, public or hidden, shareable address, delete; upload (progress per photo); cover, caption, delete per photo |
 | `/<studio>` (public page) | Anyone | The studio's showroom: its banner is an album cover; the "Our work" tab lists the public albums |
 | `/<studio>/gallery/<album>` | Anyone | The album as a standalone **masonry** page: tap for full screen, swipe, keyboard |

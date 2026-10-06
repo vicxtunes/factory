@@ -1,6 +1,9 @@
 import { redirect } from "next/navigation";
 
 import { SectionLabel } from "@repo/ui/SectionLabel";
+import { Skeleton } from "@repo/ui/Skeleton";
+import { RowsSkeleton } from "@repo/ui/skeletons/blocks";
+import { Loading } from "@repo/ui/skeletons/Loading";
 import { createAdminClient } from "@repo/lib/supabase/admin";
 import { getDashboardSession } from "@repo/lib/auth/session";
 import { canManageWorkerSecurity, isManagerRole, type Station, type Worker } from "@repo/lib/types";
@@ -14,17 +17,11 @@ export default async function WorkersPage() {
   const session = await getDashboardSession();
   if (!session || !isManagerRole(session.role)) redirect("/dashboard");
 
-  const admin = createAdminClient();
-  const [workersRes, stationsRes] = await Promise.all([
-    admin
-      .from("workers")
-      .select("id, name, station, active, created_at")
-      .order("name"),
-    admin.from("stations").select("id, name, created_at").order("name"),
-  ]);
-
-  const workers = (workersRes.data ?? []) as Omit<Worker, "pin_hash">[];
-  const stations = (stationsRes.data ?? []) as Station[];
+  // Read once: the stations show on their own and in the workers' station choice.
+  // (A Supabase query runs again on every await; a Promise of its rows doesn't.)
+  const stations = Promise.resolve(createAdminClient().from("stations").select("id, name, created_at").order("name")).then(
+    ({ data }) => (data ?? []) as Station[],
+  );
   const canManageStations = session.role === "boss";
 
   return (
@@ -36,17 +33,43 @@ export default async function WorkersPage() {
             View only — stations are managed by the boss.
           </p>
         ) : null}
-        <StationPanel stations={stations} canManage={canManageStations} />
+        <Loading
+          skeleton={
+            <div className="flex flex-wrap gap-2">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <Skeleton key={i} className="h-9 w-28 rounded-full" />
+              ))}
+            </div>
+          }
+        >
+          <Stations stations={stations} canManage={canManageStations} />
+        </Loading>
       </section>
 
       <section>
         <SectionLabel>Workers</SectionLabel>
-        <WorkerPanel
-          workers={workers}
-          stations={stations}
-          canManageSecurity={canManageWorkerSecurity(session.role)}
-        />
+        <Loading skeleton={<RowsSkeleton />}>
+          <Workers stations={stations} canManageSecurity={canManageWorkerSecurity(session.role)} />
+        </Loading>
       </section>
     </div>
+  );
+}
+
+async function Stations({ stations, canManage }: { stations: Promise<Station[]>; canManage: boolean }) {
+  return <StationPanel stations={await stations} canManage={canManage} />;
+}
+
+async function Workers({ stations, canManageSecurity }: { stations: Promise<Station[]>; canManageSecurity: boolean }) {
+  const [workersRes, stationList] = await Promise.all([
+    createAdminClient().from("workers").select("id, name, station, active, created_at").order("name"),
+    stations,
+  ]);
+  return (
+    <WorkerPanel
+      workers={(workersRes.data ?? []) as Omit<Worker, "pin_hash">[]}
+      stations={stationList}
+      canManageSecurity={canManageSecurity}
+    />
   );
 }

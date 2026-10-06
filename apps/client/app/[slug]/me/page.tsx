@@ -2,6 +2,8 @@ import { notFound, permanentRedirect, redirect } from "next/navigation";
 
 import { ClientPortalHome } from "@repo/ui/studio-portal/ClientPortalHome";
 import { PortalSignOutButton } from "@repo/ui/studio-portal/PortalForms";
+import { CardGridSkeleton, TitleRowSkeleton } from "@repo/ui/skeletons/blocks";
+import { Loading } from "@repo/ui/skeletons/Loading";
 import { localDate } from "@repo/lib/accounting/core/period";
 import { invoices, invoiceUrl, quotations, quotationUrl } from "@repo/lib/billing/server";
 import { photos } from "@repo/lib/photos/server";
@@ -9,6 +11,7 @@ import { bookings } from "@repo/lib/bookings/server";
 import { projects } from "@repo/lib/projects/server";
 import { studioOrders } from "@repo/lib/studio-orders/server";
 import { studioAccess } from "@repo/lib/studio-access/server";
+import type { SignInRecord } from "@repo/lib/studio-portal/core";
 import { portalClient, studioAtSlug } from "@repo/lib/studio-portal/server";
 
 import { StudioShell } from "../studio-shell";
@@ -28,6 +31,24 @@ export default async function ClientPortalPage({ params }: { params: Promise<{ s
   const me = await portalClient(at.studio.id);
   if (!me) redirect(`/${slug}`);
 
+  const logoUrl = await studioAccess.logoUrl(at.studio.logoKey);
+  return (
+    <StudioShell studio={{ name: at.studio.name, logoUrl, slug }} signedInAs={me.name} title="My page">
+      <Loading
+        skeleton={
+          <>
+            <TitleRowSkeleton />
+            <CardGridSkeleton count={3} />
+          </>
+        }
+      >
+        <Home at={at} me={me} slug={slug} />
+      </Loading>
+    </StudioShell>
+  );
+}
+
+async function Home({ at, me, slug }: { at: NonNullable<Awaited<ReturnType<typeof studioAtSlug>>>; me: SignInRecord; slug: string }) {
   const { scope } = at;
   const id = me.customerId;
   const [theirProjects, theirBookings, quoteList, invoiceList, allOrders] = await Promise.all([
@@ -45,26 +66,23 @@ export default async function ClientPortalPage({ params }: { params: Promise<{ s
     Promise.all(invoiceList.filter((i) => i.status !== "void").map(async (i) => ({ ...i, url: invoiceUrl((await invoices.get(scope, i.id))!.shareToken) }))),
   ]);
 
-  const logoUrl = await studioAccess.logoUrl(at.studio.logoKey);
   return (
-    <StudioShell studio={{ name: at.studio.name, logoUrl, slug }} signedInAs={me.name} title="My page">
-      <ClientPortalHome
-        view={{
-          clientName: me.name,
-          studioName: at.studio.name,
-          projects: theirProjects.map((p, i) => ({
-            ...p,
-            orders: allOrders.filter((o) => o.projectId === p.id),
-            photos: galleries[i] && galleries[i].photoCount > 0 ? { count: galleries[i].photoCount, href: `/${slug}/me/photos/${p.id}` } : null,
-          })),
-          bookings: theirBookings,
-          quotations: quotes,
-          invoices: bills,
-        }}
-        scope={scope}
-        today={localDate(new Date(), scope.timeZone)}
-        signOut={<PortalSignOutButton slug={slug} />}
-      />
-    </StudioShell>
+    <ClientPortalHome
+      view={{
+        clientName: me.name,
+        studioName: at.studio.name,
+        projects: theirProjects.map((p, i) => ({
+          ...p,
+          orders: allOrders.filter((o) => o.projectId === p.id),
+          photos: galleries[i] && galleries[i].photoCount > 0 ? { count: galleries[i].photoCount, href: `/${slug}/me/photos/${p.id}` } : null,
+        })),
+        bookings: theirBookings,
+        quotations: quotes,
+        invoices: bills,
+      }}
+      scope={scope}
+      today={localDate(new Date(), scope.timeZone)}
+      signOut={<PortalSignOutButton slug={slug} />}
+    />
   );
 }

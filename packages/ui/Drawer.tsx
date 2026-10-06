@@ -2,6 +2,8 @@
 
 import { useEffect, type ReactNode } from "react";
 
+import { useCloseOnBack } from "./navigation/back";
+
 export function Drawer({
   open,
   onClose,
@@ -26,6 +28,8 @@ export function Drawer({
   // header and footer without scrolling itself.
   scrollBody?: boolean;
 }) {
+  useCloseOnBack(open, onClose);
+
   useEffect(() => {
     if (!open) return;
     function onKey(e: KeyboardEvent) {

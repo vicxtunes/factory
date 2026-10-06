@@ -1,4 +1,6 @@
 import { Header } from "@repo/ui/Header";
+import { BannerSkeleton, ChartsSkeleton, ChipRowSkeleton, StatTilesSkeleton } from "@repo/ui/skeletons/blocks";
+import { Loading } from "@repo/ui/skeletons/Loading";
 import { WalletSummaryCard } from "@repo/ui/wallet/WalletSummaryCard";
 import { getClientSession } from "@repo/lib/auth/session";
 import { fetchClientItems, fetchMarketingSlides } from "@repo/lib/queries";
@@ -32,21 +34,39 @@ export default async function ClientSidePage({
     );
   }
 
-  const [items, slides, wallet] = await Promise.all([
-    fetchClientItems(session.client_id),
-    fetchMarketingSlides(true),
-    getMyWalletSummary(),
-  ]);
-
   return (
     <ClientShell signedIn name={session.name} avatarUrl={session.avatarUrl}>
-      {/* Cancelled orders aren't work in progress — keep them out of the stats. */}
-      <ClientDashboard
-        items={items.filter((i) => !i.order.cancelled_at)}
-        slides={slides}
-        // If the wallet can't load, the home screen still works — it just has no balance card.
-        wallet={wallet.ok ? <WalletSummaryCard summary={wallet.data} /> : null}
-      />
+      <Loading
+        skeleton={
+          // Quick actions, marketing banner, summary tiles and charts.
+          <div className="space-y-6">
+            <ChipRowSkeleton count={3} />
+            <BannerSkeleton />
+            <StatTilesSkeleton />
+            <ChartsSkeleton />
+          </div>
+        }
+      >
+        <Home clientId={session.client_id} />
+      </Loading>
     </ClientShell>
   );
 }
+
+async function Home({ clientId }: { clientId: string }) {
+  const [items, slides, wallet] = await Promise.all([
+    fetchClientItems(clientId),
+    fetchMarketingSlides(true),
+    getMyWalletSummary(),
+  ]);
+  return (
+    // Cancelled orders aren't work in progress — keep them out of the stats.
+    <ClientDashboard
+      items={items.filter((i) => !i.order.cancelled_at)}
+      slides={slides}
+      // If the wallet can't load, the home screen still works — it just has no balance card.
+      wallet={wallet.ok ? <WalletSummaryCard summary={wallet.data} /> : null}
+    />
+  );
+}
+

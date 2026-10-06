@@ -23,7 +23,7 @@ import { clearPortalCookie, inviteUrl, portal, renewPortalCookie, setPortalCooki
 
 async function studioFor(slug: unknown) {
   const at = await studioAtSlug(parseInput(slugSchema, slug));
-  if (!at) throw new PortalError("This studio's page doesn't exist.");
+  if (!at) throw new PortalError("This business's page doesn't exist.");
   return at;
 }
 
@@ -76,7 +76,7 @@ export async function createPortalInvite(customerId: unknown): Promise<Result<{ 
   return runAction("studio-portal", async () => {
     const { scope, studio } = await studioOfCaller();
     const slug = await portal.currentSlug(scope.tenantId);
-    if (!slug) throw new PortalError("Choose your studio's address first, on Studio profile.");
+    if (!slug) throw new PortalError("Choose your business's address first, on Business profile.");
     const id = parseInput(customerIdSchema, customerId);
     const token = await portal.invite(scope, id);
     const customer = await customers.get(scope, id);

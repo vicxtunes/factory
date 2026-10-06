@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BackLink } from "@repo/ui/navigation/back";
 import { notFound } from "next/navigation";
 
 import { DocumentShare } from "@repo/ui/billing/DocumentShare";
@@ -10,7 +11,7 @@ import { canEditInvoice, canVoidInvoice, invoiceIdSchema } from "@repo/lib/billi
 import { invoices, invoiceUrl, receiptUrl } from "@repo/lib/billing/server";
 import { requireStudio } from "@repo/lib/studios/server";
 
-export const metadata = { title: "Invoice · My Studio" };
+export const metadata = { title: "Invoice · My Business" };
 
 const button =
   "inline-flex min-h-11 items-center rounded-[var(--radius)] border border-gray-300 bg-white px-4 text-sm text-gray-700 shadow-theme-xs hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300";
@@ -26,9 +27,9 @@ export default async function StudioInvoicePage({ params }: { params: Promise<{ 
   return (
     <>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <Link href="/studio/invoices" className="text-xs font-medium text-brand-600 hover:underline">
+        <BackLink href="/studio/invoices" className="text-xs font-medium text-brand-600 hover:underline">
           ← Invoices
-        </Link>
+        </BackLink>
         <div className="flex flex-wrap gap-2">
           {invoice.sourceId ? (
             <Link href={`/studio/quotations/${invoice.sourceId}`} className={button}>

@@ -1,4 +1,6 @@
+import { Suspense } from "react";
 import Link from "next/link";
+import { BackLink } from "@repo/ui/navigation/back";
 import { notFound } from "next/navigation";
 
 import { InvoicesList } from "@repo/ui/billing/InvoicesList";
@@ -7,17 +9,21 @@ import { ProjectsList } from "@repo/ui/projects/ProjectBits";
 import { QuotationsList } from "@repo/ui/billing/QuotationsList";
 import { CustomerArchiveButton, CustomerForm } from "@repo/ui/customers/CustomerForm";
 import { SectionLabel } from "@repo/ui/SectionLabel";
+import { Skeleton } from "@repo/ui/Skeleton";
+import { RowsSkeleton } from "@repo/ui/skeletons/blocks";
+import { Loading } from "@repo/ui/skeletons/Loading";
 import { ClientPortalPanel } from "@repo/ui/studio-portal/ClientPortalPanel";
 import { portal } from "@repo/lib/studio-portal/server";
 import { invoices, quotations } from "@repo/lib/billing/server";
 import { bookings } from "@repo/lib/bookings/server";
 import { projects } from "@repo/lib/projects/server";
-import { customerIdSchema } from "@repo/lib/customers/core";
+import { customerIdSchema, type Customer } from "@repo/lib/customers/core";
 import { customers } from "@repo/lib/customers/server";
 import { requireStudio } from "@repo/lib/studios/server";
 import { formatAmount, formatDay } from "@repo/lib/tenancy/format";
+import type { TenantScope } from "@repo/lib/tenancy/types";
 
-export const metadata = { title: "Client · My Studio" };
+export const metadata = { title: "Client · My Business" };
 
 export default async function StudioClientPage({ params }: { params: Promise<{ id: string }> }) {
   const { scope } = await requireStudio();
@@ -25,48 +31,38 @@ export default async function StudioClientPage({ params }: { params: Promise<{ i
   const id = customerIdSchema.safeParse((await params).id);
   const customer = id.success ? await customers.get(scope, id.data) : null;
   if (!customer) notFound();
-  const [theirs, billed, booked, work, access, address] = await Promise.all([
-    quotations.list(scope, customer.id),
-    invoices.list(scope, customer.id),
-    bookings.forCustomer(scope, customer.id),
-    projects.list(scope, customer.id),
-    portal.status(scope, customer.id),
-    portal.currentSlug(scope.tenantId),
-  ]);
-  const owed = billed.reduce((sum, i) => sum + i.balance, 0);
+  // Read once, for what they owe and the list.
+  const billed = invoices.list(scope, customer.id);
 
   return (
     <>
       <div>
-        <Link href="/studio/clients" className="text-xs font-medium text-brand-600 hover:underline">
+        <BackLink href="/studio/clients" className="text-xs font-medium text-brand-600 hover:underline">
           ← Clients
-        </Link>
+        </BackLink>
         <h2 className="mt-1 text-xl font-semibold">
           {customer.name}
           {customer.archivedAt ? <span className="ml-2 align-middle text-xs font-normal text-muted">(archived)</span> : null}
         </h2>
-        {owed > 0 ? (
-          <p className="text-sm">
-            Owes <span className="font-semibold tnum">{formatAmount(scope, owed)}</span>
-          </p>
-        ) : null}
+        <Suspense fallback={null}>
+          <Owed scope={scope} billed={billed} />
+        </Suspense>
       </div>
       <CustomerForm key={customer.id} customer={customer} basePath="/studio/clients" />
-      {access ? (
-        <ClientPortalPanel
-          customerId={customer.id}
-          status={access}
-          hasAddress={address !== null}
-          lastSignedIn={access.signedInAt ? formatDay(scope, access.signedInAt) : null}
-        />
-      ) : null}
+      <Loading skeleton={<Skeleton className="h-24 w-full rounded-2xl" />}>
+        <Access scope={scope} customer={customer} />
+      </Loading>
       <section>
         <SectionLabel>Projects</SectionLabel>
-        <ProjectsList projects={work} scope={scope} basePath="/studio/projects" />
+        <Loading skeleton={<RowsSkeleton rows={2} />}>
+          <Projects scope={scope} customer={customer} />
+        </Loading>
       </section>
       <section>
         <SectionLabel>Bookings</SectionLabel>
-        <BookingsList bookings={booked} scope={scope} basePath="/studio/bookings" />
+        <Loading skeleton={<RowsSkeleton rows={2} />}>
+          <Bookings scope={scope} customer={customer} />
+        </Loading>
       </section>
       <section>
         <div className="mb-2 flex items-center justify-between gap-2">
@@ -77,7 +73,9 @@ export default async function StudioClientPage({ params }: { params: Promise<{ i
             </Link>
           )}
         </div>
-        <QuotationsList quotations={theirs} scope={scope} basePath="/studio/quotations" showClient={false} />
+        <Loading skeleton={<RowsSkeleton rows={2} />}>
+          <Quotations scope={scope} customer={customer} />
+        </Loading>
       </section>
       <section>
         <div className="mb-2 flex items-center justify-between gap-2">
@@ -88,9 +86,53 @@ export default async function StudioClientPage({ params }: { params: Promise<{ i
             </Link>
           )}
         </div>
-        <InvoicesList invoices={billed} scope={scope} basePath="/studio/invoices" showClient={false} />
+        <Loading skeleton={<RowsSkeleton rows={2} />}>
+          <Invoices scope={scope} billed={billed} />
+        </Loading>
       </section>
       <CustomerArchiveButton customer={customer} />
     </>
   );
+}
+
+type Of = { scope: TenantScope; customer: Customer };
+type Billed = { scope: TenantScope; billed: ReturnType<typeof invoices.list> };
+
+async function Owed({ scope, billed }: Billed) {
+  const owed = (await billed).reduce((sum, i) => sum + i.balance, 0);
+  if (owed <= 0) return null;
+  return (
+    <p className="text-sm">
+      Owes <span className="font-semibold tnum">{formatAmount(scope, owed)}</span>
+    </p>
+  );
+}
+
+async function Access({ scope, customer }: Of) {
+  const [access, address] = await Promise.all([portal.status(scope, customer.id), portal.currentSlug(scope.tenantId)]);
+  if (!access) return null;
+  return (
+    <ClientPortalPanel
+      customerId={customer.id}
+      status={access}
+      hasAddress={address !== null}
+      lastSignedIn={access.signedInAt ? formatDay(scope, access.signedInAt) : null}
+    />
+  );
+}
+
+async function Projects({ scope, customer }: Of) {
+  return <ProjectsList projects={await projects.list(scope, customer.id)} scope={scope} basePath="/studio/projects" />;
+}
+
+async function Bookings({ scope, customer }: Of) {
+  return <BookingsList bookings={await bookings.forCustomer(scope, customer.id)} scope={scope} basePath="/studio/bookings" />;
+}
+
+async function Quotations({ scope, customer }: Of) {
+  return <QuotationsList quotations={await quotations.list(scope, customer.id)} scope={scope} basePath="/studio/quotations" showClient={false} />;
+}
+
+async function Invoices({ scope, billed }: Billed) {
+  return <InvoicesList invoices={await billed} scope={scope} basePath="/studio/invoices" showClient={false} />;
 }

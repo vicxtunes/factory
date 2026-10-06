@@ -1,10 +1,13 @@
-import Link from "next/link";
+import { BackLink } from "@repo/ui/navigation/back";
 import { notFound } from "next/navigation";
 
 import { CustomersList } from "@repo/ui/customers/CustomersList";
 import { QuotaForm } from "@repo/ui/photos/QuotaForm";
 import { UsageBar } from "@repo/ui/photos/UsageBar";
 import { SectionLabel } from "@repo/ui/SectionLabel";
+import { Skeleton } from "@repo/ui/Skeleton";
+import { CardGridSkeleton, ChartsSkeleton, ChipRowSkeleton, PanelStackSkeleton, RowsSkeleton, StatTilesSkeleton } from "@repo/ui/skeletons/blocks";
+import { Loading } from "@repo/ui/skeletons/Loading";
 import { ReviewCard } from "@repo/ui/studio-access/ReviewCard";
 import { AccountsOverview } from "@repo/ui/accounting/AccountsOverview";
 import { PeriodPicker } from "@repo/ui/accounting/PeriodPicker";
@@ -32,6 +35,8 @@ import { customers } from "@repo/lib/customers/server";
 import { offerings } from "@repo/lib/offerings/server";
 import { studioIdSchema, studioScope } from "@repo/lib/studios/core";
 import { requireStudiosOversight, studios } from "@repo/lib/studios/server";
+import type { StudioListing } from "@repo/lib/studios/core";
+import type { TenantScope } from "@repo/lib/tenancy/types";
 
 export const dynamic = "force-dynamic";
 
@@ -50,25 +55,107 @@ export default async function StudioPage({
   if (!studio) notFound();
   const scope = studioScope(studio);
   const today = localDate(new Date(), scope.timeZone);
-  const review = await studioAccess.reviewOne(studio.id);
-  const [active, archived, catalog, quotes, bills, money, upcoming, work, todo, members, amingOrders, slug, usage] = await Promise.all([
-    customers.list(scope),
-    customers.list(scope, true),
-    offerings.manage(scope),
-    quotations.list(scope),
-    invoices.list(scope),
-    studioAccounts.overview(scope, periodFrom(await searchParams)),
-    bookings.upcoming(scope, today, 10),
-    projects.list(scope),
-    tasks.open(scope),
-    team.list(scope),
-    studioOrders.forStudio(scope),
-    portal.currentSlug(studio.id),
-    photos.usage(scope),
-  ]);
-  const openTasks: Record<string, number> = {};
-  for (const t of todo) if (t.assigneeId) openTasks[t.assigneeId] = (openTasks[t.assigneeId] ?? 0) + 1;
+  const rows = (n: number) => <RowsSkeleton rows={n} />;
+  // Read once, for the tasks and the team.
+  const work = { todo: tasks.open(scope), members: team.list(scope) };
 
+  return (
+    <div className="space-y-6">
+      <div>
+        <BackLink href="/dashboard/studios" className="text-xs font-medium text-brand-600 hover:underline">
+          ← Businesses
+        </BackLink>
+        <h2 className="mt-1 text-xl font-semibold">{studio.name}</h2>
+      </div>
+      <Loading skeleton={<PanelStackSkeleton count={1} />}>
+        <About studio={studio} scope={scope} />
+      </Loading>
+      <section className="space-y-3 rounded-2xl border border-border bg-surface p-4 shadow-theme-xs">
+        <SectionLabel>Photo storage</SectionLabel>
+        <Loading skeleton={<Skeleton className="h-16 w-full" />}>
+          <Storage studio={studio} scope={scope} />
+        </Loading>
+      </section>
+      <section className="space-y-4">
+        <SectionLabel>Money</SectionLabel>
+        <CurrencySymbolProvider symbol={scope.currency}>
+          <Loading
+            skeleton={
+              <div className="space-y-6">
+                <ChipRowSkeleton count={5} />
+                <StatTilesSkeleton />
+                <ChartsSkeleton />
+              </div>
+            }
+          >
+            <Money scope={scope} searchParams={searchParams} />
+          </Loading>
+        </CurrencySymbolProvider>
+      </section>
+      <section>
+        <SectionLabel>Coming up</SectionLabel>
+        <Loading skeleton={rows(3)}>
+          <Upcoming scope={scope} today={today} />
+        </Loading>
+      </section>
+      <section>
+        <SectionLabel>Orders placed with Aming for its projects</SectionLabel>
+        <Loading skeleton={rows(3)}>
+          <AmingOrders scope={scope} />
+        </Loading>
+      </section>
+      <section>
+        <SectionLabel>Projects</SectionLabel>
+        <Loading skeleton={<CardGridSkeleton count={3} />}>
+          <Projects scope={scope} />
+        </Loading>
+      </section>
+      <section>
+        <SectionLabel>Open tasks</SectionLabel>
+        <Loading skeleton={rows(3)}>
+          <Tasks scope={scope} today={today} work={work} />
+        </Loading>
+      </section>
+      <section>
+        <SectionLabel>Team</SectionLabel>
+        <Loading skeleton={rows(3)}>
+          <Team work={work} />
+        </Loading>
+      </section>
+      <section>
+        <SectionLabel>Clients</SectionLabel>
+        <Loading skeleton={rows(4)}>
+          <Clients scope={scope} />
+        </Loading>
+      </section>
+      <section>
+        <SectionLabel>Packages & Services</SectionLabel>
+        <Loading skeleton={rows(3)}>
+          <Services scope={scope} />
+        </Loading>
+      </section>
+      <section>
+        <SectionLabel>Quotations</SectionLabel>
+        <Loading skeleton={rows(3)}>
+          <Quotations scope={scope} />
+        </Loading>
+      </section>
+      <section>
+        <SectionLabel>Invoices</SectionLabel>
+        <Loading skeleton={rows(3)}>
+          <Invoices scope={scope} />
+        </Loading>
+      </section>
+    </div>
+  );
+}
+
+type Of = { scope: TenantScope };
+type Work = { todo: ReturnType<typeof tasks.open>; members: ReturnType<typeof team.list> };
+
+// Its review (while it's being set up or reviewed) and its details.
+async function About({ studio, scope }: Of & { studio: StudioListing }) {
+  const [review, slug] = await Promise.all([studioAccess.reviewOne(studio.id), portal.currentSlug(studio.id)]);
   const details: [string, string | null][] = [
     ["Owner", studio.ownerName],
     ["Phone", studio.phone],
@@ -76,15 +163,8 @@ export default async function StudioPage({
     ["Address", studio.address],
     ["Public page", slug ? studioUrl(slug) : "Not chosen yet"],
   ];
-
   return (
-    <div className="space-y-6">
-      <div>
-        <Link href="/dashboard/studios" className="text-xs font-medium text-brand-600 hover:underline">
-          ← Studios
-        </Link>
-        <h2 className="mt-1 text-xl font-semibold">{studio.name}</h2>
-      </div>
+    <>
       {review ? (
         <ReviewCard
           studio={review}
@@ -100,54 +180,67 @@ export default async function StudioPage({
           </div>
         ))}
       </dl>
-      <section className="space-y-3 rounded-2xl border border-border bg-surface p-4 shadow-theme-xs">
-        <SectionLabel>Photo storage</SectionLabel>
-        <UsageBar usage={usage} />
-        <QuotaForm studioId={studio.id} quotaGb={Math.round(usage.quotaBytes / 1024 ** 3)} />
-      </section>
-      <section className="space-y-4">
-        <SectionLabel>Money</SectionLabel>
-        <CurrencySymbolProvider symbol={scope.currency}>
-          <PeriodPicker period={money.period} />
-          <AccountsOverview view={money} links={NO_LINKS} showHeld={false} />
-        </CurrencySymbolProvider>
-      </section>
-      <section>
-        <SectionLabel>Coming up</SectionLabel>
-        <BookingsList bookings={upcoming} scope={scope} basePath={null} empty="Nothing booked ahead." />
-      </section>
-      <section>
-        <SectionLabel>Orders placed with Aming for its projects</SectionLabel>
-        <LinkedOrdersList orders={amingOrders} scope={scope} showProject empty="No project orders yet." />
-      </section>
-      <section>
-        <SectionLabel>Projects</SectionLabel>
-        <ProjectsBoard projects={work} scope={scope} basePath={null} />
-      </section>
-      <section>
-        <SectionLabel>Open tasks</SectionLabel>
-        <TasksBoard tasks={todo} team={members.map((m) => ({ id: m.id, name: m.name }))} today={today} scope={scope} editable={false} projectPath={null} />
-      </section>
-      <section>
-        <SectionLabel>Team</SectionLabel>
-        <TeamList members={members} openTasks={openTasks} basePath={null} />
-      </section>
-      <section>
-        <SectionLabel>Clients</SectionLabel>
-        <CustomersList active={active} archived={archived} basePath={null} />
-      </section>
-      <section>
-        <SectionLabel>Packages & Services</SectionLabel>
-        <ServicesList categories={catalog} scope={scope} />
-      </section>
-      <section>
-        <SectionLabel>Quotations</SectionLabel>
-        <QuotationsList quotations={quotes} scope={scope} basePath={null} />
-      </section>
-      <section>
-        <SectionLabel>Invoices</SectionLabel>
-        <InvoicesList invoices={bills} scope={scope} basePath={null} />
-      </section>
-    </div>
+    </>
   );
+}
+
+async function Storage({ studio, scope }: Of & { studio: StudioListing }) {
+  const usage = await photos.usage(scope);
+  return (
+    <>
+      <UsageBar usage={usage} />
+      <QuotaForm studioId={studio.id} quotaGb={Math.round(usage.quotaBytes / 1024 ** 3)} />
+    </>
+  );
+}
+
+async function Money({ scope, searchParams }: Of & { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const money = await studioAccounts.overview(scope, periodFrom(await searchParams));
+  return (
+    <>
+      <PeriodPicker period={money.period} />
+      <AccountsOverview view={money} links={NO_LINKS} showHeld={false} />
+    </>
+  );
+}
+
+async function Upcoming({ scope, today }: Of & { today: string }) {
+  return <BookingsList bookings={await bookings.upcoming(scope, today, 10)} scope={scope} basePath={null} empty="Nothing booked ahead." />;
+}
+
+async function AmingOrders({ scope }: Of) {
+  return <LinkedOrdersList orders={await studioOrders.forStudio(scope)} scope={scope} showProject empty="No project orders yet." />;
+}
+
+async function Projects({ scope }: Of) {
+  return <ProjectsBoard projects={await projects.list(scope)} scope={scope} basePath={null} />;
+}
+
+async function Tasks({ scope, today, work }: Of & { today: string; work: Work }) {
+  const [todo, members] = await Promise.all([work.todo, work.members]);
+  return <TasksBoard tasks={todo} team={members.map((m) => ({ id: m.id, name: m.name }))} today={today} scope={scope} editable={false} projectPath={null} />;
+}
+
+async function Team({ work }: { work: Work }) {
+  const [members, todo] = await Promise.all([work.members, work.todo]);
+  const openTasks: Record<string, number> = {};
+  for (const t of todo) if (t.assigneeId) openTasks[t.assigneeId] = (openTasks[t.assigneeId] ?? 0) + 1;
+  return <TeamList members={members} openTasks={openTasks} basePath={null} />;
+}
+
+async function Clients({ scope }: Of) {
+  const [active, archived] = await Promise.all([customers.list(scope), customers.list(scope, true)]);
+  return <CustomersList active={active} archived={archived} basePath={null} />;
+}
+
+async function Services({ scope }: Of) {
+  return <ServicesList categories={await offerings.manage(scope)} scope={scope} />;
+}
+
+async function Quotations({ scope }: Of) {
+  return <QuotationsList quotations={await quotations.list(scope)} scope={scope} basePath={null} />;
+}
+
+async function Invoices({ scope }: Of) {
+  return <InvoicesList invoices={await invoices.list(scope)} scope={scope} basePath={null} />;
 }

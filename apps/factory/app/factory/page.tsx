@@ -8,6 +8,8 @@ import { NotificationGate } from "@repo/ui/pwa/NotificationGate";
 import { ChatLauncher } from "@repo/ui/chat/ChatLauncher";
 import { NotificationBell } from "@repo/ui/notifications/NotificationBell";
 import { InlineProfileTrigger } from "@repo/ui/profile/InlineProfileTrigger";
+import { CardGridSkeleton, ChipRowSkeleton, FormSkeleton } from "@repo/ui/skeletons/blocks";
+import { Loading } from "@repo/ui/skeletons/Loading";
 import { createClient } from "@repo/lib/supabase/server";
 import { getWorkerSession } from "@repo/lib/auth/session";
 import { fetchBoardItems } from "@repo/lib/queries";
@@ -25,23 +27,17 @@ export default async function FactoryPage() {
   const session = await getWorkerSession();
 
   if (!session) {
-    const supabase = await createClient();
-    const { data } = await supabase
-      .from("workers_public")
-      .select("id, name, station, active")
-      .eq("active", true)
-      .order("name");
     return (
       <>
         <Header surface="Factory" />
         <main className="mx-auto w-full max-w-md flex-1 px-4 py-8">
-          <WorkerLogin workers={(data ?? []) as WorkerPublic[]} />
+          <Loading skeleton={<FormSkeleton fields={2} />}>
+            <Login />
+          </Loading>
         </main>
       </>
     );
   }
-
-  const items = await fetchBoardItems();
 
   return (
     <>
@@ -69,11 +65,16 @@ export default async function FactoryPage() {
         }
       />
       <main className="mx-auto w-full max-w-6xl flex-1 px-3 py-4 pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-4">
-        <Board
-          initialItems={items}
-          workerId={session.worker_id}
-          workerName={session.name}
-        />
+        <Loading
+          skeleton={
+            <>
+              <ChipRowSkeleton />
+              <CardGridSkeleton />
+            </>
+          }
+        >
+          <WorkerBoard workerId={session.worker_id} workerName={session.name} />
+        </Loading>
       </main>
       <HomeBar
         tabs={[
@@ -86,4 +87,18 @@ export default async function FactoryPage() {
       />
     </>
   );
+}
+
+async function Login() {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("workers_public")
+    .select("id, name, station, active")
+    .eq("active", true)
+    .order("name");
+  return <WorkerLogin workers={(data ?? []) as WorkerPublic[]} />;
+}
+
+async function WorkerBoard({ workerId, workerName }: { workerId: string; workerName: string }) {
+  return <Board initialItems={await fetchBoardItems()} workerId={workerId} workerName={workerName} />;
 }

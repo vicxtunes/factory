@@ -74,7 +74,7 @@ function fail(what: string, error: { code?: string; message: string }): never {
   // Booked twice at once: the one-booking-per-quotation index caught it.
   if (error.code === "23505" && error.message.includes("one_per_quotation")) throw new BookingError("This quotation is already booked.");
   // A client, quotation or package from another studio: the composite keys caught it.
-  if (error.code === "23503") throw new BookingError("That client, quotation or package doesn't belong to your studio.");
+  if (error.code === "23503") throw new BookingError("That client, quotation or package doesn't belong to your business.");
   throw new Error(`bookings: could not ${what}: ${error.message}`);
 }
 

@@ -15,8 +15,8 @@ test("a profile is trimmed, and empty optional fields become null", () => {
 });
 
 test("a profile needs a name", () => {
-  assert.throws(() => parseInput(studioProfileSchema, { name: "   ", phone: "", email: "", address: "" }), /Give your studio a name\./);
-  assert.throws(() => parseInput(studioProfileSchema, { phone: "", email: "", address: "" }), /Give your studio a name\./);
+  assert.throws(() => parseInput(studioProfileSchema, { name: "   ", phone: "", email: "", address: "" }), /Give your business a name\./);
+  assert.throws(() => parseInput(studioProfileSchema, { phone: "", email: "", address: "" }), /Give your business a name\./);
 });
 
 test("a profile refuses a bad email and over-long fields", () => {

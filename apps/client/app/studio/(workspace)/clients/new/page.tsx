@@ -1,15 +1,15 @@
-import Link from "next/link";
+import { BackLink } from "@repo/ui/navigation/back";
 
 import { CustomerForm } from "@repo/ui/customers/CustomerForm";
 
-export const metadata = { title: "New client · My Studio" };
+export const metadata = { title: "New client · My Business" };
 
 export default function NewStudioClientPage() {
   return (
     <>
-      <Link href="/studio/clients" className="text-xs font-medium text-brand-600 hover:underline">
+      <BackLink href="/studio/clients" className="text-xs font-medium text-brand-600 hover:underline">
         ← Clients
-      </Link>
+      </BackLink>
       <CustomerForm basePath="/studio/clients" />
     </>
   );

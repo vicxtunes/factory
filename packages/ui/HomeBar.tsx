@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useRef, useState, useTransition } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 
@@ -29,6 +29,7 @@ import {
   WorkersIcon,
 } from "./icons";
 import { ChatIcon } from "@repo/ui/chat/icons";
+import { useCloseOnBack } from "@repo/ui/navigation/back";
 
 // Mobile "home bar" shared by every signed-in surface (client portal, staff
 // dashboard, factory floor, graphics). A flat, full-width bar pinned to the
@@ -174,6 +175,8 @@ export function HomeBar({
   const [moreOpen, setMoreOpen] = useState(false);
   const [pending, start] = useTransition();
   const ref = useRef<HTMLDivElement>(null);
+  const closeMore = useCallback(() => setMoreOpen(false), []);
+  useCloseOnBack(moreOpen, closeMore);
 
   // Close the sheet on outside tap or Escape (link taps close it directly).
   useEffect(() => {

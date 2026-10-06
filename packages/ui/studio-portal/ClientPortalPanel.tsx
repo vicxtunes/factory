@@ -53,7 +53,7 @@ export function ClientPortalPanel({
         </p>
       </div>
       {!hasAddress ? (
-        <p className="text-sm text-muted">Choose your studio&apos;s address on Studio profile first.</p>
+        <p className="text-sm text-muted">Choose your business&apos;s address on Business profile first.</p>
       ) : !status.hasPhone ? (
         <p className="text-sm text-muted">Add this client&apos;s phone number above: the link is sent to it.</p>
       ) : (

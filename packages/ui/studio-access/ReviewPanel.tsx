@@ -9,8 +9,8 @@ import type { ReviewDecision, StudioStatus } from "@repo/lib/studio-access/core"
 import { reviewStudio } from "@repo/lib/studio-access/actions";
 
 const ASK: Record<Exclude<ReviewDecision, "approve">, { label: string; hint: string; button: string }> = {
-  send_back: { label: "What should they change?", hint: "The studio sees this and can submit again.", button: "Send back" },
-  suspend: { label: "Why is it suspended?", hint: "The studio sees this. Its page, workspace and client sign-in stop.", button: "Suspend" },
+  send_back: { label: "What should they change?", hint: "The business sees this and can submit again.", button: "Send back" },
+  suspend: { label: "Why is it suspended?", hint: "The business sees this. Its page, workspace and client sign-in stop.", button: "Suspend" },
 };
 
 /**
@@ -68,7 +68,7 @@ export function ReviewPanel({ studioId, status }: { studioId: string; status: St
             <Button
               loading={pending}
               onClick={() => {
-                if (settingUp && !window.confirm("They haven't submitted their studio for review yet. Open it now?")) return;
+                if (settingUp && !window.confirm("They haven't submitted their business for review yet. Open it now?")) return;
                 decide("approve");
               }}
             >

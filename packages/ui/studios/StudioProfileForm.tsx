@@ -39,7 +39,7 @@ export function StudioProfileForm({ profile }: { profile: StudioProfile }) {
 
   return (
     <form onSubmit={submit} className="space-y-4 rounded-2xl border border-border bg-surface p-4 shadow-theme-xs sm:p-5">
-      <Field label="Studio name">
+      <Field label="Business name">
         <TextInput value={form.name} onChange={set("name")} required maxLength={80} autoComplete="organization" />
       </Field>
       <div className="grid gap-4 sm:grid-cols-2">
