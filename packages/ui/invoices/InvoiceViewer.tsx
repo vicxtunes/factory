@@ -4,6 +4,7 @@ import { useEffect, useRef, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 import { CloseIcon } from "@repo/ui/media/icons";
+import { useCloseOnBack } from "@repo/ui/navigation/back";
 import type { InvoiceView } from "@repo/lib/invoices/types";
 
 import { InvoicePdf } from "./InvoicePdf";
@@ -32,6 +33,7 @@ export function InvoiceViewer({
   onClose: () => void;
 }) {
   const closeRef = useRef<HTMLButtonElement>(null);
+  useCloseOnBack(true, onClose);
 
   // While open: lock page scroll, focus ✕, and give focus back on close.
   useEffect(() => {

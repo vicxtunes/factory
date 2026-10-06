@@ -20,8 +20,6 @@ function file(id: string, file_name: string, secure_url: string, mime_type: stri
     uploaded_by_id: null,
     uploaded_by_name: "Design Room",
     uploaded_by_role: null,
-    downloaded_at: null,
-    downloaded_by_name: null,
   };
 }
 
@@ -53,12 +51,9 @@ export function albumPhotos(count: number): PhotoView[] {
   });
 }
 
-/** An order item as staff see it while printing: eight photos and a PDF, two photos already downloaded. */
+/** An order item as staff see it while printing: eight photos and a PDF. */
 export const ORDER_MEDIA_PRINTING: OrderItemMedia[] = [
-  ...PHOTOS.slice(0, 8).map((p, i) => ({
-    ...file(`p${i}`, `${p.key}.jpg`, p.src, "image/svg+xml", `design-room/${p.key}.jpg`),
-    ...(i < 2 ? { downloaded_at: "2026-10-05T07:32:00Z", downloaded_by_name: i === 0 ? "Kofi" : "Amina" } : {}),
-  })),
+  ...PHOTOS.slice(0, 8).map((p, i) => file(`p${i}`, `${p.key}.jpg`, p.src, "image/svg+xml", `design-room/${p.key}.jpg`)),
   ORDER_MEDIA[2],
   ORDER_MEDIA[3],
 ];

@@ -55,7 +55,7 @@ function fail(what: string, error: { code?: string; message: string }): never {
     throw new ProjectError("This booking already has a project.");
   }
   // A client or booking from another studio: the composite keys caught it.
-  if (error.code === "23503") throw new ProjectError("That client or booking doesn't belong to your studio.");
+  if (error.code === "23503") throw new ProjectError("That client or booking doesn't belong to your business.");
   throw new Error(`projects: could not ${what}: ${error.message}`);
 }
 

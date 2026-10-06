@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { backTo } from "@repo/ui/navigation/back";
 import { Showcase, type ShowcaseMedia } from "@repo/ui/showroom/Showcase";
 import type { OfferingKind, ServiceWithPackages } from "@repo/lib/offerings/core";
 import { formatAmount } from "@repo/lib/tenancy/format";
@@ -58,7 +59,7 @@ export function ServiceShowcase({
         gallery: media.gallery,
       }}
       viewMode={viewMode}
-      onExit={() => router.push(`/${slug}`)}
+      onExit={() => backTo(`/${slug}`, () => router.push(`/${slug}`))}
       shareable
       details={
         service.packages.length === 0 ? (

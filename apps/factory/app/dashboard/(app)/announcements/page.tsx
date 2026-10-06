@@ -1,8 +1,10 @@
 import { redirect } from "next/navigation";
 
 import { SectionLabel } from "@repo/ui/SectionLabel";
+import { RowsSkeleton } from "@repo/ui/skeletons/blocks";
+import { Loading } from "@repo/ui/skeletons/Loading";
 import { canApproveAnnouncements, canViewAnnouncements } from "@repo/lib/announcements/access";
-import { getDashboardSession } from "@repo/lib/auth/session";
+import { getDashboardSession, type DashboardSession } from "@repo/lib/auth/session";
 import { fetchAnnouncements } from "@repo/lib/queries";
 
 import { AnnouncementsPanel } from "../../announcements-panel";
@@ -17,16 +19,22 @@ export default async function AnnouncementsPage() {
   const session = await getDashboardSession();
   if (!session || !canViewAnnouncements(session)) redirect("/dashboard");
 
-  const announcements = await fetchAnnouncements();
-
   return (
     <div className="space-y-6">
       <SectionLabel>Marketing — Announcements</SectionLabel>
-      <AnnouncementsPanel
-        announcements={announcements}
-        currentUserId={session.userId}
-        canApprove={canApproveAnnouncements(session)}
-      />
+      <Loading skeleton={<RowsSkeleton rows={4} />}>
+        <Announcements session={session} />
+      </Loading>
     </div>
+  );
+}
+
+async function Announcements({ session }: { session: DashboardSession }) {
+  return (
+    <AnnouncementsPanel
+      announcements={await fetchAnnouncements()}
+      currentUserId={session.userId}
+      canApprove={canApproveAnnouncements(session)}
+    />
   );
 }

@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 
 import { SectionLabel } from "@repo/ui/SectionLabel";
+import { RowsSkeleton } from "@repo/ui/skeletons/blocks";
+import { Loading } from "@repo/ui/skeletons/Loading";
 import { createAdminClient } from "@repo/lib/supabase/admin";
 import { getDashboardSession } from "@repo/lib/auth/session";
 import type { AppRole } from "@repo/lib/types";
@@ -13,6 +15,17 @@ export default async function AdminsPage() {
   const session = await getDashboardSession();
   if (session?.role !== "boss") redirect("/dashboard");
 
+  return (
+    <div className="space-y-6">
+      <SectionLabel>Dashboard admins</SectionLabel>
+      <Loading skeleton={<RowsSkeleton rows={4} />}>
+        <Admins ownId={session.userId} />
+      </Loading>
+    </div>
+  );
+}
+
+async function Admins({ ownId }: { ownId: string }) {
   const admin = createAdminClient();
   const [{ data: profiles }, { data: usersList }] = await Promise.all([
     admin
@@ -31,10 +44,5 @@ export default async function AdminsPage() {
     created_at: p.created_at,
   }));
 
-  return (
-    <div className="space-y-6">
-      <SectionLabel>Dashboard admins</SectionLabel>
-      <AdminPanel admins={admins} ownId={session.userId} />
-    </div>
-  );
+  return <AdminPanel admins={admins} ownId={ownId} />;
 }

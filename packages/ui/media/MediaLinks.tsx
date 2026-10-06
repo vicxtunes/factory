@@ -5,9 +5,10 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { ActionMenu, type ActionMenuEntry } from "@repo/ui/ActionMenu";
 import { Spinner } from "@repo/ui/Spinner";
+import { useCloseOnBack } from "@repo/ui/navigation/back";
 
 import { getCurrentActor } from "@repo/lib/notes/actions";
-import { deleteOrderItemMedia, markMediaDownloaded, updateMediaLink } from "@repo/lib/storage/actions";
+import { deleteOrderItemMedia, getMyMediaDownloads, markMediaDownloaded, updateMediaLink } from "@repo/lib/storage/actions";
 import { canOptimizeImage } from "@repo/lib/storage/client";
 import { replaceFileInStorage } from "@repo/lib/storage/upload-client";
 import type { OrderItemMedia } from "@repo/lib/types";
@@ -176,7 +177,8 @@ function isPastedLink(file: OrderItemMedia): boolean {
 type Preview = { url: string; name: string; downloadHref: string; onSaved?: () => void };
 
 /** Whether staff have downloaded a file yet (only where downloads are tracked). */
-type DownloadState = { at: string; by: string | null } | null;
+/** When the person viewing downloaded it; null = still pending for them. */
+type DownloadState = { at: string } | null;
 
 function formatDownloadedAt(iso: string): string {
   const d = new Date(iso);
@@ -374,6 +376,8 @@ function MediaTile({
   const link = isPastedLink(file);
   const image = !link && isImage(file.secure_url, file.mime_type);
   const [shown, setShown] = useState(!tracked || !!state);
+  // Your downloads arrive a moment after the item: what you've saved shows.
+  if (state && !shown) setShown(true);
   const [loading, setLoading] = useState(false);
   const download = useDownload(resolveDownloadUrl(file), name, onSaved);
   const actions = useMediaActions(file, actor, onChanged);
@@ -476,16 +480,13 @@ function MediaTile({
         <div className="absolute inset-0 overflow-hidden rounded-xl border border-border bg-background">
           {body}
 
-          {/* Downloaded: who and when, on a soft shade along the bottom. */}
+          {/* Downloaded: when you saved it, on a soft shade along the bottom. */}
           {tracked && state && shown ? (
             <div
               className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center gap-1 bg-gradient-to-t from-black/75 to-transparent px-2 pb-1.5 pt-5 text-[10px] text-white"
               title={`Downloaded ${new Date(state.at).toLocaleString()}`}
             >
-              <span className="truncate">
-                {state.by ? `${state.by} · ` : ""}
-                {formatDownloadedAt(state.at)}
-              </span>
+              <span className="truncate">{formatDownloadedAt(state.at)}</span>
             </div>
           ) : null}
           {actions.busy ? (
@@ -574,6 +575,7 @@ function ZipButton({
 
 function Lightbox({ preview, onClose }: { preview: Preview; onClose: () => void }) {
   const download = useDownload(preview.downloadHref, preview.name, preview.onSaved);
+  useCloseOnBack(true, onClose);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -647,17 +649,23 @@ export function MediaLinks({
   useEffect(() => {
     if (editable) getCurrentActor().then(setActor);
   }, [editable]);
-  // Downloads made on this screen, shown at once instead of waiting for a refetch.
-  const [saved, setSaved] = useState<Record<string, { at: string; by: string }>>({});
+  // What the person viewing has downloaded (each person's own: someone
+  // else's download doesn't make a file done for you), plus downloads made
+  // on this screen, shown at once.
+  const orderItemId = media[0]?.order_item_id;
+  const [downloaded, setDownloaded] = useState<Record<string, string>>({});
+  useEffect(() => {
+    if (trackDownloads && orderItemId) getMyMediaDownloads(orderItemId).then(setDownloaded);
+  }, [trackDownloads, orderItemId]);
 
   const downloadState = (file: OrderItemMedia): DownloadState =>
-    saved[file.id] ?? (file.downloaded_at ? { at: file.downloaded_at, by: file.downloaded_by_name } : null);
+    downloaded[file.id] ? { at: downloaded[file.id] } : null;
 
   async function recordDownload(ids: string[]) {
     if (!trackDownloads || ids.length === 0) return;
     const res = await markMediaDownloaded(media[0].order_item_id, ids);
     if (!res.ok) return; // e.g. a client's own download: nothing to show
-    setSaved((prev) => ({ ...prev, ...Object.fromEntries(ids.map((id) => [id, { at: res.at, by: res.by }])) }));
+    setDownloaded((prev) => ({ ...prev, ...Object.fromEntries(ids.map((id) => [id, res.at])) }));
     onChanged?.();
   }
 

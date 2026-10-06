@@ -1,7 +1,10 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { SectionLabel } from "@repo/ui/SectionLabel";
+import { RowsSkeleton } from "@repo/ui/skeletons/blocks";
+import { Loading } from "@repo/ui/skeletons/Loading";
 import { getDashboardSession } from "@repo/lib/auth/session";
 import { METHOD_LABELS } from "@repo/lib/wallet/policy";
 import { getAllTransactionHistory } from "@repo/lib/wallet/actions";
@@ -43,8 +46,8 @@ export default async function TransactionsPage({
   const kindValue: TransactionHistoryKind | "all" = kind === "all" ? "all" : (kind as TransactionHistoryKind);
   const statusValue: PaymentStatus | "all" = status === "all" ? "all" : (status as PaymentStatus);
 
-  const result = await getAllTransactionHistory({ page, search: q || undefined, kind: kindValue, status: statusValue });
-  if (!result.ok) return <p className="text-sm text-error-600">{result.error}</p>;
+  // Read once, for the count and the table.
+  const history = getAllTransactionHistory({ page, search: q || undefined, kind: kindValue, status: statusValue });
 
   const kindOptions = [
     { value: "all", label: "All types" },
@@ -76,7 +79,9 @@ export default async function TransactionsPage({
             <h2 className="text-base font-semibold">All money activity</h2>
             <p className="text-xs text-muted">Search clients, orders, references, and payment notes.</p>
           </div>
-          <span className="text-xs text-muted">{result.data.items.length} shown</span>
+          <Suspense fallback={null}>
+            <Shown history={history} />
+          </Suspense>
         </div>
 
         <form method="GET" className="mb-4 grid gap-3 md:grid-cols-[1.6fr_0.9fr_0.9fr_auto]">
@@ -133,104 +138,123 @@ export default async function TransactionsPage({
           </div>
         </form>
 
-        {result.data.items.length ? (
-          <div className="overflow-hidden rounded-xl border border-border">
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-left text-sm">
-                <thead className="bg-muted/30 text-xs uppercase tracking-wide text-muted">
-                  <tr>
-                    <th className="px-3 py-2">Date</th>
-                    <th className="px-3 py-2">Client</th>
-                    <th className="px-3 py-2">Order</th>
-                    <th className="px-3 py-2">Type</th>
-                    <th className="px-3 py-2">Method</th>
-                    <th className="px-3 py-2">Status</th>
-                    <th className="px-3 py-2">Amount</th>
-                    <th className="px-3 py-2">Reference</th>
-                    <th className="px-3 py-2">Note</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {result.data.items.map((item) => {
-                    const source = item.method && item.method !== "wallet" ? METHOD_LABELS[item.method] : item.method === "wallet" ? "Wallet" : "—";
-                    const label =
-                      item.kind === "deposit_report"
-                        ? "Deposit report"
-                        : item.kind === "order_payment_report"
-                          ? "Unconfirmed order payment"
-                        : item.kind === "order_payment"
-                          ? "Order payment"
-                          : item.kind === "refund"
-                            ? "Refund"
-                            : item.kind === "adjustment"
-                              ? "Adjustment"
-                              : "Deposit";
-                    const sign = item.amount < 0 ? "−" : "+";
-
-                    return (
-                      <tr key={item.id} className="border-t border-border align-top">
-                        <td className="px-3 py-2 text-xs text-muted">{new Date(item.createdAt).toLocaleString()}</td>
-                        <td className="px-3 py-2">
-                          <div className="font-medium">{item.clientName}</div>
-                          {item.clientPhone ? <div className="text-xs text-muted">{item.clientPhone}</div> : null}
-                        </td>
-                        <td className="px-3 py-2 text-xs">
-                          {item.orderNo ? <span className="font-medium">{item.orderNo}</span> : "—"}
-                        </td>
-                        <td className="px-3 py-2 text-xs">{label}</td>
-                        <td className="px-3 py-2 text-xs">{source}</td>
-                        <td className="px-3 py-2 text-xs">
-                          <span className="inline-flex rounded-full bg-muted/40 px-2 py-0.5 capitalize">{item.status}</span>
-                        </td>
-                        <td className={`px-3 py-2 text-right text-sm font-semibold tabular-nums ${item.amount < 0 ? "text-foreground" : "text-success-600 dark:text-success-500"}`}>
-                          {sign}
-                          {formatMoney(item.amount)}
-                        </td>
-                        <td className="px-3 py-2 text-xs text-muted">{item.reference || "—"}</td>
-                        <td className="px-3 py-2 text-xs text-muted">{item.note || "—"}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        ) : (
-          <p className="py-2 text-sm text-muted">No transaction history matched your filters.</p>
-        )}
-
-        {result.data.hasMore || result.data.page > 1 ? (
-          <div className="mt-4 flex items-center justify-between gap-3">
-            <Link
-              href={buildPageHref("/dashboard/transactions", {
-                q: filters.q,
-                kind: filters.kind,
-                status: filters.status,
-                page: result.data.page > 1 ? String(result.data.page - 1) : undefined,
-              })}
-              aria-disabled={result.data.page <= 1}
-              className={`inline-flex items-center rounded-xl border border-border px-3 py-2 text-sm ${result.data.page <= 1 ? "pointer-events-none opacity-50" : ""}`}
-            >
-              Previous
-            </Link>
-
-            <span className="text-xs text-muted">Page {result.data.page}</span>
-
-            <Link
-              href={buildPageHref("/dashboard/transactions", {
-                q: filters.q,
-                kind: filters.kind,
-                status: filters.status,
-                page: result.data.hasMore ? String(result.data.page + 1) : undefined,
-              })}
-              aria-disabled={!result.data.hasMore}
-              className={`inline-flex items-center rounded-xl border border-border px-3 py-2 text-sm ${!result.data.hasMore ? "pointer-events-none opacity-50" : ""}`}
-            >
-              Next
-            </Link>
-          </div>
-        ) : null}
+        <Loading skeleton={<RowsSkeleton />}>
+          <Results history={history} filters={filters} />
+        </Loading>
       </div>
     </div>
+  );
+}
+
+type History = ReturnType<typeof getAllTransactionHistory>;
+
+async function Shown({ history }: { history: History }) {
+  const result = await history;
+  return result.ok ? <span className="text-xs text-muted">{result.data.items.length} shown</span> : null;
+}
+
+async function Results({ history, filters }: { history: History; filters: { q?: string; kind?: string; status?: string } }) {
+  const result = await history;
+  if (!result.ok) return <p className="text-sm text-error-600">{result.error}</p>;
+  return (
+    <>
+    {result.data.items.length ? (
+      <div className="overflow-hidden rounded-xl border border-border">
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-left text-sm">
+            <thead className="bg-muted/30 text-xs uppercase tracking-wide text-muted">
+              <tr>
+                <th className="px-3 py-2">Date</th>
+                <th className="px-3 py-2">Client</th>
+                <th className="px-3 py-2">Order</th>
+                <th className="px-3 py-2">Type</th>
+                <th className="px-3 py-2">Method</th>
+                <th className="px-3 py-2">Status</th>
+                <th className="px-3 py-2">Amount</th>
+                <th className="px-3 py-2">Reference</th>
+                <th className="px-3 py-2">Note</th>
+              </tr>
+            </thead>
+            <tbody>
+              {result.data.items.map((item) => {
+                const source = item.method && item.method !== "wallet" ? METHOD_LABELS[item.method] : item.method === "wallet" ? "Wallet" : "—";
+                const label =
+                  item.kind === "deposit_report"
+                    ? "Deposit report"
+                    : item.kind === "order_payment_report"
+                      ? "Unconfirmed order payment"
+                    : item.kind === "order_payment"
+                      ? "Order payment"
+                      : item.kind === "refund"
+                        ? "Refund"
+                        : item.kind === "adjustment"
+                          ? "Adjustment"
+                          : "Deposit";
+                const sign = item.amount < 0 ? "−" : "+";
+
+                return (
+                  <tr key={item.id} className="border-t border-border align-top">
+                    <td className="px-3 py-2 text-xs text-muted">{new Date(item.createdAt).toLocaleString()}</td>
+                    <td className="px-3 py-2">
+                      <div className="font-medium">{item.clientName}</div>
+                      {item.clientPhone ? <div className="text-xs text-muted">{item.clientPhone}</div> : null}
+                    </td>
+                    <td className="px-3 py-2 text-xs">
+                      {item.orderNo ? <span className="font-medium">{item.orderNo}</span> : "—"}
+                    </td>
+                    <td className="px-3 py-2 text-xs">{label}</td>
+                    <td className="px-3 py-2 text-xs">{source}</td>
+                    <td className="px-3 py-2 text-xs">
+                      <span className="inline-flex rounded-full bg-muted/40 px-2 py-0.5 capitalize">{item.status}</span>
+                    </td>
+                    <td className={`px-3 py-2 text-right text-sm font-semibold tabular-nums ${item.amount < 0 ? "text-foreground" : "text-success-600 dark:text-success-500"}`}>
+                      {sign}
+                      {formatMoney(item.amount)}
+                    </td>
+                    <td className="px-3 py-2 text-xs text-muted">{item.reference || "—"}</td>
+                    <td className="px-3 py-2 text-xs text-muted">{item.note || "—"}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    ) : (
+      <p className="py-2 text-sm text-muted">No transaction history matched your filters.</p>
+    )}
+
+    {result.data.hasMore || result.data.page > 1 ? (
+      <div className="mt-4 flex items-center justify-between gap-3">
+        <Link
+          href={buildPageHref("/dashboard/transactions", {
+            q: filters.q,
+            kind: filters.kind,
+            status: filters.status,
+            page: result.data.page > 1 ? String(result.data.page - 1) : undefined,
+          })}
+          aria-disabled={result.data.page <= 1}
+          className={`inline-flex items-center rounded-xl border border-border px-3 py-2 text-sm ${result.data.page <= 1 ? "pointer-events-none opacity-50" : ""}`}
+        >
+          Previous
+        </Link>
+
+        <span className="text-xs text-muted">Page {result.data.page}</span>
+
+        <Link
+          href={buildPageHref("/dashboard/transactions", {
+            q: filters.q,
+            kind: filters.kind,
+            status: filters.status,
+            page: result.data.hasMore ? String(result.data.page + 1) : undefined,
+          })}
+          aria-disabled={!result.data.hasMore}
+          className={`inline-flex items-center rounded-xl border border-border px-3 py-2 text-sm ${!result.data.hasMore ? "pointer-events-none opacity-50" : ""}`}
+        >
+          Next
+        </Link>
+      </div>
+    ) : null}
+    </>
   );
 }

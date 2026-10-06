@@ -1,6 +1,6 @@
 # Studios module
 
-Every Aming client is a photographer or studio owner. **My Studio** gives each of them their own
+Every Aming client is a photographer or studio owner. **My Business** gives each of them their own
 business inside the system: their clients, quotations, bookings, projects and deliveries (built
 in later phases, see the My Business brief in Notion). Aming gains production orders from their
 work.
@@ -9,7 +9,7 @@ A studio is a **tenant** (packages/lib/tenancy) owned by one client. Everything 
 creates is tagged with its tenant id.
 
 - **Opened, not pre-created.** A client's studio is created the first time they open
-  **My Studio**, named after them. Opening it again, or in two tabs at once, gives the same studio.
+  **My Business**, named after them. Opening it again, or in two tabs at once, gives the same studio.
 - **Business profile.** Name, phone, email and address: what the studio's documents and
   customers will show. The owner edits it on `/studio`.
 - **Boss oversight.** The boss sees every studio at `/dashboard/studios`. Supervisors and
@@ -48,7 +48,7 @@ packages/lib/studios/
   actions.ts         saveMyStudioProfile (session → zod → service).
   feature.ts         STUDIOS_ENABLED.
 packages/ui/studios/  StudioProfileForm (client), StudiosTable (boss).
-apps/client/app/studio/                       My Studio.
+apps/client/app/studio/                       My Business.
 apps/factory/app/dashboard/(app)/studios/     The boss's list and one studio.
 supabase/migrations/20261003100000_studios.sql
 ```

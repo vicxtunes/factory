@@ -34,7 +34,7 @@ apply: the status only changes if it's still what the boss saw.
    confirm or change for the studio.
 3. **Logo** (optional): shrunk to 512px in the browser (white background, JPEG), uploaded to a
    signed link in the photo bucket (R2), checked (≤ 1 MB) and moved to
-   `studios/<tenant>/logo-<id>.jpg`. The old one is deleted. Also on Studio profile.
+   `studios/<tenant>/logo-<id>.jpg`. The old one is deleted. Also on Business profile.
 4. **Address**: the studio's slug (packages/lib/studio-portal).
 5. **Email**: a **6-digit code** by email (Resend).
    - It works for **10 minutes** and **5 tries**.

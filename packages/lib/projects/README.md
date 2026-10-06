@@ -1,7 +1,7 @@
 # Projects module
 
 The work a business does for a customer, usually started from a confirmed booking and moved
-through a pipeline to delivery. For studios it's **My Studio → Projects**. Generic and
+through a pipeline to delivery. For studios it's **My Business → Projects**. Generic and
 tenant-scoped, so a future product (vendors, service providers) reuses it.
 
 - **Pipeline:** Booked → In progress → Editing → Review → Delivered → Completed

@@ -7,5 +7,5 @@ export const APP_IDENTITY = {
   shortName: "Aming Space",
   /** The home page's title; other pages are "<page> - Aming Space". */
   title: "Aming Space - Creativity Meets Business",
-  description: "Prints, photobooks and frames for photographers, and a studio workspace to run your photography business.",
+  description: "Prints, photobooks and frames for photographers, and a workspace to run your photography business.",
 };

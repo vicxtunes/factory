@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 
+import { ProductDetailSkeleton } from "@repo/ui/skeletons/blocks";
+import { Loading } from "@repo/ui/skeletons/Loading";
 import { localDate } from "@repo/lib/accounting/core/period";
 import { notFound, permanentRedirect } from "next/navigation";
 
@@ -45,27 +47,42 @@ export default async function ProductPage({ params }: Params) {
   if (loaded.at.redirectTo) permanentRedirect(`/${loaded.at.redirectTo}/p/${loaded.product}`);
   if (!loaded.found) notFound();
   const { at, found, source, slug } = loaded;
-  const [media, settings, signedIn, logoUrl] = await Promise.all([
-    source ? amingShowcaseMedia(source, found.hiddenMedia) : serviceMedia(at.scope, found.id),
-    offerings.settings(at.scope),
-    portalClient(at.studio.id),
-    studioAccess.logoUrl(at.studio.logoKey),
-  ]);
+  const [signedIn, logoUrl] = await Promise.all([portalClient(at.studio.id), studioAccess.logoUrl(at.studio.logoKey)]);
 
   return (
     <StudioShell studio={{ name: at.studio.name, logoUrl, slug }} signedInAs={signedIn?.name ?? null} title={found.name}>
-      <ServiceShowcase
-        kind="product"
-        studio={{ name: at.studio.name }}
-        slug={slug}
-        service={found}
-        media={media}
-        viewMode={settings.viewMode}
-        showPrices={settings.showPrices}
-        signedIn={!!signedIn}
-        today={localDate(new Date(), at.scope.timeZone)}
-        scope={at.scope}
-      />
+      <Loading skeleton={<ProductDetailSkeleton />}>
+        <Showcase loaded={{ at, found, source, slug }} signedIn={!!signedIn} />
+      </Loading>
     </StudioShell>
+  );
+}
+
+type Loaded = NonNullable<Awaited<ReturnType<typeof load>>>;
+
+async function Showcase({
+  loaded: { at, found, source, slug },
+  signedIn,
+}: {
+  loaded: Pick<Loaded, "at" | "source" | "slug"> & { found: NonNullable<Loaded["found"]> };
+  signedIn: boolean;
+}) {
+  const [media, settings] = await Promise.all([
+    source ? amingShowcaseMedia(source, found.hiddenMedia) : serviceMedia(at.scope, found.id),
+    offerings.settings(at.scope),
+  ]);
+  return (
+    <ServiceShowcase
+      kind="product"
+      studio={{ name: at.studio.name }}
+      slug={slug}
+      service={found}
+      media={media}
+      viewMode={settings.viewMode}
+      showPrices={settings.showPrices}
+      signedIn={signedIn}
+      today={localDate(new Date(), at.scope.timeZone)}
+      scope={at.scope}
+    />
   );
 }

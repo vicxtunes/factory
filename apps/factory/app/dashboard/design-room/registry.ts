@@ -144,11 +144,11 @@ export interface RoomComponent {
 export const COMPONENTS: RoomComponent[] = [
   {
     slug: "studio-setup",
-    name: "Studio set-up",
+    name: "Business set-up",
     category: "Flows",
     status: "live",
     source: "packages/ui/studio-access/SetupLayouts.tsx (SetupSplit, SetupWelcome, SetupActions)",
-    summary: "A new studio's set-up (chose the split panel): the steps in a navy panel beside the form; on phones a compact step header and buttons pinned to the bottom. Click through it.",
+    summary: "A new business's set-up (chose the split panel): the steps in a navy panel beside the form; on phones a compact step header and buttons pinned to the bottom. Click through it.",
     examples: [
       { title: "Desktop", file: "studio-setup/split-desktop.tsx", Demo: SetupSplitDesktop },
       { title: "Phone", file: "studio-setup/split-phone.tsx", Demo: SetupSplitPhone },
@@ -674,7 +674,7 @@ export const COMPONENTS: RoomComponent[] = [
     category: "Uploads & downloads",
     status: "live",
     source: "packages/ui/photos/PhotoUploader.tsx",
-    summary: "Studio album uploads (Cloudflare R2): an Upload row plus thumbnails; each photo is shrunk in the browser and sent three at a time, with progress on its thumbnail.",
+    summary: "Business album uploads (Cloudflare R2): an Upload row plus thumbnails; each photo is shrunk in the browser and sent three at a time, with progress on its thumbnail.",
     examples: [{ title: "Album", file: "photo-uploader/album.tsx", Demo: PhotoUploaderAlbum }],
   },
   {
@@ -683,7 +683,7 @@ export const COMPONENTS: RoomComponent[] = [
     category: "Uploads & downloads",
     status: "live",
     source: "packages/ui/studio-access/LogoUploader.tsx",
-    summary: "A studio's logo: preview box plus upload button; shrinks the picture to 512px first. Spinner only, no progress.",
+    summary: "A business's logo: preview box plus upload button; shrinks the picture to 512px first. Spinner only, no progress.",
     examples: [
       { title: "No logo yet", file: "logo-uploader/no-logo.tsx", Demo: LogoUploaderNoLogo },
       { title: "With a logo", file: "logo-uploader/with-logo.tsx", Demo: LogoUploaderWithLogo },
@@ -716,11 +716,11 @@ export const COMPONENTS: RoomComponent[] = [
   },
   {
     slug: "project-gallery",
-    name: "Project gallery (studio)",
+    name: "Project gallery (business)",
     category: "Uploads & downloads",
     status: "live",
     source: "packages/ui/photos/ProjectGalleryPanel.tsx",
-    summary: "A studio's delivered photos on a project: storage used, the album uploader, the uploaded photos to manage, and the share link for the client.",
+    summary: "A business's delivered photos on a project: storage used, the album uploader, the uploaded photos to manage, and the share link for the client.",
     examples: [{ title: "Delivery", file: "project-gallery/delivery.tsx", Demo: ProjectGalleryDelivery }],
   },
   {

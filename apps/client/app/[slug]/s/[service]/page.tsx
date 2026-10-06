@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 
+import { ProductDetailSkeleton } from "@repo/ui/skeletons/blocks";
+import { Loading } from "@repo/ui/skeletons/Loading";
 import { localDate } from "@repo/lib/accounting/core/period";
 import { notFound, permanentRedirect } from "next/navigation";
 
@@ -41,28 +43,34 @@ export default async function ServicePage({ params }: Params) {
   if (loaded.at.redirectTo) permanentRedirect(`/${loaded.at.redirectTo}/s/${loaded.service}`);
   if (!loaded.found) notFound();
   const { at, found, slug } = loaded;
-  const [media, settings, signedIn, logoUrl] = await Promise.all([
-    serviceMedia(at.scope, found.id),
-    offerings.settings(at.scope),
-    portalClient(at.studio.id),
-    studioAccess.logoUrl(at.studio.logoKey),
-  ]);
+  const [signedIn, logoUrl] = await Promise.all([portalClient(at.studio.id), studioAccess.logoUrl(at.studio.logoKey)]);
 
   return (
     <StudioShell studio={{ name: at.studio.name, logoUrl, slug }} signedInAs={signedIn?.name ?? null} title={found.name}>
-      <ServiceShowcase
-        kind="service"
-        studio={{ name: loaded.at.studio.name }}
-        slug={loaded.slug}
-        service={loaded.found}
-        media={media}
-        // The studio's choices (Packages & Services): 3D or carousel, prices shown or not.
-        viewMode={settings.viewMode}
-        showPrices={settings.showPrices}
-        signedIn={!!signedIn}
-        today={localDate(new Date(), at.scope.timeZone)}
-        scope={loaded.at.scope}
-      />
+      <Loading skeleton={<ProductDetailSkeleton />}>
+        <Showcase loaded={{ at, found, slug }} signedIn={!!signedIn} />
+      </Loading>
     </StudioShell>
+  );
+}
+
+type Loaded = NonNullable<Awaited<ReturnType<typeof load>>>;
+
+async function Showcase({ loaded: { at, found, slug }, signedIn }: { loaded: Pick<Loaded, "at" | "slug"> & { found: NonNullable<Loaded["found"]> }; signedIn: boolean }) {
+  const [media, settings] = await Promise.all([serviceMedia(at.scope, found.id), offerings.settings(at.scope)]);
+  return (
+    <ServiceShowcase
+      kind="service"
+      studio={{ name: at.studio.name }}
+      slug={slug}
+      service={found}
+      media={media}
+      // The studio's choices (Packages & Services): 3D or carousel, prices shown or not.
+      viewMode={settings.viewMode}
+      showPrices={settings.showPrices}
+      signedIn={signedIn}
+      today={localDate(new Date(), at.scope.timeZone)}
+      scope={at.scope}
+    />
   );
 }

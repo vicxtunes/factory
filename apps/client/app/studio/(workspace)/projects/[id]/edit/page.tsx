@@ -1,13 +1,16 @@
-import Link from "next/link";
+import { BackLink } from "@repo/ui/navigation/back";
 import { notFound } from "next/navigation";
 
 import { ProjectForm } from "@repo/ui/projects/ProjectControls";
+import { FormSkeleton } from "@repo/ui/skeletons/blocks";
+import { Loading } from "@repo/ui/skeletons/Loading";
 import { customers } from "@repo/lib/customers/server";
-import { canEditProject, projectIdSchema } from "@repo/lib/projects/core";
+import { canEditProject, projectIdSchema, type Project } from "@repo/lib/projects/core";
 import { projects } from "@repo/lib/projects/server";
 import { requireStudio } from "@repo/lib/studios/server";
+import type { TenantScope } from "@repo/lib/tenancy/types";
 
-export const metadata = { title: "Edit project · My Studio" };
+export const metadata = { title: "Edit project · My Business" };
 
 export default async function EditProjectPage({ params }: { params: Promise<{ id: string }> }) {
   const { scope } = await requireStudio();
@@ -19,21 +22,28 @@ export default async function EditProjectPage({ params }: { params: Promise<{ id
     return (
       <p className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted">
         This project is completed.{" "}
-        <Link href={`/studio/projects/${p.id}`} className="font-medium text-brand-600 underline">
+        <BackLink href={`/studio/projects/${p.id}`} className="font-medium text-brand-600 underline">
           Back to it
-        </Link>
+        </BackLink>
       </p>
     );
   }
-  const clients = await customers.list(scope);
-  const choices = clients.some((c) => c.id === p.customerId) ? clients : [...clients, { id: p.customerId, name: `${p.customerName} (archived)` }];
 
   return (
     <>
-      <Link href={`/studio/projects/${p.id}`} className="text-xs font-medium text-brand-600 hover:underline">
+      <BackLink href={`/studio/projects/${p.id}`} className="text-xs font-medium text-brand-600 hover:underline">
         ← {p.title}
-      </Link>
-      <ProjectForm project={p} customers={choices.map((c) => ({ id: c.id, name: c.name }))} basePath="/studio/projects" />
+      </BackLink>
+      <Loading skeleton={<FormSkeleton />}>
+        <Form scope={scope} p={p} />
+      </Loading>
     </>
   );
+}
+
+async function Form({ scope, p }: { scope: TenantScope; p: Project }) {
+  const clients = await customers.list(scope);
+  const choices = clients.some((c) => c.id === p.customerId) ? clients : [...clients, { id: p.customerId, name: `${p.customerName} (archived)` }];
+
+  return <ProjectForm project={p} customers={choices.map((c) => ({ id: c.id, name: c.name }))} basePath="/studio/projects" />;
 }

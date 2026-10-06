@@ -46,7 +46,7 @@ export function PortalSignIn({ slug }: { slug: string }) {
       <Button type="submit" loading={pending} className="w-full">
         Open my page
       </Button>
-      <p className="text-xs text-muted">No PIN yet, or forgot it? Ask the studio to send you a set-up link.</p>
+      <p className="text-xs text-muted">No PIN yet, or forgot it? Ask the business to send you a set-up link.</p>
     </form>
   );
 }

@@ -1,15 +1,16 @@
 import Link from "next/link";
 
 import { ProjectsBoard } from "@repo/ui/projects/ProjectsBoard";
+import { CardGridSkeleton } from "@repo/ui/skeletons/blocks";
+import { Loading } from "@repo/ui/skeletons/Loading";
 import { projects } from "@repo/lib/projects/server";
 import { requireStudio } from "@repo/lib/studios/server";
+import type { TenantScope } from "@repo/lib/tenancy/types";
 
-export const metadata = { title: "Projects · My Studio" };
+export const metadata = { title: "Projects · My Business" };
 
 export default async function StudioProjectsPage() {
   const { scope } = await requireStudio();
-  const list = await projects.list(scope);
-
   return (
     <>
       <div className="flex items-start justify-between gap-3">
@@ -21,7 +22,13 @@ export default async function StudioProjectsPage() {
           New project
         </Link>
       </div>
-      <ProjectsBoard projects={list} scope={scope} basePath="/studio/projects" />
+      <Loading skeleton={<CardGridSkeleton />}>
+        <Projects scope={scope} />
+      </Loading>
     </>
   );
+}
+
+async function Projects({ scope }: { scope: TenantScope }) {
+  return <ProjectsBoard projects={await projects.list(scope)} scope={scope} basePath="/studio/projects" />;
 }

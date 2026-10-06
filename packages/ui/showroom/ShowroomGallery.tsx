@@ -49,6 +49,22 @@ function PhotoCard({ card }: { card: ShowroomCard }) {
   );
 }
 
+/** The full-bleed photo banner at the top of a showroom. */
+export function ShowroomBanner({ title, subtitle, imageUrl }: { title: string; subtitle: string; imageUrl: string }) {
+  return (
+    <div className="relative -mx-4 -mt-6 mb-6 h-48 overflow-hidden sm:-mx-6 sm:h-64">
+      <Image src={imageUrl} alt="" fill priority unoptimized={!canOptimizeImage(imageUrl)} className="object-cover" />
+      <div className="absolute inset-0 bg-gradient-to-r from-[#1b2a4b]/90 via-[#1b2a4b]/50 to-brand-600/60" />
+      <div className="absolute inset-0 flex flex-col items-center justify-center px-4 text-center">
+        <h1 className="text-3xl font-extrabold uppercase tracking-wide text-white underline decoration-brand-400 decoration-4 underline-offset-8 sm:text-5xl">
+          {title}
+        </h1>
+        <p className="mt-2 text-sm text-white/80 sm:text-base">{subtitle}</p>
+      </div>
+    </div>
+  );
+}
+
 // Visual language lifted from the "Show Room v1" mockup (apps/client
 // public/showroom): a full-bleed photo banner, a tab bar, and under each tab
 // either a section per group listing its items as photo cards, or one grid
@@ -72,18 +88,7 @@ export function ShowroomGallery({
 
   return (
     <div className="overflow-x-clip">
-      {banner ? (
-        <div className="relative -mx-4 -mt-6 mb-6 h-48 overflow-hidden sm:-mx-6 sm:h-64">
-          <Image src={banner.imageUrl} alt="" fill priority unoptimized={!canOptimizeImage(banner.imageUrl)} className="object-cover" />
-          <div className="absolute inset-0 bg-gradient-to-r from-[#1b2a4b]/90 via-[#1b2a4b]/50 to-brand-600/60" />
-          <div className="absolute inset-0 flex flex-col items-center justify-center px-4 text-center">
-            <h1 className="text-3xl font-extrabold uppercase tracking-wide text-white underline decoration-brand-400 decoration-4 underline-offset-8 sm:text-5xl">
-              {banner.title}
-            </h1>
-            <p className="mt-2 text-sm text-white/80 sm:text-base">{banner.subtitle}</p>
-          </div>
-        </div>
-      ) : null}
+      {banner ? <ShowroomBanner {...banner} /> : null}
 
       {notice}
 

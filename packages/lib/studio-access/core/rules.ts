@@ -47,7 +47,7 @@ export function passwordProblem(password: string, avoid: string[] = []): string 
   if (/^\d+$/.test(password)) return "Use letters as well as numbers.";
   const words = avoid.map((w) => w.toLowerCase().replace(/[^a-z0-9]/g, "")).filter((w) => w.length >= 4);
   if (words.some((w) => lower.replace(/[^a-z0-9]/g, "") === w)) {
-    return "Don't use your studio's name or phone number as the password.";
+    return "Don't use your business's name or phone number as the password.";
   }
   return null;
 }
@@ -81,7 +81,7 @@ export function stepsDone(a: StudioAccess): Record<Exclude<OnboardingStep, "logo
 /** What's still missing before the studio can be submitted (in step order), as the owner would say it. */
 export function missingForSubmit(a: StudioAccess): string[] {
   const done = stepsDone(a);
-  const labels = { details: "your studio's details", address: "your studio's address", email: "a verified email", password: "a password" };
+  const labels = { details: "your business's details", address: "your business's address", email: "a verified email", password: "a password" };
   return (Object.keys(labels) as (keyof typeof labels)[]).filter((k) => !done[k]).map((k) => labels[k]);
 }
 

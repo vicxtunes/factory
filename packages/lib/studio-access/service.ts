@@ -55,7 +55,7 @@ export class StudioAccessService {
 
   async access(tenantId: string): Promise<StudioAccess> {
     const access = await this.store.get(tenantId);
-    if (!access) throw new AccessError("That studio doesn't exist.");
+    if (!access) throw new AccessError("That business doesn't exist.");
     return access;
   }
 
@@ -65,8 +65,8 @@ export class StudioAccessService {
     if (isSettingUp(access.status)) return access;
     throw new AccessError(
       access.status === "in_review"
-        ? "Your studio is being reviewed, so it can't be changed right now."
-        : "Your studio is already set up: change it from Studio profile.",
+        ? "Your business is being reviewed, so it can't be changed right now."
+        : "Your business is already set up: change it from Business profile.",
     );
   }
 
@@ -135,7 +135,7 @@ export class StudioAccessService {
     const missing = missingForSubmit(access);
     if (missing.length) throw new AccessError(`Before you submit, add ${missing.join(", ")}.`);
     if (!(await this.store.setStatus(tenantId, access.status, "in_review", this.now().toISOString(), null))) {
-      throw new AccessError("Your studio was just changed. Refresh the page.");
+      throw new AccessError("Your business was just changed. Refresh the page.");
     }
   }
 
@@ -145,7 +145,7 @@ export class StudioAccessService {
   async unlock(tenantId: string, password: string): Promise<DeviceUnlock> {
     const access = await this.access(tenantId);
     const now = this.now();
-    if (!access.passwordHash) throw new AccessError("Set a studio password first.");
+    if (!access.passwordHash) throw new AccessError("Set a business password first.");
     if (isLocked(access.passwordLockedUntil, now)) {
       throw new AccessError(`Too many wrong passwords. Try again in ${minutesLeft(access.passwordLockedUntil!, now)} minutes, or reset it.`);
     }
@@ -153,7 +153,7 @@ export class StudioAccessService {
       const next = afterWrongPassword(access.passwordFailedAttempts, now);
       await this.store.recordWrongPassword(tenantId, next.failedAttempts, next.lockedUntil);
       throw new AccessError(
-        next.lockedUntil ? "Too many wrong passwords. The studio is locked for 15 minutes." : "That password is wrong.",
+        next.lockedUntil ? "Too many wrong passwords. The business is locked for 15 minutes." : "That password is wrong.",
       );
     }
     if (access.passwordFailedAttempts > 0) await this.store.clearWrongPasswords(tenantId);
@@ -164,7 +164,7 @@ export class StudioAccessService {
   async sendResetCode(tenantId: string): Promise<CodeSent> {
     const access = await this.access(tenantId);
     if (!access.ownerEmail || !access.ownerEmailVerifiedAt) {
-      throw new AccessError("Your studio has no verified email yet. Contact Aming to reset the password.");
+      throw new AccessError("Your business has no verified email yet. Contact Aming to reset the password.");
     }
     return this.sendCode(access, "reset", access.ownerEmail);
   }
@@ -197,17 +197,17 @@ export class StudioAccessService {
     const missing = missingForSubmit(access);
     const to = afterDecision(access.status, decision, missing.length === 0);
     if (!to) {
-      if (decision === "suspend") throw new AccessError("This studio is already suspended.");
+      if (decision === "suspend") throw new AccessError("This business is already suspended.");
       if (decision === "approve" && access.status !== "active") {
         // Said as the boss would: "their address", not "your address".
         throw new AccessError(`It can't open until it's set up. Still missing: ${missing.map((m) => m.replace(/^your /, "their ")).join(", ")}.`);
       }
-      throw new AccessError(decision === "approve" ? "This studio is already open." : "This studio isn't waiting for a review.");
+      throw new AccessError(decision === "approve" ? "This business is already open." : "This business isn't waiting for a review.");
     }
     const reason = needsReason(decision) ? note.trim() : null;
-    if (needsReason(decision) && !reason) throw new AccessError("Tell the studio why, so they know what to do.");
+    if (needsReason(decision) && !reason) throw new AccessError("Tell the business why, so they know what to do.");
     if (!(await this.store.setStatus(tenantId, access.status, to, this.now().toISOString(), reason))) {
-      throw new AccessError("Someone else just reviewed this studio. Refresh the page.");
+      throw new AccessError("Someone else just reviewed this business. Refresh the page.");
     }
 
     // Lifting a suspension before it was set up: back to setting up, not open.
@@ -215,11 +215,11 @@ export class StudioAccessService {
     const message = {
       resume: {
         title: `${access.name} can continue setting up`,
-        body: "The suspension is lifted: finish setting up your studio, then submit it for review.",
+        body: "The suspension is lifted: finish setting up your business, then submit it for review.",
       },
       approve: {
         title: `${access.name} is approved`,
-        body: "Your studio is open: your public page is live and your clients can sign in.",
+        body: "Your business is open: your public page is live and your clients can sign in.",
       },
       send_back: { title: `${access.name} needs a few changes`, body: `Aming Space asks: ${reason}` },
       suspend: { title: `${access.name} is suspended`, body: `Aming Space says: ${reason}` },

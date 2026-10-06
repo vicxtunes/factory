@@ -9,7 +9,7 @@ import { stepsDone } from "@repo/lib/studio-access/core";
 import { slugFromName } from "@repo/lib/studio-portal/core";
 import { requireOwnStudio } from "@repo/lib/studios/server";
 
-export const metadata = { title: "My Studio" };
+export const metadata = { title: "My Business" };
 
 // Where My Studio goes until the studio works: set-up (first time, or after
 // Aming sent it back), waiting for review, or suspended.
@@ -21,7 +21,7 @@ export default async function StudioWelcomePage() {
   if (a.status === "in_review") {
     return (
       <Notice title={`${a.name} is being reviewed`}>
-        <p>Thanks! Aming checks every new studio before it opens. You&apos;ll get an email at {a.ownerEmail} and a notification when it&apos;s done.</p>
+        <p>Thanks! Aming checks every new business before it opens. You&apos;ll get an email at {a.ownerEmail} and a notification when it&apos;s done.</p>
         <p>Until then your public page is off and your clients can&apos;t sign in.</p>
       </Notice>
     );

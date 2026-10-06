@@ -1,5 +1,7 @@
 import { redirect } from "next/navigation";
 
+import { PanelStackSkeleton } from "@repo/ui/skeletons/blocks";
+import { Loading } from "@repo/ui/skeletons/Loading";
 import { createAdminClient } from "@repo/lib/supabase/admin";
 import { getClientSession } from "@repo/lib/auth/session";
 
@@ -13,16 +15,20 @@ export default async function ClientSettingsPage() {
   const session = await getClientSession();
   if (!session) redirect("/");
 
-  const admin = createAdminClient();
-  const { data: cred } = await admin
-    .from("client_credentials")
-    .select("client_id")
-    .eq("client_id", session.client_id)
-    .maybeSingle();
-
   return (
     <ClientShell signedIn name={session.name} avatarUrl={session.avatarUrl}>
-      <PinSettings hasPin={!!cred} />
+      <Loading skeleton={<PanelStackSkeleton count={1} />}>
+        <Pin clientId={session.client_id} />
+      </Loading>
     </ClientShell>
   );
+}
+
+async function Pin({ clientId }: { clientId: string }) {
+  const { data: cred } = await createAdminClient()
+    .from("client_credentials")
+    .select("client_id")
+    .eq("client_id", clientId)
+    .maybeSingle();
+  return <PinSettings hasPin={!!cred} />;
 }
