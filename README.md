@@ -42,7 +42,7 @@ One repository, npm workspaces:
 ```
 apps/
   factory/        staff app — dashboard, factory floor, graphics, display  (factory.<domain>)
-  client/         client portal — showroom, orders, wallet, invoices        (client.<domain>)
+  client/         client portal — showroom, orders, wallet, invoices        (amingspace.com)
 packages/
   lib/            @repo/lib — business logic, data access, auth, types
   ui/             @repo/ui  — shared React components and UI primitives

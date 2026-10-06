@@ -1,22 +1,24 @@
-
-import { CatalogPanel, type ServiceMedia } from "@repo/ui/offerings/CatalogPanel";
+import { CatalogPanel, type AmingCatalog, type ServiceMedia } from "@repo/ui/offerings/CatalogPanel";
 import { RowsSkeleton } from "@repo/ui/skeletons/blocks";
 import { Loading } from "@repo/ui/skeletons/Loading";
+import { amingMedia } from "@repo/lib/offerings/core";
 import { offerings } from "@repo/lib/offerings/server";
 import { PhotoError } from "@repo/lib/photos/ports";
 import { photos } from "@repo/lib/photos/server";
+import { fetchProductCatalog } from "@repo/lib/queries";
 import { portal } from "@repo/lib/studio-portal/server";
 import { requireStudio } from "@repo/lib/studios/server";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
-export const metadata = { title: "Packages & Services · My Business" };
+export const metadata = { title: "Products · My Business" };
 
-export default async function StudioOfferingsPage() {
+export default async function StudioProductsPage() {
   const { scope } = await requireStudio();
   return (
     <>
       <p className="text-sm text-muted">
-        Your categories and services, each with its packages. Your showroom shows them; quotations and bookings are built from the packages.
+        Products you sell, e.g. photobooks and frames, each with its sizes and prices. Pick them from Aming&apos;s catalog or add your own. Your
+        showroom shows them and clients order them; quotations and invoices can use them too.
       </p>
       <Loading skeleton={<RowsSkeleton rows={4} />}>
         <Catalog scope={scope} />
@@ -26,17 +28,26 @@ export default async function StudioOfferingsPage() {
 }
 
 async function Catalog({ scope }: { scope: TenantScope }) {
-  const [categories, settings, usage, slug] = await Promise.all([
-    offerings.manage(scope, "service"),
+  const [categories, settings, usage, slug, catalog] = await Promise.all([
+    offerings.manage(scope, "product"),
     offerings.settings(scope),
     photos.usage(scope),
     portal.currentSlug(scope.tenantId),
+    fetchProductCatalog(true),
   ]);
-  // Every service's photos and video, for its card. Until photo storage is set up, none.
+  // Aming's products on sale, to pick from, and their photos and videos for the products picked.
+  const aming: AmingCatalog = {
+    categories: catalog
+      .filter((c) => c.products.length > 0)
+      .map((c) => ({ id: c.id, name: c.name, products: c.products.map((p) => ({ id: p.id, name: p.name, imageUrl: p.display_image_url })) })),
+    media: Object.fromEntries(catalog.flatMap((c) => c.products.map((p) => [p.id, amingMedia(p)]))),
+  };
+  // The studio's own products' photos and video, for their cards. Until photo storage is set up, none.
   const media: Record<string, ServiceMedia> = Object.fromEntries(
     await Promise.all(
       categories
         .flatMap((c) => c.services)
+        .filter((s) => !s.sourceProductId)
         .map(async (s): Promise<[string, ServiceMedia]> => {
           try {
             const album = await photos.serviceGallery(scope, s.id);
@@ -51,13 +62,14 @@ async function Catalog({ scope }: { scope: TenantScope }) {
 
   return (
     <CatalogPanel
-      kind="service"
+      kind="product"
       categories={categories}
       settings={settings}
       scope={scope}
       media={media}
       usage={usage}
       publicPath={slug ? `/${slug}` : null}
+      aming={aming}
     />
   );
 }

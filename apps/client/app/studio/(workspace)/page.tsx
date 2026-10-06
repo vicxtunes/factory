@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { AccountsOverview } from "@repo/ui/accounting/AccountsOverview";
 import { PeriodPicker } from "@repo/ui/accounting/PeriodPicker";
 import { BookingsList } from "@repo/ui/bookings/BookingBits";
+import { ProductRequestsList } from "@repo/ui/product-requests/ProductRequestsList";
 import { ProjectsList } from "@repo/ui/projects/ProjectBits";
 import { TaskRows } from "@repo/ui/tasks/TaskRows";
 import { UsageBar } from "@repo/ui/photos/UsageBar";
@@ -14,6 +15,7 @@ import { localDate } from "@repo/lib/accounting/core/period";
 import { periodFrom } from "@repo/lib/accounting/params";
 import { bookings } from "@repo/lib/bookings/server";
 import { photos } from "@repo/lib/photos/server";
+import { productRequests } from "@repo/lib/product-requests/server";
 import { projects } from "@repo/lib/projects/server";
 import { tasks } from "@repo/lib/tasks/server";
 import { studioAccounts } from "@repo/lib/billing/server";
@@ -28,7 +30,7 @@ const LINKS = { sales: "/studio/invoices", overdue: "/studio/invoices", clients:
 
 // The studio's dashboard: its money at a glance, from its invoices and
 // payments (packages/lib/billing → Accounts). The studio is created the first
-// time any My Studio page opens.
+// time any My Business page opens.
 export default async function StudioDashboardPage({
   searchParams,
 }: {
@@ -46,6 +48,9 @@ export default async function StudioDashboardPage({
       {/* Shown only when there are some, so nothing stands in for it while it loads. */}
       <Suspense fallback={null}>
         <Requests scope={scope} />
+      </Suspense>
+      <Suspense fallback={null}>
+        <OrderRequests scope={scope} />
       </Suspense>
       <div className="grid gap-4 lg:grid-cols-2">
         <section>
@@ -97,6 +102,18 @@ async function Requests({ scope }: { scope: TenantScope }) {
     <section>
       <SectionLabel>Booking requests ({requests.length})</SectionLabel>
       <BookingsList bookings={requests} scope={scope} basePath="/studio/bookings" empty="" />
+    </section>
+  );
+}
+
+// Clients who asked for a product online: Confirm makes the invoice.
+async function OrderRequests({ scope }: { scope: TenantScope }) {
+  const requests = await productRequests.open(scope);
+  if (!requests.length) return null;
+  return (
+    <section>
+      <SectionLabel>Order requests ({requests.length})</SectionLabel>
+      <ProductRequestsList requests={requests} scope={scope} invoicesPath="/studio/invoices" clientsPath="/studio/clients" />
     </section>
   );
 }

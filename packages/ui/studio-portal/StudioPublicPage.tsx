@@ -7,6 +7,7 @@ import type { Booking } from "@repo/lib/bookings/core";
 import { whatsappNumber } from "@repo/lib/kernel/core/phone";
 import type { Service } from "@repo/lib/offerings/core";
 import type { AlbumView } from "@repo/lib/photos/core";
+import { PRODUCT_REQUEST_STATUS_LABELS, type ProductRequest } from "@repo/lib/product-requests/core";
 import type { Studio } from "@repo/lib/studios/core";
 
 import { PortalSignIn } from "./PortalForms";
@@ -16,23 +17,28 @@ import { PortalSignIn } from "./PortalForms";
  * like Aming's own showroom (apps/client showroom-view.tsx): a photo banner,
  * a sign-in prompt for signed-out visitors (the form opens only when asked:
  * browsing never needs it), how to reach the studio, then tabs: its services
- * in a row per category (each opening its own page with its packages) and
- * its public albums. Only public details: nothing about any client.
+ * in a row per category (each opening its own page with its packages), its
+ * products the same way (each with its sizes) and its public albums. Only
+ * public details: nothing about any client.
  */
 export function StudioPublicPage({
   studio,
   slug,
   categories,
+  products,
   albums,
   bannerUrl,
   signedInAs,
   signInOpen,
   requests,
+  orderRequests,
 }: {
   studio: Studio;
   slug: string;
   /** Its services on sale by category, each with its cover photo. */
   categories: { id: string; name: string; services: (Service & { coverUrl: string | null })[] }[];
+  /** Its products on sale by category, each with its cover photo. */
+  products: { id: string; name: string; products: (Service & { coverUrl: string | null })[] }[];
   /** Public albums, linked to their own pages. */
   albums: AlbumView[];
   /** One of the studio's own photos for the banner; Aming's banner until it has one. */
@@ -41,8 +47,9 @@ export function StudioPublicPage({
   signedInAs: string | null;
   /** The visitor asked to sign in (the "Log in" link). */
   signInOpen: boolean;
-  /** Requests this device sent while not signed in, as they stand. */
+  /** Requests this device sent while not signed in, as they stand: bookings, and products asked for. */
   requests: Booking[];
+  orderRequests: ProductRequest[];
 }) {
   const wa = studio.phone ? `https://wa.me/${whatsappNumber(studio.phone)}` : null;
   const askLink = wa ? `${wa}?text=${encodeURIComponent(`Hello ${studio.name}, please send me the link to my page.`)}` : null;
@@ -61,6 +68,21 @@ export function StudioPublicPage({
         cards: c.services.map((s) => ({ id: s.id, label: s.name, image: s.coverUrl, href: `/${slug}/s/${s.slug}` })),
       })),
     },
+    ...(products.length
+      ? [
+          {
+            key: "products",
+            label: "Products",
+            emptyText: "",
+            sections: products.map((c) => ({
+              id: c.id,
+              title: c.name,
+              emptyText: "",
+              cards: c.products.map((p) => ({ id: p.id, label: p.name, image: p.coverUrl, href: `/${slug}/p/${p.slug}` })),
+            })),
+          },
+        ]
+      : []),
     ...(albums.length
       ? [
           {
@@ -92,9 +114,9 @@ export function StudioPublicPage({
               ) : null}
             </div>
           ) : null}
-          {requests.length ? (
+          {requests.length || orderRequests.length ? (
             <div className="rounded-[var(--radius)] border border-brand-200 bg-brand-50 p-4 dark:border-brand-500/30 dark:bg-brand-500/10">
-              <p className="text-sm font-semibold">Your booking requests</p>
+              <p className="text-sm font-semibold">Your requests</p>
               <ul className="mt-2 space-y-1 text-sm">
                 {requests.map((r) => (
                   <li key={r.id} className="flex flex-wrap items-center gap-2">
@@ -104,6 +126,14 @@ export function StudioPublicPage({
                     <BookingStatusBadge status={r.status} />
                   </li>
                 ))}
+                {orderRequests.map((r) => (
+                  <li key={r.id} className="flex flex-wrap items-center gap-2">
+                    <span>
+                      {r.quantity} × {r.itemName}
+                    </span>
+                    <span className="rounded-full bg-surface px-2 py-0.5 text-xs font-medium">{PRODUCT_REQUEST_STATUS_LABELS[r.status]}</span>
+                  </li>
+                ))}
               </ul>
               <p className="mt-2 text-xs text-muted">{studio.name} will send you the link to your page.</p>
             </div>
@@ -111,8 +141,8 @@ export function StudioPublicPage({
           {signedInAs ? null : (
             <div className="rounded-[var(--radius)] border border-border bg-surface p-4 shadow-theme-xs">
               <p className="text-sm text-muted">
-                Our clients: your projects, bookings, invoices and photos are on your page. Book a service to get yours, or ask us for the link. No
-                password, no PIN.
+                Our clients: your projects, bookings, orders, invoices and photos are on your page. Book a service or order a product to get yours,
+                or ask us for the link. No password, no PIN.
               </p>
               <div className="mt-3 flex flex-wrap items-center gap-3">
                 {askLink ? (

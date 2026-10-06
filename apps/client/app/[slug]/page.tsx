@@ -7,9 +7,11 @@ import { BannerSkeleton, CardGridSkeleton, ProductDetailSkeleton } from "@repo/u
 import { Loading } from "@repo/ui/skeletons/Loading";
 import { getClientSession } from "@repo/lib/auth/session";
 import { rememberedRequests } from "@repo/lib/booking-requests/server";
-import { offerings } from "@repo/lib/offerings/server";
+import { amingShowcaseMedia } from "@repo/lib/offerings/core";
+import { amingProducts, offerings } from "@repo/lib/offerings/server";
 import { PhotoError } from "@repo/lib/photos/ports";
 import { photos } from "@repo/lib/photos/server";
+import { rememberedProductRequests } from "@repo/lib/product-requests/server";
 import { fetchCurrencies, fetchProductBySlug, fetchShowroomSettings } from "@repo/lib/queries";
 import { studioAccess } from "@repo/lib/studio-access/server";
 import { portalClient, studioAtSlug } from "@repo/lib/studio-portal/server";
@@ -102,7 +104,12 @@ async function StudioShowroom({
     if (err instanceof PhotoError) return fallback;
     throw err;
   };
-  const [showroom, albums] = await Promise.all([offerings.showroom(at.scope), photos.albums(at.scope, true).catch(unlessNoStorage([]))]);
+  const [showroom, productRows, aming, albums] = await Promise.all([
+    offerings.showroom(at.scope, "service"),
+    offerings.showroom(at.scope, "product"),
+    amingProducts(),
+    photos.albums(at.scope, true).catch(unlessNoStorage([])),
+  ]);
   // Each category's services with their covers (small for the cards, large for the banner).
   const categories = await Promise.all(
     showroom.map(async (c) => ({
@@ -116,8 +123,30 @@ async function StudioShowroom({
       ),
     })),
   );
+  // Each category's products with their covers: Aming's (less what the studio left out) or their own.
+  // One picked from Aming that Aming no longer has on sale is left out, and so is a category left empty.
+  const products = (
+    await Promise.all(
+      productRows.map(async (c) => ({
+        id: c.id,
+        name: c.name,
+        products: (
+          await Promise.all(
+            c.services.map(async (p) => {
+              if (!p.sourceProductId) {
+                const album = await photos.serviceGallery(at.scope, p.id).catch(unlessNoStorage(null));
+                return [{ ...p, coverUrl: album?.coverUrl ?? null }];
+              }
+              const source = aming.get(p.sourceProductId);
+              return source ? [{ ...p, coverUrl: amingShowcaseMedia(source, p.hiddenMedia).coverUrl }] : [];
+            }),
+          )
+        ).flat(),
+      })),
+    )
+  ).filter((c) => c.products.length > 0);
   // Requests this device sent while not signed in (a client the studio already knew, on a new phone).
-  const requests = signedInAs ? [] : await rememberedRequests(at.scope);
+  const [requests, orderRequests] = signedInAs ? [[], []] : await Promise.all([rememberedRequests(at.scope), rememberedProductRequests(at.scope)]);
   // The banner: one of the studio's own photos, its first album's cover or else a service's.
   const bannerUrl = albums.find((a) => a.coverLargeUrl)?.coverLargeUrl ?? categories.flatMap((c) => c.services).find((s) => s.coverLargeUrl)?.coverLargeUrl ?? null;
   return (
@@ -125,11 +154,13 @@ async function StudioShowroom({
       studio={at.studio}
       slug={slug}
       categories={categories}
+      products={products}
       albums={albums}
       bannerUrl={bannerUrl}
       signedInAs={signedInAs}
       signInOpen={signInOpen}
       requests={requests}
+      orderRequests={orderRequests}
     />
   );
 }

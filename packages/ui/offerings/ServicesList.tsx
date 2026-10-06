@@ -3,12 +3,21 @@ import { formatAmount } from "@repo/lib/tenancy/format";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
 /**
- * A business's categories, services and packages with their prices, read
- * only (Aming staff looking at a studio). Inactive ones are struck through.
+ * A business's categories, services (or products) and packages (sizes) with
+ * their prices, read only (Aming staff looking at a studio). Inactive ones
+ * are struck through; products picked from Aming say so.
  */
-export function ServicesList({ categories, scope }: { categories: CategoryWithServices[]; scope: Pick<TenantScope, "currency" | "locale"> }) {
+export function ServicesList({
+  categories,
+  scope,
+  empty = "No services yet.",
+}: {
+  categories: CategoryWithServices[];
+  scope: Pick<TenantScope, "currency" | "locale">;
+  empty?: string;
+}) {
   if (categories.length === 0) {
-    return <p className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted">No services yet.</p>;
+    return <p className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted">{empty}</p>;
   }
   return (
     <div className="space-y-4">
@@ -16,14 +25,17 @@ export function ServicesList({ categories, scope }: { categories: CategoryWithSe
         <section key={c.id} className="space-y-2">
           <p className={`text-xs font-semibold uppercase tracking-wide text-muted ${c.archivedAt ? "line-through" : ""}`}>{c.name}</p>
           {c.services.length === 0 ? (
-            <p className="text-sm text-muted">No services in this category.</p>
+            <p className="text-sm text-muted">Nothing in this category.</p>
           ) : (
             <ul className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-surface shadow-theme-xs">
               {c.services.map((s) => (
                 <li key={s.id} className="space-y-1.5 px-4 py-3">
-                  <p className={s.archivedAt ? "text-muted line-through" : "font-medium"}>{s.name}</p>
+                  <p className={s.archivedAt ? "text-muted line-through" : "font-medium"}>
+                    {s.name}
+                    {s.sourceProductId ? <span className="ml-2 text-xs font-normal text-muted">From Aming</span> : null}
+                  </p>
                   {s.packages.length === 0 ? (
-                    <p className="text-xs text-muted">No packages yet.</p>
+                    <p className="text-xs text-muted">No prices yet.</p>
                   ) : (
                     <ul className="flex flex-wrap gap-1.5">
                       {s.packages.map((p) => (

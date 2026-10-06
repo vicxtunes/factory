@@ -15,6 +15,12 @@ export const inclusionsSchema = z
 export const offeringIdSchema = z.uuid("That package doesn't exist.");
 export const serviceIdSchema = z.uuid("That service doesn't exist.");
 export const categoryIdSchema = z.uuid("That category doesn't exist.");
+export const amingProductIdSchema = z.uuid("That product isn't in Aming's catalog.");
+
+export const offeringKindSchema = z.enum(["service", "product"], "Choose services or products.");
+
+/** Of a picked product: which of Aming's photos and videos to leave out. */
+export const hiddenMediaSchema = z.array(z.string().trim().min(1).max(80)).max(200, "Too many photos to leave out.");
 
 export const categoryNameSchema = z
   .string("Give it a name.")

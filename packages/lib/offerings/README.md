@@ -26,15 +26,34 @@ editing a package never changes a document that's already been sent.
 
 The module is generic and tenant-scoped, so a future product (vendors, service providers) reuses it.
 
+## Products
+
+A studio keeps **Products** (photobooks, frames, prints) the same way: categories of their own
+(`kind: "product"`, apart from the services' categories), each product with its **sizes** as its
+packages ("8x12", "12x18"), each size with its price. A product's address is `/<studio>/p/<slug>`.
+
+- **Picked from Aming** (`sourceProductId`): Aming's name, description, photos, preview video and
+  sizes are copied in, each size priced 0 ("Price on request") until the studio sets its prices.
+  The name and sizes stay Aming's (no rename, no new sizes); the studio sets prices and the
+  description, deactivates sizes it doesn't sell, and may leave some of Aming's photos and video out
+  (`hiddenMedia`: `"cover"`, `"video"` or a gallery item's id). Once Aming no longer has it on sale,
+  it's off the studio's showroom. Each Aming product is picked once.
+- **The studio's own**: like a service, with its own photos and video.
+- **Selling**: clients ask for one online (packages/lib/product-requests). Quotations and invoices
+  pick from services' packages and products' sizes (`onSale(scope)`); bookings from services' only
+  (`onSale(scope, "service")`).
+
 ## Screens
 
 | Screen | Who | What |
 | --- | --- | --- |
 | `/studio/offerings` (client app) | Studio owner | Services with their packages; Archived tab; Add a service |
+| `/studio/products` (client app) | Studio owner | Products with their sizes; pick from Aming's catalog or add your own; Aming's photos to leave out |
 | `/studio/offerings/new` | Studio owner | Add a service and its packages in one form |
 | `/studio/offerings/<service id>` | Studio owner | The same form: the service and its packages saved together (a package removed there is archived); archived packages to put back; its photos and preview video |
 | `/dashboard/studios/<id>` (factory app) | Boss | The studio's services and packages, read-only |
 | `/<studio>` (client app, public) | Anyone | The studio's services as showroom cards (cover photo), linking to their pages |
+| `/<studio>/p/<product>` (client app, public) | Anyone | A product's page: its photos (Aming's, less those left out), its sizes, "Order now" |
 | `/<studio>/s/<service>` (client app, public) | Anyone | The showroom's item page (`@repo/ui/showroom/Showcase`): photos, preview video, the packages to choose from (a 0 price reads "Price on request"), "Book on WhatsApp" naming the chosen one |
 
 ## Studio separation
@@ -57,13 +76,14 @@ and is never public on its own: it's shown through the service's page.
 
 ```
 packages/lib/offerings/
-  core/              Pure: Service, Offering (a package) records, naming rules, zod schemas. Tests: npm test.
+  core/              Pure: Service, Offering (a package) records, naming rules, zod schemas;
+                     aming.ts: a picked product's photos and video. Tests: npm test.
   ports.ts           OfferingStore (tenant-scoped), OfferingError.
   service.ts         class OfferingService: saveService (the form: a service and its packages,
                      checked as a whole), catalog, archive / restore, onSale for the pickers.
   service.test.ts    The service against an in-memory store, studio separation included.
   adapters/supabase/store.ts   The offering_services and offerings tables.
-  server.ts          The wired service.
+  server.ts          The wired service; amingProducts(), Aming's products on sale.
   actions.ts         saveService, setServiceArchived, setOfferingArchived (studio → zod → service).
 packages/ui/offerings/  ServicesList, ServiceForm (the one form; ArchivedPackages; archive button).
 packages/ui/photos/ServiceMediaPanel.tsx  The service's photos and preview video.
@@ -71,6 +91,7 @@ apps/client/app/studio/offerings/
 supabase/migrations/20261003120000_offerings.sql
 supabase/migrations/20261006100000_offering_services.sql   services; every earlier offering
                      became a package of a service with the same name
+supabase/migrations/20261009110000_studio_products.sql     products: kinds, picked from Aming
 ```
 
 ## Testing

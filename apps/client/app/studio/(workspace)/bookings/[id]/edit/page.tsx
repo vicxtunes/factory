@@ -44,7 +44,7 @@ export default async function EditBookingPage({ params }: { params: Promise<{ id
 }
 
 async function Form({ scope, b }: { scope: TenantScope; b: Booking }) {
-  const [clients, onSale] = await Promise.all([customers.list(scope), offerings.onSale(scope)]);
+  const [clients, onSale] = await Promise.all([customers.list(scope), offerings.onSale(scope, "service")]);
   // Keep the booking's own client selectable even if they've since been archived.
   const choices = clients.some((c) => c.id === b.customerId) ? clients : [...clients, { id: b.customerId, name: `${b.customerName} (archived)` }];
 
