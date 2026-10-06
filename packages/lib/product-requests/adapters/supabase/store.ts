@@ -1,6 +1,6 @@
 import "server-only";
 
-// The product_requests table (supabase/migrations/20261009100000_studio_products.sql).
+// The product_requests table (supabase/migrations/20261009110000_studio_products.sql).
 // Service-role client, so every query here filters by the scope's tenant; the
 // database's composite keys also refuse another studio's client, size or invoice.
 

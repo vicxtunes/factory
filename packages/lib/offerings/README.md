@@ -91,7 +91,7 @@ apps/client/app/studio/offerings/
 supabase/migrations/20261003120000_offerings.sql
 supabase/migrations/20261006100000_offering_services.sql   services; every earlier offering
                      became a package of a service with the same name
-supabase/migrations/20261009100000_studio_products.sql     products: kinds, picked from Aming
+supabase/migrations/20261009110000_studio_products.sql     products: kinds, picked from Aming
 ```
 
 ## Testing

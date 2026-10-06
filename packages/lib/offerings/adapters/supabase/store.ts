@@ -4,7 +4,7 @@ import "server-only";
 // offerings and offering_settings tables
 // (supabase/migrations/20261003120000_offerings.sql,
 // 20261006100000_offering_services.sql, 20261007100000_offering_categories.sql,
-// 20261009100000_studio_products.sql).
+// 20261009110000_studio_products.sql).
 // Service-role client, so every
 // query here filters by the scope's tenant: that filter is what keeps one
 // studio's services and packages from another.

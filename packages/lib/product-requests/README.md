@@ -40,7 +40,7 @@ packages/lib/product-requests/
                     declineProductRequest (the owner).
 apps/client/app/order-now.tsx                         The Order now steps.
 packages/ui/product-requests/ProductRequestsList.tsx  The dashboard's list, Confirm / Decline.
-supabase/migrations/20261009100000_studio_products.sql
+supabase/migrations/20261009110000_studio_products.sql
 ```
 
 ## Testing
