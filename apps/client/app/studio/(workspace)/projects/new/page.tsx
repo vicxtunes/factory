@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { BackLink } from "@repo/ui/navigation/back";
 
 import { FormSkeleton } from "@repo/ui/skeletons/blocks";
 import { Loading } from "@repo/ui/skeletons/Loading";
@@ -14,9 +14,9 @@ export default async function NewProjectPage() {
 
   return (
     <>
-      <Link href="/studio/projects" className="text-xs font-medium text-brand-600 hover:underline">
+      <BackLink href="/studio/projects" className="text-xs font-medium text-brand-600 hover:underline">
         ← Projects
-      </Link>
+      </BackLink>
       <Loading skeleton={<FormSkeleton />}>
         <Form scope={scope} />
       </Loading>

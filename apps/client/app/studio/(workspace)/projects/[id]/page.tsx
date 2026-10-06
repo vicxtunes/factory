@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import Link from "next/link";
+import { BackLink } from "@repo/ui/navigation/back";
 import { notFound } from "next/navigation";
 
 import { InvoiceStatusBadge } from "@repo/ui/billing/StatusBadges";
@@ -41,9 +42,9 @@ export default async function StudioProjectPage({ params }: { params: Promise<{ 
   return (
     <>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <Link href="/studio/projects" className="text-xs font-medium text-brand-600 hover:underline">
+        <BackLink href="/studio/projects" className="text-xs font-medium text-brand-600 hover:underline">
           ← Projects
-        </Link>
+        </BackLink>
         {canEditProject(p.status) ? (
           <Link
             href={`/studio/projects/${p.id}/edit`}

@@ -7,6 +7,7 @@ import Image from "next/image";
 import { canOptimizeImage } from "@repo/lib/storage/client";
 import type { ShowroomViewMode } from "@repo/lib/types";
 
+import { useCloseOnBack } from "../navigation/back";
 import type { ShowroomSceneHandle } from "./ShowroomScene";
 import { useSwipe } from "./useSwipe";
 
@@ -377,6 +378,8 @@ export function Showcase({
     setDetailsOpen(false);
     setLightboxIndex(null);
   }
+  useCloseOnBack(detailsOpen, closeDetails);
+  useCloseOnBack(lightboxIndex !== null, () => setLightboxIndex(null));
 
   function advanceImage(direction: 1 | -1) {
     const len = viewMode === "scene" ? photos.length : media.length;

@@ -1,8 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import Link from "next/link";
 
+import { useBackOr } from "@repo/ui/navigation/back";
 import { Avatar } from "@repo/ui/profile/Avatar";
 import type { ConversationKind, ConversationSummary } from "@repo/lib/chat/types";
 
@@ -106,13 +106,7 @@ export function ConversationList({
         <div className="flex items-center justify-between gap-2">
           <span className="flex min-w-0 items-center gap-1">
             {exitHref ? (
-              <Link
-                href={exitHref}
-                aria-label="Leave chat"
-                className="-ml-2 inline-flex h-10 w-10 items-center justify-center rounded-full text-muted hover:bg-gray-100 md:hidden dark:hover:bg-white/5"
-              >
-                <BackIcon className="h-5 w-5" />
-              </Link>
+              <LeaveChat href={exitHref} />
             ) : null}
             <h1 className="text-base font-semibold">Chats</h1>
           </span>
@@ -218,5 +212,20 @@ export function ConversationList({
         <MessageSearchResults query={query} onSelect={onSelect} />
       </div>
     </div>
+  );
+}
+
+/** Back to wherever chat was opened from, or to `href` when it was opened first. */
+function LeaveChat({ href }: { href: string }) {
+  const leave = useBackOr(href);
+  return (
+    <button
+      type="button"
+      onClick={leave}
+      aria-label="Leave chat"
+      className="-ml-2 inline-flex h-10 w-10 items-center justify-center rounded-full text-muted hover:bg-gray-100 md:hidden dark:hover:bg-white/5"
+    >
+      <BackIcon className="h-5 w-5" />
+    </button>
   );
 }

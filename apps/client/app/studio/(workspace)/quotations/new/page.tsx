@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BackLink } from "@repo/ui/navigation/back";
 
 import { FormSkeleton } from "@repo/ui/skeletons/blocks";
 import { Loading } from "@repo/ui/skeletons/Loading";
@@ -16,9 +17,9 @@ export default async function NewQuotationPage({ searchParams }: { searchParams:
 
   return (
     <>
-      <Link href="/studio/quotations" className="text-xs font-medium text-brand-600 hover:underline">
+      <BackLink href="/studio/quotations" className="text-xs font-medium text-brand-600 hover:underline">
         ← Quotations
-      </Link>
+      </BackLink>
       <Loading skeleton={<FormSkeleton />}>
         <Form scope={scope} client={client} />
       </Loading>

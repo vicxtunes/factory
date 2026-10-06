@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BackLink } from "@repo/ui/navigation/back";
 import { notFound } from "next/navigation";
 
 import { QuotationPdf } from "@repo/ui/billing/DocumentPdf";
@@ -24,9 +25,9 @@ export default async function StudioQuotationPage({ params }: { params: Promise<
   return (
     <>
       <div className="flex flex-wrap items-center justify-between gap-2 print:hidden">
-        <Link href="/studio/quotations" className="text-xs font-medium text-brand-600 hover:underline">
+        <BackLink href="/studio/quotations" className="text-xs font-medium text-brand-600 hover:underline">
           ← Quotations
-        </Link>
+        </BackLink>
         <div className="flex flex-wrap gap-2">
           {canEditQuotation(quotation.status) ? (
             <Link

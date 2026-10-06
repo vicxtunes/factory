@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { BackLink } from "@repo/ui/navigation/back";
 import { notFound } from "next/navigation";
 
 import { BookingForm } from "@repo/ui/bookings/BookingForm";
@@ -24,18 +24,18 @@ export default async function EditBookingPage({ params }: { params: Promise<{ id
     return (
       <p className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted">
         This booking can&apos;t be changed any more.{" "}
-        <Link href={`/studio/bookings/${b.id}`} className="font-medium text-brand-600 underline">
+        <BackLink href={`/studio/bookings/${b.id}`} className="font-medium text-brand-600 underline">
           Back to it
-        </Link>
+        </BackLink>
       </p>
     );
   }
 
   return (
     <>
-      <Link href={`/studio/bookings/${b.id}`} className="text-xs font-medium text-brand-600 hover:underline">
+      <BackLink href={`/studio/bookings/${b.id}`} className="text-xs font-medium text-brand-600 hover:underline">
         ← {b.title}
-      </Link>
+      </BackLink>
       <Loading skeleton={<FormSkeleton />}>
         <Form scope={scope} b={b} />
       </Loading>

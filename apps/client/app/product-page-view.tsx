@@ -2,6 +2,8 @@
 
 import { useRouter } from "next/navigation";
 
+import { backTo } from "@repo/ui/navigation/back";
+
 import type { Currency, Product, ProductCategory, ShowroomViewMode } from "@repo/lib/types";
 
 import { ProductShowcase } from "./product-showcase";
@@ -23,7 +25,7 @@ export function ProductPageView(props: {
     <ProductShowcase
       {...props}
       shareable
-      onExit={() => router.push(SHOWROOM_HREF)}
+      onExit={() => backTo(SHOWROOM_HREF, () => router.push(SHOWROOM_HREF))}
     />
   );
 }
