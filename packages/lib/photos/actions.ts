@@ -160,7 +160,7 @@ export async function shareProjectGallery(albumId: unknown, expiresOn: unknown):
   return runAction("photos", async () => {
     const { scope } = await studioOfCaller();
     const slug = await portal.currentSlug(scope.tenantId);
-    if (!slug) throw new PhotoError("Choose your studio's address first, on Studio profile.");
+    if (!slug) throw new PhotoError("Choose your business's address first, on Business profile.");
     const token = await photos.share(scope, parseInput(albumIdSchema, albumId), parseInput(shareExpirySchema, expiresOn));
     touched();
     return studioUrl(`${slug}/g/${token}`);
@@ -179,7 +179,7 @@ export async function stopSharingProjectGallery(albumId: unknown): Promise<Resul
 export async function setStudioStorageQuota(studioId: unknown, gb: unknown): Promise<Result> {
   return runAction("photos", async () => {
     const session = await getDashboardSession();
-    if (!session || !canViewAllStudios(session.role)) throw new PhotoError("Only the boss can change a studio's storage.");
+    if (!session || !canViewAllStudios(session.role)) throw new PhotoError("Only the boss can change a business's storage.");
     const id = parseInput(studioIdSchema, studioId);
     await photos.setQuota(id, parseInput(quotaGbSchema, gb) * 1024 ** 3);
     revalidatePath(`/dashboard/studios/${id}`);

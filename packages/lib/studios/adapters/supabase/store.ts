@@ -59,7 +59,7 @@ const studios = () => createAdminClient().from("tenants").select(COLUMNS).not("o
 export const supabaseStudioStore: StudioStore = {
   async findByOwner(clientId) {
     const { data, error } = await studios().eq("owner_client_id", clientId).maybeSingle<Row>();
-    if (error) fail("load the studio", error);
+    if (error) fail("load the business", error);
     return data ? toStudio(data) : null;
   },
 
@@ -75,7 +75,7 @@ export const supabaseStudioStore: StudioStore = {
       const existing = await this.findByOwner(owner.clientId);
       if (existing) return existing;
     }
-    fail("create the studio", error ?? { message: "no row returned" });
+    fail("create the business", error ?? { message: "no row returned" });
   },
 
   async updateProfile(id, profile) {
@@ -87,7 +87,7 @@ export const supabaseStudioStore: StudioStore = {
       .not("owner_client_id", "is", null)
       .select(COLUMNS)
       .single<Row>();
-    if (error) fail("save the studio", error);
+    if (error) fail("save the business", error);
     return toStudio(data);
   },
 
@@ -97,7 +97,7 @@ export const supabaseStudioStore: StudioStore = {
       .select(`${COLUMNS}, owner:clients (name)`)
       .not("owner_client_id", "is", null)
       .returns<ListingRow[]>();
-    if (error) fail("list studios", error);
+    if (error) fail("list businesses", error);
     return data.map(toListing);
   },
 
@@ -108,7 +108,7 @@ export const supabaseStudioStore: StudioStore = {
       .eq("id", id)
       .not("owner_client_id", "is", null)
       .maybeSingle<ListingRow>();
-    if (error) fail("load the studio", error);
+    if (error) fail("load the business", error);
     return data ? toListing(data) : null;
   },
 };

@@ -5,7 +5,7 @@ import { customers } from "@repo/lib/customers/server";
 import { offerings } from "@repo/lib/offerings/server";
 import { requireStudio } from "@repo/lib/studios/server";
 
-export const metadata = { title: "New invoice · My Studio" };
+export const metadata = { title: "New invoice · My Business" };
 
 export default async function NewInvoicePage({ searchParams }: { searchParams: Promise<{ client?: string }> }) {
   const { scope } = await requireStudio();

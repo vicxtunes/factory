@@ -42,12 +42,12 @@ export interface SetupView {
 type Step = "welcome" | OnboardingStep;
 
 const STEPS: { id: OnboardingStep; label: string; hint: string; optional?: boolean; title: string; description: string }[] = [
-  { id: "details", label: "Studio details", hint: "Name, owner and phone", title: "Your studio", description: "Your clients and Aming see these. We filled them in from your Aming account: change anything that isn't right." },
-  { id: "logo", label: "Logo", hint: "Shown on your page and documents", optional: true, title: "Your logo", description: "It appears on your public page, quotations, invoices and workspace. You can add it later from Studio profile." },
+  { id: "details", label: "Business details", hint: "Name, owner and phone", title: "Your business", description: "Your clients and Aming see these. We filled them in from your Aming account: change anything that isn't right." },
+  { id: "logo", label: "Logo", hint: "Shown on your page and documents", optional: true, title: "Your logo", description: "It appears on your public page, quotations, invoices and workspace. You can add it later from Business profile." },
   { id: "address", label: "Web address", hint: "Your public page", title: "Your web address", description: "Your public page, and where your clients sign in. You can change it later; old links keep working." },
-  { id: "email", label: "Email", hint: "For codes and Aming's messages", title: "Verify your email", description: `We'll send a ${CODE_DIGITS}-digit code to check it's yours. It's used to reset your studio password.` },
-  { id: "password", label: "Password", hint: "Protects your studio", title: "Studio password", description: "Your studio holds your clients' details and money. The password is asked on each device every 30 days, and after signing out of Aming." },
-  { id: "submit", label: "Submit", hint: "Aming reviews your studio", title: "Submit for review", description: "Aming checks every new studio before it opens. You'll get an email and a notification." },
+  { id: "email", label: "Email", hint: "For codes and Aming's messages", title: "Verify your email", description: `We'll send a ${CODE_DIGITS}-digit code to check it's yours. It's used to reset your business password.` },
+  { id: "password", label: "Password", hint: "Protects your business", title: "Business password", description: "Your business holds your clients' details and money. The password is asked on each device every 30 days, and after signing out of Aming." },
+  { id: "submit", label: "Submit", hint: "Aming reviews your business", title: "Submit for review", description: "Aming checks every new business before it opens. You'll get an email and a notification." },
 ];
 
 function doneSteps(v: SetupView): Record<Exclude<OnboardingStep, "submit">, boolean> {
@@ -98,8 +98,8 @@ export function OnboardingWizard({ view }: { view: SetupView }) {
     return (
       <SetupSplit
         steps={steps}
-        title="Set up your studio"
-        description="Run your photography business from one place, next to your Aming orders. It takes about 5 minutes; Aming then reviews your studio before it opens."
+        title="Set up your business"
+        description="Run your photography business from one place, next to your Aming orders. It takes about 5 minutes; Aming then reviews your business before it opens."
       >
         <SetupWelcome onStart={() => setStep("details")} />
       </SetupSplit>
@@ -160,7 +160,7 @@ function DetailsStep({ view, back, onDone }: StepProps) {
       }}
     >
       <div className="space-y-4">
-        <Field label="Studio name">
+        <Field label="Business name">
           <TextInput value={form.name} onChange={(e) => set("name")(e.target.value)} maxLength={80} required />
         </Field>
         <div className="grid gap-4 @md:grid-cols-2">
@@ -171,7 +171,7 @@ function DetailsStep({ view, back, onDone }: StepProps) {
             <TextInput value={form.ownerLastName} onChange={(e) => set("ownerLastName")(e.target.value)} maxLength={50} autoComplete="family-name" required />
           </Field>
         </div>
-        <Field label="Studio phone" hint="Your clients call and WhatsApp this number.">
+        <Field label="Business phone" hint="Your clients call and WhatsApp this number.">
           <PhoneInput value={form.phone} onChange={set("phone")} required />
         </Field>
       </div>
@@ -398,7 +398,7 @@ function SubmitStep({ view, back, onGoTo }: Omit<StepProps, "onDone"> & { onGoTo
   const done = doneSteps(view);
   const host = view.origin.replace(/^https?:\/\//, "");
   const rows: { step: OnboardingStep; label: string; value: string | null; required: boolean }[] = [
-    { step: "details", label: "Studio", value: done.details ? `${view.details.name} · ${view.details.phone}` : null, required: true },
+    { step: "details", label: "Business", value: done.details ? `${view.details.name} · ${view.details.phone}` : null, required: true },
     { step: "details", label: "Owner", value: done.details ? `${view.details.ownerFirstName} ${view.details.ownerLastName}` : null, required: true },
     { step: "logo", label: "Logo", value: view.logoUrl ? "Uploaded" : null, required: false },
     { step: "address", label: "Web address", value: view.slug ? `${host}/${view.slug}` : null, required: true },

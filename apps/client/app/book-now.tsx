@@ -130,7 +130,7 @@ export function BookNow({
                 next();
               }}
             >
-              <Field label="The day" hint="The studio confirms whether it's free.">
+              <Field label="The day" hint="The business confirms whether it's free.">
                 <TextInput type="date" value={date} min={today} onChange={(e) => setDate(e.target.value)} required />
               </Field>
               <div className="flex gap-2">
@@ -155,7 +155,7 @@ export function BookNow({
               <Field label="Your name">
                 <TextInput value={name} onChange={(e) => setName(e.target.value)} required maxLength={80} autoComplete="name" />
               </Field>
-              <Field label="Your phone number" hint="The studio confirms on it. No password or PIN.">
+              <Field label="Your phone number" hint="The business confirms on it. No password or PIN.">
                 <PhoneInput value={phone} onChange={setPhone} required autoComplete="tel" />
               </Field>
               <div className="flex gap-2">

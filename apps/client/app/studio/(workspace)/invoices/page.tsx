@@ -5,7 +5,7 @@ import { invoices } from "@repo/lib/billing/server";
 import { requireStudio } from "@repo/lib/studios/server";
 import { formatAmount } from "@repo/lib/tenancy/format";
 
-export const metadata = { title: "Invoices · My Studio" };
+export const metadata = { title: "Invoices · My Business" };
 
 export default async function StudioInvoicesPage() {
   const { scope } = await requireStudio();

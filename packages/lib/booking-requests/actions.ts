@@ -24,7 +24,7 @@ import { BookingRequestError } from "./service";
 export async function bookNow(slug: unknown, input: unknown): Promise<Result<BookNowOutcome>> {
   return runAction("booking-requests", async () => {
     const at = await studioAtSlug(parseInput(slugSchema, slug));
-    if (!at || at.redirectTo) throw new BookingRequestError("This studio's page doesn't exist.");
+    if (!at || at.redirectTo) throw new BookingRequestError("This business's page doesn't exist.");
     const signedIn = await portalClient(at.studio.id);
     const { session, ...outcome } = await bookingRequests.request(at.scope, parseInput(bookNowSchema, input), signedIn?.customerId ?? null);
     if (session) await setPortalCookie(session);

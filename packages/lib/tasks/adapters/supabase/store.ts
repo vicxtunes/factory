@@ -45,7 +45,7 @@ const toColumns = (t: Omit<TaskInput, "projectId">) => ({ title: t.title, assign
 
 function fail(what: string, error: { code?: string; message: string }): never {
   // A project or team member from another studio: the composite keys caught it.
-  if (error.code === "23503") throw new TaskError("That project or team member doesn't belong to your studio.");
+  if (error.code === "23503") throw new TaskError("That project or team member doesn't belong to your business.");
   throw new Error(`tasks: could not ${what}: ${error.message}`);
 }
 

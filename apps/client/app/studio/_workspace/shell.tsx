@@ -83,10 +83,10 @@ function StudioSidebar({ brand }: { brand: StudioBrand }) {
         <StudioMark brand={brand} size="md" />
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold">{brand.name}</p>
-          <p className="text-xs text-muted">My Studio</p>
+          <p className="text-xs text-muted">My Business</p>
         </div>
       </div>
-      <nav aria-label="My Studio" className="flex-1 space-y-5 overflow-y-auto px-3 py-4">
+      <nav aria-label="My Business" className="flex-1 space-y-5 overflow-y-auto px-3 py-4">
         {STUDIO_NAV.map((section) => (
           <div key={section.id}>
             {section.label ? (
@@ -145,7 +145,7 @@ function StudioTopbar({ brand, user }: { brand: StudioBrand; user: { name: strin
         <Link
           href={brand.publicHref ?? "/studio/profile"}
           target={brand.publicHref ? "_blank" : undefined}
-          title={brand.publicHref ? "Your studio's public page" : "Choose your studio's address first"}
+          title={brand.publicHref ? "Your business's public page" : "Choose your business's address first"}
           className="inline-flex min-h-9 items-center gap-1.5 rounded-[var(--radius)] border border-border px-3 text-sm font-medium hover:bg-gray-50 dark:hover:bg-white/5"
         >
           <ExternalIcon className="h-4 w-4" />

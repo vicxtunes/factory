@@ -4,7 +4,7 @@ import { ProjectForm } from "@repo/ui/projects/ProjectControls";
 import { customers } from "@repo/lib/customers/server";
 import { requireStudio } from "@repo/lib/studios/server";
 
-export const metadata = { title: "New project · My Studio" };
+export const metadata = { title: "New project · My Business" };
 
 export default async function NewProjectPage() {
   const { scope } = await requireStudio();

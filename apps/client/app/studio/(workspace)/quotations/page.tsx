@@ -4,7 +4,7 @@ import { QuotationsList } from "@repo/ui/billing/QuotationsList";
 import { quotations } from "@repo/lib/billing/server";
 import { requireStudio } from "@repo/lib/studios/server";
 
-export const metadata = { title: "Quotations · My Studio" };
+export const metadata = { title: "Quotations · My Business" };
 
 export default async function StudioQuotationsPage() {
   const { scope } = await requireStudio();

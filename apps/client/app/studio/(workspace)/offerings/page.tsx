@@ -5,7 +5,7 @@ import { photos } from "@repo/lib/photos/server";
 import { portal } from "@repo/lib/studio-portal/server";
 import { requireStudio } from "@repo/lib/studios/server";
 
-export const metadata = { title: "Packages & Services · My Studio" };
+export const metadata = { title: "Packages & Services · My Business" };
 
 export default async function StudioOfferingsPage() {
   const { scope } = await requireStudio();

@@ -10,7 +10,7 @@ import { tasks } from "@repo/lib/tasks/server";
 import { teamMemberIdSchema } from "@repo/lib/team/core";
 import { team } from "@repo/lib/team/server";
 
-export const metadata = { title: "Team member · My Studio" };
+export const metadata = { title: "Team member · My Business" };
 
 export default async function TeamMemberPage({ params }: { params: Promise<{ id: string }> }) {
   const { scope } = await requireStudio();

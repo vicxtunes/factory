@@ -73,7 +73,7 @@ export class BookingRequestService {
       ({ id: customerId, isNew } = await this.deps.client(scope, { name: input.name, phone: input.phone }));
     }
     if ((await this.deps.openRequests(scope, customerId)) >= MAX_OPEN_REQUESTS) {
-      throw new BookingRequestError("You already have requests waiting for this studio's answer. They'll be in touch soon.");
+      throw new BookingRequestError("You already have requests waiting for this business's answer. They'll be in touch soon.");
     }
 
     const label = offeringLabel(pkg);

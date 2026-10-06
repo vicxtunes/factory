@@ -124,13 +124,13 @@ test("passwords: 8+ characters, typed twice, not common, not the studio's name",
   assert.match(passwordProblem("Password123")!, /too common/);
   assert.match(passwordProblem("aaaaaaaa")!, /over and over/);
   assert.match(passwordProblem("70336068812")!, /letters/);
-  assert.match(passwordProblem("Amina Studio!", ["Amina Studio"])!, /studio's name/);
+  assert.match(passwordProblem("Amina Studio!", ["Amina Studio"])!, /business's name/);
   assert.equal(passwordProblem("Golden-hour-77", ["Amina Studio"]), null);
 });
 
 test("onboarding: every step before submitting; then it waits for review and can't be changed", async () => {
   const t = setup();
-  await assert.rejects(t.service.submit(A), /add your studio's details, your studio's address, a verified email, a password/);
+  await assert.rejects(t.service.submit(A), /add your business's details, your business's address, a verified email, a password/);
   await onboard(t);
   await t.service.submit(A);
   assert.equal(t.one(A).status, "in_review");
@@ -231,22 +231,22 @@ test("review: approve, send back with a reason, suspend; the owner is told", asy
   assert.equal(t.one(A).status, "active");
   assert.equal(t.one(A).reviewNote, null);
   assert.match(t.sent.at(-1)!.subject, /is approved/);
-  assert.match(t.sent.at(-1)!.html, /Open your studio/);
+  assert.match(t.sent.at(-1)!.html, /Open your business/);
   await assert.rejects(t.service.review(A, "approve", ""), /already open/);
 
-  await assert.rejects(t.service.review(A, "suspend", " "), /Tell the studio why/);
+  await assert.rejects(t.service.review(A, "suspend", " "), /Tell the business why/);
   await t.service.review(A, "suspend", "Unpaid balance with Aming.");
   assert.equal(t.one(A).status, "suspended" satisfies StudioStatus);
   await assert.rejects(t.service.review(A, "suspend", "again"), /already suspended/);
   await t.service.review(A, "approve", "");
   assert.equal(t.one(A).status, "active", "approving lifts a suspension");
 
-  assert.throws(() => parseInput(reviewSchema, { studioId: A, decision: "send_back", note: "" }), /Tell the studio why/);
+  assert.throws(() => parseInput(reviewSchema, { studioId: A, decision: "send_back", note: "" }), /Tell the business why/);
 });
 
 test("approve now: the boss can open a set-up studio before it's submitted, never one that isn't set up", async () => {
   const t = setup();
-  await assert.rejects(t.service.review(A, "approve", ""), /can't open until it's set up\. Still missing: their studio's details/);
+  await assert.rejects(t.service.review(A, "approve", ""), /can't open until it's set up\. Still missing: their business's details/);
   assert.equal(t.one(A).status, "onboarding");
   await onboard(t);
   await t.service.review(A, "approve", "");

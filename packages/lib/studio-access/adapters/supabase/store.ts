@@ -94,7 +94,7 @@ async function update(tenantId: string, what: string, values: Record<string, unk
 export const supabaseAccessStore: AccessStore = {
   async get(tenantId) {
     const { data, error } = await tenants().select(COLUMNS).eq("id", tenantId).not("owner_client_id", "is", null).maybeSingle<Row>();
-    if (error) fail("load the studio", error);
+    if (error) fail("load the business", error);
     return data ? toAccess(data) : null;
   },
 
@@ -126,7 +126,7 @@ export const supabaseAccessStore: AccessStore = {
       .eq("status", from)
       .not("owner_client_id", "is", null)
       .select("id");
-    if (error) fail("change the studio's status", error);
+    if (error) fail("change the business's status", error);
     return data.length === 1;
   },
 
@@ -136,14 +136,14 @@ export const supabaseAccessStore: AccessStore = {
       .not("owner_client_id", "is", null)
       .order("submitted_at", { ascending: true, nullsFirst: false })
       .returns<Row[]>();
-    if (error) fail("list studios", error);
+    if (error) fail("list businesses", error);
     const order: Record<StudioStatus, number> = { in_review: 0, changes_requested: 1, onboarding: 2, active: 3, suspended: 4 };
     return data.map(toReview).sort((a, b) => order[a.status] - order[b.status]);
   },
 
   async reviewOne(tenantId) {
     const { data, error } = await tenants().select(COLUMNS).eq("id", tenantId).not("owner_client_id", "is", null).maybeSingle<Row>();
-    if (error) fail("load the studio", error);
+    if (error) fail("load the business", error);
     return data ? toReview(data) : null;
   },
 

@@ -4,7 +4,7 @@ import { requireStudio } from "@repo/lib/studios/server";
 import { tasks } from "@repo/lib/tasks/server";
 import { team } from "@repo/lib/team/server";
 
-export const metadata = { title: "Team · My Studio" };
+export const metadata = { title: "Team · My Business" };
 
 export default async function StudioTeamPage() {
   const { scope } = await requireStudio();

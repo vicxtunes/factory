@@ -12,12 +12,12 @@ import { SetupActions, SetupSplit, SetupWelcome, type SetupStep } from "@repo/ui
 // stand-ins: nothing is saved (the real steps are in OnboardingWizard).
 
 const STEPS = [
-  { id: "details", label: "Studio details", hint: "Name, owner and phone", title: "Your studio", description: "Your clients and Aming see these. We filled them in from your Aming account: change anything that isn't right." },
+  { id: "details", label: "Business details", hint: "Name, owner and phone", title: "Your business", description: "Your clients and Aming see these. We filled them in from your Aming account: change anything that isn't right." },
   { id: "logo", label: "Logo", hint: "Shown on your page and documents", optional: true, title: "Your logo", description: "It appears on your public page, quotations, invoices and workspace." },
   { id: "address", label: "Web address", hint: "Your public page", title: "Your web address", description: "Your public page, and where your clients sign in. You can change it later; old links keep working." },
-  { id: "email", label: "Email", hint: "For codes and Aming's messages", title: "Verify your email", description: "We'll send a 6-digit code. It's used to reset your studio password." },
-  { id: "password", label: "Password", hint: "Protects your studio", title: "Studio password", description: "Asked on each device every 30 days and after signing out of Aming." },
-  { id: "review", label: "Submit", hint: "Aming reviews your studio", title: "Submit for review", description: "Aming checks every new studio before it opens. You'll get an email and a notification." },
+  { id: "email", label: "Email", hint: "For codes and Aming's messages", title: "Verify your email", description: "We'll send a 6-digit code. It's used to reset your business password." },
+  { id: "password", label: "Password", hint: "Protects your business", title: "Business password", description: "Asked on each device every 30 days and after signing out of Aming." },
+  { id: "review", label: "Submit", hint: "Aming reviews your business", title: "Submit for review", description: "Aming checks every new business before it opens. You'll get an email and a notification." },
 ] as const;
 
 type StepId = (typeof STEPS)[number]["id"];
@@ -27,7 +27,7 @@ function StepForm({ id }: { id: StepId }) {
   if (id === "details") {
     return (
       <div className="space-y-4">
-        <Field label="Studio name">
+        <Field label="Business name">
           <TextInput defaultValue="Dementa Studios" />
         </Field>
         <div className="grid gap-4 @md:grid-cols-2">
@@ -38,7 +38,7 @@ function StepForm({ id }: { id: StepId }) {
             <TextInput defaultValue="Dementa" />
           </Field>
         </div>
-        <Field label="Studio phone" hint="Your clients call and WhatsApp this number.">
+        <Field label="Business phone" hint="Your clients call and WhatsApp this number.">
           <PhoneInput value={phone} onChange={setPhone} />
         </Field>
       </div>
@@ -89,7 +89,7 @@ function StepForm({ id }: { id: StepId }) {
     );
   }
   const rows: [string, string][] = [
-    ["Studio", "Dementa Studios · +256 703 360 688"],
+    ["Business", "Dementa Studios · +256 703 360 688"],
     ["Owner", "Victor Dementa"],
     ["Logo", "Not added (optional)"],
     ["Address", "amingspace.com/dementa-studios"],
@@ -116,7 +116,7 @@ export function SteppedDemo({ start = -1 }: { start?: number }) {
   const [index, setIndex] = useState(start);
   if (index < 0) {
     return (
-      <SetupSplit steps={stepsAt(-1)} title="Set up your studio" description="Run your photography business from one place, next to your Aming orders. It takes about 5 minutes; Aming then reviews your studio before it opens.">
+      <SetupSplit steps={stepsAt(-1)} title="Set up your business" description="Run your photography business from one place, next to your Aming orders. It takes about 5 minutes; Aming then reviews your business before it opens.">
         <SetupWelcome onStart={() => setIndex(0)} />
       </SetupSplit>
     );

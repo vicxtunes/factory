@@ -50,7 +50,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   }
   const studio = await studioAtSlug(slug);
   if (!studio) return { title: "Not found" };
-  const about = [studio.studio.address, studio.studio.phone].filter(Boolean).join(" · ") || "Photography studio";
+  const about = [studio.studio.address, studio.studio.phone].filter(Boolean).join(" · ") || "Photography business";
   return { title: studio.studio.name, description: about, openGraph: { title: studio.studio.name, description: about, type: "website" } };
 }
 

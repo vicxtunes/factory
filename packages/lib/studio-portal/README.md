@@ -8,7 +8,7 @@ packages/lib/booking-requests/README.md). Clients who set a PIN before can still
 
 ## The studio's address
 
-- **Setting it:** on **Studio profile**, pre-filled from the name (`slugFromName`). It allows
+- **Setting it:** on **Business profile**, pre-filled from the name (`slugFromName`). It allows
   3–40 lowercase letters, digits and hyphens.
 - **Shared space:** the slug shares the client portal's top level with product pages
   (`/a4-prints`). The database keeps them apart:

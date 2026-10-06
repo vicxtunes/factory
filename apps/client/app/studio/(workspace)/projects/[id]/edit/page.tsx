@@ -7,7 +7,7 @@ import { canEditProject, projectIdSchema } from "@repo/lib/projects/core";
 import { projects } from "@repo/lib/projects/server";
 import { requireStudio } from "@repo/lib/studios/server";
 
-export const metadata = { title: "Edit project · My Studio" };
+export const metadata = { title: "Edit project · My Business" };
 
 export default async function EditProjectPage({ params }: { params: Promise<{ id: string }> }) {
   const { scope } = await requireStudio();

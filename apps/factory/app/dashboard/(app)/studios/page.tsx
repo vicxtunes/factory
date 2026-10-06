@@ -17,7 +17,7 @@ export default async function StudiosPage() {
 
   return (
     <div className="space-y-6">
-      <p className="text-sm text-muted">Clients running their own photography studio in the system. A studio opens once you approve it.</p>
+      <p className="text-sm text-muted">Clients running their own photography business in the system. A business opens once you approve it.</p>
       <section>
         <SectionLabel>Waiting for review ({waiting.length})</SectionLabel>
         {waiting.length === 0 ? (
@@ -42,7 +42,7 @@ export default async function StudiosPage() {
         )}
       </section>
       <section>
-        <SectionLabel>All studios</SectionLabel>
+        <SectionLabel>All businesses</SectionLabel>
         <StudiosTable studios={list} scope={scope} />
       </section>
     </div>

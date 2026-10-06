@@ -81,7 +81,7 @@ export default async function StudioPage({
     <div className="space-y-6">
       <div>
         <Link href="/dashboard/studios" className="text-xs font-medium text-brand-600 hover:underline">
-          ← Studios
+          ← Businesses
         </Link>
         <h2 className="mt-1 text-xl font-semibold">{studio.name}</h2>
       </div>

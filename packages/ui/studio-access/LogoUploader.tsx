@@ -64,7 +64,7 @@ export function LogoUploader({ logoUrl, optional, onUploaded }: { logoUrl: strin
         {logoUrl ? (
           // A short-lived signed link to the private bucket: a plain img.
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={logoUrl} alt="Studio logo" className="h-full w-full object-contain" />
+          <img src={logoUrl} alt="Business logo" className="h-full w-full object-contain" />
         ) : (
           <span className="px-2 text-center text-xs text-muted">No logo yet</span>
         )}
@@ -78,7 +78,7 @@ export function LogoUploader({ logoUrl, optional, onUploaded }: { logoUrl: strin
         {error ? (
           <p className="text-sm text-error-600 dark:text-error-400">
             {error}
-            {optional ? " The logo is optional: skip it for now and add it later from Studio profile." : null}
+            {optional ? " The logo is optional: skip it for now and add it later from Business profile." : null}
           </p>
         ) : null}
       </div>

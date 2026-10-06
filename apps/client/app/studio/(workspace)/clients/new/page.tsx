@@ -2,7 +2,7 @@ import Link from "next/link";
 
 import { CustomerForm } from "@repo/ui/customers/CustomerForm";
 
-export const metadata = { title: "New client · My Studio" };
+export const metadata = { title: "New client · My Business" };
 
 export default function NewStudioClientPage() {
   return (

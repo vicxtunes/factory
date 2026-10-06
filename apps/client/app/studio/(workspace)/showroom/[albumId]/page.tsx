@@ -9,7 +9,7 @@ import { photos } from "@repo/lib/photos/server";
 import { portal, studioUrl } from "@repo/lib/studio-portal/server";
 import { requireStudio } from "@repo/lib/studios/server";
 
-export const metadata = { title: "Album · My Studio" };
+export const metadata = { title: "Album · My Business" };
 
 export default async function StudioAlbumPage({ params }: { params: Promise<{ albumId: string }> }) {
   const { scope } = await requireStudio();

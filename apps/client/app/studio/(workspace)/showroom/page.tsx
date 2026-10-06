@@ -5,7 +5,7 @@ import { UsageBar } from "@repo/ui/photos/UsageBar";
 import { photos } from "@repo/lib/photos/server";
 import { requireStudio } from "@repo/lib/studios/server";
 
-export const metadata = { title: "Showroom · My Studio" };
+export const metadata = { title: "Showroom · My Business" };
 
 export default async function StudioShowroomPage() {
   const { scope } = await requireStudio();
@@ -14,7 +14,7 @@ export default async function StudioShowroomPage() {
   return (
     <>
       <p className="text-sm text-muted">
-        Your best work, in albums. Public albums show on your studio&apos;s page in a 3D showroom, and each has its own address to share.
+        Your best work, in albums. Public albums show on your business&apos;s page in a 3D showroom, and each has its own address to share.
       </p>
       <UsageBar usage={usage} />
       <NewAlbumForm basePath="/studio/showroom" />
