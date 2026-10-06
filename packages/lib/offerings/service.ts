@@ -9,9 +9,9 @@ import {
   serviceSlug,
   uniqueSlug,
   type Offering,
-  type OfferingInput,
-  type OfferingSaveOutcome,
+  type SaveOutcome,
   type Service,
+  type ServiceFormInput,
   type ServiceInput,
   type ServiceSaveOutcome,
   type ServiceWithPackages,
@@ -51,8 +51,38 @@ export class OfferingService {
     return { ...service, packages: await this.packages(scope, service.id) };
   }
 
+  /**
+   * Saves the service form: the service (new when `id` is null) and its
+   * packages on sale, as listed. Listed packages without an id are added,
+   * the others changed; one left out is archived (quotations may use it).
+   * Refused as a whole, before anything is written, when the service's name
+   * is another's on sale or a listed package isn't this service's.
+   */
+  async saveService(scope: TenantScope, id: string | null, input: ServiceFormInput): Promise<SaveOutcome<ServiceWithPackages> | { duplicateOf: Service }> {
+    const { packages: listed, ...fields } = input;
+    const existing = id ? await this.store.service(scope, id) : null;
+    if (id && !existing) throw new OfferingError(SERVICE_GONE);
+    const current = id ? await this.packages(scope, id) : [];
+    const currentIds = new Set(current.map((p) => p.id));
+    if (listed.some((p) => p.id && !currentIds.has(p.id))) throw new OfferingError(PACKAGE_GONE);
+    if (existing?.archivedAt && listed.some((p) => !p.id)) throw new OfferingError("This service is archived. Put it back on sale first.");
+
+    const outcome = id ? await this.updateService(scope, id, fields) : await this.createService(scope, fields);
+    if ("duplicateOf" in outcome) return outcome;
+    const service = outcome.saved;
+
+    // Archive what was left out first, so its name is free for a listed one.
+    const keep = new Set(listed.map((p) => p.id));
+    for (const p of current) if (!keep.has(p.id)) await this.store.setPackageArchived(scope, p.id, true);
+    for (const { id: packageId, ...pkg } of listed) {
+      if (packageId) await this.store.updatePackage(scope, packageId, pkg);
+      else await this.store.createPackage(scope, service.id, pkg);
+    }
+    return { saved: { ...service, packages: await this.packages(scope, service.id) } };
+  }
+
   /** Saves a new service, unless one on sale already has the name. */
-  async createService(scope: TenantScope, input: ServiceInput): Promise<ServiceSaveOutcome> {
+  private async createService(scope: TenantScope, input: ServiceInput): Promise<ServiceSaveOutcome> {
     const duplicate = await this.duplicateService(scope, input.name);
     if (duplicate) return { duplicateOf: duplicate };
     const slug = uniqueSlug(serviceSlug(input.name), new Set(await this.store.serviceSlugs(scope)));
@@ -60,7 +90,7 @@ export class OfferingService {
   }
 
   /** Changes a service (its address stays), unless its new name belongs to another one on sale. */
-  async updateService(scope: TenantScope, id: string, input: ServiceInput): Promise<ServiceSaveOutcome> {
+  private async updateService(scope: TenantScope, id: string, input: ServiceInput): Promise<ServiceSaveOutcome> {
     const duplicate = await this.duplicateService(scope, input.name, id);
     if (duplicate) return { duplicateOf: duplicate };
     const saved = await this.store.updateService(scope, id, input);
@@ -98,26 +128,7 @@ export class OfferingService {
     return this.store.package(scope, id);
   }
 
-  /** Adds a package to a service on sale, unless the service already has one by that name. */
-  async createPackage(scope: TenantScope, serviceId: string, input: OfferingInput): Promise<OfferingSaveOutcome> {
-    const service = await this.store.service(scope, serviceId);
-    if (!service) throw new OfferingError(SERVICE_GONE);
-    if (service.archivedAt) throw new OfferingError("This service is archived. Put it back on sale first.");
-    const duplicate = await this.duplicatePackage(scope, serviceId, input.name);
-    if (duplicate) return { duplicateOf: duplicate };
-    return { saved: await this.store.createPackage(scope, serviceId, input) };
-  }
 
-  /** Changes a package, unless its new name belongs to another one on sale in its service. */
-  async updatePackage(scope: TenantScope, id: string, input: OfferingInput): Promise<OfferingSaveOutcome> {
-    const current = await this.store.package(scope, id);
-    if (!current) throw new OfferingError(PACKAGE_GONE);
-    const duplicate = await this.duplicatePackage(scope, current.serviceId, input.name, id);
-    if (duplicate) return { duplicateOf: duplicate };
-    const saved = await this.store.updatePackage(scope, id, input);
-    if (!saved) throw new OfferingError(PACKAGE_GONE);
-    return { saved };
-  }
 
   /** Takes a package off sale (or puts it back, if its name is still free in its service). */
   async setPackageArchived(scope: TenantScope, id: string, archived: boolean): Promise<Offering> {

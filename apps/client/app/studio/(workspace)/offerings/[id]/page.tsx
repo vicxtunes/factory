@@ -2,8 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { SectionLabel } from "@repo/ui/SectionLabel";
-import { PackagesEditor } from "@repo/ui/offerings/PackagesEditor";
-import { ServiceArchiveButton, ServiceForm } from "@repo/ui/offerings/ServiceForm";
+import { ArchivedPackages, ServiceArchiveButton, ServiceForm } from "@repo/ui/offerings/ServiceForm";
 import { ServiceMediaPanel } from "@repo/ui/photos/ServiceMediaPanel";
 import { serviceIdSchema } from "@repo/lib/offerings/core";
 import { offerings } from "@repo/lib/offerings/server";
@@ -38,11 +37,14 @@ export default async function StudioServicePage({ params }: { params: Promise<{ 
           {service.archivedAt ? <span className="ml-2 align-middle text-xs font-normal text-muted">archived</span> : null}
         </h2>
       </div>
-      <ServiceForm key={service.id} service={service} basePath="/studio/offerings" />
-      <section className="space-y-3">
-        <SectionLabel>Packages</SectionLabel>
-        <PackagesEditor serviceId={service.id} packages={onSale} archived={archived} scope={scope} canAdd={!service.archivedAt} />
-      </section>
+      {/* Keyed by what's on sale, so putting an archived package back starts the form afresh (it lists the packages a Save keeps). */}
+      <ServiceForm
+        key={[service.id, ...onSale.map((p) => p.id)].join()}
+        service={{ ...service, packages: onSale }}
+        basePath="/studio/offerings"
+        scope={scope}
+      />
+      <ArchivedPackages packages={archived} scope={scope} />
       <section className="space-y-3">
         <SectionLabel>Photos and video</SectionLabel>
         <ServiceMediaPanel serviceId={service.id} album={gallery} photos={galleryPhotos} usage={usage} />

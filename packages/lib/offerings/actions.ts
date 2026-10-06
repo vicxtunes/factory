@@ -15,31 +15,22 @@ import { studioOfCaller } from "@repo/lib/studios/server";
 
 import {
   offeringIdSchema,
-  offeringInputSchema,
+  serviceFormSchema,
   serviceIdSchema,
-  serviceInputSchema,
   type Offering,
-  type OfferingSaveOutcome,
+  type SaveOutcome,
   type Service,
-  type ServiceSaveOutcome,
+  type ServiceWithPackages,
 } from "./core";
 import { offerings } from "./server";
 
 const LIST = "/studio/offerings";
 
-export async function createService(input: unknown): Promise<Result<ServiceSaveOutcome>> {
+/** Saves the service form: the service (new when `id` is null) and its packages, together. */
+export async function saveService(id: unknown, input: unknown): Promise<Result<SaveOutcome<ServiceWithPackages> | { duplicateOf: Service }>> {
   return runAction("offerings", async () => {
     const { scope } = await studioOfCaller();
-    const outcome = await offerings.createService(scope, parseInput(serviceInputSchema, input));
-    revalidatePath(LIST);
-    return outcome;
-  });
-}
-
-export async function updateService(id: unknown, input: unknown): Promise<Result<ServiceSaveOutcome>> {
-  return runAction("offerings", async () => {
-    const { scope } = await studioOfCaller();
-    const outcome = await offerings.updateService(scope, parseInput(serviceIdSchema, id), parseInput(serviceInputSchema, input));
+    const outcome = await offerings.saveService(scope, id === null ? null : parseInput(serviceIdSchema, id), parseInput(serviceFormSchema, input));
     revalidatePath(LIST, "layout");
     return outcome;
   });
@@ -52,24 +43,6 @@ export async function setServiceArchived(id: unknown, archived: unknown): Promis
     const service = await offerings.setServiceArchived(scope, parseInput(serviceIdSchema, id), archived === true);
     revalidatePath(LIST, "layout");
     return service;
-  });
-}
-
-export async function createOffering(serviceId: unknown, input: unknown): Promise<Result<OfferingSaveOutcome>> {
-  return runAction("offerings", async () => {
-    const { scope } = await studioOfCaller();
-    const outcome = await offerings.createPackage(scope, parseInput(serviceIdSchema, serviceId), parseInput(offeringInputSchema, input));
-    revalidatePath(LIST, "layout");
-    return outcome;
-  });
-}
-
-export async function updateOffering(id: unknown, input: unknown): Promise<Result<OfferingSaveOutcome>> {
-  return runAction("offerings", async () => {
-    const { scope } = await studioOfCaller();
-    const outcome = await offerings.updatePackage(scope, parseInput(offeringIdSchema, id), parseInput(offeringInputSchema, input));
-    revalidatePath(LIST, "layout");
-    return outcome;
   });
 }
 

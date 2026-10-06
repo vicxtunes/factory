@@ -44,6 +44,11 @@ export interface Offering extends OfferingInput {
   createdAt: string;
 }
 
+/** The service form: the service and its packages on sale, saved together. A package without an id is new. */
+export interface ServiceFormInput extends ServiceInput {
+  packages: (OfferingInput & { id?: string })[];
+}
+
 /** A service with its packages. */
 export interface ServiceWithPackages extends Service {
   packages: Offering[];
@@ -51,5 +56,4 @@ export interface ServiceWithPackages extends Service {
 
 /** What saving led to: saved, or another one on sale already has that name. */
 export type SaveOutcome<T> = { saved: T } | { duplicateOf: T };
-export type OfferingSaveOutcome = SaveOutcome<Offering>;
 export type ServiceSaveOutcome = SaveOutcome<Service>;

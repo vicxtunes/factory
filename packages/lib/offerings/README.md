@@ -31,8 +31,8 @@ The module is generic and tenant-scoped, so a future product (vendors, service p
 | Screen | Who | What |
 | --- | --- | --- |
 | `/studio/offerings` (client app) | Studio owner | Services with their packages; Archived tab; Add a service |
-| `/studio/offerings/new` | Studio owner | Add a service |
-| `/studio/offerings/<service id>` | Studio owner | Edit or archive it; its packages (add, edit, archive, put back); its photos and preview video |
+| `/studio/offerings/new` | Studio owner | Add a service and its packages in one form |
+| `/studio/offerings/<service id>` | Studio owner | The same form: the service and its packages saved together (a package removed there is archived); archived packages to put back; its photos and preview video |
 | `/dashboard/studios/<id>` (factory app) | Boss | The studio's services and packages, read-only |
 | `/<studio>` (client app, public) | Anyone | The studio's services as showroom cards (cover photo), linking to their pages |
 | `/<studio>/s/<service>` (client app, public) | Anyone | The showroom's item page (`@repo/ui/showroom/Showcase`): photos, preview video, the packages to choose from (a 0 price reads "Price on request"), "Book on WhatsApp" naming the chosen one |
@@ -59,14 +59,13 @@ and is never public on its own: it's shown through the service's page.
 packages/lib/offerings/
   core/              Pure: Service, Offering (a package) records, naming rules, zod schemas. Tests: npm test.
   ports.ts           OfferingStore (tenant-scoped), OfferingError.
-  service.ts         class OfferingService: services (catalog, create, update, archive) and their
-                     packages (create, update, archive, onSale for the pickers), unique names.
+  service.ts         class OfferingService: saveService (the form: a service and its packages,
+                     checked as a whole), catalog, archive / restore, onSale for the pickers.
   service.test.ts    The service against an in-memory store, studio separation included.
   adapters/supabase/store.ts   The offering_services and offerings tables.
   server.ts          The wired service.
-  actions.ts         createService, updateService, setServiceArchived, createOffering,
-                     updateOffering, setOfferingArchived (studio → zod → service).
-packages/ui/offerings/  ServicesList, ServiceForm (+ archive), PackagesEditor.
+  actions.ts         saveService, setServiceArchived, setOfferingArchived (studio → zod → service).
+packages/ui/offerings/  ServicesList, ServiceForm (the one form; ArchivedPackages; archive button).
 packages/ui/photos/ServiceMediaPanel.tsx  The service's photos and preview video.
 apps/client/app/studio/offerings/
 supabase/migrations/20261003120000_offerings.sql

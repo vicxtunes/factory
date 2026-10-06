@@ -4,7 +4,7 @@ import { z } from "zod";
 
 import { optionalText } from "@repo/lib/kernel/core";
 
-import type { OfferingInput, ServiceInput } from "./model";
+import type { OfferingInput, ServiceFormInput, ServiceInput } from "./model";
 
 /** What's included, one short line each. Blank lines are dropped, so an empty row in a form is harmless. Billing lines use it too. */
 export const inclusionsSchema = z
@@ -30,3 +30,12 @@ export const offeringInputSchema = z.object({
     .max(1_000_000_000_000, "That price is too large."),
   inclusions: inclusionsSchema,
 }) satisfies z.ZodType<OfferingInput, unknown>;
+
+/** The whole service form: the service and its packages, every one checked before anything is saved. */
+export const serviceFormSchema = serviceInputSchema
+  .extend({
+    packages: z
+      .array(offeringInputSchema.extend({ id: offeringIdSchema.optional() }))
+      .max(20, "Keep it to 20 packages.")
+      .refine((list) => new Set(list.map((p) => p.name.toLowerCase())).size === list.length, "Give each package its own name."),
+  }) satisfies z.ZodType<ServiceFormInput, unknown>;
