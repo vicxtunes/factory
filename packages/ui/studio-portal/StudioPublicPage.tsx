@@ -20,15 +20,15 @@ const card = "rounded-2xl border border-border bg-surface p-5 shadow-theme-xs";
 export function StudioPublicPage({
   studio,
   slug,
-  services,
+  categories,
   signedInAs,
   albums,
   showroom,
 }: {
   studio: Studio;
   slug: string;
-  /** Its services on sale, each with its cover photo; each opens its own page with its packages. */
-  services: (Service & { coverUrl: string | null })[];
+  /** Its services on sale by category, each with its cover photo; each opens its own page with its packages. */
+  categories: { id: string; name: string; services: (Service & { coverUrl: string | null })[] }[];
   /** The client signed in at this studio on this device, if any. */
   signedInAs: string | null;
   /** Public albums, linked to their own pages. */
@@ -63,7 +63,7 @@ export function StudioPublicPage({
         </div>
       </header>
 
-      {services.length ? (
+      {categories.length ? (
         <section className="space-y-3">
           <h2 className="text-lg font-semibold">Our services</h2>
           <ShowroomGallery
@@ -72,7 +72,13 @@ export function StudioPublicPage({
                 key: "services",
                 label: "Services",
                 emptyText: "",
-                cards: services.map((s) => ({ id: s.id, label: s.name, image: s.coverUrl, href: `/${slug}/s/${s.slug}` })),
+                // A row per category, like Aming's showroom.
+                sections: categories.map((c) => ({
+                  id: c.id,
+                  title: c.name,
+                  emptyText: "",
+                  cards: c.services.map((s) => ({ id: s.id, label: s.name, image: s.coverUrl, href: `/${slug}/s/${s.slug}` })),
+                })),
               },
             ]}
           />

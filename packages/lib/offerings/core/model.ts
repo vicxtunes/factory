@@ -1,9 +1,29 @@
 // The offerings module's records. Pure; safe on client and server.
 //
-// What a business sells: services ("Wedding Photography"), each with
-// packages as its tiers ("Gold", "Silver", "Bronze", "Custom"), every
+// What a business sells, managed the way Aming manages products: categories
+// ("Weddings", "Portraits") holding services ("Wedding Photography"), each
+// with packages as its tiers ("Gold", "Silver", "Bronze", "Custom"), every
 // package with its own price, description and what's included. Every
-// service and package belongs to one tenant.
+// category, service and package belongs to one tenant.
+
+/** A group of services: a row in the showroom. */
+export interface Category {
+  id: string;
+  name: string;
+  /** The showroom's order, smallest first. */
+  position: number;
+  /** Deactivated categories (and their services) are off sale but kept. */
+  archivedAt: string | null;
+  createdAt: string;
+}
+
+/** Whether the showroom shows package prices, and how a service's page shows its photos. */
+export interface ShowroomSettings {
+  showPrices: boolean;
+  viewMode: "scene" | "carousel";
+}
+
+export const DEFAULT_SHOWROOM_SETTINGS: ShowroomSettings = { showPrices: true, viewMode: "scene" };
 
 /** What the business fills in for a service. */
 export interface ServiceInput {
@@ -13,6 +33,7 @@ export interface ServiceInput {
 
 export interface Service extends ServiceInput {
   id: string;
+  categoryId: string;
   /** Its page's address under the business's: /<studio>/s/<slug>. Never changes. */
   slug: string;
   /** The showroom's order, smallest first. */
@@ -44,16 +65,15 @@ export interface Offering extends OfferingInput {
   createdAt: string;
 }
 
-/** The service form: the service and its packages on sale, saved together. A package without an id is new. */
-export interface ServiceFormInput extends ServiceInput {
-  packages: (OfferingInput & { id?: string })[];
-}
-
 /** A service with its packages. */
 export interface ServiceWithPackages extends Service {
   packages: Offering[];
 }
 
+/** A category with its services (each with its packages). */
+export interface CategoryWithServices extends Category {
+  services: ServiceWithPackages[];
+}
+
 /** What saving led to: saved, or another one on sale already has that name. */
 export type SaveOutcome<T> = { saved: T } | { duplicateOf: T };
-export type ServiceSaveOutcome = SaveOutcome<Service>;

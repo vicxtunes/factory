@@ -4,7 +4,7 @@ import { test } from "node:test";
 import { parseInput } from "@repo/lib/kernel/core";
 
 import { offeringLabel, serviceSlug, uniqueSlug } from "./rules";
-import { offeringIdSchema, offeringInputSchema, serviceFormSchema, serviceIdSchema, serviceInputSchema } from "./schema";
+import { categoryNameSchema, offeringIdSchema, offeringInputSchema, serviceIdSchema, serviceInputSchema, showroomSettingsSchema } from "./schema";
 
 const ok = { name: "Gold", description: "", price: 2_500_000, inclusions: [] as string[] };
 
@@ -59,12 +59,10 @@ test("a package is labelled with its service, once when the names match", () => 
   assert.equal(offeringLabel({ serviceName: "Wedding Gold", name: "wedding gold" }), "wedding gold");
 });
 
-test("the service form: every package checked, each with its own name, ids must be real", () => {
-  const packages = [{ ...ok, name: "Gold" }, { ...ok, name: "Silver", id: "7f1f6b1e-2d43-4c1a-9a51-6a0f6d0c9e11" }];
-  const parsed = parseInput(serviceFormSchema, { name: "Wedding Photography", description: "", packages });
-  assert.deepEqual(parsed.packages.map((p) => [p.name, p.id]), [["Gold", undefined], ["Silver", "7f1f6b1e-2d43-4c1a-9a51-6a0f6d0c9e11"]]);
-  assert.throws(() => parseInput(serviceFormSchema, { name: "W", description: "", packages: [ok, { ...ok, name: "gold" }] }), /its own name/);
-  assert.throws(() => parseInput(serviceFormSchema, { name: "W", description: "", packages: [{ ...ok, price: -5 }] }), /can't be negative/);
-  assert.throws(() => parseInput(serviceFormSchema, { name: "W", description: "", packages: [{ ...ok, id: "abc" }] }), /package doesn't exist/);
-  assert.throws(() => parseInput(serviceFormSchema, { name: "W", description: "", packages: Array.from({ length: 21 }, (_, i) => ({ ...ok, name: `T${i}` })) }), /20 packages/);
+test("category names are trimmed, required and short; settings are checked", () => {
+  assert.equal(parseInput(categoryNameSchema, "  Weddings "), "Weddings");
+  assert.throws(() => parseInput(categoryNameSchema, " "), /Give it a name/);
+  assert.throws(() => parseInput(categoryNameSchema, "x".repeat(61)), /under 60/);
+  assert.deepEqual(parseInput(showroomSettingsSchema, { showPrices: false, viewMode: "carousel", extra: 1 }), { showPrices: false, viewMode: "carousel" });
+  assert.throws(() => parseInput(showroomSettingsSchema, { showPrices: true, viewMode: "grid" }), /3D or carousel/);
 });

@@ -65,22 +65,29 @@ export default async function SlugPage({ params }: Params) {
     if (err instanceof PhotoError) return fallback;
     throw err;
   };
-  const [onSale, signedIn, albums] = await Promise.all([
-    offerings.services(at.scope),
+  const [showroom, signedIn, albums] = await Promise.all([
+    offerings.showroom(at.scope),
     portalClient(at.studio.id),
     photos.albums(at.scope, true).catch(unlessNoStorage([])),
   ]);
-  const services = await Promise.all(
-    onSale.map(async (s) => ({
-      ...s,
-      coverUrl: await photos.serviceGallery(at.scope, s.id).then((a) => a?.coverUrl ?? null, unlessNoStorage(null)),
+  // Each category's services with their cover photos.
+  const categories = await Promise.all(
+    showroom.map(async (c) => ({
+      id: c.id,
+      name: c.name,
+      services: await Promise.all(
+        c.services.map(async (s) => ({
+          ...s,
+          coverUrl: await photos.serviceGallery(at.scope, s.id).then((a) => a?.coverUrl ?? null, unlessNoStorage(null)),
+        })),
+      ),
     })),
   );
   return (
     <StudioPublicPage
       studio={at.studio}
       slug={slug}
-      services={services}
+      categories={categories}
       signedInAs={signedIn?.name ?? null}
       albums={albums}
       showroom={<StudioShowroom albums={albums} slug={slug} />}

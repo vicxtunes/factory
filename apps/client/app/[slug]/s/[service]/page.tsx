@@ -4,7 +4,6 @@ import { notFound, permanentRedirect } from "next/navigation";
 import { offerings } from "@repo/lib/offerings/server";
 import { PhotoError } from "@repo/lib/photos/ports";
 import { photos } from "@repo/lib/photos/server";
-import { fetchShowroomSettings } from "@repo/lib/queries";
 import { studioAtSlug } from "@repo/lib/studio-portal/server";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
@@ -57,7 +56,7 @@ export default async function ServicePage({ params }: Params) {
   if (!loaded) notFound();
   if (loaded.at.redirectTo) permanentRedirect(`/${loaded.at.redirectTo}/s/${loaded.service}`);
   if (!loaded.found) notFound();
-  const [media, settings] = await Promise.all([mediaOf(loaded.at.scope, loaded.found.id), fetchShowroomSettings()]);
+  const [media, settings] = await Promise.all([mediaOf(loaded.at.scope, loaded.found.id), offerings.settings(loaded.at.scope)]);
 
   return (
     <main className="mx-auto w-full max-w-4xl px-4 py-6 sm:py-10">
@@ -66,8 +65,9 @@ export default async function ServicePage({ params }: Params) {
         slug={loaded.slug}
         service={loaded.found}
         media={media}
-        // The same look as Aming's own showroom (Dashboard → Products).
-        viewMode={settings.product_view_mode}
+        // The studio's choices (Packages & Services): 3D or carousel, prices shown or not.
+        viewMode={settings.viewMode}
+        showPrices={settings.showPrices}
         scope={loaded.at.scope}
       />
     </main>
