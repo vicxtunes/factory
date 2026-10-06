@@ -45,7 +45,6 @@ export function StudioPublicPage({
   requests: Booking[];
 }) {
   const wa = studio.phone ? `https://wa.me/${whatsappNumber(studio.phone)}` : null;
-  const book = wa ? `${wa}?text=${encodeURIComponent(`Hello ${studio.name}, I'd like to book a shoot.`)}` : null;
   const askLink = wa ? `${wa}?text=${encodeURIComponent(`Hello ${studio.name}, please send me the link to my page.`)}` : null;
   const outline = "inline-flex min-h-11 items-center rounded-[var(--radius)] border border-border bg-surface px-4 text-sm hover:bg-background";
 
@@ -79,13 +78,8 @@ export function StudioPublicPage({
       banner={{ title: studio.name, subtitle: studio.address ?? "Welcome to our show room", imageUrl: bannerUrl ?? "/showroom/banner.jpg" }}
       notice={
         <div className="mb-6 space-y-4">
-          {book || studio.phone || studio.email ? (
+          {studio.phone || studio.email ? (
             <div className="flex flex-wrap gap-2">
-              {book ? (
-                <a href={book} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center rounded-[var(--radius)] bg-brand-500 px-4 text-sm font-medium text-white hover:bg-brand-600">
-                  Book us on WhatsApp
-                </a>
-              ) : null}
               {studio.phone ? (
                 <a href={`tel:${studio.phone}`} className={outline}>
                   Call {studio.phone}
