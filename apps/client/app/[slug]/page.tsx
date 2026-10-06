@@ -8,11 +8,12 @@ import { offerings } from "@repo/lib/offerings/server";
 import { PhotoError } from "@repo/lib/photos/ports";
 import { photos } from "@repo/lib/photos/server";
 import { fetchCurrencies, fetchProductBySlug, fetchShowroomSettings } from "@repo/lib/queries";
+import { studioAccess } from "@repo/lib/studio-access/server";
 import { portalClient, studioAtSlug } from "@repo/lib/studio-portal/server";
 
 import { ProductPageView } from "../product-page-view";
-import { StudioShowroom } from "../studio-showroom";
 import { ClientShell } from "../shell";
+import { StudioShell } from "./studio-shell";
 
 // The client portal's top-level addresses, client.<domain>/{slug}: shared
 // between products and studios. The database never gives the two the same
@@ -52,7 +53,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   return { title: studio.studio.name, description: about, openGraph: { title: studio.studio.name, description: about, type: "website" } };
 }
 
-export default async function SlugPage({ params }: Params) {
+export default async function SlugPage({ params, searchParams }: Params & { searchParams: Promise<{ signin?: string }> }) {
   const slug = await slugOf(params);
   const found = await loadProduct(slug);
   if (found) return <ProductPage found={found} />;
@@ -65,26 +66,40 @@ export default async function SlugPage({ params }: Params) {
     if (err instanceof PhotoError) return fallback;
     throw err;
   };
-  const [onSale, signedIn, albums] = await Promise.all([
-    offerings.services(at.scope),
+  const [showroom, signedIn, albums, logoUrl, { signin }] = await Promise.all([
+    offerings.showroom(at.scope),
     portalClient(at.studio.id),
     photos.albums(at.scope, true).catch(unlessNoStorage([])),
+    studioAccess.logoUrl(at.studio.logoKey),
+    searchParams,
   ]);
-  const services = await Promise.all(
-    onSale.map(async (s) => ({
-      ...s,
-      coverUrl: await photos.serviceGallery(at.scope, s.id).then((a) => a?.coverUrl ?? null, unlessNoStorage(null)),
+  // Each category's services with their covers (small for the cards, large for the banner).
+  const categories = await Promise.all(
+    showroom.map(async (c) => ({
+      id: c.id,
+      name: c.name,
+      services: await Promise.all(
+        c.services.map(async (s) => {
+          const album = await photos.serviceGallery(at.scope, s.id).catch(unlessNoStorage(null));
+          return { ...s, coverUrl: album?.coverUrl ?? null, coverLargeUrl: album?.coverLargeUrl ?? null };
+        }),
+      ),
     })),
   );
+  // The banner: one of the studio's own photos, its first album's cover or else a service's.
+  const bannerUrl = albums.find((a) => a.coverLargeUrl)?.coverLargeUrl ?? categories.flatMap((c) => c.services).find((s) => s.coverLargeUrl)?.coverLargeUrl ?? null;
   return (
-    <StudioPublicPage
-      studio={at.studio}
-      slug={slug}
-      services={services}
-      signedInAs={signedIn?.name ?? null}
-      albums={albums}
-      showroom={<StudioShowroom albums={albums} slug={slug} />}
-    />
+    <StudioShell studio={{ name: at.studio.name, logoUrl, slug }} signedInAs={signedIn?.name ?? null} title="Showroom">
+      <StudioPublicPage
+        studio={at.studio}
+        slug={slug}
+        categories={categories}
+        albums={albums}
+        bannerUrl={bannerUrl}
+        signedInAs={signedIn?.name ?? null}
+        signInOpen={signin === "1"}
+      />
+    </StudioShell>
   );
 }
 

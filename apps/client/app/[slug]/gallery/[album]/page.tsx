@@ -4,7 +4,10 @@ import { notFound, permanentRedirect } from "next/navigation";
 
 import { MasonryGallery } from "@repo/ui/photos/MasonryGallery";
 import { photos } from "@repo/lib/photos/server";
-import { studioAtSlug } from "@repo/lib/studio-portal/server";
+import { studioAccess } from "@repo/lib/studio-access/server";
+import { portalClient, studioAtSlug } from "@repo/lib/studio-portal/server";
+
+import { StudioShell } from "../../studio-shell";
 
 // One of a studio's public albums as a standalone, shareable page:
 // client.<domain>/<studio>/gallery/<album>, a Pinterest-style grid.
@@ -35,19 +38,22 @@ export default async function AlbumPage({ params }: Params) {
   if (loaded.at.redirectTo) permanentRedirect(`/${loaded.at.redirectTo}/gallery/${loaded.album}`);
   if (!loaded.found) notFound();
   const { album, photos: list } = loaded.found;
+  const [signedIn, logoUrl] = await Promise.all([portalClient(loaded.at.studio.id), studioAccess.logoUrl(loaded.at.studio.logoKey)]);
 
   return (
-    <main className="mx-auto w-full max-w-6xl space-y-6 px-4 py-8">
-      <header className="space-y-1">
-        <Link href={`/${loaded.slug}`} className="text-sm text-muted hover:underline">
-          {loaded.at.studio.name}
-        </Link>
-        <h1 className="text-2xl font-semibold">{album.title}</h1>
-        <p className="text-sm text-muted">
-          {list.length} photo{list.length === 1 ? "" : "s"}
-        </p>
-      </header>
-      <MasonryGallery photos={list} />
-    </main>
+    <StudioShell studio={{ name: loaded.at.studio.name, logoUrl, slug: loaded.slug }} signedInAs={signedIn?.name ?? null} title={album.title}>
+      <div className="mx-auto w-full max-w-6xl space-y-6">
+        <header className="space-y-1">
+          <Link href={`/${loaded.slug}`} className="text-sm text-muted hover:underline">
+            {loaded.at.studio.name}
+          </Link>
+          <h1 className="text-2xl font-semibold">{album.title}</h1>
+          <p className="text-sm text-muted">
+            {list.length} photo{list.length === 1 ? "" : "s"}
+          </p>
+        </header>
+        <MasonryGallery photos={list} />
+      </div>
+    </StudioShell>
   );
 }

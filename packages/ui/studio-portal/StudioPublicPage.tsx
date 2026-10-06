@@ -1,7 +1,7 @@
 import Link from "next/link";
-import type { ReactNode } from "react";
 
-import { ShowroomGallery } from "@repo/ui/showroom/ShowroomGallery";
+import { Button } from "@repo/ui/Button";
+import { ShowroomGallery, type ShowroomTab } from "@repo/ui/showroom/ShowroomGallery";
 import { whatsappNumber } from "@repo/lib/kernel/core/phone";
 import type { Service } from "@repo/lib/offerings/core";
 import type { AlbumView } from "@repo/lib/photos/core";
@@ -9,113 +9,106 @@ import type { Studio } from "@repo/lib/studios/core";
 
 import { PortalSignIn } from "./PortalForms";
 
-const card = "rounded-2xl border border-border bg-surface p-5 shadow-theme-xs";
-
 /**
- * A studio's public page at client.<domain>/<slug>: who they are, how to
- * reach them, their services (each opening its own page with its
- * packages), their work, and where their clients sign in. Only public
- * details: nothing about any client.
+ * A studio's showroom, its public home at client.<domain>/<slug>, laid out
+ * like Aming's own showroom (apps/client showroom-view.tsx): a photo banner,
+ * a sign-in prompt for signed-out visitors (the form opens only when asked:
+ * browsing never needs it), how to reach the studio, then tabs: its services
+ * in a row per category (each opening its own page with its packages) and
+ * its public albums. Only public details: nothing about any client.
  */
 export function StudioPublicPage({
   studio,
   slug,
-  services,
-  signedInAs,
+  categories,
   albums,
-  showroom,
+  bannerUrl,
+  signedInAs,
+  signInOpen,
 }: {
   studio: Studio;
   slug: string;
-  /** Its services on sale, each with its cover photo; each opens its own page with its packages. */
-  services: (Service & { coverUrl: string | null })[];
-  /** The client signed in at this studio on this device, if any. */
-  signedInAs: string | null;
+  /** Its services on sale by category, each with its cover photo. */
+  categories: { id: string; name: string; services: (Service & { coverUrl: string | null })[] }[];
   /** Public albums, linked to their own pages. */
   albums: AlbumView[];
-  /** The 3D showroom of album covers (rendered by the app, which owns the scene). */
-  showroom: ReactNode;
+  /** One of the studio's own photos for the banner; Aming's banner until it has one. */
+  bannerUrl: string | null;
+  /** The client signed in at this studio on this device, if any. */
+  signedInAs: string | null;
+  /** The visitor asked to sign in (the "Log in" link). */
+  signInOpen: boolean;
 }) {
   const wa = studio.phone ? `https://wa.me/${whatsappNumber(studio.phone)}` : null;
   const book = wa ? `${wa}?text=${encodeURIComponent(`Hello ${studio.name}, I'd like to book a shoot.`)}` : null;
+  const outline = "inline-flex min-h-11 items-center rounded-[var(--radius)] border border-border bg-surface px-4 text-sm hover:bg-background";
+
+  const tabs: ShowroomTab[] = [
+    {
+      key: "services",
+      label: "Services",
+      emptyText: "Ask us about our services.",
+      // A row per category, like Aming's products.
+      sections: categories.map((c) => ({
+        id: c.id,
+        title: c.name,
+        emptyText: "",
+        cards: c.services.map((s) => ({ id: s.id, label: s.name, image: s.coverUrl, href: `/${slug}/s/${s.slug}` })),
+      })),
+    },
+    ...(albums.length
+      ? [
+          {
+            key: "work",
+            label: "Our work",
+            emptyText: "",
+            cards: albums.map((a) => ({ id: a.id, label: a.title, image: a.coverUrl, href: `/${slug}/gallery/${a.slug}` })),
+          },
+        ]
+      : []),
+  ];
 
   return (
-    <main className="mx-auto w-full max-w-4xl space-y-6 px-4 py-8 sm:py-12">
-      <header className="space-y-2 text-center">
-        <h1 className="text-3xl font-semibold">{studio.name}</h1>
-        {studio.address ? <p className="whitespace-pre-line text-muted">{studio.address}</p> : null}
-        <div className="flex flex-wrap justify-center gap-2 pt-2">
-          {book ? (
-            <a href={book} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center rounded-[var(--radius)] bg-brand-500 px-5 text-sm font-medium text-white hover:bg-brand-600">
-              Book us on WhatsApp
-            </a>
+    <ShowroomGallery
+      banner={{ title: studio.name, subtitle: studio.address ?? "Welcome to our show room", imageUrl: bannerUrl ?? "/showroom/banner.jpg" }}
+      notice={
+        <div className="mb-6 space-y-4">
+          {book || studio.phone || studio.email ? (
+            <div className="flex flex-wrap gap-2">
+              {book ? (
+                <a href={book} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center rounded-[var(--radius)] bg-brand-500 px-4 text-sm font-medium text-white hover:bg-brand-600">
+                  Book us on WhatsApp
+                </a>
+              ) : null}
+              {studio.phone ? (
+                <a href={`tel:${studio.phone}`} className={outline}>
+                  Call {studio.phone}
+                </a>
+              ) : null}
+              {studio.email ? (
+                <a href={`mailto:${studio.email}`} className={outline}>
+                  Email
+                </a>
+              ) : null}
+            </div>
           ) : null}
-          {studio.phone ? (
-            <a href={`tel:${studio.phone}`} className="inline-flex min-h-11 items-center rounded-[var(--radius)] border border-border px-5 text-sm hover:bg-background">
-              Call {studio.phone}
-            </a>
-          ) : null}
-          {studio.email ? (
-            <a href={`mailto:${studio.email}`} className="inline-flex min-h-11 items-center rounded-[var(--radius)] border border-border px-5 text-sm hover:bg-background">
-              Email
-            </a>
-          ) : null}
-        </div>
-      </header>
-
-      {services.length ? (
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold">Our services</h2>
-          <ShowroomGallery
-            tabs={[
-              {
-                key: "services",
-                label: "Services",
-                emptyText: "",
-                cards: services.map((s) => ({ id: s.id, label: s.name, image: s.coverUrl, href: `/${slug}/s/${s.slug}` })),
-              },
-            ]}
-          />
-        </section>
-      ) : null}
-
-      {showroom}
-
-      {albums.length ? (
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold">Our work</h2>
-          <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            {albums.map((a) => (
-              <li key={a.id}>
-                <Link href={`/${slug}/gallery/${a.slug}`} className="block overflow-hidden rounded-2xl border border-border bg-surface shadow-theme-xs hover:bg-background">
-                  {a.coverUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element -- signed storage link, already resized
-                    <img src={a.coverUrl} alt="" loading="lazy" className="aspect-[4/3] w-full object-cover" />
-                  ) : null}
-                  <p className="p-3 font-medium">{a.title}</p>
+          {signedInAs ? null : (
+            <div className="rounded-[var(--radius)] border border-border bg-surface p-4 shadow-theme-xs">
+              <p className="text-sm text-muted">Our clients: sign in to see your projects, bookings, invoices and photos.</p>
+              {signInOpen ? (
+                <div className="mt-3 max-w-md">
+                  <PortalSignIn slug={slug} />
+                </div>
+              ) : (
+                <Link href={`/${slug}?signin=1`}>
+                  <Button className="mt-3">Sign in</Button>
                 </Link>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
-
-      <aside className={`${card} space-y-3`}>
-        <h2 className="text-lg font-semibold">Our clients</h2>
-        {signedInAs ? (
-          <>
-            <p className="text-sm">Welcome back, {signedInAs}.</p>
-            <Link href={`/${slug}/me`} className="inline-flex min-h-11 w-full items-center justify-center rounded-[var(--radius)] bg-brand-500 px-5 text-sm text-white hover:bg-brand-600">
-              Open my page
-            </Link>
-          </>
-        ) : (
-          <>
-            <p className="text-sm text-muted">Your projects, bookings, invoices and photos.</p>
-            <PortalSignIn slug={slug} />
-          </>
-        )}
-      </aside>
-    </main>
+              )}
+            </div>
+          )}
+        </div>
+      }
+      tabs={tabs}
+    />
   );
 }

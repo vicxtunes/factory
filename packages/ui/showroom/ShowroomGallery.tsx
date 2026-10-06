@@ -74,7 +74,7 @@ export function ShowroomGallery({
     <div className="overflow-x-clip">
       {banner ? (
         <div className="relative -mx-4 -mt-6 mb-6 h-48 overflow-hidden sm:-mx-6 sm:h-64">
-          <Image src={banner.imageUrl} alt="" fill priority className="object-cover" />
+          <Image src={banner.imageUrl} alt="" fill priority unoptimized={!canOptimizeImage(banner.imageUrl)} className="object-cover" />
           <div className="absolute inset-0 bg-gradient-to-r from-[#1b2a4b]/90 via-[#1b2a4b]/50 to-brand-600/60" />
           <div className="absolute inset-0 flex flex-col items-center justify-center px-4 text-center">
             <h1 className="text-3xl font-extrabold uppercase tracking-wide text-white underline decoration-brand-400 decoration-4 underline-offset-8 sm:text-5xl">

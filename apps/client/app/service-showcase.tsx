@@ -20,6 +20,7 @@ export function ServiceShowcase({
   service,
   media,
   viewMode,
+  showPrices,
   scope,
 }: {
   studio: { name: string; phone: string | null };
@@ -28,6 +29,8 @@ export function ServiceShowcase({
   service: ServiceWithPackages;
   media: { coverUrl: string | null; videoUrl: string | null; gallery: ShowcaseMedia[] };
   viewMode: ShowroomViewMode;
+  /** The studio's choice: off, every package reads "Price on request". */
+  showPrices: boolean;
   scope: Pick<TenantScope, "currency" | "locale">;
 }) {
   const router = useRouter();
@@ -77,7 +80,7 @@ export function ServiceShowcase({
                       <span className="text-lg font-bold">{p.name}</span>
                       <span className="shrink-0 text-lg font-bold tabular-nums text-brand-600 dark:text-brand-400">
                         {/* A tier priced 0 ("Custom") is quoted on request; quotations still use the number. */}
-                        {p.price > 0 ? formatAmount(scope, p.price) : "Price on request"}
+                        {showPrices && p.price > 0 ? formatAmount(scope, p.price) : "Price on request"}
                       </span>
                     </span>
                     {p.description ? <span className="block whitespace-pre-line text-sm text-showroom-ink/60">{p.description}</span> : null}

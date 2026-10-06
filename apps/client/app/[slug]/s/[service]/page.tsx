@@ -4,15 +4,17 @@ import { notFound, permanentRedirect } from "next/navigation";
 import { offerings } from "@repo/lib/offerings/server";
 import { PhotoError } from "@repo/lib/photos/ports";
 import { photos } from "@repo/lib/photos/server";
-import { fetchShowroomSettings } from "@repo/lib/queries";
-import { studioAtSlug } from "@repo/lib/studio-portal/server";
+import { studioAccess } from "@repo/lib/studio-access/server";
+import { portalClient, studioAtSlug } from "@repo/lib/studio-portal/server";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
 import { ServiceShowcase } from "../../../service-showcase";
+import { StudioShell } from "../../studio-shell";
 
 // One of a studio's services as a standalone, shareable page:
 // client.<domain>/<studio>/s/<service>, the showroom's item page with its
-// packages to choose from. Its address never changes when it's renamed.
+// packages to choose from, in the studio's frame, like an Aming product's
+// own page. No sign-in needed. Its address never changes when it's renamed.
 
 export const dynamic = "force-dynamic";
 
@@ -57,19 +59,26 @@ export default async function ServicePage({ params }: Params) {
   if (!loaded) notFound();
   if (loaded.at.redirectTo) permanentRedirect(`/${loaded.at.redirectTo}/s/${loaded.service}`);
   if (!loaded.found) notFound();
-  const [media, settings] = await Promise.all([mediaOf(loaded.at.scope, loaded.found.id), fetchShowroomSettings()]);
+  const { at, found, slug } = loaded;
+  const [media, settings, signedIn, logoUrl] = await Promise.all([
+    mediaOf(at.scope, found.id),
+    offerings.settings(at.scope),
+    portalClient(at.studio.id),
+    studioAccess.logoUrl(at.studio.logoKey),
+  ]);
 
   return (
-    <main className="mx-auto w-full max-w-4xl px-4 py-6 sm:py-10">
+    <StudioShell studio={{ name: at.studio.name, logoUrl, slug }} signedInAs={signedIn?.name ?? null} title={found.name}>
       <ServiceShowcase
         studio={{ name: loaded.at.studio.name, phone: loaded.at.studio.phone }}
         slug={loaded.slug}
         service={loaded.found}
         media={media}
-        // The same look as Aming's own showroom (Dashboard → Products).
-        viewMode={settings.product_view_mode}
+        // The studio's choices (Packages & Services): 3D or carousel, prices shown or not.
+        viewMode={settings.viewMode}
+        showPrices={settings.showPrices}
         scope={loaded.at.scope}
       />
-    </main>
+    </StudioShell>
   );
 }

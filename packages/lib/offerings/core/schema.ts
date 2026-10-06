@@ -4,7 +4,7 @@ import { z } from "zod";
 
 import { optionalText } from "@repo/lib/kernel/core";
 
-import type { OfferingInput, ServiceFormInput, ServiceInput } from "./model";
+import type { OfferingInput, ServiceInput, ShowroomSettings } from "./model";
 
 /** What's included, one short line each. Blank lines are dropped, so an empty row in a form is harmless. Billing lines use it too. */
 export const inclusionsSchema = z
@@ -14,10 +14,20 @@ export const inclusionsSchema = z
 
 export const offeringIdSchema = z.uuid("That package doesn't exist.");
 export const serviceIdSchema = z.uuid("That service doesn't exist.");
+export const categoryIdSchema = z.uuid("That category doesn't exist.");
+
+export const categoryNameSchema = z
+  .string("Give it a name.")
+  .trim()
+  .min(1, "Give it a name.")
+  .max(60, "Keep the name under 60 characters.");
+
+export const serviceNameSchema = z.string("Give it a name.").trim().min(1, "Give it a name.").max(80, "Keep the name under 80 characters.");
+export const serviceDescriptionSchema = optionalText(2000, "Keep the description under 2,000 characters.");
 
 export const serviceInputSchema = z.object({
-  name: z.string("Give it a name.").trim().min(1, "Give it a name.").max(80, "Keep the name under 80 characters."),
-  description: optionalText(2000, "Keep the description under 2,000 characters."),
+  name: serviceNameSchema,
+  description: serviceDescriptionSchema,
 }) satisfies z.ZodType<ServiceInput, unknown>;
 
 export const offeringInputSchema = z.object({
@@ -31,11 +41,7 @@ export const offeringInputSchema = z.object({
   inclusions: inclusionsSchema,
 }) satisfies z.ZodType<OfferingInput, unknown>;
 
-/** The whole service form: the service and its packages, every one checked before anything is saved. */
-export const serviceFormSchema = serviceInputSchema
-  .extend({
-    packages: z
-      .array(offeringInputSchema.extend({ id: offeringIdSchema.optional() }))
-      .max(20, "Keep it to 20 packages.")
-      .refine((list) => new Set(list.map((p) => p.name.toLowerCase())).size === list.length, "Give each package its own name."),
-  }) satisfies z.ZodType<ServiceFormInput, unknown>;
+export const showroomSettingsSchema = z.object({
+  showPrices: z.boolean("Choose whether prices show."),
+  viewMode: z.enum(["scene", "carousel"], "Choose 3D or carousel."),
+}) satisfies z.ZodType<ShowroomSettings, unknown>;

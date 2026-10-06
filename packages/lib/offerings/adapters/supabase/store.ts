@@ -1,19 +1,30 @@
 import "server-only";
 
-// This app's OfferingStore: the offering_services and offerings tables
+// This app's OfferingStore: the offering_categories, offering_services,
+// offerings and offering_settings tables
 // (supabase/migrations/20261003120000_offerings.sql,
-// 20261006100000_offering_services.sql). Service-role client, so every
+// 20261006100000_offering_services.sql, 20261007100000_offering_categories.sql).
+// Service-role client, so every
 // query here filters by the scope's tenant: that filter is what keeps one
 // studio's services and packages from another.
 
 import { createAdminClient } from "@repo/lib/supabase/admin";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
-import type { Offering, OfferingInput, Service, ServiceInput } from "../../core/model";
+import type { Category, Offering, OfferingInput, Service, ShowroomSettings } from "../../core/model";
 import { OfferingError, type OfferingStore } from "../../ports";
+
+interface CategoryRow {
+  id: string;
+  name: string;
+  position: number;
+  archived_at: string | null;
+  created_at: string;
+}
 
 interface ServiceRow {
   id: string;
+  category_id: string;
   name: string;
   slug: string;
   description: string | null;
@@ -35,12 +46,22 @@ interface PackageRow {
   service: { name: string };
 }
 
-const SERVICE = "id, name, slug, description, position, archived_at, created_at";
+const CATEGORY = "id, name, position, archived_at, created_at";
+const SERVICE = "id, category_id, name, slug, description, position, archived_at, created_at";
 const PACKAGE =
   "id, service_id, name, description, price, inclusions, position, archived_at, created_at, service:offering_services!offerings_service_fkey (name)";
 
+const toCategory = (r: CategoryRow): Category => ({
+  id: r.id,
+  name: r.name,
+  position: r.position,
+  archivedAt: r.archived_at,
+  createdAt: r.created_at,
+});
+
 const toService = (r: ServiceRow): Service => ({
   id: r.id,
+  categoryId: r.category_id,
   name: r.name,
   slug: r.slug,
   description: r.description,
@@ -64,7 +85,11 @@ const toPackage = (r: PackageRow): Offering => ({
 });
 
 /** The writable columns, named one by one: nothing else a caller passes ever reaches the tables. */
-const serviceColumns = (input: ServiceInput) => ({ name: input.name, description: input.description });
+const servicePatch = (patch: Parameters<OfferingStore["updateService"]>[2]) => ({
+  ...(patch.name !== undefined ? { name: patch.name } : {}),
+  ...(patch.description !== undefined ? { description: patch.description } : {}),
+  ...(patch.categoryId !== undefined ? { category_id: patch.categoryId } : {}),
+});
 const packageColumns = (input: OfferingInput) => ({
   name: input.name,
   description: input.description,
@@ -83,6 +108,7 @@ function fail(what: string, error: { code?: string; message: string }): never {
 /** A name as an exact, case-insensitive ilike pattern (no wildcards). */
 const exactly = (name: string) => name.replace(/[\\%_]/g, "\\$&");
 
+const categories = () => createAdminClient().from("offering_categories");
 const services = () => createAdminClient().from("offering_services");
 const packages = () => createAdminClient().from("offerings");
 
@@ -94,6 +120,47 @@ async function nextPosition(query: PromiseLike<{ data: { position: number }[] | 
 }
 
 export const supabaseOfferingStore: OfferingStore = {
+  async categories(scope) {
+    const { data, error } = await categories().select(CATEGORY).eq("tenant_id", scope.tenantId).returns<CategoryRow[]>();
+    if (error) fail("list categories", error);
+    return data.map(toCategory);
+  },
+
+  async category(scope, id) {
+    const { data, error } = await categories().select(CATEGORY).eq("tenant_id", scope.tenantId).eq("id", id).maybeSingle<CategoryRow>();
+    if (error) fail("load the category", error);
+    return data ? toCategory(data) : null;
+  },
+
+  async findActiveCategory(scope, name) {
+    const { data, error } = await categories()
+      .select(CATEGORY)
+      .eq("tenant_id", scope.tenantId)
+      .is("archived_at", null)
+      .ilike("name", exactly(name))
+      .maybeSingle<CategoryRow>();
+    if (error) fail("look up the name", error);
+    return data ? toCategory(data) : null;
+  },
+
+  async createCategory(scope, name) {
+    const position = await nextPosition(
+      categories().select("position").eq("tenant_id", scope.tenantId).order("position", { ascending: false }).limit(1),
+      "save the category",
+    );
+    const { data, error } = await categories().insert({ name, position, tenant_id: scope.tenantId }).select(CATEGORY).single<CategoryRow>();
+    if (error) fail("save the category", error);
+    return toCategory(data);
+  },
+
+  async renameCategory(scope, id, name) {
+    return writeCategory(scope, id, { name }, "rename the category");
+  },
+
+  async setCategoryArchived(scope, id, archived) {
+    return writeCategory(scope, id, { archived_at: archived ? new Date().toISOString() : null }, "deactivate the category");
+  },
+
   async services(scope, archived) {
     const query = services().select(SERVICE).eq("tenant_id", scope.tenantId);
     const { data, error } = await (archived ? query.not("archived_at", "is", null) : query.is("archived_at", null)).returns<ServiceRow[]>();
@@ -136,15 +203,15 @@ export const supabaseOfferingStore: OfferingStore = {
       "save the service",
     );
     const { data, error } = await services()
-      .insert({ ...serviceColumns(input), slug: input.slug, position, tenant_id: scope.tenantId })
+      .insert({ name: input.name, description: input.description, category_id: input.categoryId, slug: input.slug, position, tenant_id: scope.tenantId })
       .select(SERVICE)
       .single<ServiceRow>();
     if (error) fail("save the service", error);
     return toService(data);
   },
 
-  async updateService(scope, id, input) {
-    return writeService(scope, id, serviceColumns(input), "save the service");
+  async updateService(scope, id, patch) {
+    return writeService(scope, id, servicePatch(patch), "save the service");
   },
 
   async setServiceArchived(scope, id, archived) {
@@ -197,7 +264,30 @@ export const supabaseOfferingStore: OfferingStore = {
   async setPackageArchived(scope, id, archived) {
     return writePackage(scope, id, { archived_at: archived ? new Date().toISOString() : null }, "archive the package");
   },
+
+  async settings(scope) {
+    const { data, error } = await createAdminClient()
+      .from("offering_settings")
+      .select("show_prices, view_mode")
+      .eq("tenant_id", scope.tenantId)
+      .maybeSingle<{ show_prices: boolean; view_mode: ShowroomSettings["viewMode"] }>();
+    if (error) fail("load the showroom settings", error);
+    return data ? { showPrices: data.show_prices, viewMode: data.view_mode } : null;
+  },
+
+  async saveSettings(scope, settings) {
+    const { error } = await createAdminClient()
+      .from("offering_settings")
+      .upsert({ tenant_id: scope.tenantId, show_prices: settings.showPrices, view_mode: settings.viewMode });
+    if (error) fail("save the showroom settings", error);
+  },
 };
+
+async function writeCategory(scope: TenantScope, id: string, values: object, what: string) {
+  const { data, error } = await categories().update(values).eq("tenant_id", scope.tenantId).eq("id", id).select(CATEGORY).maybeSingle<CategoryRow>();
+  if (error) fail(what, error);
+  return data ? toCategory(data) : null;
+}
 
 async function writeService(scope: TenantScope, id: string, values: object, what: string) {
   const { data, error } = await services().update(values).eq("tenant_id", scope.tenantId).eq("id", id).select(SERVICE).maybeSingle<ServiceRow>();

@@ -7,9 +7,21 @@
 import { AppError } from "@repo/lib/kernel/core";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
-import type { Offering, OfferingInput, Service, ServiceInput } from "./core/model";
+import type { Category, Offering, OfferingInput, Service, ServiceInput, ShowroomSettings } from "./core/model";
 
 export interface OfferingStore {
+  /** Every category, active and deactivated. */
+  categories(scope: TenantScope): Promise<Category[]>;
+  category(scope: TenantScope, id: string): Promise<Category | null>;
+  /** The active category with this name, ignoring case. */
+  findActiveCategory(scope: TenantScope, name: string): Promise<Category | null>;
+  /** Saves a new category last in the showroom's order. */
+  createCategory(scope: TenantScope, name: string): Promise<Category>;
+  /** Null when there is no such category in this tenant. */
+  renameCategory(scope: TenantScope, id: string, name: string): Promise<Category | null>;
+  /** Deactivates (now) or reactivates. Null when there is no such category in this tenant. */
+  setCategoryArchived(scope: TenantScope, id: string, archived: boolean): Promise<Category | null>;
+
   /** On-sale services, or archived ones. */
   services(scope: TenantScope, archived: boolean): Promise<Service[]>;
   service(scope: TenantScope, id: string): Promise<Service | null>;
@@ -19,9 +31,9 @@ export interface OfferingStore {
   /** Every slug the tenant's services use, archived ones included. */
   serviceSlugs(scope: TenantScope): Promise<string[]>;
   /** Saves a new service last in the showroom's order. */
-  createService(scope: TenantScope, input: ServiceInput & { slug: string }): Promise<Service>;
-  /** Null when there is no such service in this tenant. */
-  updateService(scope: TenantScope, id: string, input: ServiceInput): Promise<Service | null>;
+  createService(scope: TenantScope, input: ServiceInput & { slug: string; categoryId: string }): Promise<Service>;
+  /** Changes what's given (name, description, category). Null when there is no such service in this tenant. */
+  updateService(scope: TenantScope, id: string, patch: Partial<ServiceInput & { categoryId: string }>): Promise<Service | null>;
   /** Archives (now) or restores. Null when there is no such service in this tenant. */
   setServiceArchived(scope: TenantScope, id: string, archived: boolean): Promise<Service | null>;
 
@@ -36,6 +48,10 @@ export interface OfferingStore {
   updatePackage(scope: TenantScope, id: string, input: OfferingInput): Promise<Offering | null>;
   /** Archives (now) or restores. Null when there is no such package in this tenant. */
   setPackageArchived(scope: TenantScope, id: string, archived: boolean): Promise<Offering | null>;
+
+  /** The tenant's showroom settings, or null when it has never saved any (the defaults apply). */
+  settings(scope: TenantScope): Promise<ShowroomSettings | null>;
+  saveSettings(scope: TenantScope, settings: ShowroomSettings): Promise<void>;
 }
 
 /** A problem the person should see (the message is safe to show). */

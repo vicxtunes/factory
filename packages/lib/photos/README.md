@@ -2,7 +2,7 @@
 
 A business's photos, in albums, stored in **Cloudflare R2** within a **storage allowance**. For
 studios it's **My Studio → Showroom**: their best work, shown on their public page in the **same
-3D walk-through as Aming's showroom**, with each album also a standalone **Pinterest-style** page.
+showroom layout as Aming's** (its "Our work" tab), with each album also a standalone **Pinterest-style** page.
 Generic and tenant-scoped.
 
 ## How photos are stored
@@ -68,15 +68,15 @@ never shared by link: it's shown through the service's page. Managed on the serv
 | --- | --- | --- |
 | My Studio → **Showroom** (`/studio/showroom`) | Studio owner | Usage, albums (cover, count, public or hidden), create an album |
 | `/studio/showroom/<album>` | Studio owner | Name, public or hidden, shareable address, delete; upload (progress per photo); cover, caption, delete per photo |
-| `/<studio>` (public page) | Anyone | **3D showroom** of the public albums' covers (scroll or swipe), "Our work" album grid |
+| `/<studio>` (public page) | Anyone | The studio's showroom: its banner is an album cover; the "Our work" tab lists the public albums |
 | `/<studio>/gallery/<album>` | Anyone | The album as a standalone **masonry** page: tap for full screen, swipe, keyboard |
 | A project's page → **Client photos** | Studio owner | Create the gallery, upload, manage, share by link (expiry, WhatsApp, stop) |
 | `/<studio>/me/photos/<project>` | The signed-in client | Their photos: masonry, full screen, Download, Download all |
 | `/<studio>/g/<secret>` | Anyone with the link | The same, without signing in, while the link lasts |
 | Staff app → People → Studios → a studio | Boss | The studio's usage, and its allowance (GB) |
 
-The 3D scene is Aming's own `packages/ui/showroom/ShowroomScene.tsx`, unchanged: it already takes any
-two image URLs. `apps/client/app/studio-showroom.tsx` feeds it album covers (their large copies).
+A service's page can show its photos in Aming's 3D scene (`packages/ui/showroom/ShowroomScene.tsx`),
+which takes any two image URLs.
 
 ## Settings (environment variables)
 
@@ -110,7 +110,7 @@ still show, without albums.
      }
    ]
    ```
-   `PUT` lets browsers upload; `GET` lets the 3D showroom load photos as images.
+   `PUT` lets browsers upload; `GET` lets the 3D scene load photos as images.
 4. **The bucket → Settings → Object lifecycle rules → Add rule:** prefix `incoming/`, delete
    objects after **1 day**. This clears uploads that were never confirmed.
 

@@ -47,7 +47,8 @@ const ICONS: Partial<Record<StudioNavItem["icon"], typeof DashboardIcon>> = {
   settings: SettingsIcon,
 };
 
-function StudioMark({ brand, size }: { brand: StudioBrand; size: "sm" | "md" }) {
+/** The studio's logo, or its initials on a brand square. Also heads its public pages ([slug]/studio-shell.tsx). */
+export function StudioMark({ brand, size }: { brand: Pick<StudioBrand, "name" | "logoUrl">; size: "sm" | "md" }) {
   const [broken, setBroken] = useState(false);
   const img = useRef<HTMLImageElement>(null);
   // A logo that failed before the page was interactive never fires onError.
