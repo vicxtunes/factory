@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { BackLink } from "@repo/ui/navigation/back";
 import { notFound } from "next/navigation";
 
 import { SectionLabel } from "@repo/ui/SectionLabel";
@@ -25,9 +25,9 @@ export default async function TeamMemberPage({ params }: { params: Promise<{ id:
   return (
     <>
       <div>
-        <Link href="/studio/team" className="text-xs font-medium text-brand-600 hover:underline">
+        <BackLink href="/studio/team" className="text-xs font-medium text-brand-600 hover:underline">
           ← Team
-        </Link>
+        </BackLink>
         <h2 className="mt-1 text-xl font-semibold">{member.name}</h2>
       </div>
       <TeamMemberForm key={member.id} member={member} />

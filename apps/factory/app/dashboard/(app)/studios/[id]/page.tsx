@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { BackLink } from "@repo/ui/navigation/back";
 import { notFound } from "next/navigation";
 
 import { CustomersList } from "@repo/ui/customers/CustomersList";
@@ -62,9 +62,9 @@ export default async function StudioPage({
   return (
     <div className="space-y-6">
       <div>
-        <Link href="/dashboard/studios" className="text-xs font-medium text-brand-600 hover:underline">
+        <BackLink href="/dashboard/studios" className="text-xs font-medium text-brand-600 hover:underline">
           ← Businesses
-        </Link>
+        </BackLink>
         <h2 className="mt-1 text-xl font-semibold">{studio.name}</h2>
       </div>
       <Loading skeleton={<PanelStackSkeleton count={1} />}>

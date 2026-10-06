@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import type { NotificationRow } from "@repo/lib/types";
 
 import { ChatLauncher } from "@repo/ui/chat/ChatLauncher";
+import { BackButton } from "@repo/ui/navigation/back";
 
 import { NotificationMenu } from "./notification-menu";
 import { UserMenu } from "./user-menu";
@@ -55,7 +56,10 @@ export function DashboardTopbar({
 
   return (
     <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-4 border-b border-border bg-surface px-4 sm:px-6">
-      <h1 className="text-base font-semibold">{title}</h1>
+      <span className="flex min-w-0 items-center gap-1">
+        <BackButton />
+        <h1 className="truncate text-base font-semibold">{title}</h1>
+      </span>
       <div className="relative ml-auto flex items-center gap-3">
         <ChatLauncher />
         <NotificationMenu initial={notifications} />

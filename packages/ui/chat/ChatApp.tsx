@@ -9,6 +9,8 @@ import { participantKey } from "@repo/lib/chat/policy";
 import { CONVERSATION_PARAM } from "@repo/lib/chat/routes";
 import type { ConversationSummary, ParticipantRef } from "@repo/lib/chat/types";
 
+import { backTo } from "../navigation/back";
+
 import { ConversationList } from "./ConversationList";
 import { ConversationView } from "./ConversationView";
 import { CHAT_FRAME_CLASS } from "./ChatSkeleton";
@@ -82,17 +84,22 @@ export function ChatApp({
   useChatSignals(onSignal);
 
   // Switching conversations only rewrites the URL (Next keeps
-  // useSearchParams in sync with history.replaceState): no server render,
-  // ConversationView loads the thread itself.
+  // useSearchParams in sync with the history API): no server render,
+  // ConversationView loads the thread itself. Opening one from the inbox is
+  // a step of its own, so back (or the phone's back swipe) returns to the
+  // inbox; switching between them on desktop isn't.
   const select = useCallback(
     (id: string | null) => {
       const params = new URLSearchParams(searchParams.toString());
       if (id) params.set(CONVERSATION_PARAM, id);
       else params.delete(CONVERSATION_PARAM);
       const qs = params.toString();
-      window.history.replaceState(null, "", qs ? `${pathname}?${qs}` : pathname);
+      const url = qs ? `${pathname}?${qs}` : pathname;
+      if (!id) backTo(url, () => window.history.replaceState(null, "", url));
+      else if (activeId) window.history.replaceState(null, "", url);
+      else window.history.pushState(null, "", url);
     },
-    [pathname, searchParams],
+    [pathname, searchParams, activeId],
   );
 
   return (

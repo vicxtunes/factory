@@ -7,6 +7,8 @@ import { Field, TextInput } from "@repo/ui/Field";
 import { removeMyAvatar, updateMyName } from "@repo/lib/profile/actions";
 import { uploadAvatar } from "@repo/lib/profile/upload-client";
 
+import { useCloseOnBack } from "../navigation/back";
+
 import { Avatar } from "./Avatar";
 
 function CameraIcon({ className }: { className?: string }) {
@@ -51,6 +53,7 @@ export function ManageProfileModal({
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [pending, start] = useTransition();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  useCloseOnBack(open, onClose);
 
   // Re-sync from the latest props each time the modal opens — otherwise a
   // second open still shows whatever was typed/uploaded last time it closed.

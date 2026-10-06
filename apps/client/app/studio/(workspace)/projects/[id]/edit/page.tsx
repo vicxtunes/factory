@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { BackLink } from "@repo/ui/navigation/back";
 import { notFound } from "next/navigation";
 
 import { ProjectForm } from "@repo/ui/projects/ProjectControls";
@@ -22,18 +22,18 @@ export default async function EditProjectPage({ params }: { params: Promise<{ id
     return (
       <p className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted">
         This project is completed.{" "}
-        <Link href={`/studio/projects/${p.id}`} className="font-medium text-brand-600 underline">
+        <BackLink href={`/studio/projects/${p.id}`} className="font-medium text-brand-600 underline">
           Back to it
-        </Link>
+        </BackLink>
       </p>
     );
   }
 
   return (
     <>
-      <Link href={`/studio/projects/${p.id}`} className="text-xs font-medium text-brand-600 hover:underline">
+      <BackLink href={`/studio/projects/${p.id}`} className="text-xs font-medium text-brand-600 hover:underline">
         ← {p.title}
-      </Link>
+      </BackLink>
       <Loading skeleton={<FormSkeleton />}>
         <Form scope={scope} p={p} />
       </Loading>

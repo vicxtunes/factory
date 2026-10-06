@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { BackLink } from "@repo/ui/navigation/back";
 import { notFound } from "next/navigation";
 
 import { DocumentEditor } from "@repo/ui/billing/DocumentEditor";
@@ -22,18 +22,18 @@ export default async function EditInvoicePage({ params }: { params: Promise<{ id
     return (
       <p className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted">
         {invoice.voidedAt ? "This invoice is void." : "This invoice has payments, so it can't be changed. Void them first."}{" "}
-        <Link href={`/studio/invoices/${invoice.id}`} className="font-medium text-brand-600 underline">
+        <BackLink href={`/studio/invoices/${invoice.id}`} className="font-medium text-brand-600 underline">
           Back to it
-        </Link>
+        </BackLink>
       </p>
     );
   }
 
   return (
     <>
-      <Link href={`/studio/invoices/${invoice.id}`} className="text-xs font-medium text-brand-600 hover:underline">
+      <BackLink href={`/studio/invoices/${invoice.id}`} className="text-xs font-medium text-brand-600 hover:underline">
         ← {invoice.number}
-      </Link>
+      </BackLink>
       <Loading skeleton={<FormSkeleton />}>
         <Form scope={scope} invoice={invoice} />
       </Loading>

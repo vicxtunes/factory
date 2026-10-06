@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { BackLink } from "@repo/ui/navigation/back";
 import { notFound, redirect } from "next/navigation";
 
 import { DownloadAll } from "@repo/ui/photos/DownloadAll";
@@ -31,9 +31,9 @@ export default async function ClientPhotosPage({ params }: { params: Promise<{ s
   return (
     <main className="mx-auto w-full max-w-6xl space-y-6 px-4 py-8">
       <header className="space-y-2">
-        <Link href={`/${slug}/me`} className="text-sm text-muted hover:underline">
+        <BackLink href={`/${slug}/me`} className="text-sm text-muted hover:underline">
           ← {at.studio.name}
-        </Link>
+        </BackLink>
         <h1 className="text-2xl font-semibold">{view.project.title}</h1>
       </header>
       <Loading skeleton={<ProductGridSkeleton />}>

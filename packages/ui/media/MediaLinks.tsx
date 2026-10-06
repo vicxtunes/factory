@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { ActionMenu, type ActionMenuEntry } from "@repo/ui/ActionMenu";
 import { Spinner } from "@repo/ui/Spinner";
+import { useCloseOnBack } from "@repo/ui/navigation/back";
 
 import { getCurrentActor } from "@repo/lib/notes/actions";
 import { deleteOrderItemMedia, markMediaDownloaded, updateMediaLink } from "@repo/lib/storage/actions";
@@ -574,6 +575,7 @@ function ZipButton({
 
 function Lightbox({ preview, onClose }: { preview: Preview; onClose: () => void }) {
   const download = useDownload(preview.downloadHref, preview.name, preview.onSaved);
+  useCloseOnBack(true, onClose);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {

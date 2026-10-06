@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import Link from "next/link";
+import { BackLink } from "@repo/ui/navigation/back";
 import { notFound } from "next/navigation";
 
 import { InvoicesList } from "@repo/ui/billing/InvoicesList";
@@ -36,9 +37,9 @@ export default async function StudioClientPage({ params }: { params: Promise<{ i
   return (
     <>
       <div>
-        <Link href="/studio/clients" className="text-xs font-medium text-brand-600 hover:underline">
+        <BackLink href="/studio/clients" className="text-xs font-medium text-brand-600 hover:underline">
           ← Clients
-        </Link>
+        </BackLink>
         <h2 className="mt-1 text-xl font-semibold">
           {customer.name}
           {customer.archivedAt ? <span className="ml-2 align-middle text-xs font-normal text-muted">(archived)</span> : null}

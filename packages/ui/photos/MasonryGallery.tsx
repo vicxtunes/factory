@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { PhotoView } from "@repo/lib/photos/core";
 
+import { useCloseOnBack } from "../navigation/back";
+
 /**
  * Photos in a Pinterest-style masonry grid (small copies, lazy-loaded), and
  * a full-screen viewer (large copies) with arrows, swipe and keyboard. With
@@ -12,6 +14,8 @@ import type { PhotoView } from "@repo/lib/photos/core";
 export function MasonryGallery({ photos, downloads = false }: { photos: PhotoView[]; downloads?: boolean }) {
   const [open, setOpen] = useState<number | null>(null);
   const touchX = useRef<number | null>(null);
+  const close = useCallback(() => setOpen(null), []);
+  useCloseOnBack(open !== null, close);
   const step = useCallback((d: 1 | -1) => setOpen((i) => (i === null ? i : (i + d + photos.length) % photos.length)), [photos.length]);
 
   useEffect(() => {

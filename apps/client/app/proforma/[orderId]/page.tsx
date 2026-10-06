@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { BackLink } from "@repo/ui/navigation/back";
 import { notFound, redirect } from "next/navigation";
 
 import { InvoicePdf } from "@repo/ui/invoices/InvoicePdf";
@@ -24,9 +24,9 @@ export default async function ProformaPage({ params }: { params: Promise<{ order
 
   return (
     <main className="mx-auto w-full max-w-3xl px-4 py-6 sm:py-10 print:max-w-none print:p-0">
-      <Link href="/orders" className="mb-3 inline-block text-sm font-medium text-brand-600 underline print:hidden">
+      <BackLink href="/orders" className="mb-3 inline-block text-sm font-medium text-brand-600 underline print:hidden">
         ← Back to orders
-      </Link>
+      </BackLink>
       <InvoicePdf invoice={invoice} />
       {/* Paying early is fine when the estimate is complete (no photo books waiting for a price). */}
       {invoice.complete && invoice.balance > 0 && !invoice.order.cancelled ? (

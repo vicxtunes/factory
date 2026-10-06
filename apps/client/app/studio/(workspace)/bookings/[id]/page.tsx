@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BackLink } from "@repo/ui/navigation/back";
 import { notFound } from "next/navigation";
 
 import { BookingStatusBadge, timeSpan } from "@repo/ui/bookings/BookingBits";
@@ -38,9 +39,9 @@ export default async function StudioBookingPage({ params }: { params: Promise<{ 
   return (
     <>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <Link href={`/studio/bookings?view=day&date=${b.date}`} className="text-xs font-medium text-brand-600 hover:underline">
+        <BackLink href={`/studio/bookings?view=day&date=${b.date}`} className="text-xs font-medium text-brand-600 hover:underline">
           ← Bookings
-        </Link>
+        </BackLink>
         {canEditBooking(b.status) ? (
           <Link
             href={`/studio/bookings/${b.id}/edit`}

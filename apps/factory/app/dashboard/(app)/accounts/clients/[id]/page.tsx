@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { BackLink } from "@repo/ui/navigation/back";
 import { notFound } from "next/navigation";
 
 import { CustomerAccountDetail } from "@repo/ui/accounting/CustomerAccountDetail";
@@ -15,9 +15,9 @@ export default async function ClientAccountPage({ params }: { params: Promise<{ 
 
   return (
     <div>
-      <Link href="/dashboard/accounts/clients" className="text-xs font-medium text-brand-600 hover:underline">
+      <BackLink href="/dashboard/accounts/clients" className="text-xs font-medium text-brand-600 hover:underline">
         ← Client accounts
-      </Link>
+      </BackLink>
       <Loading
         skeleton={
           <div className="mt-1 space-y-6">

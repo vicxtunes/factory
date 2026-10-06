@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { BackLink } from "@repo/ui/navigation/back";
 import { notFound } from "next/navigation";
 
 import { AlbumSettings, ManagePhotos } from "@repo/ui/photos/AlbumControls";
@@ -25,9 +25,9 @@ export default async function StudioAlbumPage({ params }: { params: Promise<{ al
   return (
     <>
       <div>
-        <Link href="/studio/showroom" className="text-xs font-medium text-brand-600 hover:underline">
+        <BackLink href="/studio/showroom" className="text-xs font-medium text-brand-600 hover:underline">
           ← Showroom
-        </Link>
+        </BackLink>
         <h2 className="mt-1 text-xl font-semibold">{album.title}</h2>
       </div>
       <Loading skeleton={<Skeleton className="h-24 w-full rounded-2xl" />}>

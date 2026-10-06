@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BackLink } from "@repo/ui/navigation/back";
 import { notFound } from "next/navigation";
 
 import { DocumentShare } from "@repo/ui/billing/DocumentShare";
@@ -26,9 +27,9 @@ export default async function StudioInvoicePage({ params }: { params: Promise<{ 
   return (
     <>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <Link href="/studio/invoices" className="text-xs font-medium text-brand-600 hover:underline">
+        <BackLink href="/studio/invoices" className="text-xs font-medium text-brand-600 hover:underline">
           ← Invoices
-        </Link>
+        </BackLink>
         <div className="flex flex-wrap gap-2">
           {invoice.sourceId ? (
             <Link href={`/studio/quotations/${invoice.sourceId}`} className={button}>

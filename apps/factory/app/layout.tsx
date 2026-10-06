@@ -6,6 +6,7 @@ import { InstallCapture } from "@repo/ui/pwa/InstallCapture";
 import { AppSplash } from "@repo/ui/pwa/AppSplash";
 import { NavigationProgress } from "@repo/ui/pwa/NavigationProgress";
 import { KeepFresh } from "@repo/ui/navigation/KeepFresh";
+import { BackHistory } from "@repo/ui/navigation/back";
 import { CurrencySymbolProvider } from "@repo/lib/currency/CurrencySymbolProvider";
 import { DEFAULT_CURRENCY_SYMBOL } from "@repo/lib/currency/format";
 import { fetchBaseCurrencySymbol } from "@repo/lib/queries";
@@ -59,6 +60,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
           <InstallCapture />
           <OfflineBanner />
           <NavigationProgress />
+          <BackHistory />
           <KeepFresh />
           <AppSplash />
           <CurrencySymbolProvider symbol={symbol}>{children}</CurrencySymbolProvider>
