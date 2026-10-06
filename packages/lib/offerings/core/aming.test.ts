@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { AMING_COVER, AMING_VIDEO, amingMedia, amingShowcaseMedia } from "./aming";
+import { AMING_COVER, AMING_VIDEO, amingMedia, amingShowcaseMedia, withOwnMedia } from "./aming";
 
 const product = {
   display_image_url: "cover.jpg",
@@ -47,4 +47,22 @@ test("its cover left out, the first photo shown takes its place; none shown, no 
   assert.equal(noCover.coverUrl, "three.jpg");
   assert.deepEqual(noCover.gallery.map((m) => m.url), ["two.mp4"]);
   assert.equal(amingShowcaseMedia(product, [AMING_COVER, "m1", "m3"]).coverUrl, null);
+});
+
+test("the studio's own photos on a picked product: its cover and video first, then Aming's", () => {
+  const amingSide = amingShowcaseMedia(product, ["m2"]);
+  const none = { coverUrl: null, videoUrl: null, gallery: [] };
+  assert.deepEqual(withOwnMedia(none, amingSide), amingSide, "none of its own: Aming's as they are");
+  const own = { coverUrl: "my-cover.jpg", videoUrl: null, gallery: [{ url: "mine.jpg", kind: "photo" as const }] };
+  assert.deepEqual(withOwnMedia(own, amingSide), {
+    coverUrl: "my-cover.jpg",
+    videoUrl: "preview.mp4",
+    gallery: [
+      { url: "mine.jpg", kind: "photo" },
+      { url: "cover.jpg", kind: "photo" },
+      { url: "one.jpg", kind: "photo" },
+      { url: "three.jpg", kind: "photo" },
+    ],
+  });
+  assert.equal(withOwnMedia({ ...own, videoUrl: "my.mp4" }, amingSide).videoUrl, "my.mp4");
 });

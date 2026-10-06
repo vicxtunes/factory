@@ -123,7 +123,7 @@ async function StudioShowroom({
       ),
     })),
   );
-  // Each category's products with their covers: Aming's (less what the studio left out) or their own.
+  // Each category's products with their covers: the studio's own, else Aming's (less what it left out).
   // One picked from Aming that Aming no longer has on sale is left out, and so is a category left empty.
   const products = (
     await Promise.all(
@@ -133,12 +133,10 @@ async function StudioShowroom({
         products: (
           await Promise.all(
             c.services.map(async (p) => {
-              if (!p.sourceProductId) {
-                const album = await photos.serviceGallery(at.scope, p.id).catch(unlessNoStorage(null));
-                return [{ ...p, coverUrl: album?.coverUrl ?? null }];
-              }
-              const source = aming.get(p.sourceProductId);
-              return source ? [{ ...p, coverUrl: amingShowcaseMedia(source, p.hiddenMedia).coverUrl }] : [];
+              const source = p.sourceProductId ? aming.get(p.sourceProductId) : null;
+              if (p.sourceProductId && !source) return [];
+              const album = await photos.serviceGallery(at.scope, p.id).catch(unlessNoStorage(null));
+              return [{ ...p, coverUrl: album?.coverUrl ?? (source ? amingShowcaseMedia(source, p.hiddenMedia).coverUrl : null) }];
             }),
           )
         ).flat(),

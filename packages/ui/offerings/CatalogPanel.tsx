@@ -604,7 +604,12 @@ function ServiceCard({
 
       <div className="space-y-2">
         <p className="text-xs font-semibold uppercase tracking-wide text-muted">{words.tiers}</p>
-        {fromAming ? <p className="text-xs text-muted">Aming&apos;s sizes, at your prices to your clients. Deactivate a size you don&apos;t sell.</p> : null}
+        {fromAming ? (
+          <p className="text-xs text-muted">
+            Aming&apos;s sizes: type your price for each, it saves as you go. Left empty, clients see “Price on request”. Deactivate a size you don&apos;t
+            sell.
+          </p>
+        ) : null}
         <PackagesEditor
           kind={service.kind}
           fixedNames={fromAming}
@@ -619,22 +624,23 @@ function ServiceCard({
       <div className="space-y-2">
         <button type="button" onClick={() => setShowMedia((v) => !v)} className="text-xs font-semibold uppercase tracking-wide text-muted hover:text-foreground">
           {showMedia ? "▾" : "▸"} Photos and video
-          {fromAming
-            ? amingMedia
-              ? ` · ${amingMedia.filter((m) => !service.hiddenMedia.includes(m.key)).length} of ${amingMedia.length} shown`
-              : ""
-            : media.album
-              ? ` · ${media.photos.length} photo${media.photos.length === 1 ? "" : "s"}${media.album.videoUrl ? " · video" : ""}`
-              : ""}
+          {amingMedia ? ` · Aming's: ${amingMedia.filter((m) => !service.hiddenMedia.includes(m.key)).length} of ${amingMedia.length} shown` : ""}
+          {media.album
+            ? ` · ${fromAming ? "yours: " : ""}${media.photos.length} photo${media.photos.length === 1 ? "" : "s"}${media.album.videoUrl ? " · video" : ""}`
+            : ""}
         </button>
         {showMedia ? (
-          fromAming ? (
-            amingMedia ? (
+          <div className="space-y-4">
+            {amingMedia ? (
               <AmingMediaChooser items={amingMedia} hidden={service.hiddenMedia} onChange={(keys) => run(() => setHiddenMedia(service.id, keys))} pending={pending} />
-            ) : null
-          ) : (
+            ) : null}
+            {fromAming ? (
+              <p className="text-xs text-muted">
+                Your own photos and video: your cover and video take the place of Aming&apos;s, and your photos show before theirs.
+              </p>
+            ) : null}
             <ServiceMediaPanel serviceId={service.id} album={media.album} photos={media.photos} usage={usage} />
-          )
+          </div>
         ) : null}
       </div>
     </div>

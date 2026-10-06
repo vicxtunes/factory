@@ -5,7 +5,7 @@ import { Loading } from "@repo/ui/skeletons/Loading";
 import { localDate } from "@repo/lib/accounting/core/period";
 import { notFound, permanentRedirect } from "next/navigation";
 
-import { amingShowcaseMedia } from "@repo/lib/offerings/core";
+import { amingShowcaseMedia, withOwnMedia } from "@repo/lib/offerings/core";
 import { amingProducts, offerings } from "@repo/lib/offerings/server";
 import { studioAccess } from "@repo/lib/studio-access/server";
 import { portalClient, studioAtSlug } from "@repo/lib/studio-portal/server";
@@ -16,9 +16,9 @@ import { StudioShell } from "../../studio-shell";
 
 // One of a studio's products as a standalone, shareable page:
 // <studio>/p/<product>, like a service's page (../../s/[service]) with its
-// sizes and "Order now". A product picked from Aming shows Aming's photos and
-// video, less those the studio left out; once Aming no longer has it on sale,
-// it's gone from here too. No sign-in needed.
+// sizes and "Order now". A product picked from Aming shows the studio's own
+// photos and video, then Aming's less those it left out; once Aming no longer
+// has it on sale, it's gone from here too. No sign-in needed.
 
 export const dynamic = "force-dynamic";
 
@@ -67,10 +67,9 @@ async function Showcase({
   loaded: Pick<Loaded, "at" | "source" | "slug"> & { found: NonNullable<Loaded["found"]> };
   signedIn: boolean;
 }) {
-  const [media, settings] = await Promise.all([
-    source ? amingShowcaseMedia(source, found.hiddenMedia) : serviceMedia(at.scope, found.id),
-    offerings.settings(at.scope),
-  ]);
+  const [own, settings] = await Promise.all([serviceMedia(at.scope, found.id), offerings.settings(at.scope)]);
+  // A picked product: the studio's own photos and video, then Aming's (less those it left out).
+  const media = source ? withOwnMedia(own, amingShowcaseMedia(source, found.hiddenMedia)) : own;
   return (
     <ServiceShowcase
       kind="product"

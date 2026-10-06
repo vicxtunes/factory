@@ -61,7 +61,7 @@ function PackageForm({
       name: form.name,
       description: form.description,
       // An empty or non-numeric price reaches the server as NaN and is refused there.
-      price: form.price.trim() === "" ? Number.NaN : Number(form.price.replace(/[,\s]/g, "")),
+      price: parsePrice(form.price),
       inclusions: form.inclusions.split("\n"),
     };
     start(async () => {
@@ -132,6 +132,63 @@ function ArchiveToggle({ pkg }: { pkg: Offering }) {
   );
 }
 
+/** "250,000" for a typed price; empty or not a number gives NaN, which the server refuses. */
+const parsePrice = (text: string) => (text.trim() === "" ? Number.NaN : Number(text.replace(/[,\s]/g, "")));
+
+/**
+ * One of Aming's sizes of a picked product, priced in place: type the price
+ * and it saves on Enter or leaving the box. Empty is "Price on request".
+ */
+function SizePriceRow({ pkg, currency }: { pkg: Offering; currency: string }) {
+  const router = useRouter();
+  const [state, setState] = useState<{ saved: boolean; error: string | null }>({ saved: false, error: null });
+  const [pending, start] = useTransition();
+
+  function save(text: string) {
+    const price = text.trim() === "" ? 0 : parsePrice(text);
+    if (price === pkg.price) return;
+    start(async () => {
+      const res = await updateOffering(pkg.id, { name: pkg.name, description: pkg.description ?? "", price, inclusions: pkg.inclusions });
+      if (!res.ok) return setState({ saved: false, error: res.error });
+      setState({ saved: true, error: null });
+      router.refresh();
+    });
+  }
+
+  return (
+    <li className="space-y-1 py-2">
+      <div className="flex items-center gap-3">
+        <span className="min-w-0 flex-1 truncate text-sm font-medium">{pkg.name}</span>
+        <label className="flex items-center gap-1.5">
+          <span className="text-xs text-muted">{currency}</span>
+          <input
+            defaultValue={pkg.price > 0 ? pkg.price.toLocaleString("en-US") : ""}
+            inputMode="numeric"
+            placeholder="Add price"
+            aria-label={`Price of ${pkg.name} (${currency})`}
+            disabled={pending}
+            onFocus={() => setState({ saved: false, error: null })}
+            onBlur={(e) => save(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") e.currentTarget.blur();
+            }}
+            className={`min-h-9 w-32 rounded-[var(--radius)] border bg-surface px-2 text-right text-sm tnum ${
+              pkg.price > 0 ? "border-border" : "border-brand-300 placeholder:text-brand-600 dark:border-brand-500/40 dark:placeholder:text-brand-400"
+            }`}
+          />
+        </label>
+        <span className="w-12 text-xs">
+          {pending ? <span className="text-muted">Saving…</span> : state.saved ? <span className="text-success-600 dark:text-success-500">Saved</span> : null}
+        </span>
+        <span className="text-xs">
+          <ArchiveToggle pkg={pkg} />
+        </span>
+      </div>
+      {state.error ? <p className="text-xs text-error-600 dark:text-error-400">{state.error}</p> : null}
+    </li>
+  );
+}
+
 /** One package as the client will see it: name, price, description, what's included. */
 function PackageCard({ pkg, scope, onEdit }: { pkg: Offering; scope: Scope; onEdit?: () => void }) {
   return (
@@ -192,7 +249,14 @@ export function PackagesEditor({
 
   return (
     <div className="space-y-3">
-      {packages.length === 0 ? (
+      {fixedNames && packages.length ? (
+        // Aming's sizes: just their prices, each typed in place.
+        <ul className="divide-y divide-border rounded-2xl border border-border bg-surface px-4 shadow-theme-xs">
+          {packages.map((p) => (
+            <SizePriceRow key={p.id} pkg={p} currency={scope.currency} />
+          ))}
+        </ul>
+      ) : packages.length === 0 ? (
         <p className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted">
           {kind === "service"
             ? "No packages yet. Add its tiers, e.g. Gold, Silver, Bronze and Custom, each with its price and what's included."

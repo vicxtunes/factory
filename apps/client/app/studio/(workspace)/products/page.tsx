@@ -39,12 +39,11 @@ async function Catalog({ scope }: { scope: TenantScope }) {
     categories: catalog.map((c) => ({ id: c.id, name: c.name, products: c.products.map((p) => ({ id: p.id, name: p.name, imageUrl: p.display_image_url })) })),
     media: Object.fromEntries(catalog.flatMap((c) => c.products.map((p) => [p.id, amingMedia(p)]))),
   };
-  // The studio's own products' photos and video, for their cards. Until photo storage is set up, none.
+  // Every product's own photos and video (a picked one's too, shown before Aming's), for its card. Until photo storage is set up, none.
   const media: Record<string, ServiceMedia> = Object.fromEntries(
     await Promise.all(
       categories
         .flatMap((c) => c.services)
-        .filter((s) => !s.sourceProductId)
         .map(async (s): Promise<[string, ServiceMedia]> => {
           try {
             const album = await photos.serviceGallery(scope, s.id);

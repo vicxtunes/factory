@@ -40,9 +40,11 @@ packages ("8x12", "12x18"), each size with its price. A product's address is `/<
   own categories.
 - **Picked from Aming** (`sourceProductId`): Aming's name, description, photos, preview video and
   sizes are copied in, each size priced 0 ("Price on request") until the studio sets its prices.
-  The name and sizes stay Aming's (no rename, no new sizes); the studio sets prices and the
-  description, deactivates sizes it doesn't sell, and may leave some of Aming's photos and video out
-  (`hiddenMedia`: `"cover"`, `"video"` or a gallery item's id). Once Aming no longer has it on sale,
+  The name and sizes stay Aming's (no rename, no new sizes); the studio types each size's price
+  in place (saved as it goes), sets the description, deactivates sizes it doesn't sell, and may leave
+  some of Aming's photos and video out (`hiddenMedia`: `"cover"`, `"video"` or a gallery item's id).
+  It can also add its own photos and video (its album, as for its own products): its cover and video
+  take the place of Aming's and its photos come first (`withOwnMedia`). Once Aming no longer has it on sale,
   it's off the studio's showroom. Each Aming product is picked once.
 - **The studio's own**: like a service, with its own photos and video.
 - **Selling**: clients ask for one online (packages/lib/product-requests). Quotations and invoices
