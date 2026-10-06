@@ -10,9 +10,11 @@ import {
   formatBytes,
   MAX_LARGE_BYTES,
   MAX_THUMB_BYTES,
+  MAX_VIDEO_BYTES,
   PHOTO_CONTENT_TYPE,
   photoKeys,
   uniqueSlug,
+  videoKeys,
   type Album,
   type AlbumView,
   type Photo,
@@ -20,6 +22,7 @@ import {
   type UploadFile,
   type UploadTicket,
   type Usage,
+  type VideoContentType,
 } from "./core";
 import { PhotoError, type ObjectStore, type PhotoRepository } from "./ports";
 
@@ -88,6 +91,76 @@ export class PhotoService {
     const keys = await this.repo.deleteAlbum(scope, id);
     if (keys === null) throw new PhotoError(NO_ALBUM);
     await this.objects.remove(keys);
+  }
+
+  // ── Service media ──────────────────────────────────────────────────────
+
+  /** A service's media album (cover, gallery, preview video), if it has one. */
+  async serviceGallery(scope: TenantScope, serviceId: string): Promise<AlbumView | null> {
+    const album = await this.repo.serviceAlbumFor(scope, serviceId);
+    return album ? this.withCover(album) : null;
+  }
+
+  /** A service's media album, made the first time (private: shown through the service's page only). */
+  async openServiceGallery(scope: TenantScope, serviceId: string, title: string): Promise<string> {
+    const existing = await this.repo.serviceAlbumFor(scope, serviceId);
+    if (existing) return existing.id;
+    const slug = uniqueSlug(albumSlugFromTitle(title), new Set(await this.repo.albumSlugs(scope)));
+    return this.repo.createServiceAlbum(scope, serviceId, { title, slug });
+  }
+
+  /**
+   * An upload link for a service's preview video, if it fits the allowance
+   * (the current video's space counting as free). Nothing counts until it's
+   * confirmed with its real size (confirmVideoUpload).
+   */
+  async startVideoUpload(
+    scope: TenantScope,
+    input: { albumId: string; bytes: number; contentType: VideoContentType },
+  ): Promise<{ videoId: string; url: string }> {
+    const album = await this.serviceAlbum(scope, input.albumId);
+    const { usedBytes, quotaBytes } = await this.repo.usage(scope);
+    if (!fits(usedBytes - (album.videoBytes ?? 0), quotaBytes, input.bytes)) {
+      throw new PhotoError(
+        `Not enough space for this video: ${formatBytes(quotaBytes - Math.min(usedBytes, quotaBytes))} left of ${formatBytes(quotaBytes)}. Delete some photos, or ask Aming for more space.`,
+      );
+    }
+    const videoId = this.newId();
+    const url = await this.objects.putUrl(videoKeys(scope.tenantId, album.id, videoId, input.contentType).incoming, input.contentType, UPLOAD_SECONDS);
+    return { videoId, url };
+  }
+
+  /**
+   * After the browser uploaded the video: reads its real size, moves it into
+   * place and makes it the service's preview video if it fits, deleting the
+   * one it replaces. Anything that doesn't fit is deleted.
+   */
+  async confirmVideoUpload(scope: TenantScope, input: { albumId: string; videoId: string; contentType: VideoContentType }): Promise<void> {
+    const album = await this.serviceAlbum(scope, input.albumId);
+    const keys = videoKeys(scope.tenantId, album.id, input.videoId, input.contentType);
+    const bytes = await this.objects.size(keys.incoming);
+    if (bytes === null) throw new PhotoError("That upload didn't finish. Try the video again.");
+    if (bytes > MAX_VIDEO_BYTES) {
+      await this.objects.remove([keys.incoming]);
+      throw new PhotoError(`That video is too big. Choose one under ${formatBytes(MAX_VIDEO_BYTES)}.`);
+    }
+    await this.objects.move(keys.incoming, keys.final);
+    let old: string | null;
+    try {
+      old = await this.repo.setVideo(scope, album.id, keys.final, bytes);
+    } catch (err) {
+      // Not recorded (e.g. over the allowance): don't keep a file nobody counts.
+      await this.objects.remove([keys.final]);
+      throw err;
+    }
+    if (old) await this.objects.remove([old]);
+  }
+
+  /** Removes a service's preview video and its file, freeing its space. */
+  async removeVideo(scope: TenantScope, albumId: string): Promise<void> {
+    const album = await this.serviceAlbum(scope, albumId);
+    const old = await this.repo.clearVideo(scope, album.id);
+    if (old) await this.objects.remove([old]);
   }
 
   // ── Client delivery ────────────────────────────────────────────────────
@@ -219,12 +292,19 @@ export class PhotoService {
     return { ...p, thumbUrl, largeUrl, ...(downloadUrl ? { downloadUrl } : {}) };
   }
 
+  private async serviceAlbum(scope: TenantScope, albumId: string): Promise<Album> {
+    const album = await this.repo.album(scope, albumId);
+    if (!album || album.kind !== "service") throw new PhotoError(NO_ALBUM);
+    return album;
+  }
+
   private async withCover(a: Album): Promise<AlbumView> {
-    const [coverUrl, coverLargeUrl] = await Promise.all([
+    const [coverUrl, coverLargeUrl, videoUrl] = await Promise.all([
       a.coverThumbKey ? this.objects.getUrl(a.coverThumbKey, VIEW_SECONDS) : null,
       a.coverLargeKey ? this.objects.getUrl(a.coverLargeKey, VIEW_SECONDS) : null,
+      a.videoKey ? this.objects.getUrl(a.videoKey, VIEW_SECONDS) : null,
     ]);
-    return { ...a, coverUrl, coverLargeUrl };
+    return { ...a, coverUrl, coverLargeUrl, videoUrl };
   }
 }
 

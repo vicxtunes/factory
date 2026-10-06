@@ -1,12 +1,11 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import { ShowroomGallery } from "@repo/ui/showroom/ShowroomGallery";
 import { whatsappNumber } from "@repo/lib/kernel/core/phone";
-import type { Offering } from "@repo/lib/offerings/core";
+import type { Service } from "@repo/lib/offerings/core";
 import type { AlbumView } from "@repo/lib/photos/core";
 import type { Studio } from "@repo/lib/studios/core";
-import { formatAmount } from "@repo/lib/tenancy/format";
-import type { TenantScope } from "@repo/lib/tenancy/types";
 
 import { PortalSignIn } from "./PortalForms";
 
@@ -14,22 +13,22 @@ const card = "rounded-2xl border border-border bg-surface p-5 shadow-theme-xs";
 
 /**
  * A studio's public page at client.<domain>/<slug>: who they are, how to
- * reach them, what they offer, and where their clients sign in. Only public
+ * reach them, their services (each opening its own page with its
+ * packages), their work, and where their clients sign in. Only public
  * details: nothing about any client.
  */
 export function StudioPublicPage({
   studio,
   slug,
-  offerings,
-  scope,
+  services,
   signedInAs,
   albums,
   showroom,
 }: {
   studio: Studio;
   slug: string;
-  offerings: Offering[];
-  scope: Pick<TenantScope, "currency" | "locale">;
+  /** Its services on sale, each with its cover photo; each opens its own page with its packages. */
+  services: (Service & { coverUrl: string | null })[];
   /** The client signed in at this studio on this device, if any. */
   signedInAs: string | null;
   /** Public albums, linked to their own pages. */
@@ -64,6 +63,22 @@ export function StudioPublicPage({
         </div>
       </header>
 
+      {services.length ? (
+        <section className="space-y-3">
+          <h2 className="text-lg font-semibold">Our services</h2>
+          <ShowroomGallery
+            tabs={[
+              {
+                key: "services",
+                label: "Services",
+                emptyText: "",
+                cards: services.map((s) => ({ id: s.id, label: s.name, image: s.coverUrl, href: `/${slug}/s/${s.slug}` })),
+              },
+            ]}
+          />
+        </section>
+      ) : null}
+
       {showroom}
 
       {albums.length ? (
@@ -85,50 +100,22 @@ export function StudioPublicPage({
         </section>
       ) : null}
 
-      <div className="grid gap-6 md:grid-cols-[1fr_20rem]">
-        <section className={card}>
-          <h2 className="mb-3 text-lg font-semibold">Packages & services</h2>
-          {offerings.length === 0 ? (
-            <p className="text-sm text-muted">Ask us about our packages.</p>
-          ) : (
-            <ul className="divide-y divide-border">
-              {offerings.map((o) => (
-                <li key={o.id} className="py-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <p className="font-medium">{o.name}</p>
-                    <p className="shrink-0 font-medium tnum">{formatAmount(scope, o.price)}</p>
-                  </div>
-                  {o.description ? <p className="text-sm text-muted">{o.description}</p> : null}
-                  {o.inclusions.length ? (
-                    <ul className="mt-1 list-disc pl-5 text-sm text-muted">
-                      {o.inclusions.map((item, i) => (
-                        <li key={i}>{item}</li>
-                      ))}
-                    </ul>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-
-        <aside className={`${card} h-fit space-y-3`}>
-          <h2 className="text-lg font-semibold">Our clients</h2>
-          {signedInAs ? (
-            <>
-              <p className="text-sm">Welcome back, {signedInAs}.</p>
-              <Link href={`/${slug}/me`} className="inline-flex min-h-11 w-full items-center justify-center rounded-[var(--radius)] bg-brand-500 px-5 text-sm text-white hover:bg-brand-600">
-                Open my page
-              </Link>
-            </>
-          ) : (
-            <>
-              <p className="text-sm text-muted">Your projects, bookings, invoices and photos.</p>
-              <PortalSignIn slug={slug} />
-            </>
-          )}
-        </aside>
-      </div>
+      <aside className={`${card} space-y-3`}>
+        <h2 className="text-lg font-semibold">Our clients</h2>
+        {signedInAs ? (
+          <>
+            <p className="text-sm">Welcome back, {signedInAs}.</p>
+            <Link href={`/${slug}/me`} className="inline-flex min-h-11 w-full items-center justify-center rounded-[var(--radius)] bg-brand-500 px-5 text-sm text-white hover:bg-brand-600">
+              Open my page
+            </Link>
+          </>
+        ) : (
+          <>
+            <p className="text-sm text-muted">Your projects, bookings, invoices and photos.</p>
+            <PortalSignIn slug={slug} />
+          </>
+        )}
+      </aside>
     </main>
   );
 }

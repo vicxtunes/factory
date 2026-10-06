@@ -181,7 +181,7 @@ export interface ShowroomSceneHandle {
 // tick. This component only owns the motion; which image is "current" vs
 // "next" is the parent's job (originally cycling between different
 // products in the shuffled Free Walk deck, now cycling through one
-// product's own photos — see product-showcase.tsx), driven by onAdvance
+// item's own photos — see Showcase.tsx), driven by onAdvance
 // whenever the scroll position crosses a whole-image boundary.
 export const ShowroomScene = forwardRef<
   ShowroomSceneHandle,

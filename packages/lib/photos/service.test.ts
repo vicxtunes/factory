@@ -21,7 +21,8 @@ function fakes(quotaBytes = 10 * MB) {
   const photos: (Photo & { tenantId: string })[] = [];
   const quotas = new Map([["studio-a", quotaBytes], ["studio-b", quotaBytes]]);
   const projects = new Set(["studio-a/wedding", "studio-b/graduation"]);
-  const blank = { kind: "portfolio" as const, projectId: null, shareToken: null, shareExpiresOn: null, coverPhotoId: null, photoCount: 0, coverThumbKey: null, coverLargeKey: null };
+  const services = new Set(["studio-a/weddings", "studio-b/portraits"]);
+  const blank = { kind: "portfolio" as const, projectId: null, serviceId: null, videoKey: null, videoBytes: null, shareToken: null, shareExpiresOn: null, coverPhotoId: null, photoCount: 0, coverThumbKey: null, coverLargeKey: null };
   let n = 0;
   const objects: ObjectStore = {
     putUrl: async (key, type) => `put://${key}?type=${type}`,
@@ -33,7 +34,9 @@ function fakes(quotaBytes = 10 * MB) {
     },
     remove: async (keys) => keys.forEach((k) => files.delete(k)),
   };
-  const used = (t: string) => photos.filter((p) => p.tenantId === t).reduce((s, p) => s + p.bytes, 0);
+  const used = (t: string) =>
+    photos.filter((p) => p.tenantId === t).reduce((s, p) => s + p.bytes, 0) +
+    albums.filter((a) => a.tenantId === t).reduce((s, a) => s + (a.videoBytes ?? 0), 0);
   const mine = (s: TenantScope, id: string) => albums.find((a) => a.tenantId === s.tenantId && a.id === id);
   const repo: PhotoRepository = {
     usage: async (s) => ({ usedBytes: used(s.tenantId), quotaBytes: quotas.get(s.tenantId)! }),
@@ -51,6 +54,26 @@ function fakes(quotaBytes = 10 * MB) {
       if (!projects.has(`${s.tenantId}/${projectId}`)) throw new PhotoError("That project no longer exists.");
       albums.push({ ...blank, ...a, isPublic: false, kind: "delivery", projectId, id: `a${albums.length + 1}`, tenantId: s.tenantId, position: 0 });
       return `a${albums.length}`;
+    },
+    serviceAlbumFor: async (s, serviceId) => albums.find((a) => a.tenantId === s.tenantId && a.kind === "service" && a.serviceId === serviceId) ?? null,
+    createServiceAlbum: async (s, serviceId, a) => {
+      if (!services.has(`${s.tenantId}/${serviceId}`)) throw new PhotoError("That service no longer exists.");
+      albums.push({ ...blank, ...a, isPublic: false, kind: "service", serviceId, id: `a${albums.length + 1}`, tenantId: s.tenantId, position: 0 });
+      return `a${albums.length}`;
+    },
+    setVideo: async (s, id, key, bytes) => {
+      const a = mine(s, id);
+      if (!a || a.kind !== "service") throw new PhotoError("That album no longer exists.");
+      if (used(s.tenantId) - (a.videoBytes ?? 0) + bytes > quotas.get(s.tenantId)!) throw new PhotoError("Not enough space left for that.");
+      const old = a.videoKey;
+      Object.assign(a, { videoKey: key, videoBytes: bytes });
+      return old;
+    },
+    clearVideo: async (s, id) => {
+      const a = mine(s, id);
+      const old = a?.videoKey ?? null;
+      if (a) Object.assign(a, { videoKey: null, videoBytes: null });
+      return old;
     },
     setShare: async (s, id, token, expiresOn) => {
       const a = mine(s, id);
@@ -94,7 +117,9 @@ function fakes(quotaBytes = 10 * MB) {
     files.set(`incoming/${tenantId}/${photoId}-l.jpg`, large);
     files.set(`incoming/${tenantId}/${photoId}-s.jpg`, thumb);
   };
-  return { service, files, photos, upload };
+  /** What the browser does with a video upload link: PUT the file. */
+  const uploadVideo = (tenantId: string, videoId: string, bytes: number, ext = "mp4") => files.set(`incoming/${tenantId}/${videoId}.${ext}`, bytes);
+  return { service, files, photos, upload, uploadVideo };
 }
 
 const meta = (albumId: string, photoId: string) => ({ albumId, photoId, width: 2400, height: 1600, caption: null });
@@ -221,4 +246,66 @@ test("portfolio albums can't be shared by link", async () => {
   const { service } = fakes();
   const album = await service.createAlbum(studioA, { title: "Weddings", isPublic: true });
   await assert.rejects(service.share(studioA, album, null), /no longer exists/);
+});
+
+test("a service's gallery: made once, private, and only for the studio's own service", async () => {
+  const { service } = fakes();
+  const id = await service.openServiceGallery(studioA, "weddings", "Wedding Photography");
+  assert.equal(await service.openServiceGallery(studioA, "weddings", "Wedding Photography"), id, "opening it again finds the same one");
+  const album = await service.serviceGallery(studioA, "weddings");
+  assert.equal(album?.isPublic, false);
+  assert.equal(album?.slug, "wedding-photography");
+  assert.deepEqual(await service.albums(studioA), [], "not listed with the portfolio albums");
+  await assert.rejects(service.openServiceGallery(studioB, "weddings", "Mine now"), /no longer exists/);
+  assert.equal(await service.serviceGallery(studioB, "weddings"), null);
+});
+
+test("a preview video: uploaded to incoming/, checked, moved into place, and counted", async () => {
+  const { service, files, uploadVideo } = fakes(100 * MB);
+  const album = await service.openServiceGallery(studioA, "weddings", "Weddings");
+  const { videoId, url } = await service.startVideoUpload(studioA, { albumId: album, bytes: 20 * MB, contentType: "video/mp4" });
+  assert.match(url, new RegExp(`incoming/studio-a/${videoId}\\.mp4\\?type=video/mp4`));
+  uploadVideo("studio-a", videoId, 30 * MB);
+  await service.confirmVideoUpload(studioA, { albumId: album, videoId, contentType: "video/mp4" });
+  assert.equal((await service.usage(studioA)).usedBytes, 30 * MB, "the real size counts, not the claimed one");
+  const view = await service.serviceGallery(studioA, "weddings");
+  assert.equal(view?.videoUrl, `get://studios/studio-a/albums/${album}/video-${videoId}.mp4`);
+  assert.deepEqual([...files.keys()], [`studios/studio-a/albums/${album}/video-${videoId}.mp4`]);
+});
+
+test("replacing a video frees the old one's space and deletes its file; removing frees it all", async () => {
+  const { service, files, uploadVideo } = fakes(100 * MB);
+  const album = await service.openServiceGallery(studioA, "weddings", "Weddings");
+  const first = await service.startVideoUpload(studioA, { albumId: album, bytes: 60 * MB, contentType: "video/mp4" });
+  uploadVideo("studio-a", first.videoId, 60 * MB);
+  await service.confirmVideoUpload(studioA, { albumId: album, videoId: first.videoId, contentType: "video/mp4" });
+  // 60 MB used of 100: another 60 MB only fits because it replaces the first.
+  const second = await service.startVideoUpload(studioA, { albumId: album, bytes: 60 * MB, contentType: "video/webm" });
+  uploadVideo("studio-a", second.videoId, 60 * MB, "webm");
+  await service.confirmVideoUpload(studioA, { albumId: album, videoId: second.videoId, contentType: "video/webm" });
+  assert.deepEqual([...files.keys()], [`studios/studio-a/albums/${album}/video-${second.videoId}.webm`]);
+  assert.equal((await service.usage(studioA)).usedBytes, 60 * MB);
+  await service.removeVideo(studioA, album);
+  assert.deepEqual([...files.keys()], []);
+  assert.equal((await service.usage(studioA)).usedBytes, 0);
+});
+
+test("a video that doesn't fit is refused up front, and again with its real size (file then deleted)", async () => {
+  const { service, files, uploadVideo } = fakes(50 * MB);
+  const album = await service.openServiceGallery(studioA, "weddings", "Weddings");
+  await assert.rejects(service.startVideoUpload(studioA, { albumId: album, bytes: 60 * MB, contentType: "video/mp4" }), /Not enough space for this video/);
+  const { videoId } = await service.startVideoUpload(studioA, { albumId: album, bytes: 10 * MB, contentType: "video/mp4" });
+  uploadVideo("studio-a", videoId, 55 * MB);
+  await assert.rejects(service.confirmVideoUpload(studioA, { albumId: album, videoId, contentType: "video/mp4" }), /Not enough space/);
+  assert.deepEqual([...files.keys()], [], "the video that didn't fit left no file");
+  await assert.rejects(service.confirmVideoUpload(studioA, { albumId: album, videoId: "never-sent", contentType: "video/mp4" }), /didn't finish/);
+});
+
+test("videos only go on the studio's own service albums", async () => {
+  const { service } = fakes();
+  const portfolio = await service.createAlbum(studioA, { title: "Weddings", isPublic: true });
+  await assert.rejects(service.startVideoUpload(studioA, { albumId: portfolio, bytes: MB, contentType: "video/mp4" }), /no longer exists/);
+  const album = await service.openServiceGallery(studioA, "weddings", "Weddings");
+  await assert.rejects(service.startVideoUpload(studioB, { albumId: album, bytes: MB, contentType: "video/mp4" }), /no longer exists/);
+  await assert.rejects(service.removeVideo(studioB, album), /no longer exists/);
 });

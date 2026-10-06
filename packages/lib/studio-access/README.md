@@ -14,9 +14,16 @@ it's approved, the studio is closed: no workspace, no public page, no client sig
 | `active` | Approved | The workspace (after the password) | On |
 | `suspended` | Stopped by the boss, with a reason | The reason | Off |
 
-The boss **approves** (`in_review` or `suspended` → `active`), **sends back** (`in_review` →
-`changes_requested`, reason required) or **suspends** (any → `suspended`, reason required). The
-owner gets an **email** and a **push notification** each time. Two decisions at once can't both
+The boss **approves** (any stage but `active` → `active`), **sends back** (`in_review` →
+`changes_requested`, reason required) or **suspends** (any → `suspended`, reason required).
+
+- **Approve now**: the boss can open a studio that's still setting up, without waiting for it to
+  be submitted, once every set-up step is done (details, address, verified email, password);
+  otherwise they're told what's missing.
+- **Reinstate** (approving a suspended studio) opens it if it's set up; a studio suspended before
+  it was set up goes back to `onboarding` instead, so it can finish ("can continue setting up").
+
+The owner gets an **email** (once they have a verified one) and a **push notification** each time. Two decisions at once can't both
 apply: the status only changes if it's still what the boss saw.
 
 ## Set-up (`/studio/welcome`)

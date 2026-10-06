@@ -13,7 +13,11 @@ const ASK: Record<Exclude<ReviewDecision, "approve">, { label: string; hint: str
   suspend: { label: "Why is it suspended?", hint: "The studio sees this. Its page, workspace and client sign-in stop.", button: "Suspend" },
 };
 
-/** The boss's decision on a studio: approve, send back with a reason, or suspend with a reason. */
+/**
+ * The boss's decision on a studio: approve, send back with a reason, or
+ * suspend with a reason. Approving works at any stage, without waiting for
+ * the owner to submit, once it's set up (the server says what's missing).
+ */
 export function ReviewPanel({ studioId, status }: { studioId: string; status: StudioStatus }) {
   const router = useRouter();
   const [asking, setAsking] = useState<Exclude<ReviewDecision, "approve"> | null>(null);
@@ -31,7 +35,8 @@ export function ReviewPanel({ studioId, status }: { studioId: string; status: St
       router.refresh();
     });
 
-  const canApprove = status === "in_review" || status === "suspended";
+  const canApprove = status !== "active";
+  const settingUp = status === "onboarding" || status === "changes_requested";
   const canSendBack = status === "in_review";
   const canSuspend = status !== "suspended";
 
@@ -60,8 +65,14 @@ export function ReviewPanel({ studioId, status }: { studioId: string; status: St
       ) : (
         <div className="flex flex-wrap gap-2">
           {canApprove ? (
-            <Button loading={pending} onClick={() => decide("approve")}>
-              {status === "suspended" ? "Reinstate" : "Approve"}
+            <Button
+              loading={pending}
+              onClick={() => {
+                if (settingUp && !window.confirm("They haven't submitted their studio for review yet. Open it now?")) return;
+                decide("approve");
+              }}
+            >
+              {status === "suspended" ? "Reinstate" : settingUp ? "Approve now" : "Approve"}
             </Button>
           ) : null}
           {canSendBack ? (

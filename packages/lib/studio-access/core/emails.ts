@@ -89,13 +89,19 @@ export function passwordChangedEmail(links: EmailLinks, studio: string): Email {
 }
 
 /** The boss's decision. `reason` is required for send back and suspend. */
-export function reviewEmail(links: EmailLinks, studio: string, decision: ReviewDecision, reason: string | null): Email {
+/** `resume`: a suspension lifted before the studio was set up, so it goes back to setting up. */
+export function reviewEmail(links: EmailLinks, studio: string, decision: ReviewDecision | "resume", reason: string | null): Email {
   const said = reason ? `\n\n${BRAND} says:\n${reason}` : "";
   const content = {
     approve: {
       subject: `${studio} is approved`,
       body: `Good news: your studio is open. Your public page is live and your clients can sign in.`,
       button: "Open your studio",
+    },
+    resume: {
+      subject: `${studio} can continue setting up`,
+      body: `${BRAND} lifted the suspension. Finish setting up your studio, then submit it for review.`,
+      button: "Continue setting up",
     },
     send_back: {
       subject: `${studio} needs a few changes`,

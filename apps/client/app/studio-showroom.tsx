@@ -6,9 +6,9 @@ import { useState } from "react";
 
 import type { AlbumView } from "@repo/lib/photos/core";
 
-// The same 3D walk-through as Aming's showroom (./showroom-scene.tsx), over a
+// The same 3D walk-through as Aming's showroom (@repo/ui/showroom/ShowroomScene.tsx), over a
 // studio's albums: each album's cover in turn; scroll or swipe to walk on.
-const ShowroomScene = dynamic(() => import("./showroom-scene").then((m) => m.ShowroomScene), {
+const ShowroomScene = dynamic(() => import("@repo/ui/showroom/ShowroomScene").then((m) => m.ShowroomScene), {
   ssr: false,
   loading: () => <div className="absolute inset-0 flex items-center justify-center text-sm text-white/60">Loading…</div>,
 });

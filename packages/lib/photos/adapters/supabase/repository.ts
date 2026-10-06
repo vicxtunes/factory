@@ -14,6 +14,9 @@ interface AlbumRow {
   id: string;
   kind: Album["kind"];
   project_id: string | null;
+  service_id: string | null;
+  video_key: string | null;
+  video_bytes: number | string | null;
   share_token: string | null;
   share_expires_on: string | null;
   title: string;
@@ -38,7 +41,7 @@ interface PhotoRow {
 
 // Albums and photos are linked twice (a photo's album, an album's cover): name the one meant.
 const ALBUM =
-  "id, kind, project_id, share_token, share_expires_on, title, slug, is_public, cover_photo_id, position, photos!photos_tenant_id_album_id_fkey (id, thumb_key, large_key, position)";
+  "id, kind, project_id, service_id, video_key, video_bytes, share_token, share_expires_on, title, slug, is_public, cover_photo_id, position, photos!photos_tenant_id_album_id_fkey (id, thumb_key, large_key, position)";
 const PHOTO = "id, album_id, large_key, thumb_key, width, height, bytes, caption, position";
 
 function toAlbum(r: AlbumRow): Album {
@@ -48,6 +51,9 @@ function toAlbum(r: AlbumRow): Album {
     id: r.id,
     kind: r.kind,
     projectId: r.project_id,
+    serviceId: r.service_id,
+    videoKey: r.video_key,
+    videoBytes: r.video_bytes == null ? null : Number(r.video_bytes),
     shareToken: r.share_token,
     shareExpiresOn: r.share_expires_on,
     title: r.title,
@@ -77,7 +83,10 @@ const toPhoto = (r: PhotoRow): Photo => ({
 function fail(what: string, error: { code?: string; message: string }): never {
   // A project from another studio: the composite key caught it.
   if (error.code === "23503" && error.message.includes("photo_albums_project_fkey")) throw new PhotoError("That project no longer exists.");
-  if (error.message.includes("PHOTOS:over_quota")) throw new PhotoError("Not enough space left for that photo. Delete some photos, or ask Aming for more space.");
+  // A service from another studio, the same way.
+  if (error.code === "23503" && error.message.includes("photo_albums_service_fkey")) throw new PhotoError("That service no longer exists.");
+  if (error.message.includes("PHOTOS:over_quota")) throw new PhotoError("Not enough space left for that. Delete some photos, or ask Aming for more space.");
+  if (error.message.includes("PHOTOS:no_album")) throw new PhotoError("That album no longer exists.");
   throw new Error(`photos: could not ${what}: ${error.message}`);
 }
 
@@ -86,13 +95,14 @@ const db = () => createAdminClient();
 export const supabasePhotoRepository: PhotoRepository = {
   async usage(scope) {
     const client = db();
-    const [{ data: tenant, error: e1 }, { data: rows, error: e2 }] = await Promise.all([
+    const [{ data: tenant, error: e1 }, { data: used, error: e2 }] = await Promise.all([
       client.from("tenants").select("storage_quota_bytes").eq("id", scope.tenantId).single<{ storage_quota_bytes: number | string }>(),
-      client.from("photos").select("bytes").eq("tenant_id", scope.tenantId).returns<{ bytes: number | string }[]>(),
+      // Photos and services' videos: the same sum the database checks uploads against.
+      client.rpc("photos_used_bytes", { p_tenant: scope.tenantId }),
     ]);
     if (e1) fail("read the storage allowance", e1);
     if (e2) fail("read the storage used", e2);
-    return { usedBytes: rows.reduce((sum, r) => sum + Number(r.bytes), 0), quotaBytes: Number(tenant.storage_quota_bytes) };
+    return { usedBytes: Number(used), quotaBytes: Number(tenant.storage_quota_bytes) };
   },
 
   async setQuota(tenantId, quotaBytes) {
@@ -164,6 +174,59 @@ export const supabasePhotoRepository: PhotoRepository = {
     return data.id;
   },
 
+  async serviceAlbumFor(scope, serviceId) {
+    const { data, error } = await db()
+      .from("photo_albums")
+      .select(ALBUM)
+      .eq("tenant_id", scope.tenantId)
+      .eq("kind", "service")
+      .eq("service_id", serviceId)
+      .maybeSingle<AlbumRow>();
+    if (error) fail("load the service's photos", error);
+    return data ? toAlbum(data) : null;
+  },
+
+  async createServiceAlbum(scope, serviceId, album) {
+    const { data, error } = await db()
+      .from("photo_albums")
+      .insert({ tenant_id: scope.tenantId, kind: "service", service_id: serviceId, title: album.title, slug: album.slug, is_public: false })
+      .select("id")
+      .single<{ id: string }>();
+    if (error?.code === "23505" && error.message.includes("photo_albums_one_per_service")) {
+      // Opened twice at once: the other request made it. (Another studio's service finds none here.)
+      const existing = await supabasePhotoRepository.serviceAlbumFor(scope, serviceId);
+      if (existing) return existing.id;
+      throw new PhotoError("That service no longer exists.");
+    }
+    if (error) fail("create the service's gallery", error);
+    return data.id;
+  },
+
+  async setVideo(scope, albumId, key, bytes) {
+    const { data, error } = await db().rpc("photos_set_video", { p_tenant: scope.tenantId, p_album: albumId, p_key: key, p_bytes: bytes });
+    if (error) fail("save the video", error);
+    return (data as string | null) ?? null;
+  },
+
+  async clearVideo(scope, albumId) {
+    const { data: current, error: e1 } = await db()
+      .from("photo_albums")
+      .select("video_key")
+      .eq("tenant_id", scope.tenantId)
+      .eq("kind", "service")
+      .eq("id", albumId)
+      .maybeSingle<{ video_key: string | null }>();
+    if (e1) fail("load the video", e1);
+    if (!current?.video_key) return null;
+    const { error: e2 } = await db()
+      .from("photo_albums")
+      .update({ video_key: null, video_bytes: null })
+      .eq("tenant_id", scope.tenantId)
+      .eq("id", albumId);
+    if (e2) fail("remove the video", e2);
+    return current.video_key;
+  },
+
   async setShare(scope, albumId, token, expiresOn) {
     const { data, error } = await db()
       .from("photo_albums")
@@ -214,9 +277,16 @@ export const supabasePhotoRepository: PhotoRepository = {
       .eq("album_id", id)
       .returns<{ large_key: string; thumb_key: string }[]>();
     if (e1) fail("load the album's photos", e1);
-    const { data, error } = await client.from("photo_albums").delete().eq("tenant_id", scope.tenantId).eq("id", id).select("id");
+    const { data, error } = await client
+      .from("photo_albums")
+      .delete()
+      .eq("tenant_id", scope.tenantId)
+      .eq("id", id)
+      .select("id, video_key")
+      .returns<{ id: string; video_key: string | null }[]>();
     if (error) fail("delete the album", error);
-    return data.length === 1 ? photos.flatMap((p) => [p.large_key, p.thumb_key]) : null;
+    if (data.length !== 1) return null;
+    return [...photos.flatMap((p) => [p.large_key, p.thumb_key]), ...(data[0].video_key ? [data[0].video_key] : [])];
   },
 
   async photos(scope, albumId) {

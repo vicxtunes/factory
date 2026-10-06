@@ -9,7 +9,7 @@ export const metadata = { title: "New quotation · My Studio" };
 
 export default async function NewQuotationPage({ searchParams }: { searchParams: Promise<{ client?: string }> }) {
   const { scope } = await requireStudio();
-  const [clients, onSale, { client }] = await Promise.all([customers.list(scope), offerings.list(scope), searchParams]);
+  const [clients, onSale, { client }] = await Promise.all([customers.list(scope), offerings.onSale(scope), searchParams]);
 
   return (
     <>

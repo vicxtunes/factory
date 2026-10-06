@@ -15,7 +15,7 @@ import { LinkedOrdersList } from "@repo/ui/studio-orders/AmingOrders";
 import { TasksBoard } from "@repo/ui/tasks/TasksBoard";
 import { TeamList } from "@repo/ui/team/TeamList";
 import { QuotationsList } from "@repo/ui/billing/QuotationsList";
-import { OfferingsList } from "@repo/ui/offerings/OfferingsList";
+import { ServicesList } from "@repo/ui/offerings/ServicesList";
 import { periodFrom } from "@repo/lib/accounting/params";
 import { localDate } from "@repo/lib/accounting/core/period";
 import { invoices, quotations, studioAccounts } from "@repo/lib/billing/server";
@@ -54,8 +54,8 @@ export default async function StudioPage({
   const [active, archived, onSale, offSale, quotes, bills, money, upcoming, work, todo, members, amingOrders, slug, usage] = await Promise.all([
     customers.list(scope),
     customers.list(scope, true),
-    offerings.list(scope),
-    offerings.list(scope, true),
+    offerings.catalog(scope),
+    offerings.services(scope, true),
     quotations.list(scope),
     invoices.list(scope),
     studioAccounts.overview(scope, periodFrom(await searchParams)),
@@ -139,7 +139,7 @@ export default async function StudioPage({
       </section>
       <section>
         <SectionLabel>Packages & Services</SectionLabel>
-        <OfferingsList active={onSale} archived={offSale} scope={scope} basePath={null} />
+        <ServicesList services={onSale} archived={offSale} scope={scope} basePath={null} />
       </section>
       <section>
         <SectionLabel>Quotations</SectionLabel>

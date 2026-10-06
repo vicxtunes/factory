@@ -9,6 +9,7 @@ import {
   maskEmail,
   newPasswordSchema,
   passwordProblem,
+  reviewEmail,
   reviewSchema,
   type EmailCode,
   type StudioAccess,
@@ -216,7 +217,6 @@ test("forgot password: a code to the verified email; the new password signs othe
 test("review: approve, send back with a reason, suspend; the owner is told", async () => {
   const t = setup();
   await onboard(t);
-  await assert.rejects(t.service.review(A, "approve", ""), /isn't waiting/, "not submitted yet");
   await t.service.submit(A);
 
   await t.service.review(A, "send_back", "Please upload your real logo.");
@@ -232,7 +232,7 @@ test("review: approve, send back with a reason, suspend; the owner is told", asy
   assert.equal(t.one(A).reviewNote, null);
   assert.match(t.sent.at(-1)!.subject, /is approved/);
   assert.match(t.sent.at(-1)!.html, /Open your studio/);
-  await assert.rejects(t.service.review(A, "approve", ""), /isn't waiting/);
+  await assert.rejects(t.service.review(A, "approve", ""), /already open/);
 
   await assert.rejects(t.service.review(A, "suspend", " "), /Tell the studio why/);
   await t.service.review(A, "suspend", "Unpaid balance with Aming.");
@@ -242,6 +242,33 @@ test("review: approve, send back with a reason, suspend; the owner is told", asy
   assert.equal(t.one(A).status, "active", "approving lifts a suspension");
 
   assert.throws(() => parseInput(reviewSchema, { studioId: A, decision: "send_back", note: "" }), /Tell the studio why/);
+});
+
+test("approve now: the boss can open a set-up studio before it's submitted, never one that isn't set up", async () => {
+  const t = setup();
+  await assert.rejects(t.service.review(A, "approve", ""), /can't open until it's set up\. Still missing: their studio's details/);
+  assert.equal(t.one(A).status, "onboarding");
+  await onboard(t);
+  await t.service.review(A, "approve", "");
+  assert.equal(t.one(A).status, "active", "no submit needed");
+  assert.match(t.sent.at(-1)!.subject, /is approved/);
+});
+
+test("reinstating a studio suspended before it was set up sends it back to setting up, not open", async () => {
+  const t = setup();
+  await t.service.review(A, "suspend", "Looks like a duplicate account.");
+  await t.service.review(A, "approve", "");
+  assert.equal(t.one(A).status, "onboarding");
+  assert.deepEqual(t.pushed.at(-1), { clientId: "client-Amina Studio", title: "Amina Studio can continue setting up" });
+  assert.equal(t.sent.length, 0, "no verified email yet, so only the notification");
+  const email = reviewEmail({ workspace: "https://www.amingspace.com/studio", logo: null }, "Amina Studio", "resume", null);
+  assert.equal(email.subject, "Amina Studio can continue setting up");
+  assert.match(email.text, /lifted the suspension[\s\S]*Continue setting up: https:\/\/www\.amingspace\.com\/studio/);
+  // Once set up, the same button opens it.
+  await onboard(t);
+  await t.service.review(A, "suspend", "Unpaid balance.");
+  await t.service.review(A, "approve", "");
+  assert.equal(t.one(A).status, "active");
 });
 
 test("logo: uploaded to a signed link, checked, moved; the old one is deleted", async () => {

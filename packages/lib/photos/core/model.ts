@@ -4,14 +4,23 @@
 // within a storage allowance. Every photo is two files, both resized in the
 // browser: a large copy for full screen and a small one for grids.
 
-/** A portfolio album (the studio's own work, maybe public) or a delivery (a project's photos for its client; never public). */
-export type AlbumKind = "portfolio" | "delivery";
+/**
+ * A portfolio album (the studio's own work, maybe public), a delivery (a
+ * project's photos for its client; never public), or a service's media (its
+ * cover, gallery and preview video, shown on the service's page).
+ */
+export type AlbumKind = "portfolio" | "delivery" | "service";
 
 export interface Album {
   id: string;
   kind: AlbumKind;
   /** A delivery's project. */
   projectId: string | null;
+  /** A service album's service (packages/lib/offerings). */
+  serviceId: string | null;
+  /** A service album's preview video, if it has one: its file and size. */
+  videoKey: string | null;
+  videoBytes: number | null;
   /** A delivery's share link secret; null = not shared. */
   shareToken: string | null;
   /** The share link's last day ("yyyy-mm-dd", the studio's calendar); null = no end. */
@@ -53,6 +62,8 @@ export interface PhotoView extends Photo {
 export interface AlbumView extends Album {
   coverUrl: string | null;
   coverLargeUrl: string | null;
+  /** A service album's preview video. */
+  videoUrl: string | null;
 }
 
 export interface Usage {

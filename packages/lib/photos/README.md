@@ -43,8 +43,19 @@ allowance as portfolio albums, but **never public** (the database enforces it).
     wedding is too big for one server function or one phone download.
 - A pasted **Photos link** (Google Drive…) on a project still works alongside.
 
+## Service media
+
+A studio's service (packages/lib/offerings) gets a private album of kind **service**: its cover and
+gallery, plus one **preview video** (MP4, WebM or MOV, up to 200 MB, not resized: uploaded as it is,
+straight to R2 like photos, then checked and moved). The video counts toward the allowance;
+`photos_set_video()` checks it in the database with the studio's row locked, the old video's space
+counting as free when it's replaced, and the replaced file is deleted. Never public on its own and
+never shared by link: it's shown through the service's page. Managed on the service's page
+(`/studio/offerings/<id>`, `ServiceMediaPanel`).
+
 ## The allowance
 
+- Photos and services' preview videos share it (`photos_used_bytes()`).
 - Every studio starts with **1 GB** (`tenants.storage_quota_bytes`). The boss sets it per studio
   on the studio's page in the staff app.
 - A **usage bar** shows on the studio's dashboard and Showroom pages, warning at 80%.
@@ -64,7 +75,7 @@ allowance as portfolio albums, but **never public** (the database enforces it).
 | `/<studio>/g/<secret>` | Anyone with the link | The same, without signing in, while the link lasts |
 | Staff app → People → Studios → a studio | Boss | The studio's usage, and its allowance (GB) |
 
-The 3D scene is Aming's own `apps/client/app/showroom-scene.tsx`, unchanged: it already takes any
+The 3D scene is Aming's own `packages/ui/showroom/ShowroomScene.tsx`, unchanged: it already takes any
 two image URLs. `apps/client/app/studio-showroom.tsx` feeds it album covers (their large copies).
 
 ## Settings (environment variables)
