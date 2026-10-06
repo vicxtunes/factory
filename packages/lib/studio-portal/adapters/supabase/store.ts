@@ -15,11 +15,12 @@ interface CustomerRow {
   phone: string | null;
   portal_pin_hash: string | null;
   portal_pin_set_at: string | null;
+  portal_access_at: string | null;
   portal_failed_attempts: number;
   portal_locked_until: string | null;
 }
 
-const CUSTOMER = "id, name, phone, portal_pin_hash, portal_pin_set_at, portal_failed_attempts, portal_locked_until";
+const CUSTOMER = "id, name, phone, portal_pin_hash, portal_pin_set_at, portal_access_at, portal_failed_attempts, portal_locked_until";
 
 const toRecord = (r: CustomerRow): SignInRecord => ({
   customerId: r.id,
@@ -27,6 +28,7 @@ const toRecord = (r: CustomerRow): SignInRecord => ({
   phone: r.phone,
   pinHash: r.portal_pin_hash,
   pinSetAt: r.portal_pin_set_at,
+  accessAt: r.portal_access_at,
   failedAttempts: r.portal_failed_attempts,
   lockedUntil: r.portal_locked_until,
 });
@@ -95,20 +97,8 @@ export const supabasePortalStore: PortalStore = {
     return update(tenantId, customerId, { portal_invite_hash: inviteDigest, portal_invite_expires_at: expiresAt }, "make the link");
   },
 
-  async setPin(tenantId, customerId, pinHash, at) {
-    await update(
-      tenantId,
-      customerId,
-      {
-        portal_pin_hash: pinHash,
-        portal_pin_set_at: at,
-        portal_invite_hash: null,
-        portal_invite_expires_at: null,
-        portal_failed_attempts: 0,
-        portal_locked_until: null,
-      },
-      "save the PIN",
-    );
+  async setAccess(tenantId, customerId, at) {
+    await update(tenantId, customerId, { portal_access_at: at, portal_invite_hash: null, portal_invite_expires_at: null }, "open the client's page");
   },
 
   async recordWrongPin(tenantId, customerId, failedAttempts, lockedUntil) {
@@ -121,15 +111,21 @@ export const supabasePortalStore: PortalStore = {
 
   async status(scope, customerId) {
     const { data, error } = await customers()
-      .select("phone, portal_pin_hash, portal_invite_expires_at, portal_signed_in_at")
+      .select("phone, portal_pin_hash, portal_access_at, portal_invite_expires_at, portal_signed_in_at")
       .eq("tenant_id", scope.tenantId)
       .eq("id", customerId)
-      .maybeSingle<{ phone: string | null; portal_pin_hash: string | null; portal_invite_expires_at: string | null; portal_signed_in_at: string | null }>();
+      .maybeSingle<{
+        phone: string | null;
+        portal_pin_hash: string | null;
+        portal_access_at: string | null;
+        portal_invite_expires_at: string | null;
+        portal_signed_in_at: string | null;
+      }>();
     if (error) fail("load the client's portal", error);
     if (!data) return null;
     return {
       hasPhone: data.phone !== null,
-      pinSet: data.portal_pin_hash !== null,
+      hasAccess: data.portal_access_at !== null || data.portal_pin_hash !== null,
       inviteExpiresAt: data.portal_invite_expires_at,
       signedInAt: data.portal_signed_in_at,
     };

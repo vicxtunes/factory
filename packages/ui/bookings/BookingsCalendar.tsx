@@ -15,6 +15,7 @@ const VIEWS: { key: CalendarView; label: string }[] = [
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 const DOT: Record<Booking["status"], string> = {
+  requested: "bg-brand-500",
   tentative: "bg-warning-500",
   confirmed: "bg-success-500",
   completed: "bg-gray-400",

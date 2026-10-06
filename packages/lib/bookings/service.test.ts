@@ -3,7 +3,7 @@ import { test } from "node:test";
 
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
-import type { Booking, BookingInput } from "./core";
+import type { Booking, BookingInput, BookingStatus } from "./core";
 import { BookingError, type BookingDirectory, type BookingStore } from "./ports";
 import { BookingService } from "./service";
 
@@ -28,14 +28,29 @@ function fakes() {
   const store: BookingStore = {
     list: async (s, f) =>
       rows.filter(
-        (r) => r.tenantId === s.tenantId && (!f.from || r.date >= f.from) && (!f.to || r.date <= f.to) && (!f.customerId || r.customerId === f.customerId),
+        (r) =>
+          r.tenantId === s.tenantId &&
+          (!f.from || r.date >= f.from) &&
+          (!f.to || r.date <= f.to) &&
+          (!f.customerId || r.customerId === f.customerId) &&
+          (!f.status || r.status === f.status),
       ),
     get: async (s, id) => mine(s, id) ?? null,
     idForQuotation: async (s, q) => rows.find((r) => r.tenantId === s.tenantId && r.quotationId === q)?.id ?? null,
     create: async (s, input) => {
-      const row = { ...input, id: `b${rows.length + 1}`, tenantId: s.tenantId, customerName: "", status: "tentative" as const, createdAt: "" };
+      const row = { ...input, id: `b${rows.length + 1}`, tenantId: s.tenantId, customerName: "", status: "tentative" as BookingStatus, source: "studio" as const, offeringId: null, invoiceId: null, createdAt: "" };
       rows.push(row);
       return row.id;
+    },
+    createRequest: async (s, input) => {
+      const row = { ...input, quotationId: null, id: `b${rows.length + 1}`, tenantId: s.tenantId, customerName: "", status: "requested" as BookingStatus, source: "online" as const, invoiceId: null, createdAt: "" };
+      rows.push(row);
+      return row.id;
+    },
+    setInvoice: async (s, id, invoiceId) => {
+      const r = mine(s, id);
+      if (r) r.invoiceId = invoiceId;
+      return !!r;
     },
     update: async (s, id, input) => {
       const r = mine(s, id);
@@ -125,6 +140,25 @@ test("upcoming: from today, still going ahead, soonest first", async () => {
   await service.create(studioA, { ...wedding, title: "Later", date: "2026-11-01" });
   await service.create(studioA, { ...wedding, title: "Soon", date: "2026-10-04" });
   assert.deepEqual((await service.upcoming(studioA, "2026-10-03")).map((b) => b.title), ["Soon", "Later"]);
+});
+
+test("a client's request: listed for the business, declined as a cancel, confirmed only once and only through confirmRequest", async () => {
+  const { service } = fakes();
+  const id = await service.request(studioA, { ...wedding, offeringId: "gold" });
+  const [request] = await service.requests(studioA);
+  assert.deepEqual([request.id, request.status, request.source, request.offeringId], [id, "requested", "online", "gold"]);
+  await assert.rejects(service.setStatus(studioA, id, "confirmed"), /can't become confirmed/, "never a bare status move");
+  assert.equal((await service.confirmRequest(studioA, id)).status, "confirmed");
+  await assert.rejects(service.confirmRequest(studioA, id), /already been answered/);
+  assert.deepEqual(await service.requests(studioA), []);
+  await service.setInvoice(studioA, id, "inv-1");
+  assert.equal((await service.get(studioA, id))?.booking.invoiceId, "inv-1");
+
+  const declined = await service.request(studioA, { ...wedding, offeringId: "gold" });
+  await service.setStatus(studioA, declined, "cancelled");
+  await assert.rejects(service.confirmRequest(studioA, declined), /already been answered/);
+  await assert.rejects(service.request(studioB, { ...wedding, offeringId: "gold" }), /no longer exists/, "another studio's client");
+  await assert.rejects(service.confirmRequest(studioB, id), /no longer exists/);
 });
 
 test("one studio can't read, change or move another's booking, even with its id", async () => {

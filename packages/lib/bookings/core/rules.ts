@@ -3,6 +3,10 @@
 import type { Booking, BookingStatus } from "./model";
 
 const MOVES: Record<BookingStatus, BookingStatus[]> = {
+  // A client's request: the business declines (cancels) it here, or confirms
+  // it through BookingService.confirmRequest (which booking-requests pairs
+  // with the invoice and the project), never as a bare status move.
+  requested: ["cancelled"],
   tentative: ["confirmed", "cancelled"],
   confirmed: ["completed", "tentative", "cancelled"],
   completed: [],
@@ -20,7 +24,7 @@ export function canMoveBooking(from: BookingStatus, to: BookingStatus): boolean 
 
 /** Details can change until it's completed or cancelled. */
 export function canEditBooking(status: BookingStatus): boolean {
-  return status === "tentative" || status === "confirmed";
+  return status === "requested" || status === "tentative" || status === "confirmed";
 }
 
 /**

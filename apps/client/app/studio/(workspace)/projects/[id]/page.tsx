@@ -32,9 +32,9 @@ export default async function StudioProjectPage({ params }: { params: Promise<{ 
   const view = id.success ? await projects.get(scope, id.data) : null;
   if (!view) notFound();
   const p = view.project;
-  // Everything behind it: its booking, the quotation it was booked from, and that quotation's invoice.
+  // Everything behind it: its booking, and its invoice (made when an online request was confirmed, or from its quotation).
   const booking = p.bookingId ? (await bookings.get(scope, p.bookingId))?.booking ?? null : null;
-  const invoiceId = booking?.quotationId ? await invoices.idForQuotation(scope, booking.quotationId) : null;
+  const invoiceId = booking?.invoiceId ?? (booking?.quotationId ? await invoices.idForQuotation(scope, booking.quotationId) : null);
   const invoice = invoiceId ? await invoices.get(scope, invoiceId) : null;
   const [work, members, amingOrders, choices, gallery, usage, slug, client] = await Promise.all([
     tasks.forProject(scope, p.id),

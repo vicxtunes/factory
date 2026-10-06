@@ -73,14 +73,30 @@ export class StudioPortalService {
     return customer ? { name: customer.name } : null;
   }
 
-  /** The client chooses their PIN from the set-up link, and is signed in. The link stops working. */
-  async acceptInvite(tenantId: string, token: string, pin: string): Promise<PortalSession> {
+  /**
+   * Signs a device in to the client's page without a PIN: the device they
+   * booked on, or one that opened the studio's link. Every such device
+   * carries the client's access time, so they all stay signed in together.
+   */
+  async openDevice(tenantId: string, customerId: string): Promise<PortalSession> {
+    const customer = await this.store.customer(tenantId, customerId);
+    if (!customer) throw new PortalError("That client no longer exists.");
+    const now = this.clock().toISOString();
+    const accessAt = customer.accessAt ?? now;
+    if (!customer.accessAt) await this.store.setAccess(tenantId, customerId, accessAt);
+    await this.store.recordSignIn(tenantId, customerId, now);
+    return { tenantId, customerId, accessAt };
+  }
+
+  /** The studio's one-time link: signs this device in to the client's page, no PIN. The link stops working. */
+  async openLink(tenantId: string, token: string): Promise<PortalSession> {
     const found = await this.validInvite(tenantId, token);
     if (!found) throw new PortalError(BAD_LINK);
-    const at = this.clock().toISOString();
-    await this.store.setPin(tenantId, found.customerId, await this.secrets.hashPin(pin), at);
-    await this.store.recordSignIn(tenantId, found.customerId, at);
-    return { tenantId, customerId: found.customerId, pinSetAt: at };
+    const customer = await this.store.customer(tenantId, found.customerId);
+    if (!customer) throw new PortalError(BAD_LINK);
+    // Uses the link up, keeping the access time other devices already carry.
+    await this.store.setAccess(tenantId, found.customerId, customer.accessAt ?? this.clock().toISOString());
+    return this.openDevice(tenantId, found.customerId);
   }
 
   /** Phone + PIN at this studio. Five wrong PINs in a row lock the client for a while. */
@@ -104,10 +120,13 @@ export class StudioPortalService {
     return { tenantId, customerId: customer.customerId, pinSetAt: customer.pinSetAt };
   }
 
-  /** The signed-in client, if the session still holds: same studio, and their PIN hasn't changed since. */
+  /** The signed-in client, if the session still holds: same studio, and their access time (or PIN) hasn't changed since. */
   async check(session: PortalSession): Promise<SignInRecord | null> {
     const customer = await this.store.customer(session.tenantId, session.customerId);
-    if (!customer || !customer.pinSetAt || Date.parse(customer.pinSetAt) !== Date.parse(session.pinSetAt)) return null;
+    if (!customer) return null;
+    const anchor = session.accessAt !== undefined ? customer.accessAt : customer.pinSetAt;
+    const carried = session.accessAt ?? session.pinSetAt;
+    if (!anchor || !carried || Date.parse(anchor) !== Date.parse(carried)) return null;
     return customer;
   }
 

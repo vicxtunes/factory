@@ -4,9 +4,11 @@
 // an event. Days are calendar days ("yyyy-mm-dd") and times are clock times
 // ("HH:MM"), both in the business's own time zone, so nothing shifts.
 
-export type BookingStatus = "tentative" | "confirmed" | "completed" | "cancelled";
+/** "requested": a client booked online and the business hasn't answered yet. */
+export type BookingStatus = "requested" | "tentative" | "confirmed" | "completed" | "cancelled";
 
 export const BOOKING_STATUS_LABELS: Record<BookingStatus, string> = {
+  requested: "Requested",
   tentative: "Tentative",
   confirmed: "Confirmed",
   completed: "Completed",
@@ -35,7 +37,13 @@ export interface Booking extends Omit<BookingInput, "quotationId"> {
   id: string;
   customerName: string;
   status: BookingStatus;
+  /** Made by the business, or by the client online ("Book now"). */
+  source: "studio" | "online";
   quotationId: string | null;
+  /** The package it was requested for, when booked online. */
+  offeringId: string | null;
+  /** The invoice made when it was confirmed. */
+  invoiceId: string | null;
   createdAt: string;
 }
 

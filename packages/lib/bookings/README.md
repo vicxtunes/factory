@@ -9,6 +9,9 @@ A business's appointments with its customers: shoots, sessions, events. For stud
 - **Days and times are local:** the studio's calendar day (`date`) and clock time (`time`), stored
   as such, so nothing shifts between time zones. Calendar maths (`core/calendar.ts`) works on
   `"yyyy-mm-dd"` strings.
+- **Requested:** a client's own booking from a service's page (packages/lib/booking-requests),
+  waiting for the studio: Confirm (with its invoice and project) or Decline. It's never confirmed by
+  a plain status change.
 - **Status:** Tentative → Confirmed → Completed. Tentative and confirmed can be cancelled, and a
   cancelled booking can be reopened. **Completed is final.** Details can change only while
   tentative or confirmed (`core/rules.ts`). Status moves are guarded in the store too: a move

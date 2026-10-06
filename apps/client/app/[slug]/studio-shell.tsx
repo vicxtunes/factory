@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { ClientsIcon, ShowroomIcon } from "@repo/ui/icons";
+import { PortalStayIn } from "@repo/ui/studio-portal/PortalForms";
 
 import { StudioMark } from "../studio/_workspace/shell";
 
@@ -17,7 +18,8 @@ export interface PublicStudio {
 // A studio's public pages in the same frame as Aming's (../shell.tsx): the
 // studio's mark and menu on the left (md+), a top bar with the page's title
 // and "Log in" (or the signed-in client's way to their page). Browsing never
-// needs signing in; "Log in" only offers it.
+// needs signing in; "Log in" only offers it. A signed-in client's every visit
+// renews their sign-in, so they stay signed in for good.
 export function StudioShell({
   studio,
   signedInAs,
@@ -39,6 +41,7 @@ export function StudioShell({
 
   return (
     <div className="min-h-screen">
+      {signedInAs ? <PortalStayIn slug={studio.slug} /> : null}
       <aside className="fixed inset-y-0 left-0 z-50 hidden w-64 flex-col border-r border-border bg-surface md:flex">
         <Link href={home} className="flex h-16 shrink-0 items-center gap-2.5 border-b border-border px-5">
           <StudioMark brand={studio} size="md" />

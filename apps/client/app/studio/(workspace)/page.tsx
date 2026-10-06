@@ -30,8 +30,9 @@ export default async function StudioDashboardPage({
 }) {
   const { scope, studio } = await requireStudio();
   const today = localDate(new Date(), scope.timeZone);
-  const [view, upcoming, inHand, todo, usage] = await Promise.all([
+  const [view, requests, upcoming, inHand, todo, usage] = await Promise.all([
     studioAccounts.overview(scope, periodFrom(await searchParams)),
+    bookings.requests(scope),
     bookings.upcoming(scope, today),
     projects.active(scope),
     tasks.open(scope),
@@ -42,6 +43,13 @@ export default async function StudioDashboardPage({
     <>
       <h2 className="text-xl font-semibold">{studio.name}</h2>
       <UsageBar usage={usage} />
+      {requests.length ? (
+        // Clients who booked online: first thing the studio sees until it answers.
+        <section>
+          <SectionLabel>Booking requests ({requests.length})</SectionLabel>
+          <BookingsList bookings={requests} scope={scope} basePath="/studio/bookings" empty="" />
+        </section>
+      ) : null}
       <div className="grid gap-4 lg:grid-cols-2">
         <section>
           <SectionLabel>Coming up</SectionLabel>

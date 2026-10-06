@@ -81,7 +81,33 @@ export class BookingService {
     return this.store.create(scope, input);
   }
 
-  /** Changes the details while it's tentative or confirmed. */
+  /** The requests clients made online that the business hasn't answered, soonest first. */
+  async requests(scope: TenantScope): Promise<Booking[]> {
+    return (await this.store.list(scope, { status: "requested" })).sort(byTime);
+  }
+
+  /** A client's online request for a package: "requested", for the business to confirm or decline. */
+  async request(scope: TenantScope, input: Omit<BookingInput, "quotationId"> & { offeringId: string }): Promise<string> {
+    const customer = await this.directory.customer(scope, input.customerId);
+    if (!customer) throw new BookingError("That client no longer exists.");
+    return this.store.createRequest(scope, input);
+  }
+
+  /** Confirms a client's request (requested → confirmed). The caller makes its invoice and project (packages/lib/booking-requests). */
+  async confirmRequest(scope: TenantScope, id: string): Promise<Booking> {
+    const current = await this.store.get(scope, id);
+    if (!current) throw new BookingError(GONE);
+    if (current.status !== "requested") throw new BookingError("This request has already been answered.");
+    if (!(await this.store.setStatus(scope, id, "requested", "confirmed"))) throw new BookingError("This booking just changed. Reload and try again.");
+    return { ...current, status: "confirmed" };
+  }
+
+  /** Links the invoice made when a request was confirmed. */
+  async setInvoice(scope: TenantScope, id: string, invoiceId: string): Promise<void> {
+    if (!(await this.store.setInvoice(scope, id, invoiceId))) throw new BookingError(GONE);
+  }
+
+  /** Changes the details while it's requested, tentative or confirmed. */
   async update(scope: TenantScope, id: string, input: Omit<BookingInput, "quotationId">): Promise<void> {
     const current = await this.store.get(scope, id);
     if (!current) throw new BookingError(GONE);

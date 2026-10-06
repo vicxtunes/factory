@@ -8,7 +8,10 @@ import { photos } from "@repo/lib/photos/server";
 import { bookings } from "@repo/lib/bookings/server";
 import { projects } from "@repo/lib/projects/server";
 import { studioOrders } from "@repo/lib/studio-orders/server";
+import { studioAccess } from "@repo/lib/studio-access/server";
 import { portalClient, studioAtSlug } from "@repo/lib/studio-portal/server";
+
+import { StudioShell } from "../studio-shell";
 
 // A studio's client's own page: client.<domain>/<slug>/me. Only for the
 // client signed in at this studio on this device (phone + PIN); everyone else
@@ -42,23 +45,26 @@ export default async function ClientPortalPage({ params }: { params: Promise<{ s
     Promise.all(invoiceList.filter((i) => i.status !== "void").map(async (i) => ({ ...i, url: invoiceUrl((await invoices.get(scope, i.id))!.shareToken) }))),
   ]);
 
+  const logoUrl = await studioAccess.logoUrl(at.studio.logoKey);
   return (
-    <ClientPortalHome
-      view={{
-        clientName: me.name,
-        studioName: at.studio.name,
-        projects: theirProjects.map((p, i) => ({
-          ...p,
-          orders: allOrders.filter((o) => o.projectId === p.id),
-          photos: galleries[i] && galleries[i].photoCount > 0 ? { count: galleries[i].photoCount, href: `/${slug}/me/photos/${p.id}` } : null,
-        })),
-        bookings: theirBookings,
-        quotations: quotes,
-        invoices: bills,
-      }}
-      scope={scope}
-      today={localDate(new Date(), scope.timeZone)}
-      signOut={<PortalSignOutButton slug={slug} />}
-    />
+    <StudioShell studio={{ name: at.studio.name, logoUrl, slug }} signedInAs={me.name} title="My page">
+      <ClientPortalHome
+        view={{
+          clientName: me.name,
+          studioName: at.studio.name,
+          projects: theirProjects.map((p, i) => ({
+            ...p,
+            orders: allOrders.filter((o) => o.projectId === p.id),
+            photos: galleries[i] && galleries[i].photoCount > 0 ? { count: galleries[i].photoCount, href: `/${slug}/me/photos/${p.id}` } : null,
+          })),
+          bookings: theirBookings,
+          quotations: quotes,
+          invoices: bills,
+        }}
+        scope={scope}
+        today={localDate(new Date(), scope.timeZone)}
+        signOut={<PortalSignOutButton slug={slug} />}
+      />
+    </StudioShell>
   );
 }

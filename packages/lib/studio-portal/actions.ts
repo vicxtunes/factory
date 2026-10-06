@@ -3,9 +3,10 @@
 // The browser's entry points to the studio portal.
 //
 // Client actions come in by the studio's slug, never a tenant id from the
-// browser: sign in (phone + PIN), set the PIN from a set-up link, sign out.
+// browser: open the page from the studio's link (no PIN), stay signed in,
+// sign in with phone + PIN (clients who set one earlier), sign out.
 // Studio actions get the studio from the owner's session: set the studio's
-// address, make a client's set-up link.
+// address, make the link to a client's page.
 
 import { revalidatePath } from "next/cache";
 
@@ -16,9 +17,9 @@ import { whatsappNumber } from "@repo/lib/kernel/core/phone";
 import { runAction } from "@repo/lib/kernel/server/action";
 import { studioForSetup, studioOfCaller } from "@repo/lib/studios/server";
 
-import { INVITE_DAYS, inviteTokenSchema, pinSchema, signInSchema, slugSchema } from "./core";
+import { INVITE_DAYS, inviteTokenSchema, signInSchema, slugSchema } from "./core";
 import { PortalError } from "./ports";
-import { clearPortalCookie, inviteUrl, portal, setPortalCookie, studioAtSlug } from "./server";
+import { clearPortalCookie, inviteUrl, portal, renewPortalCookie, setPortalCookie, studioAtSlug } from "./server";
 
 async function studioFor(slug: unknown) {
   const at = await studioAtSlug(parseInput(slugSchema, slug));
@@ -35,12 +36,19 @@ export async function portalSignIn(slug: unknown, input: unknown): Promise<Resul
   });
 }
 
-/** From a set-up link: the client chooses their PIN and is signed in. */
-export async function portalSetPin(slug: unknown, token: unknown, pin: unknown): Promise<Result> {
+/** From the studio's link: this device is signed in to the client's page for good, no PIN. */
+export async function portalOpenLink(slug: unknown, token: unknown): Promise<Result> {
   return runAction("studio-portal", async () => {
     const { studio } = await studioFor(slug);
-    const session = await portal.acceptInvite(studio.id, parseInput(inviteTokenSchema, token), parseInput(pinSchema, pin));
-    await setPortalCookie(session);
+    await setPortalCookie(await portal.openLink(studio.id, parseInput(inviteTokenSchema, token)));
+  });
+}
+
+/** Keeps this device signed in at the studio (called on each visit). */
+export async function portalStayIn(slug: unknown): Promise<Result> {
+  return runAction("studio-portal", async () => {
+    const { studio } = await studioFor(slug);
+    await renewPortalCookie(studio.id);
   });
 }
 
@@ -61,8 +69,8 @@ export async function setStudioSlug(slug: unknown): Promise<Result> {
 }
 
 /**
- * A set-up link for a client (first PIN, or a forgotten one), with a WhatsApp
- * link that sends it. The studio needs an address first.
+ * The link to a client's page (it signs in the device that opens it, no
+ * PIN), with a WhatsApp link that sends it. The studio needs an address first.
  */
 export async function createPortalInvite(customerId: unknown): Promise<Result<{ url: string; whatsapp: string }>> {
   return runAction("studio-portal", async () => {
@@ -73,7 +81,7 @@ export async function createPortalInvite(customerId: unknown): Promise<Result<{ 
     const token = await portal.invite(scope, id);
     const customer = await customers.get(scope, id);
     const url = inviteUrl(slug, token);
-    const text = `Hello ${customer?.name ?? ""}, here is your page with ${studio.name}: your projects, bookings, invoices and photos. Open this link and choose a 4-digit PIN (it works for ${INVITE_DAYS} days): ${url}`;
+    const text = `Hello ${customer?.name ?? ""}, here is your page with ${studio.name}: your projects, bookings, invoices and photos. Open this link on your phone (it works once, for ${INVITE_DAYS} days) and you'll stay signed in: ${url}`;
     revalidatePath("/studio", "layout");
     return { url, whatsapp: `https://wa.me/${whatsappNumber(customer?.phone ?? null)}?text=${encodeURIComponent(text)}` };
   });

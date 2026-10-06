@@ -10,13 +10,17 @@ import type { TenantScope } from "@repo/lib/tenancy/types";
 import type { Booking, BookingInput, BookingStatus } from "./core/model";
 
 export interface BookingStore {
-  /** Bookings on days `from`..`to` inclusive, or all of one customer's. */
-  list(scope: TenantScope, filter: { from?: string; to?: string; customerId?: string }): Promise<Booking[]>;
+  /** Bookings on days `from`..`to` inclusive, or all of one customer's, or all in one status. */
+  list(scope: TenantScope, filter: { from?: string; to?: string; customerId?: string; status?: BookingStatus }): Promise<Booking[]>;
   get(scope: TenantScope, id: string): Promise<Booking | null>;
   /** The booking made from a quotation, if any. */
   idForQuotation(scope: TenantScope, quotationId: string): Promise<string | null>;
   /** Throws BookingError when the client or quotation isn't this tenant's, or the quotation is already booked. */
   create(scope: TenantScope, input: BookingInput): Promise<string>;
+  /** A client's online request for a package (status "requested"). Throws BookingError when the client or package isn't this tenant's. */
+  createRequest(scope: TenantScope, input: Omit<BookingInput, "quotationId"> & { offeringId: string }): Promise<string>;
+  /** Links the invoice made when it was confirmed. False when there's no such booking in this tenant. */
+  setInvoice(scope: TenantScope, id: string, invoiceId: string): Promise<boolean>;
   /** Changes the details (never the quotation). False when there's no such booking in this tenant. */
   update(scope: TenantScope, id: string, input: Omit<BookingInput, "quotationId">): Promise<boolean>;
   /** Moves `from` → `to` only if it's still `from`. False otherwise. */

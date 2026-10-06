@@ -4,6 +4,7 @@ import { notFound, permanentRedirect } from "next/navigation";
 
 import { StudioPublicPage } from "@repo/ui/studio-portal/StudioPublicPage";
 import { getClientSession } from "@repo/lib/auth/session";
+import { rememberedRequests } from "@repo/lib/booking-requests/server";
 import { offerings } from "@repo/lib/offerings/server";
 import { PhotoError } from "@repo/lib/photos/ports";
 import { photos } from "@repo/lib/photos/server";
@@ -86,6 +87,8 @@ export default async function SlugPage({ params, searchParams }: Params & { sear
       ),
     })),
   );
+  // Requests this device sent while not signed in (a client the studio already knew, on a new phone).
+  const requests = signedIn ? [] : await rememberedRequests(at.scope);
   // The banner: one of the studio's own photos, its first album's cover or else a service's.
   const bannerUrl = albums.find((a) => a.coverLargeUrl)?.coverLargeUrl ?? categories.flatMap((c) => c.services).find((s) => s.coverLargeUrl)?.coverLargeUrl ?? null;
   return (
@@ -98,6 +101,7 @@ export default async function SlugPage({ params, searchParams }: Params & { sear
         bannerUrl={bannerUrl}
         signedInAs={signedIn?.name ?? null}
         signInOpen={signin === "1"}
+        requests={requests}
       />
     </StudioShell>
   );

@@ -1,8 +1,10 @@
 # Studio portal module
 
 How a studio's clients get in. Each studio has **its own permanent address**,
-`client.<domain>/<slug>` (e.g. `/amina-studio`), and its clients sign in there with their
-**phone number and a 4-digit PIN**. No account, no app.
+`client.<domain>/<slug>` (e.g. `/amina-studio`). **No password, no PIN**: the device a client books
+on stays signed in, and the studio's one-time link signs in any other device (see
+packages/lib/booking-requests/README.md). Clients who set a PIN before can still sign in with their
+**phone number and PIN**. No account, no app.
 
 ## The studio's address
 

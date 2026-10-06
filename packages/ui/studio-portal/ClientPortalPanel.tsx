@@ -8,9 +8,9 @@ import { createPortalInvite } from "@repo/lib/studio-portal/actions";
 import type { PortalStatus } from "@repo/lib/studio-portal/core";
 
 /**
- * On a client's page: their access to the studio's portal. Send a set-up
- * link on WhatsApp (first PIN, or a forgotten one) and see whether they've
- * set a PIN and when they last signed in.
+ * A client's access to their page with the studio: send the link that opens
+ * it (no PIN; the phone that opens it stays signed in) on WhatsApp, and see
+ * whether they've opened it and when they last came by.
  */
 export function ClientPortalPanel({
   customerId,
@@ -41,12 +41,12 @@ export function ClientPortalPanel({
     });
   }
 
-  const state = status.pinSet ? "PIN set" : status.invitePending ? "Set-up link sent, PIN not chosen yet" : "Not set up";
+  const state = status.hasAccess ? "Has their page" : status.invitePending ? "Link sent, not opened yet" : "Not opened yet";
 
   return (
     <section className="space-y-3 rounded-2xl border border-border bg-surface p-4 shadow-theme-xs">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm font-semibold">Client portal</p>
+        <p className="text-sm font-semibold">Their page</p>
         <p className="text-xs text-muted">
           {state}
           {lastSignedIn ? ` · last signed in ${lastSignedIn}` : ""}
@@ -55,12 +55,12 @@ export function ClientPortalPanel({
       {!hasAddress ? (
         <p className="text-sm text-muted">Choose your studio&apos;s address on Studio profile first.</p>
       ) : !status.hasPhone ? (
-        <p className="text-sm text-muted">Add this client&apos;s phone number above: they sign in with it.</p>
+        <p className="text-sm text-muted">Add this client&apos;s phone number above: the link is sent to it.</p>
       ) : (
         <>
-          <p className="text-sm text-muted">They see their projects, bookings, quotations, invoices, Aming orders and photos.</p>
+          <p className="text-sm text-muted">They see their projects, bookings, quotations, invoices, Aming orders and photos. No password or PIN.</p>
           <Button type="button" onClick={invite} loading={pending}>
-            {status.pinSet ? "Send PIN reset link" : "Send portal invite"}
+            Send link to their page
           </Button>
           {link ? (
             <div className="space-y-2">
@@ -85,7 +85,7 @@ export function ClientPortalPanel({
                   {copied ? "Copied" : "Copy link"}
                 </Button>
               </div>
-              <p className="text-xs text-muted">Works once, for 7 days. Sending a new one cancels this one.</p>
+              <p className="text-xs text-muted">Works once, for 7 days: the phone that opens it stays signed in. Sending a new one cancels this one.</p>
             </div>
           ) : null}
         </>

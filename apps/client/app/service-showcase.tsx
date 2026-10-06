@@ -4,16 +4,17 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { Showcase, type ShowcaseMedia } from "@repo/ui/showroom/Showcase";
-import { whatsappNumber } from "@repo/lib/kernel/core/phone";
-import { offeringLabel, type ServiceWithPackages } from "@repo/lib/offerings/core";
+import type { ServiceWithPackages } from "@repo/lib/offerings/core";
 import { formatAmount } from "@repo/lib/tenancy/format";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 import type { ShowroomViewMode } from "@repo/lib/types";
 
+import { BookNow } from "./book-now";
+
 // A studio's service in the showroom's item page (@repo/ui/showroom/Showcase):
 // its packages as tiers to choose from, each with its price, description and
-// what's included, and "Book on WhatsApp" naming the chosen one. The page
-// for it is [slug]/s/[service]/page.tsx.
+// what's included, and "Book now" (./book-now.tsx) for the chosen one. The
+// page for it is [slug]/s/[service]/page.tsx.
 export function ServiceShowcase({
   studio,
   slug,
@@ -21,9 +22,11 @@ export function ServiceShowcase({
   media,
   viewMode,
   showPrices,
+  signedIn,
+  today,
   scope,
 }: {
-  studio: { name: string; phone: string | null };
+  studio: { name: string };
   /** The studio's address: "Back to showroom" goes there. */
   slug: string;
   service: ServiceWithPackages;
@@ -31,15 +34,14 @@ export function ServiceShowcase({
   viewMode: ShowroomViewMode;
   /** The studio's choice: off, every package reads "Price on request". */
   showPrices: boolean;
-  scope: Pick<TenantScope, "currency" | "locale">;
+  /** This device is signed in at the studio: booking needs no name or phone. */
+  signedIn: boolean;
+  /** The studio's today: the first day that can be booked. */
+  today: string;
+  scope: Pick<TenantScope, "currency" | "locale" | "timeZone">;
 }) {
   const router = useRouter();
   const [chosenId, setChosenId] = useState("");
-  const chosen = service.packages.find((p) => p.id === chosenId) ?? null;
-  const asked = chosen ? offeringLabel(chosen) : service.name;
-  const book = studio.phone
-    ? `https://wa.me/${whatsappNumber(studio.phone)}?text=${encodeURIComponent(`Hello ${studio.name}, I'd like to book ${asked}.`)}`
-    : null;
 
   return (
     <Showcase
@@ -104,16 +106,16 @@ export function ServiceShowcase({
         )
       }
       action={
-        book ? (
-          <a
-            href={book}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex min-h-11 w-full items-center justify-center rounded-[var(--radius)] bg-brand-500 px-5 text-sm font-medium text-white shadow-theme-xs hover:bg-brand-600 sm:w-auto sm:self-start"
-          >
-            {chosen ? `Book ${chosen.name} on WhatsApp` : "Book on WhatsApp"}
-          </a>
-        ) : null
+        <BookNow
+          studio={{ name: studio.name, slug }}
+          serviceSlug={service.slug}
+          packages={service.packages}
+          chosenId={chosenId}
+          signedIn={signedIn}
+          today={today}
+          showPrices={showPrices}
+          scope={scope}
+        />
       }
     />
   );

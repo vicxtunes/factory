@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+
+import { localDate } from "@repo/lib/accounting/core/period";
 import { notFound, permanentRedirect } from "next/navigation";
 
 import { offerings } from "@repo/lib/offerings/server";
@@ -70,13 +72,15 @@ export default async function ServicePage({ params }: Params) {
   return (
     <StudioShell studio={{ name: at.studio.name, logoUrl, slug }} signedInAs={signedIn?.name ?? null} title={found.name}>
       <ServiceShowcase
-        studio={{ name: loaded.at.studio.name, phone: loaded.at.studio.phone }}
+        studio={{ name: loaded.at.studio.name }}
         slug={loaded.slug}
         service={loaded.found}
         media={media}
         // The studio's choices (Packages & Services): 3D or carousel, prices shown or not.
         viewMode={settings.viewMode}
         showPrices={settings.showPrices}
+        signedIn={!!signedIn}
+        today={localDate(new Date(), at.scope.timeZone)}
         scope={loaded.at.scope}
       />
     </StudioShell>

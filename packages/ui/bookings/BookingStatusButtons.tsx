@@ -7,7 +7,7 @@ import { Button } from "@repo/ui/Button";
 import { setBookingStatus } from "@repo/lib/bookings/actions";
 import { nextStatuses, type BookingStatus } from "@repo/lib/bookings/core";
 
-const ACTIONS: Record<BookingStatus, { label: string; variant: "primary" | "secondary" | "danger" }> = {
+const ACTIONS: Record<Exclude<BookingStatus, "requested">, { label: string; variant: "primary" | "secondary" | "danger" }> = {
   confirmed: { label: "Confirm", variant: "primary" },
   completed: { label: "Mark completed", variant: "primary" },
   tentative: { label: "Back to tentative", variant: "secondary" },
@@ -35,11 +35,13 @@ export function BookingStatusButtons({ bookingId, status }: { bookingId: string;
   return (
     <div className="space-y-1">
       <div className="flex flex-wrap gap-2">
-        {moves.map((to) => (
-          <Button key={to} type="button" variant={ACTIONS[to].variant} onClick={() => move(to)} disabled={pending}>
-            {to === "tentative" && status === "cancelled" ? "Reopen" : ACTIONS[to].label}
-          </Button>
-        ))}
+        {moves.map((to) =>
+          to === "requested" ? null : (
+            <Button key={to} type="button" variant={ACTIONS[to].variant} onClick={() => move(to)} disabled={pending}>
+              {to === "tentative" && status === "cancelled" ? "Reopen" : ACTIONS[to].label}
+            </Button>
+          ),
+        )}
       </div>
       {error ? <p className="text-sm text-error-600 dark:text-error-400">{error}</p> : null}
     </div>
