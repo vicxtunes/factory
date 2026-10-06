@@ -9,7 +9,7 @@ export function StudiosTable({ studios, scope }: { studios: StudioListing[]; sco
   if (studios.length === 0) {
     return (
       <p className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted">
-        No studios yet. A client&apos;s studio appears here the first time they open My Studio.
+        No businesses yet. A client&apos;s business appears here the first time they open My Business.
       </p>
     );
   }
@@ -20,7 +20,7 @@ export function StudiosTable({ studios, scope }: { studios: StudioListing[]; sco
       <table className="w-full min-w-[720px] text-sm">
         <thead>
           <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted">
-            <th className="px-4 py-2 font-medium">Studio</th>
+            <th className="px-4 py-2 font-medium">Business</th>
             <th className="px-4 py-2 font-medium">Status</th>
             <th className="px-4 py-2 font-medium">Owner</th>
             <th className="px-4 py-2 font-medium">Contact</th>

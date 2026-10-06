@@ -22,13 +22,16 @@ interface Row {
   amount: number | string | null;
   notes: string | null;
   status: BookingStatus;
+  source: Booking["source"];
   quotation_id: string | null;
+  offering_id: string | null;
+  invoice_id: string | null;
   created_at: string;
   customer: { name: string } | null;
 }
 
 const COLUMNS = `id, customer_id, title, starts_on, start_time, end_time, location, package_name, amount, notes, status,
-  quotation_id, created_at, customer:customers!bookings_tenant_id_customer_id_fkey (name)`;
+  source, quotation_id, offering_id, invoice_id, created_at, customer:customers!bookings_tenant_id_customer_id_fkey (name)`;
 
 /** Postgres gives "14:00:00"; the app speaks "14:00". */
 const clock = (t: string | null) => (t ? t.slice(0, 5) : null);
@@ -47,7 +50,10 @@ const toBooking = (r: Row): Booking => ({
   amount: r.amount == null ? null : Number(r.amount),
   notes: r.notes,
   status: r.status,
+  source: r.source,
   quotationId: r.quotation_id,
+  offeringId: r.offering_id,
+  invoiceId: r.invoice_id,
   createdAt: r.created_at,
 });
 
@@ -67,8 +73,8 @@ const toColumns = (b: Omit<BookingInput, "quotationId">) => ({
 function fail(what: string, error: { code?: string; message: string }): never {
   // Booked twice at once: the one-booking-per-quotation index caught it.
   if (error.code === "23505" && error.message.includes("one_per_quotation")) throw new BookingError("This quotation is already booked.");
-  // A client or quotation from another studio: the composite keys caught it.
-  if (error.code === "23503") throw new BookingError("That client or quotation doesn't belong to your studio.");
+  // A client, quotation or package from another studio: the composite keys caught it.
+  if (error.code === "23503") throw new BookingError("That client, quotation or package doesn't belong to your business.");
   throw new Error(`bookings: could not ${what}: ${error.message}`);
 }
 
@@ -80,6 +86,7 @@ export const supabaseBookingStore: BookingStore = {
     if (filter.from) query = query.gte("starts_on", filter.from);
     if (filter.to) query = query.lte("starts_on", filter.to);
     if (filter.customerId) query = query.eq("customer_id", filter.customerId);
+    if (filter.status) query = query.eq("status", filter.status);
     const { data, error } = await query.returns<Row[]>();
     if (error) fail("list bookings", error);
     return data.map(toBooking);
@@ -104,6 +111,21 @@ export const supabaseBookingStore: BookingStore = {
       .single<{ id: string }>();
     if (error) fail("save the booking", error);
     return data.id;
+  },
+
+  async createRequest(scope, input) {
+    const { data, error } = await table()
+      .insert({ ...toColumns(input), offering_id: input.offeringId, status: "requested", source: "online", tenant_id: scope.tenantId })
+      .select("id")
+      .single<{ id: string }>();
+    if (error) fail("save the booking request", error);
+    return data.id;
+  },
+
+  async setInvoice(scope, id, invoiceId) {
+    const { data, error } = await table().update({ invoice_id: invoiceId }).eq("tenant_id", scope.tenantId).eq("id", id).select("id");
+    if (error) fail("link the invoice", error);
+    return data.length === 1;
   },
 
   async update(scope, id, input) {

@@ -1,7 +1,7 @@
 # Tasks module
 
 Work on a project: what, who (a team member, or unassigned), by when, and how urgent. For studios,
-tasks live on a project's page, with **My Studio → Tasks** for everything still to do. Generic and
+tasks live on a project's page, with **My Business → Tasks** for everything still to do. Generic and
 tenant-scoped.
 
 - **Add** on a project that's still in hand, for an active team member (or nobody yet).

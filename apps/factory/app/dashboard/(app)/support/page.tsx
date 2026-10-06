@@ -1,5 +1,7 @@
 import { redirect } from "next/navigation";
 
+import { PanelStackSkeleton } from "@repo/ui/skeletons/blocks";
+import { Loading } from "@repo/ui/skeletons/Loading";
 import { getDashboardSession } from "@repo/lib/auth/session";
 import { getSupportReports } from "@repo/lib/support/actions";
 import { SUPPORT_OWNER_EMAIL } from "@repo/lib/support/constants";
@@ -13,12 +15,16 @@ export default async function SupportPage() {
   const session = await getDashboardSession();
   if (!session || session.email !== SUPPORT_OWNER_EMAIL) redirect("/dashboard");
 
-  const reports = await getSupportReports();
-
   return (
     <div className="space-y-6">
-      <SupportPanel reports={reports} />
+      <Loading skeleton={<PanelStackSkeleton count={3} />}>
+        <Reports />
+      </Loading>
       <NotifyPanel />
     </div>
   );
+}
+
+async function Reports() {
+  return <SupportPanel reports={await getSupportReports()} />;
 }

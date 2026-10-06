@@ -6,10 +6,10 @@ import { optionalEmail, optionalPhone, optionalText } from "@repo/lib/kernel/cor
 
 import type { StudioProfile } from "./model";
 
-export const studioIdSchema = z.uuid("That studio doesn't exist.");
+export const studioIdSchema = z.uuid("That business doesn't exist.");
 
 export const studioProfileSchema = z.object({
-  name: z.string("Give your studio a name.").trim().min(1, "Give your studio a name.").max(80, "Keep the name under 80 characters."),
+  name: z.string("Give your business a name.").trim().min(1, "Give your business a name.").max(80, "Keep the name under 80 characters."),
   phone: optionalPhone(),
   email: optionalEmail(),
   address: optionalText(200, "Keep the address under 200 characters."),

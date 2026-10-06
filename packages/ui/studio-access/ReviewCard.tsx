@@ -9,7 +9,7 @@ export function ReviewCard({ studio, publicUrl, dateFormat }: { studio: StudioFo
   const rows: [string, React.ReactNode][] = [
     ["Owner", studio.ownerName || "Not given yet"],
     ["Aming client", <>{studio.clientName}{studio.ownerName && !sameName ? <span className="ml-1 text-xs text-warning-600">(different from the owner&apos;s name)</span> : null}</>],
-    ["Studio phone", studio.phone ?? "Not given yet"],
+    ["Business phone", studio.phone ?? "Not given yet"],
     ["Verified email", studio.ownerEmail ?? "Not verified yet"],
     ["Public page", publicUrl ?? "Not chosen yet"],
     ["Submitted", studio.submittedAt ? dateFormat.format(new Date(studio.submittedAt)) : "Not yet"],

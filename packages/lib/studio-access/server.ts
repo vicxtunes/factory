@@ -35,7 +35,7 @@ const secrets: AccessSecrets = {
 
 const workspace = clientUrl("/studio");
 if (!workspace.startsWith("http")) {
-  console.warn("studio-access: NEXT_PUBLIC_CLIENT_ORIGIN isn't set, so studio emails go out without a link to the studio.");
+  console.warn("studio-access: NEXT_PUBLIC_CLIENT_ORIGIN isn't set, so business emails go out without a link to the business.");
 }
 
 export const studioAccess = new StudioAccessService(

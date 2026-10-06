@@ -43,11 +43,11 @@ export const STUDIO_NAV: StudioNavSection[] = [
   },
   {
     id: "studio",
-    label: "Studio",
+    label: "Business",
     items: [
       { href: "/studio/offerings", label: "Packages & Services", icon: "products" },
       { href: "/studio/showroom", label: "Showroom", icon: "showroom" },
-      { href: "/studio/profile", label: "Studio profile", icon: "settings" },
+      { href: "/studio/profile", label: "Business profile", icon: "settings" },
     ],
   },
 ];
@@ -69,7 +69,7 @@ export function studioPageTitle(pathname: string): string {
   const item = STUDIO_NAV.flatMap((s) => s.items)
     .filter((i) => isCurrentStudioPage(pathname, { href: i.href }))
     .sort((a, b) => b.href.length - a.href.length)[0];
-  return item?.label ?? "My Studio";
+  return item?.label ?? "My Business";
 }
 
 /** Whether `item` is the current page (or a page under it, unless `exact`). */

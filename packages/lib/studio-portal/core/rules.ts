@@ -22,7 +22,8 @@ export const LOCK_MINUTES = 15;
 
 /** How long a set-up link works, and how long a sign-in lasts on a device. */
 export const INVITE_DAYS = 7;
-export const SESSION_DAYS = 90;
+/** As long as browsers keep a cookie (400 days); every visit renews it, so a client stays signed in for good. */
+export const SESSION_DAYS = 400;
 
 export function isLocked(lockedUntil: string | null, now: Date): boolean {
   return lockedUntil !== null && Date.parse(lockedUntil) > now.getTime();

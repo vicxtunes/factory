@@ -1,7 +1,7 @@
 # Team module
 
 The people a business gives work to: second shooters, editors, assistants. For studios it's
-**My Studio → Team**. **No logins yet**: a member is a name, role and phone to assign tasks to.
+**My Business → Team**. **No logins yet**: a member is a name, role and phone to assign tasks to.
 Logins for team members come later, when studios need them. Generic and tenant-scoped.
 
 - **Add, edit, archive and restore.** Archived members aren't offered for new tasks but keep

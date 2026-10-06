@@ -47,7 +47,7 @@ export class PhotoService {
 
   /** The boss sets a studio's allowance. */
   async setQuota(tenantId: string, quotaBytes: number): Promise<void> {
-    if (!(await this.repo.setQuota(tenantId, quotaBytes))) throw new PhotoError("That studio no longer exists.");
+    if (!(await this.repo.setQuota(tenantId, quotaBytes))) throw new PhotoError("That business no longer exists.");
   }
 
   // ── Albums ─────────────────────────────────────────────────────────────

@@ -63,7 +63,7 @@ const heading = (text: string) => `<h1 style="margin:0 0 16px;font-size:20px;lin
 /** A 6-digit code: to verify the owner's email, or to reset the studio password. */
 export function codeEmail(links: EmailLinks, studio: string, purpose: "verify" | "reset", code: string): Email {
   const what = purpose === "verify" ? "verify your email for" : "reset the password of";
-  const title = purpose === "verify" ? "Verify your email" : "Reset your studio password";
+  const title = purpose === "verify" ? "Verify your email" : "Reset your business password";
   const after = `It works for ${CODE_MINUTES} minutes. If you didn't ask for it, ignore this email: nothing changes.`;
   return {
     subject: `${code} is your ${studio} code`,
@@ -83,8 +83,8 @@ export function passwordChangedEmail(links: EmailLinks, studio: string): Email {
   const body = `The password for ${studio} was just changed, and every other device was signed out.\n\nIf this wasn't you, reset it again now and contact ${BRAND}.`;
   return {
     subject: `Your ${studio} password was changed`,
-    text: `${body}${absolute(links.workspace) ? `\n\nOpen your studio: ${links.workspace}` : ""}\n\n${FOOTER}`,
-    html: layout(links, heading("Your studio password was changed") + paragraphs(body), { label: "Open your studio", href: links.workspace }),
+    text: `${body}${absolute(links.workspace) ? `\n\nOpen your business: ${links.workspace}` : ""}\n\n${FOOTER}`,
+    html: layout(links, heading("Your business password was changed") + paragraphs(body), { label: "Open your business", href: links.workspace }),
   };
 }
 
@@ -95,23 +95,23 @@ export function reviewEmail(links: EmailLinks, studio: string, decision: ReviewD
   const content = {
     approve: {
       subject: `${studio} is approved`,
-      body: `Good news: your studio is open. Your public page is live and your clients can sign in.`,
-      button: "Open your studio",
+      body: `Good news: your business is open. Your public page is live and your clients can sign in.`,
+      button: "Open your business",
     },
     resume: {
       subject: `${studio} can continue setting up`,
-      body: `${BRAND} lifted the suspension. Finish setting up your studio, then submit it for review.`,
+      body: `${BRAND} lifted the suspension. Finish setting up your business, then submit it for review.`,
       button: "Continue setting up",
     },
     send_back: {
       subject: `${studio} needs a few changes`,
-      body: `${BRAND} looked at your studio and asks for a few changes before it opens.${said}\n\nMake the changes, then submit again.`,
+      body: `${BRAND} looked at your business and asks for a few changes before it opens.${said}\n\nMake the changes, then submit again.`,
       button: "Make the changes",
     },
     suspend: {
       subject: `${studio} is suspended`,
-      body: `Your studio is suspended: its workspace, public page and client sign-in are stopped.${said}\n\nTalk to ${BRAND} to reopen it.`,
-      button: "Open your studio",
+      body: `Your business is suspended: its workspace, public page and client sign-in are stopped.${said}\n\nTalk to ${BRAND} to reopen it.`,
+      button: "Open your business",
     },
   }[decision];
   return {

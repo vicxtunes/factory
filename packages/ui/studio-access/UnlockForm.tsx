@@ -51,7 +51,7 @@ export function UnlockForm({ studioName }: { studioName: string }) {
     return (
       <div className="space-y-4">
         <div>
-          <h1 className="text-lg font-semibold">Reset the studio password</h1>
+          <h1 className="text-lg font-semibold">Reset the business password</h1>
           <p className="text-sm text-muted">We&apos;ll email a code to {studioName}&apos;s verified address. Other devices will be signed out.</p>
         </div>
         <Button variant={sentTo ? "secondary" : "primary"} className="w-full" onClick={sendCode} loading={pending && !sentTo} disabled={wait > 0}>
@@ -114,9 +114,9 @@ export function UnlockForm({ studioName }: { studioName: string }) {
     >
       <div>
         <h1 className="text-lg font-semibold">Unlock {studioName}</h1>
-        <p className="text-sm text-muted">Enter your studio password. This device stays unlocked for 30 days.</p>
+        <p className="text-sm text-muted">Enter your business password. This device stays unlocked for 30 days.</p>
       </div>
-      <Field label="Studio password">
+      <Field label="Business password">
         <PasswordInput value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" required autoFocus />
       </Field>
       {errorText}

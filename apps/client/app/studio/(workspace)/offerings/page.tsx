@@ -1,14 +1,31 @@
+
 import { CatalogPanel, type ServiceMedia } from "@repo/ui/offerings/CatalogPanel";
+import { RowsSkeleton } from "@repo/ui/skeletons/blocks";
+import { Loading } from "@repo/ui/skeletons/Loading";
 import { offerings } from "@repo/lib/offerings/server";
 import { PhotoError } from "@repo/lib/photos/ports";
 import { photos } from "@repo/lib/photos/server";
 import { portal } from "@repo/lib/studio-portal/server";
 import { requireStudio } from "@repo/lib/studios/server";
+import type { TenantScope } from "@repo/lib/tenancy/types";
 
-export const metadata = { title: "Packages & Services · My Studio" };
+export const metadata = { title: "Packages & Services · My Business" };
 
 export default async function StudioOfferingsPage() {
   const { scope } = await requireStudio();
+  return (
+    <>
+      <p className="text-sm text-muted">
+        Your categories and services, each with its packages. Your showroom shows them; quotations and bookings are built from the packages.
+      </p>
+      <Loading skeleton={<RowsSkeleton rows={4} />}>
+        <Catalog scope={scope} />
+      </Loading>
+    </>
+  );
+}
+
+async function Catalog({ scope }: { scope: TenantScope }) {
   const [categories, settings, usage, slug] = await Promise.all([
     offerings.manage(scope),
     offerings.settings(scope),
@@ -33,18 +50,13 @@ export default async function StudioOfferingsPage() {
   );
 
   return (
-    <>
-      <p className="text-sm text-muted">
-        Your categories and services, each with its packages. Your showroom shows them; quotations and bookings are built from the packages.
-      </p>
-      <CatalogPanel
-        categories={categories}
-        settings={settings}
-        scope={scope}
-        media={media}
-        usage={usage}
-        publicPath={slug ? `/${slug}` : null}
-      />
-    </>
+    <CatalogPanel
+      categories={categories}
+      settings={settings}
+      scope={scope}
+      media={media}
+      usage={usage}
+      publicPath={slug ? `/${slug}` : null}
+    />
   );
 }

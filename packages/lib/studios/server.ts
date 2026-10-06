@@ -66,9 +66,9 @@ export async function requireOwnStudio(): Promise<CallerStudio> {
 /** For studio actions (this module's and others'): the caller's working, unlocked studio, else a StudioError. */
 export async function studioOfCaller(): Promise<CallerStudio> {
   const caller = await callerStudio();
-  if (!caller) throw new StudioError("Sign in to manage your studio.");
-  if (caller.studio.status !== "active") throw new StudioError("Your studio isn't open yet: finish setting it up and wait for Aming's approval.");
-  if (!(await unlockedHere(caller.studio))) throw new StudioError("Your studio is locked on this device. Enter the studio password.");
+  if (!caller) throw new StudioError("Sign in to manage your business.");
+  if (caller.studio.status !== "active") throw new StudioError("Your business isn't open yet: finish setting it up and wait for Aming's approval.");
+  if (!(await unlockedHere(caller.studio))) throw new StudioError("Your business is locked on this device. Enter the business password.");
   return caller;
 }
 
@@ -78,14 +78,14 @@ export async function studioOfCaller(): Promise<CallerStudio> {
  */
 export async function studioForSetup(): Promise<CallerStudio> {
   const caller = await callerStudio();
-  if (!caller) throw new StudioError("Sign in to manage your studio.");
+  if (!caller) throw new StudioError("Sign in to manage your business.");
   return isSettingUp(caller.studio.status) ? caller : studioOfCaller();
 }
 
 /** For the unlock and forgot-password actions: the caller's studio, whatever its status. */
 export async function ownStudio(): Promise<CallerStudio> {
   const caller = await callerStudio();
-  if (!caller) throw new StudioError("Sign in to manage your studio.");
+  if (!caller) throw new StudioError("Sign in to manage your business.");
   return caller;
 }
 

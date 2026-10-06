@@ -6,7 +6,7 @@ import { isUnlocked } from "@repo/lib/studio-access/core";
 import { deviceUnlockOf } from "@repo/lib/studio-access/server";
 import { requireOwnStudio } from "@repo/lib/studios/server";
 
-export const metadata = { title: "Unlock My Studio" };
+export const metadata = { title: "Unlock My Business" };
 
 // The studio password, on each device every 30 days and after signing out of Aming.
 export default async function StudioUnlockPage() {

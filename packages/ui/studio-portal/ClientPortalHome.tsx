@@ -40,7 +40,8 @@ export function ClientPortalHome({ view, scope, today, signOut }: { view: Client
   const money = (n: number) => formatAmount(scope, n);
   const toAnswer = view.quotations.filter((q) => q.status === "open");
   const owed = view.invoices.reduce((sum, i) => sum + i.balance, 0);
-  const ahead = view.bookings.filter((b) => b.date >= today && (b.status === "tentative" || b.status === "confirmed"));
+  // Their requests waiting for the studio's answer count as coming up too.
+  const ahead = view.bookings.filter((b) => b.date >= today && (b.status === "requested" || b.status === "tentative" || b.status === "confirmed"));
 
   return (
     <main className="mx-auto w-full max-w-3xl space-y-8 px-4 py-8 sm:py-12">

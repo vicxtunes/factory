@@ -10,7 +10,7 @@ import { cache } from "react";
 import { cookies } from "next/headers";
 
 import { signPayload, verifyPayload } from "@repo/lib/auth/cookies";
-import { hashPin, verifyPin } from "@repo/lib/auth/pin";
+import { verifyPin } from "@repo/lib/auth/pin";
 import { clientUrl } from "@repo/lib/client-portal/paths";
 import { studioScope, type Studio } from "@repo/lib/studios/core";
 import { STUDIOS_ENABLED } from "@repo/lib/studios/feature";
@@ -25,7 +25,6 @@ import { StudioPortalService } from "./service";
 const secrets: PortalSecrets = {
   newToken: () => randomBytes(32).toString("base64url"),
   digest: (token) => createHash("sha256").update(token).digest("hex"),
-  hashPin,
   verifyPin,
 };
 
@@ -46,6 +45,12 @@ export async function setPortalCookie(session: PortalSession): Promise<void> {
     path: "/",
     maxAge: SESSION_DAYS * 86_400,
   });
+}
+
+/** Renews this device's sign-in at a studio (each visit), so it never runs out. Nothing when it isn't signed in there. */
+export async function renewPortalCookie(tenantId: string): Promise<void> {
+  const session = await verifyPayload<PortalSession>((await cookies()).get(cookieName(tenantId))?.value);
+  if (session?.tenantId === tenantId && (await portal.check(session))) await setPortalCookie(session);
 }
 
 export async function clearPortalCookie(tenantId: string): Promise<void> {

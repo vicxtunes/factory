@@ -87,7 +87,7 @@ export function ContinueForm() {
           We don&apos;t have an account for {step.phone} yet. Tell us who you are so our reception knows who
           they&apos;re dealing with.
         </p>
-        <Field label="Full name or studio name">
+        <Field label="Full name or business name">
           <TextInput value={name} onChange={(e) => setName(e.target.value)} maxLength={100} required autoFocus />
         </Field>
         <Field label="Email" hint="Optional">

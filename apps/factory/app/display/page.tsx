@@ -1,3 +1,5 @@
+import { CardGridSkeleton } from "@repo/ui/skeletons/blocks";
+import { Loading } from "@repo/ui/skeletons/Loading";
 import { fetchBoardItems } from "@repo/lib/queries";
 
 import { DisplayBoard } from "./display-board";
@@ -10,7 +12,20 @@ import { DisplayBoard } from "./display-board";
 export const metadata = { title: "Production Board — Factory Order Tracker" };
 export const dynamic = "force-dynamic";
 
-export default async function DisplayPage() {
-  const items = await fetchBoardItems();
-  return <DisplayBoard initialItems={items} />;
+export default function DisplayPage() {
+  return (
+    <Loading
+      skeleton={
+        <div className="p-4">
+          <CardGridSkeleton count={12} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4" />
+        </div>
+      }
+    >
+      <Board />
+    </Loading>
+  );
+}
+
+async function Board() {
+  return <DisplayBoard initialItems={await fetchBoardItems()} />;
 }

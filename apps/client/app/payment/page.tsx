@@ -2,6 +2,8 @@ import { redirect } from "next/navigation";
 
 import { PaymentMethods } from "@repo/ui/payments/PaymentMethods";
 import { ClientWallet } from "@repo/ui/wallet/ClientWallet";
+import { PanelStackSkeleton } from "@repo/ui/skeletons/blocks";
+import { Loading } from "@repo/ui/skeletons/Loading";
 import { getClientSession } from "@repo/lib/auth/session";
 import { getMyWallet } from "@repo/lib/wallet/actions";
 
@@ -14,7 +16,7 @@ export default async function ClientPaymentPage({ searchParams }: { searchParams
   const session = await getClientSession();
   if (!session) redirect("/?signin=1");
 
-  const [wallet, params] = await Promise.all([getMyWallet(), searchParams]);
+  const params = await searchParams;
 
   return (
     <ClientShell signedIn name={session.name} avatarUrl={session.avatarUrl}>
@@ -25,12 +27,16 @@ export default async function ClientPaymentPage({ searchParams }: { searchParams
             Pay upfront and keep a balance with us, then pay for orders from it in one tap.
           </p>
         </div>
-        {wallet.ok ? (
-          <ClientWallet wallet={wallet.data} howToPay={<PaymentMethods />} startAdding={params.add === "1"} />
-        ) : (
-          <p className="rounded-2xl border border-border bg-surface p-4 text-sm text-error-600">{wallet.error}</p>
-        )}
+        <Loading skeleton={<PanelStackSkeleton count={3} />}>
+          <Wallet startAdding={params.add === "1"} />
+        </Loading>
       </div>
     </ClientShell>
   );
+}
+
+async function Wallet({ startAdding }: { startAdding: boolean }) {
+  const wallet = await getMyWallet();
+  if (!wallet.ok) return <p className="rounded-2xl border border-border bg-surface p-4 text-sm text-error-600">{wallet.error}</p>;
+  return <ClientWallet wallet={wallet.data} howToPay={<PaymentMethods />} startAdding={startAdding} />;
 }
