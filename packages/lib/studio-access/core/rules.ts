@@ -87,12 +87,18 @@ export function missingForSubmit(a: StudioAccess): string[] {
 
 // ── Review ──
 
-/** The status a decision leads to from `from`, or null when it doesn't apply. */
-export function afterDecision(from: StudioStatus, decision: ReviewDecision): StudioStatus | null {
+/**
+ * The status a decision leads to from `from`, or null when it doesn't apply.
+ * The boss can approve at any stage, without waiting for the owner to submit,
+ * once every set-up step is done (`setUp`). Approving also lifts a
+ * suspension: a studio suspended before it was set up goes back to setting up.
+ */
+export function afterDecision(from: StudioStatus, decision: ReviewDecision, setUp: boolean): StudioStatus | null {
   switch (decision) {
-    // Approving also lifts a suspension.
     case "approve":
-      return from === "in_review" || from === "suspended" ? "active" : null;
+      if (from === "active") return null;
+      if (setUp) return "active";
+      return from === "suspended" ? "onboarding" : null;
     case "send_back":
       return from === "in_review" ? "changes_requested" : null;
     case "suspend":

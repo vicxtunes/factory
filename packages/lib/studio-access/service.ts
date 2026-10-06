@@ -194,11 +194,15 @@ export class StudioAccessService {
   /** Approves, sends back (with a reason) or suspends (with a reason) a studio, and tells its owner. */
   async review(tenantId: string, decision: ReviewDecision, note: string): Promise<void> {
     const access = await this.access(tenantId);
-    const to = afterDecision(access.status, decision);
+    const missing = missingForSubmit(access);
+    const to = afterDecision(access.status, decision, missing.length === 0);
     if (!to) {
-      throw new AccessError(
-        decision === "suspend" ? "This studio is already suspended." : "This studio isn't waiting for a review.",
-      );
+      if (decision === "suspend") throw new AccessError("This studio is already suspended.");
+      if (decision === "approve" && access.status !== "active") {
+        // Said as the boss would: "their address", not "your address".
+        throw new AccessError(`It can't open until it's set up. Still missing: ${missing.map((m) => m.replace(/^your /, "their ")).join(", ")}.`);
+      }
+      throw new AccessError(decision === "approve" ? "This studio is already open." : "This studio isn't waiting for a review.");
     }
     const reason = needsReason(decision) ? note.trim() : null;
     if (needsReason(decision) && !reason) throw new AccessError("Tell the studio why, so they know what to do.");
@@ -206,16 +210,22 @@ export class StudioAccessService {
       throw new AccessError("Someone else just reviewed this studio. Refresh the page.");
     }
 
+    // Lifting a suspension before it was set up: back to setting up, not open.
+    const outcome = decision === "approve" && to === "onboarding" ? "resume" : decision;
     const message = {
+      resume: {
+        title: `${access.name} can continue setting up`,
+        body: "The suspension is lifted: finish setting up your studio, then submit it for review.",
+      },
       approve: {
         title: `${access.name} is approved`,
         body: "Your studio is open: your public page is live and your clients can sign in.",
       },
       send_back: { title: `${access.name} needs a few changes`, body: `Aming Space asks: ${reason}` },
       suspend: { title: `${access.name} is suspended`, body: `Aming Space says: ${reason}` },
-    }[decision];
+    }[outcome];
     await this.notifier.notify(access.ownerClientId, { ...message, url: this.links.workspace });
-    await this.tell(access, reviewEmail(this.links, access.name, decision, reason));
+    await this.tell(access, reviewEmail(this.links, access.name, outcome, reason));
   }
 
   // ── Internals ──
