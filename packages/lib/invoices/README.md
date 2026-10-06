@@ -80,8 +80,9 @@ the payment's id, which is how the history can say "Mobile money · Ref MP123".
   URL, no wallet balance and no other orders on the public page.
 - The page is `noindex`, and malformed tokens are rejected before any lookup.
 - Staff can **Reset link** if it went to the wrong person.
-- Links always point at the client app (`NEXT_PUBLIC_CLIENT_ORIGIN`, e.g. `client.<domain>/invoice/<token>`),
-  wherever they're made (see `server/links.ts`). Without that setting (local dev) they use the current origin.
+- Links always point at the client app (`NEXT_PUBLIC_CLIENT_ORIGIN`, defaulting in production to
+  `https://amingspace.com`), wherever they're made (see `server/links.ts`). In local development
+  without that setting, they use the current origin.
 
 ## Layout
 

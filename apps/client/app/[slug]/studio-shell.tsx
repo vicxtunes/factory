@@ -35,7 +35,7 @@ export function StudioShell({
   const pathname = usePathname();
   const home = `/${studio.slug}`;
   const items = [
-    { href: home, label: "Showroom", Icon: ShowroomIcon, active: pathname === home || pathname.startsWith(`${home}/s/`) || pathname.startsWith(`${home}/gallery/`) },
+    { href: home, label: "Showroom", Icon: ShowroomIcon, active: pathname === home || pathname.startsWith(`${home}/s/`) || pathname.startsWith(`${home}/p/`) || pathname.startsWith(`${home}/gallery/`) },
     ...(signedInAs ? [{ href: `${home}/me`, label: "My page", Icon: ClientsIcon, active: pathname.startsWith(`${home}/me`) }] : []),
   ];
 

@@ -4,18 +4,21 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { Showcase, type ShowcaseMedia } from "@repo/ui/showroom/Showcase";
-import type { ServiceWithPackages } from "@repo/lib/offerings/core";
+import type { OfferingKind, ServiceWithPackages } from "@repo/lib/offerings/core";
 import { formatAmount } from "@repo/lib/tenancy/format";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 import type { ShowroomViewMode } from "@repo/lib/types";
 
 import { BookNow } from "./book-now";
+import { OrderNow } from "./order-now";
 
 // A studio's service in the showroom's item page (@repo/ui/showroom/Showcase):
 // its packages as tiers to choose from, each with its price, description and
-// what's included, and "Book now" (./book-now.tsx) for the chosen one. The
-// page for it is [slug]/s/[service]/page.tsx.
+// what's included, and "Book now" (./book-now.tsx) for the chosen one. A
+// product the same way: its sizes, and "Order now" (./order-now.tsx). The
+// pages for them are [slug]/s/[service]/page.tsx and [slug]/p/[product]/page.tsx.
 export function ServiceShowcase({
+  kind,
   studio,
   slug,
   service,
@@ -26,6 +29,7 @@ export function ServiceShowcase({
   today,
   scope,
 }: {
+  kind: OfferingKind;
   studio: { name: string };
   /** The studio's address: "Back to showroom" goes there. */
   slug: string;
@@ -61,7 +65,7 @@ export function ServiceShowcase({
           <p className="text-lg font-semibold text-showroom-ink/70">Ask us for prices</p>
         ) : (
           <div>
-            <p className="mb-1.5 text-xs uppercase tracking-widest text-showroom-ink/60">Choose a package</p>
+            <p className="mb-1.5 text-xs uppercase tracking-widest text-showroom-ink/60">{kind === "service" ? "Choose a package" : "Choose a size"}</p>
             <div className="grid gap-3 sm:grid-cols-2">
               {service.packages.map((p) => {
                 const selected = p.id === chosenId;
@@ -106,16 +110,28 @@ export function ServiceShowcase({
         )
       }
       action={
-        <BookNow
-          studio={{ name: studio.name, slug }}
-          serviceSlug={service.slug}
-          packages={service.packages}
-          chosenId={chosenId}
-          signedIn={signedIn}
-          today={today}
-          showPrices={showPrices}
-          scope={scope}
-        />
+        kind === "product" ? (
+          <OrderNow
+            studio={{ name: studio.name, slug }}
+            productSlug={service.slug}
+            sizes={service.packages}
+            chosenId={chosenId}
+            signedIn={signedIn}
+            showPrices={showPrices}
+            scope={scope}
+          />
+        ) : (
+          <BookNow
+            studio={{ name: studio.name, slug }}
+            serviceSlug={service.slug}
+            packages={service.packages}
+            chosenId={chosenId}
+            signedIn={signedIn}
+            today={today}
+            showPrices={showPrices}
+            scope={scope}
+          />
+        )
       }
     />
   );

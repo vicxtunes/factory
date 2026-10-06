@@ -6,11 +6,18 @@ import { useState, useTransition } from "react";
 import { Button } from "@repo/ui/Button";
 import { Field, TextArea, TextInput } from "@repo/ui/Field";
 import { createOffering, setOfferingActive, updateOffering } from "@repo/lib/offerings/actions";
-import type { Offering } from "@repo/lib/offerings/core";
+import type { Offering, OfferingKind } from "@repo/lib/offerings/core";
 import { formatAmount } from "@repo/lib/tenancy/format";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
 type Scope = Pick<TenantScope, "currency" | "locale">;
+
+/** How a service's packages and a product's sizes are named. */
+const WORDS = {
+  service: { tier: "package", Tier: "Package", namePlaceholder: "Gold" },
+  product: { tier: "size", Tier: "Size", namePlaceholder: "12x18" },
+} satisfies Record<OfferingKind, Record<string, string>>;
+type Words = (typeof WORDS)[OfferingKind];
 
 const formOf = (p?: Offering) => ({
   name: p?.name ?? "",
@@ -19,8 +26,28 @@ const formOf = (p?: Offering) => ({
   inclusions: p?.inclusions.join("\n") ?? "",
 });
 
-/** Adds a package to the service (no `pkg`) or edits one. A name a sibling on sale already has is refused. */
-function PackageForm({ serviceId, pkg, currency, onDone }: { serviceId: string; pkg?: Offering; currency: string; onDone: () => void }) {
+/**
+ * Adds a package to the service (no `pkg`) or edits one. A name a sibling on
+ * sale already has is refused. A product's sizes have no "what's included";
+ * the sizes of a product from Aming keep Aming's names (`fixedName`).
+ */
+function PackageForm({
+  words,
+  withInclusions,
+  fixedName,
+  serviceId,
+  pkg,
+  currency,
+  onDone,
+}: {
+  words: Words;
+  withInclusions: boolean;
+  fixedName: boolean;
+  serviceId: string;
+  pkg?: Offering;
+  currency: string;
+  onDone: () => void;
+}) {
   const router = useRouter();
   const [form, setForm] = useState(formOf(pkg));
   const [error, setError] = useState<string | null>(null);
@@ -40,7 +67,7 @@ function PackageForm({ serviceId, pkg, currency, onDone }: { serviceId: string; 
     start(async () => {
       const res = pkg ? await updateOffering(pkg.id, input) : await createOffering(serviceId, input);
       if (!res.ok) return setError(res.error);
-      if ("duplicateOf" in res.data) return setError(`This service already has a package called “${res.data.duplicateOf.name}”. Choose another name.`);
+      if ("duplicateOf" in res.data) return setError(`There's already a ${words.tier} called “${res.data.duplicateOf.name}”. Choose another name.`);
       if (!pkg) setForm(formOf());
       onDone();
       router.refresh();
@@ -50,8 +77,8 @@ function PackageForm({ serviceId, pkg, currency, onDone }: { serviceId: string; 
   return (
     <form onSubmit={submit} className="space-y-3">
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="Package">
-          <TextInput value={form.name} onChange={set("name")} required maxLength={80} placeholder="Gold" />
+        <Field label={words.Tier} hint={fixedName ? "Aming's name for it." : undefined}>
+          <TextInput value={form.name} onChange={set("name")} required maxLength={80} placeholder={words.namePlaceholder} disabled={fixedName} />
         </Field>
         <Field label={`Price (${currency})`} hint="0 shows as “Price on request”.">
           <TextInput value={form.price} onChange={set("price")} required inputMode="numeric" placeholder="2,500,000" />
@@ -60,13 +87,15 @@ function PackageForm({ serviceId, pkg, currency, onDone }: { serviceId: string; 
       <Field label="Description">
         <TextArea value={form.description} onChange={set("description")} maxLength={1000} rows={2} />
       </Field>
-      <Field label="What's included" hint="One item per line, e.g. “300 edited photos”.">
-        <TextArea value={form.inclusions} onChange={set("inclusions")} rows={4} />
-      </Field>
+      {withInclusions ? (
+        <Field label="What's included" hint="One item per line, e.g. “300 edited photos”.">
+          <TextArea value={form.inclusions} onChange={set("inclusions")} rows={4} />
+        </Field>
+      ) : null}
       {error ? <p className="text-sm text-error-600 dark:text-error-400">{error}</p> : null}
       <div className="flex items-center gap-3">
         <Button type="submit" loading={pending}>
-          {pkg ? "Save" : "Add package"}
+          {pkg ? "Save" : `Add ${words.tier}`}
         </Button>
         <button type="button" onClick={onDone} className="text-sm text-muted hover:underline">
           Cancel
@@ -109,7 +138,7 @@ function PackageCard({ pkg, scope, onEdit }: { pkg: Offering; scope: Scope; onEd
     <div className="space-y-1.5">
       <div className="flex items-start justify-between gap-3">
         <p className="font-medium">{pkg.name}</p>
-        <p className="shrink-0 font-medium tnum">{formatAmount(scope, pkg.price)}</p>
+        <p className="shrink-0 font-medium tnum">{pkg.price > 0 ? formatAmount(scope, pkg.price) : "Price on request"}</p>
       </div>
       {pkg.description ? <p className="text-sm text-muted">{pkg.description}</p> : null}
       {pkg.inclusions.length ? (
@@ -132,18 +161,23 @@ function PackageCard({ pkg, scope, onEdit }: { pkg: Offering; scope: Scope; onEd
 }
 
 /**
- * A service's packages, its tiers ("Gold", "Silver", "Bronze", "Custom"), in
- * the order they were added: edit or deactivate each, add more, like a
- * product's sizes. Inactive ones are listed after, to reactivate. An
- * inactive service takes no new packages.
+ * A service's packages, its tiers ("Gold", "Silver", "Bronze", "Custom"), or
+ * a product's sizes, in the order they were added: edit or deactivate each,
+ * add more. Inactive ones are listed after, to reactivate. An inactive
+ * service takes no new packages; a product from Aming has Aming's sizes only
+ * (`fixedNames`: their prices and descriptions are the studio's).
  */
 export function PackagesEditor({
+  kind,
+  fixedNames,
   serviceId,
   packages,
   archived,
   scope,
   canAdd,
 }: {
+  kind: OfferingKind;
+  fixedNames: boolean;
   serviceId: string;
   packages: Offering[];
   archived: Offering[];
@@ -153,19 +187,23 @@ export function PackagesEditor({
   // Which package is open for editing ("new" for the add form).
   const [editing, setEditing] = useState<string | null>(null);
   const card = "rounded-2xl border border-border bg-surface p-4 shadow-theme-xs";
+  const words = WORDS[kind];
+  const form = { words, withInclusions: kind === "service", fixedName: fixedNames, serviceId, currency: scope.currency };
 
   return (
     <div className="space-y-3">
       {packages.length === 0 ? (
         <p className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted">
-          No packages yet. Add its tiers, e.g. Gold, Silver, Bronze and Custom, each with its price and what&apos;s included.
+          {kind === "service"
+            ? "No packages yet. Add its tiers, e.g. Gold, Silver, Bronze and Custom, each with its price and what's included."
+            : "No sizes yet. Add each size you sell, e.g. 8x12 or A3, with its price."}
         </p>
       ) : (
         <ul className="grid gap-3 sm:grid-cols-2">
           {packages.map((p) => (
             <li key={p.id} className={card}>
               {editing === p.id ? (
-                <PackageForm serviceId={serviceId} pkg={p} currency={scope.currency} onDone={() => setEditing(null)} />
+                <PackageForm {...form} pkg={p} onDone={() => setEditing(null)} />
               ) : (
                 <PackageCard pkg={p} scope={scope} onEdit={() => setEditing(p.id)} />
               )}
@@ -177,18 +215,20 @@ export function PackagesEditor({
       {canAdd ? (
         editing === "new" ? (
           <div className={card}>
-            <PackageForm serviceId={serviceId} currency={scope.currency} onDone={() => setEditing(null)} />
+            <PackageForm {...form} fixedName={false} onDone={() => setEditing(null)} />
           </div>
         ) : (
           <Button type="button" variant="secondary" onClick={() => setEditing("new")}>
-            + Add a package
+            + Add a {words.tier}
           </Button>
         )
       ) : null}
 
       {archived.length ? (
         <details className="rounded-2xl border border-border bg-surface p-4 shadow-theme-xs">
-          <summary className="cursor-pointer text-sm font-medium">Inactive packages ({archived.length})</summary>
+          <summary className="cursor-pointer text-sm font-medium">
+            Inactive {words.tier}s ({archived.length})
+          </summary>
           <ul className="mt-3 space-y-4">
             {archived.map((p) => (
               <li key={p.id}>

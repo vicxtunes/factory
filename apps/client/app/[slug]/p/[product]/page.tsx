@@ -3,7 +3,8 @@ import type { Metadata } from "next";
 import { localDate } from "@repo/lib/accounting/core/period";
 import { notFound, permanentRedirect } from "next/navigation";
 
-import { offerings } from "@repo/lib/offerings/server";
+import { amingShowcaseMedia } from "@repo/lib/offerings/core";
+import { amingProducts, offerings } from "@repo/lib/offerings/server";
 import { studioAccess } from "@repo/lib/studio-access/server";
 import { portalClient, studioAtSlug } from "@repo/lib/studio-portal/server";
 
@@ -11,21 +12,24 @@ import { ServiceShowcase } from "../../../service-showcase";
 import { serviceMedia } from "../../media";
 import { StudioShell } from "../../studio-shell";
 
-// One of a studio's services as a standalone, shareable page:
-// client.<domain>/<studio>/s/<service>, the showroom's item page with its
-// packages to choose from, in the studio's frame, like an Aming product's
-// own page. No sign-in needed. Its address never changes when it's renamed.
+// One of a studio's products as a standalone, shareable page:
+// <studio>/p/<product>, like a service's page (../../s/[service]) with its
+// sizes and "Order now". A product picked from Aming shows Aming's photos and
+// video, less those the studio left out; once Aming no longer has it on sale,
+// it's gone from here too. No sign-in needed.
 
 export const dynamic = "force-dynamic";
 
-type Params = { params: Promise<{ slug: string; service: string }> };
+type Params = { params: Promise<{ slug: string; product: string }> };
 
 async function load(params: Params["params"]) {
-  const { slug: rawSlug, service } = await params;
+  const { slug: rawSlug, product } = await params;
   const slug = decodeURIComponent(rawSlug);
   const at = await studioAtSlug(slug);
   if (!at) return null;
-  return { slug, at, service, found: at.redirectTo ? null : await offerings.publicService(at.scope, decodeURIComponent(service), "service") };
+  const found = at.redirectTo ? null : await offerings.publicService(at.scope, decodeURIComponent(product), "product");
+  const source = found?.sourceProductId ? ((await amingProducts()).get(found.sourceProductId) ?? null) : null;
+  return { slug, at, product, found: found?.sourceProductId && !source ? null : found, source };
 }
 
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
@@ -35,14 +39,14 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   return { title, description: loaded.found.description ?? undefined, openGraph: { title, type: "website" } };
 }
 
-export default async function ServicePage({ params }: Params) {
+export default async function ProductPage({ params }: Params) {
   const loaded = await load(params);
   if (!loaded) notFound();
-  if (loaded.at.redirectTo) permanentRedirect(`/${loaded.at.redirectTo}/s/${loaded.service}`);
+  if (loaded.at.redirectTo) permanentRedirect(`/${loaded.at.redirectTo}/p/${loaded.product}`);
   if (!loaded.found) notFound();
-  const { at, found, slug } = loaded;
+  const { at, found, source, slug } = loaded;
   const [media, settings, signedIn, logoUrl] = await Promise.all([
-    serviceMedia(at.scope, found.id),
+    source ? amingShowcaseMedia(source, found.hiddenMedia) : serviceMedia(at.scope, found.id),
     offerings.settings(at.scope),
     portalClient(at.studio.id),
     studioAccess.logoUrl(at.studio.logoKey),
@@ -51,17 +55,16 @@ export default async function ServicePage({ params }: Params) {
   return (
     <StudioShell studio={{ name: at.studio.name, logoUrl, slug }} signedInAs={signedIn?.name ?? null} title={found.name}>
       <ServiceShowcase
-        kind="service"
-        studio={{ name: loaded.at.studio.name }}
-        slug={loaded.slug}
-        service={loaded.found}
+        kind="product"
+        studio={{ name: at.studio.name }}
+        slug={slug}
+        service={found}
         media={media}
-        // The studio's choices (Packages & Services): 3D or carousel, prices shown or not.
         viewMode={settings.viewMode}
         showPrices={settings.showPrices}
         signedIn={!!signedIn}
         today={localDate(new Date(), at.scope.timeZone)}
-        scope={loaded.at.scope}
+        scope={at.scope}
       />
     </StudioShell>
   );

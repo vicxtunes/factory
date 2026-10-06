@@ -29,7 +29,10 @@ const gold: Offering = {
 const custom: Offering = { ...gold, id: "custom", name: "Custom", price: 0, inclusions: [] };
 const wedding: ServiceWithPackages = {
   id: "wed",
+  kind: "service",
   categoryId: "c",
+  sourceProductId: null,
+  hiddenMedia: [],
   name: "Wedding Photography",
   slug: "wedding-photography",
   description: null,

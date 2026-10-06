@@ -14,7 +14,7 @@ export default async function NewBookingPage({ searchParams }: { searchParams: P
   const { date, quotation } = await searchParams;
   const [clients, onSale, draft] = await Promise.all([
     customers.list(scope),
-    offerings.onSale(scope),
+    offerings.onSale(scope, "service"),
     // Looked up in the caller's studio only; anything else gives no draft.
     quotation && /^[0-9a-f-]{36}$/i.test(quotation) ? bookings.draftFromQuotation(scope, quotation) : null,
   ]);

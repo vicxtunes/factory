@@ -51,10 +51,11 @@ export default async function StudioPage({
   const scope = studioScope(studio);
   const today = localDate(new Date(), scope.timeZone);
   const review = await studioAccess.reviewOne(studio.id);
-  const [active, archived, catalog, quotes, bills, money, upcoming, work, todo, members, amingOrders, slug, usage] = await Promise.all([
+  const [active, archived, catalog, products, quotes, bills, money, upcoming, work, todo, members, amingOrders, slug, usage] = await Promise.all([
     customers.list(scope),
     customers.list(scope, true),
-    offerings.manage(scope),
+    offerings.manage(scope, "service"),
+    offerings.manage(scope, "product"),
     quotations.list(scope),
     invoices.list(scope),
     studioAccounts.overview(scope, periodFrom(await searchParams)),
@@ -139,6 +140,10 @@ export default async function StudioPage({
       <section>
         <SectionLabel>Packages & Services</SectionLabel>
         <ServicesList categories={catalog} scope={scope} />
+      </section>
+      <section>
+        <SectionLabel>Products</SectionLabel>
+        <ServicesList categories={products} scope={scope} empty="No products yet." />
       </section>
       <section>
         <SectionLabel>Quotations</SectionLabel>

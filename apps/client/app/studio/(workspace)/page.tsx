@@ -1,6 +1,7 @@
 import { AccountsOverview } from "@repo/ui/accounting/AccountsOverview";
 import { PeriodPicker } from "@repo/ui/accounting/PeriodPicker";
 import { BookingsList } from "@repo/ui/bookings/BookingBits";
+import { ProductRequestsList } from "@repo/ui/product-requests/ProductRequestsList";
 import { ProjectsList } from "@repo/ui/projects/ProjectBits";
 import { TaskRows } from "@repo/ui/tasks/TaskRows";
 import { UsageBar } from "@repo/ui/photos/UsageBar";
@@ -9,6 +10,7 @@ import { localDate } from "@repo/lib/accounting/core/period";
 import { periodFrom } from "@repo/lib/accounting/params";
 import { bookings } from "@repo/lib/bookings/server";
 import { photos } from "@repo/lib/photos/server";
+import { productRequests } from "@repo/lib/product-requests/server";
 import { projects } from "@repo/lib/projects/server";
 import { tasks } from "@repo/lib/tasks/server";
 import { studioAccounts } from "@repo/lib/billing/server";
@@ -30,9 +32,10 @@ export default async function StudioDashboardPage({
 }) {
   const { scope, studio } = await requireStudio();
   const today = localDate(new Date(), scope.timeZone);
-  const [view, requests, upcoming, inHand, todo, usage] = await Promise.all([
+  const [view, requests, orderRequests, upcoming, inHand, todo, usage] = await Promise.all([
     studioAccounts.overview(scope, periodFrom(await searchParams)),
     bookings.requests(scope),
+    productRequests.open(scope),
     bookings.upcoming(scope, today),
     projects.active(scope),
     tasks.open(scope),
@@ -48,6 +51,13 @@ export default async function StudioDashboardPage({
         <section>
           <SectionLabel>Booking requests ({requests.length})</SectionLabel>
           <BookingsList bookings={requests} scope={scope} basePath="/studio/bookings" empty="" />
+        </section>
+      ) : null}
+      {orderRequests.length ? (
+        // Clients who asked for a product online: Confirm makes the invoice.
+        <section>
+          <SectionLabel>Order requests ({orderRequests.length})</SectionLabel>
+          <ProductRequestsList requests={orderRequests} scope={scope} invoicesPath="/studio/invoices" clientsPath="/studio/clients" />
         </section>
       ) : null}
       <div className="grid gap-4 lg:grid-cols-2">

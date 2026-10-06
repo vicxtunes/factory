@@ -10,7 +10,7 @@ export const metadata = { title: "Packages & Services · My Studio" };
 export default async function StudioOfferingsPage() {
   const { scope } = await requireStudio();
   const [categories, settings, usage, slug] = await Promise.all([
-    offerings.manage(scope),
+    offerings.manage(scope, "service"),
     offerings.settings(scope),
     photos.usage(scope),
     portal.currentSlug(scope.tenantId),
@@ -38,6 +38,7 @@ export default async function StudioOfferingsPage() {
         Your categories and services, each with its packages. Your showroom shows them; quotations and bookings are built from the packages.
       </p>
       <CatalogPanel
+        kind="service"
         categories={categories}
         settings={settings}
         scope={scope}
