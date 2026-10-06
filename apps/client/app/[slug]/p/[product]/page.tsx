@@ -5,7 +5,8 @@ import { Loading } from "@repo/ui/skeletons/Loading";
 import { localDate } from "@repo/lib/accounting/core/period";
 import { notFound, permanentRedirect } from "next/navigation";
 
-import { offerings } from "@repo/lib/offerings/server";
+import { amingShowcaseMedia, withOwnMedia } from "@repo/lib/offerings/core";
+import { amingProducts, offerings } from "@repo/lib/offerings/server";
 import { studioAccess } from "@repo/lib/studio-access/server";
 import { portalClient, studioAtSlug } from "@repo/lib/studio-portal/server";
 
@@ -13,21 +14,24 @@ import { ServiceShowcase } from "../../../service-showcase";
 import { serviceMedia } from "../../media";
 import { StudioShell } from "../../studio-shell";
 
-// One of a studio's services as a standalone, shareable page:
-// client.<domain>/<studio>/s/<service>, the showroom's item page with its
-// packages to choose from, in the studio's frame, like an Aming product's
-// own page. No sign-in needed. Its address never changes when it's renamed.
+// One of a studio's products as a standalone, shareable page:
+// <studio>/p/<product>, like a service's page (../../s/[service]) with its
+// sizes and "Order now". A product picked from Aming shows the studio's own
+// photos and video, then Aming's less those it left out; once Aming no longer
+// has it on sale, it's gone from here too. No sign-in needed.
 
 export const dynamic = "force-dynamic";
 
-type Params = { params: Promise<{ slug: string; service: string }> };
+type Params = { params: Promise<{ slug: string; product: string }> };
 
 async function load(params: Params["params"]) {
-  const { slug: rawSlug, service } = await params;
+  const { slug: rawSlug, product } = await params;
   const slug = decodeURIComponent(rawSlug);
   const at = await studioAtSlug(slug);
   if (!at) return null;
-  return { slug, at, service, found: at.redirectTo ? null : await offerings.publicService(at.scope, decodeURIComponent(service), "service") };
+  const found = at.redirectTo ? null : await offerings.publicService(at.scope, decodeURIComponent(product), "product");
+  const source = found?.sourceProductId ? ((await amingProducts()).get(found.sourceProductId) ?? null) : null;
+  return { slug, at, product, found: found?.sourceProductId && !source ? null : found, source };
 }
 
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
@@ -37,18 +41,18 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   return { title, description: loaded.found.description ?? undefined, openGraph: { title, type: "website" } };
 }
 
-export default async function ServicePage({ params }: Params) {
+export default async function ProductPage({ params }: Params) {
   const loaded = await load(params);
   if (!loaded) notFound();
-  if (loaded.at.redirectTo) permanentRedirect(`/${loaded.at.redirectTo}/s/${loaded.service}`);
+  if (loaded.at.redirectTo) permanentRedirect(`/${loaded.at.redirectTo}/p/${loaded.product}`);
   if (!loaded.found) notFound();
-  const { at, found, slug } = loaded;
+  const { at, found, source, slug } = loaded;
   const [signedIn, logoUrl] = await Promise.all([portalClient(at.studio.id), studioAccess.logoUrl(at.studio.logoKey)]);
 
   return (
     <StudioShell studio={{ name: at.studio.name, logoUrl, slug }} signedInAs={signedIn?.name ?? null} title={found.name}>
       <Loading skeleton={<ProductDetailSkeleton />}>
-        <Showcase loaded={{ at, found, slug }} signedIn={!!signedIn} />
+        <Showcase loaded={{ at, found, source, slug }} signedIn={!!signedIn} />
       </Loading>
     </StudioShell>
   );
@@ -56,16 +60,23 @@ export default async function ServicePage({ params }: Params) {
 
 type Loaded = NonNullable<Awaited<ReturnType<typeof load>>>;
 
-async function Showcase({ loaded: { at, found, slug }, signedIn }: { loaded: Pick<Loaded, "at" | "slug"> & { found: NonNullable<Loaded["found"]> }; signedIn: boolean }) {
-  const [media, settings] = await Promise.all([serviceMedia(at.scope, found.id), offerings.settings(at.scope)]);
+async function Showcase({
+  loaded: { at, found, source, slug },
+  signedIn,
+}: {
+  loaded: Pick<Loaded, "at" | "source" | "slug"> & { found: NonNullable<Loaded["found"]> };
+  signedIn: boolean;
+}) {
+  const [own, settings] = await Promise.all([serviceMedia(at.scope, found.id), offerings.settings(at.scope)]);
+  // A picked product: the studio's own photos and video, then Aming's (less those it left out).
+  const media = source ? withOwnMedia(own, amingShowcaseMedia(source, found.hiddenMedia)) : own;
   return (
     <ServiceShowcase
-      kind="service"
+      kind="product"
       studio={{ name: at.studio.name }}
       slug={slug}
       service={found}
       media={media}
-      // The studio's choices (Packages & Services): 3D or carousel, prices shown or not.
       viewMode={settings.viewMode}
       showPrices={settings.showPrices}
       signedIn={signedIn}

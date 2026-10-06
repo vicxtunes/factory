@@ -3,7 +3,8 @@ import "server-only";
 // This app's OfferingStore: the offering_categories, offering_services,
 // offerings and offering_settings tables
 // (supabase/migrations/20261003120000_offerings.sql,
-// 20261006100000_offering_services.sql, 20261007100000_offering_categories.sql).
+// 20261006100000_offering_services.sql, 20261007100000_offering_categories.sql,
+// 20261009110000_studio_products.sql, 20261010100000_aming_product_categories.sql).
 // Service-role client, so every
 // query here filters by the scope's tenant: that filter is what keeps one
 // studio's services and packages from another.
@@ -11,12 +12,14 @@ import "server-only";
 import { createAdminClient } from "@repo/lib/supabase/admin";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
-import type { Category, Offering, OfferingInput, Service, ShowroomSettings } from "../../core/model";
+import type { Category, Offering, OfferingInput, OfferingKind, Service, ShowroomSettings } from "../../core/model";
 import { OfferingError, type OfferingStore } from "../../ports";
 
 interface CategoryRow {
   id: string;
+  kind: OfferingKind;
   name: string;
+  source_category_id: string | null;
   position: number;
   archived_at: string | null;
   created_at: string;
@@ -24,10 +27,13 @@ interface CategoryRow {
 
 interface ServiceRow {
   id: string;
+  kind: OfferingKind;
   category_id: string;
   name: string;
   slug: string;
   description: string | null;
+  source_product_id: string | null;
+  hidden_media: string[];
   position: number;
   archived_at: string | null;
   created_at: string;
@@ -46,14 +52,16 @@ interface PackageRow {
   service: { name: string };
 }
 
-const CATEGORY = "id, name, position, archived_at, created_at";
-const SERVICE = "id, category_id, name, slug, description, position, archived_at, created_at";
+const CATEGORY = "id, kind, name, source_category_id, position, archived_at, created_at";
+const SERVICE = "id, kind, category_id, name, slug, description, source_product_id, hidden_media, position, archived_at, created_at";
 const PACKAGE =
   "id, service_id, name, description, price, inclusions, position, archived_at, created_at, service:offering_services!offerings_service_fkey (name)";
 
 const toCategory = (r: CategoryRow): Category => ({
   id: r.id,
+  kind: r.kind,
   name: r.name,
+  sourceCategoryId: r.source_category_id,
   position: r.position,
   archivedAt: r.archived_at,
   createdAt: r.created_at,
@@ -61,10 +69,13 @@ const toCategory = (r: CategoryRow): Category => ({
 
 const toService = (r: ServiceRow): Service => ({
   id: r.id,
+  kind: r.kind,
   categoryId: r.category_id,
   name: r.name,
   slug: r.slug,
   description: r.description,
+  sourceProductId: r.source_product_id,
+  hiddenMedia: r.hidden_media,
   position: r.position,
   archivedAt: r.archived_at,
   createdAt: r.created_at,
@@ -89,6 +100,7 @@ const servicePatch = (patch: Parameters<OfferingStore["updateService"]>[2]) => (
   ...(patch.name !== undefined ? { name: patch.name } : {}),
   ...(patch.description !== undefined ? { description: patch.description } : {}),
   ...(patch.categoryId !== undefined ? { category_id: patch.categoryId } : {}),
+  ...(patch.hiddenMedia !== undefined ? { hidden_media: patch.hiddenMedia } : {}),
 });
 const packageColumns = (input: OfferingInput) => ({
   name: input.name,
@@ -132,10 +144,11 @@ export const supabaseOfferingStore: OfferingStore = {
     return data ? toCategory(data) : null;
   },
 
-  async findActiveCategory(scope, name) {
+  async findActiveCategory(scope, kind, name) {
     const { data, error } = await categories()
       .select(CATEGORY)
       .eq("tenant_id", scope.tenantId)
+      .eq("kind", kind)
       .is("archived_at", null)
       .ilike("name", exactly(name))
       .maybeSingle<CategoryRow>();
@@ -143,12 +156,12 @@ export const supabaseOfferingStore: OfferingStore = {
     return data ? toCategory(data) : null;
   },
 
-  async createCategory(scope, name) {
+  async createCategory(scope, kind, name, sourceCategoryId) {
     const position = await nextPosition(
       categories().select("position").eq("tenant_id", scope.tenantId).order("position", { ascending: false }).limit(1),
       "save the category",
     );
-    const { data, error } = await categories().insert({ name, position, tenant_id: scope.tenantId }).select(CATEGORY).single<CategoryRow>();
+    const { data, error } = await categories().insert({ kind, name, source_category_id: sourceCategoryId, position, tenant_id: scope.tenantId }).select(CATEGORY).single<CategoryRow>();
     if (error) fail("save the category", error);
     return toCategory(data);
   },
@@ -203,7 +216,16 @@ export const supabaseOfferingStore: OfferingStore = {
       "save the service",
     );
     const { data, error } = await services()
-      .insert({ name: input.name, description: input.description, category_id: input.categoryId, slug: input.slug, position, tenant_id: scope.tenantId })
+      .insert({
+        kind: input.kind,
+        name: input.name,
+        description: input.description,
+        category_id: input.categoryId,
+        slug: input.slug,
+        source_product_id: input.sourceProductId,
+        position,
+        tenant_id: scope.tenantId,
+      })
       .select(SERVICE)
       .single<ServiceRow>();
     if (error) fail("save the service", error);

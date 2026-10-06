@@ -4,8 +4,10 @@ import { InvoiceStatusBadge, QuotationStatusBadge } from "@repo/ui/billing/Statu
 import { BookingStatusBadge, timeSpan } from "@repo/ui/bookings/BookingBits";
 import { PipelineSteps } from "@repo/ui/projects/ProjectBits";
 import { LinkedOrdersList } from "@repo/ui/studio-orders/AmingOrders";
+import { localDate } from "@repo/lib/accounting/core/period";
 import type { InvoiceSummary, QuotationSummary } from "@repo/lib/billing/core";
 import type { Booking } from "@repo/lib/bookings/core";
+import { PRODUCT_REQUEST_STATUS_LABELS, type ProductRequest } from "@repo/lib/product-requests/core";
 import type { Project } from "@repo/lib/projects/core";
 import type { LinkedOrder } from "@repo/lib/studio-orders/core";
 import { formatAmount, formatDay } from "@repo/lib/tenancy/format";
@@ -18,10 +20,18 @@ export interface ClientPortalView {
   /** With their Aming orders, and their photos page when the studio has delivered some. */
   projects: (Project & { orders: LinkedOrder[]; photos: { count: number; href: string } | null })[];
   bookings: Booking[];
+  /** Products they asked for online, newest first. */
+  orderRequests: ProductRequest[];
   /** With their links (/q/<token>, /i/<token>). */
   quotations: (QuotationSummary & { url: string })[];
   invoices: (InvoiceSummary & { url: string })[];
 }
+
+const ORDER_TONES: Record<ProductRequest["status"], string> = {
+  requested: "bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-400",
+  confirmed: "bg-success-50 text-success-600 dark:bg-success-500/15 dark:text-success-500",
+  declined: "bg-error-50 text-error-600 dark:bg-error-500/15 dark:text-error-500",
+};
 
 const card = "rounded-2xl border border-border bg-surface p-4 shadow-theme-xs sm:p-5";
 const linkButton = "inline-flex min-h-11 items-center rounded-[var(--radius)] bg-brand-500 px-4 text-sm font-medium text-white hover:bg-brand-600";
@@ -119,6 +129,29 @@ export function ClientPortalHome({ view, scope, today, signOut }: { view: Client
                   </p>
                 </div>
                 <BookingStatusBadge status={b.status} />
+              </li>
+            ))}
+          </ul>
+        </Section>
+      ) : null}
+
+      {view.orderRequests.length ? (
+        <Section title="Your orders">
+          <ul className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-surface shadow-theme-xs">
+            {view.orderRequests.map((r) => (
+              <li key={r.id} className="flex items-start justify-between gap-3 px-4 py-3">
+                <div>
+                  <p className="font-medium">
+                    {r.quantity} × {r.itemName}
+                  </p>
+                  <p className="text-xs text-muted">
+                    {formatDay(scope, localDate(new Date(r.createdAt), scope.timeZone))}
+                    {r.unitPrice > 0 ? ` · ${money(r.unitPrice * r.quantity)}` : ""}
+                  </p>
+                </div>
+                <span className={`inline-flex shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${ORDER_TONES[r.status]}`}>
+                  {PRODUCT_REQUEST_STATUS_LABELS[r.status]}
+                </span>
               </li>
             ))}
           </ul>

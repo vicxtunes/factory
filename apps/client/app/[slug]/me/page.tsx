@@ -7,6 +7,7 @@ import { Loading } from "@repo/ui/skeletons/Loading";
 import { localDate } from "@repo/lib/accounting/core/period";
 import { invoices, invoiceUrl, quotations, quotationUrl } from "@repo/lib/billing/server";
 import { photos } from "@repo/lib/photos/server";
+import { productRequests } from "@repo/lib/product-requests/server";
 import { bookings } from "@repo/lib/bookings/server";
 import { projects } from "@repo/lib/projects/server";
 import { studioOrders } from "@repo/lib/studio-orders/server";
@@ -51,9 +52,10 @@ export default async function ClientPortalPage({ params }: { params: Promise<{ s
 async function Home({ at, me, slug }: { at: NonNullable<Awaited<ReturnType<typeof studioAtSlug>>>; me: SignInRecord; slug: string }) {
   const { scope } = at;
   const id = me.customerId;
-  const [theirProjects, theirBookings, quoteList, invoiceList, allOrders] = await Promise.all([
+  const [theirProjects, theirBookings, theirRequests, quoteList, invoiceList, allOrders] = await Promise.all([
     projects.list(scope, id),
     bookings.forCustomer(scope, id),
+    productRequests.forCustomer(scope, id),
     quotations.list(scope, id),
     invoices.list(scope, id),
     studioOrders.forStudio(scope),
@@ -77,6 +79,7 @@ async function Home({ at, me, slug }: { at: NonNullable<Awaited<ReturnType<typeo
           photos: galleries[i] && galleries[i].photoCount > 0 ? { count: galleries[i].photoCount, href: `/${slug}/me/photos/${p.id}` } : null,
         })),
         bookings: theirBookings,
+        orderRequests: theirRequests,
         quotations: quotes,
         invoices: bills,
       }}

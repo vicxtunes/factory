@@ -135,6 +135,12 @@ export default async function StudioPage({
         </Loading>
       </section>
       <section>
+        <SectionLabel>Products</SectionLabel>
+        <Loading skeleton={rows(3)}>
+          <Products scope={scope} />
+        </Loading>
+      </section>
+      <section>
         <SectionLabel>Quotations</SectionLabel>
         <Loading skeleton={rows(3)}>
           <Quotations scope={scope} />
@@ -234,7 +240,11 @@ async function Clients({ scope }: Of) {
 }
 
 async function Services({ scope }: Of) {
-  return <ServicesList categories={await offerings.manage(scope)} scope={scope} />;
+  return <ServicesList categories={await offerings.manage(scope, "service")} scope={scope} />;
+}
+
+async function Products({ scope }: Of) {
+  return <ServicesList categories={await offerings.manage(scope, "product")} scope={scope} empty="No products yet." />;
 }
 
 async function Quotations({ scope }: Of) {
