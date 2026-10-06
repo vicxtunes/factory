@@ -15,6 +15,7 @@ import {
   DashboardIcon,
   InvoiceIcon,
   PaymentIcon,
+  PlaceOrderIcon,
   ProductsIcon,
   SettingsIcon,
   ShowroomIcon,
@@ -44,6 +45,7 @@ const ICONS: Partial<Record<StudioNavItem["icon"], typeof DashboardIcon>> = {
   invoice: InvoiceIcon,
   payment: PaymentIcon,
   products: ProductsIcon,
+  placeOrder: PlaceOrderIcon,
   showroom: ShowroomIcon,
   settings: SettingsIcon,
 };
