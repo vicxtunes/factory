@@ -47,3 +47,19 @@ export function amingShowcaseMedia(
     gallery: cover || firstPhoto < 0 ? gallery : gallery.filter((_, i) => i !== firstPhoto),
   };
 }
+
+type ShowcaseMedia = ReturnType<typeof amingShowcaseMedia>;
+
+/**
+ * A picked product's page with the studio's own photos and video too: its
+ * cover and video take the place of Aming's, and its photos come first, then
+ * Aming's (Aming's cover among them when the studio has its own).
+ */
+export function withOwnMedia(own: ShowcaseMedia, aming: ShowcaseMedia): ShowcaseMedia {
+  const amingCover = own.coverUrl && aming.coverUrl ? [{ url: aming.coverUrl, kind: "photo" as const }] : [];
+  return {
+    coverUrl: own.coverUrl ?? aming.coverUrl,
+    videoUrl: own.videoUrl ?? aming.videoUrl,
+    gallery: [...own.gallery, ...amingCover, ...aming.gallery],
+  };
+}
