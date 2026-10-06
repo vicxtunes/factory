@@ -8,14 +8,15 @@ import Image from "next/image";
 import { Button } from "@repo/ui/Button";
 import { Drawer } from "@repo/ui/Drawer";
 import { ExportButtons } from "@repo/ui/ExportButtons";
-import { Select, TextArea, TextInput } from "@repo/ui/Field";
+import { Field, Select, TextArea, TextInput } from "@repo/ui/Field";
 import { ServiceMediaPanel } from "@repo/ui/photos/ServiceMediaPanel";
 import type { ExportColumn } from "@repo/lib/export/tableExport";
 import {
+  addAmingCategory,
   createCategory,
   createService,
   moveService,
-  pickAmingProduct,
+  pickAmingProducts,
   renameCategory,
   renameService,
   saveShowroomSettings,
@@ -46,6 +47,9 @@ export interface AmingCatalog {
   /** The photos and videos of every Aming product on sale, by its id. One missing is no longer on sale at Aming. */
   media: Record<string, AmingMediaItem[]>;
 }
+
+/** In the Add category dropdown: a products category of the studio's own, not one of Aming's. */
+const OWN = "own";
 
 /** The words that differ between Packages & Services and Products. */
 const WORDS = {
@@ -191,6 +195,8 @@ export function CatalogPanel({
   const [openCategoryId, setOpenCategoryId] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
+  // Products: which of Aming's categories to add, or OWN for one of the studio's own.
+  const [amingCategoryId, setAmingCategoryId] = useState("");
 
   const run: Run = (fn) => {
     setError(null);
@@ -252,17 +258,40 @@ export function CatalogPanel({
           className="space-y-3"
           onSubmit={(e) => {
             e.preventDefault();
+            const fromAming = aming && amingCategoryId !== OWN;
             run(async () => {
-              const res = await createCategory(kind, newCategoryName);
+              const res = fromAming ? await addAmingCategory(amingCategoryId) : await createCategory(kind, newCategoryName);
               if (res.ok && "saved" in res.data) {
                 setNewCategoryName("");
+                setAmingCategoryId("");
                 setFormOpen(false);
+                // Straight on to choosing its products from Aming's.
+                if (fromAming) setOpenCategoryId(res.data.saved.id);
               }
               return res;
             });
           }}
         >
-          <TextInput value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} placeholder={words.categoryPlaceholder} maxLength={60} required />
+          {aming ? (
+            <Field label="Product category" hint="Aming's categories come with Aming's products to choose from.">
+              <Select value={amingCategoryId} onChange={(e) => setAmingCategoryId(e.target.value)} required>
+                <option value="" disabled>
+                  Choose a category
+                </option>
+                {aming.categories
+                  .filter((c) => !activeCategories.some((mine) => mine.sourceCategoryId === c.id))
+                  .map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} ({c.products.length})
+                    </option>
+                  ))}
+                <option value={OWN}>Another category (my own)</option>
+              </Select>
+            </Field>
+          ) : null}
+          {!aming || amingCategoryId === OWN ? (
+            <TextInput value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} placeholder={words.categoryPlaceholder} maxLength={60} required />
+          ) : null}
           <Button variant="primary" type="submit" loading={pending} disabled={pending} className="w-full">
             Add category
           </Button>
@@ -310,6 +339,7 @@ export function CatalogPanel({
                         {c.name}
                       </button>
                     )}
+                    {c.sourceCategoryId ? <FromAmingTag /> : null}
                   </td>
                   <td className="px-5 py-3 text-muted">{c.services.length}</td>
                   <td className="px-5 py-3">
@@ -320,9 +350,11 @@ export function CatalogPanel({
                       <Button variant="secondary" className="min-h-9 text-xs" onClick={() => setOpenCategoryId(c.id)}>
                         Manage
                       </Button>
-                      <Button variant="secondary" className="min-h-9 text-xs" onClick={() => setRenamingId(c.id)}>
-                        Rename
-                      </Button>
+                      {c.sourceCategoryId ? null : (
+                        <Button variant="secondary" className="min-h-9 text-xs" onClick={() => setRenamingId(c.id)}>
+                          Rename
+                        </Button>
+                      )}
                       {c.archivedAt ? (
                         <Button variant="secondary" className="min-h-9 text-xs" loading={pending} disabled={pending} onClick={() => run(() => setCategoryActive(c.id, true))}>
                           Reactivate
@@ -395,7 +427,9 @@ function CategoryDetail({
   error: string | null;
 }) {
   const [newName, setNewName] = useState("");
-  const [picking, setPicking] = useState(false);
+  // Of one of Aming's categories: Aming's products in it (none once Aming no longer offers it).
+  const fromAming = category.sourceCategoryId ? (aming?.categories.find((c) => c.id === category.sourceCategoryId) ?? null) : null;
+  const picked = new Set(category.services.flatMap((s) => (s.sourceProductId && !s.archivedAt ? [s.sourceProductId] : [])));
 
   return (
     <div className="space-y-3">
@@ -403,6 +437,19 @@ function CategoryDetail({
         <p className="rounded-xl bg-background p-3 text-sm text-muted">
           This category is inactive: its {words.item}s are off your showroom. Reactivate it to add {words.item}s.
         </p>
+      ) : category.sourceCategoryId ? (
+        fromAming ? (
+          <AmingPicker
+            key={category.services.length}
+            products={fromAming.products.filter((p) => !picked.has(p.id))}
+            onAdd={(ids) => run(() => pickAmingProducts(category.id, ids))}
+            pending={pending}
+          />
+        ) : (
+          <p className="rounded-xl bg-warning-50 p-3 text-sm text-warning-700 dark:bg-warning-500/15 dark:text-warning-500">
+            Aming no longer offers this category, so its products are off your showroom.
+          </p>
+        )
       ) : (
         <form
           className="flex gap-2"
@@ -421,21 +468,6 @@ function CategoryDetail({
           </Button>
         </form>
       )}
-      {aming && !category.archivedAt ? (
-        picking ? (
-          <AmingPicker
-            catalog={aming}
-            picked={new Set(categories.flatMap((c) => c.services).flatMap((s) => (s.sourceProductId && !s.archivedAt ? [s.sourceProductId] : [])))}
-            onPick={(productId) => run(() => pickAmingProduct(category.id, productId))}
-            onClose={() => setPicking(false)}
-            pending={pending}
-          />
-        ) : (
-          <Button variant="secondary" className="w-full" onClick={() => setPicking(true)}>
-            + Pick from Aming&apos;s products
-          </Button>
-        )
-      ) : null}
       {error ? <p className="text-sm text-error-600 dark:text-error-400">{error}</p> : null}
 
       <div className="space-y-3">
@@ -512,11 +544,7 @@ function ServiceCard({
         ) : (
           <span className={active ? "font-medium" : "text-muted line-through"}>
             {service.name}
-            {fromAming ? (
-              <span className="ml-2 rounded-full bg-brand-50 px-2 py-0.5 text-[0.65rem] font-semibold text-brand-700 dark:bg-brand-500/15 dark:text-brand-400">
-                From Aming
-              </span>
-            ) : null}
+            {fromAming ? <FromAmingTag /> : null}
           </span>
         )}
         <div className="flex flex-wrap items-center gap-2">
@@ -557,16 +585,21 @@ function ServiceCard({
             }}
           />
         </label>
-        <label className="block space-y-1">
-          <span className="text-xs text-muted">Category</span>
-          <Select value={service.categoryId} onChange={(e) => run(() => moveService(service.id, e.target.value))} disabled={pending}>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </Select>
-        </label>
+        {fromAming ? null : (
+          <label className="block space-y-1">
+            <span className="text-xs text-muted">Category</span>
+            <Select value={service.categoryId} onChange={(e) => run(() => moveService(service.id, e.target.value))} disabled={pending}>
+              {/* Aming's categories hold Aming's products only. */}
+              {categories
+                .filter((c) => !c.sourceCategoryId)
+                .map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+            </Select>
+          </label>
+        )}
       </div>
 
       <div className="space-y-2">
@@ -608,66 +641,58 @@ function ServiceCard({
   );
 }
 
-/** Aming's products by category, to add one to this category: Aming's name, photos and sizes, at the studio's prices. */
-function AmingPicker({
-  catalog,
-  picked,
-  onPick,
-  onClose,
-  pending,
-}: {
-  catalog: AmingCatalog;
-  /** Aming products the studio already sells. */
-  picked: Set<string>;
-  onPick: (productId: string) => void;
-  onClose: () => void;
-  pending: boolean;
-}) {
-  const [query, setQuery] = useState("");
-  const q = query.trim().toLowerCase();
-  const shown = catalog.categories
-    .map((c) => ({ ...c, products: c.products.filter((p) => !q || p.name.toLowerCase().includes(q) || c.name.toLowerCase().includes(q)) }))
-    .filter((c) => c.products.length > 0);
+function FromAmingTag() {
+  return (
+    <span className="ml-2 rounded-full bg-brand-50 px-2 py-0.5 text-[0.65rem] font-semibold text-brand-700 dark:bg-brand-500/15 dark:text-brand-400">
+      From Aming
+    </span>
+  );
+}
+
+/**
+ * Aming's products in one of its categories that the studio doesn't sell
+ * yet, all chosen to start with: untick the ones it doesn't want, then add
+ * the rest with Aming's name, photos, video and sizes.
+ */
+function AmingPicker({ products, onAdd, pending }: { products: AmingCatalog["categories"][number]["products"]; onAdd: (ids: string[]) => void; pending: boolean }) {
+  const [chosen, setChosen] = useState(() => new Set(products.map((p) => p.id)));
+  if (products.length === 0) return <p className="rounded-xl bg-background p-3 text-sm text-muted">You sell all of Aming&apos;s products in this category.</p>;
+  const all = chosen.size === products.length;
+  const toggle = (id: string) =>
+    setChosen((now) => {
+      const next = new Set(now);
+      if (!next.delete(id)) next.add(id);
+      return next;
+    });
 
   return (
     <div className="space-y-3 rounded-2xl border border-border bg-surface p-4 shadow-theme-xs">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-sm font-semibold">Aming&apos;s products</p>
-        <button type="button" onClick={onClose} className="text-sm text-muted hover:underline">
-          Close
+        <p className="text-sm font-semibold">Choose Aming&apos;s products to sell</p>
+        <button type="button" onClick={() => setChosen(new Set(all ? [] : products.map((p) => p.id)))} className="text-sm text-brand-600 hover:underline">
+          {all ? "Clear all" : "Select all"}
         </button>
       </div>
       <p className="text-xs text-muted">
         Added with Aming&apos;s name, photos, video and sizes, priced “on request” until you set your prices. Your prices and description are yours to
         change.
       </p>
-      <TextInput value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search Aming's products" aria-label="Search Aming's products" />
-      <div className="max-h-[28rem] space-y-4 overflow-y-auto">
-        {shown.map((c) => (
-          <section key={c.id} className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted">{c.name}</p>
-            <ul className="grid gap-2 sm:grid-cols-2">
-              {c.products.map((p) => {
-                const added = picked.has(p.id);
-                return (
-                  <li key={p.id} className="flex items-center gap-3 rounded-xl border border-border p-2">
-                    <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-background">
-                      {p.imageUrl ? (
-                        <Image src={p.imageUrl} alt="" fill sizes="48px" unoptimized={!canOptimizeImage(p.imageUrl)} className="object-cover" />
-                      ) : null}
-                    </div>
-                    <span className="min-w-0 flex-1 truncate text-sm">{p.name}</span>
-                    <Button variant={added ? "secondary" : "primary"} className="min-h-8 text-xs" disabled={added || pending} onClick={() => onPick(p.id)}>
-                      {added ? "Added" : "Add"}
-                    </Button>
-                  </li>
-                );
-              })}
-            </ul>
-          </section>
+      <ul className="grid max-h-[28rem] gap-2 overflow-y-auto sm:grid-cols-2">
+        {products.map((p) => (
+          <li key={p.id}>
+            <label className={`flex cursor-pointer items-center gap-3 rounded-xl border p-2 ${chosen.has(p.id) ? "border-brand-500" : "border-border"}`}>
+              <input type="checkbox" checked={chosen.has(p.id)} onChange={() => toggle(p.id)} className="h-4 w-4 shrink-0 accent-brand-500" />
+              <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-background">
+                {p.imageUrl ? <Image src={p.imageUrl} alt="" fill sizes="48px" unoptimized={!canOptimizeImage(p.imageUrl)} className="object-cover" /> : null}
+              </div>
+              <span className="min-w-0 flex-1 truncate text-sm">{p.name}</span>
+            </label>
+          </li>
         ))}
-        {shown.length === 0 ? <p className="text-sm text-muted">No Aming products match.</p> : null}
-      </div>
+      </ul>
+      <Button variant="primary" className="w-full" loading={pending} disabled={pending || chosen.size === 0} onClick={() => onAdd([...chosen])}>
+        Add {chosen.size} {chosen.size === 1 ? "product" : "products"}
+      </Button>
     </div>
   );
 }

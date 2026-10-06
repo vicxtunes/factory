@@ -4,7 +4,7 @@ import "server-only";
 // offerings and offering_settings tables
 // (supabase/migrations/20261003120000_offerings.sql,
 // 20261006100000_offering_services.sql, 20261007100000_offering_categories.sql,
-// 20261009110000_studio_products.sql).
+// 20261009110000_studio_products.sql, 20261010100000_aming_product_categories.sql).
 // Service-role client, so every
 // query here filters by the scope's tenant: that filter is what keeps one
 // studio's services and packages from another.
@@ -19,6 +19,7 @@ interface CategoryRow {
   id: string;
   kind: OfferingKind;
   name: string;
+  source_category_id: string | null;
   position: number;
   archived_at: string | null;
   created_at: string;
@@ -51,7 +52,7 @@ interface PackageRow {
   service: { name: string };
 }
 
-const CATEGORY = "id, kind, name, position, archived_at, created_at";
+const CATEGORY = "id, kind, name, source_category_id, position, archived_at, created_at";
 const SERVICE = "id, kind, category_id, name, slug, description, source_product_id, hidden_media, position, archived_at, created_at";
 const PACKAGE =
   "id, service_id, name, description, price, inclusions, position, archived_at, created_at, service:offering_services!offerings_service_fkey (name)";
@@ -60,6 +61,7 @@ const toCategory = (r: CategoryRow): Category => ({
   id: r.id,
   kind: r.kind,
   name: r.name,
+  sourceCategoryId: r.source_category_id,
   position: r.position,
   archivedAt: r.archived_at,
   createdAt: r.created_at,
@@ -154,12 +156,12 @@ export const supabaseOfferingStore: OfferingStore = {
     return data ? toCategory(data) : null;
   },
 
-  async createCategory(scope, kind, name) {
+  async createCategory(scope, kind, name, sourceCategoryId) {
     const position = await nextPosition(
       categories().select("position").eq("tenant_id", scope.tenantId).order("position", { ascending: false }).limit(1),
       "save the category",
     );
-    const { data, error } = await categories().insert({ kind, name, position, tenant_id: scope.tenantId }).select(CATEGORY).single<CategoryRow>();
+    const { data, error } = await categories().insert({ kind, name, source_category_id: sourceCategoryId, position, tenant_id: scope.tenantId }).select(CATEGORY).single<CategoryRow>();
     if (error) fail("save the category", error);
     return toCategory(data);
   },

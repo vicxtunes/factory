@@ -15,8 +15,8 @@ export interface OfferingStore {
   category(scope: TenantScope, id: string): Promise<Category | null>;
   /** The active category of this kind with this name, ignoring case. */
   findActiveCategory(scope: TenantScope, kind: OfferingKind, name: string): Promise<Category | null>;
-  /** Saves a new category last in the showroom's order. */
-  createCategory(scope: TenantScope, kind: OfferingKind, name: string): Promise<Category>;
+  /** Saves a new category last in the showroom's order: the business's own, or added from one of Aming's (`sourceCategoryId`). */
+  createCategory(scope: TenantScope, kind: OfferingKind, name: string, sourceCategoryId: string | null): Promise<Category>;
   /** Null when there is no such category in this tenant. */
   renameCategory(scope: TenantScope, id: string, name: string): Promise<Category | null>;
   /** Deactivates (now) or reactivates. Null when there is no such category in this tenant. */

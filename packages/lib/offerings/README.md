@@ -32,6 +32,12 @@ A studio keeps **Products** (photobooks, frames, prints) the same way: categorie
 (`kind: "product"`, apart from the services' categories), each product with its **sizes** as its
 packages ("8x12", "12x18"), each size with its price. A product's address is `/<studio>/p/<slug>`.
 
+- **Categories start from Aming's**: Add category lists Aming's product categories on sale. One
+  added (`sourceCategoryId`) keeps Aming's name and holds Aming's products from there only: the studio
+  chooses all or some of them (all ticked to start with). "Another category (my own)" is for what
+  Aming doesn't offer: the studio names it and adds its own products. Each of Aming's categories is
+  added once; a product from Aming stays in its category, and the studio's own products stay in its
+  own categories.
 - **Picked from Aming** (`sourceProductId`): Aming's name, description, photos, preview video and
   sizes are copied in, each size priced 0 ("Price on request") until the studio sets its prices.
   The name and sizes stay Aming's (no rename, no new sizes); the studio sets prices and the
@@ -48,7 +54,7 @@ packages ("8x12", "12x18"), each size with its price. A product's address is `/<
 | Screen | Who | What |
 | --- | --- | --- |
 | `/studio/offerings` (client app) | Studio owner | Services with their packages; Archived tab; Add a service |
-| `/studio/products` (client app) | Studio owner | Products with their sizes; pick from Aming's catalog or add your own; Aming's photos to leave out |
+| `/studio/products` (client app) | Studio owner | Products with their sizes; add Aming's categories and choose their products, or your own; Aming's photos to leave out |
 | `/studio/offerings/new` | Studio owner | Add a service and its packages in one form |
 | `/studio/offerings/<service id>` | Studio owner | The same form: the service and its packages saved together (a package removed there is archived); archived packages to put back; its photos and preview video |
 | `/dashboard/studios/<id>` (factory app) | Boss | The studio's services and packages, read-only |
@@ -92,6 +98,7 @@ supabase/migrations/20261003120000_offerings.sql
 supabase/migrations/20261006100000_offering_services.sql   services; every earlier offering
                      became a package of a service with the same name
 supabase/migrations/20261009110000_studio_products.sql     products: kinds, picked from Aming
+supabase/migrations/20261010100000_aming_product_categories.sql   categories added from Aming's
 ```
 
 ## Testing
