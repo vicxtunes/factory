@@ -270,14 +270,11 @@ export async function confirmMediaReplace(mediaId: string, path: string): Promis
       storage_path: path,
       secure_url: pub.publicUrl,
       cloudinary_public_id: null,
-      // A new file hasn't been downloaded yet: back to pending.
-      downloaded_at: null,
-      downloaded_by_type: null,
-      downloaded_by_id: null,
-      downloaded_by_name: null,
     })
     .eq("id", mediaId);
   if (error) return { ok: false, error: error.message };
+  // A new file hasn't been downloaded yet: back to pending for everyone.
+  await admin.from("order_item_media_downloads").delete().eq("media_id", mediaId);
 
   if (existing.storage_path) {
     await admin.storage.from(MEDIA_BUCKET).remove([existing.storage_path]);
@@ -355,14 +352,15 @@ export async function updateMediaLink(mediaId: string, url: string): Promise<Res
   return { ok: true };
 }
 
-// Marks files as downloaded (for printing) after staff saved them, so the
-// item shows which are done and which are still pending. Clients downloading
-// their own files don't count. Pasted links are never marked: nothing was
-// downloaded from us.
+// Marks files as downloaded (for printing) by the person who saved them, so
+// the item shows them which are done and which are still pending. Each
+// person's own: someone else saving a file doesn't make it done for you.
+// Clients downloading their own files don't count. Pasted links are never
+// marked: nothing was downloaded from us.
 export async function markMediaDownloaded(
   orderItemId: string,
   mediaIds: string[],
-): Promise<{ ok: true; at: string; by: string } | { ok: false; error: string }> {
+): Promise<{ ok: true; at: string } | { ok: false; error: string }> {
   await requireMediaUploadAccess();
   const actor = await resolveActor();
   if (!actor || actor.type === "client" || actor.type === "system") {
@@ -370,27 +368,50 @@ export async function markMediaDownloaded(
   }
   if (!orderItemId || mediaIds.length === 0) return { ok: false, error: "Nothing to mark." };
 
-  const at = new Date().toISOString();
   const admin = createAdminClient();
-  const { data, error } = await admin
+  const { data: files, error: filesError } = await admin
     .from("order_item_media")
-    .update({ downloaded_at: at, downloaded_by_type: actor.type, downloaded_by_id: actor.id, downloaded_by_name: actor.name })
+    .select("id, file_name")
     .eq("order_item_id", orderItemId)
     .in("id", mediaIds)
-    .or("storage_path.not.is.null,cloudinary_public_id.not.is.null")
-    .select("file_name");
-  if (error) return { ok: false, error: error.message };
+    .or("storage_path.not.is.null,cloudinary_public_id.not.is.null");
+  if (filesError) return { ok: false, error: filesError.message };
+
+  const at = new Date().toISOString();
+  if (files.length) {
+    const { error } = await admin.from("order_item_media_downloads").upsert(
+      files.map((f) => ({ media_id: f.id, actor_type: actor.type, actor_id: actor.id, downloaded_at: at })),
+    );
+    if (error) return { ok: false, error: error.message };
+  }
 
   const context = await fetchOrderAndLabel(admin, orderItemId);
-  if (context && data?.length) {
+  if (context && files.length) {
     await logOrderEvent({
       orderId: context.orderId,
       orderItemId,
       actor,
       action: "media_downloaded",
-      detail: { itemLabel: context.label, count: data.length, fileName: data.length === 1 ? data[0].file_name : null },
+      detail: { itemLabel: context.label, count: files.length, fileName: files.length === 1 ? files[0].file_name : null },
     });
   }
 
-  return { ok: true, at, by: actor.name };
+  return { ok: true, at };
+}
+
+// When the person viewing last downloaded each of an item's files (by id);
+// files they haven't downloaded are left out.
+export async function getMyMediaDownloads(orderItemId: string): Promise<Record<string, string>> {
+  await requireMediaUploadAccess();
+  const actor = await resolveActor();
+  if (!actor || actor.type === "client" || actor.type === "system") return {};
+
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("order_item_media_downloads")
+    .select("media_id, downloaded_at, order_item_media!inner(order_item_id)")
+    .eq("order_item_media.order_item_id", orderItemId)
+    .eq("actor_type", actor.type)
+    .eq("actor_id", actor.id);
+  return Object.fromEntries((data ?? []).map((d) => [d.media_id, d.downloaded_at]));
 }

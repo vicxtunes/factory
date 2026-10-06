@@ -138,9 +138,6 @@ export interface OrderItemMedia {
   uploaded_by_id: string | null;
   uploaded_by_name: string | null;
   uploaded_by_role: string | null;
-  /** Last time staff downloaded it (for printing); null = still pending. */
-  downloaded_at: string | null;
-  downloaded_by_name: string | null;
 }
 
 export interface OrderNote {
