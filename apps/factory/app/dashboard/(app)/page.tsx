@@ -1,4 +1,6 @@
 import { SectionLabel } from "@repo/ui/SectionLabel";
+import { ChartsSkeleton, StatTilesSkeleton } from "@repo/ui/skeletons/blocks";
+import { Loading } from "@repo/ui/skeletons/Loading";
 import { fetchDashboardItemStats } from "@repo/lib/queries";
 import {
   BOARD_COLUMNS,
@@ -12,7 +14,23 @@ import { StatCard } from "@repo/ui/StatCard";
 
 export const dynamic = "force-dynamic";
 
-export default async function DashboardOverviewPage() {
+export default function DashboardOverviewPage() {
+  return (
+    <Loading
+      skeleton={
+        <div className="space-y-6">
+          <StatTilesSkeleton />
+          <ChartsSkeleton />
+        </div>
+      }
+    >
+      <Overview />
+    </Loading>
+  );
+}
+
+// Today's figures: stat cards and the two charts.
+async function Overview() {
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
   const stats = await fetchDashboardItemStats(todayStart);

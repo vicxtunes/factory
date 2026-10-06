@@ -9,9 +9,7 @@ export const metadata = { title: "Chat" };
 
 // The client's chat, inside the portal's own frame. A layout rather than the
 // page so the shell and ChatApp stay mounted while chatting: opening a
-// conversation only changes ?c= (see ChatApp). It sits in the (screen) group,
-// below ../loading.tsx, so a click on a Chat link shows the skeleton at once
-// and prefetching never runs this layout's queries.
+// conversation only changes ?c= (see ChatApp).
 export default async function ChatLayout({ children }: { children: React.ReactNode }) {
   const client = await getClientSession();
   if (!client) redirect("/?signin=1");

@@ -4,10 +4,13 @@ import { notFound } from "next/navigation";
 import { QuotationPdf } from "@repo/ui/billing/DocumentPdf";
 import { DocumentShare } from "@repo/ui/billing/DocumentShare";
 import { CreateInvoiceButton } from "@repo/ui/billing/InvoiceButtons";
+import { Skeleton } from "@repo/ui/Skeleton";
+import { Loading } from "@repo/ui/skeletons/Loading";
 import { canEditQuotation, quotationIdSchema } from "@repo/lib/billing/core";
 import { invoices, quotations, quotationUrl } from "@repo/lib/billing/server";
 import { bookings } from "@repo/lib/bookings/server";
 import { requireStudio } from "@repo/lib/studios/server";
+import type { TenantScope } from "@repo/lib/tenancy/types";
 
 export const metadata = { title: "Quotation · My Business" };
 
@@ -17,10 +20,6 @@ export default async function StudioQuotationPage({ params }: { params: Promise<
   const id = quotationIdSchema.safeParse((await params).id);
   const quotation = id.success ? await quotations.get(scope, id.data) : null;
   if (!quotation) notFound();
-  const [invoiceId, bookingId] =
-    quotation.status === "accepted"
-      ? await Promise.all([invoices.idForQuotation(scope, quotation.id), bookings.idForQuotation(scope, quotation.id)])
-      : [null, null];
 
   return (
     <>
@@ -40,25 +39,9 @@ export default async function StudioQuotationPage({ params }: { params: Promise<
         </div>
       </div>
       {quotation.status === "accepted" ? (
-        <section className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-surface p-4 shadow-theme-xs print:hidden">
-          <p className="text-sm">Accepted by the client.</p>
-          {bookingId ? (
-            <Link href={`/studio/bookings/${bookingId}`} className="text-sm font-medium text-brand-600 hover:underline">
-              View its booking
-            </Link>
-          ) : (
-            <Link href={`/studio/bookings/new?quotation=${quotation.id}`} className="text-sm font-medium text-brand-600 hover:underline">
-              Book it
-            </Link>
-          )}
-          {invoiceId ? (
-            <Link href={`/studio/invoices/${invoiceId}`} className="text-sm font-medium text-brand-600 hover:underline">
-              View its invoice
-            </Link>
-          ) : (
-            <CreateInvoiceButton quotationId={quotation.id} basePath="/studio/invoices" />
-          )}
-        </section>
+        <Loading skeleton={<Skeleton className="h-16 w-full rounded-2xl" />}>
+          <Accepted scope={scope} quotationId={quotation.id} />
+        </Loading>
       ) : null}
       <DocumentShare
         kind="quotation"
@@ -80,5 +63,31 @@ export default async function StudioQuotationPage({ params }: { params: Promise<
         scope={{ currency: scope.currency, locale: scope.locale, timeZone: scope.timeZone }}
       />
     </>
+  );
+}
+
+// Accepted: what's been made from it so far, and what's left to make.
+async function Accepted({ scope, quotationId }: { scope: TenantScope; quotationId: string }) {
+  const [invoiceId, bookingId] = await Promise.all([invoices.idForQuotation(scope, quotationId), bookings.idForQuotation(scope, quotationId)]);
+  return (
+    <section className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-surface p-4 shadow-theme-xs print:hidden">
+      <p className="text-sm">Accepted by the client.</p>
+      {bookingId ? (
+        <Link href={`/studio/bookings/${bookingId}`} className="text-sm font-medium text-brand-600 hover:underline">
+          View its booking
+        </Link>
+      ) : (
+        <Link href={`/studio/bookings/new?quotation=${quotationId}`} className="text-sm font-medium text-brand-600 hover:underline">
+          Book it
+        </Link>
+      )}
+      {invoiceId ? (
+        <Link href={`/studio/invoices/${invoiceId}`} className="text-sm font-medium text-brand-600 hover:underline">
+          View its invoice
+        </Link>
+      ) : (
+        <CreateInvoiceButton quotationId={quotationId} basePath="/studio/invoices" />
+      )}
+    </section>
   );
 }

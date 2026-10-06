@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 
 import { SectionLabel } from "@repo/ui/SectionLabel";
+import { RowsSkeleton } from "@repo/ui/skeletons/blocks";
+import { Loading } from "@repo/ui/skeletons/Loading";
 import { createAdminClient } from "@repo/lib/supabase/admin";
 import { getDashboardSession } from "@repo/lib/auth/session";
 import { isManagerRole, type Designer } from "@repo/lib/types";
@@ -13,13 +15,6 @@ export default async function DesignersPage() {
   const session = await getDashboardSession();
   if (!session || !isManagerRole(session.role)) redirect("/dashboard");
 
-  const admin = createAdminClient();
-  const { data } = await admin
-    .from("designers")
-    .select("id, name, active, created_at")
-    .order("name");
-
-  const designers = (data ?? []) as Omit<Designer, "pin_hash">[];
   const canManage = session.role === "boss";
 
   return (
@@ -30,7 +25,17 @@ export default async function DesignersPage() {
           View only — designers are managed by the boss.
         </p>
       ) : null}
-      <DesignerPanel designers={designers} canManage={canManage} />
+      <Loading skeleton={<RowsSkeleton />}>
+        <Designers canManage={canManage} />
+      </Loading>
     </div>
   );
+}
+
+async function Designers({ canManage }: { canManage: boolean }) {
+  const { data } = await createAdminClient()
+    .from("designers")
+    .select("id, name, active, created_at")
+    .order("name");
+  return <DesignerPanel designers={(data ?? []) as Omit<Designer, "pin_hash">[]} canManage={canManage} />;
 }

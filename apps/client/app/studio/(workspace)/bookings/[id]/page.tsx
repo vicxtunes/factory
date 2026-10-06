@@ -7,13 +7,16 @@ import { RequestAnswer } from "@repo/ui/bookings/RequestAnswer";
 import { ClientPortalPanel } from "@repo/ui/studio-portal/ClientPortalPanel";
 import { StartProjectButton } from "@repo/ui/projects/ProjectControls";
 import { InvoiceStatusBadge } from "@repo/ui/billing/StatusBadges";
+import { Skeleton } from "@repo/ui/Skeleton";
+import { Loading } from "@repo/ui/skeletons/Loading";
 import { invoices } from "@repo/lib/billing/server";
-import { bookingIdSchema, canEditBooking } from "@repo/lib/bookings/core";
+import { bookingIdSchema, canEditBooking, type Booking } from "@repo/lib/bookings/core";
 import { bookings } from "@repo/lib/bookings/server";
 import { projects } from "@repo/lib/projects/server";
 import { portal } from "@repo/lib/studio-portal/server";
 import { requireStudio } from "@repo/lib/studios/server";
 import { formatAmount, formatDay } from "@repo/lib/tenancy/format";
+import type { TenantScope } from "@repo/lib/tenancy/types";
 
 export const metadata = { title: "Booking · My Business" };
 
@@ -24,16 +27,6 @@ export default async function StudioBookingPage({ params }: { params: Promise<{ 
   const view = id.success ? await bookings.get(scope, id.data) : null;
   if (!view) notFound();
   const { booking: b, clashes } = view;
-  // The money behind it: the invoice made when its request was confirmed, or from its quotation.
-  const invoiceId = b.invoiceId ?? (b.quotationId ? await invoices.idForQuotation(scope, b.quotationId) : null);
-  const [invoice, projectId, access, slug] = await Promise.all([
-    invoiceId ? invoices.get(scope, invoiceId) : null,
-    projects.idForBooking(scope, b.id),
-    // Booked online: the client's page, to send them its link if they booked from a phone that isn't signed in.
-    b.source === "online" ? portal.status(scope, b.customerId) : null,
-    b.source === "online" ? portal.currentSlug(scope.tenantId) : null,
-  ]);
-
   const details: [string, React.ReactNode][] = [
     ["Client", <Link key="c" href={`/studio/clients/${b.customerId}`} className="hover:underline">{b.customerName}</Link>],
     ["When", `${formatDay(scope, b.date)} · ${timeSpan(b)}`],
@@ -91,6 +84,25 @@ export default async function StudioBookingPage({ params }: { params: Promise<{ 
         ) : null}
       </dl>
       {b.status === "requested" ? <RequestAnswer bookingId={b.id} projectsPath="/studio/projects" /> : null}
+      <Loading skeleton={<Skeleton className="h-16 w-full rounded-2xl" />}>
+        <Behind scope={scope} booking={b} />
+      </Loading>
+      {b.status === "requested" ? null : <BookingStatusButtons bookingId={b.id} status={b.status} />}
+      {b.source === "online" ? (
+        <Loading skeleton={<Skeleton className="h-24 w-full rounded-2xl" />}>
+          <Access scope={scope} booking={b} />
+        </Loading>
+      ) : null}
+    </>
+  );
+}
+
+// The money behind it (the invoice made when its request was confirmed, or from its quotation) and its project.
+async function Behind({ scope, booking: b }: { scope: TenantScope; booking: Booking }) {
+  const invoiceId = b.invoiceId ?? (b.quotationId ? await invoices.idForQuotation(scope, b.quotationId) : null);
+  const [invoice, projectId] = await Promise.all([invoiceId ? invoices.get(scope, invoiceId) : null, projects.idForBooking(scope, b.id)]);
+  return (
+    <>
       {b.quotationId || invoice ? (
         <section className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-surface p-4 text-sm shadow-theme-xs">
           {b.quotationId ? (
@@ -122,11 +134,12 @@ export default async function StudioBookingPage({ params }: { params: Promise<{ 
       ) : b.status === "confirmed" || b.status === "completed" ? (
         <StartProjectButton bookingId={b.id} basePath="/studio/projects" />
       ) : null}
-      {b.status === "requested" ? null : <BookingStatusButtons bookingId={b.id} status={b.status} />}
-      {access ? (
-        // Booked online: the link to their page, for a client the studio already knew who booked from a phone that isn't signed in.
-        <ClientPortalPanel customerId={b.customerId} status={access} hasAddress={!!slug} lastSignedIn={null} />
-      ) : null}
     </>
   );
+}
+
+// Booked online: the link to their page, for a client the studio already knew who booked from a phone that isn't signed in.
+async function Access({ scope, booking: b }: { scope: TenantScope; booking: Booking }) {
+  const [access, slug] = await Promise.all([portal.status(scope, b.customerId), portal.currentSlug(scope.tenantId)]);
+  return access ? <ClientPortalPanel customerId={b.customerId} status={access} hasAddress={!!slug} lastSignedIn={null} /> : null;
 }

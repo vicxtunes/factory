@@ -24,10 +24,7 @@ export const metadata = { title: "Chat — Order Tracker" };
 // uses to identify the caller — so the shell and the data always agree.
 //
 // It's a layout rather than the page so the shell and ChatApp stay mounted
-// while chatting: opening a conversation only changes ?c= (see ChatApp), and
-// the inbox is loaded here with the page instead of after it. It sits in the
-// (screen) group, below app/chat/loading.tsx, so a click on a Chat link shows
-// the skeleton at once and prefetching never runs this layout's queries.
+// while chatting: opening a conversation only changes ?c= (see ChatApp).
 
 export default async function ChatLayout({ children }: { children: React.ReactNode }) {
   const dashboard = await getDashboardSession();

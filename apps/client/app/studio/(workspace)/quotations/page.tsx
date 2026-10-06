@@ -1,15 +1,16 @@
 import Link from "next/link";
 
 import { QuotationsList } from "@repo/ui/billing/QuotationsList";
+import { RowsSkeleton } from "@repo/ui/skeletons/blocks";
+import { Loading } from "@repo/ui/skeletons/Loading";
 import { quotations } from "@repo/lib/billing/server";
 import { requireStudio } from "@repo/lib/studios/server";
+import type { TenantScope } from "@repo/lib/tenancy/types";
 
 export const metadata = { title: "Quotations · My Business" };
 
 export default async function StudioQuotationsPage() {
   const { scope } = await requireStudio();
-  const list = await quotations.list(scope);
-
   return (
     <>
       <div className="flex items-start justify-between gap-3">
@@ -21,7 +22,13 @@ export default async function StudioQuotationsPage() {
           New quotation
         </Link>
       </div>
-      <QuotationsList quotations={list} scope={scope} basePath="/studio/quotations" />
+      <Loading skeleton={<RowsSkeleton />}>
+        <Quotations scope={scope} />
+      </Loading>
     </>
   );
+}
+
+async function Quotations({ scope }: { scope: TenantScope }) {
+  return <QuotationsList quotations={await quotations.list(scope)} scope={scope} basePath="/studio/quotations" />;
 }

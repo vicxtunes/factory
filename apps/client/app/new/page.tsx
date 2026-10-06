@@ -1,5 +1,7 @@
 import { redirect } from "next/navigation";
 
+import { FormSkeleton } from "@repo/ui/skeletons/blocks";
+import { Loading } from "@repo/ui/skeletons/Loading";
 import { getClientSession } from "@repo/lib/auth/session";
 import { projectIdSchema } from "@repo/lib/projects/core";
 import { projects } from "@repo/lib/projects/server";
@@ -19,6 +21,20 @@ export default async function ClientNewOrderPage({
   const session = await getClientSession();
   if (!session) redirect("/?signin=1");
 
+  return (
+    <ClientShell signedIn name={session.name} avatarUrl={session.avatarUrl}>
+      <Loading skeleton={<FormSkeleton fields={6} />}>
+        <Form searchParams={searchParams} />
+      </Loading>
+    </ClientShell>
+  );
+}
+
+async function Form({
+  searchParams,
+}: {
+  searchParams: Promise<{ category?: string; product?: string; variant?: string; project?: string }>;
+}) {
   const [catalog, showroomSettings, currencies, params] = await Promise.all([
     fetchProductCatalog(true),
     fetchShowroomSettings(),
@@ -38,17 +54,15 @@ export default async function ClientNewOrderPage({
   const project = await projectFor(params.project);
 
   return (
-    <ClientShell signedIn name={session.name} avatarUrl={session.avatarUrl}>
-      <OrderForm
-        catalog={catalog}
-        initialCategoryId={category?.id}
-        initialProductId={product?.id}
-        initialVariantId={variant?.id}
-        showPrices={showroomSettings.show_prices}
-        currencies={currencies}
-        project={project}
-      />
-    </ClientShell>
+    <OrderForm
+      catalog={catalog}
+      initialCategoryId={category?.id}
+      initialProductId={product?.id}
+      initialVariantId={variant?.id}
+      showPrices={showroomSettings.show_prices}
+      currencies={currencies}
+      project={project}
+    />
   );
 }
 

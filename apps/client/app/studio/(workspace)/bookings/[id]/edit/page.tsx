@@ -2,12 +2,15 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { BookingForm } from "@repo/ui/bookings/BookingForm";
-import { bookingIdSchema, canEditBooking } from "@repo/lib/bookings/core";
+import { FormSkeleton } from "@repo/ui/skeletons/blocks";
+import { Loading } from "@repo/ui/skeletons/Loading";
+import { bookingIdSchema, canEditBooking, type Booking } from "@repo/lib/bookings/core";
 import { bookings } from "@repo/lib/bookings/server";
 import { customers } from "@repo/lib/customers/server";
 import { offeringLabel } from "@repo/lib/offerings/core";
 import { offerings } from "@repo/lib/offerings/server";
 import { requireStudio } from "@repo/lib/studios/server";
+import type { TenantScope } from "@repo/lib/tenancy/types";
 
 export const metadata = { title: "Edit booking · My Business" };
 
@@ -27,22 +30,31 @@ export default async function EditBookingPage({ params }: { params: Promise<{ id
       </p>
     );
   }
-  const [clients, onSale] = await Promise.all([customers.list(scope), offerings.onSale(scope)]);
-  // Keep the booking's own client selectable even if they've since been archived.
-  const choices = clients.some((c) => c.id === b.customerId) ? clients : [...clients, { id: b.customerId, name: `${b.customerName} (archived)` }];
 
   return (
     <>
       <Link href={`/studio/bookings/${b.id}`} className="text-xs font-medium text-brand-600 hover:underline">
         ← {b.title}
       </Link>
-      <BookingForm
-        booking={b}
-        customers={choices.map((c) => ({ id: c.id, name: c.name }))}
-        packages={onSale.map(offeringLabel)}
-        currency={scope.currency}
-        basePath="/studio/bookings"
-      />
+      <Loading skeleton={<FormSkeleton />}>
+        <Form scope={scope} b={b} />
+      </Loading>
     </>
+  );
+}
+
+async function Form({ scope, b }: { scope: TenantScope; b: Booking }) {
+  const [clients, onSale] = await Promise.all([customers.list(scope), offerings.onSale(scope)]);
+  // Keep the booking's own client selectable even if they've since been archived.
+  const choices = clients.some((c) => c.id === b.customerId) ? clients : [...clients, { id: b.customerId, name: `${b.customerName} (archived)` }];
+
+  return (
+    <BookingForm
+      booking={b}
+      customers={choices.map((c) => ({ id: c.id, name: c.name }))}
+      packages={onSale.map(offeringLabel)}
+      currency={scope.currency}
+      basePath="/studio/bookings"
+    />
   );
 }

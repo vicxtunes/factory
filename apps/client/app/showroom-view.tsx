@@ -1,7 +1,9 @@
 import Link from "next/link";
 
 import { Button } from "@repo/ui/Button";
-import { ShowroomGallery, type ShowroomCard, type ShowroomTab } from "@repo/ui/showroom/ShowroomGallery";
+import { ShowroomBanner, ShowroomGallery, type ShowroomCard, type ShowroomTab } from "@repo/ui/showroom/ShowroomGallery";
+import { ChipRowSkeleton, ProductGridSkeleton } from "@repo/ui/skeletons/blocks";
+import { Loading } from "@repo/ui/skeletons/Loading";
 import { getClientSession } from "@repo/lib/auth/session";
 import { isOptionCategory, optionCategory, type OptionKind } from "@repo/lib/catalog-options";
 import { fetchProductCatalog } from "@repo/lib/queries";
@@ -45,26 +47,36 @@ function showroomTabs(catalog: ProductCategory[]): ShowroomTab[] {
 }
 
 // The public showroom — no login needed. Rendered at /showroom and
-// as the front door (/) for signed-out visitors.
+// as the front door (/) for signed-out visitors. The banner and sign-in
+// prompt show at once; the catalog's tabs and tiles while it loads are a skeleton.
 export async function ShowroomView() {
-  const [session, catalog] = await Promise.all([getClientSession(), fetchProductCatalog(true)]);
+  const session = await getClientSession();
 
   return (
     <ClientShell signedIn={!!session} name={session?.name ?? null} avatarUrl={session?.avatarUrl ?? null}>
-      <ShowroomGallery
-        banner={{ title: "Show Room", subtitle: "Welcome to our show room", imageUrl: "/showroom/banner.jpg" }}
-        notice={
-          session ? null : (
-            <div className="mb-6 rounded-[var(--radius)] border border-border bg-surface p-4 shadow-theme-xs">
-              <p className="text-sm text-muted">Sign in to place an order or track existing ones.</p>
-              <Link href="/?signin=1">
-                <Button className="mt-3">Sign in / Sign up</Button>
-              </Link>
-            </div>
-          )
+      <ShowroomBanner title="Show Room" subtitle="Welcome to our show room" imageUrl="/showroom/banner.jpg" />
+      {session ? null : (
+        <div className="mb-6 rounded-[var(--radius)] border border-border bg-surface p-4 shadow-theme-xs">
+          <p className="text-sm text-muted">Sign in to place an order or track existing ones.</p>
+          <Link href="/?signin=1">
+            <Button className="mt-3">Sign in / Sign up</Button>
+          </Link>
+        </div>
+      )}
+      <Loading
+        skeleton={
+          <>
+            <ChipRowSkeleton count={3} />
+            <ProductGridSkeleton />
+          </>
         }
-        tabs={showroomTabs(catalog)}
-      />
+      >
+        <Catalog />
+      </Loading>
     </ClientShell>
   );
+}
+
+async function Catalog() {
+  return <ShowroomGallery tabs={showroomTabs(await fetchProductCatalog(true))} />;
 }

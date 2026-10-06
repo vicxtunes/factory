@@ -3,6 +3,8 @@ import type { Metadata } from "next";
 import { notFound, permanentRedirect } from "next/navigation";
 
 import { StudioPublicPage } from "@repo/ui/studio-portal/StudioPublicPage";
+import { BannerSkeleton, CardGridSkeleton, ProductDetailSkeleton } from "@repo/ui/skeletons/blocks";
+import { Loading } from "@repo/ui/skeletons/Loading";
 import { getClientSession } from "@repo/lib/auth/session";
 import { rememberedRequests } from "@repo/lib/booking-requests/server";
 import { offerings } from "@repo/lib/offerings/server";
@@ -62,18 +64,45 @@ export default async function SlugPage({ params, searchParams }: Params & { sear
   const at = await studioAtSlug(slug);
   if (!at) notFound();
   if (at.redirectTo) permanentRedirect(`/${at.redirectTo}`);
+  const [signedIn, logoUrl, { signin }] = await Promise.all([
+    portalClient(at.studio.id),
+    studioAccess.logoUrl(at.studio.logoKey),
+    searchParams,
+  ]);
+
+  return (
+    <StudioShell studio={{ name: at.studio.name, logoUrl, slug }} signedInAs={signedIn?.name ?? null} title="Showroom">
+      <Loading
+        skeleton={
+          <>
+            <BannerSkeleton />
+            <CardGridSkeleton count={3} />
+          </>
+        }
+      >
+        <StudioShowroom at={at} slug={slug} signedInAs={signedIn?.name ?? null} signInOpen={signin === "1"} />
+      </Loading>
+    </StudioShell>
+  );
+}
+
+async function StudioShowroom({
+  at,
+  slug,
+  signedInAs,
+  signInOpen,
+}: {
+  at: NonNullable<Awaited<ReturnType<typeof studioAtSlug>>>;
+  slug: string;
+  signedInAs: string | null;
+  signInOpen: boolean;
+}) {
   // Until photo storage is set up the page still shows, without albums or covers; any other failure surfaces.
   const unlessNoStorage = <T,>(fallback: T) => (err: unknown) => {
     if (err instanceof PhotoError) return fallback;
     throw err;
   };
-  const [showroom, signedIn, albums, logoUrl, { signin }] = await Promise.all([
-    offerings.showroom(at.scope),
-    portalClient(at.studio.id),
-    photos.albums(at.scope, true).catch(unlessNoStorage([])),
-    studioAccess.logoUrl(at.studio.logoKey),
-    searchParams,
-  ]);
+  const [showroom, albums] = await Promise.all([offerings.showroom(at.scope), photos.albums(at.scope, true).catch(unlessNoStorage([]))]);
   // Each category's services with their covers (small for the cards, large for the banner).
   const categories = await Promise.all(
     showroom.map(async (c) => ({
@@ -88,36 +117,43 @@ export default async function SlugPage({ params, searchParams }: Params & { sear
     })),
   );
   // Requests this device sent while not signed in (a client the studio already knew, on a new phone).
-  const requests = signedIn ? [] : await rememberedRequests(at.scope);
+  const requests = signedInAs ? [] : await rememberedRequests(at.scope);
   // The banner: one of the studio's own photos, its first album's cover or else a service's.
   const bannerUrl = albums.find((a) => a.coverLargeUrl)?.coverLargeUrl ?? categories.flatMap((c) => c.services).find((s) => s.coverLargeUrl)?.coverLargeUrl ?? null;
   return (
-    <StudioShell studio={{ name: at.studio.name, logoUrl, slug }} signedInAs={signedIn?.name ?? null} title="Showroom">
-      <StudioPublicPage
-        studio={at.studio}
-        slug={slug}
-        categories={categories}
-        albums={albums}
-        bannerUrl={bannerUrl}
-        signedInAs={signedIn?.name ?? null}
-        signInOpen={signin === "1"}
-        requests={requests}
-      />
-    </StudioShell>
+    <StudioPublicPage
+      studio={at.studio}
+      slug={slug}
+      categories={categories}
+      albums={albums}
+      bannerUrl={bannerUrl}
+      signedInAs={signedInAs}
+      signInOpen={signInOpen}
+      requests={requests}
+    />
   );
 }
 
 async function ProductPage({ found }: { found: NonNullable<Awaited<ReturnType<typeof fetchProductBySlug>>> }) {
-  const [session, showroomSettings, currencies] = await Promise.all([getClientSession(), fetchShowroomSettings(), fetchCurrencies(true)]);
+  const session = await getClientSession();
   return (
     <ClientShell signedIn={!!session} name={session?.name ?? null} avatarUrl={session?.avatarUrl ?? null}>
-      <ProductPageView
-        product={found.product}
-        category={found.category}
-        viewMode={showroomSettings.product_view_mode}
-        showPrices={showroomSettings.show_prices}
-        currencies={currencies}
-      />
+      <Loading skeleton={<ProductDetailSkeleton />}>
+        <ProductView found={found} />
+      </Loading>
     </ClientShell>
+  );
+}
+
+async function ProductView({ found }: { found: NonNullable<Awaited<ReturnType<typeof fetchProductBySlug>>> }) {
+  const [showroomSettings, currencies] = await Promise.all([fetchShowroomSettings(), fetchCurrencies(true)]);
+  return (
+    <ProductPageView
+      product={found.product}
+      category={found.category}
+      viewMode={showroomSettings.product_view_mode}
+      showPrices={showroomSettings.show_prices}
+      currencies={currencies}
+    />
   );
 }
