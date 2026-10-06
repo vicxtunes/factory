@@ -13,6 +13,7 @@ export interface OfferingStore {
   /** On-sale services, or archived ones. */
   services(scope: TenantScope, archived: boolean): Promise<Service[]>;
   service(scope: TenantScope, id: string): Promise<Service | null>;
+  serviceBySlug(scope: TenantScope, slug: string): Promise<Service | null>;
   /** The on-sale service with this name, ignoring case. */
   findActiveService(scope: TenantScope, name: string): Promise<Service | null>;
   /** Every slug the tenant's services use, archived ones included. */

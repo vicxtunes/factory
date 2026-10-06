@@ -29,6 +29,10 @@ function memoryStore() {
       const s = svc(scope, id);
       return s ? strip(s) : null;
     },
+    serviceBySlug: async (scope, slug) => {
+      const s = services.find((r) => r.tenantId === scope.tenantId && r.slug === slug);
+      return s ? strip(s) : null;
+    },
     findActiveService: async (scope, name) => {
       const s = services.find((r) => r.tenantId === scope.tenantId && !r.archivedAt && r.name.toLowerCase() === name.toLowerCase());
       return s ? strip(s) : null;
@@ -202,4 +206,16 @@ test("one studio can't read, change or archive another's services or packages, e
   assert.equal(packages[0].archivedAt, null);
   assert.equal(packages.length, 2);
   assert.deepEqual(await service.catalog(studioB), []);
+});
+
+test("a service's showroom page: by its address, on sale only, with its packages on sale, in this studio only", async () => {
+  const service = new OfferingService(memoryStore().store);
+  const { s, silver } = await weddingWithTiers(service);
+  await service.setPackageArchived(studioA, silver.id, true);
+  const page = await service.publicService(studioA, "wedding-photography");
+  assert.deepEqual(page?.packages.map((p) => p.name), ["Gold"]);
+  assert.equal(await service.publicService(studioB, "wedding-photography"), null);
+  assert.equal(await service.publicService(studioA, "nope"), null);
+  await service.setServiceArchived(studioA, s.id, true);
+  assert.equal(await service.publicService(studioA, "wedding-photography"), null);
 });

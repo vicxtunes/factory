@@ -56,17 +56,15 @@ function PhotoCard({ card }: { card: ShowroomCard }) {
 // Showcase.tsx and can be shared. Falls back to the shared placeholder
 // image for any item without its own image yet.
 export function ShowroomGallery({
-  title,
-  subtitle,
-  bannerUrl,
+  banner,
   notice,
   tabs,
 }: {
-  title: string;
-  subtitle: string;
-  bannerUrl: string;
+  /** The full-bleed photo banner; left out where the page has its own header. */
+  banner?: { title: string; subtitle: string; imageUrl: string };
   /** Between the banner and the tabs, e.g. a sign-in prompt. */
   notice?: ReactNode;
+  /** With just one, its content shows without a tab bar. */
   tabs: ShowroomTab[];
 }) {
   const [tabKey, setTabKey] = useState(tabs[0]?.key);
@@ -74,16 +72,18 @@ export function ShowroomGallery({
 
   return (
     <div className="overflow-x-clip">
-      <div className="relative -mx-4 -mt-6 mb-6 h-48 overflow-hidden sm:-mx-6 sm:h-64">
-        <Image src={bannerUrl} alt="" fill priority className="object-cover" />
-        <div className="absolute inset-0 bg-gradient-to-r from-[#1b2a4b]/90 via-[#1b2a4b]/50 to-brand-600/60" />
-        <div className="absolute inset-0 flex flex-col items-center justify-center px-4 text-center">
-          <h1 className="text-3xl font-extrabold uppercase tracking-wide text-white underline decoration-brand-400 decoration-4 underline-offset-8 sm:text-5xl">
-            {title}
-          </h1>
-          <p className="mt-2 text-sm text-white/80 sm:text-base">{subtitle}</p>
+      {banner ? (
+        <div className="relative -mx-4 -mt-6 mb-6 h-48 overflow-hidden sm:-mx-6 sm:h-64">
+          <Image src={banner.imageUrl} alt="" fill priority className="object-cover" />
+          <div className="absolute inset-0 bg-gradient-to-r from-[#1b2a4b]/90 via-[#1b2a4b]/50 to-brand-600/60" />
+          <div className="absolute inset-0 flex flex-col items-center justify-center px-4 text-center">
+            <h1 className="text-3xl font-extrabold uppercase tracking-wide text-white underline decoration-brand-400 decoration-4 underline-offset-8 sm:text-5xl">
+              {banner.title}
+            </h1>
+            <p className="mt-2 text-sm text-white/80 sm:text-base">{banner.subtitle}</p>
+          </div>
         </div>
-      </div>
+      ) : null}
 
       {notice}
 
@@ -91,32 +91,34 @@ export function ShowroomGallery({
           pills from `sm` up. `flex-1` on mobile keeps every tab an equal tap
           target; `sm:flex-none` + `sm:min-w-0` lets them shrink to content
           on desktop instead of stretching across the row. */}
-      <div
-        role="tablist"
-        className="mb-6 flex w-full overflow-x-auto rounded-lg"
-        style={{ scrollbarWidth: "none" }}
-      >
-        {tabs.map((t) => (
-          <button
-            key={t.key}
-            type="button"
-            role="tab"
-            aria-selected={tab === t}
-            onClick={() => setTabKey(t.key)}
-            className={`min-w-[7.5rem] flex-1 whitespace-nowrap px-5 py-2.5 text-sm font-bold transition-colors sm:min-w-0 sm:flex-none sm:px-4 sm:py-2 sm:text-xs ${
-              tab === t
-                ? "bg-[#1b2a4b] text-white"
-                : "bg-brand-100 text-[#1b2a4b] hover:bg-brand-200 dark:bg-brand-500/15 dark:text-brand-400 dark:hover:bg-brand-500/25"
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+      {tabs.length > 1 ? (
+        <div
+          role="tablist"
+          className="mb-6 flex w-full overflow-x-auto rounded-lg"
+          style={{ scrollbarWidth: "none" }}
+        >
+          {tabs.map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              role="tab"
+              aria-selected={tab === t}
+              onClick={() => setTabKey(t.key)}
+              className={`min-w-[7.5rem] flex-1 whitespace-nowrap px-5 py-2.5 text-sm font-bold transition-colors sm:min-w-0 sm:flex-none sm:px-4 sm:py-2 sm:text-xs ${
+                tab === t
+                  ? "bg-[#1b2a4b] text-white"
+                  : "bg-brand-100 text-[#1b2a4b] hover:bg-brand-200 dark:bg-brand-500/15 dark:text-brand-400 dark:hover:bg-brand-500/25"
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
 
       {/* Fixed-min-height stage. Every tab renders into this slot, so the
           page height (and anything below it) never jumps between tabs. */}
-      <div className="min-h-[65vh]">
+      <div className={tabs.length < 2 ? "" : "min-h-[65vh]"}>
         {!tab ? null : "sections" in tab ? (
           tab.sections.length === 0 ? (
             <p className="rounded-[var(--radius)] border border-dashed border-border p-4 text-sm text-muted">

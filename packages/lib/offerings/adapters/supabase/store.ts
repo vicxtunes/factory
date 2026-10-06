@@ -107,6 +107,12 @@ export const supabaseOfferingStore: OfferingStore = {
     return data ? toService(data) : null;
   },
 
+  async serviceBySlug(scope, slug) {
+    const { data, error } = await services().select(SERVICE).eq("tenant_id", scope.tenantId).eq("slug", slug).maybeSingle<ServiceRow>();
+    if (error) fail("load the service", error);
+    return data ? toService(data) : null;
+  },
+
   async findActiveService(scope, name) {
     const { data, error } = await services()
       .select(SERVICE)

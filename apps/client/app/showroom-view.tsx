@@ -52,9 +52,7 @@ export async function ShowroomView() {
   return (
     <ClientShell signedIn={!!session} name={session?.name ?? null} avatarUrl={session?.avatarUrl ?? null}>
       <ShowroomGallery
-        title="Show Room"
-        subtitle="Welcome to our show room"
-        bannerUrl="/showroom/banner.jpg"
+        banner={{ title: "Show Room", subtitle: "Welcome to our show room", imageUrl: "/showroom/banner.jpg" }}
         notice={
           session ? null : (
             <div className="mb-6 rounded-[var(--radius)] border border-border bg-surface p-4 shadow-theme-xs">

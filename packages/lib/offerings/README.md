@@ -34,6 +34,8 @@ The module is generic and tenant-scoped, so a future product (vendors, service p
 | `/studio/offerings/new` | Studio owner | Add a service |
 | `/studio/offerings/<service id>` | Studio owner | Edit or archive it; its packages (add, edit, archive, put back); its photos and preview video |
 | `/dashboard/studios/<id>` (factory app) | Boss | The studio's services and packages, read-only |
+| `/<studio>` (client app, public) | Anyone | The studio's services as showroom cards (cover photo), linking to their pages |
+| `/<studio>/s/<service>` (client app, public) | Anyone | The showroom's item page (`@repo/ui/showroom/Showcase`): photos, preview video, the packages to choose from (a 0 price reads "Price on request"), "Book on WhatsApp" naming the chosen one |
 
 ## Studio separation
 

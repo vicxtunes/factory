@@ -44,6 +44,13 @@ export class OfferingService {
     return services.map((s) => ({ ...s, packages: packages.filter((p) => p.serviceId === s.id).sort(byPosition) }));
   }
 
+  /** A service on sale by its address, with its packages on sale: its showroom page. Null when it's archived or unknown. */
+  async publicService(scope: TenantScope, slug: string): Promise<ServiceWithPackages | null> {
+    const service = await this.store.serviceBySlug(scope, slug);
+    if (!service || service.archivedAt) return null;
+    return { ...service, packages: await this.packages(scope, service.id) };
+  }
+
   /** Saves a new service, unless one on sale already has the name. */
   async createService(scope: TenantScope, input: ServiceInput): Promise<ServiceSaveOutcome> {
     const duplicate = await this.duplicateService(scope, input.name);
