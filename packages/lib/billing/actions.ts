@@ -16,6 +16,7 @@
 
 import { revalidatePath } from "next/cache";
 
+import { bookingIdSchema } from "@repo/lib/bookings/core";
 import { bookings } from "@repo/lib/bookings/server";
 import { parseInput, type Result } from "@repo/lib/kernel/core";
 import { runAction } from "@repo/lib/kernel/server/action";
@@ -37,11 +38,16 @@ import { invoices, quotations } from "./server";
 
 const LIST = "/studio/quotations";
 
-export async function createQuotation(input: unknown): Promise<Result<string>> {
+/** A new quotation; made from a booking (`bookingId`), it's that booking's: accepting it books nothing new. */
+export async function createQuotation(input: unknown, bookingId?: unknown): Promise<Result<string>> {
   return runAction("billing", async () => {
     const { scope } = await studioOfCaller();
-    const id = await quotations.create(scope, parseInput(quotationInputSchema, input));
-    revalidatePath(LIST);
+    const details = parseInput(quotationInputSchema, input);
+    const booking = bookingId == null ? null : parseInput(bookingIdSchema, bookingId);
+    if (booking) await bookings.checkDocumentFor(scope, booking, details.customerId, "quotation");
+    const id = await quotations.create(scope, details);
+    if (booking) await bookings.setQuotation(scope, booking, id);
+    revalidatePath("/studio", "layout");
     return id;
   });
 }
@@ -105,10 +111,15 @@ async function bookInvoice(scope: TenantScope, id: string): Promise<void> {
 
 const INVOICES = "/studio/invoices";
 
-export async function createInvoice(input: unknown): Promise<Result<string>> {
+/** A new invoice, booked from its shoot day; made from a booking (`bookingId`), it's that booking's, which it confirms. */
+export async function createInvoice(input: unknown, bookingId?: unknown): Promise<Result<string>> {
   return runAction("billing", async () => {
     const { scope } = await studioOfCaller();
-    const id = await invoices.create(scope, parseInput(invoiceInputSchema, input));
+    const details = parseInput(invoiceInputSchema, input);
+    const booking = bookingId == null ? null : parseInput(bookingIdSchema, bookingId);
+    if (booking) await bookings.checkDocumentFor(scope, booking, details.customerId, "invoice");
+    const id = await invoices.create(scope, details);
+    if (booking) await bookings.setInvoice(scope, booking, id);
     await bookInvoice(scope, id);
     revalidatePath("/studio", "layout");
     return id;

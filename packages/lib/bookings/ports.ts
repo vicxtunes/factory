@@ -25,6 +25,8 @@ export interface BookingStore {
   create(scope: TenantScope, input: BookingInput, confirmed?: { invoiceId: string }): Promise<string>;
   /** A client's online request for a package (status "requested"). Throws BookingError when the client or package isn't this tenant's. */
   createRequest(scope: TenantScope, input: Omit<BookingInput, "quotationId"> & { offeringId: string }): Promise<string>;
+  /** Links the quotation made for it, if it has none yet. False otherwise. */
+  setQuotation(scope: TenantScope, id: string, quotationId: string): Promise<boolean>;
   /** Links the invoice made when it was confirmed. False when there's no such booking in this tenant. */
   setInvoice(scope: TenantScope, id: string, invoiceId: string): Promise<boolean>;
   /** Changes the details (never the quotation). False when there's no such booking in this tenant. */

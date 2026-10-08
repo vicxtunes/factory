@@ -171,7 +171,28 @@ export class BookingService {
     return { ...current, status: "confirmed" };
   }
 
-  /** Links the invoice made when a request was confirmed. */
+  /**
+   * Whether a new quotation or invoice can be made from this booking, for this
+   * client: one going ahead (not a client's request: that's confirmed with its
+   * own invoice), for the same client, without an invoice yet (nor, for a
+   * quotation, a quotation). Throws a sentence when not.
+   */
+  async checkDocumentFor(scope: TenantScope, id: string, customerId: string, kind: "quotation" | "invoice"): Promise<void> {
+    const b = await this.store.get(scope, id);
+    if (!b) throw new BookingError(GONE);
+    if (b.status === "requested") throw new BookingError("Confirm the client's request first: that makes its invoice.");
+    if (!canEditBooking(b.status)) throw new BookingError(`This booking is ${BOOKING_STATUS_LABELS[b.status].toLowerCase()}.`);
+    if (b.customerId !== customerId) throw new BookingError("It must be for the booking's client.");
+    if (b.invoiceId) throw new BookingError("This booking already has an invoice.");
+    if (kind === "quotation" && b.quotationId) throw new BookingError("This booking already has a quotation.");
+  }
+
+  /** Links a quotation made from this booking: when the client accepts it, this is its booking. */
+  async setQuotation(scope: TenantScope, id: string, quotationId: string): Promise<void> {
+    if (!(await this.store.setQuotation(scope, id, quotationId))) throw new BookingError("This booking already has a quotation.");
+  }
+
+  /** Links the invoice made when a request was confirmed, or made from this booking. */
   async setInvoice(scope: TenantScope, id: string, invoiceId: string): Promise<void> {
     if (!(await this.store.setInvoice(scope, id, invoiceId))) throw new BookingError(GONE);
   }

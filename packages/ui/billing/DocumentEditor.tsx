@@ -63,17 +63,25 @@ export interface EditableDocument {
   lines: LineInput[];
 }
 
-type SaveInput = { customerId: string; date: string | null; shoot: Shoot | null; notes: string; lines: LineInput[] };
+type SaveInput = { customerId: string; date: string | null; shoot: Shoot | null; notes: string; lines: LineInput[]; bookingId: string | null };
+
+/** A new document made from a booking: its client, when, and what was agreed, ready to send. */
+export interface FromBooking {
+  id: string;
+  customerId: string;
+  shoot: Shoot;
+  lines: LineInput[];
+}
 
 const KINDS = {
   quotation: {
     dateLabel: "Valid until",
     dateHint: "Optional. After this day it can't be accepted.",
     create: "Create quotation",
-    shootHint: "Optional. When the client accepts, it's booked (tentative).",
+    shootHint: "Optional. When the client accepts, the date is held as a pending booking.",
     save: (doc: EditableDocument | undefined, input: SaveInput) => {
       const body = { customerId: input.customerId, validUntil: input.date, shoot: input.shoot, notes: input.notes, lines: input.lines };
-      return doc ? updateQuotation(doc.id, body) : createQuotation(body);
+      return doc ? updateQuotation(doc.id, body) : createQuotation(body, input.bookingId);
     },
   },
   invoice: {
@@ -83,7 +91,7 @@ const KINDS = {
     shootHint: "Optional. Saving the invoice books it (confirmed), or moves its booking.",
     save: (doc: EditableDocument | undefined, input: SaveInput) => {
       const body = { customerId: input.customerId, dueDate: input.date, shoot: input.shoot, notes: input.notes, lines: input.lines };
-      return doc ? updateInvoice(doc.id, body) : createInvoice(body);
+      return doc ? updateInvoice(doc.id, body) : createInvoice(body, input.bookingId);
     },
   },
 };
@@ -96,7 +104,8 @@ const card = "rounded-2xl border border-border bg-surface p-4 shadow-theme-xs sm
  * client and its date; when the shoot is (optional, what books it); the
  * lines, copied from packages and services or typed, with line discounts;
  * then a last look with the totals and notes. Each step checks its own fields
- * before the next. Totals update as you type, using the same rules the
+ * before the next. A new one can start from a booking (`fromBooking`): its
+ * client (fixed), shoot and package, and saving makes it that booking's. Totals update as you type, using the same rules the
  * server saves with.
  */
 export function DocumentEditor({
@@ -105,6 +114,7 @@ export function DocumentEditor({
   customers,
   offerings,
   presetCustomerId,
+  fromBooking,
   scope,
   basePath,
 }: {
@@ -113,22 +123,24 @@ export function DocumentEditor({
   customers: { id: string; name: string }[];
   offerings: Offering[];
   presetCustomerId?: string;
+  fromBooking?: FromBooking;
   scope: Pick<TenantScope, "currency" | "locale" | "timeZone">;
   /** The document's pages live at `${basePath}/${id}`. */
   basePath: string;
 }) {
   const router = useRouter();
   const k = KINDS[kind];
-  const [customerId, setCustomerId] = useState(doc?.customerId ?? presetCustomerId ?? "");
+  const [customerId, setCustomerId] = useState(doc?.customerId ?? fromBooking?.customerId ?? presetCustomerId ?? "");
+  const startShoot = doc?.shoot ?? fromBooking?.shoot ?? null;
   const [date, setDate] = useState(doc?.date ?? "");
   const [shoot, setShoot] = useState<When>({
-    date: doc?.shoot?.date ?? "",
-    allDay: !!doc?.shoot && doc.shoot.startTime === null,
-    startTime: doc?.shoot?.startTime ?? "",
-    endTime: doc?.shoot?.endTime ?? "",
+    date: startShoot?.date ?? "",
+    allDay: !!startShoot && startShoot.startTime === null,
+    startTime: startShoot?.startTime ?? "",
+    endTime: startShoot?.endTime ?? "",
   });
   const [notes, setNotes] = useState(doc?.notes ?? "");
-  const [lines, setLines] = useState<Draft[]>(doc ? doc.lines.map(draftOf) : []);
+  const [lines, setLines] = useState<Draft[]>((doc?.lines ?? fromBooking?.lines ?? []).map(draftOf));
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const steps = useSteps(STEPS.length, !!doc);
@@ -167,6 +179,7 @@ export function DocumentEditor({
         shoot: shoot.date ? { date: shoot.date, ...whenTimes(shoot) } : null,
         notes,
         lines: lines.map(inputOf),
+        bookingId: fromBooking?.id ?? null,
       });
       if (!res.ok) return setError(res.error);
       router.push(`${basePath}/${res.data}`);
@@ -183,7 +196,7 @@ export function DocumentEditor({
         {steps.step === 0 ? (
           <div className={`grid gap-4 sm:grid-cols-2 ${card}`}>
             <Field label="Client">
-              <Select value={customerId} onChange={(e) => setCustomerId(e.target.value)} required>
+              <Select value={customerId} onChange={(e) => setCustomerId(e.target.value)} required disabled={!!fromBooking}>
                 <option value="">Choose a client…</option>
                 {customers.map((c) => (
                   <option key={c.id} value={c.id}>
@@ -206,7 +219,7 @@ export function DocumentEditor({
               dateLabel="Shoot day"
               dateRequired={false}
               dateHint={`${k.shootHint} Leave it empty if there's no shoot.`}
-              exceptBookingId={doc?.bookingId ?? null}
+              exceptBookingId={doc?.bookingId ?? fromBooking?.id ?? null}
               bookingsPath="/studio/bookings"
             />
           </div>
