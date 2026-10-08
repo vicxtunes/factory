@@ -111,6 +111,10 @@ export const supabaseQuotationStore: QuotationStore = {
     return data.length === 1;
   },
 
+  async setShoot(scope, id, shoot) {
+    await saveShoot(scope.tenantId, id, shoot, "quotation");
+  },
+
   async resetToken(scope, id, token) {
     const { data, error } = await documents()
       .update({ share_token: token })

@@ -59,6 +59,10 @@ function fakes() {
       Object.assign(r, { response: answer, respondedAt: NOW.toISOString(), declineReason: reason });
       return true;
     },
+    setShoot: async (s, id, shoot) => {
+      const r = rows.find((q) => q.tenantId === s.tenantId && q.id === id);
+      if (r) r.shoot = shoot;
+    },
     resetToken: async (s, id, token) => {
       const r = rows.find((q) => q.tenantId === s.tenantId && q.id === id);
       if (r) r.shareToken = token;

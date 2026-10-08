@@ -21,6 +21,7 @@ import {
   type InvoiceSummary,
   type Issuer,
   type LineInput,
+  type Shoot,
   type PaymentInput,
   type Receipt,
 } from "./core";
@@ -116,6 +117,11 @@ export class InvoiceService {
   }
 
   /** A new link; the old one stops working. */
+  /** When its shoot is now: its booking was moved, and the invoice says so. */
+  async setShoot(scope: TenantScope, id: string, shoot: Shoot | null): Promise<void> {
+    await this.store.setShoot(scope, id, shoot);
+  }
+
   async resetLink(scope: TenantScope, id: string): Promise<void> {
     if (!(await this.store.resetToken(scope, id, this.newToken()))) throw new BillingError(GONE);
   }

@@ -21,7 +21,7 @@ export function useSteps(count: number, open: boolean) {
 }
 
 /** Where the form is: "Step 2 of 4", and each step by name, the ones reached so far openable. */
-export function StepIndicator({ titles, step, reached, onGo }: { titles: string[]; step: number; reached: number; onGo: (to: number) => void }) {
+export function StepIndicator({ titles, step, reached, onGo }: { titles: readonly string[]; step: number; reached: number; onGo: (to: number) => void }) {
   return (
     <nav aria-label="Steps" className="space-y-2">
       <p className="text-xs text-muted">

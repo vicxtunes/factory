@@ -42,6 +42,11 @@ A business's appointments with its customers: shoots, sessions, events. For stud
   - **A client's online request**, once confirmed, gets an invoice saying when it is.
   - With no shoot day, nothing is booked automatically: "Book it" on an accepted quotation, or the
     booking form, still work.
+- **One date, on the booking:** a quotation or invoice with a booking has no Shoot step: it shows
+  the booking's day and times, read-only, with a link to change them on the booking. Changing the
+  booking rewrites its quotation's and invoice's shoot to match (`updateBooking`), so a printed
+  document never disagrees with the calendar. Only a document without a booking asks when the
+  shoot is: that's what books it.
 - **The next document, where it's due:** a booking's page has a **Documents** box offering what
   comes next, filled in from the booking (its client, fixed; its day and times; its package and
   amount as the one line):
