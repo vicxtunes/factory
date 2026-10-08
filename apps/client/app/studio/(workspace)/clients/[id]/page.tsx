@@ -59,7 +59,14 @@ export default async function StudioClientPage({ params }: { params: Promise<{ i
         </Loading>
       </section>
       <section>
-        <SectionLabel>Bookings</SectionLabel>
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <SectionLabel>Bookings</SectionLabel>
+          {customer.archivedAt ? null : (
+            <Link href={`/studio/bookings/new?client=${customer.id}`} className="text-sm font-medium text-brand-600 hover:underline">
+              New booking
+            </Link>
+          )}
+        </div>
         <Loading skeleton={<RowsSkeleton rows={2} />}>
           <Bookings scope={scope} customer={customer} />
         </Loading>

@@ -27,6 +27,7 @@ export function BookingForm({
   booking,
   draft,
   date,
+  presetCustomerId,
   customers,
   packages,
   scope,
@@ -36,6 +37,8 @@ export function BookingForm({
   draft?: BookingDraft;
   /** Pre-filled day for a new booking, "yyyy-mm-dd". */
   date?: string;
+  /** Pre-chosen client for a new booking (from the client's page). */
+  presetCustomerId?: string;
   customers: { id: string; name: string }[];
   /** Package and service names to pick from (the field also takes anything typed). */
   packages: string[];
@@ -44,7 +47,7 @@ export function BookingForm({
 }) {
   const router = useRouter();
   const [form, setForm] = useState({
-    customerId: booking?.customerId ?? draft?.customerId ?? "",
+    customerId: booking?.customerId ?? draft?.customerId ?? presetCustomerId ?? "",
     title: booking?.title ?? draft?.title ?? "",
     location: booking?.location ?? "",
     packageName: booking?.packageName ?? draft?.packageName ?? "",

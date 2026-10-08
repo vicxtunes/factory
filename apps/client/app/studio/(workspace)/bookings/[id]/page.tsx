@@ -7,10 +7,11 @@ import { BookingStatusButtons } from "@repo/ui/bookings/BookingStatusButtons";
 import { RequestAnswer } from "@repo/ui/bookings/RequestAnswer";
 import { ClientPortalPanel } from "@repo/ui/studio-portal/ClientPortalPanel";
 import { StartProjectButton } from "@repo/ui/projects/ProjectControls";
-import { InvoiceStatusBadge } from "@repo/ui/billing/StatusBadges";
+import { CreateInvoiceButton } from "@repo/ui/billing/InvoiceButtons";
+import { InvoiceStatusBadge, QuotationStatusBadge } from "@repo/ui/billing/StatusBadges";
 import { Skeleton } from "@repo/ui/Skeleton";
 import { Loading } from "@repo/ui/skeletons/Loading";
-import { invoices } from "@repo/lib/billing/server";
+import { invoices, quotations } from "@repo/lib/billing/server";
 import { bookingIdSchema, canEditBooking, type Booking } from "@repo/lib/bookings/core";
 import { bookings } from "@repo/lib/bookings/server";
 import { projects } from "@repo/lib/projects/server";
@@ -98,34 +99,72 @@ export default async function StudioBookingPage({ params }: { params: Promise<{ 
   );
 }
 
-// The money behind it (the invoice made when its request was confirmed, or from its quotation) and its project.
+const linkStyle = "font-medium text-brand-600 hover:underline";
+
+/**
+ * The documents behind it, each with the way to make it right here when it's
+ * due: a quotation before it's confirmed (its client accepts it through a
+ * link), then the invoice (made from the accepted quotation, or straight from
+ * the booking: either confirms it). A client's request makes its invoice when
+ * it's confirmed (above). Then its project.
+ */
 async function Behind({ scope, booking: b }: { scope: TenantScope; booking: Booking }) {
   const invoiceId = b.invoiceId ?? (b.quotationId ? await invoices.idForQuotation(scope, b.quotationId) : null);
-  const [invoice, projectId] = await Promise.all([invoiceId ? invoices.get(scope, invoiceId) : null, projects.idForBooking(scope, b.id)]);
+  const [invoice, quotation, projectId] = await Promise.all([
+    invoiceId ? invoices.get(scope, invoiceId) : null,
+    b.quotationId ? quotations.get(scope, b.quotationId) : null,
+    projects.idForBooking(scope, b.id),
+  ]);
+  // Documents are made only while it's going ahead; a client's request gets its invoice on Confirm.
+  const going = b.status === "tentative" || b.status === "confirmed";
+  const showQuotation = !!quotation || (going && !invoice && b.status === "tentative");
+  const showInvoice = !!invoice || going;
+
   return (
     <>
-      {b.quotationId || invoice ? (
-        <section className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-surface p-4 text-sm shadow-theme-xs">
-          {b.quotationId ? (
-            <Link href={`/studio/quotations/${b.quotationId}`} className="font-medium text-brand-600 hover:underline">
-              Its quotation
-            </Link>
-          ) : (
-            <span className="font-medium">Its invoice</span>
-          )}
-          {invoice ? (
-            <span className="flex items-center gap-2">
-              <Link href={`/studio/invoices/${invoice.id}`} className="font-medium text-brand-600 hover:underline">
-                {invoice.number}
-              </Link>
-              <span className="tnum">
-                {formatAmount(scope, invoice.paid)} paid of {formatAmount(scope, invoice.total)}
-              </span>
-              <InvoiceStatusBadge status={invoice.status} />
-            </span>
-          ) : (
-            <span className="text-muted">No invoice yet</span>
-          )}
+      {showQuotation || showInvoice ? (
+        <section className="space-y-3 rounded-2xl border border-border bg-surface p-4 text-sm shadow-theme-xs sm:p-5">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted">Documents</p>
+          {showQuotation ? (
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-muted">Quotation</span>
+              {quotation ? (
+                <span className="flex flex-wrap items-center gap-2">
+                  <Link href={`/studio/quotations/${quotation.id}`} className={linkStyle}>
+                    {quotation.number}
+                  </Link>
+                  <QuotationStatusBadge status={quotation.status} />
+                  {quotation.status === "open" ? <span className="text-xs text-muted">Waiting for the client to accept</span> : null}
+                </span>
+              ) : (
+                <Link href={`/studio/quotations/new?booking=${b.id}`} className={linkStyle}>
+                  Create quotation
+                </Link>
+              )}
+            </div>
+          ) : null}
+          {showInvoice ? (
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-muted">Invoice</span>
+              {invoice ? (
+                <span className="flex flex-wrap items-center gap-2">
+                  <Link href={`/studio/invoices/${invoice.id}`} className={linkStyle}>
+                    {invoice.number}
+                  </Link>
+                  <span className="tnum">
+                    {formatAmount(scope, invoice.paid)} paid of {formatAmount(scope, invoice.total)}
+                  </span>
+                  <InvoiceStatusBadge status={invoice.status} />
+                </span>
+              ) : quotation?.status === "accepted" ? (
+                <CreateInvoiceButton quotationId={quotation.id} basePath="/studio/invoices" />
+              ) : (
+                <Link href={`/studio/invoices/new?booking=${b.id}`} className={linkStyle}>
+                  Create invoice{b.status === "tentative" ? " (confirms it)" : ""}
+                </Link>
+              )}
+            </div>
+          ) : null}
         </section>
       ) : null}
       {projectId ? (

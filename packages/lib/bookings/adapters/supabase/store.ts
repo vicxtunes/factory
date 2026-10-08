@@ -134,6 +134,17 @@ export const supabaseBookingStore: BookingStore = {
     return data.id;
   },
 
+  async setQuotation(scope, id, quotationId) {
+    const { data, error } = await table()
+      .update({ quotation_id: quotationId })
+      .eq("tenant_id", scope.tenantId)
+      .eq("id", id)
+      .is("quotation_id", null)
+      .select("id");
+    if (error) fail("link the quotation", error);
+    return data.length === 1;
+  },
+
   async setInvoice(scope, id, invoiceId) {
     const { data, error } = await table().update({ invoice_id: invoiceId }).eq("tenant_id", scope.tenantId).eq("id", id).select("id");
     if (error) fail("link the invoice", error);

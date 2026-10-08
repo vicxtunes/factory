@@ -9,7 +9,8 @@ export type BookingStatus = "requested" | "tentative" | "confirmed" | "completed
 
 export const BOOKING_STATUS_LABELS: Record<BookingStatus, string> = {
   requested: "Requested",
-  tentative: "Tentative",
+  // Stored as "tentative"; shown as the plainer "Pending": held, waiting to be confirmed.
+  tentative: "Pending",
   confirmed: "Confirmed",
   completed: "Completed",
   cancelled: "Cancelled",
