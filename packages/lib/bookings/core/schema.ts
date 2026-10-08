@@ -26,6 +26,11 @@ export const bookingInputSchema = z
   .refine((b) => (b.startTime === null) === (b.endTime === null), "Give both a start and an end time, or neither for all day.")
   .refine((b) => b.startTime === null || b.endTime === null || b.endTime > b.startTime, "The end time must be after the start time.") satisfies z.ZodType<BookingInput, unknown>;
 
+/** A day and its times (both or neither: all day), as a form asks which bookings it would clash with. */
+export const bookingWhenSchema = z
+  .object({ date: z.iso.date("Choose a valid date."), startTime: clockTime.nullable(), endTime: clockTime.nullable() })
+  .refine((b) => (b.startTime === null) === (b.endTime === null), "Give both a start and an end time, or neither for all day.");
+
 export const bookingStatusSchema = z.enum(["tentative", "confirmed", "completed", "cancelled"], "Choose a status.");
 
 export const calendarViewSchema = z.enum(["month", "week", "day", "list"]);

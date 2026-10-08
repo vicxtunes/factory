@@ -15,6 +15,7 @@ import {
   type BookingInput,
   type BookingStatus,
   type BookingView,
+  type DocumentToBook,
 } from "./core";
 import { BookingError, type BookingDirectory, type BookingStore } from "./ports";
 
@@ -50,6 +51,17 @@ export class BookingService {
     return { booking, clashes: sameDay.filter((b) => clashes(booking, b)).sort(byTime) };
   }
 
+  /** The bookings a day and its times (none: all day) would clash with, earliest first, leaving out `exceptId` (the one being changed). */
+  async clashesWith(scope: TenantScope, when: Pick<Booking, "date" | "startTime" | "endTime">, exceptId: string | null): Promise<Booking[]> {
+    const candidate = { ...when, id: exceptId ?? "", status: "tentative" as const };
+    const sameDay = await this.store.list(scope, { from: when.date, to: when.date });
+    return sameDay.filter((b) => clashes(candidate, b)).sort(byTime);
+  }
+
+  async idForInvoice(scope: TenantScope, invoiceId: string): Promise<string | null> {
+    return this.store.idForInvoice(scope, invoiceId);
+  }
+
   async idForQuotation(scope: TenantScope, quotationId: string): Promise<string | null> {
     return this.store.idForQuotation(scope, quotationId);
   }
@@ -64,6 +76,63 @@ export class BookingService {
       packageName: q.firstLine,
       amount: q.total,
       quotationId,
+    };
+  }
+
+  /**
+   * A quotation the customer accepted, with a shoot day: booked tentative
+   * (confirmed when its invoice is made). Without a shoot day, or booked
+   * already, nothing new. Returns its booking, if any.
+   */
+  async bookAcceptedQuotation(scope: TenantScope, quotationId: string, doc: DocumentToBook): Promise<string | null> {
+    const existing = await this.store.idForQuotation(scope, quotationId);
+    if (existing || !doc.shoot) return existing;
+    return this.store.create(scope, { ...(await this.fromDocument(scope, doc, doc.shoot)), quotationId });
+  }
+
+  /**
+   * An invoice saved: its booking kept in step, automatically.
+   * - Booked already: moved to the invoice's shoot day and times, at its total (while it can change).
+   * - Made from a quotation that was booked: that booking, now the invoice's, confirmed.
+   * - Otherwise, with a shoot day: booked, confirmed.
+   * Returns its booking, if any.
+   */
+  async bookInvoice(scope: TenantScope, invoiceId: string, doc: DocumentToBook & { quotationId: string | null }): Promise<string | null> {
+    const own = await this.store.idForInvoice(scope, invoiceId);
+    const fromQuotation = own ? null : doc.quotationId ? await this.store.idForQuotation(scope, doc.quotationId) : null;
+    const id = own ?? fromQuotation;
+    if (!id) return doc.shoot ? this.store.create(scope, { ...(await this.fromDocument(scope, doc, doc.shoot)), quotationId: null }, { invoiceId }) : null;
+
+    const current = await this.store.get(scope, id);
+    if (!current) throw new BookingError(GONE);
+    if (fromQuotation && !(await this.store.setInvoice(scope, id, invoiceId))) throw new BookingError(GONE);
+    if (canEditBooking(current.status)) {
+      const { customerId, title, date, startTime, endTime, location, packageName, notes } = current;
+      await this.store.update(scope, id, { customerId, title, date, startTime, endTime, location, packageName, notes, ...doc.shoot, amount: doc.total });
+    }
+    if (current.status === "tentative") await this.store.setStatus(scope, id, "tentative", "confirmed");
+    return id;
+  }
+
+  /** A voided invoice's booking is cancelled (unless it's completed or cancelled already). */
+  async cancelForInvoice(scope: TenantScope, invoiceId: string): Promise<void> {
+    const id = await this.store.idForInvoice(scope, invoiceId);
+    const current = id ? await this.store.get(scope, id) : null;
+    if (current && canMoveBooking(current.status, "cancelled")) await this.store.setStatus(scope, current.id, current.status, "cancelled");
+  }
+
+  /** A booking's details from a quotation or invoice: its client, "Client: first line", that line as the package, its total. */
+  private async fromDocument(scope: TenantScope, doc: DocumentToBook, shoot: NonNullable<DocumentToBook["shoot"]>): Promise<Omit<BookingInput, "quotationId">> {
+    const customer = await this.directory.customer(scope, doc.customerId);
+    if (!customer) throw new BookingError("That client no longer exists.");
+    return {
+      customerId: doc.customerId,
+      title: (doc.firstLine ? `${customer.name}: ${doc.firstLine}` : customer.name).slice(0, 120),
+      ...shoot,
+      location: null,
+      packageName: doc.firstLine?.slice(0, 200) ?? null,
+      amount: doc.total,
+      notes: null,
     };
   }
 

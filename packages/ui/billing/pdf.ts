@@ -209,11 +209,16 @@ function finish(doc: jsPDF): Blob {
   return doc.output("blob");
 }
 
+/** "Sat 12 Dec 2026, 10:00–16:00" (or "…, all day"): when the shoot is. */
+const shootLabel = (scope: Scope, s: NonNullable<Quotation["shoot"]>) =>
+  `${formatDay(scope, s.date)}, ${s.startTime && s.endTime ? `${s.startTime}-${s.endTime}` : "all day"}`;
+
 export async function quotationPdf(q: Quotation, issuer: Issuer, scope: Scope): Promise<Blob> {
   const { doc, autoTable } = await load();
   const money = (n: number) => safe(formatAmount(scope, n));
   const dates: [string, string][] = [["Date:", formatDay(scope, q.issuedAt)]];
   if (q.validUntil) dates.push(["Valid until:", formatDay(scope, q.validUntil)]);
+  if (q.shoot) dates.push(["Shoot:", shootLabel(scope, q.shoot)]);
 
   let y = header(doc, issuer, "Quotation", q.number, QUOTATION_STATUS_LABELS[q.status]);
   y = billToAndDates(doc, q.billTo, dates, y);
@@ -228,6 +233,7 @@ export async function invoicePdf(inv: Invoice, issuer: Issuer, scope: Scope): Pr
   const money = (n: number) => safe(formatAmount(scope, n));
   const dates: [string, string][] = [["Date:", formatDay(scope, inv.issuedAt)]];
   if (inv.dueDate) dates.push(["Due date:", formatDay(scope, inv.dueDate)]);
+  if (inv.shoot) dates.push(["Shoot:", shootLabel(scope, inv.shoot)]);
 
   let y = header(doc, issuer, "Invoice", inv.number, INVOICE_STATUS_LABELS[inv.status]);
   y = billToAndDates(doc, inv.billTo, dates, y);

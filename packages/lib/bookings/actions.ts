@@ -12,7 +12,7 @@ import { parseInput, type Result } from "@repo/lib/kernel/core";
 import { runAction } from "@repo/lib/kernel/server/action";
 import { studioOfCaller } from "@repo/lib/studios/server";
 
-import { bookingIdSchema, bookingInputSchema, bookingStatusSchema } from "./core";
+import { bookingIdSchema, bookingInputSchema, bookingStatusSchema, bookingWhenSchema, type Booking } from "./core";
 import { bookings } from "./server";
 
 export async function createBooking(input: unknown): Promise<Result<string>> {
@@ -31,6 +31,14 @@ export async function updateBooking(id: unknown, input: unknown): Promise<Result
     const details = parseInput(bookingInputSchema, input);
     await bookings.update(scope, parseInput(bookingIdSchema, id), details);
     revalidatePath("/studio", "layout");
+  });
+}
+
+/** For a form's warning: the caller's bookings this day and these times would clash with, leaving out the one being changed. Warns, never blocks. */
+export async function findClashes(when: unknown, exceptId: unknown): Promise<Result<Booking[]>> {
+  return runAction("bookings", async () => {
+    const { scope } = await studioOfCaller();
+    return bookings.clashesWith(scope, parseInput(bookingWhenSchema, when), exceptId == null ? null : parseInput(bookingIdSchema, exceptId));
   });
 }
 

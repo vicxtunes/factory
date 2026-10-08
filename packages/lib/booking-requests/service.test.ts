@@ -85,7 +85,7 @@ function fakes() {
   return { service, bookings, invoices, projects, opened, notified };
 }
 
-const ask = { serviceSlug: "wedding-photography", packageId: "gold", date: "2026-12-12" };
+const ask = { serviceSlug: "wedding-photography", packageId: "gold", date: "2026-12-12", startTime: "10:00", endTime: "16:00" };
 
 test("a new client books: a request for the package, the owner told, and this device signed in to their page", async () => {
   const { service, bookings, opened, notified } = fakes();
@@ -94,8 +94,11 @@ test("a new client books: a request for the package, the owner told, and this de
   assert.deepEqual(out.session, { tenantId: "studio-a", customerId: "c-amina", accessAt: "2026-10-08T00:00:00Z" });
   assert.deepEqual(opened, ["c-amina"]);
   const [b] = bookings;
-  assert.deepEqual([b.customerId, b.status, b.date, b.packageName, b.amount, b.offeringId], ["c-amina", "requested", "2026-12-12", "Wedding Photography · Gold", 4_500_000, "gold"]);
-  assert.deepEqual(notified, ["New booking request: Wedding Photography · Gold on 2026-12-12"]);
+  assert.deepEqual(
+    [b.customerId, b.status, b.date, b.startTime, b.endTime, b.packageName, b.amount, b.offeringId],
+    ["c-amina", "requested", "2026-12-12", "10:00", "16:00", "Wedding Photography · Gold", 4_500_000, "gold"],
+  );
+  assert.deepEqual(notified, ["New booking request: Wedding Photography · Gold on 2026-12-12, 10:00–16:00"]);
 });
 
 test("a known phone number still books, but signs nothing in (anyone could type it)", async () => {
@@ -132,6 +135,7 @@ test("confirming: the booking confirmed, an invoice for the package, its project
   assert.deepEqual(invoices[0], {
     customerId: "grace",
     dueDate: "2026-12-12",
+    shoot: { date: "2026-12-12", startTime: "10:00", endTime: "16:00" },
     notes: "Booking for 2026-12-12.",
     lines: [{ offeringId: "gold", description: "Wedding Photography · Gold", inclusions: ["12 hours", "500 photos"], quantity: 1, unitPrice: 4_500_000, discount: null }],
   });

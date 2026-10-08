@@ -9,6 +9,7 @@ import { PaymentsPanel } from "@repo/ui/billing/PaymentsPanel";
 import { localDate } from "@repo/lib/accounting/core/period";
 import { canEditInvoice, canVoidInvoice, invoiceIdSchema } from "@repo/lib/billing/core";
 import { invoices, invoiceUrl, receiptUrl } from "@repo/lib/billing/server";
+import { bookings } from "@repo/lib/bookings/server";
 import { requireStudio } from "@repo/lib/studios/server";
 
 export const metadata = { title: "Invoice · My Business" };
@@ -23,6 +24,8 @@ export default async function StudioInvoicePage({ params }: { params: Promise<{ 
   const invoice = id.success ? await invoices.get(scope, id.data) : null;
   if (!invoice) notFound();
   const state = { voided: !!invoice.voidedAt, paid: invoice.paid };
+  // Booked automatically from its shoot day (or its quotation's).
+  const bookingId = await bookings.idForInvoice(scope, invoice.id);
 
   return (
     <>
@@ -34,6 +37,11 @@ export default async function StudioInvoicePage({ params }: { params: Promise<{ 
           {invoice.sourceId ? (
             <Link href={`/studio/quotations/${invoice.sourceId}`} className={button}>
               Quotation
+            </Link>
+          ) : null}
+          {bookingId ? (
+            <Link href={`/studio/bookings/${bookingId}`} className={button}>
+              Booking
             </Link>
           ) : null}
           {canEditInvoice(state) ? (

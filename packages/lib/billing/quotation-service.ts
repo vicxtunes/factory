@@ -122,6 +122,7 @@ function quotationOf(r: QuotationRecord & { lines: LineInput[] }, today: string)
   return {
     ...summaryOf(r, today),
     ...totalsOf(lines),
+    shoot: r.shoot,
     notes: r.notes,
     respondedAt: r.respondedAt,
     declineReason: r.declineReason,

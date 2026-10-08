@@ -63,3 +63,12 @@ export interface BookingDraft {
 }
 
 export type CalendarView = "month" | "week" | "day" | "list";
+
+/** What a quotation or invoice books from: its client, its first line, its total and when its shoot is. */
+export interface DocumentToBook {
+  customerId: string;
+  firstLine: string | null;
+  total: number;
+  /** Both times null = all day; null = no shoot day given. */
+  shoot: { date: string; startTime: string | null; endTime: string | null } | null;
+}

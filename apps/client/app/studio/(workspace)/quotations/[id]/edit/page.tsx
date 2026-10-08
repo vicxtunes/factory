@@ -51,7 +51,16 @@ async function Form({ scope, quotation }: { scope: TenantScope; quotation: Quota
   return (
     <DocumentEditor
       kind="quotation"
-      document={{ id: quotation.id, customerId: quotation.customerId, date: quotation.validUntil, notes: quotation.notes, lines: quotation.lines }}
+      // Only an open quotation is edited, so nothing's booked from it yet.
+      document={{
+        id: quotation.id,
+        customerId: quotation.customerId,
+        date: quotation.validUntil,
+        shoot: quotation.shoot,
+        bookingId: null,
+        notes: quotation.notes,
+        lines: quotation.lines,
+      }}
       customers={choices.map((c) => ({ id: c.id, name: c.name }))}
       offerings={onSale}
       scope={scope}

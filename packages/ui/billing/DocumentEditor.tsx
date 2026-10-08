@@ -6,10 +6,12 @@ import { useState, useTransition } from "react";
 import { Button } from "@repo/ui/Button";
 import { Field, Select, TextArea, TextInput } from "@repo/ui/Field";
 import { createInvoice, createQuotation, updateInvoice, updateQuotation } from "@repo/lib/billing/actions";
-import { priceLine, totalsOf, type LineInput } from "@repo/lib/billing/core";
+import { priceLine, totalsOf, type LineInput, type Shoot } from "@repo/lib/billing/core";
 import { offeringLabel, type Offering } from "@repo/lib/offerings/core";
 import { formatAmount } from "@repo/lib/tenancy/format";
 import type { TenantScope } from "@repo/lib/tenancy/types";
+
+import { WhenFields, whenTimes, type When } from "@repo/ui/bookings/WhenFields";
 
 /** A line as typed: numbers stay strings until saved, so half-typed values don't jump. */
 interface Draft {
@@ -52,17 +54,23 @@ export interface EditableDocument {
   id: string;
   customerId: string;
   date: string | null;
+  shoot: Shoot | null;
+  /** The booking its shoot made, left out of the clash warning. */
+  bookingId: string | null;
   notes: string | null;
   lines: LineInput[];
 }
+
+type SaveInput = { customerId: string; date: string | null; shoot: Shoot | null; notes: string; lines: LineInput[] };
 
 const KINDS = {
   quotation: {
     dateLabel: "Valid until",
     dateHint: "Optional. After this day it can't be accepted.",
     create: "Create quotation",
-    save: (doc: EditableDocument | undefined, input: { customerId: string; date: string | null; notes: string; lines: LineInput[] }) => {
-      const body = { customerId: input.customerId, validUntil: input.date, notes: input.notes, lines: input.lines };
+    shootHint: "Optional. When the client accepts, it's booked (tentative).",
+    save: (doc: EditableDocument | undefined, input: SaveInput) => {
+      const body = { customerId: input.customerId, validUntil: input.date, shoot: input.shoot, notes: input.notes, lines: input.lines };
       return doc ? updateQuotation(doc.id, body) : createQuotation(body);
     },
   },
@@ -70,8 +78,9 @@ const KINDS = {
     dateLabel: "Due date",
     dateHint: "Optional. Unpaid after this day shows as overdue.",
     create: "Create invoice",
-    save: (doc: EditableDocument | undefined, input: { customerId: string; date: string | null; notes: string; lines: LineInput[] }) => {
-      const body = { customerId: input.customerId, dueDate: input.date, notes: input.notes, lines: input.lines };
+    shootHint: "Optional. Saving the invoice books it (confirmed), or moves its booking.",
+    save: (doc: EditableDocument | undefined, input: SaveInput) => {
+      const body = { customerId: input.customerId, dueDate: input.date, shoot: input.shoot, notes: input.notes, lines: input.lines };
       return doc ? updateInvoice(doc.id, body) : createInvoice(body);
     },
   },
@@ -105,6 +114,12 @@ export function DocumentEditor({
   const k = KINDS[kind];
   const [customerId, setCustomerId] = useState(doc?.customerId ?? presetCustomerId ?? "");
   const [date, setDate] = useState(doc?.date ?? "");
+  const [shoot, setShoot] = useState<When>({
+    date: doc?.shoot?.date ?? "",
+    allDay: !!doc?.shoot && doc.shoot.startTime === null,
+    startTime: doc?.shoot?.startTime ?? "",
+    endTime: doc?.shoot?.endTime ?? "",
+  });
   const [notes, setNotes] = useState(doc?.notes ?? "");
   const [lines, setLines] = useState<Draft[]>(doc ? doc.lines.map(draftOf) : []);
   const [error, setError] = useState<string | null>(null);
@@ -134,7 +149,13 @@ export function DocumentEditor({
     e.preventDefault();
     setError(null);
     start(async () => {
-      const res = await k.save(doc, { customerId, date: date || null, notes, lines: lines.map(inputOf) });
+      const res = await k.save(doc, {
+        customerId,
+        date: date || null,
+        shoot: shoot.date ? { date: shoot.date, ...whenTimes(shoot) } : null,
+        notes,
+        lines: lines.map(inputOf),
+      });
       if (!res.ok) return setError(res.error);
       router.push(`${basePath}/${res.data}`);
       router.refresh();
@@ -157,6 +178,17 @@ export function DocumentEditor({
         <Field label={k.dateLabel} hint={k.dateHint}>
           <TextInput type="date" value={date} onChange={(e) => setDate(e.target.value)} />
         </Field>
+        <div className="sm:col-span-2">
+          <WhenFields
+            value={shoot}
+            onChange={setShoot}
+            dateLabel="Shoot day"
+            dateRequired={false}
+            dateHint={k.shootHint}
+            exceptBookingId={doc?.bookingId ?? null}
+            bookingsPath="/studio/bookings"
+          />
+        </div>
       </div>
 
       <section className="space-y-3">

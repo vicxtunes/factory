@@ -19,10 +19,23 @@ export interface LineInput {
   discount: LineDiscount | null;
 }
 
+/**
+ * The shoot or event a document is for, in the business's calendar: its day
+ * ("yyyy-mm-dd") and clock times ("HH:MM"; both null = all day). It's what
+ * books it (packages/lib/bookings).
+ */
+export interface Shoot {
+  date: string;
+  startTime: string | null;
+  endTime: string | null;
+}
+
 export interface QuotationInput {
   customerId: string;
   /** Last day it can be accepted; null = no limit. */
   validUntil: string | null;
+  /** When the shoot is, if known: booked (tentative) when the customer accepts. */
+  shoot: Shoot | null;
   notes: string | null;
   lines: LineInput[];
 }
@@ -68,6 +81,7 @@ export interface Totals {
 
 /** A whole quotation, for its page and its public link. */
 export interface Quotation extends QuotationSummary, Totals {
+  shoot: Shoot | null;
   notes: string | null;
   respondedAt: string | null;
   declineReason: string | null;
@@ -96,6 +110,8 @@ export interface InvoiceInput {
   customerId: string;
   /** Unpaid after this day = overdue; null = no due date. */
   dueDate: string | null;
+  /** When the shoot is, if any: saving the invoice books it (confirmed). */
+  shoot: Shoot | null;
   notes: string | null;
   lines: LineInput[];
 }
@@ -150,6 +166,7 @@ export interface InvoiceSummary {
 
 /** A whole invoice, for its page and its public link. */
 export interface Invoice extends InvoiceSummary, Totals {
+  shoot: Shoot | null;
   notes: string | null;
   /** The accepted quotation it was made from. */
   sourceId: string | null;

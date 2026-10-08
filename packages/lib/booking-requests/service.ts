@@ -81,15 +81,15 @@ export class BookingRequestService {
       customerId,
       title: label,
       date: input.date,
-      startTime: null,
-      endTime: null,
+      startTime: input.startTime,
+      endTime: input.endTime,
       location: null,
       packageName: label,
       amount: pkg.price,
       notes: null,
       offeringId: pkg.id,
     });
-    await this.deps.notifyOwner(scope, { title: "New booking request", body: `${label} on ${input.date}` });
+    await this.deps.notifyOwner(scope, { title: "New booking request", body: `${label} on ${input.date}, ${input.startTime}–${input.endTime}` });
     const session = isNew ? await this.deps.openDevice(scope.tenantId, customerId) : null;
     return { bookingId, signedIn: !!signedInAs || !!session, session };
   }
@@ -113,6 +113,8 @@ export class BookingRequestService {
       invoiceId = await this.deps.createInvoice(scope, {
         customerId: booking.customerId,
         dueDate: booking.date,
+        // Already booked: the invoice just says when.
+        shoot: { date: booking.date, startTime: booking.startTime, endTime: booking.endTime },
         notes: `Booking for ${booking.date}.`,
         lines: [
           {

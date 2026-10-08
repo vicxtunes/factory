@@ -8,6 +8,8 @@ import { Field, Select, TextArea, TextInput } from "@repo/ui/Field";
 import { createBooking, updateBooking } from "@repo/lib/bookings/actions";
 import type { Booking, BookingDraft } from "@repo/lib/bookings/core";
 
+import { WhenFields, whenTimes, type When } from "./WhenFields";
+
 /**
  * Books a client (no `booking`) or changes a booking's details. A booking
  * can start from an accepted quotation (`draft`): its client is then fixed
@@ -36,14 +38,17 @@ export function BookingForm({
   const [form, setForm] = useState({
     customerId: booking?.customerId ?? draft?.customerId ?? "",
     title: booking?.title ?? draft?.title ?? "",
-    date: booking?.date ?? date ?? "",
-    allDay: booking ? booking.startTime === null : false,
-    startTime: booking?.startTime ?? "09:00",
-    endTime: booking?.endTime ?? "17:00",
     location: booking?.location ?? "",
     packageName: booking?.packageName ?? draft?.packageName ?? "",
     amount: booking?.amount != null ? String(booking.amount) : draft ? String(draft.amount) : "",
     notes: booking?.notes ?? "",
+  });
+  // A new booking's times start empty: chosen, never assumed.
+  const [when, setWhen] = useState<When>({
+    date: booking?.date ?? date ?? "",
+    allDay: booking ? booking.startTime === null : false,
+    startTime: booking?.startTime ?? "",
+    endTime: booking?.endTime ?? "",
   });
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -57,9 +62,8 @@ export function BookingForm({
     const input = {
       customerId: form.customerId,
       title: form.title,
-      date: form.date,
-      startTime: form.allDay ? null : form.startTime,
-      endTime: form.allDay ? null : form.endTime,
+      date: when.date,
+      ...whenTimes(when),
       location: form.location,
       packageName: form.packageName,
       // Empty = no amount; anything else must be a number (refused by the server otherwise).
@@ -98,25 +102,7 @@ export function BookingForm({
           <TextInput value={form.title} onChange={set("title")} required maxLength={120} placeholder="Grace & John wedding" />
         </Field>
       </div>
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Field label="Date">
-          <TextInput type="date" value={form.date} onChange={set("date")} required />
-        </Field>
-        {form.allDay ? null : (
-          <>
-            <Field label="From">
-              <TextInput type="time" value={form.startTime} onChange={set("startTime")} required />
-            </Field>
-            <Field label="To">
-              <TextInput type="time" value={form.endTime} onChange={set("endTime")} required />
-            </Field>
-          </>
-        )}
-      </div>
-      <label className="flex items-center gap-2 text-sm">
-        <input type="checkbox" checked={form.allDay} onChange={(e) => setForm((f) => ({ ...f, allDay: e.target.checked }))} />
-        All day
-      </label>
+      <WhenFields value={when} onChange={setWhen} dateLabel="Date" dateRequired exceptBookingId={booking?.id ?? null} bookingsPath={basePath} />
       <Field label="Location">
         <TextInput value={form.location} onChange={set("location")} maxLength={200} />
       </Field>

@@ -36,7 +36,7 @@ function fakes() {
       if (!customers.has(`${s.tenantId}/${input.customerId}`)) throw new BillingError("That client no longer exists.");
       const existing = id ? rows.find((r) => r.tenantId === s.tenantId && r.id === id) : null;
       if (id && (!existing || existing.response !== "open")) throw new BillingError("not editable");
-      const fields = { customerId: input.customerId, validUntil: input.validUntil, notes: input.notes, total, lines: input.lines };
+      const fields = { customerId: input.customerId, validUntil: input.validUntil, shoot: input.shoot, notes: input.notes, total, lines: input.lines };
       if (existing) return Object.assign(existing, fields).id;
       const row: Row = {
         ...fields,
@@ -74,7 +74,7 @@ function fakes() {
 }
 
 const wedding: LineInput = { offeringId: null, description: "Wedding Gold", inclusions: ["8 hours"], quantity: 1, unitPrice: 2_500_000, discount: { kind: "percent", value: 10 } };
-const input: QuotationInput = { customerId: "grace", validUntil: "2026-10-31", notes: null, lines: [wedding, { ...wedding, description: "Extra hour", unitPrice: 150_000, quantity: 2, discount: null }] };
+const input: QuotationInput = { customerId: "grace", validUntil: "2026-10-31", shoot: null, notes: null, lines: [wedding, { ...wedding, description: "Extra hour", unitPrice: 150_000, quantity: 2, discount: null }] };
 
 test("create works the total out on the server and the quotation reads back priced", async () => {
   const { service, rows } = fakes();

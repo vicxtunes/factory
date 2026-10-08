@@ -46,6 +46,8 @@ export function BookNow({
   const [step, setStep] = useState<Step>("package");
   const [packageId, setPackageId] = useState(chosenId);
   const [date, setDate] = useState("");
+  const [startTime, setStartTime] = useState("");
+  const [endTime, setEndTime] = useState("");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [result, setResult] = useState<{ signedIn: boolean } | null>(null);
@@ -71,7 +73,7 @@ export function BookNow({
   function send() {
     setError(null);
     start(async () => {
-      const res = await bookNow(studio.slug, { serviceSlug, packageId, date, ...(signedIn ? {} : { name, phone }) });
+      const res = await bookNow(studio.slug, { serviceSlug, packageId, date, startTime, endTime, ...(signedIn ? {} : { name, phone }) });
       if (!res.ok) return setError(res.error);
       setResult(res.data);
       setStep("sent");
@@ -80,7 +82,7 @@ export function BookNow({
 
   const titles: Record<Step, string> = {
     package: "Choose a package",
-    date: "Choose the day",
+    date: "Choose the day and time",
     details: "Your details",
     review: "Check and send",
     sent: "Request sent",
@@ -133,6 +135,14 @@ export function BookNow({
               <Field label="The day" hint="The business confirms whether it's free.">
                 <TextInput type="date" value={date} min={today} onChange={(e) => setDate(e.target.value)} required />
               </Field>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="From">
+                  <TextInput type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} required />
+                </Field>
+                <Field label="To">
+                  <TextInput type="time" value={endTime} min={startTime || undefined} onChange={(e) => setEndTime(e.target.value)} required />
+                </Field>
+              </div>
               <div className="flex gap-2">
                 <Button type="button" variant="secondary" onClick={back}>
                   Back
@@ -176,6 +186,7 @@ export function BookNow({
                   ["Package", `${pkg.serviceName} · ${pkg.name}`],
                   ["Price", price(pkg)],
                   ["Day", date ? formatDay(scope, date) : "—"],
+                  ["Time", startTime && endTime ? `${startTime}–${endTime}` : "—"],
                   ...(signedIn ? [] : [["Name", name], ["Phone", phone]]),
                 ].map(([label, value]) => (
                   <div key={label} className="flex justify-between gap-3 p-3">
@@ -199,7 +210,7 @@ export function BookNow({
           {step === "sent" && result ? (
             <div className="space-y-3 text-sm">
               <p>
-                <span className="font-semibold">{studio.name}</span> has your request for {pkg?.name} on {formatDay(scope, date)}. They&apos;ll
+                <span className="font-semibold">{studio.name}</span> has your request for {pkg?.name} on {formatDay(scope, date)}, {startTime}–{endTime}. They&apos;ll
                 confirm it and send your invoice.
               </p>
               {result.signedIn ? (
