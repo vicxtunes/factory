@@ -53,7 +53,7 @@ async function Form({ scope, b }: { scope: TenantScope; b: Booking }) {
       booking={b}
       customers={choices.map((c) => ({ id: c.id, name: c.name }))}
       packages={onSale.map(offeringLabel)}
-      currency={scope.currency}
+      scope={scope}
       basePath="/studio/bookings"
     />
   );

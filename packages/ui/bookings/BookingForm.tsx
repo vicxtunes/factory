@@ -3,17 +3,25 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
-import { Button } from "@repo/ui/Button";
 import { Field, Select, TextArea, TextInput } from "@repo/ui/Field";
+import { StepActions, StepIndicator, useSteps } from "@repo/ui/Stepper";
 import { createBooking, updateBooking } from "@repo/lib/bookings/actions";
 import type { Booking, BookingDraft } from "@repo/lib/bookings/core";
+import { formatDay } from "@repo/lib/tenancy/format";
+import type { TenantScope } from "@repo/lib/tenancy/types";
 
+import { timeSpan } from "./BookingBits";
 import { WhenFields, whenTimes, type When } from "./WhenFields";
 
+const STEPS = ["Client", "When & where", "Package & review"];
+const card = "space-y-4 rounded-2xl border border-border bg-surface p-4 shadow-theme-xs sm:p-5";
+
 /**
- * Books a client (no `booking`) or changes a booking's details. A booking
- * can start from an accepted quotation (`draft`): its client is then fixed
- * and the package and amount are filled in.
+ * Books a client (no `booking`) or changes a booking's details, in steps: the
+ * client and a title; the day, times (with the clash warning) and where; then
+ * the package, amount and notes with a last look. A booking can start from an
+ * accepted quotation (`draft`): its client is then fixed and the package and
+ * amount are filled in.
  */
 export function BookingForm({
   booking,
@@ -21,7 +29,7 @@ export function BookingForm({
   date,
   customers,
   packages,
-  currency,
+  scope,
   basePath,
 }: {
   booking?: Booking;
@@ -31,7 +39,7 @@ export function BookingForm({
   customers: { id: string; name: string }[];
   /** Package and service names to pick from (the field also takes anything typed). */
   packages: string[];
-  currency: string;
+  scope: Pick<TenantScope, "currency" | "locale" | "timeZone">;
   basePath: string;
 }) {
   const router = useRouter();
@@ -52,13 +60,16 @@ export function BookingForm({
   });
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  const steps = useSteps(STEPS.length, !!booking);
   const clientFixed = !!(draft || booking?.quotationId);
 
   const set = (key: keyof typeof form) => (e: { target: { value: string } }) => setForm((f) => ({ ...f, [key]: e.target.value }));
 
+  // Next (the browser has checked this step's fields), or on the last step, save.
   function submit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    if (!steps.last) return steps.next();
     const input = {
       customerId: form.customerId,
       title: form.title,
@@ -85,47 +96,74 @@ export function BookingForm({
     });
   }
 
+  const clientName = customers.find((c) => c.id === form.customerId)?.name ?? "—";
+
   return (
-    <form onSubmit={submit} className="space-y-4 rounded-2xl border border-border bg-surface p-4 shadow-theme-xs sm:p-5">
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Client">
-          <Select value={form.customerId} onChange={set("customerId")} required disabled={clientFixed}>
-            <option value="">Choose a client…</option>
-            {customers.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <Field label="Title">
-          <TextInput value={form.title} onChange={set("title")} required maxLength={120} placeholder="Grace & John wedding" />
-        </Field>
-      </div>
-      <WhenFields value={when} onChange={setWhen} dateLabel="Date" dateRequired exceptBookingId={booking?.id ?? null} bookingsPath={basePath} />
-      <Field label="Location">
-        <TextInput value={form.location} onChange={set("location")} maxLength={200} />
-      </Field>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Package">
-          <TextInput value={form.packageName} onChange={set("packageName")} maxLength={200} list="booking-packages" />
-          <datalist id="booking-packages">
-            {packages.map((p) => (
-              <option key={p} value={p} />
-            ))}
-          </datalist>
-        </Field>
-        <Field label={`Amount (${currency})`} hint="Optional: what was agreed.">
-          <TextInput value={form.amount} onChange={set("amount")} inputMode="numeric" />
-        </Field>
-      </div>
-      <Field label="Notes">
-        <TextArea value={form.notes} onChange={set("notes")} maxLength={2000} rows={3} />
-      </Field>
-      {error ? <p className="text-sm text-error-600 dark:text-error-400">{error}</p> : null}
-      <Button type="submit" loading={pending}>
-        {booking ? "Save changes" : "Book"}
-      </Button>
-    </form>
+    <div className="space-y-4">
+      <StepIndicator titles={STEPS} step={steps.step} reached={steps.reached} onGo={steps.go} />
+      <form onSubmit={submit} className="space-y-4">
+        {steps.step === 0 ? (
+          <div className={`grid gap-4 sm:grid-cols-2 ${card}`}>
+            <Field label="Client">
+              <Select value={form.customerId} onChange={set("customerId")} required disabled={clientFixed}>
+                <option value="">Choose a client…</option>
+                {customers.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Title">
+              <TextInput value={form.title} onChange={set("title")} required maxLength={120} placeholder="Grace & John wedding" />
+            </Field>
+          </div>
+        ) : null}
+
+        {steps.step === 1 ? (
+          <div className={card}>
+            <WhenFields value={when} onChange={setWhen} dateLabel="Date" dateRequired exceptBookingId={booking?.id ?? null} bookingsPath={basePath} />
+            <Field label="Location">
+              <TextInput value={form.location} onChange={set("location")} maxLength={200} />
+            </Field>
+          </div>
+        ) : null}
+
+        {steps.step === 2 ? (
+          <div className={card}>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Package">
+                <TextInput value={form.packageName} onChange={set("packageName")} maxLength={200} list="booking-packages" />
+                <datalist id="booking-packages">
+                  {packages.map((p) => (
+                    <option key={p} value={p} />
+                  ))}
+                </datalist>
+              </Field>
+              <Field label={`Amount (${scope.currency})`} hint="Optional: what was agreed.">
+                <TextInput value={form.amount} onChange={set("amount")} inputMode="numeric" />
+              </Field>
+            </div>
+            <Field label="Notes">
+              <TextArea value={form.notes} onChange={set("notes")} maxLength={2000} rows={3} />
+            </Field>
+            {/* A last look at the earlier steps; the indicator opens any of them to change it. */}
+            <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 border-t border-border pt-3 text-sm">
+              <dt className="text-muted">Client</dt>
+              <dd className="font-medium">{clientName}</dd>
+              <dt className="text-muted">Title</dt>
+              <dd>{form.title || "—"}</dd>
+              <dt className="text-muted">When</dt>
+              <dd>{when.date ? `${formatDay(scope, when.date)}, ${timeSpan(whenTimes(when))}` : "—"}</dd>
+              <dt className="text-muted">Where</dt>
+              <dd>{form.location || "—"}</dd>
+            </dl>
+          </div>
+        ) : null}
+
+        {error ? <p className="text-sm text-error-600 dark:text-error-400">{error}</p> : null}
+        <StepActions first={steps.step === 0} last={steps.last} onBack={steps.back} submitLabel={booking ? "Save changes" : "Book"} pending={pending} />
+      </form>
+    </div>
   );
 }

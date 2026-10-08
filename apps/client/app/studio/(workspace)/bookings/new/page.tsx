@@ -50,7 +50,7 @@ async function Form({ scope, date, quotation }: { scope: TenantScope; date?: str
       date={date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : undefined}
       customers={clients.map((c) => ({ id: c.id, name: c.name }))}
       packages={onSale.map(offeringLabel)}
-      currency={scope.currency}
+      scope={scope}
       basePath="/studio/bookings"
     />
   );
