@@ -40,8 +40,8 @@ export function BookingForm({
   /** Pre-chosen client for a new booking (from the client's page). */
   presetCustomerId?: string;
   customers: { id: string; name: string }[];
-  /** Package and service names to pick from (the field also takes anything typed). */
-  packages: string[];
+  /** Packages to pick from, with their prices (the field also takes anything typed). */
+  packages: { label: string; price: number }[];
   scope: Pick<TenantScope, "currency" | "locale" | "timeZone">;
   basePath: string;
 }) {
@@ -66,6 +66,14 @@ export function BookingForm({
   const steps = useSteps(STEPS.length, !!booking);
   const clientFixed = !!(draft || booking?.quotationId);
 
+  // Picking a package fills in its price, unless a different amount was typed (one from the previous package follows the new one).
+  const pickPackage = (packageName: string) =>
+    setForm((f) => {
+      const priceOf = (name: string) => packages.find((p) => p.label === name)?.price;
+      const picked = priceOf(packageName);
+      const untouched = f.amount.trim() === "" || f.amount === String(priceOf(f.packageName));
+      return { ...f, packageName, amount: picked !== undefined && untouched ? String(picked) : f.amount };
+    });
   const set = (key: keyof typeof form) => (e: { target: { value: string } }) => setForm((f) => ({ ...f, [key]: e.target.value }));
 
   // Next (the browser has checked this step's fields), or on the last step, save.
@@ -136,14 +144,14 @@ export function BookingForm({
           <div className={card}>
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Package">
-                <TextInput value={form.packageName} onChange={set("packageName")} maxLength={200} list="booking-packages" />
+                <TextInput value={form.packageName} onChange={(e) => pickPackage(e.target.value)} maxLength={200} list="booking-packages" />
                 <datalist id="booking-packages">
                   {packages.map((p) => (
-                    <option key={p} value={p} />
+                    <option key={p.label} value={p.label} />
                   ))}
                 </datalist>
               </Field>
-              <Field label={`Amount (${scope.currency})`} hint="Optional: what was agreed.">
+              <Field label={`Amount (${scope.currency})`} hint="The package's price, filled in; change it if you agreed another.">
                 <TextInput value={form.amount} onChange={set("amount")} inputMode="numeric" />
               </Field>
             </div>
