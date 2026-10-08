@@ -43,6 +43,8 @@ export interface QuotationStore {
   respond(tenantId: string, id: string, answer: "accepted" | "declined", reason: string | null): Promise<boolean>;
   /** Replaces the share token. False when there's no such quotation in this tenant. */
   resetToken(scope: TenantScope, id: string, token: string): Promise<boolean>;
+  /** Rewrites when its shoot is (its booking moved). Never anything else. */
+  setShoot(scope: TenantScope, id: string, shoot: Shoot | null): Promise<void>;
 }
 
 /** An invoice as stored: lines as entered, payments as recorded (void ones too). */
@@ -84,6 +86,8 @@ export interface InvoiceStore {
   /** Throws BillingError when it has payments, is already void, or isn't this tenant's. */
   voidInvoice(scope: TenantScope, id: string, reason: string): Promise<void>;
   resetToken(scope: TenantScope, id: string, token: string): Promise<boolean>;
+  /** Rewrites when its shoot is (its booking moved). Never anything else. */
+  setShoot(scope: TenantScope, id: string, shoot: Shoot | null): Promise<void>;
   /** A receipt by its own link: the payment and its invoice. */
   receiptByToken(token: string): Promise<{ tenantId: string; payment: Payment; invoice: InvoiceRecord } | null>;
 }

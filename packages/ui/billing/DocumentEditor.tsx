@@ -57,8 +57,8 @@ export interface EditableDocument {
   customerId: string;
   date: string | null;
   shoot: Shoot | null;
-  /** The booking its shoot made, left out of the clash warning. */
-  bookingId: string | null;
+  /** Its booking, where its shoot's day and times live (the document shows them, read-only). */
+  booking: { id: string; shoot: Shoot } | null;
   notes: string | null;
   lines: LineInput[];
 }
@@ -88,7 +88,7 @@ const KINDS = {
     dateLabel: "Due date",
     dateHint: "Optional. Unpaid after this day shows as overdue.",
     create: "Create invoice",
-    shootHint: "Optional. Saving the invoice books it (confirmed), or moves its booking.",
+    shootHint: "Optional. Saving the invoice books it (confirmed).",
     save: (doc: EditableDocument | undefined, input: SaveInput) => {
       const body = { customerId: input.customerId, dueDate: input.date, shoot: input.shoot, notes: input.notes, lines: input.lines };
       return doc ? updateInvoice(doc.id, body) : createInvoice(body, input.bookingId);
@@ -96,8 +96,10 @@ const KINDS = {
   },
 };
 
-// "Items": what's charged for, one per package or custom entry (stored as lines).
-const STEPS = ["Client", "Shoot", "Items", "Review"];
+// "Items": what's charged for, one per package or custom entry (stored as lines). A document with a
+// booking has no Shoot step: the booking is where its day and times are set.
+const ALL_STEPS = ["Client", "Shoot", "Items", "Review"] as const;
+const BOOKED_STEPS = ["Client", "Items", "Review"] as const;
 const card = "rounded-2xl border border-border bg-surface p-4 shadow-theme-xs sm:p-5";
 
 /**
@@ -144,7 +146,12 @@ export function DocumentEditor({
   const [lines, setLines] = useState<Draft[]>((doc?.lines ?? fromBooking?.lines ?? []).map(draftOf));
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  // Its booking, if it has one: the booking holds the shoot's day and times.
+  const linked = fromBooking ? { id: fromBooking.id, shoot: fromBooking.shoot } : (doc?.booking ?? null);
+  const STEPS: readonly string[] = linked ? BOOKED_STEPS : ALL_STEPS;
   const steps = useSteps(STEPS.length, !!doc);
+  const at = STEPS[steps.step];
+  const savedShoot = linked ? linked.shoot : shoot.date ? { date: shoot.date, ...whenTimes(shoot) } : null;
   const money = (n: number) => formatAmount(scope, n);
 
   const update = (key: number, patch: Partial<Draft>) => setLines((ls) => ls.map((l) => (l.key === key ? { ...l, ...patch } : l)));
@@ -170,14 +177,14 @@ export function DocumentEditor({
   // Next (the browser has checked this step's fields), or on the last step, save.
   function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (steps.step === 2 && lines.length === 0) return setError("Add at least one item: a package or a custom item.");
+    if (at === "Items" && lines.length === 0) return setError("Add at least one item: a package or a custom item.");
     setError(null);
     if (!steps.last) return steps.next();
     start(async () => {
       const res = await k.save(doc, {
         customerId,
         date: date || null,
-        shoot: shoot.date ? { date: shoot.date, ...whenTimes(shoot) } : null,
+        shoot: savedShoot,
         notes,
         lines: lines.map(inputOf),
         bookingId: fromBooking?.id ?? null,
@@ -194,7 +201,7 @@ export function DocumentEditor({
     <div className="space-y-4">
       <StepIndicator titles={STEPS} step={steps.step} reached={steps.reached} onGo={steps.go} />
       <form onSubmit={submit} className="space-y-4">
-        {steps.step === 0 ? (
+        {at === "Client" ? (
           <div className={`grid gap-4 sm:grid-cols-2 ${card}`}>
             <Field label="Client">
               <Select value={customerId} onChange={(e) => setCustomerId(e.target.value)} required disabled={!!fromBooking}>
@@ -209,10 +216,19 @@ export function DocumentEditor({
             <Field label={k.dateLabel} hint={k.dateHint}>
               <TextInput type="date" value={date} onChange={(e) => setDate(e.target.value)} />
             </Field>
+            {linked ? (
+              <p className="text-sm sm:col-span-2">
+                <span className="text-muted">Shoot:</span> {formatDay(scope, linked.shoot.date)}, {timeSpan(linked.shoot)}{" "}
+                <span className="text-muted">(from its booking)</span> ·{" "}
+                <a href={`/studio/bookings/${linked.id}/edit`} className="font-medium text-brand-600 hover:underline">
+                  Change it on the booking
+                </a>
+              </p>
+            ) : null}
           </div>
         ) : null}
 
-        {steps.step === 1 ? (
+        {at === "Shoot" ? (
           <div className={card}>
             <WhenFields
               value={shoot}
@@ -220,13 +236,13 @@ export function DocumentEditor({
               dateLabel="Shoot day"
               dateRequired={false}
               dateHint={`${k.shootHint} Leave it empty if there's no shoot.`}
-              exceptBookingId={doc?.bookingId ?? fromBooking?.id ?? null}
+              exceptBookingId={null}
               bookingsPath="/studio/bookings"
             />
           </div>
         ) : null}
 
-        {steps.step === 2 ? (
+        {at === "Items" ? (
           <section className="space-y-3">
             {lines.map((l, i) => {
               const line = priceLine(inputOf(l));
@@ -300,7 +316,7 @@ export function DocumentEditor({
           </section>
         ) : null}
 
-        {steps.step === 3 ? (
+        {at === "Review" ? (
           <div className={`space-y-4 ${card}`}>
             {/* A last look at what the earlier steps hold; the indicator opens any of them to change it. */}
             <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
@@ -309,7 +325,7 @@ export function DocumentEditor({
               <dt className="text-muted">{k.dateLabel}</dt>
               <dd>{date ? formatDay(scope, date) : "—"}</dd>
               <dt className="text-muted">Shoot</dt>
-              <dd>{shoot.date ? `${formatDay(scope, shoot.date)}, ${timeSpan(whenTimes(shoot))}` : "None"}</dd>
+              <dd>{savedShoot ? `${formatDay(scope, savedShoot.date)}, ${timeSpan(savedShoot)}` : "None"}</dd>
             </dl>
             <ul className="divide-y divide-border border-y border-border text-sm">
               {lines.map((l) => {

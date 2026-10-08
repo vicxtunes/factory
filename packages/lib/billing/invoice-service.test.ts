@@ -80,6 +80,10 @@ function fakes() {
       if (!r || r.voidedAt || livePaid(r) > 0) throw new BillingError("can't void");
       Object.assign(r, { voidedAt: NOW.toISOString(), voidReason: reason });
     },
+    setShoot: async (s, id, shoot) => {
+      const r = mine(s, id);
+      if (r) r.shoot = shoot;
+    },
     resetToken: async (s, id, token) => {
       const r = mine(s, id);
       if (r) r.shareToken = token;

@@ -6,6 +6,7 @@ import { FormSkeleton } from "@repo/ui/skeletons/blocks";
 import { Loading } from "@repo/ui/skeletons/Loading";
 import { canEditQuotation, quotationIdSchema, type Quotation } from "@repo/lib/billing/core";
 import { quotations } from "@repo/lib/billing/server";
+import { bookings } from "@repo/lib/bookings/server";
 import { customers } from "@repo/lib/customers/server";
 import { offerings } from "@repo/lib/offerings/server";
 import { requireStudio } from "@repo/lib/studios/server";
@@ -42,7 +43,9 @@ export default async function EditQuotationPage({ params }: { params: Promise<{ 
 }
 
 async function Form({ scope, quotation }: { scope: TenantScope; quotation: Quotation }) {
-  const [clients, onSale] = await Promise.all([customers.list(scope), offerings.onSale(scope)]);
+  const [clients, onSale, bookingId] = await Promise.all([customers.list(scope), offerings.onSale(scope), bookings.idForQuotation(scope, quotation.id)]);
+  // Made from a booking: the booking holds the shoot's day and times; the form shows them read-only.
+  const b = bookingId ? (await bookings.get(scope, bookingId))?.booking : null;
   // Keep the quotation's own client selectable even if they've since been archived.
   const choices = clients.some((c) => c.id === quotation.customerId)
     ? clients
@@ -51,13 +54,12 @@ async function Form({ scope, quotation }: { scope: TenantScope; quotation: Quota
   return (
     <DocumentEditor
       kind="quotation"
-      // Only an open quotation is edited, so nothing's booked from it yet.
       document={{
         id: quotation.id,
         customerId: quotation.customerId,
         date: quotation.validUntil,
         shoot: quotation.shoot,
-        bookingId: null,
+        booking: b ? { id: b.id, shoot: { date: b.date, startTime: b.startTime, endTime: b.endTime } } : null,
         notes: quotation.notes,
         lines: quotation.lines,
       }}

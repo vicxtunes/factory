@@ -44,6 +44,8 @@ export default async function EditInvoicePage({ params }: { params: Promise<{ id
 
 async function Form({ scope, invoice }: { scope: TenantScope; invoice: Invoice }) {
   const [clients, onSale, bookingId] = await Promise.all([customers.list(scope), offerings.onSale(scope), bookings.idForInvoice(scope, invoice.id)]);
+  // Its booking holds the shoot's day and times; the form shows them read-only.
+  const b = bookingId ? (await bookings.get(scope, bookingId))?.booking : null;
   // Keep the invoice's own client selectable even if they've since been archived.
   const choices = clients.some((c) => c.id === invoice.customerId)
     ? clients
@@ -57,7 +59,7 @@ async function Form({ scope, invoice }: { scope: TenantScope; invoice: Invoice }
         customerId: invoice.customerId,
         date: invoice.dueDate,
         shoot: invoice.shoot,
-        bookingId,
+        booking: b ? { id: b.id, shoot: { date: b.date, startTime: b.startTime, endTime: b.endTime } } : null,
         notes: invoice.notes,
         lines: invoice.lines,
       }}

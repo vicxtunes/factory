@@ -174,6 +174,10 @@ export const supabaseInvoiceStore: InvoiceStore = {
     if (error) fail("void the invoice", error);
   },
 
+  async setShoot(scope, id, shoot) {
+    await saveShoot(scope.tenantId, id, shoot, "invoice");
+  },
+
   async resetToken(scope, id, token) {
     const { data, error } = await documents()
       .update({ share_token: token })
