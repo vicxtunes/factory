@@ -7,9 +7,10 @@ import type { TenantScope } from "@repo/lib/tenancy/types";
 
 /**
  * A new quotation's or invoice's start from a booking (`?booking=`): its
- * client, when, and what was agreed as one line: its package (the one it was
- * requested for, or the package on sale whose name it was given), with what's
- * included, at the booking's amount or else the package's price. Null unless the booking can take one: going
+ * client, when, and what was agreed as one line. One of the studio's packages
+ * (the one it was requested for, or the one on sale it names): with what's
+ * included, at the package's price, a lower agreed amount as the discount
+ * off it. Otherwise the client's own request, at the agreed price. Null unless the booking can take one: going
  * ahead, not a client's request, without an invoice (nor, for a quotation, a
  * quotation). The server checks the same when it's saved.
  */
@@ -30,8 +31,8 @@ export async function fromBooking(scope: TenantScope, id: string | undefined, ki
         description: b.packageName ?? b.title,
         inclusions: pkg?.inclusions ?? [],
         quantity: 1,
-        unitPrice: b.amount ?? pkg?.price ?? 0,
-        discount: null,
+        unitPrice: pkg && (b.amount == null || b.amount < pkg.price) ? pkg.price : (b.amount ?? 0),
+        discount: pkg && b.amount != null && b.amount < pkg.price ? { kind: "amount", value: pkg.price - b.amount } : null,
       },
     ],
   };

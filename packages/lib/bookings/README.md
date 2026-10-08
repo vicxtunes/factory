@@ -17,6 +17,11 @@ A business's appointments with its customers: shoots, sessions, events. For stud
   cancelled booking can be reopened. **Completed is final.** Details can change only while
   pending or confirmed (`core/rules.ts`). Status moves are guarded in the store too: a move
   happens only if the booking is still in the status the service saw.
+- **What was agreed:** the booking form asks for one of the studio's packages, at its price with
+  a discount if one was agreed (% or an amount off; the booking keeps the price after it), or a
+  **custom request** the studio hasn't packaged, described and priced by hand. A quotation or
+  invoice made from the booking shows the package at its price with the discount on the line, or
+  the custom request at its agreed price.
 - **Times are always chosen:** every form that leads to a booking asks for the start and end time
   (or All day, for the studio's own forms). A new booking's times start empty, never assumed.
   Clients booking online give a start and end time.
