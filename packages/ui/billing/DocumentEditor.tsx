@@ -96,7 +96,8 @@ const KINDS = {
   },
 };
 
-const STEPS = ["Client", "Shoot", "Lines", "Review"];
+// "Items": what's charged for, one per package or custom entry (stored as lines).
+const STEPS = ["Client", "Shoot", "Items", "Review"];
 const card = "rounded-2xl border border-border bg-surface p-4 shadow-theme-xs sm:p-5";
 
 /**
@@ -169,7 +170,7 @@ export function DocumentEditor({
   // Next (the browser has checked this step's fields), or on the last step, save.
   function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (steps.step === 2 && lines.length === 0) return setError("Add at least one line: a package or a custom line.");
+    if (steps.step === 2 && lines.length === 0) return setError("Add at least one item: a package or a custom item.");
     setError(null);
     if (!steps.last) return steps.next();
     start(async () => {
@@ -232,7 +233,7 @@ export function DocumentEditor({
               return (
                 <div key={l.key} className="space-y-3 rounded-2xl border border-border bg-surface p-4 shadow-theme-xs">
                   <div className="flex items-center justify-between gap-2">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted">Line {i + 1}</p>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted">Item {i + 1}</p>
                     <button type="button" onClick={() => remove(l.key)} className="text-xs text-error-600 hover:underline dark:text-error-400">
                       Remove
                     </button>
@@ -288,7 +289,7 @@ export function DocumentEditor({
                 </Select>
               ) : null}
               <Button type="button" variant="secondary" onClick={addCustom}>
-                + Custom line
+                + Custom item
               </Button>
             </div>
             {lines.length ? (

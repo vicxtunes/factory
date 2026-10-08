@@ -15,15 +15,15 @@ export const quotationIdSchema = z.uuid("That quotation doesn't exist.");
 /** A share token as made by the server: base64url, 43 characters for 32 bytes. */
 export const shareTokenSchema = z.string().regex(/^[A-Za-z0-9_-]{32,128}$/, "This link isn't valid.");
 
-const linesSchema = () => z.array(lineSchema).min(1, "Add at least one line.").max(100, "A document can have at most 100 lines.");
+const linesSchema = () => z.array(lineSchema).min(1, "Add at least one item.").max(100, "A document can have at most 100 items.");
 
 const lineSchema = z.object({
   offeringId: z.uuid("Choose a package or service from the list.").nullable(),
-  description: z.string("Describe each line.").trim().min(1, "Describe each line.").max(200, "Keep each line's description under 200 characters."),
+  description: z.string("Describe each item.").trim().min(1, "Describe each item.").max(200, "Keep each item's description under 200 characters."),
   inclusions: inclusionsSchema,
   quantity: z.number("Enter a quantity.").int("Quantities are whole numbers.").min(1, "Quantities start at 1.").max(10_000, "That quantity is too large."),
   unitPrice: z
-    .number("Enter each line's price.")
+    .number("Enter each item's price.")
     .int("Enter prices in whole amounts.")
     .min(0, "A price can't be negative.")
     .max(1_000_000_000_000, "That price is too large."),
