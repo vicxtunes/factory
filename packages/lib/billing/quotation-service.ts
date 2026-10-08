@@ -18,6 +18,7 @@ import {
   type Quotation,
   type QuotationInput,
   type QuotationSummary,
+  type Shoot,
 } from "./core";
 import type { QuotationResponseInput } from "./core/schema";
 import { BillingError, type BillingDirectory, type QuotationRecord, type QuotationStore } from "./ports";
@@ -58,6 +59,11 @@ export class QuotationService {
   }
 
   /** A new link; the old one stops working. */
+  /** When its shoot is now: its booking was moved, and the quotation says so. */
+  async setShoot(scope: TenantScope, id: string, shoot: Shoot | null): Promise<void> {
+    await this.store.setShoot(scope, id, shoot);
+  }
+
   async resetLink(scope: TenantScope, id: string): Promise<void> {
     if (!(await this.store.resetToken(scope, id, this.newToken()))) throw new BillingError(GONE);
   }
@@ -122,6 +128,7 @@ function quotationOf(r: QuotationRecord & { lines: LineInput[] }, today: string)
   return {
     ...summaryOf(r, today),
     ...totalsOf(lines),
+    shoot: r.shoot,
     notes: r.notes,
     respondedAt: r.respondedAt,
     declineReason: r.declineReason,

@@ -6,10 +6,14 @@ import { useState, useTransition } from "react";
 import { Button } from "@repo/ui/Button";
 import { Field, Select, TextArea, TextInput } from "@repo/ui/Field";
 import { createInvoice, createQuotation, updateInvoice, updateQuotation } from "@repo/lib/billing/actions";
-import { priceLine, totalsOf, type LineInput } from "@repo/lib/billing/core";
+import { priceLine, totalsOf, type LineInput, type Shoot } from "@repo/lib/billing/core";
 import { offeringLabel, type Offering } from "@repo/lib/offerings/core";
-import { formatAmount } from "@repo/lib/tenancy/format";
 import type { TenantScope } from "@repo/lib/tenancy/types";
+
+import { timeSpan } from "@repo/ui/bookings/BookingBits";
+import { WhenFields, whenTimes, type When } from "@repo/ui/bookings/WhenFields";
+import { StepActions, StepIndicator, useSteps } from "@repo/ui/Stepper";
+import { formatAmount, formatDay } from "@repo/lib/tenancy/format";
 
 /** A line as typed: numbers stay strings until saved, so half-typed values don't jump. */
 interface Draft {
@@ -52,7 +56,20 @@ export interface EditableDocument {
   id: string;
   customerId: string;
   date: string | null;
+  shoot: Shoot | null;
+  /** Its booking, where its shoot's day and times live (the document shows them, read-only). */
+  booking: { id: string; shoot: Shoot } | null;
   notes: string | null;
+  lines: LineInput[];
+}
+
+type SaveInput = { customerId: string; date: string | null; shoot: Shoot | null; notes: string; lines: LineInput[]; bookingId: string | null };
+
+/** A new document made from a booking: its client, when, and what was agreed, ready to send. */
+export interface FromBooking {
+  id: string;
+  customerId: string;
+  shoot: Shoot;
   lines: LineInput[];
 }
 
@@ -61,27 +78,38 @@ const KINDS = {
     dateLabel: "Valid until",
     dateHint: "Optional. After this day it can't be accepted.",
     create: "Create quotation",
-    save: (doc: EditableDocument | undefined, input: { customerId: string; date: string | null; notes: string; lines: LineInput[] }) => {
-      const body = { customerId: input.customerId, validUntil: input.date, notes: input.notes, lines: input.lines };
-      return doc ? updateQuotation(doc.id, body) : createQuotation(body);
+    shootHint: "Optional. When the client accepts, the date is held as a pending booking.",
+    save: (doc: EditableDocument | undefined, input: SaveInput) => {
+      const body = { customerId: input.customerId, validUntil: input.date, shoot: input.shoot, notes: input.notes, lines: input.lines };
+      return doc ? updateQuotation(doc.id, body) : createQuotation(body, input.bookingId);
     },
   },
   invoice: {
     dateLabel: "Due date",
     dateHint: "Optional. Unpaid after this day shows as overdue.",
     create: "Create invoice",
-    save: (doc: EditableDocument | undefined, input: { customerId: string; date: string | null; notes: string; lines: LineInput[] }) => {
-      const body = { customerId: input.customerId, dueDate: input.date, notes: input.notes, lines: input.lines };
-      return doc ? updateInvoice(doc.id, body) : createInvoice(body);
+    shootHint: "Optional. Saving the invoice books it (confirmed).",
+    save: (doc: EditableDocument | undefined, input: SaveInput) => {
+      const body = { customerId: input.customerId, dueDate: input.date, shoot: input.shoot, notes: input.notes, lines: input.lines };
+      return doc ? updateInvoice(doc.id, body) : createInvoice(body, input.bookingId);
     },
   },
 };
 
+// "Items": what's charged for, one per package or custom entry (stored as lines). A document with a
+// booking has no Shoot step: the booking is where its day and times are set.
+const ALL_STEPS = ["Client", "Shoot", "Items", "Review"] as const;
+const BOOKED_STEPS = ["Client", "Items", "Review"] as const;
+const card = "rounded-2xl border border-border bg-surface p-4 shadow-theme-xs sm:p-5";
+
 /**
- * Creates a quotation or invoice (no `document`) or edits one: a client,
- * lines copied from packages and services or typed, line discounts, a date
- * and notes. Totals update as you type, using the same rules the server
- * saves with.
+ * Creates a quotation or invoice (no `document`) or edits one, in steps: the
+ * client and its date; when the shoot is (optional, what books it); the
+ * lines, copied from packages and services or typed, with line discounts;
+ * then a last look with the totals and notes. Each step checks its own fields
+ * before the next. A new one can start from a booking (`fromBooking`): its
+ * client (fixed), shoot and package, and saving makes it that booking's. Totals update as you type, using the same rules the
+ * server saves with.
  */
 export function DocumentEditor({
   kind,
@@ -89,6 +117,7 @@ export function DocumentEditor({
   customers,
   offerings,
   presetCustomerId,
+  fromBooking,
   scope,
   basePath,
 }: {
@@ -97,18 +126,32 @@ export function DocumentEditor({
   customers: { id: string; name: string }[];
   offerings: Offering[];
   presetCustomerId?: string;
-  scope: Pick<TenantScope, "currency" | "locale">;
+  fromBooking?: FromBooking;
+  scope: Pick<TenantScope, "currency" | "locale" | "timeZone">;
   /** The document's pages live at `${basePath}/${id}`. */
   basePath: string;
 }) {
   const router = useRouter();
   const k = KINDS[kind];
-  const [customerId, setCustomerId] = useState(doc?.customerId ?? presetCustomerId ?? "");
+  const [customerId, setCustomerId] = useState(doc?.customerId ?? fromBooking?.customerId ?? presetCustomerId ?? "");
+  const startShoot = doc?.shoot ?? fromBooking?.shoot ?? null;
   const [date, setDate] = useState(doc?.date ?? "");
+  const [shoot, setShoot] = useState<When>({
+    date: startShoot?.date ?? "",
+    allDay: !!startShoot && startShoot.startTime === null,
+    startTime: startShoot?.startTime ?? "",
+    endTime: startShoot?.endTime ?? "",
+  });
   const [notes, setNotes] = useState(doc?.notes ?? "");
-  const [lines, setLines] = useState<Draft[]>(doc ? doc.lines.map(draftOf) : []);
+  const [lines, setLines] = useState<Draft[]>((doc?.lines ?? fromBooking?.lines ?? []).map(draftOf));
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  // Its booking, if it has one: the booking holds the shoot's day and times.
+  const linked = fromBooking ? { id: fromBooking.id, shoot: fromBooking.shoot } : (doc?.booking ?? null);
+  const STEPS: readonly string[] = linked ? BOOKED_STEPS : ALL_STEPS;
+  const steps = useSteps(STEPS.length, !!doc);
+  const at = STEPS[steps.step];
+  const savedShoot = linked ? linked.shoot : shoot.date ? { date: shoot.date, ...whenTimes(shoot) } : null;
   const money = (n: number) => formatAmount(scope, n);
 
   const update = (key: number, patch: Partial<Draft>) => setLines((ls) => ls.map((l) => (l.key === key ? { ...l, ...patch } : l)));
@@ -123,130 +166,201 @@ export function DocumentEditor({
     ]);
   }
 
-  const addCustom = () =>
-    setLines((ls) => [...ls, draftOf({ offeringId: null, description: "", inclusions: [], quantity: 1, unitPrice: 0, discount: null })]);
+  const addCustom = () => setLines((ls) => [...ls, draftOf({ offeringId: null, description: "", inclusions: [], quantity: 1, unitPrice: 0, discount: null })]);
 
   // Live totals over the lines that are complete enough to price.
-  const priced = lines.map(inputOf).filter((l) => Number.isFinite(l.quantity) && Number.isFinite(l.unitPrice) && (!l.discount || Number.isFinite(l.discount.value)));
+  const priced = lines
+    .map(inputOf)
+    .filter((l) => Number.isFinite(l.quantity) && Number.isFinite(l.unitPrice) && (!l.discount || Number.isFinite(l.discount.value)));
   const totals = totalsOf(priced.map(priceLine));
 
+  // Next (the browser has checked this step's fields), or on the last step, save.
   function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (at === "Items" && lines.length === 0) return setError("Add at least one item: a package or a custom item.");
     setError(null);
+    if (!steps.last) return steps.next();
     start(async () => {
-      const res = await k.save(doc, { customerId, date: date || null, notes, lines: lines.map(inputOf) });
+      const res = await k.save(doc, {
+        customerId,
+        date: date || null,
+        shoot: savedShoot,
+        notes,
+        lines: lines.map(inputOf),
+        bookingId: fromBooking?.id ?? null,
+      });
       if (!res.ok) return setError(res.error);
       router.push(`${basePath}/${res.data}`);
       router.refresh();
     });
   }
 
+  const clientName = customers.find((c) => c.id === customerId)?.name ?? "—";
+
   return (
-    <form onSubmit={submit} className="space-y-4">
-      <div className="grid gap-4 rounded-2xl border border-border bg-surface p-4 shadow-theme-xs sm:grid-cols-2 sm:p-5">
-        <Field label="Client">
-          <Select value={customerId} onChange={(e) => setCustomerId(e.target.value)} required>
-            <option value="">Choose a client…</option>
-            {customers.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <Field label={k.dateLabel} hint={k.dateHint}>
-          <TextInput type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-        </Field>
-      </div>
+    <div className="space-y-4">
+      <StepIndicator titles={STEPS} step={steps.step} reached={steps.reached} onGo={steps.go} />
+      <form onSubmit={submit} className="space-y-4">
+        {at === "Client" ? (
+          <div className={`grid gap-4 sm:grid-cols-2 ${card}`}>
+            <Field label="Client">
+              <Select value={customerId} onChange={(e) => setCustomerId(e.target.value)} required disabled={!!fromBooking}>
+                <option value="">Choose a client…</option>
+                {customers.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label={k.dateLabel} hint={k.dateHint}>
+              <TextInput type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+            </Field>
+            {linked ? (
+              <p className="text-sm sm:col-span-2">
+                <span className="text-muted">Shoot:</span> {formatDay(scope, linked.shoot.date)}, {timeSpan(linked.shoot)}{" "}
+                <span className="text-muted">(from its booking)</span> ·{" "}
+                <a href={`/studio/bookings/${linked.id}/edit`} className="font-medium text-brand-600 hover:underline">
+                  Change it on the booking
+                </a>
+              </p>
+            ) : null}
+          </div>
+        ) : null}
 
-      <section className="space-y-3">
-        {lines.map((l, i) => {
-          const line = priceLine(inputOf(l));
-          return (
-            <div key={l.key} className="space-y-3 rounded-2xl border border-border bg-surface p-4 shadow-theme-xs">
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted">Line {i + 1}</p>
-                <button type="button" onClick={() => remove(l.key)} className="text-xs text-error-600 hover:underline dark:text-error-400">
-                  Remove
-                </button>
-              </div>
-              <Field label="Description">
-                <TextInput value={l.description} onChange={(e) => update(l.key, { description: e.target.value })} required maxLength={200} />
-              </Field>
-              <Field label="What's included" hint="One item per line.">
-                <TextArea value={l.inclusions} onChange={(e) => update(l.key, { inclusions: e.target.value })} rows={2} />
-              </Field>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                <Field label="Qty">
-                  <TextInput value={l.quantity} onChange={(e) => update(l.key, { quantity: e.target.value })} inputMode="numeric" required />
-                </Field>
-                <Field label={`Price (${scope.currency})`}>
-                  <TextInput value={l.unitPrice} onChange={(e) => update(l.key, { unitPrice: e.target.value })} inputMode="numeric" required />
-                </Field>
-                <Field label="Discount">
-                  <Select value={l.discountKind} onChange={(e) => update(l.key, { discountKind: e.target.value as Draft["discountKind"] })}>
-                    <option value="">None</option>
-                    <option value="percent">% off</option>
-                    <option value="amount">{scope.currency} off</option>
-                  </Select>
-                </Field>
-                {l.discountKind ? (
-                  <Field label={l.discountKind === "percent" ? "Percent" : "Amount off each"}>
-                    <TextInput value={l.discountValue} onChange={(e) => update(l.key, { discountValue: e.target.value })} inputMode="numeric" required />
+        {at === "Shoot" ? (
+          <div className={card}>
+            <WhenFields
+              value={shoot}
+              onChange={setShoot}
+              dateLabel="Shoot day"
+              dateRequired={false}
+              dateHint={`${k.shootHint} Leave it empty if there's no shoot.`}
+              exceptBookingId={null}
+              bookingsPath="/studio/bookings"
+            />
+          </div>
+        ) : null}
+
+        {at === "Items" ? (
+          <section className="space-y-3">
+            {lines.map((l, i) => {
+              const line = priceLine(inputOf(l));
+              return (
+                <div key={l.key} className="space-y-3 rounded-2xl border border-border bg-surface p-4 shadow-theme-xs">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted">Item {i + 1}</p>
+                    <button type="button" onClick={() => remove(l.key)} className="text-xs text-error-600 hover:underline dark:text-error-400">
+                      Remove
+                    </button>
+                  </div>
+                  <Field label="Description">
+                    <TextInput value={l.description} onChange={(e) => update(l.key, { description: e.target.value })} required maxLength={200} />
                   </Field>
-                ) : null}
-              </div>
-              {Number.isFinite(line.total) ? <p className="text-right text-sm font-medium tnum">{money(line.total)}</p> : null}
-            </div>
-          );
-        })}
+                  <Field label="What's included" hint="One item per line.">
+                    <TextArea value={l.inclusions} onChange={(e) => update(l.key, { inclusions: e.target.value })} rows={2} />
+                  </Field>
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                    <Field label="Qty">
+                      <TextInput value={l.quantity} onChange={(e) => update(l.key, { quantity: e.target.value })} inputMode="numeric" required />
+                    </Field>
+                    <Field label={`Price (${scope.currency})`}>
+                      <TextInput value={l.unitPrice} onChange={(e) => update(l.key, { unitPrice: e.target.value })} inputMode="numeric" required />
+                    </Field>
+                    <Field label="Discount">
+                      <Select value={l.discountKind} onChange={(e) => update(l.key, { discountKind: e.target.value as Draft["discountKind"] })}>
+                        <option value="">None</option>
+                        <option value="percent">% off</option>
+                        <option value="amount">{scope.currency} off</option>
+                      </Select>
+                    </Field>
+                    {l.discountKind ? (
+                      <Field label={l.discountKind === "percent" ? "Percent" : "Amount off each"}>
+                        <TextInput value={l.discountValue} onChange={(e) => update(l.key, { discountValue: e.target.value })} inputMode="numeric" required />
+                      </Field>
+                    ) : null}
+                  </div>
+                  {Number.isFinite(line.total) ? <p className="text-right text-sm font-medium tnum">{money(line.total)}</p> : null}
+                </div>
+              );
+            })}
 
-        <div className="flex flex-wrap gap-2">
-          {offerings.length ? (
-            <Select value="" onChange={(e) => addOffering(e.target.value)} aria-label="Add a package" className="sm:max-w-xs">
-              <option value="">+ Add a package…</option>
-              {/* Grouped by service; `offerings` comes in service order. */}
-              {[...new Set(offerings.map((o) => o.serviceId))].map((serviceId) => {
-                const tiers = offerings.filter((o) => o.serviceId === serviceId);
+            <div className="flex flex-wrap gap-2">
+              {offerings.length ? (
+                <Select value="" onChange={(e) => addOffering(e.target.value)} aria-label="Add a package" className="sm:max-w-xs">
+                  <option value="">+ Add a package…</option>
+                  {/* Grouped by service; `offerings` comes in service order. */}
+                  {[...new Set(offerings.map((o) => o.serviceId))].map((serviceId) => {
+                    const tiers = offerings.filter((o) => o.serviceId === serviceId);
+                    return (
+                      <optgroup key={serviceId} label={tiers[0].serviceName}>
+                        {tiers.map((o) => (
+                          <option key={o.id} value={o.id}>
+                            {o.name} · {money(o.price)}
+                          </option>
+                        ))}
+                      </optgroup>
+                    );
+                  })}
+                </Select>
+              ) : null}
+              <Button type="button" variant="secondary" onClick={addCustom}>
+                + Custom item
+              </Button>
+            </div>
+            {lines.length ? (
+              <p className="text-right text-sm">
+                Total so far: <span className="font-semibold tnum">{money(totals.total)}</span>
+              </p>
+            ) : null}
+          </section>
+        ) : null}
+
+        {at === "Review" ? (
+          <div className={`space-y-4 ${card}`}>
+            {/* A last look at what the earlier steps hold; the indicator opens any of them to change it. */}
+            <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+              <dt className="text-muted">Client</dt>
+              <dd className="font-medium">{clientName}</dd>
+              <dt className="text-muted">{k.dateLabel}</dt>
+              <dd>{date ? formatDay(scope, date) : "—"}</dd>
+              <dt className="text-muted">Shoot</dt>
+              <dd>{savedShoot ? `${formatDay(scope, savedShoot.date)}, ${timeSpan(savedShoot)}` : "None"}</dd>
+            </dl>
+            <ul className="divide-y divide-border border-y border-border text-sm">
+              {lines.map((l) => {
+                const line = priceLine(inputOf(l));
                 return (
-                  <optgroup key={serviceId} label={tiers[0].serviceName}>
-                    {tiers.map((o) => (
-                      <option key={o.id} value={o.id}>
-                        {o.name} · {money(o.price)}
-                      </option>
-                    ))}
-                  </optgroup>
+                  <li key={l.key} className="flex justify-between gap-3 py-2">
+                    <span className="min-w-0">
+                      {l.description || "—"} <span className="text-muted">× {l.quantity}</span>
+                    </span>
+                    <span className="shrink-0 tnum">{Number.isFinite(line.total) ? money(line.total) : "—"}</span>
+                  </li>
                 );
               })}
-            </Select>
-          ) : null}
-          <Button type="button" variant="secondary" onClick={addCustom}>
-            + Custom line
-          </Button>
-        </div>
-      </section>
+            </ul>
+            <dl className="ml-auto grid w-full max-w-xs grid-cols-[1fr_auto] gap-x-4 gap-y-1 text-sm">
+              {totals.discount > 0 ? (
+                <>
+                  <dt className="text-muted">Subtotal</dt>
+                  <dd className="text-right tnum">{money(totals.subtotal)}</dd>
+                  <dt className="text-muted">Discount</dt>
+                  <dd className="text-right tnum">−{money(totals.discount)}</dd>
+                </>
+              ) : null}
+              <dt className="font-semibold">Total</dt>
+              <dd className="text-right text-base font-semibold tnum">{money(totals.total)}</dd>
+            </dl>
+            <Field label="Notes" hint={`Terms, deposit, how to pay. Shown on the ${kind}.`}>
+              <TextArea value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={2000} rows={3} />
+            </Field>
+          </div>
+        ) : null}
 
-      <div className="space-y-4 rounded-2xl border border-border bg-surface p-4 shadow-theme-xs sm:p-5">
-        <dl className="ml-auto grid w-full max-w-xs grid-cols-[1fr_auto] gap-x-4 gap-y-1 text-sm">
-          {totals.discount > 0 ? (
-            <>
-              <dt className="text-muted">Subtotal</dt>
-              <dd className="text-right tnum">{money(totals.subtotal)}</dd>
-              <dt className="text-muted">Discount</dt>
-              <dd className="text-right tnum">−{money(totals.discount)}</dd>
-            </>
-          ) : null}
-          <dt className="font-semibold">Total</dt>
-          <dd className="text-right text-base font-semibold tnum">{money(totals.total)}</dd>
-        </dl>
-        <Field label="Notes" hint={`Terms, deposit, how to pay. Shown on the ${kind}.`}>
-          <TextArea value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={2000} rows={3} />
-        </Field>
         {error ? <p className="text-sm text-error-600 dark:text-error-400">{error}</p> : null}
-        <Button type="submit" loading={pending}>
-          {doc ? "Save changes" : k.create}
-        </Button>
-      </div>
-    </form>
+        <StepActions first={steps.step === 0} last={steps.last} onBack={steps.back} submitLabel={doc ? "Save changes" : k.create} pending={pending} />
+      </form>
+    </div>
   );
 }

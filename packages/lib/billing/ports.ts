@@ -9,7 +9,7 @@
 import { AppError } from "@repo/lib/kernel/core";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
-import type { BillTo, InvoiceInput, Issuer, LineInput, Payment, PaymentInput, QuotationInput, QuotationResponse } from "./core/model";
+import type { BillTo, InvoiceInput, Issuer, LineInput, Payment, PaymentInput, QuotationInput, QuotationResponse, Shoot } from "./core/model";
 
 /** A quotation as stored: lines as entered, status as answered. */
 export interface QuotationRecord {
@@ -19,6 +19,7 @@ export interface QuotationRecord {
   billTo: BillTo;
   issuedAt: string;
   validUntil: string | null;
+  shoot: Shoot | null;
   response: QuotationResponse;
   respondedAt: string | null;
   declineReason: string | null;
@@ -42,6 +43,8 @@ export interface QuotationStore {
   respond(tenantId: string, id: string, answer: "accepted" | "declined", reason: string | null): Promise<boolean>;
   /** Replaces the share token. False when there's no such quotation in this tenant. */
   resetToken(scope: TenantScope, id: string, token: string): Promise<boolean>;
+  /** Rewrites when its shoot is (its booking moved). Never anything else. */
+  setShoot(scope: TenantScope, id: string, shoot: Shoot | null): Promise<void>;
 }
 
 /** An invoice as stored: lines as entered, payments as recorded (void ones too). */
@@ -52,6 +55,7 @@ export interface InvoiceRecord {
   billTo: BillTo;
   issuedAt: string;
   dueDate: string | null;
+  shoot: Shoot | null;
   notes: string | null;
   total: number;
   sourceId: string | null;
@@ -82,6 +86,8 @@ export interface InvoiceStore {
   /** Throws BillingError when it has payments, is already void, or isn't this tenant's. */
   voidInvoice(scope: TenantScope, id: string, reason: string): Promise<void>;
   resetToken(scope: TenantScope, id: string, token: string): Promise<boolean>;
+  /** Rewrites when its shoot is (its booking moved). Never anything else. */
+  setShoot(scope: TenantScope, id: string, shoot: Shoot | null): Promise<void>;
   /** A receipt by its own link: the payment and its invoice. */
   receiptByToken(token: string): Promise<{ tenantId: string; payment: Payment; invoice: InvoiceRecord } | null>;
 }

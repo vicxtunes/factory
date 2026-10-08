@@ -11,7 +11,7 @@ import { createAdminClient } from "@repo/lib/supabase/admin";
 import type { Payment, PaymentMethod } from "../../core/model";
 import type { InvoiceRecord, InvoiceStore } from "../../ports";
 
-import { fail, LINES, toLineJson, toLines, type LineRow } from "./shared";
+import { fail, LINES, saveShoot, SHOOT, toLineJson, toLines, toShoot, type LineRow, type ShootRow } from "./shared";
 
 interface PaymentRow {
   id: string;
@@ -27,7 +27,7 @@ interface PaymentRow {
   created_at: string;
 }
 
-interface InvoiceRow {
+interface InvoiceRow extends ShootRow {
   id: string;
   tenant_id: string;
   number: string;
@@ -47,7 +47,7 @@ interface InvoiceRow {
 }
 
 const PAYMENT = "id, receipt_no, amount, method, received_on, reference, note, share_token, voided_at, void_reason, created_at";
-const INVOICE = `id, tenant_id, number, customer_id, bill_to_name, bill_to_phone, bill_to_email, issued_at, due_date,
+const INVOICE = `id, tenant_id, number, customer_id, bill_to_name, bill_to_phone, bill_to_email, issued_at, due_date, ${SHOOT},
   notes, total, source_id, voided_at, void_reason, share_token, payments:billing_payments (${PAYMENT})`;
 const WITH_LINES = `${INVOICE}, ${LINES}`;
 
@@ -73,6 +73,7 @@ const toRecord = (r: InvoiceRow): InvoiceRecord => ({
   billTo: { name: r.bill_to_name, phone: r.bill_to_phone, email: r.bill_to_email },
   issuedAt: r.issued_at,
   dueDate: r.due_date,
+  shoot: toShoot(r),
   notes: r.notes,
   total: Number(r.total),
   sourceId: r.source_id,
@@ -137,6 +138,7 @@ export const supabaseInvoiceStore: InvoiceStore = {
       p_source: sourceId,
     });
     if (error) fail("save the invoice", error);
+    await saveShoot(scope.tenantId, data as string, input.shoot, "invoice");
     return data as string;
   },
 
@@ -170,6 +172,10 @@ export const supabaseInvoiceStore: InvoiceStore = {
   async voidInvoice(scope, id, reason) {
     const { error } = await createAdminClient().rpc("billing_void_invoice", { p_tenant: scope.tenantId, p_invoice: id, p_reason: reason });
     if (error) fail("void the invoice", error);
+  },
+
+  async setShoot(scope, id, shoot) {
+    await saveShoot(scope.tenantId, id, shoot, "invoice");
   },
 
   async resetToken(scope, id, token) {

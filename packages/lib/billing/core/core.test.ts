@@ -50,12 +50,12 @@ test("quotation input: well-formed passes, notes and blank inclusions tidied", (
 });
 
 test("quotation input: malformed is refused with readable messages", () => {
-  assert.throws(() => parseInput(quotationInputSchema, { ...input, lines: [] }), /at least one line/);
+  assert.throws(() => parseInput(quotationInputSchema, { ...input, lines: [] }), /at least one item/);
   assert.throws(() => parseInput(quotationInputSchema, { ...input, customerId: "x" }), /Choose a client/);
   assert.throws(() => parseInput(quotationInputSchema, { ...input, validUntil: "31/10/2026" }), /valid date/);
   assert.throws(() => parseInput(quotationInputSchema, { ...input, lines: [{ ...line, quantity: 0 }] }), /start at 1/);
   assert.throws(() => parseInput(quotationInputSchema, { ...input, lines: [{ ...line, unitPrice: -5 }] }), /can't be negative/);
-  assert.throws(() => parseInput(quotationInputSchema, { ...input, lines: [{ ...line, description: " " }] }), /Describe each line/);
+  assert.throws(() => parseInput(quotationInputSchema, { ...input, lines: [{ ...line, description: " " }] }), /Describe each item/);
   assert.throws(() => parseInput(quotationInputSchema, { ...input, lines: [{ ...line, discount: { kind: "free", value: 1 } }] }), /percentage or an amount/);
 });
 

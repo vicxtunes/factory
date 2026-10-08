@@ -6,8 +6,9 @@ PIN.
 ## The client
 
 1. On a service's page (`/<studio>/s/<service>`), **Book now** (or "Book Gold now" when a package
-   is picked) opens a few steps: the **package**, the **day**, their **name and phone** (skipped when
-   they're signed in at the studio), a last look, **Send booking request**.
+   is picked) opens a few steps: the **package**, the **day** and its **start and end time**, their
+   **name and phone** (skipped when they're signed in at the studio), a last look, **Send booking
+   request**.
 2. It goes straight to the studio as a booking in a new status, **Requested**, and the owner gets a
    push notification.
 3. **A new client** (phone the studio doesn't know) is added to the studio's clients and **this

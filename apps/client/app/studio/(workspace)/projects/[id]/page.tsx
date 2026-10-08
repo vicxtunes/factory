@@ -132,6 +132,11 @@ async function BookingAndMoney({ scope, project: p }: { scope: TenantScope; proj
             </span>
             <InvoiceStatusBadge status={invoice.status} />
           </p>
+        ) : booking && (booking.status === "tentative" || booking.status === "confirmed") ? (
+          // Made from its booking: client, when and package filled in; saving links it (and confirms the booking).
+          <Link href={`/studio/invoices/new?booking=${booking.id}`} className="font-medium text-brand-600 hover:underline">
+            Create invoice
+          </Link>
         ) : (
           <p className="text-muted">No invoice linked</p>
         )}

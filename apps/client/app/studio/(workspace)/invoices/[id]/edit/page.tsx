@@ -6,6 +6,7 @@ import { FormSkeleton } from "@repo/ui/skeletons/blocks";
 import { Loading } from "@repo/ui/skeletons/Loading";
 import { canEditInvoice, invoiceIdSchema, type Invoice } from "@repo/lib/billing/core";
 import { invoices } from "@repo/lib/billing/server";
+import { bookings } from "@repo/lib/bookings/server";
 import { customers } from "@repo/lib/customers/server";
 import { offerings } from "@repo/lib/offerings/server";
 import { requireStudio } from "@repo/lib/studios/server";
@@ -42,7 +43,9 @@ export default async function EditInvoicePage({ params }: { params: Promise<{ id
 }
 
 async function Form({ scope, invoice }: { scope: TenantScope; invoice: Invoice }) {
-  const [clients, onSale] = await Promise.all([customers.list(scope), offerings.onSale(scope)]);
+  const [clients, onSale, bookingId] = await Promise.all([customers.list(scope), offerings.onSale(scope), bookings.idForInvoice(scope, invoice.id)]);
+  // Its booking holds the shoot's day and times; the form shows them read-only.
+  const b = bookingId ? (await bookings.get(scope, bookingId))?.booking : null;
   // Keep the invoice's own client selectable even if they've since been archived.
   const choices = clients.some((c) => c.id === invoice.customerId)
     ? clients
@@ -51,7 +54,15 @@ async function Form({ scope, invoice }: { scope: TenantScope; invoice: Invoice }
   return (
     <DocumentEditor
       kind="invoice"
-      document={{ id: invoice.id, customerId: invoice.customerId, date: invoice.dueDate, notes: invoice.notes, lines: invoice.lines }}
+      document={{
+        id: invoice.id,
+        customerId: invoice.customerId,
+        date: invoice.dueDate,
+        shoot: invoice.shoot,
+        booking: b ? { id: b.id, shoot: { date: b.date, startTime: b.startTime, endTime: b.endTime } } : null,
+        notes: invoice.notes,
+        lines: invoice.lines,
+      }}
       customers={choices.map((c) => ({ id: c.id, name: c.name }))}
       offerings={onSale}
       scope={scope}

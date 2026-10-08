@@ -11,9 +11,9 @@ import type { TenantScope } from "@repo/lib/tenancy/types";
 import type { QuotationResponse } from "../../core/model";
 import type { QuotationRecord, QuotationStore } from "../../ports";
 
-import { fail, LINES, toLineJson, toLines, type LineRow } from "./shared";
+import { fail, LINES, saveShoot, SHOOT, toLineJson, toLines, toShoot, type LineRow, type ShootRow } from "./shared";
 
-interface DocumentRow {
+interface DocumentRow extends ShootRow {
   id: string;
   tenant_id: string;
   number: string;
@@ -32,7 +32,7 @@ interface DocumentRow {
 }
 
 const DOCUMENT = `id, tenant_id, number, customer_id, bill_to_name, bill_to_phone, bill_to_email, issued_at,
-  valid_until, status, responded_at, decline_reason, notes, total, share_token`;
+  valid_until, ${SHOOT}, status, responded_at, decline_reason, notes, total, share_token`;
 const WITH_LINES = `${DOCUMENT}, ${LINES}`;
 
 const toRecord = (r: DocumentRow): QuotationRecord => ({
@@ -42,6 +42,7 @@ const toRecord = (r: DocumentRow): QuotationRecord => ({
   billTo: { name: r.bill_to_name, phone: r.bill_to_phone, email: r.bill_to_email },
   issuedAt: r.issued_at,
   validUntil: r.valid_until,
+  shoot: toShoot(r),
   response: r.status,
   respondedAt: r.responded_at,
   declineReason: r.decline_reason,
@@ -95,6 +96,7 @@ export const supabaseQuotationStore: QuotationStore = {
       p_token: token,
     });
     if (error) fail("save the quotation", error);
+    await saveShoot(scope.tenantId, data as string, input.shoot, "quotation");
     return data as string;
   },
 
@@ -107,6 +109,10 @@ export const supabaseQuotationStore: QuotationStore = {
       .select("id");
     if (error) fail("record the answer", error);
     return data.length === 1;
+  },
+
+  async setShoot(scope, id, shoot) {
+    await saveShoot(scope.tenantId, id, shoot, "quotation");
   },
 
   async resetToken(scope, id, token) {

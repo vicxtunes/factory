@@ -10,7 +10,7 @@ import { nextStatuses, type BookingStatus } from "@repo/lib/bookings/core";
 const ACTIONS: Record<Exclude<BookingStatus, "requested">, { label: string; variant: "primary" | "secondary" | "danger" }> = {
   confirmed: { label: "Confirm", variant: "primary" },
   completed: { label: "Mark completed", variant: "primary" },
-  tentative: { label: "Back to tentative", variant: "secondary" },
+  tentative: { label: "Back to pending", variant: "secondary" },
   cancelled: { label: "Cancel booking", variant: "danger" },
 };
 

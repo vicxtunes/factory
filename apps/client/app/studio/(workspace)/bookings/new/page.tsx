@@ -13,9 +13,9 @@ import type { TenantScope } from "@repo/lib/tenancy/types";
 
 export const metadata = { title: "New booking · My Business" };
 
-export default async function NewBookingPage({ searchParams }: { searchParams: Promise<{ date?: string; quotation?: string }> }) {
+export default async function NewBookingPage({ searchParams }: { searchParams: Promise<{ date?: string; quotation?: string; client?: string }> }) {
   const { scope } = await requireStudio();
-  const { date, quotation } = await searchParams;
+  const { date, quotation, client } = await searchParams;
 
   return (
     <>
@@ -23,13 +23,13 @@ export default async function NewBookingPage({ searchParams }: { searchParams: P
         ← Bookings
       </BackLink>
       <Loading skeleton={<FormSkeleton />}>
-        <Form scope={scope} date={date} quotation={quotation} />
+        <Form scope={scope} date={date} quotation={quotation} client={client} />
       </Loading>
     </>
   );
 }
 
-async function Form({ scope, date, quotation }: { scope: TenantScope; date?: string; quotation?: string }) {
+async function Form({ scope, date, quotation, client }: { scope: TenantScope; date?: string; quotation?: string; client?: string }) {
   const [clients, onSale, draft] = await Promise.all([
     customers.list(scope),
     offerings.onSale(scope, "service"),
@@ -48,9 +48,10 @@ async function Form({ scope, date, quotation }: { scope: TenantScope; date?: str
     <BookingForm
       draft={draft ?? undefined}
       date={date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : undefined}
+      presetCustomerId={clients.some((c) => c.id === client) ? client : undefined}
       customers={clients.map((c) => ({ id: c.id, name: c.name }))}
-      packages={onSale.map(offeringLabel)}
-      currency={scope.currency}
+      packages={onSale.map((o) => ({ label: offeringLabel(o), price: o.price }))}
+      scope={scope}
       basePath="/studio/bookings"
     />
   );

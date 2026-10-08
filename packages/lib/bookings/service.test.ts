@@ -37,8 +37,10 @@ function fakes() {
       ),
     get: async (s, id) => mine(s, id) ?? null,
     idForQuotation: async (s, q) => rows.find((r) => r.tenantId === s.tenantId && r.quotationId === q)?.id ?? null,
-    create: async (s, input) => {
-      const row = { ...input, id: `b${rows.length + 1}`, tenantId: s.tenantId, customerName: "", status: "tentative" as BookingStatus, source: "studio" as const, offeringId: null, invoiceId: null, createdAt: "" };
+    idForInvoice: async (s, i) => rows.find((r) => r.tenantId === s.tenantId && r.invoiceId === i)?.id ?? null,
+    create: async (s, input, confirmed) => {
+      const status: BookingStatus = confirmed ? "confirmed" : "tentative";
+      const row = { ...input, id: `b${rows.length + 1}`, tenantId: s.tenantId, customerName: "", status, source: "studio" as const, offeringId: null, invoiceId: confirmed?.invoiceId ?? null, createdAt: "" };
       rows.push(row);
       return row.id;
     },
@@ -46,6 +48,12 @@ function fakes() {
       const row = { ...input, quotationId: null, id: `b${rows.length + 1}`, tenantId: s.tenantId, customerName: "", status: "requested" as BookingStatus, source: "online" as const, invoiceId: null, createdAt: "" };
       rows.push(row);
       return row.id;
+    },
+    setQuotation: async (s, id, quotationId) => {
+      const r = mine(s, id);
+      if (!r || r.quotationId) return false;
+      r.quotationId = quotationId;
+      return true;
     },
     setInvoice: async (s, id, invoiceId) => {
       const r = mine(s, id);
@@ -108,7 +116,7 @@ test("book an accepted quotation: pre-filled, once, with its own client", async 
 test("statuses move only the allowed ways; completed and cancelled lock the details", async () => {
   const { service } = fakes();
   const id = await service.create(studioA, wedding);
-  await assert.rejects(service.setStatus(studioA, id, "completed"), /tentative booking can't become completed/);
+  await assert.rejects(service.setStatus(studioA, id, "completed"), /pending booking can't become completed/);
   await service.setStatus(studioA, id, "confirmed");
   await service.update(studioA, id, { ...wedding, location: "Speke Resort" });
   await service.setStatus(studioA, id, "completed");
@@ -170,4 +178,114 @@ test("one studio can't read, change or move another's booking, even with its id"
   await assert.rejects(service.update(studioB, id, { ...wedding, customerId: "peter" }), BookingError);
   await assert.rejects(service.setStatus(studioB, id, "confirmed"), BookingError);
   assert.deepEqual([rows[0].customerId, rows[0].status], ["grace", "tentative"]);
+});
+
+// --- Booked automatically from quotations and invoices -------------------------
+
+const shot = { date: "2026-12-12", startTime: "10:00", endTime: "16:00" };
+const doc = { customerId: "grace", firstLine: "Wedding Gold", total: 2_500_000, shoot: shot };
+
+test("an invoice with a shoot day is booked, confirmed, as its client's; saving it again moves that booking", async () => {
+  const { service, rows } = fakes();
+  const id = await service.bookInvoice(studioA, "inv-1", { ...doc, quotationId: null });
+  assert.ok(id);
+  const b = rows[0];
+  assert.deepEqual(
+    [b.status, b.invoiceId, b.title, b.packageName, b.amount, b.date, b.startTime, b.endTime],
+    ["confirmed", "inv-1", "Grace: Wedding Gold", "Wedding Gold", 2_500_000, "2026-12-12", "10:00", "16:00"],
+  );
+  const moved = { date: "2026-12-13", startTime: null, endTime: null };
+  assert.equal(await service.bookInvoice(studioA, "inv-1", { ...doc, total: 3_000_000, shoot: moved, quotationId: null }), id);
+  assert.equal(rows.length, 1, "one booking per invoice");
+  assert.deepEqual([b.date, b.startTime, b.endTime, b.amount], ["2026-12-13", null, null, 3_000_000]);
+  assert.deepEqual(await service.bookInvoice(studioA, "inv-1", { ...doc, shoot: null, quotationId: null }), id, "no shoot day: kept where it is");
+  assert.equal(b.date, "2026-12-13");
+});
+
+test("an invoice without a shoot day books nothing", async () => {
+  const { service, rows } = fakes();
+  assert.equal(await service.bookInvoice(studioA, "inv-1", { ...doc, shoot: null, quotationId: null }), null);
+  assert.equal(rows.length, 0);
+});
+
+test("an accepted quotation with a shoot day is booked tentative, once; its invoice confirms that booking", async () => {
+  const { service, rows } = fakes();
+  const id = await service.bookAcceptedQuotation(studioA, "q-accepted", doc);
+  assert.equal(await service.bookAcceptedQuotation(studioA, "q-accepted", doc), id, "booked once");
+  assert.deepEqual([rows[0].status, rows[0].quotationId, rows[0].invoiceId], ["tentative", "q-accepted", null]);
+  assert.equal(await service.bookInvoice(studioA, "inv-1", { ...doc, shoot: null, quotationId: "q-accepted" }), id);
+  assert.equal(rows.length, 1, "the quotation's booking, not a second");
+  assert.deepEqual([rows[0].status, rows[0].invoiceId, rows[0].date], ["confirmed", "inv-1", "2026-12-12"]);
+  assert.equal(await service.bookAcceptedQuotation(studioA, "q-other", { ...doc, shoot: null }), null, "no shoot day: nothing");
+});
+
+test("voiding an invoice cancels its booking; a completed one stays", async () => {
+  const { service, rows } = fakes();
+  await service.bookInvoice(studioA, "inv-1", { ...doc, quotationId: null });
+  await service.cancelForInvoice(studioA, "inv-1");
+  assert.equal(rows[0].status, "cancelled");
+  await service.bookInvoice(studioA, "inv-2", { ...doc, quotationId: null });
+  rows[1].status = "completed";
+  await service.cancelForInvoice(studioA, "inv-2");
+  assert.equal(rows[1].status, "completed");
+  await service.cancelForInvoice(studioA, "inv-none");
+});
+
+test("a cancelled booking isn't moved when its invoice is saved again", async () => {
+  const { service, rows } = fakes();
+  await service.bookInvoice(studioA, "inv-1", { ...doc, quotationId: null });
+  rows[0].status = "cancelled";
+  await service.bookInvoice(studioA, "inv-1", { ...doc, shoot: { ...shot, date: "2027-01-01" }, quotationId: null });
+  assert.deepEqual([rows[0].status, rows[0].date], ["cancelled", "2026-12-12"]);
+});
+
+test("a form's clash check: overlapping bookings that day, not cancelled ones, not the one being changed", async () => {
+  const { service, rows } = fakes();
+  const first = await service.create(studioA, wedding);
+  const late = await service.create(studioA, { ...wedding, title: "Evening", startTime: "18:00", endTime: "20:00" });
+  await service.create(studioB, { ...wedding, customerId: "peter" });
+  const titles = async (when: { date: string; startTime: string | null; endTime: string | null }, except: string | null = null) =>
+    (await service.clashesWith(studioA, when, except)).map((b) => b.title);
+  assert.deepEqual(await titles({ date: "2026-12-12", startTime: "17:00", endTime: "19:00" }), ["Wedding", "Evening"]);
+  assert.deepEqual(await titles({ date: "2026-12-12", startTime: "18:00", endTime: "19:00" }), ["Evening"], "touching ends don't clash");
+  assert.deepEqual(await titles({ date: "2026-12-12", startTime: null, endTime: null }), ["Wedding", "Evening"], "all day clashes with everything");
+  assert.deepEqual(await titles({ date: "2026-12-12", startTime: "17:00", endTime: "19:00" }, first), ["Evening"], "not itself");
+  assert.deepEqual(await titles({ date: "2026-12-13", startTime: "10:00", endTime: "11:00" }), []);
+  rows.find((r) => r.id === late)!.status = "cancelled";
+  assert.deepEqual(await titles({ date: "2026-12-12", startTime: "18:00", endTime: "19:00" }), [], "cancelled ones don't count");
+});
+
+// --- Quotations and invoices made from a booking ---------------------------------
+
+test("a quotation made from a booking is its quotation: accepting it books nothing new", async () => {
+  const { service, rows } = fakes();
+  const id = await service.create(studioA, wedding);
+  await service.checkDocumentFor(studioA, id, "grace", "quotation");
+  await service.setQuotation(studioA, id, "q-1");
+  await assert.rejects(service.checkDocumentFor(studioA, id, "grace", "quotation"), /already has a quotation/);
+  assert.equal(await service.bookAcceptedQuotation(studioA, "q-1", doc), id);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].status, "tentative", "still pending until its invoice");
+});
+
+test("an invoice made from a booking takes it over: moved to the invoice's shoot, at its total, confirmed", async () => {
+  const { service, rows } = fakes();
+  const id = await service.create(studioA, wedding);
+  await service.checkDocumentFor(studioA, id, "grace", "invoice");
+  await service.setInvoice(studioA, id, "inv-1");
+  assert.equal(await service.bookInvoice(studioA, "inv-1", { ...doc, total: 900_000, shoot: { date: "2026-12-14", startTime: "09:00", endTime: "12:00" }, quotationId: null }), id);
+  assert.equal(rows.length, 1, "no second booking");
+  assert.deepEqual([rows[0].status, rows[0].date, rows[0].startTime, rows[0].amount], ["confirmed", "2026-12-14", "09:00", 900_000]);
+  await assert.rejects(service.checkDocumentFor(studioA, id, "grace", "invoice"), /already has an invoice/);
+});
+
+test("a document from a booking: only for its client, not for a client's request or a cancelled booking", async () => {
+  const { service, rows } = fakes();
+  const id = await service.create(studioA, wedding);
+  await assert.rejects(service.checkDocumentFor(studioA, id, "old", "invoice"), /booking's client/);
+  await assert.rejects(service.checkDocumentFor(studioB, id, "grace", "invoice"), /no longer exists/);
+  rows[0].status = "requested";
+  await assert.rejects(service.checkDocumentFor(studioA, id, "grace", "invoice"), /Confirm the client's request/);
+  rows[0].status = "cancelled";
+  await assert.rejects(service.checkDocumentFor(studioA, id, "grace", "quotation"), /cancelled/);
 });

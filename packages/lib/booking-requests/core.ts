@@ -23,14 +23,20 @@ export const requesterPhoneSchema = z
     return z.NEVER;
   });
 
-/** "Book now": the package and the day; who they are unless they're signed in at the studio. */
-export const bookNowSchema = z.object({
-  serviceSlug: z.string().trim().min(1).max(90),
-  packageId: z.uuid("Choose a package."),
-  date: z.iso.date("Choose a day."),
-  name: requesterNameSchema,
-  phone: requesterPhoneSchema,
-});
+const clockTime = (message: string) => z.iso.time({ precision: -1, message });
+
+/** "Book now": the package, the day and its times; who they are unless they're signed in at the studio. */
+export const bookNowSchema = z
+  .object({
+    serviceSlug: z.string().trim().min(1).max(90),
+    packageId: z.uuid("Choose a package."),
+    date: z.iso.date("Choose a day."),
+    startTime: clockTime("Choose the start time."),
+    endTime: clockTime("Choose the end time."),
+    name: requesterNameSchema,
+    phone: requesterPhoneSchema,
+  })
+  .refine((b) => b.endTime > b.startTime, { message: "The end time must be after the start time.", path: ["endTime"] });
 
 /** As the schema gives it: the phone in its stored form, or absent. */
 export type BookNowInput = Omit<z.infer<typeof bookNowSchema>, "phone"> & { phone?: string };

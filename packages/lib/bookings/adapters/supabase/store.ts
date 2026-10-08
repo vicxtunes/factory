@@ -73,6 +73,7 @@ const toColumns = (b: Omit<BookingInput, "quotationId">) => ({
 function fail(what: string, error: { code?: string; message: string }): never {
   // Booked twice at once: the one-booking-per-quotation index caught it.
   if (error.code === "23505" && error.message.includes("one_per_quotation")) throw new BookingError("This quotation is already booked.");
+  if (error.code === "23505" && error.message.includes("one_per_invoice")) throw new BookingError("This invoice is already booked.");
   // A client, quotation or package from another studio: the composite keys caught it.
   if (error.code === "23503") throw new BookingError("That client, quotation or package doesn't belong to your business.");
   throw new Error(`bookings: could not ${what}: ${error.message}`);
@@ -104,9 +105,20 @@ export const supabaseBookingStore: BookingStore = {
     return data?.id ?? null;
   },
 
-  async create(scope, input) {
+  async idForInvoice(scope, invoiceId) {
+    const { data, error } = await table().select("id").eq("tenant_id", scope.tenantId).eq("invoice_id", invoiceId).maybeSingle<{ id: string }>();
+    if (error) fail("look up the booking", error);
+    return data?.id ?? null;
+  },
+
+  async create(scope, input, confirmed) {
     const { data, error } = await table()
-      .insert({ ...toColumns(input), quotation_id: input.quotationId, tenant_id: scope.tenantId })
+      .insert({
+        ...toColumns(input),
+        quotation_id: input.quotationId,
+        ...(confirmed ? { status: "confirmed", invoice_id: confirmed.invoiceId } : {}),
+        tenant_id: scope.tenantId,
+      })
       .select("id")
       .single<{ id: string }>();
     if (error) fail("save the booking", error);
@@ -120,6 +132,17 @@ export const supabaseBookingStore: BookingStore = {
       .single<{ id: string }>();
     if (error) fail("save the booking request", error);
     return data.id;
+  },
+
+  async setQuotation(scope, id, quotationId) {
+    const { data, error } = await table()
+      .update({ quotation_id: quotationId })
+      .eq("tenant_id", scope.tenantId)
+      .eq("id", id)
+      .is("quotation_id", null)
+      .select("id");
+    if (error) fail("link the quotation", error);
+    return data.length === 1;
   },
 
   async setInvoice(scope, id, invoiceId) {

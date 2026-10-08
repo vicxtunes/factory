@@ -21,6 +21,7 @@ import {
   type InvoiceSummary,
   type Issuer,
   type LineInput,
+  type Shoot,
   type PaymentInput,
   type Receipt,
 } from "./core";
@@ -84,7 +85,7 @@ export class InvoiceService {
     const quotation = await this.quotations.get(scope, quotationId);
     if (!quotation) throw new BillingError("That quotation no longer exists.");
     if (quotation.response !== "accepted") throw new BillingError("Only an accepted quotation can become an invoice.");
-    const input: InvoiceInput = { customerId: quotation.customerId, dueDate: null, notes: quotation.notes, lines: quotation.lines };
+    const input: InvoiceInput = { customerId: quotation.customerId, dueDate: null, shoot: quotation.shoot, notes: quotation.notes, lines: quotation.lines };
     return this.store.save(scope, null, input, this.totalOf(input.lines), this.newToken(), quotation.id);
   }
 
@@ -116,6 +117,11 @@ export class InvoiceService {
   }
 
   /** A new link; the old one stops working. */
+  /** When its shoot is now: its booking was moved, and the invoice says so. */
+  async setShoot(scope: TenantScope, id: string, shoot: Shoot | null): Promise<void> {
+    await this.store.setShoot(scope, id, shoot);
+  }
+
   async resetLink(scope: TenantScope, id: string): Promise<void> {
     if (!(await this.store.resetToken(scope, id, this.newToken()))) throw new BillingError(GONE);
   }
@@ -177,6 +183,7 @@ function invoiceOf(r: InvoiceRecord & { lines: LineInput[] }, today: string): In
   return {
     ...summaryOf(r, today),
     ...totalsOf(lines),
+    shoot: r.shoot,
     notes: r.notes,
     sourceId: r.sourceId,
     voidedAt: r.voidedAt,
