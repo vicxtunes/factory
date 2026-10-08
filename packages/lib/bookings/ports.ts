@@ -15,8 +15,14 @@ export interface BookingStore {
   get(scope: TenantScope, id: string): Promise<Booking | null>;
   /** The booking made from a quotation, if any. */
   idForQuotation(scope: TenantScope, quotationId: string): Promise<string | null>;
-  /** Throws BookingError when the client or quotation isn't this tenant's, or the quotation is already booked. */
-  create(scope: TenantScope, input: BookingInput): Promise<string>;
+  /** The booking an invoice is for, if any. */
+  idForInvoice(scope: TenantScope, invoiceId: string): Promise<string | null>;
+  /**
+   * Tentative, unless `confirmed` with its invoice (booked from one). Throws
+   * BookingError when the client, quotation or invoice isn't this tenant's,
+   * or either is already booked.
+   */
+  create(scope: TenantScope, input: BookingInput, confirmed?: { invoiceId: string }): Promise<string>;
   /** A client's online request for a package (status "requested"). Throws BookingError when the client or package isn't this tenant's. */
   createRequest(scope: TenantScope, input: Omit<BookingInput, "quotationId"> & { offeringId: string }): Promise<string>;
   /** Links the invoice made when it was confirmed. False when there's no such booking in this tenant. */

@@ -83,6 +83,7 @@ export class ProductRequestService {
     const invoiceId = await this.deps.createInvoice(scope, {
       customerId: request.customerId,
       dueDate: this.deps.today(scope),
+      shoot: null,
       notes: "Ordered online.",
       lines: [{ offeringId: request.offeringId, description: request.itemName, inclusions: [], quantity: request.quantity, unitPrice: request.unitPrice, discount: null }],
     });

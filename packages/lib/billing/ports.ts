@@ -9,7 +9,7 @@
 import { AppError } from "@repo/lib/kernel/core";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
-import type { BillTo, InvoiceInput, Issuer, LineInput, Payment, PaymentInput, QuotationInput, QuotationResponse } from "./core/model";
+import type { BillTo, InvoiceInput, Issuer, LineInput, Payment, PaymentInput, QuotationInput, QuotationResponse, Shoot } from "./core/model";
 
 /** A quotation as stored: lines as entered, status as answered. */
 export interface QuotationRecord {
@@ -19,6 +19,7 @@ export interface QuotationRecord {
   billTo: BillTo;
   issuedAt: string;
   validUntil: string | null;
+  shoot: Shoot | null;
   response: QuotationResponse;
   respondedAt: string | null;
   declineReason: string | null;
@@ -52,6 +53,7 @@ export interface InvoiceRecord {
   billTo: BillTo;
   issuedAt: string;
   dueDate: string | null;
+  shoot: Shoot | null;
   notes: string | null;
   total: number;
   sourceId: string | null;

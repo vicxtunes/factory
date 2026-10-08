@@ -8,7 +8,7 @@ import { z } from "zod";
 import { optionalText } from "@repo/lib/kernel/core";
 import { inclusionsSchema } from "@repo/lib/offerings/core";
 
-import type { InvoiceInput, PaymentInput, QuotationInput } from "./model";
+import type { InvoiceInput, PaymentInput, QuotationInput, Shoot } from "./model";
 
 export const quotationIdSchema = z.uuid("That quotation doesn't exist.");
 
@@ -35,9 +35,19 @@ const lineSchema = z.object({
     .nullable(),
 });
 
+const clockTime = z.iso.time({ precision: -1, message: "Enter a time like 14:00." });
+
+/** When the shoot is: a day, and both times or neither (all day), the end after the start. Null: not known. */
+export const shootSchema = z
+  .object({ date: z.iso.date("Choose the shoot's day."), startTime: clockTime.nullable(), endTime: clockTime.nullable() })
+  .refine((s) => (s.startTime === null) === (s.endTime === null), "Give the shoot both a start and an end time, or mark it all day.")
+  .refine((s) => s.startTime === null || s.endTime === null || s.endTime > s.startTime, "The shoot's end time must be after its start.")
+  .nullable() satisfies z.ZodType<Shoot | null, unknown>;
+
 export const quotationInputSchema = z.object({
   customerId: z.uuid("Choose a client."),
   validUntil: z.iso.date("Choose a valid date.").nullable(),
+  shoot: shootSchema.default(null),
   notes: optionalText(2000, "Keep the notes under 2,000 characters."),
   lines: linesSchema(),
 }) satisfies z.ZodType<QuotationInput, unknown>;
@@ -54,6 +64,7 @@ export const paymentIdSchema = z.uuid("That payment doesn't exist.");
 export const invoiceInputSchema = z.object({
   customerId: z.uuid("Choose a client."),
   dueDate: z.iso.date("Choose a valid due date.").nullable(),
+  shoot: shootSchema.default(null),
   notes: optionalText(2000, "Keep the notes under 2,000 characters."),
   lines: linesSchema(),
 }) satisfies z.ZodType<InvoiceInput, unknown>;

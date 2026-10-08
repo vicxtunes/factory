@@ -38,7 +38,7 @@ function fakes() {
       if (id) {
         const r = mine(s, id);
         if (!r || r.voidedAt || livePaid(r) > 0) throw new BillingError("not editable");
-        return Object.assign(r, { customerId: input.customerId, dueDate: input.dueDate, notes: input.notes, total, lines: input.lines }).id;
+        return Object.assign(r, { customerId: input.customerId, dueDate: input.dueDate, shoot: input.shoot, notes: input.notes, total, lines: input.lines }).id;
       }
       const row: Row = {
         id: `i${rows.length + 1}`,
@@ -48,6 +48,7 @@ function fakes() {
         billTo: { name: input.customerId, phone: null, email: null },
         issuedAt: NOW.toISOString(),
         dueDate: input.dueDate,
+        shoot: input.shoot,
         notes: input.notes,
         total,
         sourceId,
@@ -104,7 +105,7 @@ function fakes() {
 }
 
 const gold: LineInput = { offeringId: null, description: "Wedding Gold", inclusions: [], quantity: 1, unitPrice: 2_000_000, discount: { kind: "percent", value: 10 } };
-const input: InvoiceInput = { customerId: "grace", dueDate: "2026-10-31", notes: null, lines: [gold] };
+const input: InvoiceInput = { customerId: "grace", dueDate: "2026-10-31", shoot: null, notes: null, lines: [gold] };
 const pay = (amount: number, receivedOn = "2026-10-03"): PaymentInput => ({ amount, method: "mobile_money", receivedOn, reference: null, note: null });
 
 test("payments bring the balance down, each with its own receipt link", async () => {

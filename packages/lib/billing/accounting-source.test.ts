@@ -36,6 +36,7 @@ const payment = (id: string, amount: number, receivedOn: string, method: Payment
   createdAt: "2026-10-01T00:00:00Z",
 });
 const invoice = (o: Partial<InvoiceRecord> & { lines: LineInput[]; total: number }): InvoiceRecord & { lines: LineInput[] } => ({
+  shoot: null,
   id: "i",
   number: "INV-0001",
   customerId: "grace",

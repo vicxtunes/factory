@@ -16,9 +16,26 @@ A business's appointments with its customers: shoots, sessions, events. For stud
   cancelled booking can be reopened. **Completed is final.** Details can change only while
   tentative or confirmed (`core/rules.ts`). Status moves are guarded in the store too: a move
   happens only if the booking is still in the status the service saw.
-- **Clashes warn, never block:** a booking's page lists the same-day bookings whose times overlap.
-  All day overlaps everything, touching ends don't clash, and cancelled bookings never clash. A
-  studio may run two shoots with two teams.
+- **Times are always chosen:** every form that leads to a booking asks for the start and end time
+  (or All day, for the studio's own forms). A new booking's times start empty, never assumed.
+  Clients booking online give a start and end time.
+- **Clashes warn, never block:** as soon as a form has a day and times (the booking form, a
+  quotation's or invoice's shoot), it lists the studio's bookings they'd overlap (`findClashes`),
+  and a booking's page lists them too. All day overlaps everything, touching ends don't clash, and
+  cancelled bookings never clash. A studio may run two shoots with two teams. Clients never see
+  other clients' bookings.
+- **Booked automatically** (`bookInvoice`, `bookAcceptedQuotation`, `cancelForInvoice`, called from
+  packages/lib/billing/actions.ts). Quotations and invoices can say when their shoot is (a day and
+  times, or all day):
+  - **An invoice with a shoot day** is booked when it's saved: confirmed, for its client, titled
+    "Client: first line", at its total. Saving it again with another day or time moves its booking
+    (while the booking can change); saving it without one leaves the booking where it is.
+  - **A quotation with a shoot day** is booked when the client accepts it: tentative.
+  - **The invoice made from that quotation** takes over its booking and confirms it: never a second.
+  - **Voiding an invoice** cancels its booking (a completed one stays).
+  - **A client's online request**, once confirmed, gets an invoice saying when it is.
+  - With no shoot day, nothing is booked automatically: "Book it" on an accepted quotation, or the
+    booking form, still work.
 - **Book an accepted quotation** ("Book it" on the quotation): the form opens with the client
   (fixed), the first line as the package, the quotation's total as the amount, and a title. One
   booking per quotation. Its page links back to the quotation and shows the invoice made from it,
@@ -29,7 +46,8 @@ A business's appointments with its customers: shoots, sessions, events. For stud
 | Screen | Who | What |
 | --- | --- | --- |
 | `/studio/bookings?view=month\|week\|day\|list&date=…` | Studio owner | Calendar. Server-rendered, so every view and step is a plain link |
-| `/studio/bookings/new` (`?date=`, `?quotation=`) | Studio owner | Book; from a quotation, pre-filled |
+| `/studio/bookings/new` (`?date=`, `?quotation=`) | Studio owner | Book; from a quotation, pre-filled; clash warning as you choose the time |
+| `/studio/quotations/new`, `/studio/invoices/new` (and edit) | Studio owner | Shoot day and times, with the clash warning: what books it |
 | `/studio/bookings/<id>` | Studio owner | Details, clashes, its quotation and invoice, confirm / complete / cancel / reopen |
 | `/studio/bookings/<id>/edit` | Studio owner | Change the details |
 | `/studio` (dashboard), `/studio/clients/<id>` | Studio owner | Coming up; a client's bookings |
@@ -62,8 +80,10 @@ packages/lib/bookings/
   adapters/supabase/store.ts, directory.ts
   server.ts, actions.ts   createBooking, updateBooking, setBookingStatus.
 packages/ui/bookings/  BookingsCalendar, BookingForm, BookingStatusButtons,
-                       BookingBits (status badge, list, time span).
+                       BookingBits (status badge, list, time span),
+                       WhenFields (day, times or all day, and the clash warning).
 supabase/migrations/20261003150000_bookings.sql
+supabase/migrations/20261011100000_shoot_bookings.sql   quotations' and invoices' shoot day and times
 ```
 
 ## Testing

@@ -9,12 +9,18 @@
 // Invoices and receipts are view-only by link.
 //
 // Every action: who / which document → parse the input (zod) → service → Result.
+//
+// Bookings follow automatically (packages/lib/bookings): an invoice with a
+// shoot day is booked (confirmed) when it's saved, a quotation with one when
+// the customer accepts it (tentative), and voiding an invoice cancels its booking.
 
 import { revalidatePath } from "next/cache";
 
+import { bookings } from "@repo/lib/bookings/server";
 import { parseInput, type Result } from "@repo/lib/kernel/core";
 import { runAction } from "@repo/lib/kernel/server/action";
 import { studioOfCaller } from "@repo/lib/studios/server";
+import type { TenantScope } from "@repo/lib/tenancy/types";
 
 import {
   invoiceIdSchema,
@@ -62,8 +68,36 @@ export async function resetQuotationLink(id: unknown): Promise<Result> {
 export async function respondToQuotation(token: unknown, answer: unknown): Promise<Result> {
   return runAction("billing", async () => {
     const link = parseInput(shareTokenSchema, token);
-    await quotations.respond(link, parseInput(quotationResponseSchema, answer));
+    const response = parseInput(quotationResponseSchema, answer);
+    await quotations.respond(link, response);
+    if (response.decision === "accept") await bookAccepted(link);
     revalidatePath(`/q/${link}`);
+  });
+}
+
+/** An accepted quotation with a shoot day, booked (tentative). Its answer is recorded either way: a failure here is logged, not shown to the customer. */
+async function bookAccepted(link: string): Promise<void> {
+  try {
+    const found = await quotations.byLink(link);
+    if (!found) return;
+    const { quotation: q, scope } = found;
+    await bookings.bookAcceptedQuotation(scope, q.id, { customerId: q.customerId, firstLine: q.lines[0]?.description ?? null, total: q.total, shoot: q.shoot });
+    revalidatePath("/studio", "layout");
+  } catch (err) {
+    console.error("billing: booking an accepted quotation failed:", err);
+  }
+}
+
+/** Keeps a saved invoice's booking in step: booked, moved or confirmed. */
+async function bookInvoice(scope: TenantScope, id: string): Promise<void> {
+  const invoice = await invoices.get(scope, id);
+  if (!invoice) return;
+  await bookings.bookInvoice(scope, id, {
+    customerId: invoice.customerId,
+    firstLine: invoice.lines[0]?.description ?? null,
+    total: invoice.total,
+    shoot: invoice.shoot,
+    quotationId: invoice.sourceId,
   });
 }
 
@@ -75,7 +109,8 @@ export async function createInvoice(input: unknown): Promise<Result<string>> {
   return runAction("billing", async () => {
     const { scope } = await studioOfCaller();
     const id = await invoices.create(scope, parseInput(invoiceInputSchema, input));
-    revalidatePath(INVOICES);
+    await bookInvoice(scope, id);
+    revalidatePath("/studio", "layout");
     return id;
   });
 }
@@ -84,7 +119,8 @@ export async function updateInvoice(id: unknown, input: unknown): Promise<Result
   return runAction("billing", async () => {
     const { scope } = await studioOfCaller();
     const saved = await invoices.update(scope, parseInput(invoiceIdSchema, id), parseInput(invoiceInputSchema, input));
-    revalidatePath(INVOICES, "layout");
+    await bookInvoice(scope, saved);
+    revalidatePath("/studio", "layout");
     return saved;
   });
 }
@@ -94,6 +130,7 @@ export async function invoiceFromQuotation(quotationId: unknown): Promise<Result
   return runAction("billing", async () => {
     const { scope } = await studioOfCaller();
     const id = await invoices.fromQuotation(scope, parseInput(quotationIdSchema, quotationId));
+    await bookInvoice(scope, id);
     revalidatePath("/studio", "layout");
     return id;
   });
@@ -119,7 +156,9 @@ export async function voidPayment(paymentId: unknown, reason: unknown): Promise<
 export async function voidInvoice(id: unknown, reason: unknown): Promise<Result> {
   return runAction("billing", async () => {
     const { scope } = await studioOfCaller();
-    await invoices.voidInvoice(scope, parseInput(invoiceIdSchema, id), parseInput(voidReasonSchema, reason));
+    const invoiceId = parseInput(invoiceIdSchema, id);
+    await invoices.voidInvoice(scope, invoiceId, parseInput(voidReasonSchema, reason));
+    await bookings.cancelForInvoice(scope, invoiceId);
     revalidatePath("/studio", "layout");
   });
 }

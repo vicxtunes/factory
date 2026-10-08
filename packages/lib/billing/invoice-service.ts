@@ -84,7 +84,7 @@ export class InvoiceService {
     const quotation = await this.quotations.get(scope, quotationId);
     if (!quotation) throw new BillingError("That quotation no longer exists.");
     if (quotation.response !== "accepted") throw new BillingError("Only an accepted quotation can become an invoice.");
-    const input: InvoiceInput = { customerId: quotation.customerId, dueDate: null, notes: quotation.notes, lines: quotation.lines };
+    const input: InvoiceInput = { customerId: quotation.customerId, dueDate: null, shoot: quotation.shoot, notes: quotation.notes, lines: quotation.lines };
     return this.store.save(scope, null, input, this.totalOf(input.lines), this.newToken(), quotation.id);
   }
 
@@ -177,6 +177,7 @@ function invoiceOf(r: InvoiceRecord & { lines: LineInput[] }, today: string): In
   return {
     ...summaryOf(r, today),
     ...totalsOf(lines),
+    shoot: r.shoot,
     notes: r.notes,
     sourceId: r.sourceId,
     voidedAt: r.voidedAt,
