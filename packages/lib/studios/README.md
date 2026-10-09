@@ -15,7 +15,8 @@ creates is tagged with its tenant id.
 - **Its own brand.** A studio's public pages carry only its brand: its logo and its color
   (`core/brand.ts`: ready-made colors, or its own made readable under white text), set over
   Aming's orange, plus its own tab title, icon and install manifest (apps/client `[slug]/layout.tsx`).
-  Chosen on the Business profile page; until then, the neutral default.
+  The owner's workspace wears the color too. Chosen on the Business profile page; until then,
+  the neutral default.
 - **Boss oversight.** The boss sees every studio at `/dashboard/studios`. Supervisors and
   receptionists don't.
 
