@@ -74,7 +74,7 @@ export async function setStudioSlug(slug: unknown): Promise<Result> {
  */
 export async function createPortalInvite(customerId: unknown): Promise<Result<{ url: string; whatsapp: string }>> {
   return runAction("studio-portal", async () => {
-    const { scope, studio } = await studioOfCaller();
+    const { scope, studio } = await studioOfCaller("clients");
     const slug = await portal.currentSlug(scope.tenantId);
     if (!slug) throw new PortalError("Choose your business's address first, on Business profile.");
     const id = parseInput(customerIdSchema, customerId);

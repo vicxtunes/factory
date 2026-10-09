@@ -13,7 +13,7 @@ import type { TenantScope } from "@repo/lib/tenancy/types";
 export const metadata = { title: "Edit project · My Business" };
 
 export default async function EditProjectPage({ params }: { params: Promise<{ id: string }> }) {
-  const { scope } = await requireStudio();
+  const { scope } = await requireStudio("projects");
   const id = projectIdSchema.safeParse((await params).id);
   const view = id.success ? await projects.get(scope, id.data) : null;
   if (!view) notFound();

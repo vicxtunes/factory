@@ -15,7 +15,7 @@ import type { TenantScope } from "@repo/lib/tenancy/types";
 export const metadata = { title: "Edit invoice · My Business" };
 
 export default async function EditInvoicePage({ params }: { params: Promise<{ id: string }> }) {
-  const { scope } = await requireStudio();
+  const { scope } = await requireStudio("money");
   const id = invoiceIdSchema.safeParse((await params).id);
   const invoice = id.success ? await invoices.get(scope, id.data) : null;
   if (!invoice) notFound();

@@ -37,7 +37,7 @@ export async function bookNow(slug: unknown, input: unknown): Promise<Result<Boo
 /** The studio confirms a client's request: the booking, its invoice and its project. Returns the project's id. */
 export async function confirmBookingRequest(bookingId: unknown): Promise<Result<{ invoiceId: string | null; projectId: string }>> {
   return runAction("booking-requests", async () => {
-    const { scope, session } = await studioOfCaller();
+    const { scope, session } = await studioOfCaller("bookings");
     const done = await bookingRequests.confirm(scope, parseInput(bookingIdSchema, bookingId), session.name);
     revalidatePath("/studio", "layout");
     return done;
@@ -46,7 +46,7 @@ export async function confirmBookingRequest(bookingId: unknown): Promise<Result<
 
 export async function declineBookingRequest(bookingId: unknown): Promise<Result> {
   return runAction("booking-requests", async () => {
-    const { scope } = await studioOfCaller();
+    const { scope } = await studioOfCaller("bookings");
     await bookingRequests.decline(scope, parseInput(bookingIdSchema, bookingId));
     revalidatePath("/studio", "layout");
   });

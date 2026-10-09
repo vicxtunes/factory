@@ -10,7 +10,7 @@ import type { TenantScope } from "@repo/lib/tenancy/types";
 export const metadata = { title: "New project · My Business" };
 
 export default async function NewProjectPage() {
-  const { scope } = await requireStudio();
+  const { scope } = await requireStudio("projects");
 
   return (
     <>

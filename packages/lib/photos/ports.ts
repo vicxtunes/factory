@@ -58,6 +58,8 @@ export interface PhotoRepository {
   photos(scope: TenantScope, albumId: string): Promise<Photo[]>;
   /** Records an uploaded photo. Throws PhotoError when it doesn't fit the allowance (checked in the database). */
   record(scope: TenantScope, photo: Omit<Photo, "position">): Promise<void>;
+  /** The album a photo is in; null when it isn't this tenant's. */
+  albumOf(scope: TenantScope, photoId: string): Promise<string | null>;
   setCaption(scope: TenantScope, id: string, caption: string | null): Promise<boolean>;
   /** Deletes the record; returns its file keys. Null when it isn't this tenant's. */
   deletePhoto(scope: TenantScope, id: string): Promise<string[] | null>;

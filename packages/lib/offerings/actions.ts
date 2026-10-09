@@ -39,7 +39,7 @@ import { amingCategories, amingProducts, offerings } from "./server";
 /** Runs one change in the caller's studio and refreshes its Packages & Services and Products pages. */
 function change<T>(work: (scope: Awaited<ReturnType<typeof studioOfCaller>>["scope"]) => Promise<T>): Promise<Result<T>> {
   return runAction("offerings", async () => {
-    const { scope } = await studioOfCaller();
+    const { scope } = await studioOfCaller("catalog");
     const result = await work(scope);
     revalidatePath("/studio/offerings");
     revalidatePath("/studio/products");
