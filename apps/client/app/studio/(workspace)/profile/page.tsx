@@ -36,7 +36,7 @@ export default async function StudioProfilePage() {
       <section className="space-y-3 rounded-2xl border border-border bg-surface p-4 shadow-theme-xs sm:p-5">
         <div>
           <p className="text-sm font-semibold">Brand color</p>
-          <p className="text-sm text-muted">Your public page, its buttons and links wear it, with your logo.</p>
+          <p className="text-sm text-muted">Your public page and this workspace wear it, with your logo.</p>
         </div>
         <BrandColorPicker current={studio.brandColor} />
       </section>

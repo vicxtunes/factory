@@ -105,7 +105,7 @@ export function BrandColorPicker({ current }: { current: string | null }) {
         <Button type="button" onClick={save} loading={pending} disabled={color === current}>
           Save color
         </Button>
-        {saved ? <span className="text-sm text-success-600 dark:text-success-400">Saved. Your public page wears it now.</span> : null}
+        {saved ? <span className="text-sm text-success-600 dark:text-success-400">Saved. Your public page and workspace wear it now.</span> : null}
       </div>
     </div>
   );
