@@ -36,7 +36,7 @@ export async function orderNow(slug: unknown, input: unknown): Promise<Result<Or
 /** The studio confirms a client's request: its invoice is made (none when priced on request). */
 export async function confirmProductRequest(id: unknown): Promise<Result<{ invoiceId: string | null }>> {
   return runAction("product-requests", async () => {
-    const { scope } = await studioOfCaller();
+    const { scope } = await studioOfCaller("money");
     const done = await productRequests.confirm(scope, parseInput(productRequestIdSchema, id));
     revalidatePath("/studio", "layout");
     return done;
@@ -45,7 +45,7 @@ export async function confirmProductRequest(id: unknown): Promise<Result<{ invoi
 
 export async function declineProductRequest(id: unknown): Promise<Result> {
   return runAction("product-requests", async () => {
-    const { scope } = await studioOfCaller();
+    const { scope } = await studioOfCaller("money");
     await productRequests.decline(scope, parseInput(productRequestIdSchema, id));
     revalidatePath("/studio", "layout");
   });

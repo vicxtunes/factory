@@ -12,7 +12,7 @@ import type { TenantScope } from "@repo/lib/tenancy/types";
 export const metadata = { title: "Packages & Services · My Business" };
 
 export default async function StudioOfferingsPage() {
-  const { scope } = await requireStudio();
+  const { scope } = await requireStudio("catalog");
   return (
     <>
       <p className="text-sm text-muted">

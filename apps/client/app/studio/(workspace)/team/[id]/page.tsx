@@ -5,6 +5,7 @@ import { SectionLabel } from "@repo/ui/SectionLabel";
 import { RowsSkeleton } from "@repo/ui/skeletons/blocks";
 import { Loading } from "@repo/ui/skeletons/Loading";
 import { TaskRows } from "@repo/ui/tasks/TaskRows";
+import { TeamAccess } from "@repo/ui/team/TeamAccess";
 import { TeamArchiveButton, TeamMemberForm } from "@repo/ui/team/TeamForms";
 import { localDate } from "@repo/lib/accounting/core/period";
 import { requireStudio } from "@repo/lib/studios/server";
@@ -31,6 +32,7 @@ export default async function TeamMemberPage({ params }: { params: Promise<{ id:
         <h2 className="mt-1 text-xl font-semibold">{member.name}</h2>
       </div>
       <TeamMemberForm key={member.id} member={member} />
+      <TeamAccess key={`${member.id}-access`} member={member} />
       <section>
         <SectionLabel>Their open tasks</SectionLabel>
         <Loading skeleton={<RowsSkeleton rows={3} />}>

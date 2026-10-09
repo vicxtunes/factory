@@ -82,3 +82,14 @@ test("one studio can't read, change, finish or remove another's task", async () 
   await assert.rejects(service.remove(studioB, id), TaskError);
   assert.deepEqual([rows.length, rows[0].status], [1, "pending"]);
 });
+
+test("a team member moves only the tasks given to them", async () => {
+  const { service, rows } = fakes();
+  const theirs = await service.create(studioA, cull);
+  const someoneElses = await service.create(studioA, { ...cull, assigneeId: null, title: "Order album" });
+  await service.setStatus(studioA, theirs, "in_progress", "joel");
+  assert.equal(rows[0].status, "in_progress");
+  await assert.rejects(service.setStatus(studioA, someoneElses, "done", "joel"), /Only the person it's given to/);
+  await service.setStatus(studioA, someoneElses, "done");
+  assert.equal(rows[1].status, "done", "the owner, or Projects & tasks, moves any");
+});

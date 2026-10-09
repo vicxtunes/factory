@@ -18,7 +18,7 @@ import { bookings } from "./server";
 
 export async function createBooking(input: unknown): Promise<Result<string>> {
   return runAction("bookings", async () => {
-    const { scope } = await studioOfCaller();
+    const { scope } = await studioOfCaller("bookings");
     const id = await bookings.create(scope, parseInput(bookingInputSchema, input));
     revalidatePath("/studio", "layout");
     return id;
@@ -32,7 +32,7 @@ export async function createBooking(input: unknown): Promise<Result<string>> {
  */
 export async function updateBooking(id: unknown, input: unknown): Promise<Result> {
   return runAction("bookings", async () => {
-    const { scope } = await studioOfCaller();
+    const { scope } = await studioOfCaller("bookings");
     const details = parseInput(bookingInputSchema, input);
     const bookingId = parseInput(bookingIdSchema, id);
     await bookings.update(scope, bookingId, details);
@@ -48,7 +48,7 @@ export async function updateBooking(id: unknown, input: unknown): Promise<Result
 /** For a form's warning: the caller's bookings this day and these times would clash with, leaving out the one being changed. Warns, never blocks. */
 export async function findClashes(when: unknown, exceptId: unknown): Promise<Result<Booking[]>> {
   return runAction("bookings", async () => {
-    const { scope } = await studioOfCaller();
+    const { scope } = await studioOfCaller("bookings");
     return bookings.clashesWith(scope, parseInput(bookingWhenSchema, when), exceptId == null ? null : parseInput(bookingIdSchema, exceptId));
   });
 }
@@ -56,7 +56,7 @@ export async function findClashes(when: unknown, exceptId: unknown): Promise<Res
 /** Confirm, complete, cancel or reopen. */
 export async function setBookingStatus(id: unknown, status: unknown): Promise<Result> {
   return runAction("bookings", async () => {
-    const { scope } = await studioOfCaller();
+    const { scope } = await studioOfCaller("bookings");
     await bookings.setStatus(scope, parseInput(bookingIdSchema, id), parseInput(bookingStatusSchema, status));
     revalidatePath("/studio", "layout");
   });

@@ -4,6 +4,7 @@
 // rest in "More". To add, move or rename a studio page, edit this file only.
 
 import type { HomeBarIcon } from "@repo/ui/HomeBar";
+import { canUse, type Area, type StudioAccess } from "@repo/lib/team/core";
 
 export interface StudioNavItem {
   href: string;
@@ -11,6 +12,8 @@ export interface StudioNavItem {
   icon: HomeBarIcon;
   /** Match only this exact path (the dashboard). */
   exact?: boolean;
+  /** Who sees it besides the owner: team members with this area, or "anyone" on the team. None: the owner only. */
+  need?: Area | "anyone";
 }
 
 export interface StudioNavSection {
@@ -21,14 +24,14 @@ export interface StudioNavSection {
 }
 
 export const STUDIO_NAV: StudioNavSection[] = [
-  { id: "main", label: null, items: [{ href: "/studio", label: "Dashboard", icon: "dashboard", exact: true }] },
+  { id: "main", label: null, items: [{ href: "/studio", label: "Dashboard", icon: "dashboard", exact: true, need: "anyone" }] },
   {
     id: "work",
     label: "Work",
     items: [
-      { href: "/studio/bookings", label: "Bookings", icon: "calendar" },
-      { href: "/studio/projects", label: "Projects", icon: "studio" },
-      { href: "/studio/tasks", label: "Tasks", icon: "tasks" },
+      { href: "/studio/bookings", label: "Bookings", icon: "calendar", need: "bookings" },
+      { href: "/studio/projects", label: "Projects", icon: "studio", need: "projects" },
+      { href: "/studio/tasks", label: "Tasks", icon: "tasks", need: "anyone" },
       { href: "/studio/team", label: "Team", icon: "agents" },
     ],
   },
@@ -36,9 +39,9 @@ export const STUDIO_NAV: StudioNavSection[] = [
     id: "clients",
     label: "Clients & money",
     items: [
-      { href: "/studio/clients", label: "Clients", icon: "clients" },
-      { href: "/studio/quotations", label: "Quotations", icon: "invoice" },
-      { href: "/studio/invoices", label: "Invoices", icon: "payment" },
+      { href: "/studio/clients", label: "Clients", icon: "clients", need: "clients" },
+      { href: "/studio/quotations", label: "Quotations", icon: "invoice", need: "money" },
+      { href: "/studio/invoices", label: "Invoices", icon: "payment", need: "money" },
       { href: "/studio/documents", label: "Document settings", icon: "settings" },
     ],
   },
@@ -46,15 +49,20 @@ export const STUDIO_NAV: StudioNavSection[] = [
     id: "studio",
     label: "Business",
     items: [
-      { href: "/studio/offerings", label: "Packages & Services", icon: "products" },
-      { href: "/studio/products", label: "Products", icon: "placeOrder" },
-      { href: "/studio/showroom", label: "Showroom", icon: "showroom" },
+      { href: "/studio/offerings", label: "Packages & Services", icon: "products", need: "catalog" },
+      { href: "/studio/products", label: "Products", icon: "placeOrder", need: "catalog" },
+      { href: "/studio/showroom", label: "Showroom", icon: "showroom", need: "catalog" },
       { href: "/studio/profile", label: "Business profile", icon: "settings" },
     ],
   },
 ];
 
-/** On the phone's bar; everything else is in "More". */
+/** The menu as `access` sees it: the owner all of it, a team member what they were given (empty sections left out). */
+export function studioNavFor(access: StudioAccess): StudioNavSection[] {
+  return STUDIO_NAV.map((s) => ({ ...s, items: s.items.filter((i) => i.need === "anyone" || canUse(access, i.need)) })).filter((s) => s.items.length > 0);
+}
+
+/** On the phone's bar (those the person can use); everything else is in "More". */
 export const STUDIO_TABS = ["/studio", "/studio/bookings", "/studio/projects", "/studio/clients"];
 
 const TITLES: Record<string, string> = {

@@ -310,6 +310,12 @@ export const supabasePhotoRepository: PhotoRepository = {
     if (error) fail("save the photo", error);
   },
 
+  async albumOf(scope, photoId) {
+    const { data, error } = await db().from("photos").select("album_id").eq("tenant_id", scope.tenantId).eq("id", photoId).maybeSingle<{ album_id: string }>();
+    if (error) fail("find the photo's album", error);
+    return data?.album_id ?? null;
+  },
+
   async setCaption(scope, id, caption) {
     const { data, error } = await db().from("photos").update({ caption }).eq("tenant_id", scope.tenantId).eq("id", id).select("id");
     if (error) fail("save the caption", error);

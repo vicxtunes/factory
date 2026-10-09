@@ -23,10 +23,11 @@ import {
   TasksIcon,
 } from "@repo/ui/icons";
 import { studioInitials } from "@repo/lib/studios/core";
+import type { StudioAccess } from "@repo/lib/team/core";
 
 import { getMyNotifications, logoutClient } from "../../actions";
 import { ClientUserMenu } from "../../user-menu";
-import { isCurrentStudioPage, STUDIO_NAV, STUDIO_TABS, studioPageTitle, type StudioNavItem } from "./nav";
+import { isCurrentStudioPage, STUDIO_TABS, studioNavFor, studioPageTitle, type StudioNavItem, type StudioNavSection } from "./nav";
 
 /** How the studio presents itself in its own workspace. */
 export interface StudioBrand {
@@ -73,7 +74,7 @@ export function StudioMark({ brand, size }: { brand: Pick<StudioBrand, "name" | 
 }
 
 // Desktop/tablet (md+): the studio's mark and name, its menu, and the way back to Aming.
-function StudioSidebar({ brand }: { brand: StudioBrand }) {
+function StudioSidebar({ brand, nav, switcher }: { brand: StudioBrand; nav: StudioNavSection[]; switcher: React.ReactNode }) {
   const pathname = usePathname();
   return (
     <aside className="fixed inset-y-0 left-0 z-50 hidden w-64 flex-col border-r border-border bg-surface md:flex">
@@ -84,8 +85,9 @@ function StudioSidebar({ brand }: { brand: StudioBrand }) {
           <p className="text-xs text-muted">My Business</p>
         </div>
       </div>
+      {switcher}
       <nav aria-label="My Business" className="flex-1 space-y-5 overflow-y-auto px-3 py-4">
-        {STUDIO_NAV.map((section) => (
+        {nav.map((section) => (
           <div key={section.id}>
             {section.label ? (
               <p className="mb-1 px-3 text-xs font-semibold uppercase tracking-wide text-muted">{section.label}</p>
@@ -130,7 +132,7 @@ function ExternalIcon({ className }: { className?: string }) {
   );
 }
 
-function StudioTopbar({ brand, user }: { brand: StudioBrand; user: { name: string; avatarUrl: string | null } }) {
+function StudioTopbar({ brand, user, owner }: { brand: StudioBrand; user: { name: string; avatarUrl: string | null }; owner: boolean }) {
   const pathname = usePathname();
   return (
     <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-3 border-b border-border bg-surface px-4 sm:px-6">
@@ -141,15 +143,17 @@ function StudioTopbar({ brand, user }: { brand: StudioBrand; user: { name: strin
       </span>
       <h1 className="truncate text-base font-semibold">{studioPageTitle(pathname)}</h1>
       <div className="relative ml-auto flex items-center gap-3">
-        <Link
-          href={brand.publicHref ?? "/studio/profile"}
-          target={brand.publicHref ? "_blank" : undefined}
-          title={brand.publicHref ? "Your business's public page" : "Choose your business's address first"}
-          className="inline-flex min-h-9 items-center gap-1.5 rounded-[var(--radius)] border border-border px-3 text-sm font-medium hover:bg-gray-50 dark:hover:bg-white/5"
-        >
-          <ExternalIcon className="h-4 w-4" />
-          <span className="hidden sm:inline">View public page</span>
-        </Link>
+        {brand.publicHref || owner ? (
+          <Link
+            href={brand.publicHref ?? "/studio/profile"}
+            target={brand.publicHref ? "_blank" : undefined}
+            title={brand.publicHref ? "Your business's public page" : "Choose your business's address first"}
+            className="inline-flex min-h-9 items-center gap-1.5 rounded-[var(--radius)] border border-border px-3 text-sm font-medium hover:bg-gray-50 dark:hover:bg-white/5"
+          >
+            <ExternalIcon className="h-4 w-4" />
+            <span className="hidden sm:inline">View public page</span>
+          </Link>
+        ) : null}
         <NotificationBell fetchNotifications={getMyNotifications} />
         <ClientUserMenu name={user.name} avatarUrl={user.avatarUrl} />
       </div>
@@ -159,9 +163,9 @@ function StudioTopbar({ brand, user }: { brand: StudioBrand; user: { name: strin
 
 // Phones: Dashboard, Bookings, Projects and Clients on the bar; the rest, and
 // the way back to Aming, in "More".
-function StudioHomeBar() {
-  const items = STUDIO_NAV.flatMap((s) => s.items.map((i) => ({ ...i, section: s.label ?? undefined })));
-  const tabs: HomeBarLink[] = STUDIO_TABS.map((href) => items.find((i) => i.href === href)!).map((i) => ({
+function StudioHomeBar({ nav }: { nav: StudioNavSection[] }) {
+  const items = nav.flatMap((s) => s.items.map((i) => ({ ...i, section: s.label ?? undefined })));
+  const tabs: HomeBarLink[] = items.filter((i) => STUDIO_TABS.includes(i.href)).map((i) => ({
     href: i.href,
     label: i.label,
     icon: i.icon,
@@ -181,22 +185,32 @@ function StudioHomeBar() {
 export function StudioShell({
   brand,
   user,
+  access,
+  switcher,
   children,
 }: {
   brand: StudioBrand;
   user: { name: string; avatarUrl: string | null };
+  /** The owner sees the whole menu; a team member what they were given. */
+  access: StudioAccess;
+  /** Choosing between the businesses the account opens, when there's more than one. */
+  switcher: React.ReactNode;
   children: React.ReactNode;
 }) {
+  const nav = studioNavFor(access);
   return (
     <div className="min-h-screen">
-      <StudioSidebar brand={brand} />
+      <StudioSidebar brand={brand} nav={nav} switcher={switcher} />
       <div className="flex min-h-screen flex-col md:pl-64">
-        <StudioTopbar brand={brand} user={user} />
+        <StudioTopbar brand={brand} user={user} owner={access.owner} />
         <main className="flex-1 bg-background px-4 py-6 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:px-6 md:pb-6">
-          <div className="mx-auto max-w-5xl space-y-4">{children}</div>
+          <div className="mx-auto max-w-5xl space-y-4">
+            {switcher ? <div className="-mx-4 -mt-6 sm:-mx-6 md:hidden">{switcher}</div> : null}
+            {children}
+          </div>
         </main>
       </div>
-      <StudioHomeBar />
+      <StudioHomeBar nav={nav} />
     </div>
   );
 }

@@ -272,6 +272,12 @@ export class PhotoService {
     }
   }
 
+  /** The album a photo is in (null: not this studio's photo). */
+  async albumOfPhoto(scope: TenantScope, photoId: string): Promise<AlbumView | null> {
+    const albumId = await this.repo.albumOf(scope, photoId);
+    return albumId ? this.album(scope, albumId) : null;
+  }
+
   async setCaption(scope: TenantScope, id: string, caption: string | null): Promise<void> {
     if (!(await this.repo.setCaption(scope, id, caption))) throw new PhotoError("That photo no longer exists.");
   }

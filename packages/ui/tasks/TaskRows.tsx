@@ -29,7 +29,8 @@ function useTaskAction() {
 
 /**
  * Tasks with what's due and who's on it. With `editable`, each can be ticked
- * done (or reopened), started and removed. `showProject` names each one's
+ * done (or reopened), started and removed; with "status", not removed (a
+ * team member's own tasks). `showProject` names each one's
  * project, linked to `${projectPath}/${id}` (plain text when null).
  */
 export function TaskRows({
@@ -44,7 +45,7 @@ export function TaskRows({
   tasks: Task[];
   today: string;
   scope: Pick<TenantScope, "locale" | "timeZone">;
-  editable: boolean;
+  editable: boolean | "status";
   showProject?: boolean;
   projectPath?: string | null;
   empty?: string;
@@ -103,14 +104,16 @@ export function TaskRows({
                       Start
                     </button>
                   ) : null}
-                  <button
-                    type="button"
-                    disabled={pending}
-                    onClick={() => window.confirm("Remove this task?") && run(() => removeTask(t.id))}
-                    className="text-error-600 hover:underline dark:text-error-400"
-                  >
-                    Remove
-                  </button>
+                  {editable === true ? (
+                    <button
+                      type="button"
+                      disabled={pending}
+                      onClick={() => window.confirm("Remove this task?") && run(() => removeTask(t.id))}
+                      className="text-error-600 hover:underline dark:text-error-400"
+                    >
+                      Remove
+                    </button>
+                  ) : null}
                 </div>
               ) : null}
             </li>

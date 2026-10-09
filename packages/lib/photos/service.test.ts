@@ -99,6 +99,7 @@ function fakes(quotaBytes = 10 * MB) {
       if (used(s.tenantId) + p.bytes > quotas.get(s.tenantId)!) throw new PhotoError("Not enough space left for that photo.");
       photos.push({ ...p, tenantId: s.tenantId, position: photos.length + 1 });
     },
+    albumOf: async (s, photoId) => photos.find((x) => x.tenantId === s.tenantId && x.id === photoId)?.albumId ?? null,
     setCaption: async (s, id, c) => {
       const p = photos.find((x) => x.tenantId === s.tenantId && x.id === id);
       if (p) p.caption = c;

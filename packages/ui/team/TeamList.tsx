@@ -19,6 +19,14 @@ export function TeamList({ members, openTasks, basePath }: { members: TeamMember
                 m.name
               )}
               {m.archivedAt ? <span className="ml-1 text-xs font-normal text-muted">(archived)</span> : null}
+              {!m.archivedAt && m.joined ? (
+                <span className="ml-2 rounded-full bg-success-50 px-2 py-0.5 text-xs font-normal text-success-700 dark:bg-success-500/15 dark:text-success-400">
+                  Signs in
+                </span>
+              ) : null}
+              {!m.archivedAt && !m.joined && m.invite ? (
+                <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-normal text-muted dark:bg-white/5">Invited</span>
+              ) : null}
             </p>
             <p className="text-xs text-muted">{[m.role, m.phone].filter(Boolean).join(" · ") || "—"}</p>
           </div>
