@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import type { Studio, StudioListing } from "./core";
+import { contrastWithWhite, type Studio, type StudioListing } from "./core";
 import type { StudioStore } from "./ports";
 import { StudioService } from "./service";
 
@@ -27,6 +27,7 @@ function memoryStore() {
         createdAt: new Date(Date.UTC(2026, 9, 3, 0, 0, clock++)).toISOString(),
         status: "onboarding",
         logoKey: null,
+        brandColor: null,
         passwordSetAt: null,
       };
       rows.set(studio.id, studio);
@@ -34,6 +35,11 @@ function memoryStore() {
     },
     updateProfile: async (id, profile) => {
       const studio = { ...rows.get(id)!, ...profile };
+      rows.set(id, studio);
+      return studio;
+    },
+    setBrandColor: async (id, brandColor) => {
+      const studio = { ...rows.get(id)!, brandColor };
       rows.set(id, studio);
       return studio;
     },
@@ -72,6 +78,16 @@ test("saving a profile changes only that studio", async () => {
   assert.equal(saved.ownerClientId, "c-amina");
   assert.equal(saved.name, "Amina Studios");
   assert.equal((await service.get(brians.id))?.name, "Brian");
+});
+
+test("a studio's own color is saved made readable", async () => {
+  const { store } = memoryStore();
+  const service = new StudioService(store);
+  const aminas = await service.open(amina);
+  assert.equal((await service.setBrandColor(aminas.id, "#1d4ed8")).brandColor, "#1d4ed8");
+  const yellow = (await service.setBrandColor(aminas.id, "#ffff00")).brandColor!;
+  assert.notEqual(yellow, "#ffff00");
+  assert.ok(contrastWithWhite(yellow) >= 4.5);
 });
 
 test("the boss's list is newest first", async () => {

@@ -46,9 +46,10 @@ function showroomTabs(catalog: ProductCategory[]): ShowroomTab[] {
   ];
 }
 
-// The public showroom — no login needed. Rendered at /showroom and
-// as the front door (/) for signed-out visitors. The banner and sign-in
-// prompt show at once; the catalog's tabs and tiles while it loads are a skeleton.
+// The public showroom — no login needed. Rendered at /showroom and as the
+// front door (/) for signed-out visitors while studios are off. The banner and
+// sign-in prompt show at once; the catalog's tabs and tiles while it loads are
+// a skeleton.
 export async function ShowroomView() {
   const session = await getClientSession();
 

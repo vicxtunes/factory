@@ -22,6 +22,7 @@ import {
   StudioIcon,
   TasksIcon,
 } from "@repo/ui/icons";
+import { studioInitials } from "@repo/lib/studios/core";
 
 import { getMyNotifications, logoutClient } from "../../actions";
 import { ClientUserMenu } from "../../user-menu";
@@ -64,15 +65,9 @@ export function StudioMark({ brand, size }: { brand: Pick<StudioBrand, "name" | 
     // eslint-disable-next-line @next/next/no-img-element
     return <img ref={img} src={brand.logoUrl} alt="" onError={() => setBroken(true)} className={`${box} shrink-0 rounded-lg object-cover`} />;
   }
-  const initials = brand.name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((w) => w[0]!.toUpperCase())
-    .join("");
   return (
     <span className={`${box} grid shrink-0 place-items-center rounded-lg bg-brand-500 font-semibold text-white`}>
-      {initials || "S"}
+      {studioInitials(brand.name)}
     </span>
   );
 }

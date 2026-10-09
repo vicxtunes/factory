@@ -12,6 +12,11 @@ creates is tagged with its tenant id.
   **My Business**, named after them. Opening it again, or in two tabs at once, gives the same studio.
 - **Business profile.** Name, phone, email and address: what the studio's documents and
   customers will show. The owner edits it on `/studio`.
+- **Its own brand.** A studio's public pages carry only its brand: its logo and its color
+  (`core/brand.ts`: ready-made colors, or its own made readable under white text), set over
+  Aming's orange, plus its own tab title, icon and install manifest (apps/client `[slug]/layout.tsx`).
+  The owner's workspace wears the color too. Chosen on the Business profile page; until then,
+  the neutral default.
 - **Boss oversight.** The boss sees every studio at `/dashboard/studios`. Supervisors and
   receptionists don't.
 

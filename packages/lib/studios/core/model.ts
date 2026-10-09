@@ -26,6 +26,8 @@ export interface Studio extends StudioProfile {
   /** Where it is in onboarding and review (packages/lib/studio-access). Only an active studio works. */
   status: StudioStatus;
   logoKey: string | null;
+  /** Its public pages' color (core/brand.ts), already readable; null until chosen. */
+  brandColor: string | null;
   /** When the studio password was set: a device's unlock must carry the same. */
   passwordSetAt: string | null;
 }

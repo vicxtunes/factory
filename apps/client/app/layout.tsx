@@ -32,6 +32,15 @@ export const metadata: Metadata = {
   title: { default: app.title, template: `%s - ${app.name}` },
   description: app.description,
   applicationName: app.shortName,
+  // Set here, not as app/favicon.ico & co (which Next adds to every page), so
+  // a studio's pages can replace them with their own ([slug]/layout.tsx).
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "256x256" },
+      { url: "/icon.png", sizes: "192x192", type: "image/png" },
+    ],
+    apple: { url: "/apple-icon.png", sizes: "180x180" },
+  },
   openGraph: { siteName: app.name, title: app.title, description: app.description, type: "website" },
   // iOS uses this for the home-screen label.
   appleWebApp: {

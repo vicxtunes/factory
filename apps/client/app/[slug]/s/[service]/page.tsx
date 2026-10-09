@@ -36,7 +36,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const title = `${loaded.found.name} · ${loaded.at.studio.name}`;
   const description = loaded.found.description?.trim() || `${loaded.found.name} by ${loaded.at.studio.name}`;
   // Shown when the link is shared (WhatsApp, Facebook, X…), with the picture from ./opengraph-image.
-  return { title, description, openGraph: { title, description, type: "website" }, twitter: { card: "summary_large_image", title, description } };
+  return { title: { absolute: title }, description, openGraph: { title, description, type: "website" }, twitter: { card: "summary_large_image", title, description } };
 }
 
 export default async function ServicePage({ params }: Params) {

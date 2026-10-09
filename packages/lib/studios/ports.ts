@@ -13,6 +13,7 @@ export interface StudioStore {
    */
   create(owner: StudioOwner): Promise<Studio>;
   updateProfile(id: string, profile: StudioProfile): Promise<Studio>;
+  setBrandColor(id: string, color: string): Promise<Studio>;
   /** Every studio, for the boss. */
   list(): Promise<StudioListing[]>;
   get(id: string): Promise<StudioListing | null>;

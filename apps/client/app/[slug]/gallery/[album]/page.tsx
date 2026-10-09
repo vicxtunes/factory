@@ -29,7 +29,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   if (!loaded?.found) return { title: "Not found" };
   const { album } = loaded.found;
   const title = `${album.title} · ${loaded.at.studio.name}`;
-  return { title, openGraph: { title, type: "website", images: album.coverUrl ? [album.coverUrl] : [] } };
+  return { title: { absolute: title }, openGraph: { title, type: "website", images: album.coverUrl ? [album.coverUrl] : [] } };
 }
 
 export default async function AlbumPage({ params }: Params) {

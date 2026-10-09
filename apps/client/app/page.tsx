@@ -4,10 +4,12 @@ import { Loading } from "@repo/ui/skeletons/Loading";
 import { WalletSummaryCard } from "@repo/ui/wallet/WalletSummaryCard";
 import { getClientSession } from "@repo/lib/auth/session";
 import { fetchClientItems, fetchMarketingSlides } from "@repo/lib/queries";
+import { STUDIOS_ENABLED } from "@repo/lib/studios/feature";
 import { getMyWalletSummary } from "@repo/lib/wallet/actions";
 
 import { AuthGate } from "./auth-gate";
 import { ClientDashboard } from "./dashboard";
+import { Landing } from "./landing";
 import { ClientShell } from "./shell";
 import { ShowroomView } from "./showroom-view";
 
@@ -20,10 +22,11 @@ export default async function ClientSidePage({
   const session = await getClientSession();
 
   if (!session) {
-    // Signed-out visitors land on the public showroom; the sign-in form only
-    // shows when asked for (?signin=1, e.g. from the topbar's Log in link).
+    // Signed-out visitors land on Aming Space's landing page (the public
+    // showroom while studios are off); the sign-in form only shows when asked
+    // for (?signin=1, e.g. from the topbar's Log in link).
     const params = await searchParams;
-    if (!params.signin) return <ShowroomView />;
+    if (!params.signin) return STUDIOS_ENABLED ? <Landing /> : <ShowroomView />;
     return (
       <>
         <Header surface="Client Portal" />

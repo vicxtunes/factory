@@ -22,10 +22,11 @@ interface Row {
   created_at: string;
   status: Studio["status"];
   logo_key: string | null;
+  brand_color: string | null;
   password_set_at: string | null;
 }
 
-const COLUMNS = "id, owner_client_id, name, phone, email, address, currency, locale, time_zone, created_at, status, logo_key, password_set_at";
+const COLUMNS = "id, owner_client_id, name, phone, email, address, currency, locale, time_zone, created_at, status, logo_key, brand_color, password_set_at";
 
 const toStudio = (r: Row): Studio => ({
   id: r.id,
@@ -40,6 +41,7 @@ const toStudio = (r: Row): Studio => ({
   createdAt: r.created_at,
   status: r.status,
   logoKey: r.logo_key,
+  brandColor: r.brand_color,
   passwordSetAt: r.password_set_at,
 });
 
@@ -88,6 +90,18 @@ export const supabaseStudioStore: StudioStore = {
       .select(COLUMNS)
       .single<Row>();
     if (error) fail("save the business", error);
+    return toStudio(data);
+  },
+
+  async setBrandColor(id, color) {
+    const { data, error } = await createAdminClient()
+      .from("tenants")
+      .update({ brand_color: color })
+      .eq("id", id)
+      .not("owner_client_id", "is", null)
+      .select(COLUMNS)
+      .single<Row>();
+    if (error) fail("save the color", error);
     return toStudio(data);
   },
 
