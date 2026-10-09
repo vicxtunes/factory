@@ -1,7 +1,7 @@
 // Studio access records. Pure; safe on client and server.
 //
-// Who may operate a studio: it is onboarded by its owner, reviewed by the
-// boss, and opened on each device with the studio password.
+// Who may operate a studio: it is onboarded by its owner and reviewed by the
+// boss. Once approved, the owner's Aming sign-in opens it — no second login.
 
 /**
  * - onboarding: the owner is filling in the set-up steps.
@@ -29,10 +29,6 @@ export interface StudioAccess {
   ownerEmailVerifiedAt: string | null;
   /** The studio's current public address, if it has chosen one. */
   slug: string | null;
-  passwordHash: string | null;
-  passwordSetAt: string | null;
-  passwordFailedAttempts: number;
-  passwordLockedUntil: string | null;
   submittedAt: string | null;
   reviewedAt: string | null;
   reviewNote: string | null;
@@ -42,7 +38,7 @@ export interface StudioAccess {
 /** A pending email code (only its hash is kept). */
 export interface EmailCode {
   tenantId: string;
-  purpose: "verify" | "reset";
+  purpose: "verify";
   email: string;
   codeHash: string;
   attempts: number;
@@ -51,7 +47,7 @@ export interface EmailCode {
 }
 
 /** The onboarding steps after the welcome, in order. */
-export type OnboardingStep = "details" | "logo" | "address" | "email" | "password" | "submit";
+export type OnboardingStep = "details" | "logo" | "address" | "email" | "submit";
 
 /** A studio as the boss sees it when reviewing. */
 export interface StudioForReview {

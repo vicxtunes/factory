@@ -4,7 +4,7 @@ import { z } from "zod";
 
 import { parsePhone } from "@repo/lib/kernel/core";
 
-import { CODE_DIGITS, PASSWORD_MAX, PASSWORD_MIN } from "./rules";
+import { CODE_DIGITS } from "./rules";
 
 const ownerName = (label: string) =>
   z
@@ -51,22 +51,6 @@ export const codeSchema = z
   .string("Enter the code from the email.")
   .transform((v) => v.replace(/\s/g, ""))
   .pipe(z.string().regex(new RegExp(`^\\d{${CODE_DIGITS}}$`), `Enter the ${CODE_DIGITS}-digit code from the email.`));
-
-const password = z
-  .string("Enter a password.")
-  .min(PASSWORD_MIN, `Use at least ${PASSWORD_MIN} characters.`)
-  .max(PASSWORD_MAX, `Keep the password under ${PASSWORD_MAX} characters.`);
-
-/** A new password, typed twice. Common ones are refused by the service (passwordProblem). */
-export const newPasswordSchema = z
-  .object({ password, confirm: z.string("Type the password again.") })
-  .refine((v) => v.password === v.confirm, { message: "The two passwords don't match.", path: ["confirm"] })
-  .transform((v) => v.password);
-
-export const unlockSchema = z.string("Enter the business password.").min(1, "Enter the business password.").max(PASSWORD_MAX, "That password is wrong.");
-
-/** A password reset: the emailed code and the new password. */
-export const resetSchema = z.object({ code: codeSchema, password: newPasswordSchema });
 
 export const reviewSchema = z
   .object({

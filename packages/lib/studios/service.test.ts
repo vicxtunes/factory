@@ -28,7 +28,6 @@ function memoryStore() {
         status: "onboarding",
         logoKey: null,
         brandColor: null,
-        passwordSetAt: null,
       };
       rows.set(studio.id, studio);
       return studio;

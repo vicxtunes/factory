@@ -1,12 +1,14 @@
 "use server";
 
+import { createHmac, randomInt, randomUUID, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 
 import { createAdminClient } from "@repo/lib/supabase/admin";
-import { CLIENT_COOKIE, signPayload } from "@repo/lib/auth/cookies";
+import { createClient } from "@repo/lib/supabase/server";
+import { countAttempt, tooManyAttempts } from "@repo/lib/auth/attempts";
+import { signPayload, verifyPayload } from "@repo/lib/auth/cookies";
 import { getClientSession } from "@repo/lib/auth/session";
-import { hashPin, isValidPinFormat, verifyPin } from "@repo/lib/auth/pin";
 import { logOrderEvent, resolveActor } from "@repo/lib/audit/log";
 import {
   exactClientMatch,
@@ -22,32 +24,57 @@ import type { CreateOrderResult, OrderItemInput } from "@repo/lib/orders/types";
 import { projectIdSchema } from "@repo/lib/projects/core";
 import { notifyActor } from "@repo/lib/push/send";
 import { fetchClientNotifications } from "@repo/lib/queries";
-import { clearUnlockCookie } from "@repo/lib/studio-access/server";
+import { LOGO_CID, maskEmail, signInCodeEmail } from "@repo/lib/studio-access/core";
+import { resendMailer } from "@repo/lib/studio-access/adapters/resend/mailer";
 import { linkPlacedOrder } from "@repo/lib/studio-orders/server";
 import type { NotificationRow, OrderType } from "@repo/lib/types";
 
-const COOKIE_MAX_AGE = 60 * 60 * 24 * 30; // "remembered on device", same as worker/designer sessions
 const NAME_MAX = 100;
 
 type ActionResult = { ok: true } | { ok: false; error: string };
 
-async function setClientCookie(clientId: string, name: string): Promise<void> {
-  const store = await cookies();
-  store.set(CLIENT_COOKIE, await signPayload({ client_id: clientId, name }), {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    maxAge: COOKIE_MAX_AGE,
-  });
+// Clients sign in with a phone number to find the account, then a 6-digit
+// code emailed to the address on file. The code is ours — made here, sent
+// through Resend, only its HMAC kept — so Supabase never emails anyone and
+// its OTP settings don't matter. Once it checks out, Supabase Auth issues the
+// standard session (JWT) cookies, refreshed by proxy.ts and read by
+// getClientSession through the client_identities link.
+//
+// The code goes to the email on the account. An older account with no email
+// yet adds one here and verifies it with the code.
+//
+// Between the two steps, who is signing in (and, for a new account, the name
+// and phone to create it with) and the code's hash ride in a short-lived
+// signed cookie, so the browser can't swap in another account at the code
+// step. Wrong guesses are counted server-side per code (auth_attempts), so
+// replaying the cookie doesn't reset them.
+
+const LOGIN_COOKIE = "client_login";
+const LOGIN_TTL_SECONDS = 10 * 60;
+
+interface PendingLogin {
+  email: string;
+  phone: string;
+  clientId: string | null; // null: create the account once the code checks out
+  name: string | null;
+  nonce: string;
+  codeHash: string;
+  exp: number;
 }
 
-// Clients sign in with just a phone number. Security is opt-in: by default an
-// account only needs a matching phone number to log in (no PIN at signup). A
-// client can add a PIN later from /settings (setPin below) —
-// once one exists, continueLogin requires it. checkAccount lets the login
-// form know, after the phone step, whether to ask for a name (new account)
-// or a PIN (returning + PIN enabled).
+const CODE_MINUTES = LOGIN_TTL_SECONDS / 60;
+
+function hashCode(nonce: string, email: string, code: string): string {
+  const secret = process.env.APP_SECRET;
+  if (!secret) throw new Error("APP_SECRET is not set");
+  return createHmac("sha256", secret).update(`client-login:${nonce}:${email}:${code}`).digest("hex");
+}
+
+export type StartLoginResult =
+  | { ok: true; step: "code"; sentTo: string }
+  | { ok: true; step: "new" } // unknown number: ask for name + email
+  | { ok: true; step: "add-email" } // known number, no email yet
+  | { ok: false; error: string };
 
 // The client, if any, that holds this phone number. The database matches it
 // however the record was typed (0703…, +256703…; norm_client_phone).
@@ -58,28 +85,61 @@ async function clientByPhone(
   return exactClientMatch(await findClientCandidates(admin, { phone }));
 }
 
-export async function checkAccount(phone: string): Promise<{ exists: boolean; pinRequired: boolean; error?: string }> {
-  const parsed = parsePhone(phone);
-  if (!parsed.ok) return { exists: false, pinRequired: false, error: parsed.error };
-
-  const admin = createAdminClient();
-  const match = await clientByPhone(admin, parsed.store);
-  if (!match || !match.active) return { exists: false, pinRequired: false };
-
-  const { data: cred } = await admin
-    .from("client_credentials")
-    .select("client_id")
-    .eq("client_id", match.id)
-    .maybeSingle();
-  return { exists: true, pinRequired: !!cred };
+function cleanEmail(input: string | undefined): string | null {
+  const email = input?.trim().toLowerCase();
+  return email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : null;
 }
 
-export async function continueLogin(input: {
+async function emailTakenByOtherClient(
+  admin: ReturnType<typeof createAdminClient>,
+  email: string,
+  clientId: string,
+): Promise<boolean> {
+  const hits = await findClientCandidates(admin, { email, excludeId: clientId });
+  return hits.some((c) => c.match_reason === "email");
+}
+
+async function sendCode(pending: Omit<PendingLogin, "nonce" | "codeHash" | "exp">): Promise<StartLoginResult> {
+  const sendKey = `login-send:${pending.email}`;
+  if (await tooManyAttempts(sendKey)) {
+    return { ok: false, error: "Too many codes sent to this email. Please wait 15 minutes and try again." };
+  }
+  await countAttempt(sendKey);
+
+  const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
+  const nonce = randomUUID();
+  try {
+    await resendMailer.send({
+      to: pending.email,
+      ...signInCodeEmail({ workspace: "", logo: `cid:${LOGO_CID}` }, code, CODE_MINUTES),
+    });
+  } catch (err) {
+    console.error("client login: sending the code failed:", err);
+    return { ok: false, error: "We couldn't send a code to that email. Check it and try again." };
+  }
+
+  const payload: PendingLogin = {
+    ...pending,
+    nonce,
+    codeHash: hashCode(nonce, pending.email, code),
+    exp: Date.now() + LOGIN_TTL_SECONDS * 1000,
+  };
+  (await cookies()).set(LOGIN_COOKIE, await signPayload({ ...payload }), {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: LOGIN_TTL_SECONDS,
+  });
+  return { ok: true, step: "code", sentTo: maskEmail(pending.email) };
+}
+
+/** Step 1 (and "resend code"): find the account by phone and email it a code. */
+export async function startLogin(input: {
   phone: string;
   name?: string;
   email?: string;
-  pin?: string;
-}): Promise<ActionResult> {
+}): Promise<StartLoginResult> {
   const parsed = parsePhone(input.phone);
   if (!parsed.ok) return { ok: false, error: parsed.error };
 
@@ -88,111 +148,134 @@ export async function continueLogin(input: {
 
   if (match) {
     if (!match.active) return { ok: false, error: "This account is inactive — contact us for help." };
+    const onFile = cleanEmail(match.email ?? undefined);
+    if (onFile) return sendCode({ email: onFile, phone: parsed.store, clientId: match.id, name: null });
 
-    const { data: cred } = await admin
-      .from("client_credentials")
-      .select("pin_hash")
-      .eq("client_id", match.id)
-      .maybeSingle();
-    if (cred) {
-      if (!input.pin) return { ok: false, error: "PIN required." };
-      if (!(await verifyPin(input.pin, cred.pin_hash))) return { ok: false, error: "Incorrect PIN." };
+    // An older account with no email yet: ask for one and verify it with the code.
+    if (input.email === undefined) return { ok: true, step: "add-email" };
+    const email = cleanEmail(input.email);
+    if (!email) return { ok: false, error: "Enter a valid email address." };
+    if (await emailTakenByOtherClient(admin, email, match.id)) {
+      return { ok: false, error: "That email belongs to another account — use a different one." };
     }
-
-    await setClientCookie(match.id, match.name);
-    return { ok: true };
+    return sendCode({ email, phone: parsed.store, clientId: match.id, name: null });
   }
 
   // A new number: their full name or studio name, so reception knows who
   // they're dealing with. At least two letters, so a number or "." won't do.
-  const name = input.name?.trim().replace(/\s+/g, " ");
-  if (!name || (name.match(/\p{L}/gu)?.length ?? 0) < 2) {
+  if (input.name === undefined) return { ok: true, step: "new" };
+  const name = input.name.trim().replace(/\s+/g, " ");
+  if ((name.match(/\p{L}/gu)?.length ?? 0) < 2) {
     return { ok: false, error: "Enter your full name or business name." };
   }
   if (name.length > NAME_MAX) return { ok: false, error: `Name must be ${NAME_MAX} characters or fewer.` };
-
-  const resolved = await resolveOrCreateClient(admin, {
-    name,
-    phone: parsed.store,
-    email: input.email,
-  });
-  if (!resolved.ok) return { ok: false, error: resolved.error };
-
-  await setClientCookie(resolved.client.id, resolved.client.name);
-  return { ok: true };
+  const email = cleanEmail(input.email);
+  if (!email) return { ok: false, error: "Enter a valid email address." };
+  return sendCode({ email, phone: parsed.store, clientId: null, name });
 }
 
-// --- Opt-in PIN security (settings page) -----------------------------------
-
-export async function setPin(pin: string): Promise<ActionResult> {
-  const session = await getClientSession();
-  if (!session) return { ok: false, error: "Not signed in." };
-  if (!isValidPinFormat(pin)) return { ok: false, error: "PIN must be 4-8 digits." };
-
-  const admin = createAdminClient();
-  const { data: existing } = await admin
-    .from("client_credentials")
-    .select("client_id")
-    .eq("client_id", session.client_id)
-    .maybeSingle();
-  if (existing) return { ok: false, error: "A PIN is already set — use Change PIN instead." };
-
-  const { error } = await admin
-    .from("client_credentials")
-    .insert({ client_id: session.client_id, pin_hash: await hashPin(pin) });
-  if (error) return { ok: false, error: error.message };
-  return { ok: true };
-}
-
-export async function changePin(input: { currentPin: string; newPin: string }): Promise<ActionResult> {
-  const session = await getClientSession();
-  if (!session) return { ok: false, error: "Not signed in." };
-  if (!isValidPinFormat(input.newPin)) return { ok: false, error: "PIN must be 4-8 digits." };
-
-  const admin = createAdminClient();
-  const { data: cred } = await admin
-    .from("client_credentials")
-    .select("pin_hash")
-    .eq("client_id", session.client_id)
-    .maybeSingle();
-  if (!cred) return { ok: false, error: "No PIN is set yet — add one instead." };
-  if (!(await verifyPin(input.currentPin, cred.pin_hash))) {
-    return { ok: false, error: "Current PIN is incorrect." };
+/** Step 2: check the emailed code, then tie the signed-in auth user to the client. */
+export async function verifyLoginCode(code: string): Promise<ActionResult> {
+  const store = await cookies();
+  const pending = await verifyPayload<PendingLogin>(store.get(LOGIN_COOKIE)?.value);
+  if (!pending || pending.exp < Date.now()) {
+    return { ok: false, error: "That sign-in has expired — enter your phone number again." };
   }
 
-  const { error } = await admin
-    .from("client_credentials")
-    .update({ pin_hash: await hashPin(input.newPin) })
-    .eq("client_id", session.client_id);
-  if (error) return { ok: false, error: error.message };
-  return { ok: true };
-}
+  const codeKey = `login-code:${pending.nonce}`;
+  const tooMany = "Too many wrong codes. Ask for a new one.";
+  if (await tooManyAttempts(codeKey)) return { ok: false, error: tooMany };
+  const given = Buffer.from(hashCode(pending.nonce, pending.email, code.replace(/\s/g, "")));
+  const expected = Buffer.from(pending.codeHash);
+  if (given.length !== expected.length || !timingSafeEqual(given, expected)) {
+    return { ok: false, error: (await countAttempt(codeKey)) ? tooMany : "That code is wrong. Check the email and try again." };
+  }
+  store.delete(LOGIN_COOKIE);
 
-export async function removePin(currentPin: string): Promise<ActionResult> {
-  const session = await getClientSession();
-  if (!session) return { ok: false, error: "Not signed in." };
-
+  // The code checked out: have Supabase Auth issue the session. The auth
+  // user is created on first sign-in (already confirmed); generateLink makes
+  // a one-time token without sending any email, redeemed right here.
   const admin = createAdminClient();
-  const { data: cred } = await admin
-    .from("client_credentials")
-    .select("pin_hash")
-    .eq("client_id", session.client_id)
-    .maybeSingle();
-  if (!cred) return { ok: true }; // already no PIN
-  if (!(await verifyPin(currentPin, cred.pin_hash))) {
-    return { ok: false, error: "Current PIN is incorrect." };
+  const { error: createError } = await admin.auth.admin.createUser({ email: pending.email, email_confirm: true });
+  if (createError && createError.code !== "email_exists") {
+    console.error("client login: createUser failed:", createError);
+    return { ok: false, error: "We couldn't sign you in. Please try again." };
+  }
+  const { data: link, error: linkGenError } = await admin.auth.admin.generateLink({ type: "magiclink", email: pending.email });
+  if (linkGenError) {
+    console.error("client login: generateLink failed:", linkGenError);
+    return { ok: false, error: "We couldn't sign you in. Please try again." };
+  }
+  const supabase = await createClient();
+  const { data, error } = await supabase.auth.verifyOtp({ token_hash: link.properties.hashed_token, type: "magiclink" });
+  if (error || !data.user) {
+    console.error("client login: verifyOtp failed:", error);
+    return { ok: false, error: "We couldn't sign you in. Please try again." };
   }
 
-  const { error } = await admin.from("client_credentials").delete().eq("client_id", session.client_id);
-  if (error) return { ok: false, error: error.message };
+  let clientId = pending.clientId;
+  if (clientId) {
+    // An older account adding its first email (verified by the code).
+    const { data: claimed, error: emailError } = await admin
+      .from("clients")
+      .update({ email: pending.email })
+      .eq("id", clientId)
+      .is("email", null)
+      .select("name, phone")
+      .maybeSingle();
+    if (emailError) {
+      await supabase.auth.signOut();
+      return { ok: false, error: "That email belongs to another account — use a different one." };
+    }
+    // Anyone who knows the phone number can do this once, before the owner
+    // does — so reception hears about every first email and can catch a
+    // wrong one (fix the email in Clients, which moves the sign-in with it).
+    if (claimed) {
+      const { data: managers } = await admin.from("profiles").select("id").in("role", ["receptionist", "supervisor", "boss"]);
+      await Promise.all(
+        (managers ?? []).map((m) =>
+          notifyActor(
+            { type: "dashboard_user", id: m.id },
+            {
+              title: "Client added a sign-in email",
+              body: `${claimed.name}${claimed.phone ? ` (${claimed.phone})` : ""} now signs in with ${pending.email}. Not them? Fix the email in Clients.`,
+              url: "/dashboard/clients",
+            },
+          ),
+        ),
+      );
+    }
+  } else {
+    const resolved = await resolveOrCreateClient(admin, {
+      name: pending.name,
+      phone: pending.phone,
+      email: pending.email,
+    });
+    if (!resolved.ok) {
+      await supabase.auth.signOut();
+      return { ok: false, error: resolved.error };
+    }
+    clientId = resolved.client.id;
+  }
+
+  // One auth user per client: a new email for the client (changed by
+  // reception) replaces the old link rather than failing on client_id.
+  await admin.from("client_identities").delete().eq("client_id", clientId).neq("auth_user_id", data.user.id);
+  const { error: linkError } = await admin
+    .from("client_identities")
+    .upsert({ auth_user_id: data.user.id, client_id: clientId }, { onConflict: "auth_user_id" });
+  if (linkError) {
+    console.error("client login: linking identity failed:", linkError);
+    await supabase.auth.signOut();
+    return { ok: false, error: "We couldn't sign you in. Please try again." };
+  }
+
   return { ok: true };
 }
 
 export async function logoutClient(): Promise<void> {
-  const store = await cookies();
-  store.delete(CLIENT_COOKIE);
-  // Signing out of Aming locks My Studio on this device too.
-  await clearUnlockCookie();
+  const supabase = await createClient();
+  await supabase.auth.signOut();
 }
 
 export interface ClientOrderPayload {

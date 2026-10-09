@@ -29,7 +29,6 @@ export interface Studio extends StudioProfile {
   /** Its public pages' color (core/brand.ts), already readable; null until chosen. */
   brandColor: string | null;
   /** When the studio password was set: a device's unlock must carry the same. */
-  passwordSetAt: string | null;
 }
 
 /** The scope every studio-owned record is read and written in. */

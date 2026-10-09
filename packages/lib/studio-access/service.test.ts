@@ -5,10 +5,7 @@ import { parseInput } from "@repo/lib/kernel/core";
 
 import {
   detailsSchema,
-  isUnlocked,
   maskEmail,
-  newPasswordSchema,
-  passwordProblem,
   reviewEmail,
   reviewSchema,
   type EmailCode,
@@ -24,8 +21,8 @@ const B = "bbbbbbbb-0000-4000-8000-000000000002";
 function blank(tenantId: string, name: string): StudioAccess {
   return {
     tenantId, ownerClientId: `client-${name}`, client: { name: "Amina N.", phone: null }, status: "onboarding", name, phone: null, ownerFirstName: null, ownerLastName: null,
-    logoKey: null, ownerEmail: null, ownerEmailVerifiedAt: null, slug: null, passwordHash: null, passwordSetAt: null,
-    passwordFailedAttempts: 0, passwordLockedUntil: null, submittedAt: null, reviewedAt: null, reviewNote: null, createdAt: "2026-10-01T00:00:00Z",
+    logoKey: null, ownerEmail: null, ownerEmailVerifiedAt: null, slug: null,
+    submittedAt: null, reviewedAt: null, reviewNote: null, createdAt: "2026-10-01T00:00:00Z",
   };
 }
 
@@ -48,9 +45,6 @@ function setup() {
       return old;
     },
     setOwnerEmail: async (id, email, at) => void Object.assign(one(id), { ownerEmail: email, ownerEmailVerifiedAt: at }),
-    setPassword: async (id, hash, at) => void Object.assign(one(id), { passwordHash: hash, passwordSetAt: at, passwordFailedAttempts: 0, passwordLockedUntil: null }),
-    recordWrongPassword: async (id, n, until) => void Object.assign(one(id), { passwordFailedAttempts: n, passwordLockedUntil: until }),
-    clearWrongPasswords: async (id) => void Object.assign(one(id), { passwordFailedAttempts: 0, passwordLockedUntil: null }),
     setStatus: async (id, from, to, at, note) => {
       const s = one(id);
       if (s.status !== from) return false;
@@ -69,8 +63,6 @@ function setup() {
     newCode: () => nextCode,
     hashCode: (id, purpose, code) => `h:${id}:${purpose}:${code}`,
     sameHash: (a, b) => a === b,
-    hashPassword: async (p) => `pw:${p}`,
-    verifyPassword: async (p, h) => h === `pw:${p}`,
     newId: () => `00000000-0000-4000-8000-${String(++ids).padStart(12, "0")}`,
   };
   const files: LogoFiles = {
@@ -107,7 +99,6 @@ async function onboard(t: ReturnType<typeof setup>, id = A) {
   t.one(id).slug = "amina-studio";
   await t.service.sendVerifyCode(id, "amina@mail.com");
   await t.service.verifyEmail(id, "123456");
-  return t.service.setPassword(id, "Golden-hour-77");
 }
 
 test("details: owner names and a phone are required; the phone is stored in one form", () => {
@@ -117,20 +108,9 @@ test("details: owner names and a phone are required; the phone is stored in one 
   assert.throws(() => parseInput(detailsSchema, { ...details, phone: "" }), /phone number/);
 });
 
-test("passwords: 8+ characters, typed twice, not common, not the studio's name", () => {
-  assert.equal(parseInput(newPasswordSchema, { password: "Golden-hour-77", confirm: "Golden-hour-77" }), "Golden-hour-77");
-  assert.throws(() => parseInput(newPasswordSchema, { password: "short", confirm: "short" }), /at least 8/);
-  assert.throws(() => parseInput(newPasswordSchema, { password: "Golden-hour-77", confirm: "Golden-hour-78" }), /don't match/);
-  assert.match(passwordProblem("Password123")!, /too common/);
-  assert.match(passwordProblem("aaaaaaaa")!, /over and over/);
-  assert.match(passwordProblem("70336068812")!, /letters/);
-  assert.match(passwordProblem("Amina Studio!", ["Amina Studio"])!, /business's name/);
-  assert.equal(passwordProblem("Golden-hour-77", ["Amina Studio"]), null);
-});
-
 test("onboarding: every step before submitting; then it waits for review and can't be changed", async () => {
   const t = setup();
-  await assert.rejects(t.service.submit(A), /add your business's details, your business's address, a verified email, a password/);
+  await assert.rejects(t.service.submit(A), /add your business's details, your business's address, a verified email/);
   await onboard(t);
   await t.service.submit(A);
   assert.equal(t.one(A).status, "in_review");
@@ -174,44 +154,6 @@ test("email codes: 6 digits by email, 10 minutes, 5 tries, one at a time, stored
   assert.equal(t.one(A).ownerEmail, "new@mail.com");
   await assert.rejects(t.service.verifyEmail(A, "654321"), /Ask for a code first/, "a code works once");
   assert.equal((await t.service.sendVerifyCode(A, "new@mail.com")).alreadySent, false, "used: a new one can be sent");
-});
-
-test("the password unlocks a device for 30 days; 5 wrong tries lock it for 15 minutes", async () => {
-  const t = setup();
-  const first = await onboard(t);
-  assert.ok(isUnlocked(first, t.one(A), t.now()));
-  assert.ok(!isUnlocked(first, { ...t.one(A), tenantId: B }, t.now()), "not another studio");
-
-  const unlock = await t.service.unlock(A, "Golden-hour-77");
-  t.tick(29 * 86_400_000);
-  assert.ok(isUnlocked(unlock, t.one(A), t.now()));
-  t.tick(2 * 86_400_000);
-  assert.ok(!isUnlocked(unlock, t.one(A), t.now()), "asked again after 30 days");
-
-  for (let i = 0; i < 4; i++) await assert.rejects(t.service.unlock(A, "wrong-one"), /password is wrong/);
-  await assert.rejects(t.service.unlock(A, "wrong-one"), /locked for 15 minutes/);
-  await assert.rejects(t.service.unlock(A, "Golden-hour-77"), /Try again in 15 minutes/, "even the right one while locked");
-  t.tick(15 * 60_000);
-  await t.service.unlock(A, "Golden-hour-77");
-  assert.equal(t.one(A).passwordFailedAttempts, 0);
-});
-
-test("forgot password: a code to the verified email; the new password signs other devices out", async () => {
-  const t = setup();
-  await assert.rejects(t.service.sendResetCode(A), /no verified email/);
-  await onboard(t);
-  const otherDevice = await t.service.unlock(A, "Golden-hour-77");
-  t.setNextCode("777777");
-  const { sentTo } = await t.service.sendResetCode(A);
-  assert.equal(sentTo, maskEmail("amina@mail.com"));
-  assert.equal(t.sent.at(-1)!.to, "amina@mail.com");
-  await assert.rejects(t.service.resetPassword(A, "777777", "password123"), /too common/);
-  t.tick(1000);
-  const here = await t.service.resetPassword(A, "777777", "Blue-Studio-2026");
-  assert.ok(isUnlocked(here, t.one(A), t.now()));
-  assert.ok(!isUnlocked(otherDevice, t.one(A), t.now()), "other devices are signed out");
-  assert.match(t.sent.at(-1)!.subject, /password was changed/);
-  await t.service.unlock(A, "Blue-Studio-2026");
 });
 
 test("review: approve, send back with a reason, suspend; the owner is told", async () => {
@@ -308,9 +250,9 @@ test("emails: Aming Space branding, a plain-text copy, and names can't inject HT
 });
 
 test("emails never carry a dead link: a bare path (the app's address not set) is left out", async () => {
-  const { reviewEmail, passwordChangedEmail } = await import("./core");
+  const { reviewEmail } = await import("./core");
   const bare = { workspace: "/studio", logo: null };
-  for (const email of [reviewEmail(bare, "Amina Studio", "send_back", "Change the logo"), passwordChangedEmail(bare, "Amina Studio")]) {
+  for (const email of [reviewEmail(bare, "Amina Studio", "send_back", "Change the logo")]) {
     assert.ok(!email.text.includes("/studio") && !email.html.includes('href="/studio"'), email.subject);
   }
   const full = reviewEmail({ workspace: "https://www.amingspace.com/studio", logo: null }, "Amina Studio", "send_back", "Change the logo");

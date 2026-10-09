@@ -20,10 +20,6 @@ interface Row {
   logo_key: string | null;
   owner_email: string | null;
   owner_email_verified_at: string | null;
-  password_hash: string | null;
-  password_set_at: string | null;
-  password_failed_attempts: number;
-  password_locked_until: string | null;
   submitted_at: string | null;
   reviewed_at: string | null;
   review_note: string | null;
@@ -34,7 +30,7 @@ interface Row {
 
 const COLUMNS =
   "id, owner_client_id, status, name, phone, owner_first_name, owner_last_name, logo_key, owner_email, owner_email_verified_at, " +
-  "password_hash, password_set_at, password_failed_attempts, password_locked_until, submitted_at, reviewed_at, review_note, created_at, " +
+  "submitted_at, reviewed_at, review_note, created_at, " +
   "slugs:studio_slugs (slug, is_current), owner:clients (name, phone)";
 
 const toAccess = (r: Row): StudioAccess => ({
@@ -50,10 +46,6 @@ const toAccess = (r: Row): StudioAccess => ({
   ownerEmail: r.owner_email,
   ownerEmailVerifiedAt: r.owner_email_verified_at,
   slug: r.slugs.find((s) => s.is_current)?.slug ?? null,
-  passwordHash: r.password_hash,
-  passwordSetAt: r.password_set_at,
-  passwordFailedAttempts: r.password_failed_attempts,
-  passwordLockedUntil: r.password_locked_until,
   submittedAt: r.submitted_at,
   reviewedAt: r.reviewed_at,
   reviewNote: r.review_note,
@@ -110,14 +102,6 @@ export const supabaseAccessStore: AccessStore = {
   },
 
   setOwnerEmail: (tenantId, email, at) => update(tenantId, "save the email", { owner_email: email, owner_email_verified_at: at }),
-
-  setPassword: (tenantId, hash, at) =>
-    update(tenantId, "save the password", { password_hash: hash, password_set_at: at, password_failed_attempts: 0, password_locked_until: null }),
-
-  recordWrongPassword: (tenantId, attempts, lockedUntil) =>
-    update(tenantId, "record a wrong password", { password_failed_attempts: attempts, password_locked_until: lockedUntil }),
-
-  clearWrongPasswords: (tenantId) => update(tenantId, "clear wrong passwords", { password_failed_attempts: 0, password_locked_until: null }),
 
   async setStatus(tenantId, from, to, at, note) {
     const { data, error } = await tenants()

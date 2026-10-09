@@ -6,61 +6,51 @@ import { useRouter } from "next/navigation";
 import { Button } from "@repo/ui/Button";
 import { Field, TextInput } from "@repo/ui/Field";
 import { PhoneInput } from "@repo/ui/PhoneInput";
-import { PasswordInput } from "@repo/ui/PasswordInput";
 
-import { checkAccount, continueLogin } from "./actions";
+import { startLogin, verifyLoginCode, type StartLoginResult } from "./actions";
 
-type Step = { kind: "phone" } | { kind: "new"; phone: string } | { kind: "pin"; phone: string };
+type Step =
+  | { kind: "phone" }
+  | { kind: "new" }
+  | { kind: "add-email" }
+  | { kind: "code"; sentTo: string; input: LoginInput };
 
-// Phone-first, single entry point: no PIN is required by default (security
-// is opt-in — see /settings). Enter a phone number; a match with
-// no PIN set logs straight in, a match with a PIN set asks for it, and no
-// match at all asks for their full name or studio name to create the account.
+type LoginInput = Parameters<typeof startLogin>[0];
+
+// Phone first, to find the account; then a 6-digit code emailed to the
+// address on file. An unknown number asks for a name and email to create
+// the account; an older account without an email adds one and verifies it.
 export function ContinueForm() {
   const router = useRouter();
   const [step, setStep] = useState<Step>({ kind: "phone" });
   const [phone, setPhone] = useState("");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [pin, setPin] = useState("");
+  const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
-  function submitPhone() {
+  function send(input: LoginInput) {
     setError(null);
     start(async () => {
-      const res = await checkAccount(phone);
-      if (res.error) {
-        setError(res.error);
-        return;
-      }
-      if (!res.exists) {
-        setStep({ kind: "new", phone });
-        return;
-      }
-      if (!res.pinRequired) {
-        const login = await continueLogin({ phone });
-        if (login.ok) router.refresh();
-        else setError(login.error);
-        return;
-      }
-      setStep({ kind: "pin", phone });
+      const res: StartLoginResult = await startLogin(input);
+      if (!res.ok) setError(res.error);
+      else if (res.step === "code") setStep({ kind: "code", sentTo: res.sentTo, input });
+      else setStep({ kind: res.step });
     });
   }
 
-  function submitNew() {
-    setError(null);
-    start(async () => {
-      const res = await continueLogin({ phone, name, email });
-      if (res.ok) router.refresh();
-      else setError(res.error);
-    });
+  // Each step sends only what it has collected.
+  function submitStart() {
+    if (step.kind === "new") send({ phone, name, email });
+    else if (step.kind === "add-email") send({ phone, email });
+    else send({ phone });
   }
 
-  function submitPin() {
+  function submitCode() {
     setError(null);
     start(async () => {
-      const res = await continueLogin({ phone, pin });
+      const res = await verifyLoginCode(code);
       if (res.ok) router.refresh();
       else setError(res.error);
     });
@@ -70,8 +60,61 @@ export function ContinueForm() {
     setStep({ kind: "phone" });
     setName("");
     setEmail("");
-    setPin("");
+    setCode("");
     setError(null);
+  }
+
+  const errorLine = error ? <p className="text-sm text-[var(--rush)]">{error}</p> : null;
+  const differentNumber = (
+    <button
+      type="button"
+      onClick={useDifferentNumber}
+      className="text-xs text-muted underline-offset-2 hover:underline"
+    >
+      Use a different number
+    </button>
+  );
+
+  if (step.kind === "code") {
+    return (
+      <form
+        className="space-y-4"
+        onSubmit={(e) => {
+          e.preventDefault();
+          submitCode();
+        }}
+      >
+        <p className="text-sm text-muted">We emailed a 6-digit code to {step.sentTo}. It expires in 10 minutes.</p>
+        <Field label="Code">
+          <TextInput
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            value={code}
+            onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+            required
+            autoFocus
+          />
+        </Field>
+        {errorLine}
+        <Button variant="primary" type="submit" className="w-full" disabled={pending}>
+          {pending ? "Checking…" : "Log in"}
+        </Button>
+        <div className="flex justify-between">
+          <button
+            type="button"
+            onClick={() => {
+              setCode("");
+              send(step.input);
+            }}
+            disabled={pending}
+            className="text-xs text-muted underline-offset-2 hover:underline"
+          >
+            Resend code
+          </button>
+          {differentNumber}
+        </div>
+      </form>
+    );
   }
 
   if (step.kind === "new") {
@@ -80,65 +123,55 @@ export function ContinueForm() {
         className="space-y-4"
         onSubmit={(e) => {
           e.preventDefault();
-          submitNew();
+          submitStart();
         }}
       >
         <p className="text-sm text-muted">
-          We don&apos;t have an account for {step.phone} yet. Tell us who you are so our reception knows who
+          We don&apos;t have an account for {phone} yet. Tell us who you are so our reception knows who
           they&apos;re dealing with.
         </p>
         <Field label="Full name or business name">
           <TextInput value={name} onChange={(e) => setName(e.target.value)} maxLength={100} required autoFocus />
         </Field>
-        <Field label="Email" hint="Optional">
-          <TextInput type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+        <Field label="Email" hint="We'll send your sign-in code here">
+          <TextInput type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
         </Field>
-        {error ? <p className="text-sm text-[var(--rush)]">{error}</p> : null}
+        {errorLine}
         <Button variant="primary" type="submit" className="w-full" disabled={pending}>
-          {pending ? "Creating account…" : "Continue"}
+          {pending ? "Sending code…" : "Continue"}
         </Button>
-        <button
-          type="button"
-          onClick={useDifferentNumber}
-          className="text-xs text-muted underline-offset-2 hover:underline"
-        >
-          Use a different number
-        </button>
+        {differentNumber}
       </form>
     );
   }
 
-  if (step.kind === "pin") {
+  if (step.kind === "add-email") {
     return (
       <form
         className="space-y-4"
         onSubmit={(e) => {
           e.preventDefault();
-          submitPin();
+          submitStart();
         }}
       >
-        <p className="text-sm text-muted">Enter your PIN for {step.phone}.</p>
-        <Field label="PIN">
-          <PasswordInput
-            inputMode="numeric"
-            autoComplete="off"
-            value={pin}
-            onChange={(e) => setPin(e.target.value)}
+        <p className="text-sm text-muted">
+          We now sign you in with a code sent by email. Add your email and we&apos;ll send you a code to verify it.
+        </p>
+        <Field label="Email">
+          <TextInput
+            type="email"
+            autoComplete="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
             required
             autoFocus
           />
         </Field>
-        {error ? <p className="text-sm text-[var(--rush)]">{error}</p> : null}
+        {errorLine}
         <Button variant="primary" type="submit" className="w-full" disabled={pending}>
-          {pending ? "Checking…" : "Log in"}
+          {pending ? "Sending code…" : "Continue"}
         </Button>
-        <button
-          type="button"
-          onClick={useDifferentNumber}
-          className="text-xs text-muted underline-offset-2 hover:underline"
-        >
-          Use a different number
-        </button>
+        {differentNumber}
       </form>
     );
   }
@@ -148,19 +181,18 @@ export function ContinueForm() {
       className="space-y-4"
       onSubmit={(e) => {
         e.preventDefault();
-        submitPhone();
+        submitStart();
       }}
     >
       <Field label="Phone number">
         <PhoneInput value={phone} onChange={setPhone} required autoFocus />
       </Field>
-      {error ? <p className="text-sm text-[var(--rush)]">{error}</p> : null}
+      {errorLine}
       <Button variant="primary" type="submit" className="w-full" disabled={pending}>
         {pending ? "Checking…" : "Continue"}
       </Button>
       <p className="text-xs text-muted">
-        New here? Just enter your number — we&apos;ll set up your account. You can add a PIN for
-        extra security later, from Settings.
+        New here? Just enter your number — we&apos;ll set up your account and email you a sign-in code.
       </p>
     </form>
   );

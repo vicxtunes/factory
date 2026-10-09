@@ -23,10 +23,9 @@ interface Row {
   status: Studio["status"];
   logo_key: string | null;
   brand_color: string | null;
-  password_set_at: string | null;
 }
 
-const COLUMNS = "id, owner_client_id, name, phone, email, address, currency, locale, time_zone, created_at, status, logo_key, brand_color, password_set_at";
+const COLUMNS = "id, owner_client_id, name, phone, email, address, currency, locale, time_zone, created_at, status, logo_key, brand_color";
 
 const toStudio = (r: Row): Studio => ({
   id: r.id,
@@ -42,7 +41,6 @@ const toStudio = (r: Row): Studio => ({
   status: r.status,
   logoKey: r.logo_key,
   brandColor: r.brand_color,
-  passwordSetAt: r.password_set_at,
 });
 
 type ListingRow = Row & { owner: { name: string } | null };
