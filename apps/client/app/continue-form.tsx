@@ -5,86 +5,118 @@ import { useRouter } from "next/navigation";
 
 import { Button } from "@repo/ui/Button";
 import { Field, TextInput } from "@repo/ui/Field";
+import { PasswordInput } from "@repo/ui/PasswordInput";
 import { PhoneInput } from "@repo/ui/PhoneInput";
+import { Tabs } from "@repo/ui/Tabs";
 
-import { startLogin, verifyLoginCode, type StartLoginResult } from "./actions";
+import { choosePassword, signIn, startReset, startSignUp, verifyCode, type AuthStep } from "./auth-actions";
 
-type Step =
-  | { kind: "phone" }
-  | { kind: "new" }
+type Method = "email" | "phone";
+
+// What the screen shows. "code" remembers how the flow started, so
+// "Resend code" can repeat it.
+type View =
+  | { kind: "signin" }
+  | { kind: "signup" }
+  | { kind: "reset" }
   | { kind: "add-email" }
-  | { kind: "code"; sentTo: string; input: LoginInput };
+  | { kind: "code"; sentTo: string; resend: () => Promise<AuthStep> }
+  | { kind: "password" };
 
-type LoginInput = Parameters<typeof startLogin>[0];
+const METHOD_TABS: { key: Method; label: string }[] = [
+  { key: "email", label: "Email" },
+  { key: "phone", label: "Phone" },
+];
 
-// Phone first, to find the account; then a 6-digit code emailed to the
-// address on file. An unknown number asks for a name and email to create
-// the account; an older account without an email adds one and verifies it.
+const linkClass = "text-xs text-muted underline-offset-2 hover:underline";
+const strongLinkClass = "font-medium text-foreground underline-offset-2 hover:underline";
+
+// Sign in with email or phone and password, then the 6-digit code emailed
+// to the account. Also: create an account, and forgot password (which is how
+// an account from before passwords sets its first one). The server side is
+// ./auth-actions.ts.
 export function ContinueForm() {
   const router = useRouter();
-  const [step, setStep] = useState<Step>({ kind: "phone" });
-  const [phone, setPhone] = useState("");
+  const [view, setView] = useState<View>({ kind: "signin" });
+  const [method, setMethod] = useState<Method>("email");
+  const [identifier, setIdentifier] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
-  function send(input: LoginInput) {
+  /** Runs a step and moves to what it leads to. */
+  function run(action: () => Promise<AuthStep>) {
     setError(null);
     start(async () => {
-      const res: StartLoginResult = await startLogin(input);
-      if (!res.ok) setError(res.error);
-      else if (res.step === "code") setStep({ kind: "code", sentTo: res.sentTo, input });
-      else setStep({ kind: res.step });
+      const res = await action();
+      if (!res.ok) return setError(res.error);
+      if (res.step === "done") return router.refresh();
+      setCode("");
+      if (res.step === "code") setView({ kind: "code", sentTo: res.sentTo, resend: action });
+      else setView({ kind: res.step });
     });
   }
 
-  // Each step sends only what it has collected.
-  function submitStart() {
-    if (step.kind === "new") send({ phone, name, email });
-    else if (step.kind === "add-email") send({ phone, email });
-    else send({ phone });
-  }
-
-  function submitCode() {
+  function go(kind: "signin" | "signup" | "reset") {
+    setView({ kind });
+    setPassword("");
+    setConfirm("");
     setError(null);
-    start(async () => {
-      const res = await verifyLoginCode(code);
-      if (res.ok) router.refresh();
-      else setError(res.error);
-    });
   }
 
-  function useDifferentNumber() {
-    setStep({ kind: "phone" });
-    setName("");
-    setEmail("");
-    setCode("");
+  function switchMethod(next: Method) {
+    setMethod(next);
+    setIdentifier("");
     setError(null);
   }
 
   const errorLine = error ? <p className="text-sm text-[var(--rush)]">{error}</p> : null;
-  const differentNumber = (
-    <button
-      type="button"
-      onClick={useDifferentNumber}
-      className="text-xs text-muted underline-offset-2 hover:underline"
-    >
-      Use a different number
+  const backToSignIn = (
+    <button type="button" onClick={() => go("signin")} className={linkClass}>
+      Back to sign in
     </button>
   );
 
-  if (step.kind === "code") {
+  // Email or phone, chosen with the tabs above it.
+  const identifierFields = (
+    <>
+      <Tabs tabs={METHOD_TABS} value={method} onChange={switchMethod} label="Sign in with" />
+      {method === "email" ? (
+        <Field label="Email">
+          <TextInput type="email" autoComplete="email" value={identifier} onChange={(e) => setIdentifier(e.target.value)} required autoFocus />
+        </Field>
+      ) : (
+        <Field label="Phone number">
+          <PhoneInput value={identifier} onChange={setIdentifier} required autoFocus />
+        </Field>
+      )}
+    </>
+  );
+
+  function form(onSubmit: () => void, children: React.ReactNode) {
     return (
       <form
         className="space-y-4"
         onSubmit={(e) => {
           e.preventDefault();
-          submitCode();
+          onSubmit();
         }}
       >
-        <p className="text-sm text-muted">We emailed a 6-digit code to {step.sentTo}. It expires in 10 minutes.</p>
+        {children}
+      </form>
+    );
+  }
+
+  if (view.kind === "code") {
+    return form(
+      () => run(() => verifyCode(code)),
+      <>
+        <p className="text-sm text-muted">We emailed a 6-digit code to {view.sentTo}. It works for 10 minutes.</p>
         <Field label="Code">
           <TextInput
             inputMode="numeric"
@@ -96,104 +128,130 @@ export function ContinueForm() {
           />
         </Field>
         {errorLine}
-        <Button variant="primary" type="submit" className="w-full" disabled={pending}>
-          {pending ? "Checking…" : "Log in"}
+        <Button variant="primary" type="submit" className="w-full" disabled={pending || code.length !== 6}>
+          {pending ? "Checking…" : "Continue"}
         </Button>
         <div className="flex justify-between">
-          <button
-            type="button"
-            onClick={() => {
-              setCode("");
-              send(step.input);
-            }}
-            disabled={pending}
-            className="text-xs text-muted underline-offset-2 hover:underline"
-          >
+          <button type="button" onClick={() => run(view.resend)} disabled={pending} className={linkClass}>
             Resend code
           </button>
-          {differentNumber}
+          {backToSignIn}
         </div>
-      </form>
+      </>,
     );
   }
 
-  if (step.kind === "new") {
-    return (
-      <form
-        className="space-y-4"
-        onSubmit={(e) => {
-          e.preventDefault();
-          submitStart();
-        }}
-      >
-        <p className="text-sm text-muted">
-          We don&apos;t have an account for {phone} yet. Tell us who you are so our reception knows who
-          they&apos;re dealing with.
-        </p>
-        <Field label="Full name or business name">
-          <TextInput value={name} onChange={(e) => setName(e.target.value)} maxLength={100} required autoFocus />
-        </Field>
-        <Field label="Email" hint="We'll send your sign-in code here">
-          <TextInput type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-        </Field>
-        {errorLine}
-        <Button variant="primary" type="submit" className="w-full" disabled={pending}>
-          {pending ? "Sending code…" : "Continue"}
-        </Button>
-        {differentNumber}
-      </form>
-    );
-  }
-
-  if (step.kind === "add-email") {
-    return (
-      <form
-        className="space-y-4"
-        onSubmit={(e) => {
-          e.preventDefault();
-          submitStart();
-        }}
-      >
-        <p className="text-sm text-muted">
-          We now sign you in with a code sent by email. Add your email and we&apos;ll send you a code to verify it.
-        </p>
-        <Field label="Email">
-          <TextInput
-            type="email"
-            autoComplete="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+  if (view.kind === "password") {
+    return form(
+      () => run(() => choosePassword({ password, confirm })),
+      <>
+        <p className="text-sm text-muted">Email verified. Choose a password for your account.</p>
+        <Field label="New password" hint="At least 8 characters.">
+          <PasswordInput
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            autoComplete="new-password"
+            minLength={8}
+            maxLength={72}
             required
             autoFocus
           />
         </Field>
+        <Field label="Type it again">
+          <PasswordInput value={confirm} onChange={(e) => setConfirm(e.target.value)} autoComplete="new-password" maxLength={72} required />
+        </Field>
         {errorLine}
         <Button variant="primary" type="submit" className="w-full" disabled={pending}>
-          {pending ? "Sending code…" : "Continue"}
+          {pending ? "Saving…" : "Save and sign in"}
         </Button>
-        {differentNumber}
-      </form>
+      </>,
     );
   }
 
-  return (
-    <form
-      className="space-y-4"
-      onSubmit={(e) => {
-        e.preventDefault();
-        submitStart();
-      }}
-    >
-      <Field label="Phone number">
-        <PhoneInput value={phone} onChange={setPhone} required autoFocus />
+  if (view.kind === "signup") {
+    return form(
+      () => run(() => startSignUp({ name, email, phone })),
+      <>
+        <Field label="Full name or business name">
+          <TextInput value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" maxLength={100} required autoFocus />
+        </Field>
+        <Field label="Email" hint="We'll send a code here to verify it.">
+          <TextInput type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+        </Field>
+        <Field label="Phone number">
+          <PhoneInput value={phone} onChange={setPhone} required />
+        </Field>
+        {errorLine}
+        <Button variant="primary" type="submit" className="w-full" disabled={pending}>
+          {pending ? "Sending code…" : "Create account"}
+        </Button>
+        <p className="text-xs text-muted">
+          Already have an account?{" "}
+          <button type="button" onClick={() => go("signin")} className={strongLinkClass}>
+            Sign in
+          </button>
+        </p>
+      </>,
+    );
+  }
+
+  if (view.kind === "reset") {
+    return form(
+      () => run(() => startReset({ method, identifier })),
+      <>
+        <p className="text-sm text-muted">
+          We&apos;ll email you a code, then you choose a new password. Signed in with just your phone before? This is
+          how you set your first password.
+        </p>
+        {identifierFields}
+        {errorLine}
+        <Button variant="primary" type="submit" className="w-full" disabled={pending}>
+          {pending ? "Sending code…" : "Send code"}
+        </Button>
+        {backToSignIn}
+      </>,
+    );
+  }
+
+  if (view.kind === "add-email") {
+    return form(
+      () => run(() => startReset({ method, identifier, email })),
+      <>
+        <p className="text-sm text-muted">Your account has no email yet. Add one and we&apos;ll send it a code to verify it.</p>
+        <Field label="Email">
+          <TextInput type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus />
+        </Field>
+        {errorLine}
+        <Button variant="primary" type="submit" className="w-full" disabled={pending}>
+          {pending ? "Sending code…" : "Send code"}
+        </Button>
+        {backToSignIn}
+      </>,
+    );
+  }
+
+  return form(
+    () => run(() => signIn({ method, identifier, password })),
+    <>
+      {identifierFields}
+      <Field label="Password">
+        <PasswordInput value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" maxLength={72} required />
       </Field>
+      <div className="flex justify-end">
+        <button type="button" onClick={() => go("reset")} className={linkClass}>
+          Forgot password?
+        </button>
+      </div>
       {errorLine}
       <Button variant="primary" type="submit" className="w-full" disabled={pending}>
-        {pending ? "Checking…" : "Continue"}
+        {pending ? "Checking…" : "Sign in"}
       </Button>
       <p className="text-xs text-muted">
-        New here? Just enter your number — we&apos;ll set up your account and email you a sign-in code.
+        New here?{" "}
+        <button type="button" onClick={() => go("signup")} className={strongLinkClass}>
+          Create an account
+        </button>
       </p>
-    </form>
+    </>,
   );
 }

@@ -49,7 +49,7 @@ export default async function JoinTeamPage({ params }: { params: Promise<{ token
             </div>
             {!session ? (
               <div className="space-y-2">
-                <p className="text-sm">Sign in with your own Aming account, or make one with your phone number.</p>
+                <p className="text-sm">Sign in with your own Aming account, or create one.</p>
                 <AuthGate />
               </div>
             ) : (
