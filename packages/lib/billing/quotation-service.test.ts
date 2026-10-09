@@ -3,7 +3,7 @@ import { test } from "node:test";
 
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
-import type { LineInput, QuotationInput } from "./core";
+import { NO_DOCUMENT_SETTINGS, type LineInput, type QuotationInput } from "./core";
 import { BillingError, type BillingDirectory, type QuotationRecord, type QuotationStore } from "./ports";
 import { QuotationService } from "./quotation-service";
 
@@ -71,7 +71,7 @@ function fakes() {
   };
   const directory: BillingDirectory = {
     customer: async (s, id) => customers.get(`${s.tenantId}/${id}`) ?? null,
-    issuer: async (tenantId) => ({ issuer: { name: tenantId, phone: null, email: null, address: null }, scope: scope(tenantId) }),
+    issuer: async (tenantId) => ({ issuer: { name: tenantId, phone: null, email: null, address: null, logo: null, color: "#1f2937", ...NO_DOCUMENT_SETTINGS }, scope: scope(tenantId) }),
   };
   const service = new QuotationService(store, directory, () => `token-${++tokens}`.padEnd(43, "x"), () => NOW);
   return { service, rows };

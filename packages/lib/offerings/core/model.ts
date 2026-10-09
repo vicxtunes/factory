@@ -28,13 +28,12 @@ export interface Category {
   createdAt: string;
 }
 
-/** Whether the showroom shows package prices, and how a service's page shows its photos. */
+/** Whether the showroom shows package prices. */
 export interface ShowroomSettings {
   showPrices: boolean;
-  viewMode: "scene" | "carousel";
 }
 
-export const DEFAULT_SHOWROOM_SETTINGS: ShowroomSettings = { showPrices: true, viewMode: "scene" };
+export const DEFAULT_SHOWROOM_SETTINGS: ShowroomSettings = { showPrices: true };
 
 /** What the business fills in for a service. */
 export interface ServiceInput {

@@ -51,5 +51,4 @@ export const offeringInputSchema = z.object({
 
 export const showroomSettingsSchema = z.object({
   showPrices: z.boolean("Choose whether prices show."),
-  viewMode: z.enum(["scene", "carousel"], "Choose 3D or carousel."),
 }) satisfies z.ZodType<ShowroomSettings, unknown>;

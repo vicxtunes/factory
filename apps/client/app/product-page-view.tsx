@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 
 import { backTo } from "@repo/ui/navigation/back";
 
-import type { Currency, Product, ProductCategory, ShowroomViewMode } from "@repo/lib/types";
+import type { Currency, Product, ProductCategory } from "@repo/lib/types";
 
 import { ProductShowcase } from "./product-showcase";
 
@@ -16,7 +16,6 @@ export const SHOWROOM_HREF = "/showroom";
 export function ProductPageView(props: {
   product: Product;
   category: ProductCategory;
-  viewMode: ShowroomViewMode;
   showPrices: boolean;
   currencies: Currency[];
 }) {

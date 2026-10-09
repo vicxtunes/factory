@@ -24,6 +24,7 @@ import { studioOfCaller } from "@repo/lib/studios/server";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
 import {
+  documentSettingsSchema,
   invoiceIdSchema,
   invoiceInputSchema,
   paymentIdSchema,
@@ -34,7 +35,7 @@ import {
   shareTokenSchema,
   voidReasonSchema,
 } from "./core";
-import { invoices, quotations } from "./server";
+import { documentSettings, invoices, quotations } from "./server";
 
 const LIST = "/studio/quotations";
 
@@ -180,5 +181,14 @@ export async function resetInvoiceLink(id: unknown): Promise<Result> {
     const { scope } = await studioOfCaller();
     await invoices.resetLink(scope, parseInput(invoiceIdSchema, id));
     revalidatePath(INVOICES, "layout");
+  });
+}
+
+/** Saves the caller's studio's Document settings: terms, payment instructions, signature. */
+export async function saveDocumentSettings(input: unknown): Promise<Result<void>> {
+  return runAction("billing", async () => {
+    const { scope } = await studioOfCaller();
+    await documentSettings.save(scope.tenantId, parseInput(documentSettingsSchema, input));
+    revalidatePath("/studio", "layout");
   });
 }

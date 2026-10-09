@@ -8,7 +8,7 @@ import { z } from "zod";
 import { optionalText } from "@repo/lib/kernel/core";
 import { inclusionsSchema } from "@repo/lib/offerings/core";
 
-import type { InvoiceInput, PaymentInput, QuotationInput, Shoot } from "./model";
+import type { DocumentSettings, InvoiceInput, PaymentInput, QuotationInput, Shoot } from "./model";
 
 export const quotationIdSchema = z.uuid("That quotation doesn't exist.");
 
@@ -83,3 +83,14 @@ export const paymentInputSchema = z.object({
 
 /** Voiding needs a reason, kept with the record. */
 export const voidReasonSchema = z.string("Say why.").trim().min(1, "Say why.").max(500, "Keep the reason under 500 characters.");
+
+export const documentSettingsSchema = z.object({
+  terms: optionalText(2000, "Keep the terms under 2000 characters."),
+  paymentInstructions: optionalText(1000, "Keep the payment instructions under 1000 characters."),
+  signatureName: optionalText(80, "Keep the name under 80 characters."),
+  signature: z
+    .string()
+    .max(200_000, "That signature is too large. Draw it again.")
+    .regex(/^data:image\/png;base64,[A-Za-z0-9+/]+=*$/, "That signature isn't valid. Draw it again.")
+    .nullable(),
+}) satisfies z.ZodType<DocumentSettings, unknown>;

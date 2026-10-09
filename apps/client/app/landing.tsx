@@ -44,9 +44,6 @@ export function Landing() {
           Aming <span className="text-brand-500">Space</span>
         </Link>
         <nav className="flex items-center gap-4 text-sm">
-          <Link href="/showroom" className="hidden text-muted hover:text-foreground sm:inline">
-            Prints & albums
-          </Link>
           <Link href={START} className="font-medium text-brand-600 hover:underline dark:text-brand-400">
             Log in
           </Link>
@@ -65,9 +62,6 @@ export function Landing() {
             <div className="mt-8 flex flex-wrap items-center gap-3">
               <Link href={START} className="inline-flex min-h-12 items-center rounded-[var(--radius)] bg-brand-500 px-6 font-semibold text-white shadow-theme-xs hover:bg-brand-600">
                 Open your business
-              </Link>
-              <Link href="/showroom" className="inline-flex min-h-12 items-center rounded-[var(--radius)] border border-border bg-surface px-6 font-medium hover:bg-background">
-                See prints & albums
               </Link>
             </div>
           </div>
@@ -136,9 +130,6 @@ export function Landing() {
 
       <footer className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-8 text-sm text-muted sm:px-6">
         <span>© {new Date().getFullYear()} {APP_IDENTITY.name}</span>
-        <Link href="/showroom" className="hover:text-foreground">
-          Prints & albums
-        </Link>
       </footer>
     </div>
   );

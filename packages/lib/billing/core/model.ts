@@ -89,12 +89,30 @@ export interface Quotation extends QuotationSummary, Totals {
   lines: Line[];
 }
 
-/** The business's own details, printed on its documents. */
-export interface Issuer {
+/** How the business's documents close: its Document settings. */
+export interface DocumentSettings {
+  /** One term per line, printed as bullets under "Terms & conditions". */
+  terms: string | null;
+  /** How to pay (mobile money, bank details…): printed on invoices. */
+  paymentInstructions: string | null;
+  /** Printed as "For, <name>" above the signature line; null: no signature block. */
+  signatureName: string | null;
+  /** The signature as a PNG data URL, printed on the line; null: left blank to sign by hand. */
+  signature: string | null;
+}
+
+export const NO_DOCUMENT_SETTINGS: DocumentSettings = { terms: null, paymentInstructions: null, signatureName: null, signature: null };
+
+/** The business's own details and look, printed on its documents. */
+export interface Issuer extends DocumentSettings {
   name: string;
   phone: string | null;
   email: string | null;
   address: string | null;
+  /** Its logo as a data URL (the documents are drawn in the browser), or null. */
+  logo: string | null;
+  /** Its brand color (hex): the documents' accents. */
+  color: string;
 }
 
 export const QUOTATION_STATUS_LABELS: Record<QuotationStatus, string> = {

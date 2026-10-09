@@ -79,7 +79,6 @@ async function Showcase({
       slug={slug}
       service={found}
       media={media}
-      viewMode={settings.viewMode}
       showPrices={settings.showPrices}
       signedIn={signedIn}
       today={localDate(new Date(), at.scope.timeZone)}

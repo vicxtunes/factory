@@ -9,7 +9,7 @@
 import { AppError } from "@repo/lib/kernel/core";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
-import type { BillTo, InvoiceInput, Issuer, LineInput, Payment, PaymentInput, QuotationInput, QuotationResponse, Shoot } from "./core/model";
+import type { BillTo, DocumentSettings, InvoiceInput, Issuer, LineInput, Payment, PaymentInput, QuotationInput, QuotationResponse, Shoot } from "./core/model";
 
 /** A quotation as stored: lines as entered, status as answered. */
 export interface QuotationRecord {
@@ -98,6 +98,13 @@ export interface BillingDirectory {
   customer(scope: TenantScope, id: string): Promise<{ archived: boolean } | null>;
   /** The business behind a tenant, as printed on its documents, with its scope. */
   issuer(tenantId: string): Promise<{ issuer: Issuer; scope: TenantScope } | null>;
+}
+
+/** A business's Document settings. */
+export interface DocumentSettingsStore {
+  /** Its saved settings, or none of them. */
+  get(tenantId: string): Promise<DocumentSettings>;
+  save(tenantId: string, settings: DocumentSettings): Promise<DocumentSettings>;
 }
 
 /** A problem the person should see (the message is safe to show). */
