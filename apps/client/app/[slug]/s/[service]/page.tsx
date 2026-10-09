@@ -68,7 +68,6 @@ async function Showcase({ loaded: { at, found, slug }, signedIn }: { loaded: Pic
       service={found}
       media={media}
       // The studio's choices (Packages & Services): 3D or carousel, prices shown or not.
-      viewMode={settings.viewMode}
       showPrices={settings.showPrices}
       signedIn={signedIn}
       today={localDate(new Date(), at.scope.timeZone)}

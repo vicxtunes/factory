@@ -8,7 +8,6 @@ import { Showcase, type ShowcaseMedia } from "@repo/ui/showroom/Showcase";
 import type { OfferingKind, ServiceWithPackages } from "@repo/lib/offerings/core";
 import { formatAmount } from "@repo/lib/tenancy/format";
 import type { TenantScope } from "@repo/lib/tenancy/types";
-import type { ShowroomViewMode } from "@repo/lib/types";
 
 import { BookNow } from "./book-now";
 import { OrderNow } from "./order-now";
@@ -24,7 +23,6 @@ export function ServiceShowcase({
   slug,
   service,
   media,
-  viewMode,
   showPrices,
   signedIn,
   today,
@@ -36,7 +34,6 @@ export function ServiceShowcase({
   slug: string;
   service: ServiceWithPackages;
   media: { coverUrl: string | null; videoUrl: string | null; gallery: ShowcaseMedia[] };
-  viewMode: ShowroomViewMode;
   /** The studio's choice: off, every package reads "Price on request". */
   showPrices: boolean;
   /** This device is signed in at the studio: booking needs no name or phone. */
@@ -58,7 +55,6 @@ export function ServiceShowcase({
         previewVideoUrl: media.videoUrl,
         gallery: media.gallery,
       }}
-      viewMode={viewMode}
       onExit={() => backTo(`/${slug}`, () => router.push(`/${slug}`))}
       shareable
       details={

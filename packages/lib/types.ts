@@ -244,15 +244,7 @@ export interface ProductCategory {
   products: Product[];
 }
 
-// Whether a product's showcase view (opened by clicking it in the showroom
-// grid) uses the scroll-driven 3D scene or a plain photo/video carousel.
-// Boss-configurable, boring default of "carousel" (shows everything a
-// product has, including video; the 3D scene can only cycle through
-// photos).
-export type ShowroomViewMode = "carousel" | "scene";
-
 export interface ShowroomSettings {
-  product_view_mode: ShowroomViewMode;
   // Boss-configurable, off by default — see Product.price's comment. When
   // true, the showroom and order form show each product/variant's recorded
   // price instead of "Pricing confirmed after review".

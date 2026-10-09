@@ -7,7 +7,7 @@ import { Button } from "@repo/ui/Button";
 import { Showcase } from "@repo/ui/showroom/Showcase";
 import { useCurrency } from "@repo/lib/currency/useCurrency";
 import { offerBadge } from "@repo/lib/discounts/core/rules";
-import type { Currency, Product, ProductCategory, ShowroomViewMode } from "@repo/lib/types";
+import type { Currency, Product, ProductCategory } from "@repo/lib/types";
 
 // A factory product in the showroom's item page (@repo/ui/showroom/Showcase):
 // its price (or "Pricing confirmed after review"), the size picker and
@@ -15,7 +15,6 @@ import type { Currency, Product, ProductCategory, ShowroomViewMode } from "@repo
 export function ProductShowcase({
   product,
   category,
-  viewMode,
   showPrices,
   currencies,
   onExit,
@@ -23,8 +22,6 @@ export function ProductShowcase({
 }: {
   product: Product;
   category: ProductCategory;
-  // Boss-configurable (dashboard Products page) — see Showcase's viewMode.
-  viewMode: ShowroomViewMode;
   // Boss-configurable (dashboard Products page) — see ShowroomSettings.
   showPrices: boolean;
   currencies: Currency[];
@@ -57,7 +54,6 @@ export function ProductShowcase({
   return (
     <Showcase
       item={item}
-      viewMode={viewMode}
       onExit={onExit}
       shareable={shareable}
       details={

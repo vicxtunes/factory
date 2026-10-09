@@ -68,11 +68,9 @@ const EXPORT_COLUMNS: ExportColumn<CategoryExportRow>[] = [
   { key: "status", label: "Status" },
 ];
 
-// The showroom product-view-mode toggle (3D scene vs. photo carousel) that
-// used to live here is hidden for now, per the boss — product_view_mode
-// still exists on showroom_settings and still drives product-showcase.tsx,
-// it just can't be changed from this panel any more; only this "show
-// prices" switch is exposed today.
+// The showroom's "show prices" switch. (Item pages always use the photo
+// carousel; the old 3D scene is gone, and showroom_settings.product_view_mode
+// is no longer read.)
 function ShowroomSettingsCard({
   settings,
   run,

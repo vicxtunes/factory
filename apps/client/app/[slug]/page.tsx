@@ -181,7 +181,6 @@ async function ProductView({ found }: { found: NonNullable<Awaited<ReturnType<ty
     <ProductPageView
       product={found.product}
       category={found.category}
-      viewMode={showroomSettings.product_view_mode}
       showPrices={showroomSettings.show_prices}
       currencies={currencies}
     />

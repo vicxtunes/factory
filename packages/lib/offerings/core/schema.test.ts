@@ -63,6 +63,6 @@ test("category names are trimmed, required and short; settings are checked", () 
   assert.equal(parseInput(categoryNameSchema, "  Weddings "), "Weddings");
   assert.throws(() => parseInput(categoryNameSchema, " "), /Give it a name/);
   assert.throws(() => parseInput(categoryNameSchema, "x".repeat(61)), /under 60/);
-  assert.deepEqual(parseInput(showroomSettingsSchema, { showPrices: false, viewMode: "carousel", extra: 1 }), { showPrices: false, viewMode: "carousel" });
-  assert.throws(() => parseInput(showroomSettingsSchema, { showPrices: true, viewMode: "grid" }), /3D or carousel/);
+  assert.deepEqual(parseInput(showroomSettingsSchema, { showPrices: false, extra: 1 }), { showPrices: false });
+  assert.throws(() => parseInput(showroomSettingsSchema, { showPrices: "yes" }), /whether prices show/);
 });

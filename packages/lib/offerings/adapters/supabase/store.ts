@@ -12,7 +12,7 @@ import "server-only";
 import { createAdminClient } from "@repo/lib/supabase/admin";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
-import type { Category, Offering, OfferingInput, OfferingKind, Service, ShowroomSettings } from "../../core/model";
+import type { Category, Offering, OfferingInput, OfferingKind, Service } from "../../core/model";
 import { OfferingError, type OfferingStore } from "../../ports";
 
 interface CategoryRow {
@@ -290,17 +290,17 @@ export const supabaseOfferingStore: OfferingStore = {
   async settings(scope) {
     const { data, error } = await createAdminClient()
       .from("offering_settings")
-      .select("show_prices, view_mode")
+      .select("show_prices")
       .eq("tenant_id", scope.tenantId)
-      .maybeSingle<{ show_prices: boolean; view_mode: ShowroomSettings["viewMode"] }>();
+      .maybeSingle<{ show_prices: boolean }>();
     if (error) fail("load the showroom settings", error);
-    return data ? { showPrices: data.show_prices, viewMode: data.view_mode } : null;
+    return data ? { showPrices: data.show_prices } : null;
   },
 
   async saveSettings(scope, settings) {
     const { error } = await createAdminClient()
       .from("offering_settings")
-      .upsert({ tenant_id: scope.tenantId, show_prices: settings.showPrices, view_mode: settings.viewMode });
+      .upsert({ tenant_id: scope.tenantId, show_prices: settings.showPrices });
     if (error) fail("save the showroom settings", error);
   },
 };

@@ -232,17 +232,6 @@ export function CatalogPanel({
           onChange={(showPrices) => run(() => saveShowroomSettings({ ...settings, showPrices }))}
           pending={pending}
         />
-        <ChoiceCard
-          title="Item page"
-          hint="How a service's or product's photos show on its page."
-          value={settings.viewMode}
-          options={[
-            { value: "scene", label: "3D scene", hint: "Scroll or swipe through the photos in 3D" },
-            { value: "carousel", label: "Carousel", hint: "Photos and video side by side" },
-          ]}
-          onChange={(viewMode) => run(() => saveShowroomSettings({ ...settings, viewMode }))}
-          pending={pending}
-        />
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-2">

@@ -44,7 +44,6 @@ import {
   type AttributeType,
   type OrderAuditEntry,
   type ProductionStatus,
-  type ShowroomViewMode,
 } from "@repo/lib/types";
 import { clientPath } from "@repo/lib/client-portal/paths";
 
@@ -1033,18 +1032,6 @@ export async function setVariantActive(id: string, active: boolean): Promise<Res
   await requireRole("boss");
   const admin = createAdminClient();
   const { error } = await admin.from("product_variants").update({ active }).eq("id", id);
-  if (error) return { ok: false, error: error.message };
-  catalogChanged();
-  return { ok: true };
-}
-
-// Which image display the showroom's single-product view uses (see
-// apps/client/app/product-showcase.tsx) — the boss's call, since neither
-// is objectively better (3D scene can't show video; carousel can).
-export async function setShowroomViewMode(mode: ShowroomViewMode): Promise<Result> {
-  await requireRole("boss");
-  const admin = createAdminClient();
-  const { error } = await admin.from("showroom_settings").update({ product_view_mode: mode }).eq("id", 1);
   if (error) return { ok: false, error: error.message };
   catalogChanged();
   return { ok: true };

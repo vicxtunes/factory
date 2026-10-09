@@ -8,7 +8,7 @@ import { VoidInvoiceButton } from "@repo/ui/billing/InvoiceButtons";
 import { PaymentsPanel } from "@repo/ui/billing/PaymentsPanel";
 import { localDate } from "@repo/lib/accounting/core/period";
 import { canEditInvoice, canVoidInvoice, invoiceIdSchema } from "@repo/lib/billing/core";
-import { invoices, invoiceUrl, receiptUrl } from "@repo/lib/billing/server";
+import { documentIssuer, invoices, invoiceUrl, receiptUrl } from "@repo/lib/billing/server";
 import { bookings } from "@repo/lib/bookings/server";
 import { requireStudio } from "@repo/lib/studios/server";
 
@@ -21,7 +21,7 @@ export default async function StudioInvoicePage({ params }: { params: Promise<{ 
   const { scope, studio } = await requireStudio();
   // Looked up inside the caller's studio only: another studio's id is "not found".
   const id = invoiceIdSchema.safeParse((await params).id);
-  const invoice = id.success ? await invoices.get(scope, id.data) : null;
+  const [invoice, issuer] = await Promise.all([id.success ? invoices.get(scope, id.data) : null, documentIssuer(studio.id)]);
   if (!invoice) notFound();
   const state = { voided: !!invoice.voidedAt, paid: invoice.paid };
   // Booked automatically from its shoot day (or its quotation's).
@@ -69,7 +69,7 @@ export default async function StudioInvoicePage({ params }: { params: Promise<{ 
       />
       <InvoicePdf
         invoice={invoice}
-        issuer={{ name: studio.name, phone: studio.phone, email: studio.email, address: studio.address }}
+        issuer={issuer}
         scope={{ currency: scope.currency, locale: scope.locale, timeZone: scope.timeZone }}
       />
       {canVoidInvoice(state) ? <VoidInvoiceButton invoiceId={invoice.id} /> : null}
