@@ -24,6 +24,7 @@ import { photos } from "@repo/lib/photos/server";
 import { studioOrders } from "@repo/lib/studio-orders/server";
 import { portal, studioUrl } from "@repo/lib/studio-portal/server";
 import { requireStudio } from "@repo/lib/studios/server";
+import { canUse } from "@repo/lib/team/core";
 import { tasks } from "@repo/lib/tasks/server";
 import { team } from "@repo/lib/team/server";
 import { formatAmount, formatDay } from "@repo/lib/tenancy/format";
@@ -32,7 +33,7 @@ import type { TenantScope } from "@repo/lib/tenancy/types";
 export const metadata = { title: "Project · My Business" };
 
 export default async function StudioProjectPage({ params }: { params: Promise<{ id: string }> }) {
-  const { scope, studio } = await requireStudio();
+  const { scope, studio, access } = await requireStudio("projects");
   // Looked up inside the caller's studio only: another studio's id is "not found".
   const id = projectIdSchema.safeParse((await params).id);
   const view = id.success ? await projects.get(scope, id.data) : null;
@@ -67,7 +68,7 @@ export default async function StudioProjectPage({ params }: { params: Promise<{ 
       <ProjectStatusButtons projectId={p.id} status={p.status} />
 
       <Suspense fallback={<Skeleton className="h-24 w-full rounded-2xl" />}>
-        <BookingAndMoney scope={scope} project={p} />
+        <BookingAndMoney scope={scope} project={p} money={canUse(access, "money")} />
       </Suspense>
 
       <section className="space-y-3">
@@ -82,12 +83,15 @@ export default async function StudioProjectPage({ params }: { params: Promise<{ 
           <Photos scope={scope} project={p} />
         </Loading>
       </section>
-      <section className="space-y-3">
-        <SectionLabel>Aming orders</SectionLabel>
-        <Loading skeleton={<RowsSkeleton rows={2} />}>
-          <AmingOrders scope={scope} project={p} ownerClientId={studio.ownerClientId} />
-        </Loading>
-      </section>
+      {/* Placed under the owner's own Aming account: theirs alone. */}
+      {access.owner ? (
+        <section className="space-y-3">
+          <SectionLabel>Aming orders</SectionLabel>
+          <Loading skeleton={<RowsSkeleton rows={2} />}>
+            <AmingOrders scope={scope} project={p} ownerClientId={studio.ownerClientId} />
+          </Loading>
+        </section>
+      ) : null}
       {p.notes ? (
         <section>
           <SectionLabel>Notes</SectionLabel>
@@ -102,10 +106,10 @@ export default async function StudioProjectPage({ params }: { params: Promise<{ 
   );
 }
 
-// Everything behind it: its booking, and its invoice (made when an online request was confirmed, or from its quotation).
-async function BookingAndMoney({ scope, project: p }: { scope: TenantScope; project: Project }) {
-  const booking = p.bookingId ? (await bookings.get(scope, p.bookingId))?.booking ?? null : null;
-  const invoiceId = booking?.invoiceId ?? (booking?.quotationId ? await invoices.idForQuotation(scope, booking.quotationId) : null);
+// Everything behind it: its booking, and its invoice (made when an online request was confirmed, or from its quotation); the money only for those who handle it.
+async function BookingAndMoney({ scope, project: p, money }: { scope: TenantScope; project: Project; money: boolean }) {
+  const booking = p.bookingId ? ((await bookings.get(scope, p.bookingId))?.booking ?? null) : null;
+  const invoiceId = !money ? null : (booking?.invoiceId ?? (booking?.quotationId ? await invoices.idForQuotation(scope, booking.quotationId) : null));
   const invoice = invoiceId ? await invoices.get(scope, invoiceId) : null;
   return (
     <section className="grid gap-3 rounded-2xl border border-border bg-surface p-4 text-sm shadow-theme-xs sm:grid-cols-2">
@@ -120,27 +124,29 @@ async function BookingAndMoney({ scope, project: p }: { scope: TenantScope; proj
           <p className="text-muted">None</p>
         )}
       </div>
-      <div>
-        <p className="text-xs font-medium text-muted">Money</p>
-        {invoice ? (
-          <p className="flex flex-wrap items-center gap-2">
-            <Link href={`/studio/invoices/${invoice.id}`} className="font-medium text-brand-600 hover:underline">
-              {invoice.number}
+      {money ? (
+        <div>
+          <p className="text-xs font-medium text-muted">Money</p>
+          {invoice ? (
+            <p className="flex flex-wrap items-center gap-2">
+              <Link href={`/studio/invoices/${invoice.id}`} className="font-medium text-brand-600 hover:underline">
+                {invoice.number}
+              </Link>
+              <span className="tnum">
+                {formatAmount(scope, invoice.paid)} paid · {formatAmount(scope, invoice.balance)} left
+              </span>
+              <InvoiceStatusBadge status={invoice.status} />
+            </p>
+          ) : booking && (booking.status === "tentative" || booking.status === "confirmed") ? (
+            // Made from its booking: client, when and package filled in; saving links it (and confirms the booking).
+            <Link href={`/studio/invoices/new?booking=${booking.id}`} className="font-medium text-brand-600 hover:underline">
+              Create invoice
             </Link>
-            <span className="tnum">
-              {formatAmount(scope, invoice.paid)} paid · {formatAmount(scope, invoice.balance)} left
-            </span>
-            <InvoiceStatusBadge status={invoice.status} />
-          </p>
-        ) : booking && (booking.status === "tentative" || booking.status === "confirmed") ? (
-          // Made from its booking: client, when and package filled in; saving links it (and confirms the booking).
-          <Link href={`/studio/invoices/new?booking=${booking.id}`} className="font-medium text-brand-600 hover:underline">
-            Create invoice
-          </Link>
-        ) : (
-          <p className="text-muted">No invoice linked</p>
-        )}
-      </div>
+          ) : (
+            <p className="text-muted">No invoice linked</p>
+          )}
+        </div>
+      ) : null}
     </section>
   );
 }

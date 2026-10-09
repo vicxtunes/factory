@@ -21,6 +21,7 @@ import { tasks } from "@repo/lib/tasks/server";
 import { studioAccounts } from "@repo/lib/billing/server";
 import { CurrencySymbolProvider } from "@repo/lib/currency/CurrencySymbolProvider";
 import { requireStudio } from "@repo/lib/studios/server";
+import { canUse, type StudioAccess } from "@repo/lib/team/core";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
 export const metadata = { title: "My Business" };
@@ -30,62 +31,78 @@ const LINKS = { sales: "/studio/invoices", overdue: "/studio/invoices", clients:
 
 // The studio's dashboard: its money at a glance, from its invoices and
 // payments (packages/lib/billing → Accounts). The studio is created the first
-// time any My Business page opens.
+// time any My Business page opens. A team member sees only the parts they were
+// given, and the tasks given to them.
 export default async function StudioDashboardPage({
   searchParams,
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const { scope, studio } = await requireStudio();
+  const { scope, studio, access } = await requireStudio("anyone");
   const today = localDate(new Date(), scope.timeZone);
+  const can = (area: Parameters<typeof canUse>[1]) => canUse(access, area);
 
   return (
     <>
       <h2 className="text-xl font-semibold">{studio.name}</h2>
-      <Suspense fallback={<Skeleton className="h-6 w-full" />}>
-        <Usage scope={scope} />
-      </Suspense>
+      {access.owner ? (
+        <Suspense fallback={<Skeleton className="h-6 w-full" />}>
+          <Usage scope={scope} />
+        </Suspense>
+      ) : null}
       {/* Shown only when there are some, so nothing stands in for it while it loads. */}
-      <Suspense fallback={null}>
-        <Requests scope={scope} />
-      </Suspense>
-      <Suspense fallback={null}>
-        <OrderRequests scope={scope} />
-      </Suspense>
-      <div className="grid gap-4 lg:grid-cols-2">
-        <section>
-          <SectionLabel>Coming up</SectionLabel>
-          <Loading skeleton={<RowsSkeleton rows={3} />}>
-            <Upcoming scope={scope} today={today} />
-          </Loading>
-        </section>
-        <section>
-          <SectionLabel>Projects in hand</SectionLabel>
-          <Loading skeleton={<RowsSkeleton rows={3} />}>
-            <InHand scope={scope} />
-          </Loading>
-        </section>
-      </div>
+      {can("bookings") ? (
+        <Suspense fallback={null}>
+          <Requests scope={scope} />
+        </Suspense>
+      ) : null}
+      {can("money") ? (
+        <Suspense fallback={null}>
+          <OrderRequests scope={scope} />
+        </Suspense>
+      ) : null}
+      {can("bookings") || can("projects") ? (
+        <div className="grid gap-4 lg:grid-cols-2">
+          {can("bookings") ? (
+            <section>
+              <SectionLabel>Coming up</SectionLabel>
+              <Loading skeleton={<RowsSkeleton rows={3} />}>
+                <Upcoming scope={scope} today={today} />
+              </Loading>
+            </section>
+          ) : null}
+          {can("projects") ? (
+            <section>
+              <SectionLabel>Projects in hand</SectionLabel>
+              <Loading skeleton={<RowsSkeleton rows={3} />}>
+                <InHand scope={scope} />
+              </Loading>
+            </section>
+          ) : null}
+        </div>
+      ) : null}
       <section>
-        <SectionLabel>Tasks to do</SectionLabel>
+        <SectionLabel>{can("projects") ? "Tasks to do" : "Your tasks"}</SectionLabel>
         <Loading skeleton={<RowsSkeleton rows={4} />}>
-          <Todo scope={scope} today={today} />
+          <Todo scope={scope} today={today} access={access} />
         </Loading>
       </section>
       {/* Amounts in the studio's own currency. */}
-      <CurrencySymbolProvider symbol={scope.currency}>
-        <Loading
-          skeleton={
-            <div className="space-y-6">
-              <ChipRowSkeleton count={5} />
-              <StatTilesSkeleton />
-              <ChartsSkeleton />
-            </div>
-          }
-        >
-          <Accounts scope={scope} searchParams={searchParams} />
-        </Loading>
-      </CurrencySymbolProvider>
+      {can("money") ? (
+        <CurrencySymbolProvider symbol={scope.currency}>
+          <Loading
+            skeleton={
+              <div className="space-y-6">
+                <ChipRowSkeleton count={5} />
+                <StatTilesSkeleton />
+                <ChartsSkeleton />
+              </div>
+            }
+          >
+            <Accounts scope={scope} searchParams={searchParams} />
+          </Loading>
+        </CurrencySymbolProvider>
+      ) : null}
     </>
   );
 }
@@ -127,9 +144,14 @@ async function InHand({ scope }: { scope: TenantScope }) {
   return <ProjectsList projects={inHand.slice(0, 5)} scope={scope} basePath="/studio/projects" empty="No projects in hand." />;
 }
 
-async function Todo({ scope, today }: { scope: TenantScope; today: string }) {
-  const todo = await tasks.open(scope);
-  return <TaskRows tasks={todo.slice(0, 6)} today={today} scope={scope} editable showProject empty="Nothing to do." />;
+// Everyone's, for those who run the projects; else only the caller's own.
+async function Todo({ scope, today, access }: { scope: TenantScope; today: string; access: StudioAccess }) {
+  if (access.owner || canUse(access, "projects")) {
+    const todo = await tasks.open(scope);
+    return <TaskRows tasks={todo.slice(0, 6)} today={today} scope={scope} editable showProject empty="Nothing to do." />;
+  }
+  const mine = await tasks.open(scope, access.memberId);
+  return <TaskRows tasks={mine} today={today} scope={scope} editable="status" showProject projectPath={null} empty="Nothing given to you right now." />;
 }
 
 async function Accounts({ scope, searchParams }: { scope: TenantScope; searchParams: Promise<Record<string, string | string[] | undefined>> }) {

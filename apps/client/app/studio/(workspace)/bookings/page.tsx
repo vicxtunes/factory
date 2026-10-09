@@ -12,7 +12,7 @@ import type { TenantScope } from "@repo/lib/tenancy/types";
 export const metadata = { title: "Bookings · My Business" };
 
 export default async function StudioBookingsPage({ searchParams }: { searchParams: Promise<{ view?: string; date?: string }> }) {
-  const { scope } = await requireStudio();
+  const { scope } = await requireStudio("bookings");
   const params = await searchParams;
   const today = localDate(new Date(), scope.timeZone);
   const view = calendarViewSchema.catch("month").parse(params.view);

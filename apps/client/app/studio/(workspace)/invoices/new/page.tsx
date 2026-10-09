@@ -14,7 +14,7 @@ import { fromBooking } from "../../../_workspace/from-booking";
 export const metadata = { title: "New invoice · My Business" };
 
 export default async function NewInvoicePage({ searchParams }: { searchParams: Promise<{ client?: string; booking?: string }> }) {
-  const { scope } = await requireStudio();
+  const { scope } = await requireStudio("money");
   const { client, booking } = await searchParams;
 
   return (

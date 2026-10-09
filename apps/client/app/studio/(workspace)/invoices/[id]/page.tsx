@@ -18,7 +18,7 @@ const button =
   "inline-flex min-h-11 items-center rounded-[var(--radius)] border border-gray-300 bg-white px-4 text-sm text-gray-700 shadow-theme-xs hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300";
 
 export default async function StudioInvoicePage({ params }: { params: Promise<{ id: string }> }) {
-  const { scope, studio } = await requireStudio();
+  const { scope, studio } = await requireStudio("money");
   // Looked up inside the caller's studio only: another studio's id is "not found".
   const id = invoiceIdSchema.safeParse((await params).id);
   const [invoice, issuer] = await Promise.all([id.success ? invoices.get(scope, id.data) : null, documentIssuer(studio.id)]);

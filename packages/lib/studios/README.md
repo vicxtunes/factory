@@ -50,7 +50,7 @@ packages/lib/studios/
   adapters/supabase/store.ts   Studios as owned rows of `tenants`; Aming's default tenant is never one.
   server.ts          The wired service; requireStudio (pages), studioOfCaller (actions, any module),
                      requireStudiosOversight (boss pages).
-  actions.ts         saveMyStudioProfile (session → zod → service).
+  actions.ts         saveMyStudioProfile (session → zod → service), chooseStudio.
   feature.ts         STUDIOS_ENABLED.
 packages/ui/studios/  StudioProfileForm (client), StudiosTable (boss).
 apps/client/app/studio/                       My Business.
@@ -77,8 +77,17 @@ tenant that isn't the default must have an owner. Additive only: no existing row
 
 Studio-owned modules (customers, …) get the caller's studio from `server.ts`:
 `requireStudio()` on pages and `studioOfCaller()` in actions. Both return `{ session, studio,
-scope }`; pass `scope` (`studioScope(studio)`: the studio's tenant id, currency, locale and time
+scope, access }`; pass `scope` (`studioScope(studio)`: the studio's tenant id, currency, locale and time
 zone) to the module. Neither takes an id from the browser.
+
+**Who's calling.** The owner, or a team member who joined with their own account
+(packages/lib/team). Each page and action says what it needs: an area (`requireStudio("money")`,
+`studioOfCaller("bookings")`), `"anyone"` on the team (the dashboard, their own tasks), or nothing:
+owner-only. A member without it is sent to `/studio` (pages) or refused (actions). The owner
+unlocks with the business password; a member's account and PIN are their lock. Set-up, password
+and profile stay the owner's (`requireOwnStudio`, `studioForSetup`, `ownStudio`). An account that
+owns a business and works for others picks one per device (`chooseStudio`, the `studio_as`
+cookie); with no business of its own it opens the first it works for.
 
 ## Next
 

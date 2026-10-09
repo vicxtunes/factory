@@ -16,7 +16,7 @@ import type { TenantScope } from "@repo/lib/tenancy/types";
 export const metadata = { title: "Quotation · My Business" };
 
 export default async function StudioQuotationPage({ params }: { params: Promise<{ id: string }> }) {
-  const { scope, studio } = await requireStudio();
+  const { scope, studio } = await requireStudio("money");
   // Looked up inside the caller's studio only: another studio's id is "not found".
   const id = quotationIdSchema.safeParse((await params).id);
   const [quotation, issuer] = await Promise.all([id.success ? quotations.get(scope, id.data) : null, documentIssuer(studio.id)]);

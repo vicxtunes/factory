@@ -15,7 +15,7 @@ export const metadata = { title: "Invoices · My Business" };
 type Invoices = ReturnType<typeof invoices.list>;
 
 export default async function StudioInvoicesPage() {
-  const { scope } = await requireStudio();
+  const { scope } = await requireStudio("money");
   // Read once, for the total and the list.
   const list = invoices.list(scope);
 

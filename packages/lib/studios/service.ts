@@ -13,6 +13,11 @@ export class StudioService {
     return (await this.store.findByOwner(owner.clientId)) ?? this.store.create(owner);
   }
 
+  /** The client's studio, if they've opened one (none is created). */
+  async owned(clientId: string): Promise<Studio | null> {
+    return this.store.findByOwner(clientId);
+  }
+
   /**
    * Changes a studio's profile. Callers pass the id of the caller's own
    * studio (server.ts → studioOfCaller), never one sent by the browser.
