@@ -15,7 +15,7 @@ import type { TenantScope } from "@repo/lib/tenancy/types";
 export const metadata = { title: "Edit quotation · My Business" };
 
 export default async function EditQuotationPage({ params }: { params: Promise<{ id: string }> }) {
-  const { scope } = await requireStudio();
+  const { scope } = await requireStudio("money");
   const id = quotationIdSchema.safeParse((await params).id);
   const quotation = id.success ? await quotations.get(scope, id.data) : null;
   if (!quotation) notFound();

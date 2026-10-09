@@ -16,6 +16,8 @@ tenant-scoped.
   - the Tasks page (Open / Overdue / Unassigned, or one person's);
   - each member's open tasks;
   - **Tasks to do** on the studio dashboard;
+  - for a team member who signs in without projects, only theirs (dashboard and Tasks page): they
+    can start and finish them, and the server refuses a status change on anyone else's;
   - the studio's open tasks and team for the boss, read-only.
 
 ## Studio separation

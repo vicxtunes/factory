@@ -14,7 +14,7 @@ import type { TenantScope } from "@repo/lib/tenancy/types";
 export const metadata = { title: "New booking · My Business" };
 
 export default async function NewBookingPage({ searchParams }: { searchParams: Promise<{ date?: string; quotation?: string; client?: string }> }) {
-  const { scope } = await requireStudio();
+  const { scope } = await requireStudio("bookings");
   const { date, quotation, client } = await searchParams;
 
   return (

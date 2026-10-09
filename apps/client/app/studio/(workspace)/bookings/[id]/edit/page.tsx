@@ -15,7 +15,7 @@ import type { TenantScope } from "@repo/lib/tenancy/types";
 export const metadata = { title: "Edit booking · My Business" };
 
 export default async function EditBookingPage({ params }: { params: Promise<{ id: string }> }) {
-  const { scope } = await requireStudio();
+  const { scope } = await requireStudio("bookings");
   const id = bookingIdSchema.safeParse((await params).id);
   const view = id.success ? await bookings.get(scope, id.data) : null;
   if (!view) notFound();

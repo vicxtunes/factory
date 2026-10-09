@@ -16,7 +16,7 @@ import type { TenantScope } from "@repo/lib/tenancy/types";
 export const metadata = { title: "Album · My Business" };
 
 export default async function StudioAlbumPage({ params }: { params: Promise<{ albumId: string }> }) {
-  const { scope } = await requireStudio();
+  const { scope } = await requireStudio("catalog");
   // Looked up inside the caller's studio only: another studio's id is "not found".
   const id = albumIdSchema.safeParse((await params).albumId);
   const album = id.success ? await photos.album(scope, id.data) : null;

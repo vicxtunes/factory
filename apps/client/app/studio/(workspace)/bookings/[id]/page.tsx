@@ -23,7 +23,7 @@ import type { TenantScope } from "@repo/lib/tenancy/types";
 export const metadata = { title: "Booking · My Business" };
 
 export default async function StudioBookingPage({ params }: { params: Promise<{ id: string }> }) {
-  const { scope } = await requireStudio();
+  const { scope } = await requireStudio("bookings");
   // Looked up inside the caller's studio only: another studio's id is "not found".
   const id = bookingIdSchema.safeParse((await params).id);
   const view = id.success ? await bookings.get(scope, id.data) : null;

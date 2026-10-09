@@ -42,7 +42,7 @@ const LIST = "/studio/quotations";
 /** A new quotation; made from a booking (`bookingId`), it's that booking's: accepting it books nothing new. */
 export async function createQuotation(input: unknown, bookingId?: unknown): Promise<Result<string>> {
   return runAction("billing", async () => {
-    const { scope } = await studioOfCaller();
+    const { scope } = await studioOfCaller("money");
     const details = parseInput(quotationInputSchema, input);
     const booking = bookingId == null ? null : parseInput(bookingIdSchema, bookingId);
     if (booking) await bookings.checkDocumentFor(scope, booking, details.customerId, "quotation");
@@ -55,7 +55,7 @@ export async function createQuotation(input: unknown, bookingId?: unknown): Prom
 
 export async function updateQuotation(id: unknown, input: unknown): Promise<Result<string>> {
   return runAction("billing", async () => {
-    const { scope } = await studioOfCaller();
+    const { scope } = await studioOfCaller("money");
     const saved = await quotations.update(scope, parseInput(quotationIdSchema, id), parseInput(quotationInputSchema, input));
     revalidatePath(LIST, "layout");
     return saved;
@@ -65,7 +65,7 @@ export async function updateQuotation(id: unknown, input: unknown): Promise<Resu
 /** A new link for the quotation; the old one stops working. */
 export async function resetQuotationLink(id: unknown): Promise<Result> {
   return runAction("billing", async () => {
-    const { scope } = await studioOfCaller();
+    const { scope } = await studioOfCaller("money");
     await quotations.resetLink(scope, parseInput(quotationIdSchema, id));
     revalidatePath(LIST, "layout");
   });
@@ -115,7 +115,7 @@ const INVOICES = "/studio/invoices";
 /** A new invoice, booked from its shoot day; made from a booking (`bookingId`), it's that booking's, which it confirms. */
 export async function createInvoice(input: unknown, bookingId?: unknown): Promise<Result<string>> {
   return runAction("billing", async () => {
-    const { scope } = await studioOfCaller();
+    const { scope } = await studioOfCaller("money");
     const details = parseInput(invoiceInputSchema, input);
     const booking = bookingId == null ? null : parseInput(bookingIdSchema, bookingId);
     if (booking) await bookings.checkDocumentFor(scope, booking, details.customerId, "invoice");
@@ -129,7 +129,7 @@ export async function createInvoice(input: unknown, bookingId?: unknown): Promis
 
 export async function updateInvoice(id: unknown, input: unknown): Promise<Result<string>> {
   return runAction("billing", async () => {
-    const { scope } = await studioOfCaller();
+    const { scope } = await studioOfCaller("money");
     const saved = await invoices.update(scope, parseInput(invoiceIdSchema, id), parseInput(invoiceInputSchema, input));
     await bookInvoice(scope, saved);
     revalidatePath("/studio", "layout");
@@ -140,7 +140,7 @@ export async function updateInvoice(id: unknown, input: unknown): Promise<Result
 /** The invoice for an accepted quotation: made now from its lines, or the one already made. */
 export async function invoiceFromQuotation(quotationId: unknown): Promise<Result<string>> {
   return runAction("billing", async () => {
-    const { scope } = await studioOfCaller();
+    const { scope } = await studioOfCaller("money");
     const id = await invoices.fromQuotation(scope, parseInput(quotationIdSchema, quotationId));
     await bookInvoice(scope, id);
     revalidatePath("/studio", "layout");
@@ -150,7 +150,7 @@ export async function invoiceFromQuotation(quotationId: unknown): Promise<Result
 
 export async function recordPayment(invoiceId: unknown, input: unknown): Promise<Result<string>> {
   return runAction("billing", async () => {
-    const { scope } = await studioOfCaller();
+    const { scope } = await studioOfCaller("money");
     const id = await invoices.recordPayment(scope, parseInput(invoiceIdSchema, invoiceId), parseInput(paymentInputSchema, input));
     revalidatePath("/studio", "layout");
     return id;
@@ -159,7 +159,7 @@ export async function recordPayment(invoiceId: unknown, input: unknown): Promise
 
 export async function voidPayment(paymentId: unknown, reason: unknown): Promise<Result> {
   return runAction("billing", async () => {
-    const { scope } = await studioOfCaller();
+    const { scope } = await studioOfCaller("money");
     await invoices.voidPayment(scope, parseInput(paymentIdSchema, paymentId), parseInput(voidReasonSchema, reason));
     revalidatePath("/studio", "layout");
   });
@@ -167,7 +167,7 @@ export async function voidPayment(paymentId: unknown, reason: unknown): Promise<
 
 export async function voidInvoice(id: unknown, reason: unknown): Promise<Result> {
   return runAction("billing", async () => {
-    const { scope } = await studioOfCaller();
+    const { scope } = await studioOfCaller("money");
     const invoiceId = parseInput(invoiceIdSchema, id);
     await invoices.voidInvoice(scope, invoiceId, parseInput(voidReasonSchema, reason));
     await bookings.cancelForInvoice(scope, invoiceId);
@@ -178,7 +178,7 @@ export async function voidInvoice(id: unknown, reason: unknown): Promise<Result>
 /** A new link for the invoice; the old one stops working. */
 export async function resetInvoiceLink(id: unknown): Promise<Result> {
   return runAction("billing", async () => {
-    const { scope } = await studioOfCaller();
+    const { scope } = await studioOfCaller("money");
     await invoices.resetLink(scope, parseInput(invoiceIdSchema, id));
     revalidatePath(INVOICES, "layout");
   });

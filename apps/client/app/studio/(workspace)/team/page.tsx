@@ -13,7 +13,7 @@ export default async function StudioTeamPage() {
   const { scope } = await requireStudio();
   return (
     <>
-      <p className="text-sm text-muted">The people you give work to. They don&apos;t need an account: assign them tasks on your projects.</p>
+      <p className="text-sm text-muted">The people you give work to. Assign them tasks on your projects. To let someone sign in and work with you, open them and choose what they can use: run the business for you, handle the accounts, or only their tasks.</p>
       <TeamMemberForm />
       <Loading skeleton={<RowsSkeleton rows={4} />}>
         <Members scope={scope} />

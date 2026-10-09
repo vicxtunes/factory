@@ -10,7 +10,7 @@ import type { TenantScope } from "@repo/lib/tenancy/types";
 export const metadata = { title: "Projects · My Business" };
 
 export default async function StudioProjectsPage() {
-  const { scope } = await requireStudio();
+  const { scope } = await requireStudio("projects");
   return (
     <>
       <div className="flex items-start justify-between gap-3">

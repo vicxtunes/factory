@@ -20,7 +20,7 @@ const LIST = "/studio/clients";
 
 export async function createCustomer(input: unknown): Promise<Result<SaveOutcome>> {
   return runAction("customers", async () => {
-    const { scope } = await studioOfCaller();
+    const { scope } = await studioOfCaller("clients");
     const outcome = await customers.create(scope, parseInput(customerInputSchema, input));
     revalidatePath(LIST);
     return outcome;
@@ -29,7 +29,7 @@ export async function createCustomer(input: unknown): Promise<Result<SaveOutcome
 
 export async function updateCustomer(id: unknown, input: unknown): Promise<Result<SaveOutcome>> {
   return runAction("customers", async () => {
-    const { scope } = await studioOfCaller();
+    const { scope } = await studioOfCaller("clients");
     const outcome = await customers.update(scope, parseInput(customerIdSchema, id), parseInput(customerInputSchema, input));
     revalidatePath(LIST, "layout");
     return outcome;
@@ -39,7 +39,7 @@ export async function updateCustomer(id: unknown, input: unknown): Promise<Resul
 /** Archives a customer (or restores one). */
 export async function setCustomerArchived(id: unknown, archived: unknown): Promise<Result<Customer>> {
   return runAction("customers", async () => {
-    const { scope } = await studioOfCaller();
+    const { scope } = await studioOfCaller("clients");
     const customer = await customers.setArchived(scope, parseInput(customerIdSchema, id), archived === true);
     revalidatePath(LIST, "layout");
     return customer;

@@ -42,7 +42,9 @@ export class TaskService {
   }
 
   /** Pending ↔ in progress ↔ done, any way round (done can be reopened). */
-  async setStatus(scope: TenantScope, id: string, status: TaskStatus): Promise<void> {
+  /** Moves a task along. `onlyFor`: a team member moving their own tasks only (without Projects & tasks). */
+  async setStatus(scope: TenantScope, id: string, status: TaskStatus, onlyFor?: string): Promise<void> {
+    if (onlyFor !== undefined && (await this.store.get(scope, id))?.assigneeId !== onlyFor) throw new TaskError("Only the person it's given to can move this task.");
     if (!(await this.store.setStatus(scope, id, status))) throw new TaskError(GONE);
   }
 
