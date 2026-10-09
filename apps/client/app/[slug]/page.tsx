@@ -55,7 +55,8 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const studio = await studioAtSlug(slug);
   if (!studio) return { title: "Not found" };
   const about = [studio.studio.address, studio.studio.phone].filter(Boolean).join(" · ") || "Photography business";
-  return { title: studio.studio.name, description: about, openGraph: { title: studio.studio.name, description: about, type: "website" } };
+  // The studio's own name alone (./layout.tsx would add it again).
+  return { title: { absolute: studio.studio.name }, description: about, openGraph: { title: studio.studio.name, description: about, type: "website" } };
 }
 
 export default async function SlugPage({ params, searchParams }: Params & { searchParams: Promise<{ signin?: string }> }) {

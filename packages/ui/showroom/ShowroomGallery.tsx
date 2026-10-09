@@ -49,12 +49,18 @@ function PhotoCard({ card }: { card: ShowroomCard }) {
   );
 }
 
-/** The full-bleed photo banner at the top of a showroom. */
-export function ShowroomBanner({ title, subtitle, imageUrl }: { title: string; subtitle: string; imageUrl: string }) {
+/** The full-bleed photo banner at the top of a showroom. No photo: the brand color alone (a studio's page before it has any). */
+export function ShowroomBanner({ title, subtitle, imageUrl }: { title: string; subtitle: string; imageUrl: string | null }) {
   return (
     <div className="relative -mx-4 -mt-6 mb-6 h-48 overflow-hidden sm:-mx-6 sm:h-64">
-      <Image src={imageUrl} alt="" fill priority unoptimized={!canOptimizeImage(imageUrl)} className="object-cover" />
-      <div className="absolute inset-0 bg-gradient-to-r from-[#1b2a4b]/90 via-[#1b2a4b]/50 to-brand-600/60" />
+      {imageUrl ? (
+        <>
+          <Image src={imageUrl} alt="" fill priority unoptimized={!canOptimizeImage(imageUrl)} className="object-cover" />
+          <div className="absolute inset-0 bg-gradient-to-r from-[#1b2a4b]/90 via-[#1b2a4b]/50 to-brand-600/60" />
+        </>
+      ) : (
+        <div className="absolute inset-0 bg-gradient-to-r from-brand-900 via-brand-700 to-brand-500" />
+      )}
       <div className="absolute inset-0 flex flex-col items-center justify-center px-4 text-center">
         <h1 className="text-3xl font-extrabold uppercase tracking-wide text-white underline decoration-brand-400 decoration-4 underline-offset-8 sm:text-5xl">
           {title}
@@ -77,7 +83,7 @@ export function ShowroomGallery({
   tabs,
 }: {
   /** The full-bleed photo banner; left out where the page has its own header. */
-  banner?: { title: string; subtitle: string; imageUrl: string };
+  banner?: { title: string; subtitle: string; imageUrl: string | null };
   /** Between the banner and the tabs, e.g. a sign-in prompt. */
   notice?: ReactNode;
   /** With just one, its content shows without a tab bar. */

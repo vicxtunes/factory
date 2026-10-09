@@ -14,7 +14,7 @@ import { PortalSignIn } from "./PortalForms";
 
 /**
  * A studio's showroom, its public home at client.<domain>/<slug>, laid out
- * like Aming's own showroom (apps/client showroom-view.tsx): a photo banner,
+ * in its own brand (apps/client [slug]/layout.tsx): a photo banner,
  * a sign-in prompt for signed-out visitors (the form opens only when asked:
  * browsing never needs it), how to reach the studio, then tabs: its services
  * in a row per category (each opening its own page with its packages), its
@@ -41,7 +41,7 @@ export function StudioPublicPage({
   products: { id: string; name: string; products: (Service & { coverUrl: string | null })[] }[];
   /** Public albums, linked to their own pages. */
   albums: AlbumView[];
-  /** One of the studio's own photos for the banner; Aming's banner until it has one. */
+  /** One of the studio's own photos for the banner; its color alone until it has one. */
   bannerUrl: string | null;
   /** The client signed in at this studio on this device, if any. */
   signedInAs: string | null;
@@ -97,7 +97,7 @@ export function StudioPublicPage({
 
   return (
     <ShowroomGallery
-      banner={{ title: studio.name, subtitle: studio.address ?? "Welcome to our show room", imageUrl: bannerUrl ?? "/showroom/banner.jpg" }}
+      banner={{ title: studio.name, subtitle: studio.address ?? "Welcome to our show room", imageUrl: bannerUrl }}
       notice={
         <div className="mb-6 space-y-4">
           {studio.phone || studio.email ? (

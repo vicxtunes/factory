@@ -34,6 +34,8 @@ export function SplashScreen({
 
   return (
     <div
+      // Lets a page that isn't Aming's hide it (a studio's public pages, apps/client [slug]/layout.tsx).
+      data-app-splash
       style={{
         position: "fixed",
         inset: 0,

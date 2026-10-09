@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { optionalEmail, optionalPhone, optionalText } from "@repo/lib/kernel/core";
 
+import { normalizeHex } from "./brand";
 import type { StudioProfile } from "./model";
 
 export const studioIdSchema = z.uuid("That business doesn't exist.");
@@ -14,3 +15,11 @@ export const studioProfileSchema = z.object({
   email: optionalEmail(),
   address: optionalText(200, "Keep the address under 200 characters."),
 }) satisfies z.ZodType<StudioProfile, unknown>;
+
+export const brandColorSchema = z.object({
+  color: z.string("Choose a color.").transform((s, ctx) => {
+    const hex = normalizeHex(s);
+    if (!hex) ctx.addIssue({ code: "custom", message: "Choose a color." });
+    return hex ?? "";
+  }),
+});
