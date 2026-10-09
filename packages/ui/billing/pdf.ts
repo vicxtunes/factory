@@ -2,9 +2,11 @@
 // the quotation, the invoice (with what's been paid and what's left) and a
 // payment's receipt. This is their only layout: the pages show them as paper
 // (./DocumentPdf.tsx) and download the same file. The invoice and quotation
-// share one layout: the studio's header, who it's for and the dates, the
-// priced lines and totals, then notes; "Page X of Y" on every page. jspdf is
-// loaded only when needed, like the other exports.
+// share one layout: the studio's header (its logo, and its brand color for the
+// accents), who it's for and the dates, the priced lines and totals, then
+// notes and the studio's Document settings: how to pay (invoices), terms and
+// a signature. "Page X of Y" on every page. jspdf is loaded only when needed,
+// like the other exports.
 
 import type { jsPDF } from "jspdf";
 
@@ -33,11 +35,14 @@ const M = 15; // margin
 const RIGHT = PAGE_W - M;
 const INK: Rgb = [17, 24, 39];
 const MUTED: Rgb = [100, 108, 120];
-const SHADE: Rgb = [240, 243, 247];
 const RULE: Rgb = [200, 205, 212];
 const RED: Rgb = [180, 35, 24];
 /** Where the totals block starts (it runs to the right margin). */
 const TOTALS_X = 115;
+
+const rgb = (hex: string): Rgb => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)) as Rgb;
+/** The brand color mixed with white: a pale tint for shaded bands. */
+const tint = (c: Rgb, white = 0.88): Rgb => c.map((v) => Math.round(v + (255 - v) * white)) as Rgb;
 
 async function load() {
   const [{ default: JsPDF }, { default: autoTable }] = await Promise.all([import("jspdf"), import("jspdf-autotable")]);
@@ -51,24 +56,41 @@ function paragraph(doc: jsPDF, text: string, x: number, y: number, width: number
   return y + lines.length * lineHeight;
 }
 
-/** The studio on the left; the document's title, number and status on the right. Returns the y under the rule. */
+/** Draws a data-URL image as large as fits `w` × `h`, keeping its shape, from (x, y). Returns its height. */
+function fit(doc: jsPDF, image: string, x: number, y: number, w: number, h: number, right = false): number {
+  const { width, height, fileType } = doc.getImageProperties(image);
+  const scale = Math.min(w / width, h / height);
+  doc.addImage(image, fileType, right ? x + w - width * scale : x, y, width * scale, height * scale);
+  return height * scale;
+}
+
+/** The studio (its logo above its name) on the left; the document's title, number and status on the right. Returns the y under the rule. */
 function header(doc: jsPDF, issuer: Issuer, title: string, number: string, status: string | null): number {
+  let top = 20;
+  if (issuer.logo) {
+    try {
+      top = 12 + fit(doc, issuer.logo, M, 12, 45, 20) + 7;
+    } catch {
+      // A logo the PDF can't read: the documents still print, with the name alone.
+    }
+  }
   doc.setTextColor(...INK).setFont("helvetica", "bold").setFontSize(16);
-  let y = paragraph(doc, issuer.name, M, 20, 110, 6.5);
+  let y = paragraph(doc, issuer.name, M, top, 110, 6.5);
   doc.setFont("helvetica", "normal").setFontSize(9).setTextColor(...MUTED);
   for (const line of [...(issuer.address?.split("\n") ?? []), [issuer.phone, issuer.email].filter(Boolean).join("   ")]) {
     if (line.trim()) y = paragraph(doc, line, M, y, 110);
   }
 
-  doc.setTextColor(...INK).setFont("helvetica", "bold").setFontSize(15);
+  doc.setTextColor(...rgb(issuer.color)).setFont("helvetica", "bold").setFontSize(15);
   doc.text(title.toUpperCase(), RIGHT, 20, { align: "right" });
+  doc.setTextColor(...INK);
   doc.setFont("helvetica", "normal").setFontSize(11).text(safe(number), RIGHT, 26, { align: "right" });
   if (status) {
     doc.setFontSize(9).setTextColor(...MUTED).text(status.toUpperCase(), RIGHT, 31.5, { align: "right" });
   }
 
   const ruleY = Math.max(y, 35) + 2;
-  doc.setDrawColor(...RULE).setLineWidth(0.2).line(M, ruleY, RIGHT, ruleY);
+  doc.setDrawColor(...rgb(issuer.color)).setLineWidth(0.6).line(M, ruleY, RIGHT, ruleY);
   return ruleY + 8;
 }
 
@@ -90,7 +112,7 @@ function billToAndDates(doc: jsPDF, billTo: BillTo, dates: [string, string][], y
 }
 
 /** The priced lines: description in bold with its inclusions under it; a discounted price under its crossed-out list price. */
-function linesTable(doc: jsPDF, autoTable: Awaited<ReturnType<typeof load>>["autoTable"], lines: Line[], money: (n: number) => string, y: number): number {
+function linesTable(doc: jsPDF, autoTable: Awaited<ReturnType<typeof load>>["autoTable"], lines: Line[], money: (n: number) => string, y: number, color: Rgb): number {
   const discounted = (i: number) => lines[i].netUnitPrice !== lines[i].unitPrice;
   // The description cell is drawn by hand (bold name, bulleted inclusions), so its height is measured the same way.
   const DESC_W = RIGHT - M - 10 - 16 - 34 - 34;
@@ -114,7 +136,7 @@ function linesTable(doc: jsPDF, autoTable: Awaited<ReturnType<typeof load>>["aut
       money(l.total),
     ]),
     styles: { font: "helvetica", fontSize: 10, textColor: INK, cellPadding: { top: 3, bottom: 3, left: 2, right: 2 }, valign: "top" },
-    headStyles: { fontStyle: "bold", fontSize: 9, fillColor: SHADE, lineColor: RULE, lineWidth: { top: 0.3, bottom: 0.3 } },
+    headStyles: { fontStyle: "bold", fontSize: 9, fillColor: tint(color), lineColor: RULE, lineWidth: { top: 0.3, bottom: 0.3 } },
     bodyStyles: { lineColor: RULE, lineWidth: { bottom: 0.2 } },
     columnStyles: {
       0: { cellWidth: 10 },
@@ -173,7 +195,7 @@ function totalRow(doc: jsPDF, label: string, amount: string, y: number, strong =
 }
 
 /** Subtotal and discount (when there is one) and the shaded total. Returns the y under it. */
-function totals(doc: jsPDF, t: Totals, money: (n: number) => string, y: number): number {
+function totals(doc: jsPDF, t: Totals, money: (n: number) => string, y: number, color: Rgb): number {
   y = room(doc, y, 30) + 6;
   if (t.discount > 0) {
     y = totalRow(doc, "Subtotal", money(t.subtotal), y);
@@ -181,7 +203,7 @@ function totals(doc: jsPDF, t: Totals, money: (n: number) => string, y: number):
   } else {
     y -= 4;
   }
-  doc.setFillColor(...SHADE).rect(TOTALS_X, y, RIGHT - TOTALS_X, 10, "F");
+  doc.setFillColor(...tint(color)).rect(TOTALS_X, y, RIGHT - TOTALS_X, 10, "F");
   doc.setDrawColor(...RULE).setLineWidth(0.2).line(TOTALS_X, y + 10, RIGHT, y + 10);
   doc.setFont("helvetica", "bold").setFontSize(11).setTextColor(...INK);
   doc.text("TOTAL", TOTALS_X + 3, y + 6.8);
@@ -197,6 +219,43 @@ function notes(doc: jsPDF, text: string | null, y: number): number {
   doc.setFont("helvetica", "bold").setFontSize(10).setTextColor(...INK).text("Notes", M, y);
   doc.setFont("helvetica", "normal").setFontSize(9).setTextColor(...MUTED);
   return paragraph(doc, text, M, y + 5, RIGHT - M) + 6;
+}
+
+/** A titled block of text (one paragraph per line, or bullets). Returns the y under it. */
+function block(doc: jsPDF, title: string, text: string | null, y: number, bullets = false): number {
+  if (!text) return y;
+  const items = text.split("\n").map((l) => l.trim()).filter(Boolean);
+  doc.setFont("helvetica", "normal").setFontSize(9);
+  const indent = bullets ? 3.5 : 0;
+  const height = items.reduce((h, l) => h + (doc.splitTextToSize(safe(l), RIGHT - M - indent) as string[]).length * 4.2, 0);
+  y = room(doc, y, height + 8);
+  doc.setFont("helvetica", "bold").setFontSize(10).setTextColor(...INK).text(title, M, y);
+  doc.setFont("helvetica", "normal").setFontSize(9).setTextColor(...MUTED);
+  y += 5;
+  for (const item of items) {
+    if (bullets) doc.text("•", M, y);
+    y = paragraph(doc, item, M + indent, y, RIGHT - M - indent);
+  }
+  return y + 6;
+}
+
+/** "For, <name>", the signature (or a blank line to sign by hand) and AUTHORIZED SIGNATURE, on the right. */
+function signature(doc: jsPDF, issuer: Issuer, y: number): number {
+  if (!issuer.signatureName && !issuer.signature) return y;
+  y = room(doc, y, 34) + 4;
+  const x = RIGHT - 60;
+  doc.setFont("helvetica", "bold").setFontSize(10).setTextColor(...INK);
+  if (issuer.signatureName) doc.text(safe(`For, ${issuer.signatureName}`), RIGHT, y, { align: "right" });
+  if (issuer.signature) {
+    try {
+      fit(doc, issuer.signature, x, y + 3, 60, 16, true);
+    } catch {
+      // Unreadable: left blank to sign by hand.
+    }
+  }
+  doc.setDrawColor(...INK).setLineWidth(0.3).line(x, y + 21, RIGHT, y + 21);
+  doc.setFont("helvetica", "normal").setFontSize(8).setTextColor(...MUTED).text("AUTHORIZED SIGNATURE", RIGHT, y + 25.5, { align: "right" });
+  return y + 30;
 }
 
 function finish(doc: jsPDF): Blob {
@@ -220,11 +279,14 @@ export async function quotationPdf(q: Quotation, issuer: Issuer, scope: Scope): 
   if (q.validUntil) dates.push(["Valid until:", formatDay(scope, q.validUntil)]);
   if (q.shoot) dates.push(["Shoot:", shootLabel(scope, q.shoot)]);
 
+  const color = rgb(issuer.color);
   let y = header(doc, issuer, "Quotation", q.number, QUOTATION_STATUS_LABELS[q.status]);
   y = billToAndDates(doc, q.billTo, dates, y);
-  y = linesTable(doc, autoTable, q.lines, money, y);
-  y = totals(doc, q, money, y);
-  notes(doc, q.notes, y);
+  y = linesTable(doc, autoTable, q.lines, money, y, color);
+  y = totals(doc, q, money, y, color);
+  y = notes(doc, q.notes, y);
+  y = block(doc, "Terms & conditions", issuer.terms, y, true);
+  signature(doc, issuer, y);
   return finish(doc);
 }
 
@@ -235,10 +297,11 @@ export async function invoicePdf(inv: Invoice, issuer: Issuer, scope: Scope): Pr
   if (inv.dueDate) dates.push(["Due date:", formatDay(scope, inv.dueDate)]);
   if (inv.shoot) dates.push(["Shoot:", shootLabel(scope, inv.shoot)]);
 
+  const color = rgb(issuer.color);
   let y = header(doc, issuer, "Invoice", inv.number, INVOICE_STATUS_LABELS[inv.status]);
   y = billToAndDates(doc, inv.billTo, dates, y);
-  y = linesTable(doc, autoTable, inv.lines, money, y);
-  y = totals(doc, inv, money, y);
+  y = linesTable(doc, autoTable, inv.lines, money, y, color);
+  y = totals(doc, inv, money, y, color);
 
   if (inv.voidedAt) {
     doc.setFont("helvetica", "bold").setFontSize(10).setTextColor(...RED);
@@ -264,7 +327,11 @@ export async function invoicePdf(inv: Invoice, issuer: Issuer, scope: Scope): Pr
     y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
   }
 
-  notes(doc, inv.notes, y);
+  y = notes(doc, inv.notes, y);
+  // How to pay: only while there's something left to pay.
+  if (!inv.voidedAt && inv.balance > 0) y = block(doc, "How to pay", issuer.paymentInstructions, y);
+  y = block(doc, "Terms & conditions", issuer.terms, y, true);
+  signature(doc, issuer, y);
   return finish(doc);
 }
 
@@ -278,8 +345,8 @@ export async function receiptPdf({ payment: p, invoice }: Receipt, issuer: Issue
     y = paragraph(doc, `This payment was voided${p.voidReason ? `: ${p.voidReason}` : "."}`, M, y, RIGHT - M) + 6;
   }
 
-  // The amount, large, in a shaded band.
-  doc.setFillColor(...SHADE).rect(M, y, RIGHT - M, 28, "F");
+  // The amount, large, in a band of the studio's color.
+  doc.setFillColor(...tint(rgb(issuer.color))).rect(M, y, RIGHT - M, 28, "F");
   doc.setFont("helvetica", "normal").setFontSize(10).setTextColor(...MUTED).text("Amount received", PAGE_W / 2, y + 9, { align: "center" });
   const amount = money(p.amount);
   doc.setFont("helvetica", "bold").setFontSize(22).setTextColor(...INK).text(amount, PAGE_W / 2, y + 20, { align: "center" });
@@ -311,5 +378,6 @@ export async function receiptPdf({ payment: p, invoice }: Receipt, issuer: Issue
     y = paragraph(doc, p.note, M, y + 2, RIGHT - M) + 4;
   }
   doc.setFont("helvetica", "bold").setFontSize(11).setTextColor(...INK).text("Thank you.", PAGE_W / 2, y + 8, { align: "center" });
+  signature(doc, issuer, y + 16);
   return finish(doc);
 }

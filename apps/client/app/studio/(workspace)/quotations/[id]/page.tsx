@@ -8,7 +8,7 @@ import { CreateInvoiceButton } from "@repo/ui/billing/InvoiceButtons";
 import { Skeleton } from "@repo/ui/Skeleton";
 import { Loading } from "@repo/ui/skeletons/Loading";
 import { canEditQuotation, quotationIdSchema } from "@repo/lib/billing/core";
-import { invoices, quotations, quotationUrl } from "@repo/lib/billing/server";
+import { documentIssuer, invoices, quotations, quotationUrl } from "@repo/lib/billing/server";
 import { bookings } from "@repo/lib/bookings/server";
 import { requireStudio } from "@repo/lib/studios/server";
 import type { TenantScope } from "@repo/lib/tenancy/types";
@@ -19,7 +19,7 @@ export default async function StudioQuotationPage({ params }: { params: Promise<
   const { scope, studio } = await requireStudio();
   // Looked up inside the caller's studio only: another studio's id is "not found".
   const id = quotationIdSchema.safeParse((await params).id);
-  const quotation = id.success ? await quotations.get(scope, id.data) : null;
+  const [quotation, issuer] = await Promise.all([id.success ? quotations.get(scope, id.data) : null, documentIssuer(studio.id)]);
   if (!quotation) notFound();
 
   return (
@@ -60,7 +60,7 @@ export default async function StudioQuotationPage({ params }: { params: Promise<
       ) : null}
       <QuotationPdf
         quotation={quotation}
-        issuer={{ name: studio.name, phone: studio.phone, email: studio.email, address: studio.address }}
+        issuer={issuer}
         scope={{ currency: scope.currency, locale: scope.locale, timeZone: scope.timeZone }}
       />
     </>

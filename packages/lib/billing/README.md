@@ -33,6 +33,18 @@ A business's documents to its customers. Built for studios first and generic eno
   and the old link stops working. The quotation shows as its PDF, page by page, exactly as it
   downloads and prints (`packages/ui/billing/pdf.ts`).
 
+## How documents look (Document settings)
+
+- **Logo and color** come from the business's profile (packages/lib/studios: `logo_key`,
+  `brand_color`). The logo is read on the server into a data URL, since the PDFs are drawn in the
+  browser and the logo storage is private.
+- **Document settings** (`/studio/documents`, one `billing_document_settings` row per business):
+  how to pay (printed on invoices with something left to pay), terms (one per line, as bullets,
+  on quotations and invoices), and a signature line with a drawn signature (a small PNG data URL)
+  on quotations, invoices and receipts. No row: none of these print.
+- The directory (`adapters/supabase/directory.ts`) puts it all on the `Issuer`; workspace pages
+  get it from `documentIssuer()`, link pages through the services.
+
 ## Invoices, payments and receipts
 
 - **From an accepted quotation, with one tap** (`fromQuotation`): its client, lines and notes are

@@ -236,10 +236,10 @@ test("reactivating refuses a name that's been taken since", async () => {
 
 test("showroom settings: defaults until saved, per studio", async () => {
   const service = new OfferingService(memoryStore().store);
-  assert.deepEqual(await service.settings(studioA), { showPrices: true, viewMode: "scene" });
-  await service.saveSettings(studioA, { showPrices: false, viewMode: "carousel" });
-  assert.deepEqual(await service.settings(studioA), { showPrices: false, viewMode: "carousel" });
-  assert.deepEqual(await service.settings(studioB), { showPrices: true, viewMode: "scene" });
+  assert.deepEqual(await service.settings(studioA), { showPrices: true });
+  await service.saveSettings(studioA, { showPrices: false });
+  assert.deepEqual(await service.settings(studioA), { showPrices: false });
+  assert.deepEqual(await service.settings(studioB), { showPrices: true });
 });
 
 test("one studio can't read, change or use another's categories, services or packages", async () => {

@@ -371,7 +371,7 @@ export const fetchShowroomSettings = unstable_cache(
   async (): Promise<ShowroomSettings> => {
     const { data, error } = await createCatalogClient()
       .from("showroom_settings")
-      .select("product_view_mode, show_prices")
+      .select("show_prices")
       .eq("id", 1)
       .single();
     if (error) throw new Error(error.message);

@@ -1,20 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import dynamic from "next/dynamic";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Image from "next/image";
 
 import { canOptimizeImage } from "@repo/lib/storage/client";
-import type { ShowroomViewMode } from "@repo/lib/types";
 
 import { useCloseOnBack } from "../navigation/back";
-import type { ShowroomSceneHandle } from "./ShowroomScene";
 import { useSwipe } from "./useSwipe";
-
-const ShowroomScene = dynamic(() => import("./ShowroomScene").then((m) => m.ShowroomScene), {
-  ssr: false,
-  loading: () => <div className="absolute inset-0 flex items-center justify-center text-sm text-ink/50">Loading…</div>,
-});
 
 const PLACEHOLDER = "/showroom/placeholder.PNG";
 
@@ -307,9 +299,8 @@ function DetailsOverlay({
 // Walk" per-card layout (studio background, big image area), locked to a
 // single item instead of scrolling through a shuffled deck of many — that
 // shuffled-browsing feature is retired (see git history), but its look lives
-// on here, and its 3D scene component is reused as one of two
-// interchangeable image displays (see `viewMode`). What's for sale (price,
-// options, the call to action) is the caller's: `details` and `action`.
+// on here, with a photo/video carousel. What's for sale (price, options, the
+// call to action) is the caller's: `details` and `action`.
 //
 // On desktop this is an in-page card, not a full-screen takeover (the boss
 // wants the navbar/sidebar to stay visible). On mobile it *does* go
@@ -318,7 +309,6 @@ function DetailsOverlay({
 // screen real estate matters more on a small viewport.
 export function Showcase({
   item,
-  viewMode,
   details,
   action,
   onExit,
@@ -333,11 +323,6 @@ export function Showcase({
     /** Everything else: shown after the cover and video, and in "More details". */
     gallery: ShowcaseMedia[];
   };
-  // Whether the image area is the scroll-driven 3D scene or a plain
-  // photo/video carousel. The scene can only flip through actual photos
-  // (WebGL textures need static images), so it silently drops any video;
-  // the carousel shows everything.
-  viewMode: ShowroomViewMode;
   /** Under the description: price, options. */
   details?: ReactNode;
   /** Below everything: the call to action. */
@@ -353,16 +338,12 @@ export function Showcase({
     // Right after the display image, ahead of the open-ended gallery — the
     // preview video is a dedicated upload slot (see product-panel.tsx), not
     // just another gallery item, so it gets a fixed, prominent position
-    // rather than wherever it happened to land in the gallery. In
-    // carousel mode this is enough — it's just a normal playable slide. In
-    // scene mode it's filtered out below (`photos`, WebGL can't texture
-    // video) and instead gets a dedicated "Watch preview" overlay button —
-    // the 3D view's only way to reach it at all.
+    // rather than wherever it happened to land in the gallery: a normal
+    // playable slide.
     if (item.previewVideoUrl) list.push({ url: item.previewVideoUrl, kind: "video" });
     list.push(...item.gallery);
     return list.length > 0 ? list : [{ url: PLACEHOLDER, kind: "photo" }];
   }, [item]);
-  const photos = useMemo(() => media.filter((m) => m.kind === "photo"), [media]);
   const extraMedia = item.gallery;
 
   const [index, setIndex] = useState(0);
@@ -372,7 +353,6 @@ export function Showcase({
   // one overlay layer at a time (lightbox, then details, then exit) instead
   // of two independent keydown listeners both firing on the same press.
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
-  const sceneRef = useRef<ShowroomSceneHandle>(null);
 
   function closeDetails() {
     setDetailsOpen(false);
@@ -381,9 +361,8 @@ export function Showcase({
   useCloseOnBack(detailsOpen, closeDetails);
   useCloseOnBack(lightboxIndex !== null, () => setLightboxIndex(null));
 
-  function advanceImage(direction: 1 | -1) {
-    const len = viewMode === "scene" ? photos.length : media.length;
-    setIndex((i) => (i + direction + len) % len);
+  function stepImage(direction: 1 | -1) {
+    setIndex((i) => (i + direction + media.length) % media.length);
   }
 
   // Tracks the same breakpoint Tailwind's `sm:` prefix uses, so body-scroll
@@ -436,15 +415,9 @@ export function Showcase({
 
   const current = media[index] ?? media[0];
 
-  function stepImage(direction: 1 | -1) {
-    if (viewMode === "scene") sceneRef.current?.advance(direction);
-    else advanceImage(direction);
-  }
-
-  // Finger swipe on the flat photo view. Not for videos (horizontal drags on
-  // their controls scrub the timeline) and not for the 3D scene, which has
-  // its own touch handling.
-  const mediaSwipe = useSwipe(stepImage, viewMode !== "scene" && current.kind !== "video" && media.length > 1);
+  // Finger swipe on the photo view. Not for videos (horizontal drags on their
+  // controls scrub the timeline).
+  const mediaSwipe = useSwipe(stepImage, current.kind !== "video" && media.length > 1);
 
   return (
     <div
@@ -470,44 +443,35 @@ export function Showcase({
 
       <div className="relative z-10 mx-auto mt-4 flex w-full max-w-3xl flex-col gap-8">
         <div className="relative h-72 w-full shrink-0 sm:h-80 lg:h-96">
-          {viewMode === "scene" ? (
-            <ShowroomScene
-              ref={sceneRef}
-              onAdvance={advanceImage}
-              currentImage={photos[index % photos.length]?.url ?? PLACEHOLDER}
-              nextImage={photos[(index + 1) % photos.length]?.url ?? PLACEHOLDER}
-            />
-          ) : (
-            <div className="absolute inset-0 overflow-hidden rounded-2xl bg-black/5" {...mediaSwipe.bind}>
-              {current.kind === "video" ? (
-                <video src={current.url} controls preload="metadata" className="h-full w-full object-cover" />
-              ) : (
-                <Image
-                  src={current.url}
-                  alt={item.name}
-                  fill
-                  sizes="(max-width: 768px) 100vw, 768px"
-                  loading="eager"
-                  unoptimized={!canOptimizeImage(current.url)}
-                  draggable={false}
-                  className={`select-none object-cover ${
-                    mediaSwipe.dragging ? "" : "transition-transform duration-200"
-                  }`}
-                  style={{ transform: `translateX(${mediaSwipe.offset}px)` }}
-                />
-              )}
-              {media.length > 1 ? (
-                <div className="absolute inset-x-0 bottom-3 flex items-center justify-center gap-2">
-                  {media.map((m, i) => (
-                    <span
-                      key={m.url + i}
-                      className={`h-1.5 w-1.5 rounded-full ${i === index ? "bg-white" : "bg-white/40"}`}
-                    />
-                  ))}
-                </div>
-              ) : null}
-            </div>
-          )}
+          <div className="absolute inset-0 overflow-hidden rounded-2xl bg-black/5" {...mediaSwipe.bind}>
+            {current.kind === "video" ? (
+              <video src={current.url} controls preload="metadata" className="h-full w-full object-cover" />
+            ) : (
+              <Image
+                src={current.url}
+                alt={item.name}
+                fill
+                sizes="(max-width: 768px) 100vw, 768px"
+                loading="eager"
+                unoptimized={!canOptimizeImage(current.url)}
+                draggable={false}
+                className={`select-none object-cover ${
+                  mediaSwipe.dragging ? "" : "transition-transform duration-200"
+                }`}
+                style={{ transform: `translateX(${mediaSwipe.offset}px)` }}
+              />
+            )}
+            {media.length > 1 ? (
+              <div className="absolute inset-x-0 bottom-3 flex items-center justify-center gap-2">
+                {media.map((m, i) => (
+                  <span
+                    key={m.url + i}
+                    className={`h-1.5 w-1.5 rounded-full ${i === index ? "bg-white" : "bg-white/40"}`}
+                  />
+                ))}
+              </div>
+            ) : null}
+          </div>
 
           {/* One overlay button lives directly on the media box — right by
               the viewpoint, not buried in the details panel below where
@@ -543,27 +507,14 @@ export function Showcase({
         </div>
 
         <div className="flex flex-col gap-4 text-showroom-ink">
-          {media.length > 1 || (viewMode === "scene" && photos.length > 1) ? (
-            (() => {
-              // Scene mode only cycles through `photos` — the nav/counter
-              // must agree with that, not with `media.length`.
-              const cycleLength = viewMode === "scene" ? photos.length : media.length;
-              return (
-                <div className="flex items-center gap-2">
-                  <ArrowButton
-                    direction="prev"
-                    onClick={() => stepImage(-1)}
-                  />
-                  <ArrowButton
-                    direction="next"
-                    onClick={() => stepImage(1)}
-                  />
-                  <span className="ml-1 text-xs uppercase tracking-widest text-showroom-ink/60">
-                    {(index % cycleLength) + 1} / {cycleLength}
-                  </span>
-                </div>
-              );
-            })()
+          {media.length > 1 ? (
+            <div className="flex items-center gap-2">
+              <ArrowButton direction="prev" onClick={() => stepImage(-1)} />
+              <ArrowButton direction="next" onClick={() => stepImage(1)} />
+              <span className="ml-1 text-xs uppercase tracking-widest text-showroom-ink/60">
+                {index + 1} / {media.length}
+              </span>
+            </div>
           ) : null}
 
           <h2 className="text-4xl font-extrabold leading-tight sm:text-5xl">{item.name}</h2>
