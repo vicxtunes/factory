@@ -2,7 +2,7 @@
 // runs on any store (tests use an in-memory one, ./service.test.ts).
 // Callers check who's asking and parse the input first (./actions.ts).
 
-import type { Studio, StudioListing, StudioOwner, StudioProfile } from "./core";
+import { readableBrandColor, type Studio, type StudioListing, type StudioOwner, type StudioProfile } from "./core";
 import type { StudioStore } from "./ports";
 
 export class StudioService {
@@ -19,6 +19,11 @@ export class StudioService {
    */
   async updateProfile(studioId: string, profile: StudioProfile): Promise<Studio> {
     return this.store.updateProfile(studioId, profile);
+  }
+
+  /** Sets a studio's brand color (same caller rule as updateProfile), made readable first. */
+  async setBrandColor(studioId: string, color: string): Promise<Studio> {
+    return this.store.setBrandColor(studioId, readableBrandColor(color));
   }
 
   /** Every studio, newest first. Boss only (checked by the caller). */

@@ -5,6 +5,7 @@ import { FormSkeleton } from "@repo/ui/skeletons/blocks";
 import { Loading } from "@repo/ui/skeletons/Loading";
 import { LogoUploader } from "@repo/ui/studio-access/LogoUploader";
 import { StudioAddressForm } from "@repo/ui/studio-portal/StudioAddressForm";
+import { BrandColorPicker } from "@repo/ui/studios/BrandColorPicker";
 import { StudioProfileForm } from "@repo/ui/studios/StudioProfileForm";
 import { clientUrl } from "@repo/lib/client-portal/paths";
 import { studioAccess } from "@repo/lib/studio-access/server";
@@ -31,6 +32,13 @@ export default async function StudioProfilePage() {
         <Suspense fallback={<Skeleton className="h-24 w-24 rounded-2xl" />}>
           <Logo studio={studio} />
         </Suspense>
+      </section>
+      <section className="space-y-3 rounded-2xl border border-border bg-surface p-4 shadow-theme-xs sm:p-5">
+        <div>
+          <p className="text-sm font-semibold">Brand color</p>
+          <p className="text-sm text-muted">Your public page, its buttons and links wear it, with your logo.</p>
+        </div>
+        <BrandColorPicker current={studio.brandColor} />
       </section>
       <Loading skeleton={<FormSkeleton fields={1} />}>
         <Address studio={studio} />
