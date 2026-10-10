@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 
 import { Button } from "@repo/ui/Button";
+import { StepRail } from "@repo/ui/StepForm";
 import { Field, Select, TextArea, TextInput } from "@repo/ui/Field";
 import { PhoneInput } from "@repo/ui/PhoneInput";
 import { SectionLabel } from "@repo/ui/SectionLabel";
@@ -278,11 +279,7 @@ export function OrderForm({
         </div>
       ) : null}
 
-      <div className="flex items-center gap-2 text-xs font-medium text-muted">
-        <span className={step === 1 ? "text-brand-600" : ""}>1. General information</span>
-        <span>→</span>
-        <span className={step === 2 ? "text-brand-600" : ""}>2. Items</span>
-      </div>
+      <StepRail titles={["General information", "Items"]} step={step - 1} reached={step - 1} onGo={(i) => i === 0 && setStep(1)} />
 
       {step === 1 ? (
         <GeneralStep
@@ -305,7 +302,7 @@ export function OrderForm({
       <div className="flex justify-between">
         {step === 2 ? (
           <Button variant="secondary" type="button" onClick={() => setStep(1)} loading={pending} disabled={pending}>
-            Back
+            Previous
           </Button>
         ) : (
           <span />

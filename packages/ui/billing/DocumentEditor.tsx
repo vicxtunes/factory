@@ -12,7 +12,8 @@ import type { TenantScope } from "@repo/lib/tenancy/types";
 
 import { timeSpan } from "@repo/ui/bookings/BookingBits";
 import { WhenFields, whenTimes, type When } from "@repo/ui/bookings/WhenFields";
-import { StepActions, StepIndicator, useSteps } from "@repo/ui/Stepper";
+import { StepForm } from "@repo/ui/StepForm";
+import { useSteps } from "@repo/ui/Stepper";
 import { formatAmount, formatDay } from "@repo/lib/tenancy/format";
 
 /** A line as typed: numbers stay strings until saved, so half-typed values don't jump. */
@@ -100,7 +101,12 @@ const KINDS = {
 // booking has no Shoot step: the booking is where its day and times are set.
 const ALL_STEPS = ["Client", "Shoot", "Items", "Review"] as const;
 const BOOKED_STEPS = ["Client", "Items", "Review"] as const;
-const card = "rounded-2xl border border-border bg-surface p-4 shadow-theme-xs sm:p-5";
+const HEADINGS: Record<string, [string, string]> = {
+  Client: ["Who is it for?", "Pick the client and the dates."],
+  Shoot: ["The shoot", "When and where, if it's for a session."],
+  Items: ["What's included?", "Packages and custom items, with any discount."],
+  Review: ["Check it over", "The totals, and notes for the client."],
+};
 
 /**
  * Creates a quotation or invoice (no `document`) or edits one, in steps: the
@@ -174,12 +180,16 @@ export function DocumentEditor({
     .filter((l) => Number.isFinite(l.quantity) && Number.isFinite(l.unitPrice) && (!l.discount || Number.isFinite(l.discount.value)));
   const totals = totalsOf(priced.map(priceLine));
 
-  // Next (the browser has checked this step's fields), or on the last step, save.
-  function submit(e: React.FormEvent) {
-    e.preventDefault();
+  // Continue (the browser has checked this step's fields): the items step needs an item.
+  function next() {
     if (at === "Items" && lines.length === 0) return setError("Add at least one item: a package or a custom item.");
     setError(null);
-    if (!steps.last) return steps.next();
+    steps.next();
+  }
+
+  // The last step's button: save.
+  function submit() {
+    setError(null);
     start(async () => {
       const res = await k.save(doc, {
         customerId,
@@ -198,169 +208,172 @@ export function DocumentEditor({
   const clientName = customers.find((c) => c.id === customerId)?.name ?? "—";
 
   return (
-    <div className="space-y-4">
-      <StepIndicator titles={STEPS} step={steps.step} reached={steps.reached} onGo={steps.go} />
-      <form onSubmit={submit} className="space-y-4">
-        {at === "Client" ? (
-          <div className={`grid gap-4 sm:grid-cols-2 ${card}`}>
-            <Field label="Client">
-              <Select value={customerId} onChange={(e) => setCustomerId(e.target.value)} required disabled={!!fromBooking}>
-                <option value="">Choose a client…</option>
-                {customers.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
+    <StepForm
+      titles={STEPS}
+      steps={{ ...steps, next }}
+      heading={HEADINGS[at][0]}
+      hint={HEADINGS[at][1]}
+      submitLabel={doc ? "Save changes" : k.create}
+      pending={pending}
+      error={error}
+      onSubmit={submit}
+    >
+      {at === "Client" ? (
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Client">
+            <Select value={customerId} onChange={(e) => setCustomerId(e.target.value)} required disabled={!!fromBooking}>
+              <option value="">Choose a client…</option>
+              {customers.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label={k.dateLabel} hint={k.dateHint}>
+            <TextInput type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          </Field>
+          {linked ? (
+            <p className="text-sm sm:col-span-2">
+              <span className="text-muted">Shoot:</span> {formatDay(scope, linked.shoot.date)}, {timeSpan(linked.shoot)}{" "}
+              <span className="text-muted">(from its booking)</span> ·{" "}
+              <a href={`/studio/bookings/${linked.id}/edit`} className="font-medium text-brand-600 hover:underline">
+                Change it on the booking
+              </a>
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
+      {at === "Shoot" ? (
+        <div>
+          <WhenFields
+            value={shoot}
+            onChange={setShoot}
+            dateLabel="Shoot day"
+            dateRequired={false}
+            dateHint={`${k.shootHint} Leave it empty if there's no shoot.`}
+            exceptBookingId={null}
+            bookingsPath="/studio/bookings"
+          />
+        </div>
+      ) : null}
+
+      {at === "Items" ? (
+        <section className="space-y-3">
+          {lines.map((l, i) => {
+            const line = priceLine(inputOf(l));
+            return (
+              <div key={l.key} className="space-y-3 rounded-2xl border border-border bg-surface p-4 shadow-theme-xs">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted">Item {i + 1}</p>
+                  <button type="button" onClick={() => remove(l.key)} className="text-xs text-error-600 hover:underline dark:text-error-400">
+                    Remove
+                  </button>
+                </div>
+                <Field label="Description">
+                  <TextInput value={l.description} onChange={(e) => update(l.key, { description: e.target.value })} required maxLength={200} />
+                </Field>
+                <Field label="What's included" hint="One item per line.">
+                  <TextArea value={l.inclusions} onChange={(e) => update(l.key, { inclusions: e.target.value })} rows={2} />
+                </Field>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <Field label="Qty">
+                    <TextInput value={l.quantity} onChange={(e) => update(l.key, { quantity: e.target.value })} inputMode="numeric" required />
+                  </Field>
+                  <Field label={`Price (${scope.currency})`}>
+                    <TextInput value={l.unitPrice} onChange={(e) => update(l.key, { unitPrice: e.target.value })} inputMode="numeric" required />
+                  </Field>
+                  <Field label="Discount">
+                    <Select value={l.discountKind} onChange={(e) => update(l.key, { discountKind: e.target.value as Draft["discountKind"] })}>
+                      <option value="">None</option>
+                      <option value="percent">% off</option>
+                      <option value="amount">{scope.currency} off</option>
+                    </Select>
+                  </Field>
+                  {l.discountKind ? (
+                    <Field label={l.discountKind === "percent" ? "Percent" : "Amount off each"}>
+                      <TextInput value={l.discountValue} onChange={(e) => update(l.key, { discountValue: e.target.value })} inputMode="numeric" required />
+                    </Field>
+                  ) : null}
+                </div>
+                {Number.isFinite(line.total) ? <p className="text-right text-sm font-medium tnum">{money(line.total)}</p> : null}
+              </div>
+            );
+          })}
+
+          <div className="flex flex-wrap gap-2">
+            {offerings.length ? (
+              <Select value="" onChange={(e) => addOffering(e.target.value)} aria-label="Add a package" className="sm:max-w-xs">
+                <option value="">+ Add a package…</option>
+                {/* Grouped by service; `offerings` comes in service order. */}
+                {[...new Set(offerings.map((o) => o.serviceId))].map((serviceId) => {
+                  const tiers = offerings.filter((o) => o.serviceId === serviceId);
+                  return (
+                    <optgroup key={serviceId} label={tiers[0].serviceName}>
+                      {tiers.map((o) => (
+                        <option key={o.id} value={o.id}>
+                          {o.name} · {money(o.price)}
+                        </option>
+                      ))}
+                    </optgroup>
+                  );
+                })}
               </Select>
-            </Field>
-            <Field label={k.dateLabel} hint={k.dateHint}>
-              <TextInput type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-            </Field>
-            {linked ? (
-              <p className="text-sm sm:col-span-2">
-                <span className="text-muted">Shoot:</span> {formatDay(scope, linked.shoot.date)}, {timeSpan(linked.shoot)}{" "}
-                <span className="text-muted">(from its booking)</span> ·{" "}
-                <a href={`/studio/bookings/${linked.id}/edit`} className="font-medium text-brand-600 hover:underline">
-                  Change it on the booking
-                </a>
-              </p>
             ) : null}
+            <Button type="button" variant="secondary" onClick={addCustom}>
+              + Custom item
+            </Button>
           </div>
-        ) : null}
+          {lines.length ? (
+            <p className="text-right text-sm">
+              Total so far: <span className="font-semibold tnum">{money(totals.total)}</span>
+            </p>
+          ) : null}
+        </section>
+      ) : null}
 
-        {at === "Shoot" ? (
-          <div className={card}>
-            <WhenFields
-              value={shoot}
-              onChange={setShoot}
-              dateLabel="Shoot day"
-              dateRequired={false}
-              dateHint={`${k.shootHint} Leave it empty if there's no shoot.`}
-              exceptBookingId={null}
-              bookingsPath="/studio/bookings"
-            />
-          </div>
-        ) : null}
-
-        {at === "Items" ? (
-          <section className="space-y-3">
-            {lines.map((l, i) => {
+      {at === "Review" ? (
+        <div className="space-y-4">
+          {/* A last look at what the earlier steps hold; the indicator opens any of them to change it. */}
+          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+            <dt className="text-muted">Client</dt>
+            <dd className="font-medium">{clientName}</dd>
+            <dt className="text-muted">{k.dateLabel}</dt>
+            <dd>{date ? formatDay(scope, date) : "—"}</dd>
+            <dt className="text-muted">Shoot</dt>
+            <dd>{savedShoot ? `${formatDay(scope, savedShoot.date)}, ${timeSpan(savedShoot)}` : "None"}</dd>
+          </dl>
+          <ul className="divide-y divide-border border-y border-border text-sm">
+            {lines.map((l) => {
               const line = priceLine(inputOf(l));
               return (
-                <div key={l.key} className="space-y-3 rounded-2xl border border-border bg-surface p-4 shadow-theme-xs">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted">Item {i + 1}</p>
-                    <button type="button" onClick={() => remove(l.key)} className="text-xs text-error-600 hover:underline dark:text-error-400">
-                      Remove
-                    </button>
-                  </div>
-                  <Field label="Description">
-                    <TextInput value={l.description} onChange={(e) => update(l.key, { description: e.target.value })} required maxLength={200} />
-                  </Field>
-                  <Field label="What's included" hint="One item per line.">
-                    <TextArea value={l.inclusions} onChange={(e) => update(l.key, { inclusions: e.target.value })} rows={2} />
-                  </Field>
-                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                    <Field label="Qty">
-                      <TextInput value={l.quantity} onChange={(e) => update(l.key, { quantity: e.target.value })} inputMode="numeric" required />
-                    </Field>
-                    <Field label={`Price (${scope.currency})`}>
-                      <TextInput value={l.unitPrice} onChange={(e) => update(l.key, { unitPrice: e.target.value })} inputMode="numeric" required />
-                    </Field>
-                    <Field label="Discount">
-                      <Select value={l.discountKind} onChange={(e) => update(l.key, { discountKind: e.target.value as Draft["discountKind"] })}>
-                        <option value="">None</option>
-                        <option value="percent">% off</option>
-                        <option value="amount">{scope.currency} off</option>
-                      </Select>
-                    </Field>
-                    {l.discountKind ? (
-                      <Field label={l.discountKind === "percent" ? "Percent" : "Amount off each"}>
-                        <TextInput value={l.discountValue} onChange={(e) => update(l.key, { discountValue: e.target.value })} inputMode="numeric" required />
-                      </Field>
-                    ) : null}
-                  </div>
-                  {Number.isFinite(line.total) ? <p className="text-right text-sm font-medium tnum">{money(line.total)}</p> : null}
-                </div>
+                <li key={l.key} className="flex justify-between gap-3 py-2">
+                  <span className="min-w-0">
+                    {l.description || "—"} <span className="text-muted">× {l.quantity}</span>
+                  </span>
+                  <span className="shrink-0 tnum">{Number.isFinite(line.total) ? money(line.total) : "—"}</span>
+                </li>
               );
             })}
-
-            <div className="flex flex-wrap gap-2">
-              {offerings.length ? (
-                <Select value="" onChange={(e) => addOffering(e.target.value)} aria-label="Add a package" className="sm:max-w-xs">
-                  <option value="">+ Add a package…</option>
-                  {/* Grouped by service; `offerings` comes in service order. */}
-                  {[...new Set(offerings.map((o) => o.serviceId))].map((serviceId) => {
-                    const tiers = offerings.filter((o) => o.serviceId === serviceId);
-                    return (
-                      <optgroup key={serviceId} label={tiers[0].serviceName}>
-                        {tiers.map((o) => (
-                          <option key={o.id} value={o.id}>
-                            {o.name} · {money(o.price)}
-                          </option>
-                        ))}
-                      </optgroup>
-                    );
-                  })}
-                </Select>
-              ) : null}
-              <Button type="button" variant="secondary" onClick={addCustom}>
-                + Custom item
-              </Button>
-            </div>
-            {lines.length ? (
-              <p className="text-right text-sm">
-                Total so far: <span className="font-semibold tnum">{money(totals.total)}</span>
-              </p>
+          </ul>
+          <dl className="ml-auto grid w-full max-w-xs grid-cols-[1fr_auto] gap-x-4 gap-y-1 text-sm">
+            {totals.discount > 0 ? (
+              <>
+                <dt className="text-muted">Subtotal</dt>
+                <dd className="text-right tnum">{money(totals.subtotal)}</dd>
+                <dt className="text-muted">Discount</dt>
+                <dd className="text-right tnum">−{money(totals.discount)}</dd>
+              </>
             ) : null}
-          </section>
-        ) : null}
-
-        {at === "Review" ? (
-          <div className={`space-y-4 ${card}`}>
-            {/* A last look at what the earlier steps hold; the indicator opens any of them to change it. */}
-            <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
-              <dt className="text-muted">Client</dt>
-              <dd className="font-medium">{clientName}</dd>
-              <dt className="text-muted">{k.dateLabel}</dt>
-              <dd>{date ? formatDay(scope, date) : "—"}</dd>
-              <dt className="text-muted">Shoot</dt>
-              <dd>{savedShoot ? `${formatDay(scope, savedShoot.date)}, ${timeSpan(savedShoot)}` : "None"}</dd>
-            </dl>
-            <ul className="divide-y divide-border border-y border-border text-sm">
-              {lines.map((l) => {
-                const line = priceLine(inputOf(l));
-                return (
-                  <li key={l.key} className="flex justify-between gap-3 py-2">
-                    <span className="min-w-0">
-                      {l.description || "—"} <span className="text-muted">× {l.quantity}</span>
-                    </span>
-                    <span className="shrink-0 tnum">{Number.isFinite(line.total) ? money(line.total) : "—"}</span>
-                  </li>
-                );
-              })}
-            </ul>
-            <dl className="ml-auto grid w-full max-w-xs grid-cols-[1fr_auto] gap-x-4 gap-y-1 text-sm">
-              {totals.discount > 0 ? (
-                <>
-                  <dt className="text-muted">Subtotal</dt>
-                  <dd className="text-right tnum">{money(totals.subtotal)}</dd>
-                  <dt className="text-muted">Discount</dt>
-                  <dd className="text-right tnum">−{money(totals.discount)}</dd>
-                </>
-              ) : null}
-              <dt className="font-semibold">Total</dt>
-              <dd className="text-right text-base font-semibold tnum">{money(totals.total)}</dd>
-            </dl>
-            <Field label="Notes" hint={`Terms, deposit, how to pay. Shown on the ${kind}.`}>
-              <TextArea value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={2000} rows={3} />
-            </Field>
-          </div>
-        ) : null}
-
-        {error ? <p className="text-sm text-error-600 dark:text-error-400">{error}</p> : null}
-        <StepActions first={steps.step === 0} last={steps.last} onBack={steps.back} submitLabel={doc ? "Save changes" : k.create} pending={pending} />
-      </form>
-    </div>
+            <dt className="font-semibold">Total</dt>
+            <dd className="text-right text-base font-semibold tnum">{money(totals.total)}</dd>
+          </dl>
+          <Field label="Notes" hint={`Terms, deposit, how to pay. Shown on the ${kind}.`}>
+            <TextArea value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={2000} rows={3} />
+          </Field>
+        </div>
+      ) : null}
+    </StepForm>
   );
 }

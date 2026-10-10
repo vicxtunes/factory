@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState, useTransition } from "react";
 
+import { StepRail } from "@repo/ui/StepForm";
 import { Button } from "@repo/ui/Button";
 import { Drawer } from "@repo/ui/Drawer";
 import { Field, TextInput } from "@repo/ui/Field";
@@ -17,6 +18,8 @@ import { formatAmount } from "@repo/lib/tenancy/format";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
 type Step = "size" | "details" | "review" | "pay" | "sent";
+/** The steps shown on the rail, by short name. */
+const RAIL: Partial<Record<Step, string>> = { size: "Size", details: "Details", review: "Review" };
 
 /**
  * "Order now" on a studio's product page, like Book now (./book-now.tsx):
@@ -103,11 +106,7 @@ export function OrderNow({
       </Button>
       <Drawer open={open} onClose={() => !pending && setOpen(false)} title={titles[step]}>
         <div className="space-y-4">
-          {step !== "sent" && step !== "pay" ? (
-            <p className="text-xs text-muted">
-              Step {index + 1} of {steps.length} · {studio.name}
-            </p>
-          ) : null}
+          {index >= 0 ? <StepRail titles={steps.map((k) => RAIL[k] ?? "")} step={index} reached={index} onGo={(i) => setStep(steps[i])} /> : null}
 
           {step === "size" ? (
             <form
@@ -138,7 +137,7 @@ export function OrderNow({
                 <TextInput type="number" inputMode="numeric" min={1} max={99} value={quantity} onChange={(e) => setQuantity(e.target.value)} required />
               </Field>
               <Button type="submit" className="w-full" disabled={!size || count < 1}>
-                Next
+                Continue
               </Button>
             </form>
           ) : null}
@@ -159,10 +158,10 @@ export function OrderNow({
               </Field>
               <div className="flex gap-2">
                 <Button type="button" variant="secondary" onClick={back}>
-                  Back
+                  Previous
                 </Button>
                 <Button type="submit" className="flex-1">
-                  Next
+                  Continue
                 </Button>
               </div>
             </form>
@@ -186,7 +185,7 @@ export function OrderNow({
               {error ? <p className="text-sm text-error-600 dark:text-error-400">{error}</p> : null}
               <div className="flex gap-2">
                 <Button type="button" variant="secondary" onClick={back} disabled={pending}>
-                  Back
+                  Previous
                 </Button>
                 <Button type="button" className="flex-1" loading={pending} onClick={send}>
                   Order now

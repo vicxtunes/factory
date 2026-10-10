@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState, useTransition } from "react";
 
+import { StepRail } from "@repo/ui/StepForm";
 import { Button } from "@repo/ui/Button";
 import { Drawer } from "@repo/ui/Drawer";
 import { Field, TextInput } from "@repo/ui/Field";
@@ -13,6 +14,8 @@ import { formatAmount, formatDay } from "@repo/lib/tenancy/format";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
 type Step = "package" | "date" | "details" | "review" | "sent";
+/** The steps shown on the rail, by short name. */
+const RAIL: Partial<Record<Step, string>> = { package: "Package", date: "Date", details: "Details", review: "Review" };
 
 /**
  * "Book now" on a service's page: a few steps (the package, the day, who
@@ -95,11 +98,7 @@ export function BookNow({
       </Button>
       <Drawer open={open} onClose={() => !pending && setOpen(false)} title={titles[step]}>
         <div className="space-y-4">
-          {step !== "sent" ? (
-            <p className="text-xs text-muted">
-              Step {index + 1} of {steps.length} · {studio.name}
-            </p>
-          ) : null}
+          {index >= 0 ? <StepRail titles={steps.map((k) => RAIL[k] ?? "")} step={index} reached={index} onGo={(i) => setStep(steps[i])} /> : null}
 
           {step === "package" ? (
             <div className="space-y-2" role="radiogroup" aria-label="Package">
@@ -119,7 +118,7 @@ export function BookNow({
                 </button>
               ))}
               <Button type="button" className="w-full" disabled={!pkg} onClick={next}>
-                Next
+                Continue
               </Button>
             </div>
           ) : null}
@@ -145,10 +144,10 @@ export function BookNow({
               </div>
               <div className="flex gap-2">
                 <Button type="button" variant="secondary" onClick={back}>
-                  Back
+                  Previous
                 </Button>
                 <Button type="submit" className="flex-1">
-                  Next
+                  Continue
                 </Button>
               </div>
             </form>
@@ -170,10 +169,10 @@ export function BookNow({
               </Field>
               <div className="flex gap-2">
                 <Button type="button" variant="secondary" onClick={back}>
-                  Back
+                  Previous
                 </Button>
                 <Button type="submit" className="flex-1">
-                  Next
+                  Continue
                 </Button>
               </div>
             </form>
@@ -198,7 +197,7 @@ export function BookNow({
               {error ? <p className="text-sm text-error-600 dark:text-error-400">{error}</p> : null}
               <div className="flex gap-2">
                 <Button type="button" variant="secondary" onClick={back} disabled={pending}>
-                  Back
+                  Previous
                 </Button>
                 <Button type="button" className="flex-1" loading={pending} onClick={send}>
                   Send booking request
