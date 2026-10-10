@@ -5,7 +5,6 @@
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
 import {
-  canEditProject,
   canMoveProject,
   isActive,
   PROJECT_PIPELINE,
@@ -72,11 +71,10 @@ export class ProjectService {
     return this.store.create(scope, { ...input, bookingId: null }, actor.name);
   }
 
-  /** Changes the details until it's completed. A booked project's client stays the booking's. */
+  /** Changes the details, whatever its status. A booked project's client stays the booking's. */
   async update(scope: TenantScope, id: string, input: ProjectInput): Promise<void> {
     const current = await this.store.get(scope, id);
     if (!current) throw new ProjectError(GONE);
-    if (!canEditProject(current.status)) throw new ProjectError("This project is completed, so it can't be changed.");
     if (input.customerId !== current.customerId) {
       if (current.bookingId) throw new ProjectError("This project came from a booking, so its client can't change.");
       const customer = await this.directory.customer(scope, input.customerId);

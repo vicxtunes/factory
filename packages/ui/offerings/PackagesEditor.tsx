@@ -5,7 +5,7 @@ import { useState, useTransition } from "react";
 
 import { Button } from "@repo/ui/Button";
 import { Field, TextArea, TextInput } from "@repo/ui/Field";
-import { createOffering, setOfferingActive, updateOffering } from "@repo/lib/offerings/actions";
+import { createOffering, deleteOffering, setOfferingActive, updateOffering } from "@repo/lib/offerings/actions";
 import type { Offering, OfferingKind } from "@repo/lib/offerings/core";
 import { formatAmount } from "@repo/lib/tenancy/format";
 import type { TenantScope } from "@repo/lib/tenancy/types";
@@ -126,6 +126,22 @@ function ArchiveToggle({ pkg }: { pkg: Offering }) {
         className={archived ? "text-brand-600 hover:underline" : "text-muted hover:underline"}
       >
         {archived ? "Reactivate" : "Deactivate"}
+      </button>
+      <button
+        type="button"
+        disabled={pending}
+        onClick={() => {
+          if (!window.confirm(`Delete "${pkg.name}"? This can't be undone.`)) return;
+          start(async () => {
+            setError(null);
+            const res = await deleteOffering(pkg.id);
+            if (!res.ok) return setError(res.error);
+            router.refresh();
+          });
+        }}
+        className="ml-3 text-error-600 hover:underline dark:text-error-400"
+      >
+        Delete
       </button>
       {error ? <span className="text-error-600 dark:text-error-400">{error}</span> : null}
     </>

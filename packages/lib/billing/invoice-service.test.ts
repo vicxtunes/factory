@@ -37,7 +37,7 @@ function fakes() {
       if (!customers.has(`${s.tenantId}/${input.customerId}`)) throw new BillingError("That client no longer exists.");
       if (id) {
         const r = mine(s, id);
-        if (!r || r.voidedAt || livePaid(r) > 0) throw new BillingError("not editable");
+        if (!r || r.voidedAt) throw new BillingError("not editable");
         return Object.assign(r, { customerId: input.customerId, dueDate: input.dueDate, shoot: input.shoot, notes: input.notes, total, lines: input.lines }).id;
       }
       const row: Row = {
@@ -138,13 +138,13 @@ test("never more than the balance, never on a paid or void invoice, never in the
   await assert.rejects(service.recordPayment(studioA, other, pay(1)), /void/);
 });
 
-test("an invoice can be changed or voided only before money arrives", async () => {
+test("an invoice can be changed until it's void, payments or not; voided only before money arrives", async () => {
   const { service } = fakes();
   const id = await service.create(studioA, input);
   await service.update(studioA, id, { ...input, lines: [{ ...gold, discount: null }] });
   assert.equal((await service.get(studioA, id))?.total, 2_000_000);
   const payment = await service.recordPayment(studioA, id, pay(500_000));
-  await assert.rejects(service.update(studioA, id, input), /has payments/);
+  await service.update(studioA, id, input);
   await assert.rejects(service.voidInvoice(studioA, id, "x"), /Void them first/);
   await service.voidPayment(studioA, payment, "Typed the wrong amount");
   const inv = await service.get(studioA, id);

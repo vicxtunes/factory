@@ -6,7 +6,8 @@ import { useState, useTransition } from "react";
 
 import { Button } from "@repo/ui/Button";
 import { localDate } from "@repo/lib/accounting/core/period";
-import { confirmProductRequest, declineProductRequest } from "@repo/lib/product-requests/actions";
+import { confirmProductRequest, declineProductRequest, deleteProductRequest } from "@repo/lib/product-requests/actions";
+import { DeleteButton } from "@repo/ui/DeleteButton";
 import type { ProductRequest } from "@repo/lib/product-requests/core";
 import { formatAmount, formatDay } from "@repo/lib/tenancy/format";
 import type { TenantScope } from "@repo/lib/tenancy/types";
@@ -98,6 +99,7 @@ function Answer({ request, invoicesPath }: { request: ProductRequest; invoicesPa
         >
           Decline
         </Button>
+        <DeleteButton confirm="Delete this order request?" action={() => deleteProductRequest(request.id)} />
       </div>
       {error ? <p className="text-sm text-error-600 dark:text-error-400">{error}</p> : null}
     </div>

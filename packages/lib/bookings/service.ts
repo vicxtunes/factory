@@ -197,11 +197,10 @@ export class BookingService {
     if (!(await this.store.setInvoice(scope, id, invoiceId))) throw new BookingError(GONE);
   }
 
-  /** Changes the details while it's requested, tentative or confirmed. */
+  /** Changes the details, whatever its status (studios correct anything, even after it's done). */
   async update(scope: TenantScope, id: string, input: Omit<BookingInput, "quotationId">): Promise<void> {
     const current = await this.store.get(scope, id);
     if (!current) throw new BookingError(GONE);
-    if (!canEditBooking(current.status)) throw new BookingError(`This booking is ${BOOKING_STATUS_LABELS[current.status].toLowerCase()}, so it can't be changed.`);
     if (input.customerId !== current.customerId) {
       if (current.quotationId) throw new BookingError("This booking came from a quotation, so its client can't change.");
       const customer = await this.directory.customer(scope, input.customerId);

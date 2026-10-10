@@ -14,7 +14,7 @@ import { parseInput, type Result } from "@repo/lib/kernel/core";
 import { runAction } from "@repo/lib/kernel/server/action";
 import { slugSchema } from "@repo/lib/studio-portal/core";
 import { portalClient, setPortalCookie, studioAtSlug } from "@repo/lib/studio-portal/server";
-import { studioOfCaller } from "@repo/lib/studios/server";
+import { deleteStudioRecord, studioOfCaller } from "@repo/lib/studios/server";
 
 import type { MobileMoneyCollection } from "@repo/lib/wallet/types";
 import { WalletError, checkStudioRequestPayment, startStudioRequestPayment } from "@repo/lib/wallet/studio";
@@ -103,6 +103,15 @@ export async function declineProductRequest(id: unknown): Promise<Result> {
   return runAction("product-requests", async () => {
     const { scope } = await studioOfCaller("money");
     await productRequests.decline(scope, parseInput(productRequestIdSchema, id));
+    revalidatePath("/studio", "layout");
+  });
+}
+
+/** Deletes an order request for good (not one paid for by mobile money in the app). */
+export async function deleteProductRequest(id: unknown): Promise<Result> {
+  return runAction("product-requests", async () => {
+    const { scope } = await studioOfCaller("money");
+    await deleteStudioRecord(scope, "product_request", parseInput(productRequestIdSchema, id));
     revalidatePath("/studio", "layout");
   });
 }

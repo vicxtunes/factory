@@ -8,6 +8,8 @@ import { BookingsList } from "@repo/ui/bookings/BookingBits";
 import { ProjectsList } from "@repo/ui/projects/ProjectBits";
 import { QuotationsList } from "@repo/ui/billing/QuotationsList";
 import { CustomerArchiveButton, CustomerForm } from "@repo/ui/customers/CustomerForm";
+import { DeleteButton } from "@repo/ui/DeleteButton";
+import { deleteCustomer } from "@repo/lib/customers/actions";
 import { SectionLabel } from "@repo/ui/SectionLabel";
 import { Skeleton } from "@repo/ui/Skeleton";
 import { RowsSkeleton } from "@repo/ui/skeletons/blocks";
@@ -97,7 +99,16 @@ export default async function StudioClientPage({ params }: { params: Promise<{ i
           <Invoices scope={scope} billed={billed} />
         </Loading>
       </section>
-      <CustomerArchiveButton customer={customer} />
+      <div className="flex flex-wrap items-start gap-3">
+        <CustomerArchiveButton customer={customer} />
+        <DeleteButton
+          label="Delete client"
+          className="min-h-11"
+          confirm={`Delete ${customer.name} with all their bookings, projects, quotations, invoices and orders?`}
+          action={deleteCustomer.bind(null, customer.id)}
+          after="/studio/clients"
+        />
+      </div>
     </>
   );
 }

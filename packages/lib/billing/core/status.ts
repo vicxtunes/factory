@@ -11,11 +11,6 @@ export function quotationStatus(q: { status: QuotationResponse; validUntil: stri
   return q.status;
 }
 
-/** Only an unanswered quotation can be edited. An expired one can, to give it a new date. */
-export function canEditQuotation(status: QuotationStatus): boolean {
-  return status === "open" || status === "expired";
-}
-
 /** The customer can answer only while it's open and in date. */
 export function canRespondToQuotation(status: QuotationStatus): boolean {
   return status === "open";
@@ -35,9 +30,9 @@ export function invoiceStatus(inv: { voided: boolean; dueDate: string | null; to
   return inv.paid > 0 ? "partially_paid" : "unpaid";
 }
 
-/** Lines and client can change until money arrives; after that, void the payments first. */
+/** Anything can change until it's voided, payments or not (studios correct anything). */
 export function canEditInvoice(inv: { voided: boolean; paid: number }): boolean {
-  return !inv.voided && inv.paid === 0;
+  return !inv.voided;
 }
 
 export function canVoidInvoice(inv: { voided: boolean; paid: number }): boolean {

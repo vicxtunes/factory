@@ -11,7 +11,7 @@ import { revalidatePath } from "next/cache";
 
 import { parseInput, type Result } from "@repo/lib/kernel/core";
 import { runAction } from "@repo/lib/kernel/server/action";
-import { studioOfCaller } from "@repo/lib/studios/server";
+import { deleteStudioRecord, studioOfCaller } from "@repo/lib/studios/server";
 
 import { customerIdSchema, customerInputSchema, type Customer, type SaveOutcome } from "./core";
 import { customers } from "./server";
@@ -43,5 +43,14 @@ export async function setCustomerArchived(id: unknown, archived: unknown): Promi
     const customer = await customers.setArchived(scope, parseInput(customerIdSchema, id), archived === true);
     revalidatePath(LIST, "layout");
     return customer;
+  });
+}
+
+/** Deletes the client for good, with their bookings, projects, quotations, invoices and order requests. */
+export async function deleteCustomer(id: unknown): Promise<Result> {
+  return runAction("customers", async () => {
+    const { scope } = await studioOfCaller("clients");
+    await deleteStudioRecord(scope, "customer", parseInput(customerIdSchema, id));
+    revalidatePath("/studio", "layout");
   });
 }

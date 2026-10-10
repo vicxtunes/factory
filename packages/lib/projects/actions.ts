@@ -12,7 +12,7 @@ import { revalidatePath } from "next/cache";
 import { bookingIdSchema } from "@repo/lib/bookings/core";
 import { parseInput, type Result } from "@repo/lib/kernel/core";
 import { runAction } from "@repo/lib/kernel/server/action";
-import { studioOfCaller } from "@repo/lib/studios/server";
+import { deleteStudioRecord, studioOfCaller } from "@repo/lib/studios/server";
 
 import { projectIdSchema, projectInputSchema, projectStatusSchema } from "./core";
 import { projects } from "./server";
@@ -48,6 +48,15 @@ export async function setProjectStatus(id: unknown, status: unknown): Promise<Re
   return runAction("projects", async () => {
     const { scope, session } = await studioOfCaller("projects");
     await projects.setStatus(scope, parseInput(projectIdSchema, id), parseInput(projectStatusSchema, status), { name: session.name });
+    revalidatePath("/studio", "layout");
+  });
+}
+
+/** Deletes the project for good, with its tasks and albums. */
+export async function deleteProject(id: unknown): Promise<Result> {
+  return runAction("projects", async () => {
+    const { scope } = await studioOfCaller("projects");
+    await deleteStudioRecord(scope, "project", parseInput(projectIdSchema, id));
     revalidatePath("/studio", "layout");
   });
 }

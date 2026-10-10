@@ -5,6 +5,8 @@ import { notFound } from "next/navigation";
 import { DocumentShare } from "@repo/ui/billing/DocumentShare";
 import { InvoicePdf } from "@repo/ui/billing/DocumentPdf";
 import { VoidInvoiceButton } from "@repo/ui/billing/InvoiceButtons";
+import { DeleteButton } from "@repo/ui/DeleteButton";
+import { deleteInvoice } from "@repo/lib/billing/actions";
 import { PaymentsPanel } from "@repo/ui/billing/PaymentsPanel";
 import { localDate } from "@repo/lib/accounting/core/period";
 import { canEditInvoice, canVoidInvoice, invoiceIdSchema } from "@repo/lib/billing/core";
@@ -49,6 +51,12 @@ export default async function StudioInvoicePage({ params }: { params: Promise<{ 
               Edit
             </Link>
           ) : null}
+          <DeleteButton
+            className="min-h-11"
+            confirm={`Delete invoice ${invoice.number} and its recorded payments?`}
+            action={deleteInvoice.bind(null, invoice.id)}
+            after="/studio/invoices"
+          />
         </div>
       </div>
       {invoice.voidedAt ? null : (

@@ -11,7 +11,7 @@ import { revalidatePath } from "next/cache";
 import { invoices, quotations } from "@repo/lib/billing/server";
 import { parseInput, type Result } from "@repo/lib/kernel/core";
 import { runAction } from "@repo/lib/kernel/server/action";
-import { studioOfCaller } from "@repo/lib/studios/server";
+import { deleteStudioRecord, studioOfCaller } from "@repo/lib/studios/server";
 
 import { bookingIdSchema, bookingInputSchema, bookingStatusSchema, bookingWhenSchema, type Booking } from "./core";
 import { bookings } from "./server";
@@ -58,6 +58,15 @@ export async function setBookingStatus(id: unknown, status: unknown): Promise<Re
   return runAction("bookings", async () => {
     const { scope } = await studioOfCaller("bookings");
     await bookings.setStatus(scope, parseInput(bookingIdSchema, id), parseInput(bookingStatusSchema, status));
+    revalidatePath("/studio", "layout");
+  });
+}
+
+/** Deletes the booking for good (its project, quotation and invoice stay, unlinked). */
+export async function deleteBooking(id: unknown): Promise<Result> {
+  return runAction("bookings", async () => {
+    const { scope } = await studioOfCaller("bookings");
+    await deleteStudioRecord(scope, "booking", parseInput(bookingIdSchema, id));
     revalidatePath("/studio", "layout");
   });
 }

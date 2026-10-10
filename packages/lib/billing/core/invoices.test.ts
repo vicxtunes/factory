@@ -30,7 +30,7 @@ test("invoice status: void, then paid, then overdue, then partly or not paid", (
 
 test("what can be done with an invoice", () => {
   assert.equal(canEditInvoice({ voided: false, paid: 0 }), true);
-  assert.equal(canEditInvoice({ voided: false, paid: 1 }), false);
+  assert.equal(canEditInvoice({ voided: false, paid: 1 }), true, "payments don't lock it");
   assert.equal(canEditInvoice({ voided: true, paid: 0 }), false);
   assert.equal(canRecordPayment({ voided: false, balance: 1 }), true);
   assert.equal(canRecordPayment({ voided: false, balance: 0 }), false);

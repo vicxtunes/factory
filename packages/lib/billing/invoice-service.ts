@@ -59,13 +59,11 @@ export class InvoiceService {
     return this.store.save(scope, null, input, this.totalOf(input.lines), this.newToken(), null);
   }
 
-  /** Changes an invoice while no money has arrived and it isn't void. */
+  /** Changes an invoice until it's void, payments or not. */
   async update(scope: TenantScope, id: string, input: InvoiceInput): Promise<string> {
     const current = await this.get(scope, id);
     if (!current) throw new BillingError(GONE);
-    if (!canEditInvoice({ voided: !!current.voidedAt, paid: current.paid })) {
-      throw new BillingError(current.voidedAt ? "This invoice is void." : "This invoice has payments, so it can't be changed. Void them first.");
-    }
+    if (!canEditInvoice({ voided: !!current.voidedAt, paid: current.paid })) throw new BillingError("This invoice is void.");
     await this.check(scope, input, current.customerId);
     return this.store.save(scope, id, input, this.totalOf(input.lines), current.shareToken, current.sourceId);
   }

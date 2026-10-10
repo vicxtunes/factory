@@ -7,6 +7,8 @@ import { Loading } from "@repo/ui/skeletons/Loading";
 import { TaskRows } from "@repo/ui/tasks/TaskRows";
 import { TeamAccess } from "@repo/ui/team/TeamAccess";
 import { TeamArchiveButton, TeamMemberForm } from "@repo/ui/team/TeamForms";
+import { DeleteButton } from "@repo/ui/DeleteButton";
+import { deleteTeamMember } from "@repo/lib/team/actions";
 import { localDate } from "@repo/lib/accounting/core/period";
 import { requireStudio } from "@repo/lib/studios/server";
 import { tasks } from "@repo/lib/tasks/server";
@@ -39,7 +41,16 @@ export default async function TeamMemberPage({ params }: { params: Promise<{ id:
           <Tasks scope={scope} memberId={member.id} />
         </Loading>
       </section>
-      <TeamArchiveButton member={member} />
+      <div className="flex flex-wrap items-start gap-3">
+        <TeamArchiveButton member={member} />
+        <DeleteButton
+          label="Delete"
+          className="min-h-11"
+          confirm={`Delete ${member.name}? Their tasks stay, unassigned.`}
+          action={deleteTeamMember.bind(null, member.id)}
+          after="/studio/team"
+        />
+      </div>
     </>
   );
 }

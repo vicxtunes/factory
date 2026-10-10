@@ -5,7 +5,7 @@ import { ProjectForm } from "@repo/ui/projects/ProjectControls";
 import { FormSkeleton } from "@repo/ui/skeletons/blocks";
 import { Loading } from "@repo/ui/skeletons/Loading";
 import { customers } from "@repo/lib/customers/server";
-import { canEditProject, projectIdSchema, type Project } from "@repo/lib/projects/core";
+import { projectIdSchema, type Project } from "@repo/lib/projects/core";
 import { projects } from "@repo/lib/projects/server";
 import { requireStudio } from "@repo/lib/studios/server";
 import type { TenantScope } from "@repo/lib/tenancy/types";
@@ -18,16 +18,6 @@ export default async function EditProjectPage({ params }: { params: Promise<{ id
   const view = id.success ? await projects.get(scope, id.data) : null;
   if (!view) notFound();
   const p = view.project;
-  if (!canEditProject(p.status)) {
-    return (
-      <p className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted">
-        This project is completed.{" "}
-        <BackLink href={`/studio/projects/${p.id}`} className="font-medium text-brand-600 underline">
-          Back to it
-        </BackLink>
-      </p>
-    );
-  }
 
   return (
     <>

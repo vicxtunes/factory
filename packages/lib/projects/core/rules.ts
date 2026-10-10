@@ -27,7 +27,3 @@ export function isActive(status: ProjectStatus): boolean {
   return status !== "completed";
 }
 
-/** Details can change until it's completed. */
-export function canEditProject(status: ProjectStatus): boolean {
-  return status !== "completed";
-}
