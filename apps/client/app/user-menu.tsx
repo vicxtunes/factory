@@ -7,6 +7,7 @@ import { Avatar } from "@repo/ui/profile/Avatar";
 import { ManageProfileModal } from "@repo/ui/profile/ManageProfileModal";
 
 import { logoutClient } from "./actions";
+import { mySignInEmail } from "./auth-actions";
 
 // Same shape as app/dashboard/user-menu.tsx, adapted for a client session
 // (name instead of email/role, a Settings shortcut instead of a role badge).
@@ -47,6 +48,7 @@ export function ClientUserMenu({ name, avatarUrl }: { name: string; avatarUrl: s
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [signInEmail, setSignInEmail] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const ref = useRef<HTMLDivElement>(null);
 
@@ -78,6 +80,7 @@ export function ClientUserMenu({ name, avatarUrl }: { name: string; avatarUrl: s
             onClick={() => {
               setOpen(false);
               setProfileOpen(true);
+              mySignInEmail().then(setSignInEmail);
             }}
             className="flex items-center gap-3 rounded-lg border-t border-border px-2 pt-3 text-left text-sm font-medium text-gray-700 hover:text-foreground dark:text-gray-300"
           >
@@ -106,6 +109,7 @@ export function ClientUserMenu({ name, avatarUrl }: { name: string; avatarUrl: s
         onClose={() => setProfileOpen(false)}
         name={name}
         avatarUrl={avatarUrl}
+        signInEmail={signInEmail}
         onSaved={() => router.refresh()}
       />
     </div>
