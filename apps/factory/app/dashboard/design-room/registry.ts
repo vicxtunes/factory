@@ -162,7 +162,7 @@ export const COMPONENTS: RoomComponent[] = [
     slug: "step-form",
     name: "Step form",
     category: "Flows",
-    status: "draft",
+    status: "live",
     source: "packages/ui/StepForm.tsx (StepForm, StepRail, ChoiceGroup)",
     summary: "A long form as one card: a numbered rail (done steps ticked), the open step's heading and fields, option cards and tiles, and Previous / Continue under a rule. Click through it.",
     examples: [
