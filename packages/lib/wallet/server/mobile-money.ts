@@ -23,6 +23,7 @@ import { WalletError } from "./errors";
 import type { ClientViewer } from "./identity";
 import * as notifier from "./notifier";
 import * as hivepay from "./providers/hivepay";
+import { fromHivepayReference, toHivepayReference } from "./providers/hivepay-reference";
 import * as repo from "./repository";
 
 const PROVIDER = "hivepay";
@@ -66,7 +67,7 @@ async function prompt(
 
   const webhook = clientUrl("/api/payments/hivepay");
   const sent = await hivepay.collect({
-    reference: row.id,
+    reference: toHivepayReference(row.id),
     phone: phone.store,
     amount: input.amount + fee,
     description: input.description,
@@ -108,7 +109,7 @@ export async function startOrderPayment(viewer: ClientViewer, input: { orderId: 
 /** Asks HivePay about a pending collection and settles or fails it. Returns the row as it now stands. */
 async function reconcile(row: repo.CollectionRow): Promise<repo.CollectionRow> {
   if (row.status !== "pending") return row;
-  const res = await hivepay.status(row.id);
+  const res = await hivepay.status(toHivepayReference(row.id));
   if (!res.ok) {
     console.error("hivepay status failed:", res.message);
     return row;
@@ -155,9 +156,10 @@ export async function handleWebhook(rawBody: string, signature: string | null): 
   } catch {
     return 400;
   }
-  // Ours are uuids (the collection id); anything else isn't a collection we started.
-  if (!reference || !/^[0-9a-f-]{36}$/i.test(reference)) return 200;
-  const row = await repo.getCollection(reference);
+  // Ours stand for a collection id (see hivepay-reference.ts); anything else isn't a collection we started.
+  const collectionId = reference ? fromHivepayReference(reference) : null;
+  if (!collectionId) return 200;
+  const row = await repo.getCollection(collectionId);
   if (row) await reconcile(row);
   return 200;
 }
