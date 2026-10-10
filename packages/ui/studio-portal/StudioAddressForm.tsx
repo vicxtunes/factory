@@ -35,7 +35,7 @@ export function StudioAddressForm({ current, suggested, origin }: { current: str
   return (
     <form onSubmit={submit} className="space-y-3 rounded-2xl border border-border bg-surface p-4 shadow-theme-xs sm:p-5">
       <p className="text-sm font-semibold">Your business&apos;s address</p>
-      <p className="text-sm text-muted">Your public page, and where your clients sign in with their phone and PIN. Share it anywhere.</p>
+      <p className="text-sm text-muted">Your public page, and where your clients sign in with their phone number. Share it anywhere.</p>
       <Field label="Address" hint={current ? "If you change it, the old address keeps working." : undefined}>
         <div className="flex items-center gap-1">
           <span className="shrink-0 text-sm text-muted">{origin.replace(/^https?:\/\//, "")}/</span>

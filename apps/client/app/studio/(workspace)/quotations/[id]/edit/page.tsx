@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { DocumentEditor } from "@repo/ui/billing/DocumentEditor";
 import { FormSkeleton } from "@repo/ui/skeletons/blocks";
 import { Loading } from "@repo/ui/skeletons/Loading";
-import { canEditQuotation, quotationIdSchema, type Quotation } from "@repo/lib/billing/core";
+import { quotationIdSchema, type Quotation } from "@repo/lib/billing/core";
 import { quotations } from "@repo/lib/billing/server";
 import { bookings } from "@repo/lib/bookings/server";
 import { customers } from "@repo/lib/customers/server";
@@ -19,16 +19,6 @@ export default async function EditQuotationPage({ params }: { params: Promise<{ 
   const id = quotationIdSchema.safeParse((await params).id);
   const quotation = id.success ? await quotations.get(scope, id.data) : null;
   if (!quotation) notFound();
-  if (!canEditQuotation(quotation.status)) {
-    return (
-      <p className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted">
-        This quotation has been answered, so it can&apos;t be changed.{" "}
-        <BackLink href={`/studio/quotations/${quotation.id}`} className="font-medium text-brand-600 underline">
-          Back to it
-        </BackLink>
-      </p>
-    );
-  }
 
   return (
     <>

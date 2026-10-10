@@ -7,6 +7,8 @@ import { InvoiceStatusBadge } from "@repo/ui/billing/StatusBadges";
 import { timeSpan } from "@repo/ui/bookings/BookingBits";
 import { PipelineSteps, ProjectHistory } from "@repo/ui/projects/ProjectBits";
 import { ProjectStatusButtons } from "@repo/ui/projects/ProjectControls";
+import { DeleteButton } from "@repo/ui/DeleteButton";
+import { deleteProject } from "@repo/lib/projects/actions";
 import { ProjectGalleryPanel } from "@repo/ui/photos/ProjectGalleryPanel";
 import { SectionLabel } from "@repo/ui/SectionLabel";
 import { Skeleton } from "@repo/ui/Skeleton";
@@ -17,7 +19,7 @@ import { AddTaskForm, TaskRows } from "@repo/ui/tasks/TaskRows";
 import { localDate } from "@repo/lib/accounting/core/period";
 import { invoices } from "@repo/lib/billing/server";
 import { bookings } from "@repo/lib/bookings/server";
-import { canEditProject, projectIdSchema, type Project } from "@repo/lib/projects/core";
+import { projectIdSchema, type Project } from "@repo/lib/projects/core";
 import { projects } from "@repo/lib/projects/server";
 import { customers } from "@repo/lib/customers/server";
 import { photos } from "@repo/lib/photos/server";
@@ -46,14 +48,12 @@ export default async function StudioProjectPage({ params }: { params: Promise<{ 
         <BackLink href="/studio/projects" className="text-xs font-medium text-brand-600 hover:underline">
           ← Projects
         </BackLink>
-        {canEditProject(p.status) ? (
           <Link
             href={`/studio/projects/${p.id}/edit`}
             className="inline-flex min-h-11 items-center rounded-[var(--radius)] border border-gray-300 bg-white px-4 text-sm text-gray-700 shadow-theme-xs hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300"
           >
             Edit
           </Link>
-        ) : null}
       </div>
       <div className="space-y-2">
         <h2 className="text-xl font-semibold">{p.title}</h2>
@@ -65,7 +65,16 @@ export default async function StudioProjectPage({ params }: { params: Promise<{ 
         </p>
         <PipelineSteps status={p.status} />
       </div>
-      <ProjectStatusButtons projectId={p.id} status={p.status} />
+      <div className="flex flex-wrap items-start gap-2">
+        <ProjectStatusButtons projectId={p.id} status={p.status} />
+        <DeleteButton
+          label="Delete project"
+          className="min-h-11"
+          confirm={`Delete "${p.title}" with its tasks and albums?`}
+          action={deleteProject.bind(null, p.id)}
+          after="/studio/projects"
+        />
+      </div>
 
       <Suspense fallback={<Skeleton className="h-24 w-full rounded-2xl" />}>
         <BookingAndMoney scope={scope} project={p} money={canUse(access, "money")} />
@@ -156,7 +165,7 @@ async function Tasks({ scope, project: p }: { scope: TenantScope; project: Proje
   return (
     <>
       <TaskRows tasks={work} today={localDate(new Date(), scope.timeZone)} scope={scope} editable empty="No tasks yet." />
-      {canEditProject(p.status) ? <AddTaskForm projectId={p.id} team={members.map((m) => ({ id: m.id, name: m.name }))} /> : null}
+      <AddTaskForm projectId={p.id} team={members.map((m) => ({ id: m.id, name: m.name }))} />
     </>
   );
 }

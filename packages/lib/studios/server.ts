@@ -18,6 +18,7 @@ import { isSettingUp } from "@repo/lib/studio-access/core";
 import { canUse, type Area, type StudioAccess } from "@repo/lib/team/core";
 import { team } from "@repo/lib/team/server";
 import type { TenantScope } from "@repo/lib/tenancy/types";
+import { createAdminClient } from "@repo/lib/supabase/admin";
 
 import { supabaseStudioStore } from "./adapters/supabase/store";
 import { studioScope, type Studio, type StudioOwner } from "./core";
@@ -144,4 +145,32 @@ export async function requireStudiosOversight(): Promise<DashboardSession> {
   const session = await getDashboardSession();
   if (!session || !canViewAllStudios(session.role)) redirect("/dashboard");
   return session;
+}
+
+/** What a studio can delete for good (see supabase/migrations/20261016100000_studio_delete.sql). */
+export type StudioRecordKind =
+  | "customer"
+  | "booking"
+  | "project"
+  | "team_member"
+  | "category"
+  | "service"
+  | "offering"
+  | "document"
+  | "product_request";
+
+/**
+ * Deletes one of the studio's records for good, with what belongs inside it
+ * (a client's bookings, projects, quotations, invoices and order requests; a
+ * project's tasks and albums; a category's services and packages) and
+ * unlinking what only points at it — one transaction, this studio only.
+ * The caller checks access (studioOfCaller) and passes its scope.
+ */
+export async function deleteStudioRecord(scope: TenantScope, kind: StudioRecordKind, id: string): Promise<void> {
+  const { error } = await createAdminClient().rpc("studio_delete", { p_tenant: scope.tenantId, p_kind: kind, p_id: id });
+  if (!error) return;
+  if (error.message.includes("STUDIO_DELETE:paid_in_app")) {
+    throw new StudioError("A customer paid for this by mobile money in the app, so it stays on record.");
+  }
+  throw new Error(`studios: could not delete the ${kind}: ${error.message}`);
 }

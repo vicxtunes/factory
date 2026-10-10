@@ -13,7 +13,7 @@ import { parseInput, type Result } from "@repo/lib/kernel/core";
 import { runAction } from "@repo/lib/kernel/server/action";
 import { getClientSession } from "@repo/lib/auth/session";
 import { clientUrl } from "@repo/lib/client-portal/paths";
-import { STUDIO_CHOICE_COOKIE, studioOfCaller } from "@repo/lib/studios/server";
+import { STUDIO_CHOICE_COOKIE, deleteStudioRecord, studioOfCaller } from "@repo/lib/studios/server";
 
 import { accessSchema, inviteTokenSchema, teamMemberIdSchema, teamMemberInputSchema } from "./core";
 import { TeamError } from "./ports";
@@ -85,6 +85,15 @@ export async function joinTeam(token: unknown): Promise<Result> {
       path: "/",
       maxAge: 400 * 86_400,
     });
+    revalidatePath("/studio", "layout");
+  });
+}
+
+/** Deletes the team member for good (owner only); their tasks stay, unassigned. */
+export async function deleteTeamMember(id: unknown): Promise<Result> {
+  return runAction("team", async () => {
+    const { scope } = await studioOfCaller();
+    await deleteStudioRecord(scope, "team_member", parseInput(teamMemberIdSchema, id));
     revalidatePath("/studio", "layout");
   });
 }

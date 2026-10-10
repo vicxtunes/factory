@@ -1,10 +1,10 @@
 # Studio portal module
 
 How a studio's clients get in. Each studio has **its own permanent address**,
-`client.<domain>/<slug>` (e.g. `/amina-studio`). **No password, no PIN**: the device a client books
-on stays signed in, and the studio's one-time link signs in any other device (see
-packages/lib/booking-requests/README.md). Clients who set a PIN before can still sign in with their
-**phone number and PIN**. No account, no app.
+`client.<domain>/<slug>` (e.g. `/amina-studio`). **Just their phone number**: a number the studio has
+for a client signs that device in to their page. The device a client books on stays signed in, and
+the studio's one-time link signs in any other device (see packages/lib/booking-requests/README.md).
+No password, no PIN, no account, no app.
 
 ## The studio's address
 
@@ -24,23 +24,16 @@ packages/lib/booking-requests/README.md). Clients who set a PIN before can still
 
 ## Client sign-in
 
-1. **Set-up link** (first time, or a forgotten PIN):
-   - On a client's page the studio taps **Send portal invite** / **Send PIN reset link**, and
-     WhatsApp opens with the link: `/<slug>/welcome/<secret>`.
-   - The secret is 32 random bytes; **only its sha256 is stored**.
-   - It works **once, for 7 days, at that studio only**, and a new link cancels the old one.
-   - The client chooses a PIN and is signed in.
-2. **Phone + PIN** on the studio's page:
-   - The phone is stored in one form (`0772…` = `+256772…`) and is unique per studio.
-   - The PIN is stored as a **bcrypt** hash.
-   - A wrong phone and a wrong PIN get the **same answer**, and a missing client costs the same
-     bcrypt check, so neither the message nor the timing tells who is a client.
-   - **5 wrong PINs lock that client for 15 minutes.**
-3. **Session:**
-   - One signed, httpOnly cookie **per studio** (`sp_<tenantId>`), valid 90 days, so being
-     signed in at one studio means nothing at another.
-   - Setting a new PIN signs out older sessions (the cookie carries when the PIN was set).
-   - Sign out is on the page.
+1. **Phone number** on the studio's page: a number the studio has for a client (stored in one form,
+   `0772…` = `+256772…`, unique per studio) signs this device in. A number it doesn't have is told to
+   book, order, or ask for their link.
+2. **The studio's link** (another or a new phone): on a client's page the studio taps **Send link to
+   their page**, and WhatsApp opens with `/<slug>/welcome/<secret>`. The secret is 32 random bytes,
+   **only its sha256 is stored**, and it works **once, for 7 days, at that studio only**.
+3. **Booking or ordering** on the studio's page signs a new client's device in.
+4. **Session:** one signed, httpOnly cookie **per studio** (`sp_<tenantId>`), renewed on every visit.
+   Every device carries the client's access time, so they stay signed in together. Sign out is on
+   the page.
 
 **The client's page** (`/<slug>/me`, only for the client signed in there):
 - Their projects (stage, **Download your photos** when the studio has pasted a link, prints and

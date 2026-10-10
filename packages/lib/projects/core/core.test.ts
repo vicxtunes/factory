@@ -3,7 +3,7 @@ import { test } from "node:test";
 
 import { parseInput } from "@repo/lib/kernel/core";
 
-import { canEditProject, canMoveProject, isActive, nextStep, previousStep, projectInputSchema } from "./index";
+import { canMoveProject, isActive, nextStep, previousStep, projectInputSchema } from "./index";
 
 test("forward any number of steps, back one, completed is final", () => {
   assert.equal(canMoveProject("booked", "in_progress"), true);
@@ -18,7 +18,7 @@ test("forward any number of steps, back one, completed is final", () => {
 test("next and previous steps", () => {
   assert.deepEqual([nextStep("booked"), nextStep("delivered"), nextStep("completed")], ["in_progress", "completed", null]);
   assert.deepEqual([previousStep("booked"), previousStep("review"), previousStep("completed")], [null, "editing", null]);
-  assert.deepEqual([isActive("delivered"), isActive("completed"), canEditProject("completed")], [true, false, false]);
+  assert.deepEqual([isActive("delivered"), isActive("completed")], [true, false]);
 });
 
 test("project input", () => {

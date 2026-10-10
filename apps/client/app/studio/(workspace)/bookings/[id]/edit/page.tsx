@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { BookingForm } from "@repo/ui/bookings/BookingForm";
 import { FormSkeleton } from "@repo/ui/skeletons/blocks";
 import { Loading } from "@repo/ui/skeletons/Loading";
-import { bookingIdSchema, canEditBooking, type Booking } from "@repo/lib/bookings/core";
+import { bookingIdSchema, type Booking } from "@repo/lib/bookings/core";
 import { bookings } from "@repo/lib/bookings/server";
 import { customers } from "@repo/lib/customers/server";
 import { offeringLabel } from "@repo/lib/offerings/core";
@@ -20,16 +20,6 @@ export default async function EditBookingPage({ params }: { params: Promise<{ id
   const view = id.success ? await bookings.get(scope, id.data) : null;
   if (!view) notFound();
   const b = view.booking;
-  if (!canEditBooking(b.status)) {
-    return (
-      <p className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted">
-        This booking can&apos;t be changed any more.{" "}
-        <BackLink href={`/studio/bookings/${b.id}`} className="font-medium text-brand-600 underline">
-          Back to it
-        </BackLink>
-      </p>
-    );
-  }
 
   return (
     <>

@@ -5,9 +5,11 @@ import { notFound } from "next/navigation";
 import { QuotationPdf } from "@repo/ui/billing/DocumentPdf";
 import { DocumentShare } from "@repo/ui/billing/DocumentShare";
 import { CreateInvoiceButton } from "@repo/ui/billing/InvoiceButtons";
+import { DeleteButton } from "@repo/ui/DeleteButton";
+import { deleteQuotation } from "@repo/lib/billing/actions";
 import { Skeleton } from "@repo/ui/Skeleton";
 import { Loading } from "@repo/ui/skeletons/Loading";
-import { canEditQuotation, quotationIdSchema } from "@repo/lib/billing/core";
+import { quotationIdSchema } from "@repo/lib/billing/core";
 import { documentIssuer, invoices, quotations, quotationUrl } from "@repo/lib/billing/server";
 import { bookings } from "@repo/lib/bookings/server";
 import { requireStudio } from "@repo/lib/studios/server";
@@ -29,14 +31,18 @@ export default async function StudioQuotationPage({ params }: { params: Promise<
           ← Quotations
         </BackLink>
         <div className="flex flex-wrap gap-2">
-          {canEditQuotation(quotation.status) ? (
             <Link
               href={`/studio/quotations/${quotation.id}/edit`}
               className="inline-flex min-h-11 items-center rounded-[var(--radius)] border border-gray-300 bg-white px-4 text-sm text-gray-700 shadow-theme-xs hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300"
             >
               Edit
             </Link>
-          ) : null}
+            <DeleteButton
+              className="min-h-11"
+              confirm={`Delete quotation ${quotation.number}?`}
+              action={deleteQuotation.bind(null, quotation.id)}
+              after="/studio/quotations"
+            />
         </div>
       </div>
       {quotation.status === "accepted" ? (

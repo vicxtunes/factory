@@ -9,7 +9,7 @@ import type { PortalStatus } from "@repo/lib/studio-portal/core";
 
 /**
  * A client's access to their page with the studio: send the link that opens
- * it (no PIN; the phone that opens it stays signed in) on WhatsApp, and see
+ * it (the phone that opens it stays signed in) on WhatsApp, and see
  * whether they've opened it and when they last came by.
  */
 export function ClientPortalPanel({
@@ -58,7 +58,7 @@ export function ClientPortalPanel({
         <p className="text-sm text-muted">Add this client&apos;s phone number above: the link is sent to it.</p>
       ) : (
         <>
-          <p className="text-sm text-muted">They see their projects, bookings, quotations, invoices, Aming orders and photos. No password or PIN.</p>
+          <p className="text-sm text-muted">They see their projects, bookings, quotations, invoices, Aming orders and photos. They sign in with their phone number.</p>
           <Button type="button" onClick={invite} loading={pending}>
             Send link to their page
           </Button>

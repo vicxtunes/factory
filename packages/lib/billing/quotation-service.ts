@@ -7,7 +7,6 @@ import { localDate } from "@repo/lib/accounting/core/period";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
 import {
-  canEditQuotation,
   canRespondToQuotation,
   linesProblem,
   priceLine,
@@ -49,11 +48,10 @@ export class QuotationService {
     return this.store.save(scope, null, input, this.totalOf(input), this.newToken());
   }
 
-  /** Changes an unanswered quotation (an expired one too, e.g. to give it a new date). */
+  /** Changes a quotation, answered or not (studios correct anything). */
   async update(scope: TenantScope, id: string, input: QuotationInput): Promise<string> {
     const current = await this.get(scope, id);
     if (!current) throw new BillingError(GONE);
-    if (!canEditQuotation(current.status)) throw new BillingError("This quotation has been answered, so it can't be changed.");
     await this.check(scope, input, current.customerId);
     return this.store.save(scope, id, input, this.totalOf(input), current.shareToken);
   }

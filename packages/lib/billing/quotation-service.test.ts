@@ -35,7 +35,7 @@ function fakes() {
     save: async (s, id, input, total, token) => {
       if (!customers.has(`${s.tenantId}/${input.customerId}`)) throw new BillingError("That client no longer exists.");
       const existing = id ? rows.find((r) => r.tenantId === s.tenantId && r.id === id) : null;
-      if (id && (!existing || existing.response !== "open")) throw new BillingError("not editable");
+      if (id && !existing) throw new BillingError("not editable");
       const fields = { customerId: input.customerId, validUntil: input.validUntil, shoot: input.shoot, notes: input.notes, total, lines: input.lines };
       if (existing) return Object.assign(existing, fields).id;
       const row: Row = {
@@ -113,7 +113,7 @@ test("the customer accepts through the link, once", async () => {
   const after = await service.get(studioA, id);
   assert.deepEqual([after?.status, after?.declineReason], ["accepted", null]);
   await assert.rejects(service.respond(q!.shareToken, { decision: "decline", reason: null }), /already been answered/);
-  await assert.rejects(service.update(studioA, id, input), /answered, so it can't be changed/);
+  await service.update(studioA, id, input); // studios can still correct an answered quotation
 });
 
 test("declining keeps the reason", async () => {

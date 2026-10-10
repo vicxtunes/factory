@@ -113,14 +113,14 @@ test("book an accepted quotation: pre-filled, once, with its own client", async 
   await assert.rejects(service.create(studioA, { ...wedding, quotationId: "q-accepted" }), /already booked/);
 });
 
-test("statuses move only the allowed ways; completed and cancelled lock the details", async () => {
+test("statuses move only the allowed ways; the details stay editable", async () => {
   const { service } = fakes();
   const id = await service.create(studioA, wedding);
   await assert.rejects(service.setStatus(studioA, id, "completed"), /pending booking can't become completed/);
   await service.setStatus(studioA, id, "confirmed");
   await service.update(studioA, id, { ...wedding, location: "Speke Resort" });
   await service.setStatus(studioA, id, "completed");
-  await assert.rejects(service.update(studioA, id, wedding), /completed, so it can't be changed/);
+  await service.update(studioA, id, wedding); // a completed booking can still be corrected
   await assert.rejects(service.setStatus(studioA, id, "cancelled"), /can't become cancelled/);
 });
 

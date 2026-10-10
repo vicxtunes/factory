@@ -12,7 +12,7 @@ import { revalidatePath } from "next/cache";
 
 import { parseInput, type Result } from "@repo/lib/kernel/core";
 import { runAction } from "@repo/lib/kernel/server/action";
-import { studioOfCaller } from "@repo/lib/studios/server";
+import { deleteStudioRecord, studioOfCaller } from "@repo/lib/studios/server";
 
 import {
   amingCategoryIdSchema,
@@ -151,4 +151,19 @@ export async function updateOffering(id: unknown, input: unknown): Promise<Resul
 /** Takes a package off sale (or puts it back). */
 export async function setOfferingActive(id: unknown, active: unknown): Promise<Result<Offering>> {
   return change((scope) => offerings.setPackageArchived(scope, parseInput(offeringIdSchema, id), active !== true));
+}
+
+/** Deletes a category for good, with its services and their packages. */
+export async function deleteCategory(id: unknown): Promise<Result> {
+  return change((scope) => deleteStudioRecord(scope, "category", parseInput(categoryIdSchema, id)));
+}
+
+/** Deletes a service or product for good, with its packages / sizes and gallery. */
+export async function deleteService(id: unknown): Promise<Result> {
+  return change((scope) => deleteStudioRecord(scope, "service", parseInput(serviceIdSchema, id)));
+}
+
+/** Deletes a package / size for good (bookings and invoice lines keep their copy of it). */
+export async function deleteOffering(id: unknown): Promise<Result> {
+  return change((scope) => deleteStudioRecord(scope, "offering", parseInput(offeringIdSchema, id)));
 }

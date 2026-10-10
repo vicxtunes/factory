@@ -77,7 +77,7 @@ test("moves along the pipeline are logged; back one step for revisions", async (
   await assert.rejects(service.setStatus(studioA, id, "in_progress", owner), /back one step/);
   await service.setStatus(studioA, id, "completed", owner);
   await assert.rejects(service.setStatus(studioA, id, "delivered", owner), /completed/);
-  await assert.rejects(service.update(studioA, id, direct), /completed/);
+  await service.update(studioA, id, direct); // a completed project can still be corrected
   const history = (await service.get(studioA, id))?.events.map((e) => (e.kind === "created" ? "created" : `${e.from}→${e.to}`));
   assert.deepEqual(history, ["created", "booked→in_progress", "in_progress→editing", "editing→review", "review→editing", "editing→review", "review→delivered", "delivered→completed"]);
 });

@@ -6,6 +6,7 @@ import { useState, useTransition } from "react";
 import Image from "next/image";
 
 import { Button } from "@repo/ui/Button";
+import { DeleteButton } from "@repo/ui/DeleteButton";
 import { Drawer } from "@repo/ui/Drawer";
 import { ExportButtons } from "@repo/ui/ExportButtons";
 import { Field, Select, TextArea, TextInput } from "@repo/ui/Field";
@@ -15,6 +16,8 @@ import {
   addAmingCategory,
   createCategory,
   createService,
+  deleteCategory,
+  deleteService,
   moveService,
   pickAmingProducts,
   renameCategory,
@@ -353,6 +356,11 @@ export function CatalogPanel({
                           Deactivate
                         </Button>
                       )}
+                      <DeleteButton
+                        className="min-h-9 text-xs"
+                        confirm={`Delete "${c.name}" with everything in it?`}
+                        action={() => deleteCategory(c.id)}
+                      />
                     </div>
                   </td>
                 </tr>
@@ -552,6 +560,7 @@ function ServiceCard({
               Reactivate
             </Button>
           )}
+          <DeleteButton confirm={`Delete "${service.name}" with its ${words.tiers.toLowerCase()}?`} action={() => deleteService(service.id)} />
         </div>
       </div>
 

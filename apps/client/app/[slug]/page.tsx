@@ -59,7 +59,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   return { title: { absolute: studio.studio.name }, description: about, openGraph: { title: studio.studio.name, description: about, type: "website" } };
 }
 
-export default async function SlugPage({ params, searchParams }: Params & { searchParams: Promise<{ signin?: string }> }) {
+export default async function SlugPage({ params }: Params) {
   const slug = await slugOf(params);
   const found = await loadProduct(slug);
   if (found) return <ProductPage found={found} />;
@@ -67,11 +67,7 @@ export default async function SlugPage({ params, searchParams }: Params & { sear
   const at = await studioAtSlug(slug);
   if (!at) notFound();
   if (at.redirectTo) permanentRedirect(`/${at.redirectTo}`);
-  const [signedIn, logoUrl, { signin }] = await Promise.all([
-    portalClient(at.studio.id),
-    studioAccess.logoUrl(at.studio.logoKey),
-    searchParams,
-  ]);
+  const [signedIn, logoUrl] = await Promise.all([portalClient(at.studio.id), studioAccess.logoUrl(at.studio.logoKey)]);
 
   return (
     <StudioShell studio={{ name: at.studio.name, logoUrl, slug }} signedInAs={signedIn?.name ?? null} title="Showroom">
@@ -83,7 +79,7 @@ export default async function SlugPage({ params, searchParams }: Params & { sear
           </>
         }
       >
-        <StudioShowroom at={at} slug={slug} signedInAs={signedIn?.name ?? null} signInOpen={signin === "1"} />
+        <StudioShowroom at={at} slug={slug} signedInAs={signedIn?.name ?? null} />
       </Loading>
     </StudioShell>
   );
@@ -93,12 +89,10 @@ async function StudioShowroom({
   at,
   slug,
   signedInAs,
-  signInOpen,
 }: {
   at: NonNullable<Awaited<ReturnType<typeof studioAtSlug>>>;
   slug: string;
   signedInAs: string | null;
-  signInOpen: boolean;
 }) {
   // Until photo storage is set up the page still shows, without albums or covers; any other failure surfaces.
   const unlessNoStorage = <T,>(fallback: T) => (err: unknown) => {
@@ -157,7 +151,6 @@ async function StudioShowroom({
       albums={albums}
       bannerUrl={bannerUrl}
       signedInAs={signedInAs}
-      signInOpen={signInOpen}
       requests={requests}
       orderRequests={orderRequests}
     />

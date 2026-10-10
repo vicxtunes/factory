@@ -1,10 +1,7 @@
-import Link from "next/link";
 
-import { Button } from "@repo/ui/Button";
 import { BookingStatusBadge } from "@repo/ui/bookings/BookingBits";
 import { ShowroomGallery, type ShowroomTab } from "@repo/ui/showroom/ShowroomGallery";
 import type { Booking } from "@repo/lib/bookings/core";
-import { whatsappNumber } from "@repo/lib/kernel/core/phone";
 import type { Service } from "@repo/lib/offerings/core";
 import type { AlbumView } from "@repo/lib/photos/core";
 import { PRODUCT_REQUEST_STATUS_LABELS, type ProductRequest } from "@repo/lib/product-requests/core";
@@ -29,7 +26,6 @@ export function StudioPublicPage({
   albums,
   bannerUrl,
   signedInAs,
-  signInOpen,
   requests,
   orderRequests,
 }: {
@@ -45,14 +41,10 @@ export function StudioPublicPage({
   bannerUrl: string | null;
   /** The client signed in at this studio on this device, if any. */
   signedInAs: string | null;
-  /** The visitor asked to sign in (the "Log in" link). */
-  signInOpen: boolean;
   /** Requests this device sent while not signed in, as they stand: bookings, and products asked for. */
   requests: Booking[];
   orderRequests: ProductRequest[];
 }) {
-  const wa = studio.phone ? `https://wa.me/${whatsappNumber(studio.phone)}` : null;
-  const askLink = wa ? `${wa}?text=${encodeURIComponent(`Hello ${studio.name}, please send me the link to my page.`)}` : null;
   const outline = "inline-flex min-h-11 items-center rounded-[var(--radius)] border border-border bg-surface px-4 text-sm hover:bg-background";
 
   const tabs: ShowroomTab[] = [
@@ -139,28 +131,11 @@ export function StudioPublicPage({
             </div>
           ) : null}
           {signedInAs ? null : (
-            <div className="rounded-[var(--radius)] border border-border bg-surface p-4 shadow-theme-xs">
-              <p className="text-sm text-muted">
-                Our clients: your projects, bookings, orders, invoices and photos are on your page. Book a service or order a product to get yours,
-                or ask us for the link. No password, no PIN.
-              </p>
-              <div className="mt-3 flex flex-wrap items-center gap-3">
-                {askLink ? (
-                  <a href={askLink} target="_blank" rel="noreferrer">
-                    <Button>Ask for my link</Button>
-                  </a>
-                ) : null}
-                {signInOpen ? null : (
-                  <Link href={`/${slug}?signin=1`} className="text-sm text-muted underline">
-                    I have a PIN
-                  </Link>
-                )}
+            <div id="signin" className="rounded-[var(--radius)] border border-border bg-surface p-4 shadow-theme-xs">
+              <p className="mb-3 text-sm font-medium">Your page</p>
+              <div className="max-w-md">
+                <PortalSignIn slug={slug} />
               </div>
-              {signInOpen ? (
-                <div className="mt-3 max-w-md">
-                  <PortalSignIn slug={slug} />
-                </div>
-              ) : null}
             </div>
           )}
         </div>

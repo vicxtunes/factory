@@ -4,6 +4,8 @@ import { notFound } from "next/navigation";
 
 import { BookingStatusBadge, timeSpan } from "@repo/ui/bookings/BookingBits";
 import { BookingStatusButtons } from "@repo/ui/bookings/BookingStatusButtons";
+import { DeleteButton } from "@repo/ui/DeleteButton";
+import { deleteBooking } from "@repo/lib/bookings/actions";
 import { RequestAnswer } from "@repo/ui/bookings/RequestAnswer";
 import { ClientPortalPanel } from "@repo/ui/studio-portal/ClientPortalPanel";
 import { StartProjectButton } from "@repo/ui/projects/ProjectControls";
@@ -12,7 +14,7 @@ import { InvoiceStatusBadge, QuotationStatusBadge } from "@repo/ui/billing/Statu
 import { Skeleton } from "@repo/ui/Skeleton";
 import { Loading } from "@repo/ui/skeletons/Loading";
 import { invoices, quotations } from "@repo/lib/billing/server";
-import { bookingIdSchema, canEditBooking, type Booking } from "@repo/lib/bookings/core";
+import { bookingIdSchema, type Booking } from "@repo/lib/bookings/core";
 import { bookings } from "@repo/lib/bookings/server";
 import { projects } from "@repo/lib/projects/server";
 import { portal } from "@repo/lib/studio-portal/server";
@@ -43,14 +45,12 @@ export default async function StudioBookingPage({ params }: { params: Promise<{ 
         <BackLink href={`/studio/bookings?view=day&date=${b.date}`} className="text-xs font-medium text-brand-600 hover:underline">
           ← Bookings
         </BackLink>
-        {canEditBooking(b.status) ? (
           <Link
             href={`/studio/bookings/${b.id}/edit`}
             className="inline-flex min-h-11 items-center rounded-[var(--radius)] border border-gray-300 bg-white px-4 text-sm text-gray-700 shadow-theme-xs hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300"
           >
             Edit
           </Link>
-        ) : null}
       </div>
       <div>
         <h2 className="text-xl font-semibold">{b.title}</h2>
@@ -95,6 +95,13 @@ export default async function StudioBookingPage({ params }: { params: Promise<{ 
           <Access scope={scope} booking={b} />
         </Loading>
       ) : null}
+      <DeleteButton
+        label="Delete booking"
+        className="min-h-11 self-start"
+        confirm="Delete this booking? Its project, quotation and invoice stay."
+        action={deleteBooking.bind(null, b.id)}
+        after="/studio/bookings"
+      />
     </>
   );
 }

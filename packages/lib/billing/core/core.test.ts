@@ -3,7 +3,7 @@ import { test } from "node:test";
 
 import { parseInput } from "@repo/lib/kernel/core";
 
-import { canEditQuotation, canRespondToQuotation, priceLine, quotationInputSchema, quotationStatus, shareTokenSchema, totalsOf } from "./index";
+import { canRespondToQuotation, priceLine, quotationInputSchema, quotationStatus, shareTokenSchema, totalsOf } from "./index";
 
 const line = { offeringId: null, description: "Wedding Gold", inclusions: [], quantity: 2, unitPrice: 1_000_000, discount: null };
 
@@ -32,7 +32,6 @@ test("an open quotation past its valid-until date is expired", () => {
 });
 
 test("what can be done in each status", () => {
-  assert.deepEqual(["open", "expired", "accepted", "declined"].map((s) => canEditQuotation(s as never)), [true, true, false, false]);
   assert.deepEqual(["open", "expired", "accepted", "declined"].map((s) => canRespondToQuotation(s as never)), [true, false, false, false]);
 });
 

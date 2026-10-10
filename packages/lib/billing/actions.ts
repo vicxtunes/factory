@@ -20,7 +20,7 @@ import { bookingIdSchema } from "@repo/lib/bookings/core";
 import { bookings } from "@repo/lib/bookings/server";
 import { parseInput, type Result } from "@repo/lib/kernel/core";
 import { runAction } from "@repo/lib/kernel/server/action";
-import { studioOfCaller } from "@repo/lib/studios/server";
+import { deleteStudioRecord, studioOfCaller } from "@repo/lib/studios/server";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
 import {
@@ -189,6 +189,24 @@ export async function saveDocumentSettings(input: unknown): Promise<Result<void>
   return runAction("billing", async () => {
     const { scope } = await studioOfCaller();
     await documentSettings.save(scope.tenantId, parseInput(documentSettingsSchema, input));
+    revalidatePath("/studio", "layout");
+  });
+}
+
+/** Deletes a quotation for good (an invoice made from it stays, unlinked). */
+export async function deleteQuotation(id: unknown): Promise<Result> {
+  return runAction("billing", async () => {
+    const { scope } = await studioOfCaller("money");
+    await deleteStudioRecord(scope, "document", parseInput(quotationIdSchema, id));
+    revalidatePath("/studio", "layout");
+  });
+}
+
+/** Deletes an invoice for good, with its recorded payments. */
+export async function deleteInvoice(id: unknown): Promise<Result> {
+  return runAction("billing", async () => {
+    const { scope } = await studioOfCaller("money");
+    await deleteStudioRecord(scope, "document", parseInput(invoiceIdSchema, id));
     revalidatePath("/studio", "layout");
   });
 }

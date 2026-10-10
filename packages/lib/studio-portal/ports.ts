@@ -22,11 +22,9 @@ export interface PortalStore {
   customerByInvite(inviteDigest: string): Promise<{ tenantId: string; customerId: string; expiresAt: string } | null>;
   /** Replaces the client's set-up link. False when there's no such client in this tenant. */
   setInvite(tenantId: string, customerId: string, inviteDigest: string, expiresAt: string): Promise<boolean>;
-  /** Sets the PIN; clears the set-up link, wrong-PIN count and lock. */
-  /** Gives the client a PIN-free access time (devices signed in carry it), and uses up any set-up link. */
+  /** Gives the client an access time (devices signed in carry it), and uses up any set-up link. */
   setAccess(tenantId: string, customerId: string, at: string): Promise<void>;
-  recordWrongPin(tenantId: string, customerId: string, failedAttempts: number, lockedUntil: string | null): Promise<void>;
-  /** A good sign-in: clears the wrong-PIN count, notes the time. */
+  /** A sign-in: notes the time. */
   recordSignIn(tenantId: string, customerId: string, at: string): Promise<void>;
   status(scope: TenantScope, customerId: string): Promise<(Omit<PortalStatus, "invitePending"> & { inviteExpiresAt: string | null }) | null>;
 }
@@ -37,8 +35,6 @@ export interface PortalSecrets {
   newToken(): string;
   /** A one-way digest of a link's secret, for storing. */
   digest(token: string): string;
-  /** Checks a PIN set earlier (clients signing in with phone + PIN). */
-  verifyPin(pin: string, hash: string): Promise<boolean>;
 }
 
 /** A problem the person should see (the message is safe to show). */
