@@ -16,8 +16,10 @@ import { revalidatePath } from "next/cache";
 
 import { WalletError } from "./server/errors";
 import { requireClient, requireStaff, getViewer } from "./server/identity";
+import * as mobileMoney from "./server/mobile-money";
 import * as service from "./server/service";
 import type {
+  MobileMoneyCollection,
   OrderPaymentState,
   PaymentMethod,
   PendingDeposit,
@@ -102,6 +104,25 @@ export async function payOrderFromWallet(orderId: string): Promise<WalletResult<
     const result = await service.payOrder(await requireClient(), orderId);
     refreshMoneyPages();
     return result;
+  });
+}
+
+/** "Top up with mobile money": `amount` lands in the wallet; the phone is prompted for it plus the fee. */
+export async function topUpWithMobileMoney(amount: number, phone: string): Promise<WalletResult<MobileMoneyCollection>> {
+  return run(async () => mobileMoney.startTopUp(await requireClient(), { amount, phone }));
+}
+
+/** "Pay with mobile money" on an order: prompts for what's due plus the fee. */
+export async function payOrderWithMobileMoney(orderId: string, phone: string): Promise<WalletResult<MobileMoneyCollection>> {
+  return run(async () => mobileMoney.startOrderPayment(await requireClient(), { orderId, phone }));
+}
+
+/** The payment screen asking how its prompt is going. Refreshes the money pages once it's through. */
+export async function checkMobileMoneyPayment(collectionId: string): Promise<WalletResult<MobileMoneyCollection>> {
+  return run(async () => {
+    const collection = await mobileMoney.checkCollection(await requireClient(), collectionId);
+    if (collection.status === "succeeded") refreshMoneyPages();
+    return collection;
   });
 }
 

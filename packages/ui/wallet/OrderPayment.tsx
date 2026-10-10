@@ -7,16 +7,18 @@ import { useRouter } from "next/navigation";
 import { Button } from "@repo/ui/Button";
 import { Field, TextInput } from "@repo/ui/Field";
 import { paymentMethodLabel } from "@repo/lib/wallet/policy";
-import { getOrderPayment, payOrderFromWallet, refundOrderToWallet } from "@repo/lib/wallet/actions";
+import { getOrderPayment, payOrderFromWallet, payOrderWithMobileMoney, refundOrderToWallet } from "@repo/lib/wallet/actions";
 import type { OrderPaymentState } from "@repo/lib/wallet/types";
 
+import { MobileMoneyPay } from "./MobileMoneyPay";
 import { parseAmount, useMoney } from "./shared";
 import { clientPath } from "@repo/lib/client-portal/paths";
 
 // An order's payment state, dropped into an order screen by order id.
 // Loads its own data, so the order screens don't need to know about wallets.
 //
-//   <ClientOrderPayment>  the client: paid / still to pay, "Pay from wallet"
+//   <ClientOrderPayment>  the client: paid / still to pay, "Pay from wallet",
+//                         "Pay with mobile money"
 //   <StaffOrderPayment>   staff: paid / still to pay, "Refund to wallet"
 
 function useOrderPayment(orderId: string) {
@@ -62,6 +64,7 @@ export function ClientOrderPayment({ orderId }: { orderId: string }) {
   const { state, setState } = useOrderPayment(orderId);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  const [byMobileMoney, setByMobileMoney] = useState(false);
 
   // Nothing to show until the order can take a payment (priced, confirmed,
   // not cancelled) — unless money was already paid, which is always shown.
@@ -107,6 +110,20 @@ export function ClientOrderPayment({ orderId }: { orderId: string }) {
             </Link>{" "}
             to pay {state.paid > 0 ? "the rest of this order" : "for this order"} from your balance.
           </p>
+        )
+      ) : null}
+      {state.payable && due > 0 ? (
+        byMobileMoney ? (
+          <MobileMoneyPay
+            amount={due}
+            start={(phone) => payOrderWithMobileMoney(orderId, phone)}
+            submitLabel={`Pay ${money(due)} with mobile money`}
+            onDone={() => getOrderPayment(orderId).then((res) => res.ok && setState(res.data))}
+          />
+        ) : (
+          <Button variant={balance > 0 ? "secondary" : "primary"} onClick={() => setByMobileMoney(true)} className="w-full">
+            Pay with mobile money
+          </Button>
         )
       ) : null}
       {error ? <p className="text-xs text-error-600">{error}</p> : null}

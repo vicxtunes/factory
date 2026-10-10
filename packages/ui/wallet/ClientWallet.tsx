@@ -5,15 +5,17 @@ import { useRouter } from "next/navigation";
 
 import { Button } from "@repo/ui/Button";
 import { Field, Select, TextInput } from "@repo/ui/Field";
-import { reportDeposit, withdrawDeposit } from "@repo/lib/wallet/actions";
+import { reportDeposit, topUpWithMobileMoney, withdrawDeposit } from "@repo/lib/wallet/actions";
 import { CLIENT_METHODS, MAX_DEPOSIT, MIN_DEPOSIT, checkAmount } from "@repo/lib/wallet/policy";
 import type { PaymentMethod, WalletView } from "@repo/lib/wallet/types";
 
+import { MobileMoneyPay } from "./MobileMoneyPay";
 import { BalanceCard, EntryLine, MethodOptions, Panel, PaymentLine, parseAmount, useMoney } from "./shared";
 
-// The client's wallet: balance first, then "Add funds" — send the money the
-// usual way, then tell us so staff can confirm it — then deposits waiting
-// for confirmation and the full history.
+// The client's wallet: balance first, then "Add funds" — top up by mobile
+// money right here (a prompt on their phone), or send the money the usual way
+// and tell us so staff can confirm it — then deposits waiting for
+// confirmation and the full history.
 //
 // Layout: one column on phones and tablets. From `lg` up it becomes a
 // two-column grid — balance + history on the left, the "add funds" flow and
@@ -107,6 +109,10 @@ export function ClientWallet({
         <div className="contents lg:flex lg:min-w-0 lg:flex-col lg:gap-4">
           {adding ? (
             <div ref={addRef} className="order-2 scroll-mt-4 space-y-3">
+              <Panel title="Top up with mobile money">
+                <TopUpForm />
+              </Panel>
+              <p className="px-1 text-xs font-semibold uppercase tracking-wide text-muted">Or send it yourself</p>
               <Panel title="1. Tell us you&apos;ve sent it">
                 <ReportDepositForm
                   onDone={() => {
@@ -217,5 +223,26 @@ function ReportDepositForm({ onDone }: { onDone: () => void }) {
       </Button>
       <p className="text-xs text-muted">Your balance goes up once we&apos;ve confirmed the money arrived.</p>
     </form>
+  );
+}
+
+/** An amount, then the mobile money prompt: the wallet goes up as soon as it's approved. */
+function TopUpForm() {
+  const money = useMoney();
+  const [amount, setAmount] = useState("");
+  const value = parseAmount(amount);
+
+  return (
+    <div className="space-y-3">
+      <Field label="Amount to add" hint={Number.isFinite(value) && value > 0 ? money(value) : undefined}>
+        <TextInput inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="e.g. 200000" />
+      </Field>
+      <MobileMoneyPay
+        amount={value}
+        start={(phone) => topUpWithMobileMoney(value, phone)}
+        submitLabel="Top up"
+        onDone={() => setAmount("")}
+      />
+    </div>
   );
 }

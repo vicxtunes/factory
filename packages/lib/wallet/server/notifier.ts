@@ -55,3 +55,14 @@ export async function walletChangedByStaff(clientId: string, amount: number, bal
     `${what}: ${sign}${formatMoney(Math.abs(amount))}. Balance: ${formatMoney(balance)}.`,
   );
 }
+
+/** A mobile money prompt the client approved went through. `orderNo` null: a wallet top-up. */
+export async function mobileMoneyReceived(clientId: string, amount: number, orderNo: string | null): Promise<void> {
+  await pushClient(
+    clientId,
+    "Payment received",
+    orderNo
+      ? `${formatMoney(amount)} by mobile money for order ${orderNo}. Thank you!`
+      : `${formatMoney(amount)} by mobile money was added to your wallet.`,
+  );
+}

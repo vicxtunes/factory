@@ -165,6 +165,19 @@ export interface OrderPaymentRecord {
 
 export type OrderPaymentExcessDisposition = "wallet" | "physical_refund";
 
+/** One mobile money prompt (HivePay), as the client's payment screen follows it. */
+export interface MobileMoneyCollection {
+  id: string;
+  /** What's credited / applied. */
+  amount: number;
+  /** HivePay's fee, paid by the client on top: the prompt is for amount + fee. */
+  fee: number;
+  status: "pending" | "succeeded" | "failed";
+  failureReason: string | null;
+  orderId: string | null;
+  network: string | null;
+}
+
 /** What every wallet server action returns. `error` is always safe to show. */
 export type WalletResult<T = undefined> = T extends undefined
   ? { ok: true } | { ok: false; error: string }
