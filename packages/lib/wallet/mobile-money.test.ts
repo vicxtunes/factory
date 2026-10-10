@@ -37,3 +37,21 @@ test("webhook signature: right secret, exact body, within 5 minutes", () => {
   assert.ok(!verifyHivepaySignature(body, null, secret, now));
   assert.ok(!verifyHivepaySignature(body, `t=${t},v=${v}`, "", now), "no secret configured");
 });
+
+test("HivePay reference: at most 30 letters and digits, and back to the same collection id", async () => {
+  const { fromHivepayReference, toHivepayReference } = await import("./server/providers/hivepay-reference");
+  const ids = [
+    "33333333-3333-4333-8333-333333333331",
+    "ffffffff-ffff-ffff-ffff-ffffffffffff",
+    "00000000-0000-0000-0000-000000000001",
+    crypto.randomUUID(),
+  ];
+  for (const id of ids) {
+    const ref = toHivepayReference(id);
+    assert.ok(ref.length <= 30, `${ref} is ${ref.length} chars`);
+    assert.match(ref, /^AM[0-9a-z]+$/);
+    assert.equal(fromHivepayReference(ref), id);
+  }
+  assert.equal(fromHivepayReference("ORD-1001"), null, "not ours");
+  assert.equal(fromHivepayReference("AM" + "z".repeat(25)), null, "too big for a uuid");
+});
