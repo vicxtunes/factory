@@ -132,7 +132,7 @@ export function MobileMoneyPay({
 
   return (
     <div className="space-y-3">
-      {collection?.status === "failed" ? <p className="text-sm text-error-600">Not approved. Try again.</p> : null}
+      {collection?.status === "failed" ? <p className="text-sm text-error-600">Didn&apos;t go through. Try again.</p> : null}
       {own ? (
         <div className="grid grid-cols-2 gap-2">
           <button type="button" className={choiceClass(!useOther)} onClick={() => setUseOther(false)}>

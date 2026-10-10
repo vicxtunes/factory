@@ -162,7 +162,7 @@ async function reconcile(row: repo.CollectionRow): Promise<repo.CollectionRow> {
     return row;
   }
   if (res.status === "failed") {
-    await repo.failCollection(row.id, "The payment wasn't approved on the phone.");
+    await repo.failCollection(row.id, "The payment didn't go through.");
   } else if (res.status === "success") {
     if (!(res.amount >= row.amount)) {
       // Never credit more than HivePay collected: leave it for staff. (Prompts
