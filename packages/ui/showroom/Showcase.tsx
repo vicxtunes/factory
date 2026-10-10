@@ -102,7 +102,7 @@ function BackLink({ onClick }: { onClick: () => void }) {
   );
 }
 
-// Full-screen single-photo viewer over the "More details" waterfall — steps
+// Full-screen single-photo viewer over the "More Photos & Videos" waterfall — steps
 // through only the *photo* entries (videos already have their own inline
 // controls in the waterfall and aren't worth re-opening full-screen) by
 // swiping, with a counter, on this overlay's black backdrop.
@@ -296,7 +296,7 @@ export function Showcase({
     description: string | null;
     coverUrl: string | null;
     previewVideoUrl: string | null;
-    /** Everything else: shown after the cover and video, and in "More details". */
+    /** Everything else: shown after the cover and video, and in "More Photos & Videos". */
     gallery: ShowcaseMedia[];
   };
   /** Under the description: price, options. */
@@ -312,7 +312,7 @@ export function Showcase({
     const list: ShowcaseMedia[] = [];
     if (item.coverUrl) list.push({ url: item.coverUrl, kind: "photo" });
     // Photos only: the preview video and any gallery videos play in the
-    // overlay behind the button on the media box ("Watch preview" / "More details").
+    // overlay behind the "More Photos & Videos" button on the media box.
     list.push(...item.gallery.filter((m) => m.kind === "photo"));
     return list.length > 0 ? list : [{ url: PLACEHOLDER, kind: "photo" }];
   }, [item]);
@@ -446,26 +446,19 @@ export function Showcase({
             <button
               type="button"
               onClick={() => setDetailsOpen(true)}
-              aria-label={item.previewVideoUrl ? "Watch preview video" : "More details"}
               // Solid brand orange, not the ink token — ink flips light↔dark
               // for text/outline use, which would turn this into a pale
               // pill instead of a solid accent button under dark mode.
               className="absolute bottom-3 right-3 z-10 flex items-center gap-2 rounded-full bg-brand-600/90 px-3 py-2 text-xs font-semibold text-white backdrop-blur-sm transition-colors hover:bg-brand-600"
             >
-              {item.previewVideoUrl ? (
-                <svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4">
-                  <path d="M8 5.5v13l11-6.5-11-6.5Z" />
-                </svg>
-              ) : (
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-4 w-4">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M2.25 7.5A2.25 2.25 0 0 1 4.5 5.25h4.5l1.5 2.25h7.25A2.25 2.25 0 0 1 20 9.75v7A2.25 2.25 0 0 1 17.75 19H4.5a2.25 2.25 0 0 1-2.25-2.25v-9.25Z"
-                  />
-                </svg>
-              )}
-              {item.previewVideoUrl ? "Watch preview" : "More details"}
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-4 w-4">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M2.25 7.5A2.25 2.25 0 0 1 4.5 5.25h4.5l1.5 2.25h7.25A2.25 2.25 0 0 1 20 9.75v7A2.25 2.25 0 0 1 17.75 19H4.5a2.25 2.25 0 0 1-2.25-2.25v-9.25Z"
+                />
+              </svg>
+              More Photos &amp; Videos
             </button>
           ) : null}
         </div>
