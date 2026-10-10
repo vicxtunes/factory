@@ -179,7 +179,8 @@ async function sendCode(flow: Pick<Flow, "purpose" | "email" | "phone" | "client
 
 /**
  * Whether the password is right for this email. Checked with a throwaway,
- * cookie-less client; the session Supabase makes is revoked at once — the
+ * cookie-less client; the session Supabase makes is revoked at once (that one
+ * only: the default scope would sign them out on every other device) — the
  * real one comes only after the emailed code.
  */
 async function passwordMatches(email: string, password: string): Promise<boolean> {
@@ -188,7 +189,7 @@ async function passwordMatches(email: string, password: string): Promise<boolean
   });
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error || !data.session) return false;
-  await createAdminClient().auth.admin.signOut(data.session.access_token);
+  await createAdminClient().auth.admin.signOut(data.session.access_token, "local");
   return true;
 }
 
@@ -366,7 +367,7 @@ export async function verifyCode(code: string): Promise<AuthStep> {
   (await cookies()).delete(FLOW_COOKIE);
   const authUserId = await openSession(flow.email);
   if (!authUserId || !(await linkClient(createAdminClient(), flow.clientId!, authUserId))) {
-    await (await createClient()).auth.signOut();
+    await (await createClient()).auth.signOut({ scope: "local" });
     return { ok: false, error: TRY_AGAIN };
   }
   return { ok: true, step: "done" };
@@ -400,7 +401,7 @@ export async function choosePassword(input: { password: string; confirm: string 
   (await cookies()).delete(FLOW_COOKIE);
   const authUserId = await openSession(flow.email);
   if (!authUserId || !(await linkClient(admin, clientId, authUserId))) {
-    await (await createClient()).auth.signOut();
+    await (await createClient()).auth.signOut({ scope: "local" });
     return { ok: false, error: TRY_AGAIN };
   }
   return { ok: true, step: "done" };

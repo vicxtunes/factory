@@ -67,7 +67,8 @@ export async function signIn(
 
 export async function signOut(): Promise<void> {
   const supabase = await createClient();
-  await supabase.auth.signOut();
+  // This device only: the default signs the account out everywhere.
+  await supabase.auth.signOut({ scope: "local" });
 }
 
 export async function addWorker(input: {
