@@ -1,12 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Image from "next/image";
+import type { Swiper as SwiperInstance } from "swiper";
+import { Swiper, SwiperSlide } from "swiper/react";
+
+import "swiper/css";
 
 import { canOptimizeImage } from "@repo/lib/storage/client";
 
 import { useCloseOnBack } from "../navigation/back";
-import { useSwipe } from "./useSwipe";
 
 const PLACEHOLDER = "/showroom/placeholder.PNG";
 
@@ -119,14 +122,8 @@ function GalleryLightbox({
   onClose: () => void;
 }) {
   const pos = photoIndices.indexOf(index);
-
-  function step(direction: 1 | -1) {
-    const nextPos = (pos + direction + photoIndices.length) % photoIndices.length;
-    onIndexChange(photoIndices[nextPos]);
-  }
-
-  // Finger swipe steps through photos too (buttons and arrow keys still work).
-  const swipe = useSwipe(step, photoIndices.length > 1);
+  // Swiper does the sliding (finger drag, arrows, arrow keys); at either end it rewinds to the other.
+  const swiper = useRef<SwiperInstance | null>(null);
 
   // Escape is deliberately not handled here — it's owned by Showcase's
   // single keydown effect, which knows about every stacked overlay (video /
@@ -137,25 +134,45 @@ function GalleryLightbox({
   // lightbox and the whole gallery in one keystroke instead of one at a time.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === "ArrowRight") step(1);
-      else if (e.key === "ArrowLeft") step(-1);
+      if (e.key === "ArrowRight") swiper.current?.slideNext();
+      else if (e.key === "ArrowLeft") swiper.current?.slidePrev();
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pos, photoIndices]);
+  }, []);
 
   return (
-    <div
-      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/95 p-4"
-      onClick={onClose}
-      {...swipe.bind}
-    >
+    <div className="fixed inset-0 z-[70] bg-black/95" onClick={onClose}>
+      <Swiper
+        className="h-full w-full"
+        initialSlide={Math.max(pos, 0)}
+        rewind
+        spaceBetween={16}
+        onSwiper={(sw) => (swiper.current = sw)}
+        onSlideChange={(sw) => onIndexChange(photoIndices[sw.activeIndex])}
+      >
+        {photoIndices.map((mediaIndex) => (
+          <SwiperSlide key={mediaIndex} className="!flex items-center justify-center p-4">
+            <Image
+              src={media[mediaIndex].url}
+              alt=""
+              width={1600}
+              height={1600}
+              sizes="100vw"
+              unoptimized={!canOptimizeImage(media[mediaIndex].url)}
+              draggable={false}
+              className="h-auto max-h-full w-auto max-w-full select-none rounded-xl object-contain"
+              onClick={(e) => e.stopPropagation()}
+            />
+          </SwiperSlide>
+        ))}
+      </Swiper>
+
       <button
         type="button"
         onClick={onClose}
         aria-label="Close"
-        className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-lg text-white transition-colors hover:bg-white/20"
+        className="absolute right-4 top-4 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-lg text-white transition-colors hover:bg-white/20"
       >
         ✕
       </button>
@@ -166,10 +183,10 @@ function GalleryLightbox({
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              step(-1);
+              swiper.current?.slidePrev();
             }}
             aria-label="Previous photo"
-            className="absolute left-2 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-2xl text-white transition-colors hover:bg-white/20 sm:left-4"
+            className="absolute left-2 top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-2xl text-white transition-colors hover:bg-white/20 sm:left-4"
           >
             ‹
           </button>
@@ -177,33 +194,18 @@ function GalleryLightbox({
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              step(1);
+              swiper.current?.slideNext();
             }}
             aria-label="Next photo"
-            className="absolute right-2 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-2xl text-white transition-colors hover:bg-white/20 sm:right-4"
+            className="absolute right-2 top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-2xl text-white transition-colors hover:bg-white/20 sm:right-4"
           >
             ›
           </button>
-          <span className="absolute bottom-4 left-1/2 -translate-x-1/2 text-xs uppercase tracking-widest text-white/70">
+          <span className="absolute bottom-4 left-1/2 z-10 -translate-x-1/2 text-xs uppercase tracking-widest text-white/70">
             {pos + 1} / {photoIndices.length}
           </span>
         </>
       ) : null}
-
-      <Image
-        src={media[index].url}
-        alt=""
-        width={1600}
-        height={1600}
-        sizes="100vw"
-        unoptimized={!canOptimizeImage(media[index].url)}
-        draggable={false}
-        className={`h-auto max-h-full w-auto max-w-full select-none rounded-xl object-contain ${
-          swipe.dragging ? "" : "transition-transform duration-200"
-        }`}
-        style={{ transform: `translateX(${swipe.offset}px)` }}
-        onClick={(e) => e.stopPropagation()}
-      />
     </div>
   );
 }
@@ -361,9 +363,8 @@ export function Showcase({
   useCloseOnBack(detailsOpen, closeDetails);
   useCloseOnBack(lightboxIndex !== null, () => setLightboxIndex(null));
 
-  function stepImage(direction: 1 | -1) {
-    setIndex((i) => (i + direction + media.length) % media.length);
-  }
+  // Swiper slides the photos and videos (finger drag and the arrows below); at either end it rewinds to the other.
+  const slider = useRef<SwiperInstance | null>(null);
 
   // Tracks the same breakpoint Tailwind's `sm:` prefix uses, so body-scroll
   // locking agrees with when the showcase itself goes full-screen (mobile
@@ -413,12 +414,6 @@ export function Showcase({
     return () => window.removeEventListener("keydown", onKey);
   }, [lightboxIndex, detailsOpen, onExit]);
 
-  const current = media[index] ?? media[0];
-
-  // Finger swipe on the photo view. Not for videos (horizontal drags on their
-  // controls scrub the timeline).
-  const mediaSwipe = useSwipe(stepImage, current.kind !== "video" && media.length > 1);
-
   return (
     <div
       // Mobile only: this view is `fixed inset-0`, same z-40 as the bottom
@@ -443,30 +438,34 @@ export function Showcase({
 
       <div className="relative z-10 mx-auto mt-4 flex w-full max-w-3xl flex-col gap-8">
         <div className="relative h-72 w-full shrink-0 sm:h-80 lg:h-96">
-          <div className="absolute inset-0 overflow-hidden rounded-2xl bg-black/5" {...mediaSwipe.bind}>
-            {current.kind === "video" ? (
-              <video src={current.url} controls preload="metadata" className="h-full w-full object-cover" />
-            ) : (
-              <Image
-                src={current.url}
-                alt={item.name}
-                fill
-                sizes="(max-width: 768px) 100vw, 768px"
-                loading="eager"
-                unoptimized={!canOptimizeImage(current.url)}
-                draggable={false}
-                className={`select-none object-cover ${
-                  mediaSwipe.dragging ? "" : "transition-transform duration-200"
-                }`}
-                style={{ transform: `translateX(${mediaSwipe.offset}px)` }}
-              />
-            )}
+          <div className="absolute inset-0 overflow-hidden rounded-2xl bg-black/5">
+            <Swiper className="h-full w-full" rewind onSwiper={(sw) => (slider.current = sw)} onSlideChange={(sw) => setIndex(sw.activeIndex)}>
+              {media.map((m, i) => (
+                // A video isn't dragged from: horizontal drags on its controls scrub the timeline (the arrows still move on).
+                <SwiperSlide key={m.url + i} className={m.kind === "video" ? "swiper-no-swiping" : ""}>
+                  {m.kind === "video" ? (
+                    <video src={m.url} controls preload="metadata" className="h-full w-full object-cover" />
+                  ) : (
+                    <Image
+                      src={m.url}
+                      alt={item.name}
+                      fill
+                      sizes="(max-width: 768px) 100vw, 768px"
+                      loading={i === 0 ? "eager" : "lazy"}
+                      unoptimized={!canOptimizeImage(m.url)}
+                      draggable={false}
+                      className="select-none object-cover"
+                    />
+                  )}
+                </SwiperSlide>
+              ))}
+            </Swiper>
             {media.length > 1 ? (
-              <div className="absolute inset-x-0 bottom-3 flex items-center justify-center gap-2">
+              <div className="pointer-events-none absolute inset-x-0 bottom-3 z-10 flex items-center justify-center gap-2">
                 {media.map((m, i) => (
                   <span
                     key={m.url + i}
-                    className={`h-1.5 w-1.5 rounded-full ${i === index ? "bg-white" : "bg-white/40"}`}
+                    className={`h-1.5 w-1.5 rounded-full transition-colors ${i === index ? "bg-white" : "bg-white/40"}`}
                   />
                 ))}
               </div>
@@ -509,8 +508,8 @@ export function Showcase({
         <div className="flex flex-col gap-4 text-showroom-ink">
           {media.length > 1 ? (
             <div className="flex items-center gap-2">
-              <ArrowButton direction="prev" onClick={() => stepImage(-1)} />
-              <ArrowButton direction="next" onClick={() => stepImage(1)} />
+              <ArrowButton direction="prev" onClick={() => slider.current?.slidePrev()} />
+              <ArrowButton direction="next" onClick={() => slider.current?.slideNext()} />
               <span className="ml-1 text-xs uppercase tracking-widest text-showroom-ink/60">
                 {index + 1} / {media.length}
               </span>
