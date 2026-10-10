@@ -20,7 +20,8 @@ type ActionResult = { ok: true } | { ok: false; error: string };
 
 export async function logoutClient(): Promise<void> {
   const supabase = await createClient();
-  await supabase.auth.signOut();
+  // This device only: the default signs the account out everywhere.
+  await supabase.auth.signOut({ scope: "local" });
 }
 
 export interface ClientOrderPayload {
