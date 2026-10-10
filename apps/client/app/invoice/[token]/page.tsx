@@ -27,7 +27,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ token:
       {invoice.balance > 0 && !invoice.order.cancelled ? (
         <section className="mt-4 space-y-2 print:hidden">
           <h2 className="text-sm font-semibold">Pay now</h2>
-          <PaymentMethods orderNo={invoice.order.orderNo} />
+          <PaymentMethods orderNo={invoice.order.orderNo} pay={{ orderId: invoice.order.id }} />
         </section>
       ) : null}
       <p className="mt-4 text-center text-sm text-muted print:hidden">

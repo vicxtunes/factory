@@ -168,10 +168,8 @@ export type OrderPaymentExcessDisposition = "wallet" | "physical_refund";
 /** One mobile money prompt (HivePay), as the client's payment screen follows it. */
 export interface MobileMoneyCollection {
   id: string;
-  /** What's credited / applied. */
+  /** What the phone is prompted for, and what's credited / applied. */
   amount: number;
-  /** HivePay's fee, paid by the client on top: the prompt is for amount + fee. */
-  fee: number;
   status: "pending" | "succeeded" | "failed";
   failureReason: string | null;
   orderId: string | null;

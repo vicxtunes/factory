@@ -145,8 +145,8 @@ export function ClientItemDetail({ item, orderItems }: { item: OrderItemWithOrde
         </Collapsible>
       ) : null}
 
-      <Collapsible ref={howToPayRef} title="How to pay" summary="Bank or mobile money">
-        <PaymentMethods orderNo={item.order.order_no} />
+      <Collapsible ref={howToPayRef} title="How to pay" summary="MTN, Airtel or bank">
+        <PaymentMethods orderNo={item.order.order_no} pay={{ orderId: item.order_id }} />
       </Collapsible>
 
       

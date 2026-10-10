@@ -21,8 +21,6 @@ export const HISTORY_LIMIT = 100;
 
 /** Methods a person can pick when reporting or recording a deposit. `card` only comes from a provider. */
 export const MANUAL_METHODS: PaymentMethod[] = ["mobile_money", "bank_transfer", "cash", "other"];
-/** Clients can't hand us cash through the app, so they don't get that option. */
-export const CLIENT_METHODS: PaymentMethod[] = ["mobile_money", "bank_transfer", "other"];
 
 export const METHOD_LABELS: Record<PaymentMethod | "wallet", string> = {
   mobile_money: "Mobile money",
@@ -78,29 +76,38 @@ export function cleanReason(value: string | null | undefined): string | null {
 
 // --- Mobile money through the provider (HivePay) ----------------------------
 
-/** What one mobile money prompt may charge, fee included (UGX) — HivePay's limits. */
-export const MOBILE_MONEY_MIN_CHARGE = 500;
-export const MOBILE_MONEY_MAX_CHARGE = 5_000_000;
-/**
- * HivePay's fee on a collection, which the client pays on top. Their docs
- * don't state the rule; their example (50,000 requested → 48,500 credited)
- * is 3%. Confirm with HivePay and change it here.
- */
-export const MOBILE_MONEY_FEE_RATE = 0.03;
+/** What one mobile money prompt can collect (UGX) — HivePay's limits. HivePay takes its fee from what it pays us; the client is charged just the amount. */
+export const MOBILE_MONEY_MIN = 500;
+export const MOBILE_MONEY_MAX = 5_000_000;
 
-/** The fee added to `amount`, so that what's left after HivePay's cut covers `amount`. */
-export function mobileMoneyFee(amount: number): number {
-  return Math.ceil(amount / (1 - MOBILE_MONEY_FEE_RATE)) - amount;
+export type MobileNetwork = "mtn" | "airtel";
+
+/** Uganda mobile prefixes (after +256) by network. */
+const NETWORK_PREFIXES: Record<MobileNetwork, string[]> = {
+  mtn: ["76", "77", "78", "79"],
+  airtel: ["70", "74", "75"],
+};
+
+/** The network a stored number (+2567XXXXXXXX) is on, or null when it isn't an MTN / Airtel Uganda number. */
+export function networkOfPhone(stored: string | null | undefined): MobileNetwork | null {
+  const m = /^\+256(\d{2})\d{7}$/.exec(stored ?? "");
+  if (!m) return null;
+  return (Object.keys(NETWORK_PREFIXES) as MobileNetwork[]).find((n) => NETWORK_PREFIXES[n].includes(m[1])) ?? null;
+}
+
+/** "+256703360688" → "0703 360 688". */
+export function localPhone(stored: string): string {
+  const d = stored.replace(/^\+256/, "0");
+  return `${d.slice(0, 4)} ${d.slice(4, 7)} ${d.slice(7)}`;
 }
 
 /** Why `amount` can't be collected by mobile money, or null when it can. */
 export function checkMobileMoneyAmount(amount: number): string | null {
-  const basic = checkAmount(amount, { min: 1, max: MOBILE_MONEY_MAX_CHARGE });
+  const basic = checkAmount(amount, { min: 1, max: Number.MAX_SAFE_INTEGER });
   if (basic) return basic;
-  const charge = amount + mobileMoneyFee(amount);
-  if (charge < MOBILE_MONEY_MIN_CHARGE) return `Mobile money payments start at ${MOBILE_MONEY_MIN_CHARGE.toLocaleString("en-UG")} including the fee.`;
-  if (charge > MOBILE_MONEY_MAX_CHARGE) {
-    return `Mobile money can take up to ${MOBILE_MONEY_MAX_CHARGE.toLocaleString("en-UG")} at a time, fee included. Pay in parts or another way.`;
+  if (amount < MOBILE_MONEY_MIN) return `Mobile money payments start at ${MOBILE_MONEY_MIN.toLocaleString("en-UG")}.`;
+  if (amount > MOBILE_MONEY_MAX) {
+    return `Mobile money can take up to ${MOBILE_MONEY_MAX.toLocaleString("en-UG")} at a time. Pay in parts or by bank.`;
   }
   return null;
 }

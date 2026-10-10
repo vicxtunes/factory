@@ -18,19 +18,13 @@ An order receipt and a wallet deposit are different events. A receipt from mobil
 
 ## Payment flow
 
-### 1) Client reports a deposit
+### 1) Clients add funds
 
-The client goes to the wallet page, fills in amount, method, reference and an optional note, then submits the report.
+On the wallet page, *Add funds* offers MTN, Airtel or Bank. MTN / Airtel top up straight away through HivePay (see 7). Bank shows the account details; the client doesn't file anything — staff record the deposit when it shows on the statement (3).
 
-Relevant code:
+Clients used to report deposits ("I've sent it") for staff to confirm. That's gone; reports already filed stay in the staff queue (2).
 
-- `packages/lib/wallet/actions.ts` — `reportDeposit()`
-- `packages/lib/wallet/server/service.ts` — `reportDeposit()`
-- `packages/lib/wallet/policy.ts` — allowed methods and validation rules
-
-The client can only choose methods the app allows, and the reference is required.
-
-### 2) Staff confirms or rejects the report
+### 2) Staff confirms or rejects older reports
 
 Staff review the pending queue, check a statement or app, and either confirm or reject the report.
 
@@ -91,7 +85,7 @@ If the receipt exceeds the invoice balance, staff must choose what happened to t
 
 ### 7) Clients pay by mobile money in the app (HivePay)
 
-A client can top up their wallet, or pay a payable order, with an MTN / Airtel PIN prompt on their phone. The client pays HivePay's fee on top. Each prompt is a `provider_collections` row; once HivePay confirms success, `provider_collection_settle()` records it in one transaction:
+A client can top up their wallet, or pay a payable order, with an MTN / Airtel PIN prompt on their phone. The phone is prompted for exactly the amount; HivePay takes its fee from what it pays the business. Each prompt is a `provider_collections` row; once HivePay confirms success, `provider_collection_settle()` records it in one transaction:
 
 - for an order: an `order_payment_receipts` row (method mobile money) applying up to what's due, any excess credited to the wallet — the same model as a staff-recorded receipt, never a wallet deposit plus debit;
 - for a top-up: a `payments` row (`provider = 'hivepay'`) settled into the wallet;

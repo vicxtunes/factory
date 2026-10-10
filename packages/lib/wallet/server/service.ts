@@ -12,7 +12,6 @@ import "server-only";
 //   staff record it            provider webhook          (later — see README)
 
 import {
-  CLIENT_METHODS,
   HISTORY_LIMIT,
   MANUAL_METHODS,
   MAX_ADJUSTMENT,
@@ -210,6 +209,11 @@ export async function getMyTransactionHistory(
   };
 }
 
+/** The client's phone on record — offered first when they pay by mobile money. */
+export async function getMyPhone(viewer: ClientViewer): Promise<string | null> {
+  return (await directory.loadClient(viewer.id))?.phone ?? null;
+}
+
 export async function getMyWallet(viewer: ClientViewer): Promise<WalletView> {
   return walletView(viewer.id, viewer.name);
 }
@@ -224,33 +228,6 @@ export async function getMyWalletSummary(viewer: ClientViewer): Promise<WalletSu
     pendingCount: pending.length,
     pendingAmount: pending.reduce((sum, p) => sum + p.amount, 0),
   };
-}
-
-export async function reportDeposit(
-  viewer: ClientViewer,
-  input: { amount: number; method: PaymentMethod; reference?: string | null; note?: string | null },
-): Promise<WalletPayment> {
-  checkDepositInput(input, CLIENT_METHODS);
-  const reference = cleanText(input.reference, MAX_REFERENCE_LENGTH);
-  if (!reference) throw new WalletError("Enter the transaction ID or deposit reference so we can find your payment.");
-
-  const payment = await repo.insertPayment({
-    clientId: viewer.id,
-    amount: input.amount,
-    method: input.method,
-    reference,
-    note: cleanText(input.note, MAX_NOTE_LENGTH),
-    createdBy: viewer,
-  });
-  await notifier.depositReported(viewer.name, payment.amount);
-  return toPayment(payment);
-}
-
-/** A client takes back a deposit report they made by mistake (only while it's still pending). */
-export async function withdrawDeposit(viewer: ClientViewer, paymentId: string): Promise<void> {
-  const payment = await repo.getPayment(paymentId);
-  if (!payment || payment.client_id !== viewer.id) throw new WalletError("Deposit not found.");
-  await repo.closePayment(paymentId, "cancelled", "Withdrawn by the client", viewer);
 }
 
 export async function getOrderPayment(viewer: ClientViewer | StaffViewer, orderId: string): Promise<OrderPaymentState> {

@@ -7,7 +7,6 @@ import { Collapsible, PriceHero } from "@repo/ui/order/OrderSummary";
 import { PaymentMethods } from "@repo/ui/payments/PaymentMethods";
 import { useCurrencySymbol } from "@repo/lib/currency/CurrencySymbolProvider";
 import { formatMoney } from "@repo/lib/currency/format";
-import { SUPPORT_PHONE_DISPLAY } from "@repo/lib/support/constants";
 
 // Shown in place of the order form once placeOrder succeeds: a big tick, the
 // order number, then a nudge to pay. Two flavours:
@@ -120,22 +119,20 @@ export function OrderPlaced({
       <Collapsible
         ref={howToPayRef}
         title="How to pay"
-        summary={payNow ? "Bank or mobile money · 4 steps" : "For later, once we confirm the price"}
+        summary={payNow ? "MTN, Airtel or bank" : "For later, once we confirm the price"}
       >
         <div className="space-y-4">
           <Steps
             steps={
               payNow
                 ? [
-                    <>Send the amount above by bank or mobile money.</>,
-                    <>Use {ref} as the payment reference.</>,
-                    <>Send your receipt or a screenshot to {SUPPORT_PHONE_DISPLAY} (WhatsApp or SMS).</>,
-                    <>We&apos;ll confirm your payment and get your order moving.</>,
+                    <>We confirm your order and send the invoice.</>,
+                    <>Open the order and pay by MTN or Airtel: approve the prompt on your phone.</>,
+                    <>Or pay by bank, using {ref} as the reference.</>,
                   ]
                 : [
                     <>Wait for our call or message confirming the final price.</>,
-                    <>Pay by bank or mobile money, using {ref} as the reference.</>,
-                    <>Send your receipt or a screenshot to {SUPPORT_PHONE_DISPLAY} (WhatsApp or SMS).</>,
+                    <>Then open the order and pay by MTN or Airtel, or by bank using {ref} as the reference.</>,
                   ]
             }
           />

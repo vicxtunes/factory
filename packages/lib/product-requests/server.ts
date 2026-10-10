@@ -46,6 +46,7 @@ const requests = new ProductRequestService({
 
 export const productRequests = {
   request: requests.request.bind(requests),
+  get: (scope: TenantScope, id: string) => store.get(scope, id),
   confirm: requests.confirm.bind(requests),
   decline: requests.decline.bind(requests),
   /** Waiting for the studio's answer, newest first. */
@@ -61,6 +62,11 @@ const remembered = rememberedOnDevice("spr");
 /** Remembers on this device a request it sent, so the studio's page can show how it's going. */
 export async function rememberProductRequest(tenantId: string, requestId: string): Promise<void> {
   await remembered.add(tenantId, requestId);
+}
+
+/** Whether this device sent this request (so it may pay for it without being signed in). */
+export async function isRememberedProductRequest(tenantId: string, requestId: string): Promise<boolean> {
+  return (await remembered.ids(tenantId)).includes(requestId);
 }
 
 /** The requests this device sent to the studio, newest first, as they stand now. */

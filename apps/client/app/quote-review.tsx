@@ -135,7 +135,7 @@ export function ClientQuoteReview({
 // Instructions only: the price is already shown once, at the top.
 function HowToPay({ orderNo }: { orderNo: string }) {
   return (
-    <Collapsible title="How to pay" summary="Bank or mobile money">
+    <Collapsible title="How to pay" summary="MTN, Airtel or bank">
       <PaymentMethods orderNo={orderNo} />
     </Collapsible>
   );
