@@ -3,8 +3,8 @@
 // The browser's entry points to the studio portal.
 //
 // Client actions come in by the studio's slug, never a tenant id from the
-// browser: open the page from the studio's link (no PIN), stay signed in,
-// sign in with phone + PIN (clients who set one earlier), sign out.
+// browser: open the page from the studio's link, stay signed in, sign in
+// with just their phone number, sign out.
 // Studio actions get the studio from the owner's session: set the studio's
 // address, make the link to a client's page.
 
@@ -27,16 +27,16 @@ async function studioFor(slug: unknown) {
   return at;
 }
 
-/** A studio's client signs in with their phone and PIN. */
+/** A studio's client signs in with just their phone number. */
 export async function portalSignIn(slug: unknown, input: unknown): Promise<Result> {
   return runAction("studio-portal", async () => {
     const { studio } = await studioFor(slug);
-    const { phone, pin } = parseInput(signInSchema, input);
-    await setPortalCookie(await portal.signIn(studio.id, phone, pin));
+    const { phone } = parseInput(signInSchema, input);
+    await setPortalCookie(await portal.signIn(studio.id, phone));
   });
 }
 
-/** From the studio's link: this device is signed in to the client's page for good, no PIN. */
+/** From the studio's link: this device is signed in to the client's page for good. */
 export async function portalOpenLink(slug: unknown, token: unknown): Promise<Result> {
   return runAction("studio-portal", async () => {
     const { studio } = await studioFor(slug);
@@ -69,8 +69,8 @@ export async function setStudioSlug(slug: unknown): Promise<Result> {
 }
 
 /**
- * The link to a client's page (it signs in the device that opens it, no
- * PIN), with a WhatsApp link that sends it. The studio needs an address first.
+ * The link to a client's page (it signs in the device that opens it), with
+ * a WhatsApp link that sends it. The studio needs an address first.
  */
 export async function createPortalInvite(customerId: unknown): Promise<Result<{ url: string; whatsapp: string }>> {
   return runAction("studio-portal", async () => {

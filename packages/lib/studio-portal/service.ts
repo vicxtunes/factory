@@ -6,18 +6,14 @@ import type { TenantScope } from "@repo/lib/tenancy/types";
 
 import {
   addDays,
-  afterWrongPin,
   INVITE_DAYS,
-  isLocked,
-  LOCK_MINUTES,
   type PortalSession,
   type PortalStatus,
   type SignInRecord,
 } from "./core";
 import { PortalError, type PortalSecrets, type PortalStore } from "./ports";
 
-/** Always the same answer, so a wrong number and a wrong PIN look alike. */
-const WRONG = "That phone number or PIN is wrong.";
+const UNKNOWN_NUMBER = "We don't have this number. Book or order to get started, or ask us for your link.";
 const BAD_LINK = "This link has expired or was already used. Ask the business for a new one.";
 
 export class StudioPortalService {
@@ -52,7 +48,7 @@ export class StudioPortalService {
   }
 
   /**
-   * A one-time set-up link for a client (first PIN, or a forgotten one).
+   * A one-time link that signs a client's device in (another phone, a new phone).
    * Returns the secret for the link; only its digest is stored. A new link
    * replaces any earlier one.
    */
@@ -74,8 +70,8 @@ export class StudioPortalService {
   }
 
   /**
-   * Signs a device in to the client's page without a PIN: the device they
-   * booked on, or one that opened the studio's link. Every such device
+   * Signs a device in to the client's page: the device they booked on, one
+   * that opened the studio's link, or their number at the studio. Every such device
    * carries the client's access time, so they all stay signed in together.
    */
   async openDevice(tenantId: string, customerId: string): Promise<PortalSession> {
@@ -88,7 +84,7 @@ export class StudioPortalService {
     return { tenantId, customerId, accessAt };
   }
 
-  /** The studio's one-time link: signs this device in to the client's page, no PIN. The link stops working. */
+  /** The studio's one-time link: signs this device in to the client's page. The link stops working. */
   async openLink(tenantId: string, token: string): Promise<PortalSession> {
     const found = await this.validInvite(tenantId, token);
     if (!found) throw new PortalError(BAD_LINK);
@@ -99,34 +95,17 @@ export class StudioPortalService {
     return this.openDevice(tenantId, found.customerId);
   }
 
-  /** Phone + PIN at this studio. Five wrong PINs in a row lock the client for a while. */
-  async signIn(tenantId: string, phone: string, pin: string): Promise<PortalSession> {
-    const now = this.clock();
+  /** Just their phone number: a number the studio has for a client signs this device in to their page. */
+  async signIn(tenantId: string, phone: string): Promise<PortalSession> {
     const customer = await this.store.customerByPhone(tenantId, phone);
-    if (!customer || !customer.pinHash || !customer.pinSetAt) {
-      // Same work as a real check, so how long it takes doesn't tell who's a client.
-      await this.secrets.verifyPin(pin, DUMMY_HASH);
-      throw new PortalError(WRONG);
-    }
-    if (isLocked(customer.lockedUntil, now)) {
-      throw new PortalError(`Too many wrong PINs. Try again in ${LOCK_MINUTES} minutes, or ask the business for a reset link.`);
-    }
-    if (!(await this.secrets.verifyPin(pin, customer.pinHash))) {
-      const next = afterWrongPin(customer.failedAttempts, now);
-      await this.store.recordWrongPin(tenantId, customer.customerId, next.failedAttempts, next.lockedUntil);
-      throw new PortalError(next.lockedUntil ? `Too many wrong PINs. Try again in ${LOCK_MINUTES} minutes.` : WRONG);
-    }
-    await this.store.recordSignIn(tenantId, customer.customerId, now.toISOString());
-    return { tenantId, customerId: customer.customerId, pinSetAt: customer.pinSetAt };
+    if (!customer) throw new PortalError(UNKNOWN_NUMBER);
+    return this.openDevice(tenantId, customer.customerId);
   }
 
-  /** The signed-in client, if the session still holds: same studio, and their access time (or PIN) hasn't changed since. */
+  /** The signed-in client, if the session still holds: same studio, and their access time hasn't changed since. */
   async check(session: PortalSession): Promise<SignInRecord | null> {
     const customer = await this.store.customer(session.tenantId, session.customerId);
-    if (!customer) return null;
-    const anchor = session.accessAt !== undefined ? customer.accessAt : customer.pinSetAt;
-    const carried = session.accessAt ?? session.pinSetAt;
-    if (!anchor || !carried || Date.parse(anchor) !== Date.parse(carried)) return null;
+    if (!customer?.accessAt || !session.accessAt || Date.parse(customer.accessAt) !== Date.parse(session.accessAt)) return null;
     return customer;
   }
 
@@ -137,5 +116,3 @@ export class StudioPortalService {
   }
 }
 
-/** A real bcrypt hash of a random secret nobody knows, for the same-cost miss path. */
-const DUMMY_HASH = "$2b$10$YdgMa5EJG4o4hb5BIetyreYgOZ1NPqTR.40EcmQ7n6reiJJ6HBWDq";

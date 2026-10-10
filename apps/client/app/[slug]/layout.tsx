@@ -7,8 +7,8 @@ import { BrandStyle } from "../brand-style";
 
 // A studio's public pages carry its brand, never Aming's: its name in the tab
 // and on the home screen, its logo as the icon (./logo), its own install
-// manifest, and its color over Aming's orange (../brand-style.tsx). Aming's
-// launch splash is hidden. A product's page at the same address
+// manifest, and its color over Aming's orange (../brand-style.tsx). A
+// product's page at the same address
 // (./page.tsx) stays Aming's: this layout leaves it alone.
 
 type Props = { params: Promise<{ slug: string }> };
@@ -48,7 +48,6 @@ export default async function StudioLayout({ children, params }: Props & { child
   return (
     <>
       <BrandStyle color={at.studio.brandColor} />
-      <style>{"[data-app-splash]{display:none}"}</style>
       {children}
     </>
   );

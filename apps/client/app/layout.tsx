@@ -3,7 +3,6 @@ import { Geist_Mono, Outfit } from "next/font/google";
 import { SerwistProvider } from "@serwist/turbopack/react";
 import { OfflineBanner } from "@repo/ui/pwa/OfflineBanner";
 import { InstallCapture } from "@repo/ui/pwa/InstallCapture";
-import { AppSplash } from "@repo/ui/pwa/AppSplash";
 import { NavigationProgress } from "@repo/ui/pwa/NavigationProgress";
 import { KeepFresh } from "@repo/ui/navigation/KeepFresh";
 import { BackHistory } from "@repo/ui/navigation/back";
@@ -77,7 +76,6 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
           <NavigationProgress />
           <BackHistory />
           <KeepFresh />
-          <AppSplash />
           <CurrencySymbolProvider symbol={symbol}>{children}</CurrencySymbolProvider>
         </SerwistProvider>
       </body>

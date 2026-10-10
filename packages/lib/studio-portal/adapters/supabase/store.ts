@@ -13,24 +13,16 @@ interface CustomerRow {
   id: string;
   name: string;
   phone: string | null;
-  portal_pin_hash: string | null;
-  portal_pin_set_at: string | null;
   portal_access_at: string | null;
-  portal_failed_attempts: number;
-  portal_locked_until: string | null;
 }
 
-const CUSTOMER = "id, name, phone, portal_pin_hash, portal_pin_set_at, portal_access_at, portal_failed_attempts, portal_locked_until";
+const CUSTOMER = "id, name, phone, portal_access_at";
 
 const toRecord = (r: CustomerRow): SignInRecord => ({
   customerId: r.id,
   name: r.name,
   phone: r.phone,
-  pinHash: r.portal_pin_hash,
-  pinSetAt: r.portal_pin_set_at,
   accessAt: r.portal_access_at,
-  failedAttempts: r.portal_failed_attempts,
-  lockedUntil: r.portal_locked_until,
 });
 
 function fail(what: string, error: { message: string }): never {
@@ -101,12 +93,8 @@ export const supabasePortalStore: PortalStore = {
     await update(tenantId, customerId, { portal_access_at: at, portal_invite_hash: null, portal_invite_expires_at: null }, "open the client's page");
   },
 
-  async recordWrongPin(tenantId, customerId, failedAttempts, lockedUntil) {
-    await update(tenantId, customerId, { portal_failed_attempts: failedAttempts, portal_locked_until: lockedUntil }, "record the attempt");
-  },
-
   async recordSignIn(tenantId, customerId, at) {
-    await update(tenantId, customerId, { portal_failed_attempts: 0, portal_locked_until: null, portal_signed_in_at: at }, "record the sign-in");
+    await update(tenantId, customerId, { portal_signed_in_at: at }, "record the sign-in");
   },
 
   async status(scope, customerId) {

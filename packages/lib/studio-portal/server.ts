@@ -10,7 +10,6 @@ import { cache } from "react";
 import { cookies } from "next/headers";
 
 import { signPayload, verifyPayload } from "@repo/lib/auth/cookies";
-import { verifyPin } from "@repo/lib/auth/pin";
 import { clientUrl } from "@repo/lib/client-portal/paths";
 import { studioScope, type Studio } from "@repo/lib/studios/core";
 import { STUDIOS_ENABLED } from "@repo/lib/studios/feature";
@@ -25,7 +24,6 @@ import { StudioPortalService } from "./service";
 const secrets: PortalSecrets = {
   newToken: () => randomBytes(32).toString("base64url"),
   digest: (token) => createHash("sha256").update(token).digest("hex"),
-  verifyPin,
 };
 
 export const portal = new StudioPortalService(supabasePortalStore, secrets);

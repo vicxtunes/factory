@@ -12,8 +12,6 @@ export const slugSchema = z
   .toLowerCase()
   .regex(SLUG_PATTERN, "Use 3–40 lowercase letters, numbers and hyphens, e.g. amina-studio.");
 
-export const pinSchema = z.string("Enter a 4-digit PIN.").regex(/^\d{4}$/, "Enter a 4-digit PIN.");
-
 /** A set-up link's secret as made by the server: base64url, 43 characters for 32 bytes. */
 export const inviteTokenSchema = z.string().regex(/^[A-Za-z0-9_-]{32,128}$/, "This link isn't valid.");
 
@@ -28,5 +26,4 @@ export const signInSchema = z.object({
       ctx.addIssue({ code: "custom", message: p.error });
       return z.NEVER;
     }),
-  pin: pinSchema,
 });
