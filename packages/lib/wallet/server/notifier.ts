@@ -45,3 +45,11 @@ export async function mobileMoneyReceived(clientId: string, amount: number, orde
       : `${formatMoney(amount)} by mobile money was added to your wallet.`,
   );
 }
+
+/** A studio's customer paid for an order request: it's in the owner's wallet. */
+export async function studioCustomerPaid(ownerClientId: string, amount: number): Promise<void> {
+  await notifyActor(
+    { type: "client", id: ownerClientId },
+    { title: "Customer paid", body: `${formatMoney(amount)} by mobile money for an order. It's in your wallet.`, url: "/studio" },
+  );
+}

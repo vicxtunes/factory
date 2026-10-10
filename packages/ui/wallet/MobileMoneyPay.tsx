@@ -32,6 +32,8 @@ export function MobileMoneyPay({
   amount,
   network,
   start,
+  check = checkMobileMoneyPayment,
+  knownPhone,
   onDone,
 }: {
   /** What the phone is prompted for; NaN while the amount isn't typed yet. */
@@ -39,11 +41,15 @@ export function MobileMoneyPay({
   network: MobileNetwork;
   /** Sends the prompt. */
   start: (phone: string) => Promise<WalletResult<MobileMoneyCollection>>;
+  /** Follows it (default: the signed-in client's own payments). */
+  check?: (id: string) => Promise<WalletResult<MobileMoneyCollection>>;
+  /** The payer's number when the page already has it; otherwise the signed-in client's is fetched. */
+  knownPhone?: string | null;
   onDone?: () => void;
 }) {
   const router = useRouter();
   const money = useMoney();
-  const [ownPhone, setOwnPhone] = useState<string | null>(null);
+  const [fetchedPhone, setFetchedPhone] = useState<string | null>(null);
   const [useOther, setUseOther] = useState(false);
   const [otherPhone, setOtherPhone] = useState("");
   const [collection, setCollection] = useState<MobileMoneyCollection | null>(null);
@@ -52,11 +58,13 @@ export function MobileMoneyPay({
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
+  const ownPhone = knownPhone === undefined ? fetchedPhone : knownPhone;
   useEffect(() => {
+    if (knownPhone !== undefined) return;
     getMyPhone().then((res) => {
-      if (res.ok) setOwnPhone(res.data);
+      if (res.ok) setFetchedPhone(res.data);
     });
-  }, []);
+  }, [knownPhone]);
 
   // Callers pass a fresh onDone each render; keep the latest without restarting the timer.
   const onDoneRef = useRef(onDone);
@@ -70,7 +78,7 @@ export function MobileMoneyPay({
     if (!followingId) return;
     const timer = setInterval(async () => {
       if (Date.now() - startedAt > GIVE_UP_AFTER_MS) return setGaveUp(true);
-      const res = await checkMobileMoneyPayment(followingId);
+      const res = await check(followingId);
       if (!res.ok) return;
       setCollection(res.data);
       if (res.data.status === "succeeded") {
@@ -79,7 +87,7 @@ export function MobileMoneyPay({
       }
     }, CHECK_EVERY_MS);
     return () => clearInterval(timer);
-  }, [followingId, startedAt, router]);
+  }, [followingId, startedAt, router, check]);
 
   // Their own number, when it's on this network.
   const own = ownPhone && networkOfPhone(ownPhone) === network ? ownPhone : null;

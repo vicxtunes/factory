@@ -14,15 +14,19 @@ import type { TenantScope } from "@repo/lib/tenancy/types";
 /**
  * Products clients asked for online, waiting for the studio's answer:
  * Confirm (its invoice is made, then opens; none when priced on request) or
- * Decline.
+ * Decline. "Paid" is what the client paid by mobile money when ordering
+ * (it's in the studio's wallet).
  */
 export function ProductRequestsList({
   requests,
+  paid,
   scope,
   invoicesPath,
   clientsPath,
 }: {
   requests: ProductRequest[];
+  /** Mobile money paid in, by request id. */
+  paid: Record<string, number>;
   scope: Pick<TenantScope, "currency" | "locale" | "timeZone">;
   invoicesPath: string;
   clientsPath: string;
@@ -42,6 +46,9 @@ export function ProductRequestsList({
               </Link>{" "}
               · {r.unitPrice > 0 ? formatAmount(scope, r.unitPrice * r.quantity) : "Price on request"}
             </p>
+            {paid[r.id] ? (
+              <p className="text-xs font-medium text-success-600 dark:text-success-500">Paid {formatAmount(scope, paid[r.id])} · in your wallet</p>
+            ) : null}
           </div>
           <Answer request={r} invoicesPath={invoicesPath} />
         </li>

@@ -8,16 +8,22 @@ import { Drawer } from "@repo/ui/Drawer";
 import { Field, TextInput } from "@repo/ui/Field";
 import { PhoneInput } from "@repo/ui/PhoneInput";
 import type { Offering } from "@repo/lib/offerings/core";
-import { orderNow } from "@repo/lib/product-requests/actions";
+import { checkProductRequestPayment, orderNow, payForProductRequest } from "@repo/lib/product-requests/actions";
+import type { OrderNowOutcome } from "@repo/lib/product-requests/core";
+import type { MobileNetwork } from "@repo/lib/wallet/policy";
+import { MobileMoneyPay } from "@repo/ui/wallet/MobileMoneyPay";
+import { parseAmount } from "@repo/ui/wallet/shared";
 import { formatAmount } from "@repo/lib/tenancy/format";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
-type Step = "size" | "details" | "review" | "sent";
+type Step = "size" | "details" | "review" | "pay" | "sent";
 
 /**
  * "Order now" on a studio's product page, like Book now (./book-now.tsx):
  * the size and how many, who they are unless they're signed in at the
- * studio, a last look, and the request goes straight to the studio. A new
+ * studio, a last look, and the order goes straight to the studio. Then they
+ * may pay now by MTN / Airtel — in full or a deposit — or skip; the money
+ * goes to the studio's wallet. A new
  * client is signed in to their page on this phone for good; a number the
  * studio already knows gets their page from the studio.
  */
@@ -45,7 +51,11 @@ export function OrderNow({
   const [quantity, setQuantity] = useState("1");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
-  const [result, setResult] = useState<{ signedIn: boolean } | null>(null);
+  const [result, setResult] = useState<OrderNowOutcome | null>(null);
+  const [network, setNetwork] = useState<MobileNetwork>("mtn");
+  const [deposit, setDeposit] = useState(false);
+  const [depositAmount, setDepositAmount] = useState("");
+  const [paid, setPaid] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
@@ -71,15 +81,19 @@ export function OrderNow({
       const res = await orderNow(studio.slug, { productSlug, packageId, quantity, ...(signedIn ? {} : { name, phone }) });
       if (!res.ok) return setError(res.error);
       setResult(res.data);
-      setStep("sent");
+      setPaid(0);
+      setDeposit(false);
+      setDepositAmount("");
+      setStep("pay");
     });
   }
 
   const titles: Record<Step, string> = {
     size: "Choose a size",
     details: "Your details",
-    review: "Check and send",
-    sent: "Order sent",
+    review: "Check your order",
+    pay: "Pay now?",
+    sent: "Order placed",
   };
 
   return (
@@ -89,7 +103,7 @@ export function OrderNow({
       </Button>
       <Drawer open={open} onClose={() => !pending && setOpen(false)} title={titles[step]}>
         <div className="space-y-4">
-          {step !== "sent" ? (
+          {step !== "sent" && step !== "pay" ? (
             <p className="text-xs text-muted">
               Step {index + 1} of {steps.length} · {studio.name}
             </p>
@@ -175,17 +189,38 @@ export function OrderNow({
                   Back
                 </Button>
                 <Button type="button" className="flex-1" loading={pending} onClick={send}>
-                  Send order request
+                  Order now
                 </Button>
               </div>
             </div>
           ) : null}
 
+          {step === "pay" && result && size ? (
+            <PayNow
+              slug={studio.slug}
+              requestId={result.requestId}
+              total={showPrices ? size.price * count : 0}
+              format={(n) => formatAmount(scope, n)}
+              phone={signedIn ? null : phone}
+              network={network}
+              onNetwork={setNetwork}
+              deposit={deposit}
+              onDeposit={setDeposit}
+              depositAmount={depositAmount}
+              onDepositAmount={setDepositAmount}
+              onPaid={(amount) => {
+                setPaid(amount);
+                setStep("sent");
+              }}
+              onSkip={() => setStep("sent")}
+            />
+          ) : null}
+
           {step === "sent" && result ? (
             <div className="space-y-3 text-sm">
               <p>
-                <span className="font-semibold">{studio.name}</span> has your order for {count} × {size?.serviceName} · {size?.name}. They&apos;ll
-                confirm it and send your invoice.
+                <span className="font-semibold">{studio.name}</span> has your order: {count} × {size?.serviceName} · {size?.name}.
+                {paid > 0 ? ` Paid ${formatAmount(scope, paid)}.` : ""}
               </p>
               {result.signedIn ? (
                 <>
@@ -204,5 +239,86 @@ export function OrderNow({
         </div>
       </Drawer>
     </>
+  );
+}
+
+const choiceClass = (selected: boolean) =>
+  `min-h-11 rounded-xl border px-3 text-sm font-medium ${
+    selected ? "border-brand-500 bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-300" : "border-border hover:bg-background"
+  }`;
+
+/** The optional "Pay now" step: full or a deposit, MTN or Airtel, or skip. */
+function PayNow({
+  slug,
+  requestId,
+  total,
+  format,
+  phone,
+  network,
+  onNetwork,
+  deposit,
+  onDeposit,
+  depositAmount,
+  onDepositAmount,
+  onPaid,
+  onSkip,
+}: {
+  slug: string;
+  requestId: string;
+  /** 0 when priced on request: then they type an amount. */
+  total: number;
+  format: (n: number) => string;
+  /** The number they ordered with, when they typed one. */
+  phone: string | null;
+  network: MobileNetwork;
+  onNetwork: (n: MobileNetwork) => void;
+  deposit: boolean;
+  onDeposit: (d: boolean) => void;
+  depositAmount: string;
+  onDepositAmount: (v: string) => void;
+  onPaid: (amount: number) => void;
+  onSkip: () => void;
+}) {
+  const typed = total === 0 || deposit;
+  const amount = typed ? parseAmount(depositAmount) : total;
+
+  return (
+    <div className="space-y-3">
+      {total > 0 ? (
+        <div className="grid grid-cols-2 gap-2">
+          <button type="button" className={choiceClass(!deposit)} onClick={() => onDeposit(false)}>
+            Full · {format(total)}
+          </button>
+          <button type="button" className={choiceClass(deposit)} onClick={() => onDeposit(true)}>
+            Deposit
+          </button>
+        </div>
+      ) : null}
+      {typed ? (
+        <Field label={total > 0 ? "Deposit" : "Amount"}>
+          <TextInput inputMode="numeric" value={depositAmount} onChange={(e) => onDepositAmount(e.target.value)} placeholder="e.g. 20000" />
+        </Field>
+      ) : null}
+      <div className="grid grid-cols-2 gap-2">
+        <button type="button" className={choiceClass(network === "mtn")} onClick={() => onNetwork("mtn")}>
+          MTN
+        </button>
+        <button type="button" className={choiceClass(network === "airtel")} onClick={() => onNetwork("airtel")}>
+          Airtel
+        </button>
+      </div>
+      <MobileMoneyPay
+        key={network}
+        amount={amount}
+        network={network}
+        knownPhone={phone}
+        start={(p) => payForProductRequest(slug, { requestId, amount, phone: p })}
+        check={checkProductRequestPayment}
+        onDone={() => onPaid(amount)}
+      />
+      <button type="button" onClick={onSkip} className="w-full text-center text-xs text-muted underline-offset-2 hover:underline">
+        Skip, pay later
+      </button>
+    </div>
   );
 }

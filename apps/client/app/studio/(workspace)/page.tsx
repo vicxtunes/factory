@@ -16,6 +16,7 @@ import { periodFrom } from "@repo/lib/accounting/params";
 import { bookings } from "@repo/lib/bookings/server";
 import { photos } from "@repo/lib/photos/server";
 import { productRequests } from "@repo/lib/product-requests/server";
+import { paidForStudioRequests } from "@repo/lib/wallet/studio";
 import { projects } from "@repo/lib/projects/server";
 import { tasks } from "@repo/lib/tasks/server";
 import { studioAccounts } from "@repo/lib/billing/server";
@@ -127,10 +128,11 @@ async function Requests({ scope }: { scope: TenantScope }) {
 async function OrderRequests({ scope }: { scope: TenantScope }) {
   const requests = await productRequests.open(scope);
   if (!requests.length) return null;
+  const paid = await paidForStudioRequests(requests.map((r) => r.id));
   return (
     <section>
       <SectionLabel>Order requests ({requests.length})</SectionLabel>
-      <ProductRequestsList requests={requests} scope={scope} invoicesPath="/studio/invoices" clientsPath="/studio/clients" />
+      <ProductRequestsList requests={requests} paid={paid} scope={scope} invoicesPath="/studio/invoices" clientsPath="/studio/clients" />
     </section>
   );
 }
