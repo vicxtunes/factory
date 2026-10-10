@@ -87,6 +87,8 @@ import ScrollbarsPanels from "./examples/scrollbars/panels";
 import SkeletonListRow from "./examples/skeleton/list-row";
 import SpinnerSizes from "./examples/spinner/sizes";
 import StatusGlowBadgeAll from "./examples/status-glow-badge/all";
+import StepFormBooking from "./examples/step-form/booking";
+import StepFormRail from "./examples/step-form/rail";
 import StatusPickerInTable from "./examples/status-picker/in-table";
 import StatusPickerPriority from "./examples/status-picker/priority";
 import StatusPickerStatus from "./examples/status-picker/status";
@@ -154,6 +156,18 @@ export const COMPONENTS: RoomComponent[] = [
       { title: "Desktop", file: "studio-setup/split-desktop.tsx", Demo: SetupSplitDesktop },
       { title: "Phone", file: "studio-setup/split-phone.tsx", Demo: SetupSplitPhone },
       { title: "Welcome, phone", file: "studio-setup/split-welcome-phone.tsx", Demo: SetupSplitWelcomePhone },
+    ],
+  },
+  {
+    slug: "step-form",
+    name: "Step form",
+    category: "Flows",
+    status: "draft",
+    source: "packages/ui/StepForm.tsx (StepForm, StepRail, ChoiceGroup)",
+    summary: "A long form as one card: a numbered rail (done steps ticked), the open step's heading and fields, option cards and tiles, and Previous / Continue under a rule. Click through it.",
+    examples: [
+      { title: "New booking", file: "step-form/booking.tsx", Demo: StepFormBooking },
+      { title: "Rail, five steps", file: "step-form/rail.tsx", Demo: StepFormRail },
     ],
   },
   {
