@@ -30,6 +30,24 @@ const eslintConfig = defineConfig([
       ],
     },
   },
+  // Supabase's signOut defaults to scope "global": it ends the account's
+  // sessions on every device, so one person signing in or out logged
+  // everyone else out. Always say which session.
+  {
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "CallExpression[callee.property.name='signOut'][arguments.length=0]",
+          message: 'signOut() signs the account out on every device. Pass { scope: "local" }.',
+        },
+        {
+          selector: "CallExpression[callee.property.name='signOut'][callee.object.property.name='admin'][arguments.length=1]",
+          message: 'admin.signOut(jwt) ends every session the account has. Pass "local" as the scope.',
+        },
+      ],
+    },
+  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:
