@@ -52,7 +52,7 @@ export function StudioPublicPage({
       key: "services",
       label: "Services",
       emptyText: "Ask us about our services.",
-      // A row per category, like Aming's products.
+      // A grid per category.
       sections: categories.map((c) => ({
         id: c.id,
         title: c.name,
@@ -89,6 +89,7 @@ export function StudioPublicPage({
 
   return (
     <ShowroomGallery
+      wrap
       banner={{ title: studio.name, subtitle: studio.address ?? "Welcome to our show room", imageUrl: bannerUrl }}
       notice={
         <div className="mb-6 space-y-4">

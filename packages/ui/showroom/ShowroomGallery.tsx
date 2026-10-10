@@ -31,15 +31,16 @@ export type ShowroomTab = { key: string; label: string; emptyText: string } & (
 
 const PLACEHOLDER = "/showroom/placeholder.PNG";
 
-function PhotoCard({ card }: { card: ShowroomCard }) {
-  const className = "relative block h-48 w-40 shrink-0 overflow-hidden rounded-xl text-left shadow-theme-sm sm:h-48 sm:w-40";
+/** `fill`: as wide as its grid column (two a row on a phone) instead of its fixed width. */
+function PhotoCard({ card, fill = false }: { card: ShowroomCard; fill?: boolean }) {
+  const className = `relative block h-48 shrink-0 overflow-hidden rounded-xl text-left shadow-theme-sm ${fill ? "w-full" : "w-40"}`;
   return (
     <Link href={card.href} className={className}>
       <Image
         src={card.image ?? PLACEHOLDER}
         alt={card.label}
         fill
-        sizes="160px"
+        sizes={fill ? "(max-width: 640px) 50vw, 160px" : "160px"}
         unoptimized={!!card.image && !canOptimizeImage(card.image)}
         className="object-cover"
       />
@@ -81,6 +82,7 @@ export function ShowroomGallery({
   banner,
   notice,
   tabs,
+  wrap = false,
 }: {
   /** The full-bleed photo banner; left out where the page has its own header. */
   banner?: { title: string; subtitle: string; imageUrl: string | null };
@@ -88,6 +90,8 @@ export function ShowroomGallery({
   notice?: ReactNode;
   /** With just one, its content shows without a tab bar. */
   tabs: ShowroomTab[];
+  /** A section's cards wrap into a grid instead of sliding sideways in one row. */
+  wrap?: boolean;
 }) {
   const [tabKey, setTabKey] = useState(tabs[0]?.key);
   const tab = tabs.find((t) => t.key === tabKey) ?? tabs[0];
@@ -143,6 +147,12 @@ export function ShowroomGallery({
                   <div className="mb-4 mt-1 h-1 w-10 bg-brand-500" />
                   {section.cards.length === 0 ? (
                     <p className="text-sm text-muted">{section.emptyText}</p>
+                  ) : wrap ? (
+                    <div className="grid grid-cols-2 gap-4 sm:grid-cols-[repeat(auto-fill,10rem)]">
+                      {section.cards.map((card) => (
+                        <PhotoCard key={card.id} card={card} fill />
+                      ))}
+                    </div>
                   ) : (
                     // `overflow-x-auto` gets a reserved gutter so the row's
                     // height doesn't change when the scrollbar appears.
