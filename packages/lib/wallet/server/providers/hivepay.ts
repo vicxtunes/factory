@@ -31,10 +31,13 @@ async function call<T>(path: string, init: RequestInit): Promise<{ ok: true; dat
     headers: { ...credentials(), Accept: "application/json", "Content-Type": "application/json", ...init.headers },
     cache: "no-store",
   });
-  const body = (await response.json().catch(() => null)) as (T & { success?: boolean; message?: string; errors?: Record<string, string[]> }) | null;
+  const body = (await response.json().catch(() => null)) as
+    | (T & { success?: boolean; error?: string; message?: string; errors?: Record<string, string[]> })
+    | null;
   if (!response.ok || !body || body.success === false) {
+    // HivePay says why in `error` (e.g. "Invalid API secret."), with field details in `errors` on a 422.
     const fieldErrors = body?.errors ? Object.values(body.errors).flat().join(" ") : "";
-    return { ok: false, status: response.status, message: fieldErrors || body?.message || `HivePay answered ${response.status}` };
+    return { ok: false, status: response.status, message: fieldErrors || body?.error || body?.message || `HivePay answered ${response.status}` };
   }
   return { ok: true, data: body };
 }
