@@ -94,26 +94,26 @@ function cleanEmail(input: string | null | undefined): string | null {
 
 type Admin = ReturnType<typeof createAdminClient>;
 
+type Found = { client: ClientCandidate; studioEmail: string | null };
+
 /**
- * The client an email or phone number belongs to. The database matches a
- * phone however it was typed. An email is the account's own, or a studio's
- * verified owner email (`studioEmail`: the code goes there).
+ * The accounts an email or phone number can mean. The database matches a
+ * phone however it was typed. An email is an account's own, and it can also
+ * be a studio's verified owner email (`studioEmail`: the code goes there),
+ * which means the studio owner's account. Usually that's one account; when
+ * the studio's email also sits on another client record, both come back.
  */
-async function findClient(
-  admin: Admin,
-  method: Method,
-  identifier: string,
-): Promise<{ client: ClientCandidate; studioEmail: string | null } | null> {
+async function findClients(admin: Admin, method: Method, identifier: string): Promise<Found[]> {
   if (method === "phone") {
     const parsed = parsePhone(identifier);
-    if (!parsed.ok) return null;
+    if (!parsed.ok) return [];
     const client = exactClientMatch(await findClientCandidates(admin, { phone: parsed.store }));
-    return client && { client, studioEmail: null };
+    return client ? [{ client, studioEmail: null }] : [];
   }
   const email = cleanEmail(identifier);
-  if (!email) return null;
+  if (!email) return [];
   const own = (await findClientCandidates(admin, { email })).find((c) => c.match_reason === "email");
-  if (own) return { client: own, studioEmail: null };
+  const found: Found[] = own ? [{ client: own, studioEmail: null }] : [];
 
   const { data: studio } = await admin
     .from("tenants")
@@ -122,8 +122,15 @@ async function findClient(
     .not("owner_email_verified_at", "is", null)
     .limit(1)
     .maybeSingle<{ owner: Omit<ClientCandidate, "match_reason" | "score"> | null }>();
-  if (!studio?.owner) return null;
-  return { client: { ...studio.owner, match_reason: "email", score: 1 }, studioEmail: email };
+  if (studio?.owner && studio.owner.id !== own?.id) {
+    found.push({ client: { ...studio.owner, match_reason: "email", score: 1 }, studioEmail: email });
+  }
+  return found;
+}
+
+/** The first of them: the account's own email before a studio's. */
+async function findClient(admin: Admin, method: Method, identifier: string): Promise<Found | null> {
+  return (await findClients(admin, method, identifier))[0] ?? null;
 }
 
 async function emailTakenByOtherClient(admin: Admin, email: string, clientId: string | null): Promise<boolean> {
@@ -284,19 +291,24 @@ export async function mySignInEmail(): Promise<string | null> {
 export async function signIn(input: { method: Method; identifier: string; password: string }): Promise<AuthStep> {
   const wrong = `That ${input.method === "phone" ? "phone number" : "email"} and password don't match.`;
   const admin = createAdminClient();
-  const found = await findClient(admin, input.method, input.identifier);
-  const client = found?.client;
-  const email = cleanEmail(client?.email);
-  if (!found || !client || !email) return { ok: false, error: wrong };
-  if (!client.active) return { ok: false, error: "This account is inactive — contact us for help." };
-
-  const key = `login-pw:${client.id}`;
-  if (await tooManyAttempts(key)) return { ok: false, error: "Too many wrong passwords. Wait 15 minutes, or reset your password." };
-  if (!input.password || input.password.length > PASSWORD_MAX || !(await passwordMatches(email, input.password))) {
+  // A studio's email can sit on another client record too: the password says which account they mean.
+  let inactive = false;
+  for (const found of await findClients(admin, input.method, input.identifier)) {
+    const { client } = found;
+    const email = cleanEmail(client.email);
+    if (!email) continue;
+    if (!client.active) {
+      inactive = true;
+      continue;
+    }
+    const key = `login-pw:${client.id}`;
+    if (await tooManyAttempts(key)) return { ok: false, error: "Too many wrong passwords. Wait 15 minutes, or reset your password." };
+    if (input.password && input.password.length <= PASSWORD_MAX && (await passwordMatches(email, input.password))) {
+      return sendCode({ purpose: "signin", email, phone: client.phone, clientId: client.id, name: null, sendTo: found.studioEmail });
+    }
     await countAttempt(key);
-    return { ok: false, error: wrong };
   }
-  return sendCode({ purpose: "signin", email, phone: client.phone, clientId: client.id, name: null, sendTo: found.studioEmail });
+  return { ok: false, error: inactive ? "This account is inactive — contact us for help." : wrong };
 }
 
 /** Create account: name, email and phone; the code verifies the email, then they choose a password. */
