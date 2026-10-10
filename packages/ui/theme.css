@@ -285,3 +285,41 @@ html {
     font-size: 16px;
   }
 }
+
+/* Scrollbars: thin and quiet, in the brand's orange — a soft thumb on no
+   track. Chrome/Edge/Firefox take the two standard properties; Safari only
+   knows ::-webkit-scrollbar, which also lets the thumb deepen on hover.
+   Phones keep their own overlay scrollbars. Outside any @layer, like the
+   rules above, so a component can still hide its bar with a utility. */
+:root {
+  --scrollbar-thumb: rgb(246 116 19 / 0.4); /* brand-500 */
+  --scrollbar-thumb-hover: #f67413;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --scrollbar-thumb: rgb(246 116 19 / 0.45);
+  }
+}
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+@supports not (scrollbar-color: auto) {
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track,
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border: 2px solid transparent;
+    border-radius: 9999px;
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: var(--scrollbar-thumb-hover);
+  }
+}

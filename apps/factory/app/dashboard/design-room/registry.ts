@@ -83,6 +83,7 @@ import ProjectPageLaptop from "./examples/project-page/laptop";
 import ProjectPageMobile from "./examples/project-page/mobile";
 import ProjectPagePage from "./examples/project-page/page";
 import SectionLabelBasic from "./examples/section-label/basic";
+import ScrollbarsPanels from "./examples/scrollbars/panels";
 import SkeletonListRow from "./examples/skeleton/list-row";
 import SpinnerSizes from "./examples/spinner/sizes";
 import StatusGlowBadgeAll from "./examples/status-glow-badge/all";
@@ -247,6 +248,15 @@ export const COMPONENTS: RoomComponent[] = [
     source: "packages/ui/Spinner.tsx",
     summary: "Inline spinner that inherits the text colour.",
     examples: [{ title: "Sizes & colours", file: "spinner/sizes.tsx", Demo: SpinnerSizes }],
+  },
+  {
+    slug: "scrollbars",
+    name: "Scrollbars",
+    category: "Data display",
+    status: "live",
+    source: "packages/ui/theme.css",
+    summary: "Every scroll area: thin, no track, a soft brand-orange thumb (full orange on hover in Safari).",
+    examples: [{ title: "Vertical and both ways", file: "scrollbars/panels.tsx", Demo: ScrollbarsPanels }],
   },
   {
     slug: "skeleton",
