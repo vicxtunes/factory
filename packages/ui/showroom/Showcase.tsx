@@ -301,7 +301,7 @@ function DetailsOverlay({
 // Walk" per-card layout (studio background, big image area), locked to a
 // single item instead of scrolling through a shuffled deck of many — that
 // shuffled-browsing feature is retired (see git history), but its look lives
-// on here, with a photo/video carousel. What's for sale (price, options, the
+// on here, with a photo carousel (videos play in the overlay). What's for sale (price, options, the
 // call to action) is the caller's: `details` and `action`.
 //
 // On desktop this is an in-page card, not a full-screen takeover (the boss
@@ -337,13 +337,9 @@ export function Showcase({
   const media = useMemo<ShowcaseMedia[]>(() => {
     const list: ShowcaseMedia[] = [];
     if (item.coverUrl) list.push({ url: item.coverUrl, kind: "photo" });
-    // Right after the display image, ahead of the open-ended gallery — the
-    // preview video is a dedicated upload slot (see product-panel.tsx), not
-    // just another gallery item, so it gets a fixed, prominent position
-    // rather than wherever it happened to land in the gallery: a normal
-    // playable slide.
-    if (item.previewVideoUrl) list.push({ url: item.previewVideoUrl, kind: "video" });
-    list.push(...item.gallery);
+    // Photos only: the preview video and any gallery videos play in the
+    // overlay behind the button on the media box ("Watch preview" / "More details").
+    list.push(...item.gallery.filter((m) => m.kind === "photo"));
     return list.length > 0 ? list : [{ url: PLACEHOLDER, kind: "photo" }];
   }, [item]);
   const extraMedia = item.gallery;
@@ -363,7 +359,7 @@ export function Showcase({
   useCloseOnBack(detailsOpen, closeDetails);
   useCloseOnBack(lightboxIndex !== null, () => setLightboxIndex(null));
 
-  // Swiper slides the photos and videos (finger drag and the arrows below); at either end it rewinds to the other.
+  // Swiper slides the photos (finger drag and the arrows below); at either end it rewinds to the other.
   const slider = useRef<SwiperInstance | null>(null);
 
   // Tracks the same breakpoint Tailwind's `sm:` prefix uses, so body-scroll
@@ -441,22 +437,17 @@ export function Showcase({
           <div className="absolute inset-0 overflow-hidden rounded-2xl bg-black/5">
             <Swiper className="h-full w-full" rewind onSwiper={(sw) => (slider.current = sw)} onSlideChange={(sw) => setIndex(sw.activeIndex)}>
               {media.map((m, i) => (
-                // A video isn't dragged from: horizontal drags on its controls scrub the timeline (the arrows still move on).
-                <SwiperSlide key={m.url + i} className={m.kind === "video" ? "swiper-no-swiping" : ""}>
-                  {m.kind === "video" ? (
-                    <video src={m.url} controls preload="metadata" className="h-full w-full object-cover" />
-                  ) : (
-                    <Image
-                      src={m.url}
-                      alt={item.name}
-                      fill
-                      sizes="(max-width: 768px) 100vw, 768px"
-                      loading={i === 0 ? "eager" : "lazy"}
-                      unoptimized={!canOptimizeImage(m.url)}
-                      draggable={false}
-                      className="select-none object-cover"
-                    />
-                  )}
+                <SwiperSlide key={m.url + i}>
+                  <Image
+                    src={m.url}
+                    alt={item.name}
+                    fill
+                    sizes="(max-width: 768px) 100vw, 768px"
+                    loading={i === 0 ? "eager" : "lazy"}
+                    unoptimized={!canOptimizeImage(m.url)}
+                    draggable={false}
+                    className="select-none object-cover"
+                  />
                 </SwiperSlide>
               ))}
             </Swiper>
