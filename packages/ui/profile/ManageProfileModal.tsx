@@ -35,12 +35,15 @@ export function ManageProfileModal({
   onClose,
   name,
   avatarUrl,
+  signInEmail,
   onSaved,
 }: {
   open: boolean;
   onClose: () => void;
   name: string;
   avatarUrl: string | null;
+  /** The client portal shows the email its sign-in uses, so nobody has to guess it. */
+  signInEmail?: string | null;
   // Called after any successful change (photo or name) — callers typically
   // router.refresh() so the rest of the page (e.g. the user menu itself)
   // picks up the fresh session data.
@@ -215,6 +218,11 @@ export function ManageProfileModal({
               maxLength={100}
             />
           </Field>
+          {signInEmail ? (
+            <Field label="Sign-in email" hint="Sign in with this email and your password. To change it, contact us.">
+              <TextInput value={signInEmail} readOnly disabled />
+            </Field>
+          ) : null}
           {error ? <p className="text-sm text-[var(--rush)]">{error}</p> : null}
           {nameSaved && !error ? <p className="text-sm text-success-600">Saved.</p> : null}
           <Button

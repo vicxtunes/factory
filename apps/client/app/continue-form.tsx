@@ -87,7 +87,7 @@ export function ContinueForm() {
     <>
       <Tabs tabs={METHOD_TABS} value={method} onChange={switchMethod} label="Sign in with" />
       {method === "email" ? (
-        <Field label="Email">
+        <Field label="Email" hint="Running a studio? Use your business email.">
           <TextInput type="email" autoComplete="email" value={identifier} onChange={(e) => setIdentifier(e.target.value)} required autoFocus />
         </Field>
       ) : (
