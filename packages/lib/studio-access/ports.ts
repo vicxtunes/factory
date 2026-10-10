@@ -12,11 +12,6 @@ export interface AccessStore {
   /** Sets the logo; returns the old one's key, if any, so its file can go. */
   setLogo(tenantId: string, key: string): Promise<string | null>;
   setOwnerEmail(tenantId: string, email: string, verifiedAt: string): Promise<void>;
-  /** Sets the password; clears the wrong-password count and lock. */
-  setPassword(tenantId: string, hash: string, at: string): Promise<void>;
-  recordWrongPassword(tenantId: string, failedAttempts: number, lockedUntil: string | null): Promise<void>;
-  /** A good unlock: clears the wrong-password count. */
-  clearWrongPasswords(tenantId: string): Promise<void>;
   /**
    * Moves the studio from `from` to `to` (only if it's still at `from`, so two
    * decisions at once can't both apply) and records when and why. False when
@@ -53,8 +48,6 @@ export interface AccessSecrets {
   hashCode(tenantId: string, purpose: EmailCode["purpose"], code: string): string;
   /** Compares two code hashes in constant time. */
   sameHash(a: string, b: string): boolean;
-  hashPassword(password: string): Promise<string>;
-  verifyPassword(password: string, hash: string): Promise<boolean>;
   newId(): string;
 }
 

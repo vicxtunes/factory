@@ -60,10 +60,10 @@ function layout(links: EmailLinks, body: string, button?: { label: string; href:
 
 const heading = (text: string) => `<h1 style="margin:0 0 16px;font-size:20px;line-height:1.3;color:#111827">${escape(text)}</h1>`;
 
-/** A 6-digit code: to verify the owner's email, or to reset the studio password. */
-export function codeEmail(links: EmailLinks, studio: string, purpose: "verify" | "reset", code: string): Email {
-  const what = purpose === "verify" ? "verify your email for" : "reset the password of";
-  const title = purpose === "verify" ? "Verify your email" : "Reset your business password";
+/** A 6-digit code to verify the owner's email. */
+export function codeEmail(links: EmailLinks, studio: string, code: string): Email {
+  const what = "verify your email for";
+  const title = "Verify your email";
   const after = `It works for ${CODE_MINUTES} minutes. If you didn't ask for it, ignore this email: nothing changes.`;
   return {
     subject: `${code} is your ${studio} code`,
@@ -78,13 +78,19 @@ export function codeEmail(links: EmailLinks, studio: string, purpose: "verify" |
   };
 }
 
-/** After a password reset: every other device was signed out. */
-export function passwordChangedEmail(links: EmailLinks, studio: string): Email {
-  const body = `The password for ${studio} was just changed, and every other device was signed out.\n\nIf this wasn't you, reset it again now and contact ${BRAND}.`;
+/** The 6-digit code a client signs in to Aming with (apps/client/app/actions.ts). Code only: no link. */
+export function signInCodeEmail(links: EmailLinks, code: string, minutes: number): Email {
+  const after = `It works for ${minutes} minutes. If you didn't try to sign in, ignore this email: nobody can get in without this code.`;
   return {
-    subject: `Your ${studio} password was changed`,
-    text: `${body}${absolute(links.workspace) ? `\n\nOpen your business: ${links.workspace}` : ""}\n\n${FOOTER}`,
-    html: layout(links, heading("Your business password was changed") + paragraphs(body), { label: "Open your business", href: links.workspace }),
+    subject: `${code} is your ${BRAND} sign-in code`,
+    text: `Your sign-in code\n\nEnter this code to sign in to ${BRAND}:\n\n${code}\n\n${after}\n\n${FOOTER}`,
+    html: layout(
+      links,
+      heading("Your sign-in code") +
+        paragraphs(`Enter this code to sign in to ${BRAND}:`) +
+        `<p style="margin:8px 0 20px;font-size:34px;font-weight:700;letter-spacing:10px;color:${NAVY};font-family:'SFMono-Regular',Menlo,Consolas,monospace">${escape(code)}</p>` +
+        paragraphs(after),
+    ),
   };
 }
 

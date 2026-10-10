@@ -1,20 +1,11 @@
 "use server";
 
-import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 
 import { createAdminClient } from "@repo/lib/supabase/admin";
-import { CLIENT_COOKIE, signPayload } from "@repo/lib/auth/cookies";
+import { createClient } from "@repo/lib/supabase/server";
 import { getClientSession } from "@repo/lib/auth/session";
-import { hashPin, isValidPinFormat, verifyPin } from "@repo/lib/auth/pin";
 import { logOrderEvent, resolveActor } from "@repo/lib/audit/log";
-import {
-  exactClientMatch,
-  findClientCandidates,
-  resolveOrCreateClient,
-  type ClientCandidate,
-} from "@repo/lib/clients/dedupe";
-import { parsePhone } from "@repo/lib/kernel/core/phone";
 import { buildAndInsertOrder } from "@repo/lib/orders/create";
 import { applyCancellation, cleanReason, loadCancellableOrder } from "@repo/lib/orders/cancel";
 import { isPhotobookCategory } from "@repo/lib/orders/photobook";
@@ -22,177 +13,14 @@ import type { CreateOrderResult, OrderItemInput } from "@repo/lib/orders/types";
 import { projectIdSchema } from "@repo/lib/projects/core";
 import { notifyActor } from "@repo/lib/push/send";
 import { fetchClientNotifications } from "@repo/lib/queries";
-import { clearUnlockCookie } from "@repo/lib/studio-access/server";
 import { linkPlacedOrder } from "@repo/lib/studio-orders/server";
 import type { NotificationRow, OrderType } from "@repo/lib/types";
 
-const COOKIE_MAX_AGE = 60 * 60 * 24 * 30; // "remembered on device", same as worker/designer sessions
-const NAME_MAX = 100;
-
 type ActionResult = { ok: true } | { ok: false; error: string };
 
-async function setClientCookie(clientId: string, name: string): Promise<void> {
-  const store = await cookies();
-  store.set(CLIENT_COOKIE, await signPayload({ client_id: clientId, name }), {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    maxAge: COOKIE_MAX_AGE,
-  });
-}
-
-// Clients sign in with just a phone number. Security is opt-in: by default an
-// account only needs a matching phone number to log in (no PIN at signup). A
-// client can add a PIN later from /settings (setPin below) —
-// once one exists, continueLogin requires it. checkAccount lets the login
-// form know, after the phone step, whether to ask for a name (new account)
-// or a PIN (returning + PIN enabled).
-
-// The client, if any, that holds this phone number. The database matches it
-// however the record was typed (0703…, +256703…; norm_client_phone).
-async function clientByPhone(
-  admin: ReturnType<typeof createAdminClient>,
-  phone: string,
-): Promise<ClientCandidate | null> {
-  return exactClientMatch(await findClientCandidates(admin, { phone }));
-}
-
-export async function checkAccount(phone: string): Promise<{ exists: boolean; pinRequired: boolean; error?: string }> {
-  const parsed = parsePhone(phone);
-  if (!parsed.ok) return { exists: false, pinRequired: false, error: parsed.error };
-
-  const admin = createAdminClient();
-  const match = await clientByPhone(admin, parsed.store);
-  if (!match || !match.active) return { exists: false, pinRequired: false };
-
-  const { data: cred } = await admin
-    .from("client_credentials")
-    .select("client_id")
-    .eq("client_id", match.id)
-    .maybeSingle();
-  return { exists: true, pinRequired: !!cred };
-}
-
-export async function continueLogin(input: {
-  phone: string;
-  name?: string;
-  email?: string;
-  pin?: string;
-}): Promise<ActionResult> {
-  const parsed = parsePhone(input.phone);
-  if (!parsed.ok) return { ok: false, error: parsed.error };
-
-  const admin = createAdminClient();
-  const match = await clientByPhone(admin, parsed.store);
-
-  if (match) {
-    if (!match.active) return { ok: false, error: "This account is inactive — contact us for help." };
-
-    const { data: cred } = await admin
-      .from("client_credentials")
-      .select("pin_hash")
-      .eq("client_id", match.id)
-      .maybeSingle();
-    if (cred) {
-      if (!input.pin) return { ok: false, error: "PIN required." };
-      if (!(await verifyPin(input.pin, cred.pin_hash))) return { ok: false, error: "Incorrect PIN." };
-    }
-
-    await setClientCookie(match.id, match.name);
-    return { ok: true };
-  }
-
-  // A new number: their full name or studio name, so reception knows who
-  // they're dealing with. At least two letters, so a number or "." won't do.
-  const name = input.name?.trim().replace(/\s+/g, " ");
-  if (!name || (name.match(/\p{L}/gu)?.length ?? 0) < 2) {
-    return { ok: false, error: "Enter your full name or business name." };
-  }
-  if (name.length > NAME_MAX) return { ok: false, error: `Name must be ${NAME_MAX} characters or fewer.` };
-
-  const resolved = await resolveOrCreateClient(admin, {
-    name,
-    phone: parsed.store,
-    email: input.email,
-  });
-  if (!resolved.ok) return { ok: false, error: resolved.error };
-
-  await setClientCookie(resolved.client.id, resolved.client.name);
-  return { ok: true };
-}
-
-// --- Opt-in PIN security (settings page) -----------------------------------
-
-export async function setPin(pin: string): Promise<ActionResult> {
-  const session = await getClientSession();
-  if (!session) return { ok: false, error: "Not signed in." };
-  if (!isValidPinFormat(pin)) return { ok: false, error: "PIN must be 4-8 digits." };
-
-  const admin = createAdminClient();
-  const { data: existing } = await admin
-    .from("client_credentials")
-    .select("client_id")
-    .eq("client_id", session.client_id)
-    .maybeSingle();
-  if (existing) return { ok: false, error: "A PIN is already set — use Change PIN instead." };
-
-  const { error } = await admin
-    .from("client_credentials")
-    .insert({ client_id: session.client_id, pin_hash: await hashPin(pin) });
-  if (error) return { ok: false, error: error.message };
-  return { ok: true };
-}
-
-export async function changePin(input: { currentPin: string; newPin: string }): Promise<ActionResult> {
-  const session = await getClientSession();
-  if (!session) return { ok: false, error: "Not signed in." };
-  if (!isValidPinFormat(input.newPin)) return { ok: false, error: "PIN must be 4-8 digits." };
-
-  const admin = createAdminClient();
-  const { data: cred } = await admin
-    .from("client_credentials")
-    .select("pin_hash")
-    .eq("client_id", session.client_id)
-    .maybeSingle();
-  if (!cred) return { ok: false, error: "No PIN is set yet — add one instead." };
-  if (!(await verifyPin(input.currentPin, cred.pin_hash))) {
-    return { ok: false, error: "Current PIN is incorrect." };
-  }
-
-  const { error } = await admin
-    .from("client_credentials")
-    .update({ pin_hash: await hashPin(input.newPin) })
-    .eq("client_id", session.client_id);
-  if (error) return { ok: false, error: error.message };
-  return { ok: true };
-}
-
-export async function removePin(currentPin: string): Promise<ActionResult> {
-  const session = await getClientSession();
-  if (!session) return { ok: false, error: "Not signed in." };
-
-  const admin = createAdminClient();
-  const { data: cred } = await admin
-    .from("client_credentials")
-    .select("pin_hash")
-    .eq("client_id", session.client_id)
-    .maybeSingle();
-  if (!cred) return { ok: true }; // already no PIN
-  if (!(await verifyPin(currentPin, cred.pin_hash))) {
-    return { ok: false, error: "Current PIN is incorrect." };
-  }
-
-  const { error } = await admin.from("client_credentials").delete().eq("client_id", session.client_id);
-  if (error) return { ok: false, error: error.message };
-  return { ok: true };
-}
-
 export async function logoutClient(): Promise<void> {
-  const store = await cookies();
-  store.delete(CLIENT_COOKIE);
-  // Signing out of Aming locks My Studio on this device too.
-  await clearUnlockCookie();
+  const supabase = await createClient();
+  await supabase.auth.signOut();
 }
 
 export interface ClientOrderPayload {

@@ -2,7 +2,7 @@ import "server-only";
 
 // This app's TeamStore and TeamAccounts: the team_members table
 // (supabase/migrations/20261003170000_team_tasks.sql, 20261013100000_team_access.sql),
-// and clients' PINs and studios' owners. Service-role client, so every
+// and studios' owners. Service-role client, so every
 // scoped query here filters by the scope's tenant; the invite and account
 // lookups match the exact token or account.
 
@@ -117,12 +117,6 @@ export const supabaseTeamStore: TeamStore = {
 };
 
 export const supabaseTeamAccounts: TeamAccounts = {
-  async hasPin(clientId) {
-    const { data, error } = await createAdminClient().from("client_credentials").select("client_id").eq("client_id", clientId).maybeSingle();
-    if (error) fail("check the account's PIN", error);
-    return !!data;
-  },
-
   async ownerOf(tenantId) {
     const { data, error } = await createAdminClient().from("tenants").select("owner_client_id").eq("id", tenantId).maybeSingle<{ owner_client_id: string | null }>();
     if (error) fail("look up the business's owner", error);

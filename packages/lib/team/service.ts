@@ -75,27 +75,20 @@ export class TeamService {
   }
 
   /**
-   * The signed-in account joins through an invite link. It must have a PIN
-   * (without one, anyone with its phone number could sign in as it) and not
-   * be the studio's owner. Returns the studio joined.
+   * The signed-in account joins through an invite link — any account but the
+   * studio's owner (its sign-in is an emailed code, so it's theirs alone).
+   * Returns the studio joined.
    */
   async join(token: string, clientId: string): Promise<{ tenantId: string; memberId: string }> {
     const found = await this.byInvite(token);
     if (!found) throw new TeamError(LINK_GONE);
     if ((await this.accounts.ownerOf(found.tenantId)) === clientId) throw new TeamError("This is your own business: you already run it.");
-    if (!(await this.accounts.hasPin(clientId))) throw new TeamError("Set a PIN on your account first: it keeps the business safe.");
     if (!(await this.store.join(found.tenantId, found.member.id, token, clientId))) throw new TeamError(LINK_GONE);
     return { tenantId: found.tenantId, memberId: found.member.id };
   }
 
-  /** Whether the account can join: it needs a PIN (the join page asks for one first). */
-  async hasPin(clientId: string): Promise<boolean> {
-    return this.accounts.hasPin(clientId);
-  }
-
-  /** The studios an account works for. Only while it has a PIN: it's what keeps their sign-in theirs. */
+  /** The studios an account works for. */
   async membershipsOf(clientId: string): Promise<Membership[]> {
-    const memberships = await this.store.membershipsOf(clientId);
-    return memberships.length && (await this.accounts.hasPin(clientId)) ? memberships : [];
+    return this.store.membershipsOf(clientId);
   }
 }

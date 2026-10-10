@@ -414,3 +414,92 @@ export async function adjust(clientId: string, amount: number, note: string, act
   if (error) throwDbError(error);
   return num(data);
 }
+
+// --- Mobile money collections (provider prompts) ----------------------------
+
+export interface CollectionRow {
+  id: string;
+  provider: string;
+  provider_ref: string | null;
+  client_id: string;
+  order_id: string | null;
+  amount: number;
+  fee: number;
+  phone: string;
+  network: string | null;
+  status: "pending" | "succeeded" | "failed";
+  failure_reason: string | null;
+  created_at: string;
+}
+
+const COLLECTION_COLUMNS = "id, provider, provider_ref, client_id, order_id, amount, fee, phone, network, status, failure_reason, created_at";
+
+function normaliseCollection(row: CollectionRow): CollectionRow {
+  return { ...row, amount: num(row.amount), fee: num(row.fee) };
+}
+
+export async function insertCollection(input: {
+  provider: string;
+  clientId: string;
+  orderId: string | null;
+  amount: number;
+  fee: number;
+  phone: string;
+  createdByName: string;
+}): Promise<CollectionRow> {
+  const { data, error } = await createAdminClient()
+    .from("provider_collections")
+    .insert({
+      provider: input.provider,
+      client_id: input.clientId,
+      order_id: input.orderId,
+      amount: input.amount,
+      fee: input.fee,
+      phone: input.phone,
+      created_by_name: input.createdByName,
+    })
+    .select(COLLECTION_COLUMNS)
+    .single<CollectionRow>();
+  if (error) throwDbError(error);
+  return normaliseCollection(data);
+}
+
+export async function getCollection(id: string): Promise<CollectionRow | null> {
+  const { data, error } = await createAdminClient()
+    .from("provider_collections")
+    .select(COLLECTION_COLUMNS)
+    .eq("id", id)
+    .maybeSingle<CollectionRow>();
+  if (error) throwDbError(error);
+  return data ? normaliseCollection(data) : null;
+}
+
+/** The prompt went out: keep the provider's id for it. */
+export async function markCollectionSent(id: string, providerRef: string, network: string | null): Promise<void> {
+  const { error } = await createAdminClient()
+    .from("provider_collections")
+    .update({ provider_ref: providerRef, network })
+    .eq("id", id);
+  if (error) throwDbError(error);
+}
+
+/** Only while still pending: a collection that succeeded stays succeeded. */
+export async function failCollection(id: string, reason: string): Promise<void> {
+  const { error } = await createAdminClient()
+    .from("provider_collections")
+    .update({ status: "failed", failure_reason: reason, resolved_at: new Date().toISOString() })
+    .eq("id", id)
+    .eq("status", "pending");
+  if (error) throwDbError(error);
+}
+
+/** Records the money (order receipt or wallet deposit) in one transaction. Safe to call twice. */
+export async function settleCollection(id: string, actorName: string): Promise<{ alreadySettled: boolean; applied: number }> {
+  const { data, error } = await createAdminClient().rpc("provider_collection_settle", {
+    p_collection: id,
+    p_actor_name: actorName,
+  });
+  if (error) throwDbError(error);
+  const result = data as { already_settled: boolean; applied?: number };
+  return { alreadySettled: result.already_settled, applied: num(result.applied) };
+}

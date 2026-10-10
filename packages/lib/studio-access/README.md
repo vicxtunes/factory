@@ -1,8 +1,9 @@
 # Studio access module
 
-Who may operate a studio, and on which devices. A new studio is **set up** by its owner,
-**reviewed** by the boss, and then opened on each device with the **studio password**. Until
-it's approved, the studio is closed: no workspace, no public page, no client sign-in.
+Who may operate a studio. A new studio is **set up** by its owner and **reviewed** by the boss.
+Once it's approved, the owner's Aming sign-in (an emailed code, see `apps/client/app/actions.ts`)
+opens it: there's no second studio login. Until it's approved, the studio is closed: no
+workspace, no public page, no client sign-in.
 
 ## Statuses
 
@@ -11,14 +12,14 @@ it's approved, the studio is closed: no workspace, no public page, no client sig
 | `onboarding` | Setting up (every studio starts here, existing ones too) | The set-up steps | Off |
 | `in_review` | Submitted, waiting for the boss | "Being reviewed" | Off |
 | `changes_requested` | Sent back with the boss's reason | The reason, and the steps to fix and resubmit | Off |
-| `active` | Approved | The workspace (after the password) | On |
+| `active` | Approved | The workspace | On |
 | `suspended` | Stopped by the boss, with a reason | The reason | Off |
 
 The boss **approves** (any stage but `active` → `active`), **sends back** (`in_review` →
 `changes_requested`, reason required) or **suspends** (any → `suspended`, reason required).
 
 - **Approve now**: the boss can open a studio that's still setting up, without waiting for it to
-  be submitted, once every set-up step is done (details, address, verified email, password);
+  be submitted, once every set-up step is done (details, address, verified email);
   otherwise they're told what's missing.
 - **Reinstate** (approving a suspended studio) opens it if it's set up; a studio suspended before
   it was set up goes back to `onboarding` instead, so it can finish ("can continue setting up").
@@ -43,37 +44,17 @@ apply: the status only changes if it's still what the boss saw.
      wrong tries) or expired.
    - Only an **HMAC** of the code is stored (keyed with `APP_SECRET`, bound to the studio and
      purpose), compared in constant time, and it works once.
-6. **Password**: typed twice.
-   - At least **8 characters** (bcrypt's limit of 72 at most).
-   - Common passwords, one repeated character, digits only, or the studio's name or phone are
-     refused.
-   - Stored as a **bcrypt** hash.
-7. **Submit**: only once 2, 4, 5 and 6 are done.
+6. **Submit**: only once 2, 4 and 5 are done.
 
 Each step saves as it's done, so leaving and coming back resumes at the first missing step.
-
-## The studio password (`/studio/unlock`)
-
-- **Per device, every 30 days:** a good password sets a signed, httpOnly cookie
-  (`studio_unlock`) carrying the studio, when the password was set, and an expiry 30 days out.
-- **Locks:**
-  - Signing out of Aming deletes the cookie, which locks the studio.
-  - A new password signs every other device out, because their cookie carries the old
-    `password_set_at`.
-- **Lockout:** 5 wrong passwords lock the studio for 15 minutes.
-- **Forgot it:**
-  - A reset code goes to the verified email (same rules as above).
-  - A new password signs other devices out and unlocks this one.
-  - The owner is emailed that it changed.
 
 ## Where it's enforced
 
 - `packages/lib/studios/server.ts` (the one place every studio page and action finds its studio):
-  - `requireStudio()` (workspace pages): not active → `/studio/welcome`; not unlocked on this
-    device → `/studio/unlock`.
-  - `studioOfCaller()` (every studio module's actions): refuses unless active and unlocked.
-  - `studioForSetup()`: the address and logo, while setting up or once unlocked.
-  - `ownStudio()` / `requireOwnStudio()`: set-up, unlock and reset, in any status.
+  - `requireStudio()` (workspace pages): not active → `/studio/welcome`.
+  - `studioOfCaller()` (every studio module's actions): refuses unless active.
+  - `studioForSetup()`: the address and logo, while setting up or once active.
+  - `ownStudio()` / `requireOwnStudio()`: set-up, in any status.
 - `studioAtSlug()` (packages/lib/studio-portal) returns nothing for a studio that isn't active.
   So its public page, client sign-in, galleries and share links are all off.
 
@@ -83,18 +64,18 @@ Each step saves as it's done, so leaving and coming back resumes at the first mi
 packages/lib/studio-access/
   core/
     model.ts       StudioStatus, StudioAccess, EmailCode, StudioForReview, ReviewDecision.
-    emails.ts      The emails (Aming Space branded HTML + plain text): code, password changed, review. Edit wording here.
-    rules.ts       Code (one at a time), password and lock rules; passwordProblem; afterDecision; isUnlocked; maskEmail.
-    schema.ts      zod: details, email, code, new password (twice), unlock, reset, review, upload key.
+    emails.ts      The emails (Aming Space branded HTML + plain text): code, review. Edit wording here.
+    rules.ts       Code (one at a time) rules; afterDecision; maskEmail.
+    schema.ts      zod: details, email, code, review, upload key.
   ports.ts         AccessStore, Mailer, AccessSecrets, LogoFiles, OwnerNotifier, AccessError.
-  service.ts       class StudioAccessService: set-up, logo, codes, password, unlock, reset, review.
+  service.ts       class StudioAccessService: set-up, logo, codes, review.
   service.test.ts  In-memory fakes.
   adapters/supabase/store.ts   tenants' access columns, studio_email_codes.
   adapters/resend/mailer.ts    Resend's HTTP API.
-  server.ts        Wiring (HMAC, bcrypt, R2, push), the device-unlock cookie.
-  actions.ts       Owner: details, logo, email code, password, submit, unlock, reset. Boss: reviewStudio.
-packages/ui/studio-access/   OnboardingWizard, LogoUploader, UnlockForm, ReviewCard, ReviewPanel, StatusBadge.
-apps/client/app/studio/(setup)/       welcome/, unlock/ (outside the workspace frame).
+  server.ts        Wiring (HMAC, R2, push).
+  actions.ts       Owner: details, logo, email code, submit. Boss: reviewStudio.
+packages/ui/studio-access/   OnboardingWizard, LogoUploader, ReviewCard, ReviewPanel, StatusBadge.
+apps/client/app/studio/(setup)/       welcome/ (outside the workspace frame).
 apps/factory/app/dashboard/(app)/studios/  "Waiting for review" list; ReviewCard on each studio.
 supabase/migrations/20261004120000_studio_access.sql
 ```

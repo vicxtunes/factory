@@ -14,8 +14,7 @@ import { cookies } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 
 import { getClientSession, getDashboardSession, type ClientSession, type DashboardSession } from "@repo/lib/auth/session";
-import { isSettingUp, isUnlocked } from "@repo/lib/studio-access/core";
-import { deviceUnlockOf } from "@repo/lib/studio-access/server";
+import { isSettingUp } from "@repo/lib/studio-access/core";
 import { canUse, type Area, type StudioAccess } from "@repo/lib/team/core";
 import { team } from "@repo/lib/team/server";
 import type { TenantScope } from "@repo/lib/tenancy/types";
@@ -77,18 +76,12 @@ const callerStudio = cache(async (): Promise<CallerStudio | null> => {
   return { session, studio, scope: studioScope(studio), access: { owner: true } };
 });
 
-/** Whether this device has the studio unlocked with its current password (within 30 days). */
-const unlockedHere = cache(async (studio: Studio): Promise<boolean> =>
-  isUnlocked(await deviceUnlockOf(), { tenantId: studio.id, passwordSetAt: studio.passwordSetAt }, new Date()),
-);
-
 /**
- * For workspace pages: the caller's studio, working and unlocked on this
- * device, when the caller has what the page `need`s (nothing: owner-only).
- * Otherwise to set-up / review (/studio/welcome), the password
- * (/studio/unlock), or a member's home (/studio). 404 while studios are off.
- * The owner unlocks with the business password; a member's own account and
- * PIN are their lock.
+ * For workspace pages: the caller's working studio, when the caller has what
+ * the page `need`s (nothing: owner-only). Otherwise to set-up / review
+ * (/studio/welcome) or a member's home (/studio). 404 while studios are off.
+ * Owner and members alike get in with their Aming sign-in (an emailed code):
+ * there's no second studio login.
  */
 export async function requireStudio(need?: StudioNeed): Promise<CallerStudio> {
   if (!STUDIOS_ENABLED) notFound();
@@ -99,11 +92,10 @@ export async function requireStudio(need?: StudioNeed): Promise<CallerStudio> {
     return caller;
   }
   if (caller.studio.status !== "active") redirect("/studio/welcome");
-  if (!(await unlockedHere(caller.studio))) redirect("/studio/unlock");
   return caller;
 }
 
-/** For the set-up, review and password pages: the owner's studio, whatever its status. A team member goes to their workspace. */
+/** For the set-up and review pages: the owner's studio, whatever its status. A team member goes to their workspace. */
 export async function requireOwnStudio(): Promise<CallerStudio> {
   if (!STUDIOS_ENABLED) notFound();
   const caller = await callerStudio();
@@ -113,9 +105,9 @@ export async function requireOwnStudio(): Promise<CallerStudio> {
 }
 
 /**
- * For studio actions (this module's and others'): the caller's working,
- * unlocked studio when they have what the action `need`s (nothing:
- * owner-only), else a StudioError.
+ * For studio actions (this module's and others'): the caller's working
+ * studio when they have what the action `need`s (nothing: owner-only), else
+ * a StudioError.
  */
 export async function studioOfCaller(need?: StudioNeed): Promise<CallerStudio> {
   const caller = await callerStudio();
@@ -125,13 +117,12 @@ export async function studioOfCaller(need?: StudioNeed): Promise<CallerStudio> {
     return caller;
   }
   if (caller.studio.status !== "active") throw new StudioError("Your business isn't open yet: finish setting it up and wait for Aming's approval.");
-  if (!(await unlockedHere(caller.studio))) throw new StudioError("Your business is locked on this device. Enter the business password.");
   return caller;
 }
 
 /**
  * For actions that are part of setting up (the address, the logo): the
- * caller's studio while it's being set up, or once it works and is unlocked.
+ * caller's studio while it's being set up, or once it works.
  */
 export async function studioForSetup(): Promise<CallerStudio> {
   const caller = await callerStudio();
@@ -140,7 +131,7 @@ export async function studioForSetup(): Promise<CallerStudio> {
   return isSettingUp(caller.studio.status) ? caller : studioOfCaller();
 }
 
-/** For the unlock and forgot-password actions: the caller's studio, whatever its status. */
+/** For the set-up actions: the caller's studio, whatever its status. */
 export async function ownStudio(): Promise<CallerStudio> {
   const caller = await callerStudio();
   if (!caller) throw new StudioError("Sign in to manage your business.");

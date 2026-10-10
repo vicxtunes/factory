@@ -76,6 +76,35 @@ export function cleanReason(value: string | null | undefined): string | null {
   return text && text.length >= MIN_REASON_LENGTH ? text : null;
 }
 
+// --- Mobile money through the provider (HivePay) ----------------------------
+
+/** What one mobile money prompt may charge, fee included (UGX) — HivePay's limits. */
+export const MOBILE_MONEY_MIN_CHARGE = 500;
+export const MOBILE_MONEY_MAX_CHARGE = 5_000_000;
+/**
+ * HivePay's fee on a collection, which the client pays on top. Their docs
+ * don't state the rule; their example (50,000 requested → 48,500 credited)
+ * is 3%. Confirm with HivePay and change it here.
+ */
+export const MOBILE_MONEY_FEE_RATE = 0.03;
+
+/** The fee added to `amount`, so that what's left after HivePay's cut covers `amount`. */
+export function mobileMoneyFee(amount: number): number {
+  return Math.ceil(amount / (1 - MOBILE_MONEY_FEE_RATE)) - amount;
+}
+
+/** Why `amount` can't be collected by mobile money, or null when it can. */
+export function checkMobileMoneyAmount(amount: number): string | null {
+  const basic = checkAmount(amount, { min: 1, max: MOBILE_MONEY_MAX_CHARGE });
+  if (basic) return basic;
+  const charge = amount + mobileMoneyFee(amount);
+  if (charge < MOBILE_MONEY_MIN_CHARGE) return `Mobile money payments start at ${MOBILE_MONEY_MIN_CHARGE.toLocaleString("en-UG")} including the fee.`;
+  if (charge > MOBILE_MONEY_MAX_CHARGE) {
+    return `Mobile money can take up to ${MOBILE_MONEY_MAX_CHARGE.toLocaleString("en-UG")} at a time, fee included. Pay in parts or another way.`;
+  }
+  return null;
+}
+
 /** The fields of an order that decide whether it can be paid. */
 export interface PayableOrder {
   approval_status: string;

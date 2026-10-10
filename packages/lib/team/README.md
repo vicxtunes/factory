@@ -19,18 +19,16 @@ The owner chooses what each member may use, from the member's page:
 | Tasks only | none: only the tasks given to them |
 | Choose | any of: bookings, projects (& tasks), clients, money, catalog (packages, products, showroom) |
 
-Never given: the team, the business profile, its password, brand and document settings, and
+Never given: the team, the business profile, its brand and document settings, and
 Aming orders (placed under the owner's own account). Those stay the owner's.
 
 - **Invite.** "Invite to sign in" makes a link (`/studio/join/<token>`, 7 days; a new one
   replaces the old). The owner copies it or sends it on WhatsApp.
-- **Join.** The member opens it, signs in to their own Aming account (or makes one), adds a
-  PIN if the account has none, and joins. Without a PIN anyone with their phone number could
-  sign in as them, so a member's access also stops working if they remove their PIN. The
-  owner's own account can't join their own business.
+- **Join.** The member opens it, signs in to their own Aming account (or makes one) with the
+  code emailed to them, and joins. The owner's own account can't join their own business.
 - **Working.** The member opens My Business and sees only what they were given (the menu, the
-  dashboard and the pages; actions refuse the rest). A member doesn't use the business
-  password: their account and PIN are their lock. A member without projects sees only their own
+  dashboard and the pages; actions refuse the rest). Owner and members alike get in
+  with their Aming sign-in: there's no second studio login. A member without projects sees only their own
   tasks, and can start and finish them. An account that owns a business and works for others
   chooses which one from "Working in" at the top of the menu.
 - **Remove access.** Their sign-in stops at once (and any invite link). They stay on the team
@@ -55,7 +53,7 @@ The same rules as every studio module:
 packages/lib/team/
   core/            TeamMember, TeamMemberInput, zod schemas (phone stored in one form);
                    access.ts: areas, presets, canUse.
-  ports.ts         TeamStore, TeamAccounts (PIN, owner), TeamError.
+  ports.ts         TeamStore, TeamAccounts (owner), TeamError.
   service.ts       class TeamService: list (active first), active, get, create, update, setArchived,
                    setAccess, invite, removeAccess, byInvite, join, membershipsOf.
   service.test.ts
@@ -68,6 +66,6 @@ supabase/migrations/20261003170000_team_tasks.sql (with tasks), 20261013100000_t
 ## Testing
 
 - `npm test`: input (phone forms), active first and archived not offered, studio separation,
-  access rules and presets, invites and joining (no PIN, own business, expired, archived,
+  access rules and presets, invites and joining (own business, expired, archived,
   replaced links, removed access).
 - Against Postgres: see packages/lib/tasks/README.md.

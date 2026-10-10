@@ -35,8 +35,6 @@ export interface TeamStore {
 
 /** What joining needs to know about an account and a studio. */
 export interface TeamAccounts {
-  /** Whether the account has a PIN: without one, anyone with its phone number could sign in as it. */
-  hasPin(clientId: string): Promise<boolean>;
   /** The account that owns the studio. */
   ownerOf(tenantId: string): Promise<string | null>;
 }

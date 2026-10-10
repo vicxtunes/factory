@@ -5,13 +5,11 @@ import { useEffect, useState, useTransition } from "react";
 
 import { Button } from "@repo/ui/Button";
 import { Field, TextInput } from "@repo/ui/Field";
-import { PasswordInput } from "@repo/ui/PasswordInput";
 import { PhoneInput } from "@repo/ui/PhoneInput";
-import { CODE_DIGITS, PASSWORD_MIN, type OnboardingStep } from "@repo/lib/studio-access/core";
+import { CODE_DIGITS, type OnboardingStep } from "@repo/lib/studio-access/core";
 import {
   saveStudioDetails,
   sendStudioEmailCode,
-  setStudioPassword,
   submitStudioForReview,
   verifyStudioEmail,
 } from "@repo/lib/studio-access/actions";
@@ -36,7 +34,6 @@ export interface SetupView {
   origin: string;
   ownerEmail: string | null;
   emailVerified: boolean;
-  hasPassword: boolean;
 }
 
 type Step = "welcome" | OnboardingStep;
@@ -45,8 +42,7 @@ const STEPS: { id: OnboardingStep; label: string; hint: string; optional?: boole
   { id: "details", label: "Business details", hint: "Name, owner and phone", title: "Your business", description: "Your clients and Aming see these. We filled them in from your Aming account: change anything that isn't right." },
   { id: "logo", label: "Logo", hint: "Shown on your page and documents", optional: true, title: "Your logo", description: "It appears on your public page, quotations, invoices and workspace. You can add it later from Business profile." },
   { id: "address", label: "Web address", hint: "Your public page", title: "Your web address", description: "Your public page, and where your clients sign in. You can change it later; old links keep working." },
-  { id: "email", label: "Email", hint: "For codes and Aming's messages", title: "Verify your email", description: `We'll send a ${CODE_DIGITS}-digit code to check it's yours. It's used to reset your business password.` },
-  { id: "password", label: "Password", hint: "Protects your business", title: "Business password", description: "Your business holds your clients' details and money. The password is asked on each device every 30 days, and after signing out of Aming." },
+  { id: "email", label: "Email", hint: "For codes and Aming's messages", title: "Verify your email", description: `We'll send a ${CODE_DIGITS}-digit code to check it's yours. Aming uses it to reach you about your business.` },
   { id: "submit", label: "Submit", hint: "Aming reviews your business", title: "Submit for review", description: "Aming checks every new business before it opens. You'll get an email and a notification." },
 ];
 
@@ -56,7 +52,6 @@ function doneSteps(v: SetupView): Record<Exclude<OnboardingStep, "submit">, bool
     logo: !!v.logoUrl,
     address: !!v.slug,
     email: v.emailVerified,
-    password: v.hasPassword,
   };
 }
 
@@ -75,7 +70,7 @@ const ErrorText = ({ error }: { error: string | null }) =>
 
 /**
  * A new studio's set-up: welcome, then its details, logo, address, a verified
- * email and a password, then submit for Aming's review. Each step is saved as
+ * email, then submit for Aming's review. Each step is saved as
  * it's done, so leaving and coming back resumes where it stopped.
  */
 export function OnboardingWizard({ view }: { view: SetupView }) {
@@ -131,7 +126,6 @@ export function OnboardingWizard({ view }: { view: SetupView }) {
       ) : null}
       {step === "address" ? <AddressStep view={view} back={back} onDone={next} /> : null}
       {step === "email" ? <EmailStep view={view} back={back} onDone={next} /> : null}
-      {step === "password" ? <PasswordStep view={view} back={back} onDone={next} /> : null}
       {step === "submit" ? <SubmitStep view={view} back={back} onGoTo={setStep} /> : null}
     </SetupSplit>
   );
@@ -321,76 +315,6 @@ function EmailStep({ view, back, onDone }: StepProps) {
   );
 }
 
-/** Two password boxes; used here and to reset a forgotten one. */
-export function NewPasswordFields({
-  password,
-  confirm,
-  onPassword,
-  onConfirm,
-}: {
-  password: string;
-  confirm: string;
-  onPassword: (v: string) => void;
-  onConfirm: (v: string) => void;
-}) {
-  return (
-    <div className="grid gap-4 @md:grid-cols-2">
-      <Field label="New password" hint={`At least ${PASSWORD_MIN} characters.`}>
-        <PasswordInput value={password} onChange={(e) => onPassword(e.target.value)} autoComplete="new-password" minLength={PASSWORD_MIN} maxLength={72} required />
-      </Field>
-      <Field label="Type it again">
-        <PasswordInput value={confirm} onChange={(e) => onConfirm(e.target.value)} autoComplete="new-password" maxLength={72} required />
-      </Field>
-    </div>
-  );
-}
-
-function PasswordStep({ view, back, onDone }: StepProps) {
-  const router = useRouter();
-  const [changing, setChanging] = useState(!view.hasPassword);
-  const [password, setPassword] = useState("");
-  const [confirm, setConfirm] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [pending, start] = useTransition();
-
-  if (!changing) {
-    return (
-      <>
-        <p className="rounded-xl border border-border px-4 py-3 text-sm text-success-600 dark:text-success-400">✓ Password set</p>
-        <SetupActions back={back}>
-          <Button variant="secondary" onClick={() => setChanging(true)}>
-            Change it
-          </Button>
-          <Button onClick={onDone}>Continue</Button>
-        </SetupActions>
-      </>
-    );
-  }
-
-  return (
-    <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        setError(null);
-        start(async () => {
-          const res = await setStudioPassword({ password, confirm });
-          if (!res.ok) return setError(res.error);
-          router.refresh();
-          onDone();
-        });
-      }}
-    >
-      <NewPasswordFields password={password} confirm={confirm} onPassword={setPassword} onConfirm={setConfirm} />
-      <ErrorText error={error} />
-      <SetupActions back={back}>
-        <Button type="submit" loading={pending}>
-          Save and continue
-        </Button>
-      </SetupActions>
-    </form>
-  );
-}
-
 function SubmitStep({ view, back, onGoTo }: Omit<StepProps, "onDone"> & { onGoTo: (step: Step) => void }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -403,7 +327,6 @@ function SubmitStep({ view, back, onGoTo }: Omit<StepProps, "onDone"> & { onGoTo
     { step: "logo", label: "Logo", value: view.logoUrl ? "Uploaded" : null, required: false },
     { step: "address", label: "Web address", value: view.slug ? `${host}/${view.slug}` : null, required: true },
     { step: "email", label: "Email", value: view.emailVerified ? view.ownerEmail : null, required: true },
-    { step: "password", label: "Password", value: view.hasPassword ? "Set" : null, required: true },
   ];
   const ready = rows.every((r) => !r.required || r.value);
 

@@ -697,11 +697,13 @@ export async function updateClient(input: {
     };
   }
 
+  const email = input.email.trim() || null;
+  const { data: before } = await admin.from("clients").select("email").eq("id", input.id).maybeSingle();
   const { error } = await admin
     .from("clients")
     .update({
       name,
-      email: input.email.trim() || null,
+      email,
       phone,
     })
     .eq("id", input.id);
@@ -710,6 +712,12 @@ export async function updateClient(input: {
       return { ok: false, error: "Another client already uses this phone number or email." };
     }
     return { ok: false, error: error.message };
+  }
+  // The client signs in with a code sent to this email (apps/client/app/actions.ts).
+  // A changed email signs out whoever held the old one at once; the next
+  // sign-in links the new address.
+  if ((before?.email ?? null)?.toLowerCase() !== email?.toLowerCase()) {
+    await admin.from("client_identities").delete().eq("client_id", input.id);
   }
   revalidatePath("/dashboard/clients");
   return { ok: true };

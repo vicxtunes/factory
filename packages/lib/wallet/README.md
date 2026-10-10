@@ -118,26 +118,41 @@ An order can take a payment when it's **approved**, has a known price and invoic
 cancelled**. Client orders are reviewed and invoiced in the staff intake queue before routing; routing
 does not require payment. Clients can pay from wallet; external receipts are recorded by staff.
 
-## Adding a payment provider later
+## Mobile money through HivePay
 
-The ledger doesn't change. A provider is just a different way for a `payments` row to become
-`succeeded`:
+Clients can pay by **MTN / Airtel mobile money** without leaving the app (HivePay,
+https://hivepay.site/docs): "Top up with mobile money" on the wallet page, and "Pay with mobile
+money" on a payable order (approved, priced, invoiced). Their phone gets a PIN prompt for the amount
+**plus HivePay's fee** (the client pays it: `MOBILE_MONEY_FEE_RATE` in `policy.ts`, 3% from HivePay's
+example — confirm the real rule with HivePay).
 
-1. **Start a payment.** Add a service function that inserts a `payments` row with
-   `provider = '<name>'`, `method = 'card' | 'mobile_money'` and `status = 'pending'`, then asks
-   the provider for a checkout/prompt. To pay one order directly, also set `order_id`.
-2. **Webhook.** Add `app/api/payments/<provider>/route.ts`: verify the provider's signature, find
-   the payment by `(provider, provider_ref)` (unique index), then call
-   `repository.settlePayment(id, { type: "system", id: null, name: "<Provider>" })`. That's the
-   same call staff confirmation uses. It credits the wallet, and when `order_id` is set it applies
-   the money to that order in the same transaction. Settling twice is a no-op, so provider retries
-   are safe. On failure, call `closePayment(id, "failed", reason, …)`.
-3. **Put the provider behind an adapter** (`server/providers/<name>.ts`) so the service never
-   imports a provider SDK directly.
+- **One row per prompt** in `provider_collections` (migration `20261014100000`).
+- **Settling** is `provider_collection_settle()`, one transaction:
+  - an order → an **order receipt** (`order_payment_receipts`, method mobile money), any excess to
+    the wallet — an order payment, not a wallet deposit (PAYMENT_WORKFLOW.md);
+  - a top-up → a **wallet deposit** (`payments` with `provider = 'hivepay'`, settled);
+  - money the client already paid is never refused: if the order can't take it any more (paid
+    meanwhile, cancelled, no invoice), the whole amount goes to the wallet with a note saying why.
+  - Settling twice is a no-op, so the webhook and the screen's own check can both run it.
+- **Success only comes from HivePay.** The webhook (`apps/client/app/api/payments/hivepay`, signed
+  `X-HivePay-Signature`, ±5 min) only says "look": the outcome and amount are read back from
+  HivePay's status API before settling, and a different amount than was asked for is never credited
+  (logged for staff). The payment screen asks too (`checkMobileMoneyPayment`, every few seconds), so
+  a payment completes even if the webhook is late or missing. A prompt is marked failed only when
+  HivePay says so — never on our own timeout.
+- **Code:** `server/providers/hivepay.ts` (the only file that talks to HivePay),
+  `server/mobile-money.ts` (use cases), `packages/ui/wallet/MobileMoneyPay.tsx` (the form and the
+  "check your phone" wait).
+- **Settings** (client app): `HIVEPAY_API_KEY`, `HIVEPAY_API_SECRET`, `HIVEPAY_ACCOUNT_NUMBER`,
+  `HIVEPAY_WEBHOOK_SECRET`. The webhook URL is sent with each prompt (from
+  `NEXT_PUBLIC_CLIENT_ORIGIN`), so nothing needs setting in HivePay's dashboard. Without the keys the
+  buttons answer "not available yet".
 
-For a future provider that collects directly for an invoice, use the order-receipt path only after
-adding provider verification and idempotency. A provider collecting wallet top-ups continues to use
-`payments` and `wallet_settle_payment`; those funds are intentionally wallet deposits.
+## Adding another payment provider
+
+Follow HivePay's shape: an adapter in `server/providers/<name>.ts`, rows in
+`provider_collections` with `provider = '<name>'`, settled with `provider_collection_settle()`
+after confirming success with the provider's own API.
 
 ## Testing notes
 

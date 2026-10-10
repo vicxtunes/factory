@@ -6,22 +6,16 @@
 
 import {
   afterDecision,
-  afterWrongPassword,
   CODE_MAX_TRIES,
   CODE_MINUTES,
   codeEmail,
   codeWait,
-  deviceUnlock,
-  isLocked,
   isSettingUp,
   LOGO_MAX_BYTES,
   maskEmail,
   missingForSubmit,
   needsReason,
-  passwordChangedEmail,
-  passwordProblem,
   reviewEmail,
-  type DeviceUnlock,
   type Email,
   type EmailCode,
   type EmailLinks,
@@ -39,8 +33,6 @@ export interface CodeSent {
   /** True when nothing was sent because a code is still pending. */
   alreadySent: boolean;
 }
-
-const minutesLeft = (until: string, now: Date) => Math.max(1, Math.ceil((Date.parse(until) - now.getTime()) / 60_000));
 
 export class StudioAccessService {
   constructor(
@@ -114,19 +106,13 @@ export class StudioAccessService {
   /** Emails a code to verify the owner's address (or points to the one already pending). */
   async sendVerifyCode(tenantId: string, email: string): Promise<CodeSent> {
     const access = await this.settingUp(tenantId);
-    return this.sendCode(access, "verify", email);
+    return this.sendCode(access, email);
   }
 
   async verifyEmail(tenantId: string, code: string): Promise<void> {
     await this.settingUp(tenantId);
-    const email = await this.useCode(tenantId, "verify", code);
+    const email = await this.useCode(tenantId, code);
     await this.store.setOwnerEmail(tenantId, email, this.now().toISOString());
-  }
-
-  /** Sets the studio password during set-up. Returns what this device's unlock needs. */
-  async setPassword(tenantId: string, password: string): Promise<DeviceUnlock> {
-    const access = await this.settingUp(tenantId);
-    return this.storePassword(access, password);
   }
 
   /** Sends the studio for the boss's review, once every step is done. */
@@ -137,47 +123,6 @@ export class StudioAccessService {
     if (!(await this.store.setStatus(tenantId, access.status, "in_review", this.now().toISOString(), null))) {
       throw new AccessError("Your business was just changed. Refresh the page.");
     }
-  }
-
-  // ── The studio password ──
-
-  /** Checks the password; 5 wrong in a row lock the studio for 15 minutes. Returns this device's unlock. */
-  async unlock(tenantId: string, password: string): Promise<DeviceUnlock> {
-    const access = await this.access(tenantId);
-    const now = this.now();
-    if (!access.passwordHash) throw new AccessError("Set a business password first.");
-    if (isLocked(access.passwordLockedUntil, now)) {
-      throw new AccessError(`Too many wrong passwords. Try again in ${minutesLeft(access.passwordLockedUntil!, now)} minutes, or reset it.`);
-    }
-    if (!(await this.secrets.verifyPassword(password, access.passwordHash))) {
-      const next = afterWrongPassword(access.passwordFailedAttempts, now);
-      await this.store.recordWrongPassword(tenantId, next.failedAttempts, next.lockedUntil);
-      throw new AccessError(
-        next.lockedUntil ? "Too many wrong passwords. The business is locked for 15 minutes." : "That password is wrong.",
-      );
-    }
-    if (access.passwordFailedAttempts > 0) await this.store.clearWrongPasswords(tenantId);
-    return deviceUnlock(access, now);
-  }
-
-  /** Emails a reset code to the owner's verified address (or points to the one already pending). */
-  async sendResetCode(tenantId: string): Promise<CodeSent> {
-    const access = await this.access(tenantId);
-    if (!access.ownerEmail || !access.ownerEmailVerifiedAt) {
-      throw new AccessError("Your business has no verified email yet. Contact Aming to reset the password.");
-    }
-    return this.sendCode(access, "reset", access.ownerEmail);
-  }
-
-  /** A new password from an emailed code. Every other device is signed out; this one is unlocked. */
-  async resetPassword(tenantId: string, code: string, password: string): Promise<DeviceUnlock> {
-    const access = await this.access(tenantId);
-    const problem = passwordProblem(password, [access.name, access.phone ?? ""]);
-    if (problem) throw new AccessError(problem);
-    await this.useCode(tenantId, "reset", code);
-    const unlock = await this.storePassword(access, password);
-    await this.tell(access, passwordChangedEmail(this.links, access.name));
-    return unlock;
   }
 
   // ── The boss's review ──
@@ -234,19 +179,12 @@ export class StudioAccessService {
     return this.logoUrl((await this.store.get(tenantId))?.logoKey ?? null);
   }
 
-  private async storePassword(access: StudioAccess, password: string): Promise<DeviceUnlock> {
-    const problem = passwordProblem(password, [access.name, access.phone ?? ""]);
-    if (problem) throw new AccessError(problem);
-    const at = this.now().toISOString();
-    await this.store.setPassword(access.tenantId, await this.secrets.hashPassword(password), at);
-    return deviceUnlock({ tenantId: access.tenantId, passwordSetAt: at }, this.now());
-  }
-
   /**
    * Sends a code, unless one is still pending: then nothing is sent and the
    * owner is pointed to that one (one code at a time, see codeWait).
    */
-  private async sendCode(access: StudioAccess, purpose: EmailCode["purpose"], email: string): Promise<CodeSent> {
+  private async sendCode(access: StudioAccess, email: string): Promise<CodeSent> {
+    const purpose: EmailCode["purpose"] = "verify";
     const now = this.now();
     const pending = await this.store.code(access.tenantId, purpose);
     const wait = codeWait(pending, now);
@@ -262,12 +200,13 @@ export class StudioAccessService {
       sentAt: now.toISOString(),
       expiresAt: new Date(now.getTime() + CODE_MINUTES * 60_000).toISOString(),
     });
-    await this.mailer.send({ to: email, ...codeEmail(this.links, access.name, purpose, code) });
-    return { sentTo: purpose === "verify" ? email : maskEmail(email), resendIn: CODE_MINUTES * 60, alreadySent: false };
+    await this.mailer.send({ to: email, ...codeEmail(this.links, access.name, code) });
+    return { sentTo: email, resendIn: CODE_MINUTES * 60, alreadySent: false };
   }
 
   /** Checks a code (10 minutes, 5 tries) and uses it up. Returns the email it was sent to. */
-  private async useCode(tenantId: string, purpose: EmailCode["purpose"], code: string): Promise<string> {
+  private async useCode(tenantId: string, code: string): Promise<string> {
+    const purpose: EmailCode["purpose"] = "verify";
     const pending = await this.store.code(tenantId, purpose);
     if (!pending) throw new AccessError("Ask for a code first.");
     if (Date.parse(pending.expiresAt) <= this.now().getTime()) {

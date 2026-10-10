@@ -58,7 +58,6 @@ export default async function StudioWelcomePage() {
         origin: clientUrl("/").replace(/\/$/, ""),
         ownerEmail: a.ownerEmail,
         emailVerified: !!a.ownerEmailVerifiedAt,
-        hasPassword: !!a.passwordHash,
       }}
     />
   );

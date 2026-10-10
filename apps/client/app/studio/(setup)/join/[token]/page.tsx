@@ -8,13 +8,12 @@ import { AREA_LABELS, inviteTokenSchema } from "@repo/lib/team/core";
 import { team } from "@repo/lib/team/server";
 
 import { AuthGate } from "../../../../auth-gate";
-import { JoinButton, JoinPin } from "./join-steps";
+import { JoinButton } from "./join-steps";
 
 export const metadata = { title: "Join a business · Aming" };
 
 // A team member's invite link (sent by the business's owner from Team). They
-// sign in to their own Aming account, add a PIN if it has none (so no one can
-// open the business with just their phone number), and join.
+// sign in to their own Aming account (an emailed code) and join.
 export default async function JoinTeamPage({ params }: { params: Promise<{ token: string }> }) {
   if (!STUDIOS_ENABLED) notFound();
   const token = inviteTokenSchema.safeParse((await params).token);
@@ -50,11 +49,9 @@ export default async function JoinTeamPage({ params }: { params: Promise<{ token
             </div>
             {!session ? (
               <div className="space-y-2">
-                <p className="text-sm">Sign in with your own Aming account, or make one with your phone number.</p>
+                <p className="text-sm">Sign in with your own Aming account, or create one.</p>
                 <AuthGate />
               </div>
-            ) : !(await team.hasPin(session.client_id)) ? (
-              <JoinPin name={session.name} />
             ) : (
               <JoinButton token={token.data!} name={session.name} />
             )}

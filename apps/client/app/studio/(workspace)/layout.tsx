@@ -10,8 +10,8 @@ export const dynamic = "force-dynamic";
 
 // Every My Studio page, in the studio's own workspace and color (apart from
 // the Aming marketplace). The studio is created the first time any of these
-// pages opens; until Aming approves it, and on a device without the studio
-// password, requireStudio sends the owner to /studio/welcome or /studio/unlock.
+// pages opens; until Aming approves it, requireStudio sends the owner to
+// /studio/welcome.
 // A team member sees the menu for what they were given.
 export default async function StudioLayout({ children }: { children: React.ReactNode }) {
   const { session, studio, access } = await requireStudio("anyone");

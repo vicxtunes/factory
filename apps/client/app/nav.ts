@@ -60,7 +60,6 @@ export const CLIENT_NAV: ClientNavSection[] = [
     label: "Account",
     items: [
       { href: "/payment", label: "Wallet", icon: "payment", requiresSignIn: true },
-      { href: "/settings", label: "Settings", icon: "settings", requiresSignIn: true },
     ],
   },
   {

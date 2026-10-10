@@ -44,17 +44,16 @@ function memoryStore() {
     membershipsOf: async (clientId) =>
       rows.filter((r) => r.clientId === clientId && !r.archivedAt).map((r) => ({ tenantId: r.tenantId, memberId: r.id, name: r.tenantId, access: r.access })),
   };
-  const pins = new Set(["joel-account", "amina-account"]);
   const owners = new Map([["studio-a", "owner-a"], ["studio-b", "owner-b"]]);
   let tokens = 0;
   let now = NOW;
   const service = new TeamService(
     store,
-    { hasPin: async (c) => pins.has(c), ownerOf: async (t) => owners.get(t) ?? null },
+    { ownerOf: async (t) => owners.get(t) ?? null },
     () => `token-${++tokens}-${"x".repeat(32)}`,
     () => now,
   );
-  return { store, rows, service, pins, later: (days: number) => (now = new Date(NOW.getTime() + days * 86_400_000)) };
+  return { store, rows, service, later: (days: number) => (now = new Date(NOW.getTime() + days * 86_400_000)) };
 }
 
 test("team input: phone stored in one form, role optional", () => {
@@ -105,7 +104,7 @@ test("presets: named back from the areas, in any order; anything else is custom"
   assert.throws(() => parseInput(accessSchema, ["team"]), /Choose from the list/);
 });
 
-test("invite and join: the account with a PIN joins once; the link then stops working", async () => {
+test("invite and join: the account joins once; the link then stops working", async () => {
   const { service: team, rows } = memoryStore();
   const id = await team.create(studioA, { name: "Joel", phone: null, role: "Editor" });
   await team.setAccess(studioA, id, ["money", "clients"]);
@@ -119,12 +118,10 @@ test("invite and join: the account with a PIN joins once; the link then stops wo
   await assert.rejects(team.invite(studioA, id), /already joined/);
 });
 
-test("joining is refused: without a PIN, by the studio's owner, after a week, for an archived member", async () => {
-  const { service: team, pins, later } = memoryStore();
+test("joining is refused: by the studio's owner, after a week, for an archived member", async () => {
+  const { service: team, later } = memoryStore();
   const id = await team.create(studioA, { name: "Joel", phone: null, role: null });
   const token = await team.invite(studioA, id);
-  await assert.rejects(team.join(token, "no-pin-account"), /Set a PIN/);
-  pins.add("owner-a");
   await assert.rejects(team.join(token, "owner-a"), /your own business/);
   later(8);
   await assert.rejects(team.join(token, "joel-account"), /isn't valid any more/);
@@ -135,8 +132,8 @@ test("joining is refused: without a PIN, by the studio's owner, after a week, fo
   await assert.rejects(team.invite(studioA, id), /Restore them/);
 });
 
-test("a new invite replaces the old; removing access signs them out; archiving ends it; no PIN, no studios", async () => {
-  const { service: team, pins } = memoryStore();
+test("a new invite replaces the old; removing access signs them out; archiving ends it", async () => {
+  const { service: team } = memoryStore();
   const id = await team.create(studioA, { name: "Joel", phone: null, role: null });
   const first = await team.invite(studioA, id);
   const second = await team.invite(studioA, id);
@@ -147,7 +144,4 @@ test("a new invite replaces the old; removing access signs them out; archiving e
   await team.join(await team.invite(studioA, id), "joel-account");
   await team.setArchived(studioA, id, true);
   assert.deepEqual(await team.membershipsOf("joel-account"), [], "archived: no sign-in");
-  await team.setArchived(studioA, id, false);
-  pins.delete("joel-account");
-  assert.deepEqual(await team.membershipsOf("joel-account"), [], "PIN removed: no studio until it's back");
 });

@@ -13,12 +13,7 @@ import {
   type AppRole,
   type Profile,
 } from "@repo/lib/types";
-import {
-  CLIENT_COOKIE,
-  DESIGNER_COOKIE,
-  WORKER_COOKIE,
-  verifyPayload,
-} from "@repo/lib/auth/cookies";
+import { DESIGNER_COOKIE, WORKER_COOKIE, verifyPayload } from "@repo/lib/auth/cookies";
 
 // Each getter is wrapped in React's cache(): the layout, the page and any
 // helper that asks for the session in the same request share one lookup
@@ -78,21 +73,27 @@ export interface ClientSession {
   avatarUrl: string | null;
 }
 
+// Clients sign in with Supabase Auth (emailed one-time code — see
+// apps/client/app/actions.ts), so their session is the standard Supabase JWT,
+// verified locally like the dashboard's. The auth user is tied to its clients
+// row through client_identities.
 export const getClientSession = cache(async (): Promise<ClientSession | null> => {
-  const store = await cookies();
-  const session = await verifyPayload<{ client_id: string }>(store.get(CLIENT_COOKIE)?.value);
-  if (!session?.client_id) return null;
+  const supabase = await createClient();
+  const { data } = await supabase.auth.getClaims();
+  const claims = data?.claims;
+  if (!claims) return null;
 
   // Confirm the client still exists and is active — see getWorkerSession's
-  // comment on reading name/avatar fresh rather than from the cookie.
+  // comment on reading name/avatar fresh.
   const admin = createAdminClient();
-  const { data } = await admin
-    .from("clients")
-    .select("id, name, avatar_url, active")
-    .eq("id", session.client_id)
-    .maybeSingle();
-  if (!data || data.active === false) return null;
-  return { client_id: data.id, name: data.name, avatarUrl: data.avatar_url };
+  const { data: link } = await admin
+    .from("client_identities")
+    .select("client:clients!inner (id, name, avatar_url, active)")
+    .eq("auth_user_id", claims.sub)
+    .maybeSingle<{ client: { id: string; name: string; avatar_url: string | null; active: boolean } }>();
+  const client = link?.client;
+  if (!client || client.active === false) return null;
+  return { client_id: client.id, name: client.name, avatarUrl: client.avatar_url };
 });
 
 export interface DashboardSession {

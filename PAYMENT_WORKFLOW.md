@@ -89,6 +89,23 @@ Relevant code:
 
 If the receipt exceeds the invoice balance, staff must choose what happened to the excess: record it as physically returned, or credit it to the client's wallet. Only the wallet-credit choice creates a wallet deposit, and only for the excess amount. The gross receipt and its disposition remain auditable.
 
+### 7) Clients pay by mobile money in the app (HivePay)
+
+A client can top up their wallet, or pay a payable order, with an MTN / Airtel PIN prompt on their phone. The client pays HivePay's fee on top. Each prompt is a `provider_collections` row; once HivePay confirms success, `provider_collection_settle()` records it in one transaction:
+
+- for an order: an `order_payment_receipts` row (method mobile money) applying up to what's due, any excess credited to the wallet — the same model as a staff-recorded receipt, never a wallet deposit plus debit;
+- for a top-up: a `payments` row (`provider = 'hivepay'`) settled into the wallet;
+- if the order can no longer take the money (paid meanwhile, cancelled, no invoice), the whole amount is kept as a wallet deposit with a note — a client's payment is never refused.
+
+Settlement is idempotent and only runs after the outcome and amount are confirmed through HivePay's API (the signed webhook only triggers the check).
+
+Relevant code:
+
+- `packages/lib/wallet/server/mobile-money.ts` and `server/providers/hivepay.ts`
+- `supabase/migrations/20261014100000_mobile_money_collections.sql`
+- `packages/ui/wallet/MobileMoneyPay.tsx`, used by `ClientWallet.tsx` and `OrderPayment.tsx`
+- `apps/client/app/api/payments/hivepay/route.ts` — the webhook
+
 ## Why some entries say “Wallet” while others say “Mobile money” or “Bank transfer”
 
 Keep these separate:
