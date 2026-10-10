@@ -104,10 +104,8 @@ function BackLink({ onClick }: { onClick: () => void }) {
 
 // Full-screen single-photo viewer over the "More details" waterfall — steps
 // through only the *photo* entries (videos already have their own inline
-// controls in the waterfall and aren't worth re-opening full-screen), via
-// the same arrow buttons/counter/keyboard-arrows pattern as the main
-// showcase carousel above, just restyled for this overlay's black backdrop
-// instead of the showroom theme.
+// controls in the waterfall and aren't worth re-opening full-screen) by
+// swiping, with a counter, on this overlay's black backdrop.
 function GalleryLightbox({
   media,
   photoIndices,
@@ -122,7 +120,7 @@ function GalleryLightbox({
   onClose: () => void;
 }) {
   const pos = photoIndices.indexOf(index);
-  // Swiper does the sliding (finger drag, arrows, arrow keys); at either end it rewinds to the other.
+  // Moved through by swiping (or dragging with a mouse, or the arrow keys): no buttons. At either end it rewinds to the other.
   const swiper = useRef<SwiperInstance | null>(null);
 
   // Escape is deliberately not handled here — it's owned by Showcase's
@@ -178,33 +176,9 @@ function GalleryLightbox({
       </button>
 
       {photoIndices.length > 1 ? (
-        <>
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              swiper.current?.slidePrev();
-            }}
-            aria-label="Previous photo"
-            className="absolute left-2 top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-2xl text-white transition-colors hover:bg-white/20 sm:left-4"
-          >
-            ‹
-          </button>
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              swiper.current?.slideNext();
-            }}
-            aria-label="Next photo"
-            className="absolute right-2 top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-2xl text-white transition-colors hover:bg-white/20 sm:right-4"
-          >
-            ›
-          </button>
-          <span className="absolute bottom-4 left-1/2 z-10 -translate-x-1/2 text-xs uppercase tracking-widest text-white/70">
-            {pos + 1} / {photoIndices.length}
-          </span>
-        </>
+        <span className="absolute bottom-4 left-1/2 z-10 -translate-x-1/2 text-xs uppercase tracking-widest text-white/70">
+          {pos + 1} / {photoIndices.length}
+        </span>
       ) : null}
     </div>
   );
