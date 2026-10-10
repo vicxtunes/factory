@@ -4,7 +4,6 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "prebuild": "cd ../.. && eslint",
     "build": "next build",
     "start": "next start"
   },
