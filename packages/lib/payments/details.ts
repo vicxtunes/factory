@@ -27,12 +27,11 @@ export const PAYMENT_METHODS: PaymentMethod[] = [
       { label: "Currency", value: "Uganda Shillings (UGX)" },
     ],
   },
+  // Paid in the app (HivePay prompt on the client's phone), so there's no
+  // number to send to. Printed invoices show this line.
   {
     id: "mobile_money",
-    title: "Mobile money",
-    fields: [
-      { label: "Number", value: "0700768312", copyable: true },
-      { label: "Name", value: "Arthur Sembatya" },
-    ],
+    title: "MTN / Airtel mobile money",
+    fields: [{ label: "Pay in the Aming app", value: "www.amingspace.com" }],
   },
 ];

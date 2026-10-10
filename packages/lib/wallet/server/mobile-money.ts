@@ -16,7 +16,7 @@ import { clientUrl } from "@repo/lib/client-portal/paths";
 import { parsePhone } from "@repo/lib/kernel/core/phone";
 import { createAdminClient } from "@repo/lib/supabase/admin";
 
-import { MIN_DEPOSIT, checkMobileMoneyAmount, isOrderPayable, mobileMoneyFee } from "../policy";
+import { MIN_DEPOSIT, checkMobileMoneyAmount, isOrderPayable } from "../policy";
 import type { MobileMoneyCollection } from "../types";
 import * as directory from "./directory";
 import { WalletError } from "./errors";
@@ -30,12 +30,13 @@ const PROVIDER = "hivepay";
 const ACTOR_NAME = "HivePay";
 /** The payment screen asks every few seconds; HivePay is only asked once a prompt has had this long. */
 const ASK_PROVIDER_AFTER_MS = 10_000;
+/** While a prompt is this fresh and still pending, a new one isn't sent — the client gets the waiting one back. */
+const ONE_PROMPT_AT_A_TIME_MS = 3 * 60_000;
 
 function toView(row: repo.CollectionRow): MobileMoneyCollection {
   return {
     id: row.id,
     amount: row.amount,
-    fee: row.fee,
     status: row.status,
     failureReason: row.failure_reason,
     orderId: row.order_id,
@@ -54,13 +55,16 @@ async function prompt(
   if (!phone.ok) throw new WalletError(phone.error);
   if (!phone.store.startsWith("+256")) throw new WalletError("Mobile money works with MTN and Airtel Uganda numbers.");
 
-  const fee = mobileMoneyFee(input.amount);
+  // One prompt at a time for the same payment: a second tap (or "try again"
+  // too soon) would put two charges on the client's phone.
+  const waiting = await repo.pendingCollection(viewer.id, input.orderId, new Date(Date.now() - ONE_PROMPT_AT_A_TIME_MS));
+  if (waiting) return toView(waiting);
+
   const row = await repo.insertCollection({
     provider: PROVIDER,
     clientId: viewer.id,
     orderId: input.orderId,
     amount: input.amount,
-    fee,
     phone: phone.store,
     createdByName: viewer.name,
   });
@@ -69,7 +73,7 @@ async function prompt(
   const sent = await hivepay.collect({
     reference: toHivepayReference(row.id),
     phone: phone.store,
-    amount: input.amount + fee,
+    amount: input.amount,
     description: input.description,
     webhookUrl: webhook.startsWith("https://") ? webhook : null,
   });
@@ -83,13 +87,13 @@ async function prompt(
   return toView({ ...row, provider_ref: sent.gatewayRef, network: sent.network });
 }
 
-/** "Top up with mobile money": `amount` is what lands in the wallet; the prompt adds the fee. */
+/** "Top up with mobile money": the phone is prompted for `amount`, and that's what lands in the wallet. */
 export async function startTopUp(viewer: ClientViewer, input: { amount: number; phone: string }): Promise<MobileMoneyCollection> {
   if (!(input.amount >= MIN_DEPOSIT)) throw new WalletError(`Top up at least ${MIN_DEPOSIT.toLocaleString("en-UG")}.`);
   return prompt(viewer, { amount: input.amount, phone: input.phone, orderId: null, description: "Aming wallet top-up" });
 }
 
-/** "Pay with mobile money" on an order: prompts for what's still due, plus the fee. */
+/** "Pay with mobile money" on an order: prompts for what's still due. */
 export async function startOrderPayment(viewer: ClientViewer, input: { orderId: string; phone: string }): Promise<MobileMoneyCollection> {
   const order = await directory.loadOrder(input.orderId);
   if (!order || order.clientId !== viewer.id) throw new WalletError("Order not found.");
@@ -117,9 +121,10 @@ async function reconcile(row: repo.CollectionRow): Promise<repo.CollectionRow> {
   if (res.status === "failed") {
     await repo.failCollection(row.id, "The payment wasn't approved on the phone.");
   } else if (res.status === "success") {
-    if (res.amount !== row.amount + row.fee) {
-      // Never credit a different amount than was asked for: leave it for staff.
-      console.error("hivepay amount mismatch:", row.id, "asked", row.amount + row.fee, "got", res.amount);
+    if (!(res.amount >= row.amount)) {
+      // Never credit more than HivePay collected: leave it for staff. (Prompts
+      // sent before the fee came off asked for amount + fee; `amount` is what's credited.)
+      console.error("hivepay amount mismatch:", row.id, "asked", row.amount, "got", res.amount);
       return row;
     }
     const settled = await repo.settleCollection(row.id, ACTOR_NAME);

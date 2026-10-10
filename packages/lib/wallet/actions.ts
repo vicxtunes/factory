@@ -26,7 +26,6 @@ import type {
   TransactionHistoryFilters,
   TransactionHistoryPage,
   WalletListRow,
-  WalletPayment,
   WalletResult,
   WalletSummary,
   WalletView,
@@ -78,25 +77,14 @@ export async function getMyTransactionHistory(
   return run(async () => service.getMyTransactionHistory(await requireClient(), filters));
 }
 
+/** The client's phone on record, offered first when paying by mobile money. */
+export async function getMyPhone(): Promise<WalletResult<string | null>> {
+  return run(async () => service.getMyPhone(await requireClient()));
+}
+
 /** Balance + pending deposits only — cheap enough for the home screen. */
 export async function getMyWalletSummary(): Promise<WalletResult<WalletSummary>> {
   return run(async () => service.getMyWalletSummary(await requireClient()));
-}
-
-/** "I've sent money": records a deposit for staff to confirm. */
-export async function reportDeposit(input: DepositInput): Promise<WalletResult<WalletPayment>> {
-  return run(async () => {
-    const payment = await service.reportDeposit(await requireClient(), input);
-    refreshMoneyPages();
-    return payment;
-  });
-}
-
-export async function withdrawDeposit(paymentId: string): Promise<WalletResult> {
-  return run(async () => {
-    await service.withdrawDeposit(await requireClient(), paymentId);
-    refreshMoneyPages();
-  });
 }
 
 export async function payOrderFromWallet(orderId: string): Promise<WalletResult<OrderPaymentState & { paidNow: number }>> {
@@ -107,12 +95,12 @@ export async function payOrderFromWallet(orderId: string): Promise<WalletResult<
   });
 }
 
-/** "Top up with mobile money": `amount` lands in the wallet; the phone is prompted for it plus the fee. */
+/** "Top up with mobile money": the phone is prompted for `amount`, which lands in the wallet. */
 export async function topUpWithMobileMoney(amount: number, phone: string): Promise<WalletResult<MobileMoneyCollection>> {
   return run(async () => mobileMoney.startTopUp(await requireClient(), { amount, phone }));
 }
 
-/** "Pay with mobile money" on an order: prompts for what's due plus the fee. */
+/** "Pay with mobile money" on an order: prompts for what's due. */
 export async function payOrderWithMobileMoney(orderId: string, phone: string): Promise<WalletResult<MobileMoneyCollection>> {
   return run(async () => mobileMoney.startOrderPayment(await requireClient(), { orderId, phone }));
 }

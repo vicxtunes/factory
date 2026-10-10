@@ -424,7 +424,6 @@ export interface CollectionRow {
   client_id: string;
   order_id: string | null;
   amount: number;
-  fee: number;
   phone: string;
   network: string | null;
   status: "pending" | "succeeded" | "failed";
@@ -432,10 +431,10 @@ export interface CollectionRow {
   created_at: string;
 }
 
-const COLLECTION_COLUMNS = "id, provider, provider_ref, client_id, order_id, amount, fee, phone, network, status, failure_reason, created_at";
+const COLLECTION_COLUMNS = "id, provider, provider_ref, client_id, order_id, amount, phone, network, status, failure_reason, created_at";
 
 function normaliseCollection(row: CollectionRow): CollectionRow {
-  return { ...row, amount: num(row.amount), fee: num(row.fee) };
+  return { ...row, amount: num(row.amount) };
 }
 
 export async function insertCollection(input: {
@@ -443,7 +442,6 @@ export async function insertCollection(input: {
   clientId: string;
   orderId: string | null;
   amount: number;
-  fee: number;
   phone: string;
   createdByName: string;
 }): Promise<CollectionRow> {
@@ -454,7 +452,6 @@ export async function insertCollection(input: {
       client_id: input.clientId,
       order_id: input.orderId,
       amount: input.amount,
-      fee: input.fee,
       phone: input.phone,
       created_by_name: input.createdByName,
     })
@@ -470,6 +467,21 @@ export async function getCollection(id: string): Promise<CollectionRow | null> {
     .select(COLLECTION_COLUMNS)
     .eq("id", id)
     .maybeSingle<CollectionRow>();
+  if (error) throwDbError(error);
+  return data ? normaliseCollection(data) : null;
+}
+
+/** The client's newest prompt for this order (null: a top-up) still waiting since `since`, if any. */
+export async function pendingCollection(clientId: string, orderId: string | null, since: Date): Promise<CollectionRow | null> {
+  let query = createAdminClient()
+    .from("provider_collections")
+    .select(COLLECTION_COLUMNS)
+    .eq("client_id", clientId)
+    .eq("status", "pending")
+    .not("provider_ref", "is", null)
+    .gte("created_at", since.toISOString());
+  query = orderId ? query.eq("order_id", orderId) : query.is("order_id", null);
+  const { data, error } = await query.order("created_at", { ascending: false }).limit(1).maybeSingle<CollectionRow>();
   if (error) throwDbError(error);
   return data ? normaliseCollection(data) : null;
 }

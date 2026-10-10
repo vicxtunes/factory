@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
 
-import { PaymentMethods } from "@repo/ui/payments/PaymentMethods";
 import { ClientWallet } from "@repo/ui/wallet/ClientWallet";
 import { PanelStackSkeleton } from "@repo/ui/skeletons/blocks";
 import { Loading } from "@repo/ui/skeletons/Loading";
@@ -38,5 +37,5 @@ export default async function ClientPaymentPage({ searchParams }: { searchParams
 async function Wallet({ startAdding }: { startAdding: boolean }) {
   const wallet = await getMyWallet();
   if (!wallet.ok) return <p className="rounded-2xl border border-border bg-surface p-4 text-sm text-error-600">{wallet.error}</p>;
-  return <ClientWallet wallet={wallet.data} howToPay={<PaymentMethods />} startAdding={startAdding} />;
+  return <ClientWallet wallet={wallet.data} startAdding={startAdding} />;
 }

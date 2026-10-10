@@ -1,62 +1,62 @@
 "use client";
 
-import { useEffect, useRef, useState, useSyncExternalStore, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@repo/ui/Button";
-import { Field } from "@repo/ui/Field";
 import { PhoneInput } from "@repo/ui/PhoneInput";
-import { checkMobileMoneyPayment } from "@repo/lib/wallet/actions";
-import { checkMobileMoneyAmount, mobileMoneyFee } from "@repo/lib/wallet/policy";
+import { checkMobileMoneyPayment, getMyPhone } from "@repo/lib/wallet/actions";
+import { checkMobileMoneyAmount, localPhone, networkOfPhone, type MobileNetwork } from "@repo/lib/wallet/policy";
 import type { MobileMoneyCollection, WalletResult } from "@repo/lib/wallet/types";
 
 import { useMoney } from "./shared";
 
-// Paying by mobile money (HivePay): the phone number, what the prompt will
-// charge (amount + fee), then "approve on your phone" while the screen
-// follows the payment until it goes through or fails. Used by the wallet's
-// top-up and an order's "Pay with mobile money".
+// Paying by MTN / Airtel (HivePay): their number on record as one tap (when
+// it's on the chosen network) or another number, one Pay button, then
+// "approve on your phone" while the screen follows the payment.
 
-const PHONE_KEY = "aming:mobile-money-phone";
 const CHECK_EVERY_MS = 4000;
-/** After this long the screen stops asking and says what to do; the payment can still complete. */
+/** After this long the screen stops asking; the payment can still complete. */
 const GIVE_UP_AFTER_MS = 3 * 60_000;
 
-const noopSubscribe = () => () => {};
+const NETWORK_NAME: Record<MobileNetwork, string> = { mtn: "MTN", airtel: "Airtel" };
 
-function rememberedPhone(): string {
-  try {
-    return localStorage.getItem(PHONE_KEY) ?? "";
-  } catch {
-    return "";
-  }
-}
+const choiceClass = (selected: boolean) =>
+  `min-h-11 rounded-xl border px-3 text-sm font-medium transition-colors ${
+    selected
+      ? "border-brand-500 bg-brand-50 text-brand-700 dark:bg-brand-500/10 dark:text-brand-300"
+      : "border-border bg-surface hover:bg-gray-50 dark:hover:bg-white/5"
+  }`;
 
 export function MobileMoneyPay({
   amount,
+  network,
   start,
-  submitLabel,
   onDone,
 }: {
-  /** What's credited / applied (the fee is added on top); NaN while the amount isn't typed yet. */
+  /** What the phone is prompted for; NaN while the amount isn't typed yet. */
   amount: number;
+  network: MobileNetwork;
   /** Sends the prompt. */
   start: (phone: string) => Promise<WalletResult<MobileMoneyCollection>>;
-  submitLabel: string;
   onDone?: () => void;
 }) {
   const router = useRouter();
   const money = useMoney();
-  // The last number used on this device, until they type another. Read
-  // after hydration only, so the server's HTML always matches.
-  const remembered = useSyncExternalStore(noopSubscribe, rememberedPhone, () => "");
-  const [typed, setPhone] = useState<string | null>(null);
-  const phone = typed ?? remembered;
+  const [ownPhone, setOwnPhone] = useState<string | null>(null);
+  const [useOther, setUseOther] = useState(false);
+  const [otherPhone, setOtherPhone] = useState("");
   const [collection, setCollection] = useState<MobileMoneyCollection | null>(null);
   const [startedAt, setStartedAt] = useState(0);
   const [gaveUp, setGaveUp] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+
+  useEffect(() => {
+    getMyPhone().then((res) => {
+      if (res.ok) setOwnPhone(res.data);
+    });
+  }, []);
 
   // Callers pass a fresh onDone each render; keep the latest without restarting the timer.
   const onDoneRef = useRef(onDone);
@@ -81,21 +81,19 @@ export function MobileMoneyPay({
     return () => clearInterval(timer);
   }, [followingId, startedAt, router]);
 
+  // Their own number, when it's on this network.
+  const own = ownPhone && networkOfPhone(ownPhone) === network ? ownPhone : null;
+  const phone = own && !useOther ? own : otherPhone;
   const valid = Number.isFinite(amount) && amount > 0;
-  const fee = valid ? mobileMoneyFee(amount) : 0;
 
-  function submit(e: React.FormEvent) {
-    e.preventDefault();
+  function pay() {
     const amountError = checkMobileMoneyAmount(amount);
     if (amountError) return setError(amountError);
-    if (!phone) return setError("Enter the mobile money number to pay from.");
+    if (!phone) return setError(`Enter your ${NETWORK_NAME[network]} number.`);
     setError(null);
     startTransition(async () => {
       const res = await start(phone);
       if (!res.ok) return setError(res.error);
-      try {
-        localStorage.setItem(PHONE_KEY, phone);
-      } catch {}
       setCollection(res.data);
       setStartedAt(Date.now());
       setGaveUp(false);
@@ -105,51 +103,50 @@ export function MobileMoneyPay({
   if (collection?.status === "succeeded") {
     return (
       <p className="rounded-xl border border-border px-4 py-3 text-sm font-medium text-success-600 dark:text-success-500">
-        ✓ Payment received: {money(collection.amount)}
+        ✓ Paid {money(collection.amount)}
       </p>
     );
   }
 
   if (collection?.status === "pending") {
     return (
-      <div className="space-y-2 rounded-xl border border-border px-4 py-3">
-        <p className="text-sm font-medium">Check your phone</p>
-        <p className="text-sm text-muted">
-          Approve the {collection.network ?? "mobile money"} prompt for{" "}
-          <span className="font-semibold text-foreground">{money(collection.amount + collection.fee)}</span> with your PIN.
-          {gaveUp ? null : " This page updates by itself."}
-        </p>
+      <div className="space-y-1 rounded-xl border border-border px-4 py-3">
+        <p className="text-sm font-medium">Approve {money(collection.amount)} on your phone</p>
+        <p className="text-xs text-muted">{gaveUp ? "Still waiting. It shows here once approved." : "Enter your PIN in the prompt."}</p>
         {gaveUp ? (
-          <p className="text-xs text-muted">
-            Still waiting. If you approved it, the payment will show up here shortly — refresh the page later. If no prompt
-            came, try again.
-          </p>
+          <button type="button" onClick={() => setCollection(null)} className="text-xs text-muted underline-offset-2 hover:underline">
+            Try again
+          </button>
         ) : null}
-        <button type="button" onClick={() => setCollection(null)} className="text-xs text-muted underline-offset-2 hover:underline">
-          No prompt? Try again
-        </button>
       </div>
     );
   }
 
   return (
-    <form onSubmit={submit} className="space-y-3">
-      {collection?.status === "failed" ? (
-        <p className="text-sm text-error-600">{collection.failureReason ?? "The payment didn't go through."} You can try again.</p>
+    <div className="space-y-3">
+      {collection?.status === "failed" ? <p className="text-sm text-error-600">Not approved. Try again.</p> : null}
+      {own ? (
+        <div className="grid grid-cols-2 gap-2">
+          <button type="button" className={choiceClass(!useOther)} onClick={() => setUseOther(false)}>
+            {localPhone(own)}
+          </button>
+          <button type="button" className={choiceClass(useOther)} onClick={() => setUseOther(true)}>
+            Other number
+          </button>
+        </div>
       ) : null}
-      <Field label="MTN or Airtel number" hint="You'll get a prompt on this phone to approve with your PIN.">
-        <PhoneInput value={phone} onChange={setPhone} required />
-      </Field>
-      {valid ? (
-        <p className="text-xs text-muted">
-          You&apos;ll be charged <span className="font-semibold text-foreground">{money(amount + fee)}</span> ({money(amount)} +{" "}
-          {money(fee)} mobile money fee).
-        </p>
+      {!own || useOther ? (
+        <PhoneInput
+          value={otherPhone}
+          onChange={setOtherPhone}
+          aria-label={`${NETWORK_NAME[network]} number`}
+          placeholder={`${NETWORK_NAME[network]} number`}
+        />
       ) : null}
       {error ? <p className="text-xs text-error-600">{error}</p> : null}
-      <Button type="submit" loading={pending} className="w-full">
-        {submitLabel}
+      <Button type="button" onClick={pay} loading={pending} disabled={!valid} className="w-full">
+        {valid ? `Pay ${money(amount)}` : "Pay"}
       </Button>
-    </form>
+    </div>
   );
 }

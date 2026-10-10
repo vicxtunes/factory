@@ -2,10 +2,10 @@
 
 Clients who pay upfront keep a balance with us and spend it on orders.
 
-- **Add funds.** The client sends money the usual way (bank or mobile money), then taps
-  *Add funds → I've sent it* with the amount and transaction ID. Staff check the statement and
-  **confirm** it (or **reject** it with a reason). Only then does the wallet balance go up.
-  Staff can also **record** a deposit directly, e.g. cash taken at the counter.
+- **Add funds.** *Add funds → MTN / Airtel* tops up right away with a prompt on the client's phone
+  (HivePay, below). *Bank* shows the account details; staff **record** the deposit once they see it
+  on the statement (also how cash at the counter goes in). Older client deposit reports still
+  waiting are confirmed or rejected by staff as before; clients can no longer file new ones.
 - **Pay from wallet.** On any confirmed, invoiced order the client taps *Pay from wallet*. It takes as much
   of what's due as the balance covers; anything left stays due.
 - **Pay an invoice externally.** Staff record cash, mobile money or bank receipts against the
@@ -110,7 +110,7 @@ calling an external order receipt a deposit.
 
 | Who | Can |
 | --- | --- |
-| Client | See their own wallet and orders' paid state; report or withdraw a pending deposit; pay their own confirmed orders from their wallet. |
+| Client | See their own wallet and orders' paid state; top up and pay orders by MTN / Airtel; pay their own confirmed orders from their wallet. |
 | Receptionist / supervisor / boss | Everything on `/dashboard/wallets`: confirm/reject/record deposits, adjust, refund orders. Same audience as the Clients page (`isManagerRole`). |
 | Workers, designers | Nothing. They never see money. |
 
@@ -121,10 +121,10 @@ does not require payment. Clients can pay from wallet; external receipts are rec
 ## Mobile money through HivePay
 
 Clients can pay by **MTN / Airtel mobile money** without leaving the app (HivePay,
-https://hivepay.site/docs): "Top up with mobile money" on the wallet page, and "Pay with mobile
-money" on a payable order (approved, priced, invoiced). Their phone gets a PIN prompt for the amount
-**plus HivePay's fee** (the client pays it: `MOBILE_MONEY_FEE_RATE` in `policy.ts`, 3% from HivePay's
-example — confirm the real rule with HivePay).
+https://hivepay.site/docs): *Add funds* on the wallet page, and *How to pay* on a payable order
+(approved, priced, invoiced) — pick MTN or Airtel, their number on record or another, *Pay*. Their
+phone gets a PIN prompt for **exactly the amount**; HivePay takes its fee from what it pays the
+business. One prompt at a time per payment: a second tap within 3 minutes gets the waiting one back.
 
 - **One row per prompt** in `provider_collections` (migration `20261014100000`).
 - **Settling** is `provider_collection_settle()`, one transaction:
