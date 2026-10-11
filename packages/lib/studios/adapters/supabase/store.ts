@@ -16,6 +16,8 @@ interface Row {
   phone: string | null;
   email: string | null;
   address: string | null;
+  latitude: number | null;
+  longitude: number | null;
   currency: string;
   locale: string;
   time_zone: string;
@@ -25,7 +27,7 @@ interface Row {
   brand_color: string | null;
 }
 
-const COLUMNS = "id, owner_client_id, name, phone, email, address, currency, locale, time_zone, created_at, status, logo_key, brand_color";
+const COLUMNS = "id, owner_client_id, name, phone, email, address, latitude, longitude, currency, locale, time_zone, created_at, status, logo_key, brand_color";
 
 const toStudio = (r: Row): Studio => ({
   id: r.id,
@@ -34,6 +36,7 @@ const toStudio = (r: Row): Studio => ({
   phone: r.phone,
   email: r.email,
   address: r.address,
+  location: r.latitude != null && r.longitude != null ? { lat: r.latitude, lng: r.longitude } : null,
   currency: r.currency,
   locale: r.locale,
   timeZone: r.time_zone,
@@ -82,7 +85,14 @@ export const supabaseStudioStore: StudioStore = {
     const { data, error } = await createAdminClient()
       .from("tenants")
       // Named one by one: nothing else a caller passes (an owner, is_default) ever reaches tenants.
-      .update({ name: profile.name, phone: profile.phone, email: profile.email, address: profile.address })
+      .update({
+        name: profile.name,
+        phone: profile.phone,
+        email: profile.email,
+        address: profile.address,
+        latitude: profile.location?.lat ?? null,
+        longitude: profile.location?.lng ?? null,
+      })
       .eq("id", id)
       .not("owner_client_id", "is", null)
       .select(COLUMNS)

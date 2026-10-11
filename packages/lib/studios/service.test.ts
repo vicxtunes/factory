@@ -21,6 +21,7 @@ function memoryStore() {
         phone: null,
         email: null,
         address: null,
+        location: null,
         currency: "UGX",
         locale: "en-UG",
         timeZone: "Africa/Kampala",
@@ -50,7 +51,7 @@ function memoryStore() {
 
 const amina = { clientId: "c-amina", name: "Amina" };
 const brian = { clientId: "c-brian", name: "Brian" };
-const profile = { name: "Amina Studios", phone: "0700 000000", email: null, address: "Kampala" };
+const profile = { name: "Amina Studios", phone: "0700 000000", email: null, address: "Kampala", location: null };
 
 test("opening a studio creates it once, named after the owner", async () => {
   const { store, rows } = memoryStore();

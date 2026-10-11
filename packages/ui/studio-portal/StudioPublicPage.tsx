@@ -1,5 +1,6 @@
 
 import { BookingStatusBadge } from "@repo/ui/bookings/BookingBits";
+import { DirectionsButton } from "@repo/ui/maps/Directions";
 import { ShowroomGallery, type ShowroomTab } from "@repo/ui/showroom/ShowroomGallery";
 import type { Booking } from "@repo/lib/bookings/core";
 import type { Service } from "@repo/lib/offerings/core";
@@ -93,8 +94,11 @@ export function StudioPublicPage({
       banner={{ title: studio.name, subtitle: studio.address ?? "Welcome to our show room", imageUrl: bannerUrl }}
       notice={
         <div className="mb-6 space-y-4">
-          {studio.phone || studio.email ? (
+          {studio.phone || studio.email || studio.location || studio.address ? (
             <div className="flex flex-wrap gap-2">
+              {studio.location || studio.address ? (
+                <DirectionsButton to={studio.location ?? { query: studio.address! }} name={studio.name} className="bg-surface" />
+              ) : null}
               {studio.phone ? (
                 <a href={`tel:${studio.phone}`} className={outline}>
                   Call {studio.phone}

@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 
 import { Button } from "@repo/ui/Button";
 import { Field, TextArea, TextInput } from "@repo/ui/Field";
+import { LocationPicker } from "@repo/ui/maps/LocationPicker";
 import { PhoneInput } from "@repo/ui/PhoneInput";
 import { saveMyStudioProfile } from "@repo/lib/studios/actions";
 import type { StudioProfile } from "@repo/lib/studios/core";
@@ -16,6 +17,7 @@ export function StudioProfileForm({ profile }: { profile: StudioProfile }) {
     email: profile.email ?? "",
     address: profile.address ?? "",
   });
+  const [location, setLocation] = useState(profile.location);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [pending, start] = useTransition();
@@ -29,10 +31,11 @@ export function StudioProfileForm({ profile }: { profile: StudioProfile }) {
     e.preventDefault();
     setError(null);
     start(async () => {
-      const res = await saveMyStudioProfile(form);
+      const res = await saveMyStudioProfile({ ...form, location });
       if (!res.ok) return setError(res.error);
       const s = res.data;
       setForm({ name: s.name, phone: s.phone ?? "", email: s.email ?? "", address: s.address ?? "" });
+      setLocation(s.location);
       setSaved(true);
     });
   }
@@ -53,6 +56,17 @@ export function StudioProfileForm({ profile }: { profile: StudioProfile }) {
       <Field label="Address" hint="Where customers find you. Shown on your quotations and invoices.">
         <TextArea value={form.address} onChange={set("address")} maxLength={200} rows={2} />
       </Field>
+      <div className="space-y-1.5">
+        <p className="text-sm font-medium">Your place on the map</p>
+        <p className="text-xs text-muted">Clients get live directions to this pin.</p>
+        <LocationPicker
+          value={location}
+          onChange={(point) => {
+            setLocation(point);
+            setSaved(false);
+          }}
+        />
+      </div>
       {error ? <p className="text-sm text-error-600 dark:text-error-400">{error}</p> : null}
       <div className="flex items-center gap-3">
         <Button type="submit" loading={pending}>

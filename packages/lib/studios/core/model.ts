@@ -6,12 +6,20 @@
 import type { StudioStatus } from "@repo/lib/studio-access/core";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
+/** A point on the map. */
+export interface MapPoint {
+  lat: number;
+  lng: number;
+}
+
 /** What the studio shows on its documents and to its customers. */
 export interface StudioProfile {
   name: string;
   phone: string | null;
   email: string | null;
   address: string | null;
+  /** Its pin on the map: where directions lead. */
+  location: MapPoint | null;
 }
 
 export interface Studio extends StudioProfile {

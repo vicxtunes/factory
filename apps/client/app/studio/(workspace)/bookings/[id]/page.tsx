@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { BookingStatusBadge, timeSpan } from "@repo/ui/bookings/BookingBits";
 import { BookingStatusButtons } from "@repo/ui/bookings/BookingStatusButtons";
 import { DeleteButton } from "@repo/ui/DeleteButton";
+import { DirectionsButton } from "@repo/ui/maps/Directions";
 import { deleteBooking } from "@repo/lib/bookings/actions";
 import { RequestAnswer } from "@repo/ui/bookings/RequestAnswer";
 import { ClientPortalPanel } from "@repo/ui/studio-portal/ClientPortalPanel";
@@ -34,7 +35,17 @@ export default async function StudioBookingPage({ params }: { params: Promise<{ 
   const details: [string, React.ReactNode][] = [
     ["Client", <Link key="c" href={`/studio/clients/${b.customerId}`} className="hover:underline">{b.customerName}</Link>],
     ["When", `${formatDay(scope, b.date)} · ${timeSpan(b)}`],
-    ["Location", b.location ?? "—"],
+    [
+      "Location",
+      b.location ? (
+        <span key="l" className="flex flex-wrap items-center gap-2">
+          {b.location}
+          <DirectionsButton to={{ query: b.location }} name={b.location} className="min-h-8 px-3 text-xs" />
+        </span>
+      ) : (
+        "—"
+      ),
+    ],
     ["Package", b.packageName ?? "—"],
     ["Amount", b.amount != null ? formatAmount(scope, b.amount) : "—"],
   ];

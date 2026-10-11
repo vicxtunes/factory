@@ -1,6 +1,7 @@
 import { notFound, permanentRedirect, redirect } from "next/navigation";
 
 import { ClientPortalHome } from "@repo/ui/studio-portal/ClientPortalHome";
+import { DirectionsButton } from "@repo/ui/maps/Directions";
 import { PortalSignOutButton } from "@repo/ui/studio-portal/PortalForms";
 
 import { PayRequestButton } from "../../pay-request-button";
@@ -88,6 +89,11 @@ async function Home({ at, me, slug }: { at: NonNullable<Awaited<ReturnType<typeo
       scope={scope}
       today={localDate(new Date(), scope.timeZone)}
       signOut={<PortalSignOutButton slug={slug} />}
+      directions={
+        at.studio.location || at.studio.address ? (
+          <DirectionsButton to={at.studio.location ?? { query: at.studio.address! }} name={at.studio.name} className="min-h-9 text-xs" />
+        ) : null
+      }
       pay={(target) => <PayRequestButton slug={slug} phone={me.phone ?? null} scope={{ currency: scope.currency, locale: scope.locale }} {...target} />}
     />
   );

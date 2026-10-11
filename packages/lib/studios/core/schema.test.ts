@@ -11,7 +11,11 @@ test("a profile is trimmed, and empty optional fields become null", () => {
     phone: null,
     email: null,
     address: "Kampala",
+    location: null,
   });
+  const pinned = parseInput(studioProfileSchema, { name: "Studio", phone: "", email: "", address: "", location: { lat: 0.3136, lng: 32.5811 } });
+  assert.deepEqual(pinned.location, { lat: 0.3136, lng: 32.5811 });
+  assert.throws(() => parseInput(studioProfileSchema, { name: "Studio", phone: "", email: "", address: "", location: { lat: 120, lng: 32 } }));
 });
 
 test("a profile needs a name", () => {

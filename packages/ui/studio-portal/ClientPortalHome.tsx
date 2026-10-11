@@ -51,12 +51,15 @@ export function ClientPortalHome({
   scope,
   today,
   signOut,
+  directions,
   pay,
 }: {
   view: ClientPortalView;
   scope: Omit<TenantScope, "tenantId">;
   today: string;
   signOut: ReactNode;
+  /** "Directions" to the studio, when it has a place. */
+  directions?: ReactNode;
   /** The "Pay to confirm" button for a priced booking or order still waiting for the studio. */
   pay?: (target: { kind: "booking" | "order"; id: string; total: number }) => ReactNode;
 }) {
@@ -73,7 +76,10 @@ export function ClientPortalHome({
           <p className="text-sm text-muted">{view.studioName}</p>
           <h1 className="text-2xl font-semibold">Hello, {view.clientName}</h1>
         </div>
-        {signOut}
+        <div className="flex flex-wrap items-center gap-2">
+          {directions}
+          {signOut}
+        </div>
       </header>
 
       {toAnswer.length || owed > 0 ? (

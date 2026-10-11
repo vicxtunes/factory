@@ -14,6 +14,10 @@ export const studioProfileSchema = z.object({
   phone: optionalPhone(),
   email: optionalEmail(),
   address: optionalText(200, "Keep the address under 200 characters."),
+  location: z
+    .object({ lat: z.number().min(-90).max(90), lng: z.number().min(-180).max(180) }, "That place on the map isn't valid.")
+    .nullish()
+    .transform((p) => p ?? null),
 }) satisfies z.ZodType<StudioProfile, unknown>;
 
 export const brandColorSchema = z.object({
