@@ -12,6 +12,8 @@ export interface AccessStore {
   /** Sets the logo; returns the old one's key, if any, so its file can go. */
   setLogo(tenantId: string, key: string): Promise<string | null>;
   setOwnerEmail(tenantId: string, email: string, verifiedAt: string): Promise<void>;
+  /** Whether another account (or another business) already signs in with this email: one email is one account. */
+  emailInUse(tenantId: string, email: string): Promise<boolean>;
   /**
    * Moves the studio from `from` to `to` (only if it's still at `from`, so two
    * decisions at once can't both apply) and records when and why. False when

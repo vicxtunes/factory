@@ -98,10 +98,11 @@ type Found = { client: ClientCandidate; studioEmail: string | null };
 
 /**
  * The accounts an email or phone number can mean. The database matches a
- * phone however it was typed. An email is an account's own, and it can also
- * be a studio's verified owner email (`studioEmail`: the code goes there),
- * which means the studio owner's account. Usually that's one account; when
- * the studio's email also sits on another client record, both come back.
+ * phone however it was typed, and an email to the account that has it as its
+ * own or owns the studio that verified it (`studioEmail`: the code goes
+ * there). One email is one account: the database refuses a second since
+ * 20261017100000_one_email_one_account. Older records can still collide, so
+ * both come back, the studio's owner first.
  */
 async function findClients(admin: Admin, method: Method, identifier: string): Promise<Found[]> {
   if (method === "phone") {
@@ -112,23 +113,13 @@ async function findClients(admin: Admin, method: Method, identifier: string): Pr
   }
   const email = cleanEmail(identifier);
   if (!email) return [];
-  const own = (await findClientCandidates(admin, { email })).find((c) => c.match_reason === "email");
-  const found: Found[] = own ? [{ client: own, studioEmail: null }] : [];
-
-  const { data: studio } = await admin
-    .from("tenants")
-    .select("owner:clients (id, name, email, phone, active)")
-    .eq("owner_email", email)
-    .not("owner_email_verified_at", "is", null)
-    .limit(1)
-    .maybeSingle<{ owner: Omit<ClientCandidate, "match_reason" | "score"> | null }>();
-  if (studio?.owner && studio.owner.id !== own?.id) {
-    found.push({ client: { ...studio.owner, match_reason: "email", score: 1 }, studioEmail: email });
-  }
-  return found;
+  return (await findClientCandidates(admin, { email }))
+    .filter((c) => c.match_reason === "email")
+    .map((client) => ({ client, studioEmail: cleanEmail(client.email) === email ? null : email }))
+    .sort((a, b) => Number(!a.studioEmail) - Number(!b.studioEmail));
 }
 
-/** The first of them: the account's own email before a studio's. */
+/** The first of them. */
 async function findClient(admin: Admin, method: Method, identifier: string): Promise<Found | null> {
   return (await findClients(admin, method, identifier))[0] ?? null;
 }

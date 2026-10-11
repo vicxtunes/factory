@@ -45,6 +45,7 @@ function setup() {
       return old;
     },
     setOwnerEmail: async (id, email, at) => void Object.assign(one(id), { ownerEmail: email, ownerEmailVerifiedAt: at }),
+    emailInUse: async (_id, email) => email === "taken@mail.com",
     setStatus: async (id, from, to, at, note) => {
       const s = one(id);
       if (s.status !== from) return false;
@@ -146,6 +147,10 @@ test("email codes: 6 digits by email, 10 minutes, 5 tries, one at a time, stored
   assert.equal(t.sent.length, 2);
   t.tick(10 * 60_000);
   await assert.rejects(t.service.verifyEmail(A, "654321"), /expired/);
+
+  // An email another account signs in with is refused before any code goes out.
+  await assert.rejects(t.service.sendVerifyCode(A, "taken@mail.com"), /belongs to another account/);
+  assert.equal(t.sent.length, 2);
 
   // Expired: a new one too.
   await t.service.sendVerifyCode(A, "new@mail.com");

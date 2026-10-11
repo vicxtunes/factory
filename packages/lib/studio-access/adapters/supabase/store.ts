@@ -5,6 +5,7 @@ import "server-only";
 // Service-role client; only studios (tenants with an owner) are read or written.
 
 import { createAdminClient } from "@repo/lib/supabase/admin";
+import { findClientCandidates } from "@repo/lib/clients/dedupe";
 
 import type { EmailCode, StudioAccess, StudioForReview, StudioStatus } from "../../core";
 import type { AccessStore } from "../../ports";
@@ -102,6 +103,14 @@ export const supabaseAccessStore: AccessStore = {
   },
 
   setOwnerEmail: (tenantId, email, at) => update(tenantId, "save the email", { owner_email: email, owner_email_verified_at: at }),
+
+  // Anyone but this business's owner that the email finds (as their own, or as another business's).
+  async emailInUse(tenantId, email) {
+    const { data: tenant, error } = await tenants().select("owner_client_id").eq("id", tenantId).single<{ owner_client_id: string }>();
+    if (error) fail("load the business", error);
+    const others = await findClientCandidates(createAdminClient(), { email, excludeId: tenant.owner_client_id });
+    return others.some((c) => c.match_reason === "email");
+  },
 
   async setStatus(tenantId, from, to, at, note) {
     const { data, error } = await tenants()

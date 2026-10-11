@@ -106,6 +106,9 @@ export class StudioAccessService {
   /** Emails a code to verify the owner's address (or points to the one already pending). */
   async sendVerifyCode(tenantId: string, email: string): Promise<CodeSent> {
     const access = await this.settingUp(tenantId);
+    if (await this.store.emailInUse(tenantId, email)) {
+      throw new AccessError("That email belongs to another account. Use a different one, or sign in to that account.");
+    }
     return this.sendCode(access, email);
   }
 
