@@ -28,7 +28,9 @@ export interface ProductRequest {
   /** Each; 0 = priced on request. */
   unitPrice: number;
   status: ProductRequestStatus;
-  /** The invoice made when it was confirmed. */
+  /** The quotation made when it was asked for (none when priced on request). */
+  quotationId: string | null;
+  /** The invoice made when it was paid for or confirmed. */
   invoiceId: string | null;
   createdAt: string;
 }

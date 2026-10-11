@@ -5,7 +5,7 @@ import "server-only";
 // to the client's page (a returning client on a new device).
 
 import { localDate } from "@repo/lib/accounting/core/period";
-import { invoices } from "@repo/lib/billing/server";
+import { invoices, quotations } from "@repo/lib/billing/server";
 import type { Booking } from "@repo/lib/bookings/core";
 import { bookings } from "@repo/lib/bookings/server";
 import { customers } from "@repo/lib/customers/server";
@@ -31,6 +31,14 @@ export const bookingRequests = new BookingRequestService({
   createRequest: (scope, input) => bookings.request(scope, input),
   confirm: async (scope, id) => void (await bookings.confirmRequest(scope, id)),
   decline: (scope, id) => bookings.setStatus(scope, id, "cancelled"),
+  bookedDays: (scope, from) => bookedDays(scope, from),
+  createQuotation: (scope, input) => quotations.create(scope, input),
+  linkQuotation: (scope, bookingId, quotationId) => bookings.setQuotation(scope, bookingId, quotationId),
+  invoiceFromQuotation: async (scope, quotationId) => {
+    await quotations.answer(scope, quotationId, "accepted");
+    return invoices.fromQuotation(scope, quotationId);
+  },
+  declineQuotation: (scope, quotationId) => quotations.answer(scope, quotationId, "declined", "The business couldn't take this booking."),
   createInvoice: (scope, input) => invoices.create(scope, input),
   linkInvoice: (scope, bookingId, invoiceId) => bookings.setInvoice(scope, bookingId, invoiceId),
   startProject: (scope, bookingId, actorName) => projects.startFromBooking(scope, bookingId, { name: actorName }),
@@ -42,6 +50,16 @@ export const bookingRequests = new BookingRequestService({
   today: (scope) => localDate(new Date(), scope.timeZone),
 });
 
+/** How far ahead a client can see which days are taken. */
+const BOOKED_DAYS_AHEAD = 365;
+
+/** The days from `from` on (a year ahead) that already have a confirmed booking: all a client sees is the date. */
+export async function bookedDays(scope: TenantScope, from: string): Promise<string[]> {
+  const to = new Date(Date.parse(`${from}T00:00:00Z`) + BOOKED_DAYS_AHEAD * 86_400_000).toISOString().slice(0, 10);
+  const days = (await bookings.between(scope, from, to)).filter((b) => b.status === "confirmed").map((b) => b.date);
+  return [...new Set(days)].sort();
+}
+
 // --- Requests sent from a device that isn't signed in -------------------------
 
 const remembered = rememberedOnDevice("sbr");
@@ -49,6 +67,11 @@ const remembered = rememberedOnDevice("sbr");
 /** Remembers on this device a request it sent, so the studio's page can show how it's going. */
 export async function rememberRequest(tenantId: string, bookingId: string): Promise<void> {
   await remembered.add(tenantId, bookingId);
+}
+
+/** Whether this device sent this request (so it may pay for it without being signed in). */
+export async function isRememberedRequest(tenantId: string, bookingId: string): Promise<boolean> {
+  return (await remembered.ids(tenantId)).includes(bookingId);
 }
 
 /** The requests this device sent to the studio, newest first, as they stand now. */

@@ -52,7 +52,7 @@ interface Payee {
 
 async function prompt(
   payee: Payee,
-  input: { amount: number; phone: string; orderId: string | null; productRequestId?: string | null; description: string },
+  input: { amount: number; phone: string; orderId: string | null; productRequestId?: string | null; bookingId?: string | null; description: string },
 ): Promise<MobileMoneyCollection> {
   if (!hivepay.isConfigured()) throw new WalletError("Mobile money payments aren't available yet. Please pay another way.");
   const amountError = checkMobileMoneyAmount(input.amount);
@@ -65,7 +65,7 @@ async function prompt(
   // too soon) would put two charges on the client's phone.
   const waiting = await repo.pendingCollection(
     payee.clientId,
-    { orderId: input.orderId, productRequestId: input.productRequestId ?? null },
+    { orderId: input.orderId, productRequestId: input.productRequestId ?? null, bookingId: input.bookingId ?? null },
     new Date(Date.now() - ONE_PROMPT_AT_A_TIME_MS),
   );
   if (waiting) return toView(waiting);
@@ -75,6 +75,7 @@ async function prompt(
     clientId: payee.clientId,
     orderId: input.orderId,
     productRequestId: input.productRequestId ?? null,
+    bookingId: input.bookingId ?? null,
     amount: input.amount,
     phone: phone.store,
     createdByName: payee.payerName,
@@ -128,7 +129,9 @@ export async function startOrderPayment(viewer: ClientViewer, input: { orderId: 
  */
 export async function startStudioRequestPayment(input: {
   ownerClientId: string;
-  requestId: string;
+  /** What's paid for: the order request, or the booking. */
+  requestId?: string;
+  bookingId?: string;
   studioName: string;
   payerName: string;
   amount: number;
@@ -136,14 +139,42 @@ export async function startStudioRequestPayment(input: {
 }): Promise<MobileMoneyCollection> {
   return prompt(
     { clientId: input.ownerClientId, payerName: input.payerName },
-    { amount: input.amount, phone: input.phone, orderId: null, productRequestId: input.requestId, description: input.studioName },
+    { amount: input.amount, phone: input.phone, orderId: null, productRequestId: input.requestId, bookingId: input.bookingId, description: input.studioName },
   );
 }
+
+/** A studio customer's payment as it stands, for putting it on its invoice (packages/lib/studio-payments). */
+export async function studioPayment(id: string): Promise<{
+  id: string;
+  ownerClientId: string;
+  requestId: string | null;
+  bookingId: string | null;
+  amount: number;
+  reference: string;
+  succeeded: boolean;
+  applied: boolean;
+} | null> {
+  const row = await repo.getCollection(id);
+  if (!row || (!row.product_request_id && !row.booking_id)) return null;
+  return {
+    id: row.id,
+    ownerClientId: row.client_id,
+    requestId: row.product_request_id,
+    bookingId: row.booking_id,
+    amount: row.amount,
+    reference: toHivepayReference(row.id),
+    succeeded: row.status === "succeeded",
+    applied: !!row.applied_at,
+  };
+}
+
+export const claimStudioPaymentApply = repo.claimCollectionApply;
+export const releaseStudioPaymentApply = repo.releaseCollectionApply;
 
 /** The studio page following a customer's payment. The collection id (a uuid only that page has) is the key. */
 export async function checkStudioRequestPayment(id: string): Promise<MobileMoneyCollection> {
   const row = await repo.getCollection(id);
-  if (!row?.product_request_id) throw new WalletError("Payment not found.");
+  if (!row?.product_request_id && !row?.booking_id) throw new WalletError("Payment not found.");
   const asked = row.status === "pending" && Date.now() - Date.parse(row.created_at) > ASK_PROVIDER_AFTER_MS;
   return toView(asked ? await reconcile(row) : row);
 }
@@ -195,20 +226,21 @@ export async function checkCollection(viewer: ClientViewer, id: string): Promise
  * taken from HivePay's status API (reconcile), so a leaked webhook secret
  * still can't credit anyone. Returns the HTTP status to answer with.
  */
-export async function handleWebhook(rawBody: string, signature: string | null): Promise<number> {
-  if (!hivepay.verifyWebhook(rawBody, signature)) return 400;
+export async function handleWebhook(rawBody: string, signature: string | null): Promise<{ status: number; collectionId: string | null }> {
+  const answer = (status: number, collectionId: string | null = null) => ({ status, collectionId });
+  if (!hivepay.verifyWebhook(rawBody, signature)) return answer(400);
   let reference: string | null = null;
   try {
     const body = JSON.parse(rawBody) as { reference?: unknown; data?: { reference?: unknown } };
     const ref = body.reference ?? body.data?.reference;
     reference = typeof ref === "string" ? ref : null;
   } catch {
-    return 400;
+    return answer(400);
   }
   // Ours stand for a collection id (see hivepay-reference.ts); anything else isn't a collection we started.
   const collectionId = reference ? fromHivepayReference(reference) : null;
-  if (!collectionId) return 200;
+  if (!collectionId) return answer(200);
   const row = await repo.getCollection(collectionId);
   if (row) await reconcile(row);
-  return 200;
+  return answer(200, row ? collectionId : null);
 }

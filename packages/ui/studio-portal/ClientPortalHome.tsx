@@ -46,7 +46,20 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 }
 
 /** A studio's client's own page: their work with the studio, in one place. */
-export function ClientPortalHome({ view, scope, today, signOut }: { view: ClientPortalView; scope: Omit<TenantScope, "tenantId">; today: string; signOut: ReactNode }) {
+export function ClientPortalHome({
+  view,
+  scope,
+  today,
+  signOut,
+  pay,
+}: {
+  view: ClientPortalView;
+  scope: Omit<TenantScope, "tenantId">;
+  today: string;
+  signOut: ReactNode;
+  /** The "Pay to confirm" button for a priced booking or order still waiting for the studio. */
+  pay?: (target: { kind: "booking" | "order"; id: string; total: number }) => ReactNode;
+}) {
   const money = (n: number) => formatAmount(scope, n);
   const toAnswer = view.quotations.filter((q) => q.status === "open");
   const owed = view.invoices.reduce((sum, i) => sum + i.balance, 0);
@@ -128,7 +141,10 @@ export function ClientPortalHome({ view, scope, today, signOut }: { view: Client
                     {b.location ? ` · ${b.location}` : ""}
                   </p>
                 </div>
-                <BookingStatusBadge status={b.status} />
+                <div className="flex shrink-0 flex-col items-end gap-2">
+                  <BookingStatusBadge status={b.status} />
+                  {pay && b.status === "requested" && b.amount ? pay({ kind: "booking", id: b.id, total: b.amount }) : null}
+                </div>
               </li>
             ))}
           </ul>
@@ -149,9 +165,10 @@ export function ClientPortalHome({ view, scope, today, signOut }: { view: Client
                     {r.unitPrice > 0 ? ` · ${money(r.unitPrice * r.quantity)}` : ""}
                   </p>
                 </div>
-                <span className={`inline-flex shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${ORDER_TONES[r.status]}`}>
-                  {PRODUCT_REQUEST_STATUS_LABELS[r.status]}
-                </span>
+                <div className="flex shrink-0 flex-col items-end gap-2">
+                  <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${ORDER_TONES[r.status]}`}>{PRODUCT_REQUEST_STATUS_LABELS[r.status]}</span>
+                  {pay && r.status === "requested" && r.unitPrice > 0 ? pay({ kind: "order", id: r.id, total: r.unitPrice * r.quantity }) : null}
+                </div>
               </li>
             ))}
           </ul>

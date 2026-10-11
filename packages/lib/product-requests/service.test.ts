@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import type { InvoiceInput } from "@repo/lib/billing/core";
+import type { InvoiceInput, QuotationInput } from "@repo/lib/billing/core";
 import type { Offering, ServiceWithPackages } from "@repo/lib/offerings/core";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
@@ -47,7 +47,13 @@ function fakes() {
   const invoices: InvoiceInput[] = [];
   const opened: string[] = [];
   const notified: string[] = [];
+  const quotations: QuotationInput[] = [];
+  const declined: string[] = [];
   const service = new ProductRequestService({
+    createQuotation: async (_s, input) => (quotations.push(input), `q${quotations.length}`),
+    linkQuotation: async (_s, id, q) => void (requests.find((x) => x.id === id)!.quotationId = q),
+    invoiceFromQuotation: async (_s, q) => `inv-of-${q}`,
+    declineQuotation: async (_s, q) => void declined.push(q),
     product: async (_s, slug) => (slug === photobook.slug ? photobook : null),
     client: async (_s, { name, phone }) => {
       const known = clients.get(phone);
@@ -59,7 +65,7 @@ function fakes() {
     openRequests: async (_s, customerId) => requests.filter((r) => r.customerId === customerId && r.status === "requested").length,
     request: async (_s, id) => requests.find((r) => r.id === id) ?? null,
     createRequest: async (_s, input) => {
-      const r: ProductRequest = { ...input, id: `r${requests.length + 1}`, customerName: "", status: "requested", invoiceId: null, createdAt: "" };
+      const r: ProductRequest = { ...input, id: `r${requests.length + 1}`, customerName: "", status: "requested", quotationId: null, invoiceId: null, createdAt: "" };
       requests.push(r);
       return r.id;
     },
@@ -75,7 +81,7 @@ function fakes() {
     notifyOwner: async (_s, m) => void notified.push(`${m.title}: ${m.body}`),
     today: () => "2026-10-09",
   });
-  return { service, requests, invoices, opened, notified };
+  return { service, requests, invoices, opened, notified, quotations, declined };
 }
 
 const ask = { productSlug: "photobook", packageId: "small", quantity: 2 };
@@ -115,25 +121,35 @@ test("how many: a whole number from 1 to 99", () => {
   assert.deepEqual([parse("3"), parse(0), parse(100), parse(1.5)], [true, false, false, false]);
 });
 
-test("confirm makes one invoice for quantity × price, safe to repeat; none when priced on request", async () => {
-  const { service, requests, invoices } = fakes();
+test("asking makes the quotation for quantity × price; confirming makes its invoice from it, safe to repeat; none when priced on request", async () => {
+  const { service, requests, invoices, quotations } = fakes();
   const { requestId } = await service.request(scope, ask, "grace");
-  assert.deepEqual(await service.confirm(scope, requestId), { invoiceId: "inv1" });
-  assert.deepEqual(await service.confirm(scope, requestId), { invoiceId: "inv1" });
-  assert.equal(invoices.length, 1);
-  assert.deepEqual(invoices[0].lines.map((l) => [l.description, l.quantity, l.unitPrice, l.offeringId]), [["Photobook · 8x12", 2, 250_000, "small"]]);
+  assert.deepEqual(quotations[0].lines.map((l) => [l.description, l.quantity, l.unitPrice, l.offeringId]), [["Photobook · 8x12", 2, 250_000, "small"]]);
+  assert.equal(requests[0].quotationId, "q1");
+  assert.deepEqual(await service.confirm(scope, requestId), { invoiceId: "inv-of-q1" });
+  assert.deepEqual(await service.confirm(scope, requestId), { invoiceId: "inv-of-q1" });
+  assert.equal(invoices.length, 0, "the invoice comes from the quotation, not typed again");
   assert.equal(requests[0].status, "confirmed");
 
   const onRequest = await service.request(scope, { ...ask, packageId: "large" }, "grace");
+  assert.equal(quotations.length, 1, "nothing to quote yet");
   assert.deepEqual(await service.confirm(scope, onRequest.requestId), { invoiceId: null });
-  assert.equal(invoices.length, 1);
+});
+
+test("a request from before quotations still gets its invoice from the request", async () => {
+  const { service, requests, invoices } = fakes();
+  const { requestId } = await service.request(scope, ask, "grace");
+  requests[0].quotationId = null;
+  assert.deepEqual(await service.confirm(scope, requestId), { invoiceId: "inv1" });
+  assert.deepEqual(invoices[0].lines.map((l) => [l.quantity, l.unitPrice]), [[2, 250_000]]);
 });
 
 test("decline, and answered requests stay answered", async () => {
-  const { service, requests } = fakes();
+  const { service, requests, declined } = fakes();
   const { requestId } = await service.request(scope, ask, "grace");
   await service.decline(scope, requestId);
   assert.equal(requests[0].status, "declined");
+  assert.deepEqual(declined, ["q1"], "its quotation is turned down with it");
   await assert.rejects(service.decline(scope, requestId), /already been answered/);
   await assert.rejects(service.confirm(scope, requestId), /already been answered/);
   await assert.rejects(service.confirm(scope, "nope"), /no longer exists/);

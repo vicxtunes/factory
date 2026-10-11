@@ -2,6 +2,8 @@ import { notFound, permanentRedirect, redirect } from "next/navigation";
 
 import { ClientPortalHome } from "@repo/ui/studio-portal/ClientPortalHome";
 import { PortalSignOutButton } from "@repo/ui/studio-portal/PortalForms";
+
+import { PayRequestButton } from "../../pay-request-button";
 import { CardGridSkeleton, TitleRowSkeleton } from "@repo/ui/skeletons/blocks";
 import { Loading } from "@repo/ui/skeletons/Loading";
 import { localDate } from "@repo/lib/accounting/core/period";
@@ -86,6 +88,7 @@ async function Home({ at, me, slug }: { at: NonNullable<Awaited<ReturnType<typeo
       scope={scope}
       today={localDate(new Date(), scope.timeZone)}
       signOut={<PortalSignOutButton slug={slug} />}
+      pay={(target) => <PayRequestButton slug={slug} phone={me.phone ?? null} scope={{ currency: scope.currency, locale: scope.locale }} {...target} />}
     />
   );
 }

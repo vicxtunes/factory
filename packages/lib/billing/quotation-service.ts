@@ -90,6 +90,15 @@ export class QuotationService {
     if (!recorded) throw new BillingError("This quotation has already been answered.");
   }
 
+  /**
+   * Answers a quotation without its link: the client paid for it (accepted),
+   * or the studio turned the request down (declined). Leaves one that's
+   * already answered as it is.
+   */
+  async answer(scope: TenantScope, id: string, decision: "accepted" | "declined", reason: string | null = null): Promise<void> {
+    await this.store.respond(scope.tenantId, id, decision, decision === "declined" ? reason : null);
+  }
+
   private async check(scope: TenantScope, input: QuotationInput, currentCustomerId: string | null): Promise<void> {
     const customer = await this.directory.customer(scope, input.customerId);
     if (!customer) throw new BillingError("That client no longer exists.");

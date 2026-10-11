@@ -5,7 +5,7 @@
 // (./service.test.ts). See ./README.md.
 
 import type { Booking } from "@repo/lib/bookings/core";
-import type { InvoiceInput } from "@repo/lib/billing/core";
+import type { InvoiceInput, QuotationInput } from "@repo/lib/billing/core";
 import { AppError } from "@repo/lib/kernel/core";
 import { offeringLabel, type Offering, type ServiceWithPackages } from "@repo/lib/offerings/core";
 import type { PortalSession } from "@repo/lib/studio-portal/core";
@@ -32,6 +32,14 @@ export interface BookingRequestDeps {
   /** requested → confirmed, once. */
   confirm(scope: TenantScope, id: string): Promise<void>;
   decline(scope: TenantScope, id: string): Promise<void>;
+  /** The days from `from` on that already have a confirmed booking. */
+  bookedDays(scope: TenantScope, from: string): Promise<string[]>;
+  createQuotation(scope: TenantScope, input: QuotationInput): Promise<string>;
+  linkQuotation(scope: TenantScope, bookingId: string, quotationId: string): Promise<void>;
+  /** The invoice for the request's quotation (accepted now, if it wasn't). */
+  invoiceFromQuotation(scope: TenantScope, quotationId: string): Promise<string>;
+  /** The quotation, turned down with the request. */
+  declineQuotation(scope: TenantScope, quotationId: string): Promise<void>;
   createInvoice(scope: TenantScope, input: InvoiceInput): Promise<string>;
   linkInvoice(scope: TenantScope, bookingId: string, invoiceId: string): Promise<void>;
   /** The booking's project: started now, or the one it already has. */
@@ -52,7 +60,10 @@ export class BookingRequestService {
    * this device is signed in to their page for good (`session`); a number
    * the studio already knows still books, but signs nothing in (anyone could
    * type a client's number): the studio sends that client the link to their
-   * page when it confirms.
+   * page when it confirms. A day that already has a confirmed booking can't
+   * be asked for. A priced request gets its quotation straight away: they can
+   * pay for it there and then (which makes its invoice and confirms it), or
+   * wait for the studio to confirm.
    */
   async request(
     scope: TenantScope,
@@ -64,6 +75,9 @@ export class BookingRequestService {
     const pkg = service.packages.find((p) => p.id === input.packageId);
     if (!pkg) throw new BookingRequestError("That package is no longer offered. Choose another.");
     if (input.date < this.deps.today(scope)) throw new BookingRequestError("Choose a day from today on.");
+    if ((await this.deps.bookedDays(scope, input.date)).includes(input.date)) {
+      throw new BookingRequestError("We're already booked for this day. Choose another day.");
+    }
 
     let customerId = signedInAs;
     let isNew = false;
@@ -89,16 +103,28 @@ export class BookingRequestService {
       notes: null,
       offeringId: pkg.id,
     });
+    if (pkg.price > 0) {
+      const quotationId = await this.deps.createQuotation(scope, {
+        customerId,
+        validUntil: null,
+        shoot: { date: input.date, startTime: input.startTime, endTime: input.endTime },
+        notes: `Booking for ${input.date}.`,
+        lines: [{ offeringId: pkg.id, description: label, inclusions: pkg.inclusions, quantity: 1, unitPrice: pkg.price, discount: null }],
+      });
+      await this.deps.linkQuotation(scope, bookingId, quotationId);
+    }
     await this.deps.notifyOwner(scope, { title: "New booking request", body: `${label} on ${input.date}, ${input.startTime}–${input.endTime}` });
     const session = isNew ? await this.deps.openDevice(scope.tenantId, customerId) : null;
     return { bookingId, signedIn: !!signedInAs || !!session, session };
   }
 
   /**
-   * The studio confirms a client's request: the booking is confirmed, the
-   * invoice for its package is made (none for a package priced 0: it's priced
-   * on request) and its project started. Safe to repeat: a request confirmed
-   * before gets whatever it's still missing.
+   * A client's request is confirmed (by the studio, or by the client paying
+   * for it): the booking is confirmed, its invoice is made (from its
+   * quotation, or from the booking itself for one asked for before
+   * quotations; none for a package priced 0: it's priced on request) and its
+   * project started. Safe to repeat: a request confirmed before gets
+   * whatever it's still missing.
    */
   async confirm(scope: TenantScope, bookingId: string, actorName: string): Promise<{ invoiceId: string | null; projectId: string }> {
     const booking = await this.deps.booking(scope, bookingId);
@@ -108,6 +134,10 @@ export class BookingRequestService {
     else if (booking.status !== "confirmed") throw new BookingRequestError("This request has already been answered.");
 
     let invoiceId = booking.invoiceId;
+    if (!invoiceId && booking.quotationId) {
+      invoiceId = await this.deps.invoiceFromQuotation(scope, booking.quotationId);
+      await this.deps.linkInvoice(scope, bookingId, invoiceId);
+    }
     if (!invoiceId && booking.amount) {
       const pkg = booking.offeringId ? await this.deps.package(scope, booking.offeringId) : null;
       invoiceId = await this.deps.createInvoice(scope, {
@@ -139,5 +169,6 @@ export class BookingRequestService {
     if (!booking) throw new BookingRequestError("That booking no longer exists.");
     if (booking.status !== "requested") throw new BookingRequestError("This request has already been answered.");
     await this.deps.decline(scope, bookingId);
+    if (booking.quotationId) await this.deps.declineQuotation(scope, booking.quotationId);
   }
 }

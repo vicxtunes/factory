@@ -6,7 +6,7 @@ import "server-only";
 // client's page.
 
 import { localDate } from "@repo/lib/accounting/core/period";
-import { invoices } from "@repo/lib/billing/server";
+import { invoices, quotations } from "@repo/lib/billing/server";
 import { customers } from "@repo/lib/customers/server";
 import { amingProducts, offerings } from "@repo/lib/offerings/server";
 import { notifyActor } from "@repo/lib/push/send";
@@ -34,6 +34,13 @@ const requests = new ProductRequestService({
   request: (scope, id) => store.get(scope, id),
   createRequest: (scope, input) => store.create(scope, input),
   answer: (scope, id, status) => store.answer(scope, id, status),
+  createQuotation: (scope, input) => quotations.create(scope, input),
+  linkQuotation: (scope, id, quotationId) => store.setQuotation(scope, id, quotationId),
+  invoiceFromQuotation: async (scope, quotationId) => {
+    await quotations.answer(scope, quotationId, "accepted");
+    return invoices.fromQuotation(scope, quotationId);
+  },
+  declineQuotation: (scope, quotationId) => quotations.answer(scope, quotationId, "declined", "The studio couldn't take this order."),
   createInvoice: (scope, input) => invoices.create(scope, input),
   linkInvoice: (scope, id, invoiceId) => store.setInvoice(scope, id, invoiceId),
   openDevice: (tenantId, customerId) => portal.openDevice(tenantId, customerId),

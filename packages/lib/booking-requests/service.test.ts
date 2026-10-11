@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import type { Booking } from "@repo/lib/bookings/core";
-import type { InvoiceInput } from "@repo/lib/billing/core";
+import type { InvoiceInput, QuotationInput } from "@repo/lib/billing/core";
 import type { Offering, ServiceWithPackages } from "@repo/lib/offerings/core";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
@@ -49,7 +49,15 @@ function fakes() {
   const projects = new Map<string, string>();
   const opened: string[] = [];
   const notified: string[] = [];
+  const quotations: QuotationInput[] = [];
+  const declined: string[] = [];
+  const booked: string[] = [];
   const service = new BookingRequestService({
+    bookedDays: async () => booked,
+    createQuotation: async (_s, input) => (quotations.push(input), `q${quotations.length}`),
+    linkQuotation: async (_s, id, q) => void (bookings.find((x) => x.id === id)!.quotationId = q),
+    invoiceFromQuotation: async (_s, q) => `inv-of-${q}`,
+    declineQuotation: async (_s, q) => void declined.push(q),
     service: async (_s, slug) => (slug === wedding.slug ? wedding : null),
     package: async (_s, id) => wedding.packages.find((p) => p.id === id) ?? null,
     client: async (_s, { name, phone }) => {
@@ -82,7 +90,7 @@ function fakes() {
     notifyOwner: async (_s, m) => void notified.push(`${m.title}: ${m.body}`),
     today: () => "2026-10-08",
   });
-  return { service, bookings, invoices, projects, opened, notified };
+  return { service, bookings, invoices, projects, opened, notified, quotations, declined, booked };
 }
 
 const ask = { serviceSlug: "wedding-photography", packageId: "gold", date: "2026-12-12", startTime: "10:00", endTime: "16:00" };
@@ -127,29 +135,48 @@ test("refused: a service or package off sale, a past day, missing name or phone,
   await assert.rejects(service.request(scope, ask, "grace"), /already have requests waiting/);
 });
 
-test("confirming: the booking confirmed, an invoice for the package, its project; repeating adds nothing", async () => {
-  const { service, bookings, invoices, projects } = fakes();
+test("asking makes the quotation; confirming makes its invoice from it, and the project; repeating adds nothing", async () => {
+  const { service, bookings, invoices, quotations, projects } = fakes();
   const { bookingId } = await service.request(scope, ask, "grace");
-  const done = await service.confirm(scope, bookingId, "Sanon");
-  assert.equal(bookings[0].status, "confirmed");
-  assert.deepEqual(invoices[0], {
+  assert.deepEqual(quotations[0], {
     customerId: "grace",
-    dueDate: "2026-12-12",
+    validUntil: null,
     shoot: { date: "2026-12-12", startTime: "10:00", endTime: "16:00" },
     notes: "Booking for 2026-12-12.",
     lines: [{ offeringId: "gold", description: "Wedding Photography · Gold", inclusions: ["12 hours", "500 photos"], quantity: 1, unitPrice: 4_500_000, discount: null }],
   });
-  assert.deepEqual(done, { invoiceId: "inv1", projectId: `p-${bookingId}` });
-  assert.equal(bookings[0].invoiceId, "inv1");
+  assert.equal(bookings[0].quotationId, "q1");
+  const done = await service.confirm(scope, bookingId, "Sanon");
+  assert.equal(bookings[0].status, "confirmed");
+  assert.deepEqual(done, { invoiceId: "inv-of-q1", projectId: `p-${bookingId}` });
+  assert.equal(bookings[0].invoiceId, "inv-of-q1");
   assert.deepEqual(await service.confirm(scope, bookingId, "Sanon"), done, "a second tap opens the same");
-  assert.equal(invoices.length, 1);
+  assert.equal(invoices.length, 0, "the invoice comes from the quotation, not typed again");
   assert.equal(projects.size, 1);
 });
 
-test("a package priced on request (0) gets no invoice; its project still starts", async () => {
-  const { service, invoices } = fakes();
+test("a request from before quotations still gets its invoice from the booking", async () => {
+  const { service, bookings, invoices } = fakes();
+  const { bookingId } = await service.request(scope, ask, "grace");
+  bookings[0].quotationId = null;
+  assert.equal((await service.confirm(scope, bookingId, "Sanon")).invoiceId, "inv1");
+  assert.equal(invoices[0].dueDate, "2026-12-12");
+});
+
+test("a day that's already booked can't be asked for", async () => {
+  const { service, bookings, booked } = fakes();
+  booked.push("2026-12-12");
+  await assert.rejects(service.request(scope, ask, "grace"), /already booked for this day/);
+  assert.equal(bookings.length, 0);
+  await service.request(scope, { ...ask, date: "2026-12-13" }, "grace");
+  assert.equal(bookings.length, 1);
+});
+
+test("a package priced on request (0) gets no quotation or invoice; its project still starts", async () => {
+  const { service, invoices, quotations } = fakes();
   const { bookingId } = await service.request(scope, { ...ask, packageId: "custom" }, "grace");
   const done = await service.confirm(scope, bookingId, "Sanon");
+  assert.equal(quotations.length, 0, "nothing to quote yet");
   assert.deepEqual([done.invoiceId, invoices.length], [null, 0]);
   assert.equal(done.projectId, `p-${bookingId}`);
 });

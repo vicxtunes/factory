@@ -17,6 +17,7 @@ import { portalClient, setPortalCookie, studioAtSlug } from "@repo/lib/studio-po
 import { deleteStudioRecord, studioOfCaller } from "@repo/lib/studios/server";
 
 import type { MobileMoneyCollection } from "@repo/lib/wallet/types";
+import { applyStudioPayment } from "@repo/lib/studio-payments/server";
 import { WalletError, checkStudioRequestPayment, startStudioRequestPayment } from "@repo/lib/wallet/studio";
 
 import { orderNowSchema, productRequestIdSchema, type OrderNowOutcome } from "./core";
@@ -84,9 +85,15 @@ export async function payForProductRequest(
 
 /** The Order now sheet following its payment. */
 export async function checkProductRequestPayment(collectionId: unknown): Promise<Result<MobileMoneyCollection>> {
-  return runAction("product-requests", async () =>
-    walletStep(() => checkStudioRequestPayment(parseInput(productRequestIdSchema, collectionId))),
-  );
+  return runAction("product-requests", async () => {
+    const payment = await walletStep(() => checkStudioRequestPayment(parseInput(productRequestIdSchema, collectionId)));
+    // Paid: the order is confirmed and the payment goes on its invoice.
+    if (payment.status === "succeeded") {
+      await applyStudioPayment(payment.id);
+      revalidatePath("/studio", "layout");
+    }
+    return payment;
+  });
 }
 
 /** The studio confirms a client's request: its invoice is made (none when priced on request). */

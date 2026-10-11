@@ -1,19 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 
 import { StepRail } from "@repo/ui/StepForm";
 import { Button } from "@repo/ui/Button";
 import { Drawer } from "@repo/ui/Drawer";
 import { Field, TextInput } from "@repo/ui/Field";
 import { PhoneInput } from "@repo/ui/PhoneInput";
-import { bookNow } from "@repo/lib/booking-requests/actions";
+import { bookNow, bookedDaysAt, checkBookingPayment, payForBooking } from "@repo/lib/booking-requests/actions";
 import type { Offering } from "@repo/lib/offerings/core";
 import { formatAmount, formatDay } from "@repo/lib/tenancy/format";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
-type Step = "package" | "date" | "details" | "review" | "sent";
+import { PayNow } from "./pay-now";
+
+type Step = "package" | "date" | "details" | "review" | "pay" | "sent";
 /** The steps shown on the rail, by short name. */
 const RAIL: Partial<Record<Step, string>> = { package: "Package", date: "Date", details: "Details", review: "Review" };
 
@@ -53,7 +55,17 @@ export function BookNow({
   const [endTime, setEndTime] = useState("");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
-  const [result, setResult] = useState<{ signedIn: boolean } | null>(null);
+  const [result, setResult] = useState<{ bookingId: string; signedIn: boolean } | null>(null);
+  const [paid, setPaid] = useState(0);
+  // The days already taken, fetched when the sheet first opens.
+  const [booked, setBooked] = useState<string[]>([]);
+  useEffect(() => {
+    if (!open) return;
+    bookedDaysAt(studio.slug).then((res) => {
+      if (res.ok) setBooked(res.data);
+    });
+  }, [open, studio.slug]);
+  const taken = !!date && booked.includes(date);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
@@ -79,7 +91,9 @@ export function BookNow({
       const res = await bookNow(studio.slug, { serviceSlug, packageId, date, startTime, endTime, ...(signedIn ? {} : { name, phone }) });
       if (!res.ok) return setError(res.error);
       setResult(res.data);
-      setStep("sent");
+      setPaid(0);
+      // A priced package can be paid for now; one priced on request waits for the business.
+      setStep(showPrices && pkg && pkg.price > 0 ? "pay" : "sent");
     });
   }
 
@@ -88,7 +102,8 @@ export function BookNow({
     date: "Choose the day and time",
     details: "Your details",
     review: "Check and send",
-    sent: "Request sent",
+    pay: "Pay now?",
+    sent: paid > 0 ? "Booked" : "Request sent",
   };
 
   return (
@@ -131,9 +146,14 @@ export function BookNow({
                 next();
               }}
             >
-              <Field label="The day" hint="The business confirms whether it's free.">
-                <TextInput type="date" value={date} min={today} onChange={(e) => setDate(e.target.value)} required />
+              <Field label="The day" hint={taken ? undefined : "Days already booked can't be chosen."}>
+                <TextInput type="date" value={date} min={today} onChange={(e) => setDate(e.target.value)} required aria-invalid={taken || undefined} />
               </Field>
+              {taken ? (
+                <p className="rounded-xl border border-warning-500/40 bg-warning-50 p-3 text-sm text-warning-700 dark:bg-warning-500/10 dark:text-warning-400">
+                  {studio.name} is already booked on {formatDay(scope, date)}. Choose another day.
+                </p>
+              ) : null}
               <div className="grid grid-cols-2 gap-3">
                 <Field label="From">
                   <TextInput type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} required />
@@ -146,7 +166,7 @@ export function BookNow({
                 <Button type="button" variant="secondary" onClick={back}>
                   Previous
                 </Button>
-                <Button type="submit" className="flex-1">
+                <Button type="submit" className="flex-1" disabled={taken}>
                   Continue
                 </Button>
               </div>
@@ -206,11 +226,35 @@ export function BookNow({
             </div>
           ) : null}
 
+          {step === "pay" && result && pkg ? (
+            <PayNow
+              total={pkg.price}
+              format={(n) => formatAmount(scope, n)}
+              phone={signedIn ? null : phone}
+              start={(amount, p) => payForBooking(studio.slug, { bookingId: result.bookingId, amount, phone: p })}
+              check={checkBookingPayment}
+              onPaid={(amount) => {
+                setPaid(amount);
+                setStep("sent");
+              }}
+              onSkip={() => setStep("sent")}
+            />
+          ) : null}
+
           {step === "sent" && result ? (
             <div className="space-y-3 text-sm">
               <p>
-                <span className="font-semibold">{studio.name}</span> has your request for {pkg?.name} on {formatDay(scope, date)}, {startTime}–{endTime}. They&apos;ll
-                confirm it and send your invoice.
+                {paid > 0 ? (
+                  <>
+                    You&apos;re booked with <span className="font-semibold">{studio.name}</span> for {pkg?.name} on {formatDay(scope, date)}, {startTime}–{endTime}.
+                    Paid {formatAmount(scope, paid)}: your invoice shows the payment.
+                  </>
+                ) : (
+                  <>
+                    <span className="font-semibold">{studio.name}</span> has your request for {pkg?.name} on {formatDay(scope, date)}, {startTime}–{endTime}.{" "}
+                    {pkg && pkg.price > 0 ? "Your quotation is ready. Pay any time to confirm the day, or wait for them to confirm." : "They'll confirm it and send your invoice."}
+                  </>
+                )}
               </p>
               {result.signedIn ? (
                 <>

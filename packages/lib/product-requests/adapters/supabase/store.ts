@@ -18,12 +18,13 @@ interface Row {
   quantity: number;
   unit_price: number | string;
   status: ProductRequestStatus;
+  quotation_id: string | null;
   invoice_id: string | null;
   created_at: string;
   customer: { name: string } | null;
 }
 
-const COLUMNS = `id, customer_id, offering_id, item_name, quantity, unit_price, status, invoice_id, created_at,
+const COLUMNS = `id, customer_id, offering_id, item_name, quantity, unit_price, status, quotation_id, invoice_id, created_at,
   customer:customers!product_requests_tenant_id_customer_id_fkey (name)`;
 
 const toRequest = (r: Row): ProductRequest => ({
@@ -36,6 +37,7 @@ const toRequest = (r: Row): ProductRequest => ({
   // bigint may arrive as a string.
   unitPrice: Number(r.unit_price),
   status: r.status,
+  quotationId: r.quotation_id,
   invoiceId: r.invoice_id,
   createdAt: r.created_at,
 });
@@ -86,6 +88,11 @@ export const supabaseProductRequestStore = {
     const { data, error } = await table().update({ status }).eq("tenant_id", scope.tenantId).eq("id", id).eq("status", "requested").select("id");
     if (error) fail("answer the request", error);
     return data.length > 0;
+  },
+
+  async setQuotation(scope: TenantScope, id: string, quotationId: string): Promise<void> {
+    const { error } = await table().update({ quotation_id: quotationId }).eq("tenant_id", scope.tenantId).eq("id", id);
+    if (error) fail("link the quotation", error);
   },
 
   async setInvoice(scope: TenantScope, id: string, invoiceId: string): Promise<void> {
