@@ -89,6 +89,7 @@ import SpinnerSizes from "./examples/spinner/sizes";
 import BottomSheetBasic from "./examples/bottom-sheet/basic";
 import ConfirmationBooked from "./examples/confirmation/booked";
 import DocumentPayBarQuotation from "./examples/document-pay-bar/quotation";
+import HomeStudio from "./examples/home/studio";
 import StatusGlowBadgeAll from "./examples/status-glow-badge/all";
 import StepFormBooking from "./examples/step-form/booking";
 import StepFormRail from "./examples/step-form/rail";
@@ -199,6 +200,15 @@ export const COMPONENTS: RoomComponent[] = [
     source: "packages/ui/billing/DocumentPayBar.tsx (with packages/ui/payments/PayNow.tsx)",
     summary: "Pinned under a quotation or invoice on its link: what it is, from whom to whom, what's to pay and by when, and one action (Approve & Pay / Pay) that opens the pay sheet and ends on a confirmation.",
     examples: [{ title: "Quotation", file: "document-pay-bar/quotation.tsx", Demo: DocumentPayBarQuotation }],
+  },
+  {
+    slug: "home",
+    name: "Home screen",
+    category: "Flows",
+    status: "live",
+    source: "packages/ui/home/HomeBits.tsx (HomeGreeting, HomeHero, QuickActions, HomeSection, EventRail), packages/ui/home/PackageList.tsx",
+    summary: "A dashboard's first screen: a greeting, a dark banner with the one thing to do next, shortcut tiles (one can be marked Soon), what's coming up as cards to swipe through, and what's on sale as rows filtered by chips.",
+    examples: [{ title: "A studio's home", file: "home/studio.tsx", Demo: HomeStudio }],
   },
   {
     slug: "button",
