@@ -36,6 +36,7 @@ export function OrderNow({
   sizes,
   chosenId,
   signedIn,
+  signedInPhone = null,
   showPrices,
   scope,
 }: {
@@ -45,6 +46,8 @@ export function OrderNow({
   /** The size picked on the page, if any. */
   chosenId: string;
   signedIn: boolean;
+  /** The signed-in client's number on file: what mobile money prompts unless they choose another. */
+  signedInPhone?: string | null;
   showPrices: boolean;
   scope: Pick<TenantScope, "currency" | "locale">;
 }) {
@@ -193,7 +196,7 @@ export function OrderNow({
             <PayNow
               total={showPrices ? size.price * count : 0}
               format={(n) => formatAmount(scope, n)}
-              phone={signedIn ? null : phone}
+              phone={signedIn ? signedInPhone : phone}
               start={(amount, p) => payForProductRequest(studio.slug, { requestId: result.requestId, amount, phone: p })}
               check={checkProductRequestPayment}
               onPaid={(amount) => {

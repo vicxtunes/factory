@@ -54,7 +54,7 @@ export default async function ProductPage({ params }: Params) {
   return (
     <StudioShell studio={{ name: at.studio.name, logoUrl, slug }} signedInAs={signedIn?.name ?? null} title={found.name}>
       <Loading skeleton={<ProductDetailSkeleton />}>
-        <Showcase loaded={{ at, found, source, slug }} signedIn={!!signedIn} />
+        <Showcase loaded={{ at, found, source, slug }} signedIn={!!signedIn} signedInPhone={signedIn?.phone ?? null} />
       </Loading>
     </StudioShell>
   );
@@ -65,9 +65,11 @@ type Loaded = NonNullable<Awaited<ReturnType<typeof load>>>;
 async function Showcase({
   loaded: { at, found, source, slug },
   signedIn,
+  signedInPhone,
 }: {
   loaded: Pick<Loaded, "at" | "source" | "slug"> & { found: NonNullable<Loaded["found"]> };
   signedIn: boolean;
+  signedInPhone: string | null;
 }) {
   const [own, settings] = await Promise.all([serviceMedia(at.scope, found.id), offerings.settings(at.scope)]);
   // A picked product: the studio's own photos and video, then Aming's (less those it left out).
@@ -81,6 +83,7 @@ async function Showcase({
       media={media}
       showPrices={settings.showPrices}
       signedIn={signedIn}
+      signedInPhone={signedInPhone}
       today={localDate(new Date(), at.scope.timeZone)}
       scope={at.scope}
     />

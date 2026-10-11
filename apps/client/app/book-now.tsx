@@ -33,6 +33,7 @@ export function BookNow({
   packages,
   chosenId,
   signedIn,
+  signedInPhone = null,
   today,
   showPrices,
   scope,
@@ -43,6 +44,8 @@ export function BookNow({
   /** The package picked on the page, if any. */
   chosenId: string;
   signedIn: boolean;
+  /** The signed-in client's number on file: what mobile money prompts unless they choose another. */
+  signedInPhone?: string | null;
   /** The studio's today ("yyyy-mm-dd"): the first day that can be booked. */
   today: string;
   showPrices: boolean;
@@ -231,7 +234,7 @@ export function BookNow({
             <PayNow
               total={pkg.price}
               format={(n) => formatAmount(scope, n)}
-              phone={signedIn ? null : phone}
+              phone={signedIn ? signedInPhone : phone}
               start={(amount, p) => payForBooking(studio.slug, { bookingId: result.bookingId, amount, phone: p })}
               check={checkBookingPayment}
               onPaid={(amount) => {

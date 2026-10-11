@@ -6,7 +6,8 @@ import { Field, TextInput } from "@repo/ui/Field";
 import { ChoiceGroup } from "@repo/ui/StepForm";
 import { MobileMoneyPay } from "@repo/ui/wallet/MobileMoneyPay";
 import { parseAmount } from "@repo/ui/wallet/shared";
-import type { MobileNetwork } from "@repo/lib/wallet/policy";
+import { parsePhone } from "@repo/lib/kernel/core/phone";
+import { networkOfPhone, type MobileNetwork } from "@repo/lib/wallet/policy";
 import type { MobileMoneyCollection, WalletResult } from "@repo/lib/wallet/types";
 
 /**
@@ -26,7 +27,7 @@ export function PayNow({
   /** 0 when priced on request: then they type an amount. */
   total: number;
   format: (n: number) => string;
-  /** The number they booked or ordered with, when they typed one. */
+  /** Their number, when it's known (typed a step ago, or on file): it isn't asked for again unless they choose another. */
   phone: string | null;
   /** Sends the prompt for `amount` to `phone`. */
   start: (amount: number, phone: string) => Promise<WalletResult<MobileMoneyCollection>>;
@@ -35,7 +36,10 @@ export function PayNow({
   /** "Skip, pay later", where paying is optional. */
   onSkip?: () => void;
 }) {
-  const [network, setNetwork] = useState<MobileNetwork>("mtn");
+  // However it was typed ("0772…", "+256 772…"), in the stored form; and its own network to start on.
+  const parsed = phone ? parsePhone(phone) : null;
+  const known = parsed?.ok ? parsed.store : null;
+  const [network, setNetwork] = useState<MobileNetwork>(() => networkOfPhone(known) ?? "mtn");
   const [how, setHow] = useState<"full" | "deposit">("full");
   const [depositAmount, setDepositAmount] = useState("");
   const typed = total === 0 || how === "deposit";
@@ -70,7 +74,7 @@ export function PayNow({
           { value: "airtel", title: "Airtel" },
         ]}
       />
-      <MobileMoneyPay key={network} amount={amount} network={network} knownPhone={phone} start={(p) => start(amount, p)} check={check} onDone={() => onPaid(amount)} />
+      <MobileMoneyPay key={network} amount={amount} network={network} knownPhone={known} start={(p) => start(amount, p)} check={check} onDone={() => onPaid(amount)} />
       {onSkip ? (
         <button type="button" onClick={onSkip} className="w-full text-center text-xs text-muted underline-offset-2 hover:underline">
           Skip, pay later

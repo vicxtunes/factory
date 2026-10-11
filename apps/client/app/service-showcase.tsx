@@ -25,6 +25,7 @@ export function ServiceShowcase({
   media,
   showPrices,
   signedIn,
+  signedInPhone,
   today,
   scope,
 }: {
@@ -38,6 +39,8 @@ export function ServiceShowcase({
   showPrices: boolean;
   /** This device is signed in at the studio: booking needs no name or phone. */
   signedIn: boolean;
+  /** Their number on file, when signed in. */
+  signedInPhone: string | null;
   /** The studio's today: the first day that can be booked. */
   today: string;
   scope: Pick<TenantScope, "currency" | "locale" | "timeZone">;
@@ -114,6 +117,7 @@ export function ServiceShowcase({
             sizes={service.packages}
             chosenId={chosenId}
             signedIn={signedIn}
+            signedInPhone={signedInPhone}
             showPrices={showPrices}
             scope={scope}
           />
@@ -124,6 +128,7 @@ export function ServiceShowcase({
             packages={service.packages}
             chosenId={chosenId}
             signedIn={signedIn}
+            signedInPhone={signedInPhone}
             today={today}
             showPrices={showPrices}
             scope={scope}

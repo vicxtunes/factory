@@ -50,7 +50,7 @@ export default async function ServicePage({ params }: Params) {
   return (
     <StudioShell studio={{ name: at.studio.name, logoUrl, slug }} signedInAs={signedIn?.name ?? null} title={found.name}>
       <Loading skeleton={<ProductDetailSkeleton />}>
-        <Showcase loaded={{ at, found, slug }} signedIn={!!signedIn} />
+        <Showcase loaded={{ at, found, slug }} signedIn={!!signedIn} signedInPhone={signedIn?.phone ?? null} />
       </Loading>
     </StudioShell>
   );
@@ -58,7 +58,15 @@ export default async function ServicePage({ params }: Params) {
 
 type Loaded = NonNullable<Awaited<ReturnType<typeof load>>>;
 
-async function Showcase({ loaded: { at, found, slug }, signedIn }: { loaded: Pick<Loaded, "at" | "slug"> & { found: NonNullable<Loaded["found"]> }; signedIn: boolean }) {
+async function Showcase({
+  loaded: { at, found, slug },
+  signedIn,
+  signedInPhone,
+}: {
+  loaded: Pick<Loaded, "at" | "slug"> & { found: NonNullable<Loaded["found"]> };
+  signedIn: boolean;
+  signedInPhone: string | null;
+}) {
   const [media, settings] = await Promise.all([serviceMedia(at.scope, found.id), offerings.settings(at.scope)]);
   return (
     <ServiceShowcase
@@ -70,6 +78,7 @@ async function Showcase({ loaded: { at, found, slug }, signedIn }: { loaded: Pic
       // The studio's choices (Packages & Services): 3D or carousel, prices shown or not.
       showPrices={settings.showPrices}
       signedIn={signedIn}
+      signedInPhone={signedInPhone}
       today={localDate(new Date(), at.scope.timeZone)}
       scope={at.scope}
     />
