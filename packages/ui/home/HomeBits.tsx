@@ -4,8 +4,8 @@ import Link from "next/link";
 import { Avatar } from "@repo/ui/Avatar";
 
 // The pieces of a home screen (a studio's dashboard): who's here, the one
-// thing to do next, the usual shortcuts, and what's coming up as cards to
-// swipe through. Each takes plain data; the page decides what goes in.
+// thing to do next, the usual shortcuts, and cards to swipe through (what's
+// coming up, what's on sale). Each takes plain data; the page decides what goes in.
 
 const stroke = { fill: "none", stroke: "currentColor", strokeWidth: 1.6, strokeLinecap: "round", strokeLinejoin: "round" } as const;
 
@@ -128,49 +128,51 @@ export function HomeSection({ title, href, children }: { title: string; href?: s
   );
 }
 
-export interface EventCardData {
+export interface RailCard {
   id: string;
   href: string;
   title: string;
-  /** "Sat 12 Dec · 10:00–16:00 · Munyonyo". */
-  when: string;
-  /** A short tag over the details, e.g. "Confirmed". */
+  /** The line under the title: when and where ("Sat 12 Dec · 10:00–16:00 · Munyonyo"), or what's included. */
+  meta: string | null;
+  /** The small icon before that line. */
+  metaIcon?: HomeIcon;
+  /** A short tag over the details, e.g. "Confirmed", or the service. */
   tag: string;
   /** Already formatted, or null when there's no amount. */
   price: string | null;
   imageUrl: string | null;
   /** Who it's for: their avatar sits in the corner. */
-  person: string;
+  person?: string;
 }
 
-/** What's coming up, as cards to swipe through sideways: a photo, a tag and price, the title, when and where, and who. */
-export function EventRail({ events }: { events: EventCardData[] }) {
+/** Cards to swipe through sideways (what's coming up, what's on sale): a photo, a tag and price, the title, a line of detail, and who. */
+export function CardRail({ cards }: { cards: RailCard[] }) {
   return (
     <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0" style={{ scrollbarWidth: "none" }}>
-      {events.map((e) => (
-        <Link key={e.id} href={e.href} className="w-[78%] max-w-xs shrink-0 snap-start rounded-3xl border border-border bg-surface p-2 shadow-theme-xs hover:bg-background sm:w-72">
+      {cards.map((c) => (
+        <Link key={c.id} href={c.href} className="w-[78%] max-w-xs shrink-0 snap-start rounded-3xl border border-border bg-surface p-2 shadow-theme-xs hover:bg-background sm:w-72">
           <div className="relative h-40 overflow-hidden rounded-2xl bg-gradient-to-br from-brand-100 to-brand-300 dark:from-brand-500/20 dark:to-brand-500/40">
-            {e.imageUrl ? (
+            {c.imageUrl ? (
               // eslint-disable-next-line @next/next/no-img-element -- a short-lived signed photo link
-              <img src={e.imageUrl} alt="" loading="lazy" className="size-full object-cover" />
+              <img src={c.imageUrl} alt="" loading="lazy" className="size-full object-cover" />
             ) : (
               <span className="absolute inset-0 grid place-items-center text-brand-600/60 dark:text-brand-300/70">
-                <Icon name="calendar" className="size-10" />
+                <Icon name={c.metaIcon ?? "store"} className="size-10" />
               </span>
             )}
           </div>
           <div className="space-y-1.5 px-2 pb-2 pt-3">
             <div className="flex items-center justify-between gap-2">
-              <span className="rounded-md bg-background px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted">{e.tag}</span>
-              {e.price ? <span className="text-sm font-bold tnum">{e.price}</span> : null}
+              <span className="truncate rounded-md bg-background px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted">{c.tag}</span>
+              {c.price ? <span className="shrink-0 text-sm font-bold tnum">{c.price}</span> : null}
             </div>
-            <p className="truncate text-base font-semibold">{e.title}</p>
-            <div className="flex items-center justify-between gap-2">
+            <p className="truncate text-base font-semibold">{c.title}</p>
+            <div className="flex min-h-6 items-center justify-between gap-2">
               <p className="flex min-w-0 items-center gap-1.5 text-xs text-muted">
-                <Icon name="calendar" className="size-3.5 shrink-0" />
-                <span className="truncate">{e.when}</span>
+                {c.meta && c.metaIcon ? <Icon name={c.metaIcon} className="size-3.5 shrink-0" /> : null}
+                <span className="truncate">{c.meta}</span>
               </p>
-              <Avatar name={e.person} size="sm" />
+              {c.person ? <Avatar name={c.person} size="sm" /> : null}
             </div>
           </div>
         </Link>

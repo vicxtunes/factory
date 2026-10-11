@@ -1,20 +1,16 @@
 import { Suspense } from "react";
 
-import { AccountsOverview } from "@repo/ui/accounting/AccountsOverview";
-import { PeriodPicker } from "@repo/ui/accounting/PeriodPicker";
-import { BookingsList, timeSpan } from "@repo/ui/bookings/BookingBits";
-import { EventRail, HomeGreeting, HomeHero, HomeSection, Icon, QuickActions, RoundLink, type QuickAction } from "@repo/ui/home/HomeBits";
+import { timeSpan } from "@repo/ui/bookings/BookingBits";
+import { CardRail, HomeGreeting, HomeHero, HomeSection, Icon, QuickActions, RoundLink, type QuickAction } from "@repo/ui/home/HomeBits";
 import { PackageList } from "@repo/ui/home/PackageList";
-import { ProductRequestsList } from "@repo/ui/product-requests/ProductRequestsList";
 import { ProjectsList } from "@repo/ui/projects/ProjectBits";
-import { TaskRows } from "@repo/ui/tasks/TaskRows";
 import { UsageBar } from "@repo/ui/photos/UsageBar";
+import { TodoList } from "@repo/ui/tasks/TodoList";
 import { SectionLabel } from "@repo/ui/SectionLabel";
 import { Skeleton } from "@repo/ui/Skeleton";
-import { ChartsSkeleton, ChipRowSkeleton, RowsSkeleton, StatTilesSkeleton } from "@repo/ui/skeletons/blocks";
+import { RowsSkeleton } from "@repo/ui/skeletons/blocks";
 import { Loading } from "@repo/ui/skeletons/Loading";
 import { localDate } from "@repo/lib/accounting/core/period";
-import { periodFrom } from "@repo/lib/accounting/params";
 import { BOOKING_STATUS_LABELS } from "@repo/lib/bookings/core";
 import { bookings } from "@repo/lib/bookings/server";
 import { offerings } from "@repo/lib/offerings/server";
@@ -23,30 +19,21 @@ import { photos } from "@repo/lib/photos/server";
 import { portal } from "@repo/lib/studio-portal/server";
 import { formatAmount, formatDay } from "@repo/lib/tenancy/format";
 import { productRequests } from "@repo/lib/product-requests/server";
-import { paidForStudioRequests } from "@repo/lib/wallet/studio";
 import { projects } from "@repo/lib/projects/server";
 import { tasks } from "@repo/lib/tasks/server";
-import { studioAccounts } from "@repo/lib/billing/server";
-import { CurrencySymbolProvider } from "@repo/lib/currency/CurrencySymbolProvider";
 import { requireStudio } from "@repo/lib/studios/server";
 import { canUse, type StudioAccess } from "@repo/lib/team/core";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
 export const metadata = { title: "My Business" };
 
-/** Where the studio's figures lead. */
-const LINKS = { sales: "/studio/invoices", overdue: "/studio/invoices", clients: "/studio/clients", client: "/studio/clients/" };
-
 // The studio's home: who's here, the one thing to do next, the usual
-// shortcuts, the next events as cards and the packages on sale; then the
-// requests waiting, the work in hand and its money (packages/lib/billing →
-// Accounts). The studio is created the first time any My Business page opens.
-// A team member sees only the parts they were given, and the tasks given to them.
-export default async function StudioDashboardPage({
-  searchParams,
-}: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
+// shortcuts, the next events and the packages on sale as cards, then the
+// work in hand. Requests are answered where they belong (bookings on
+// Bookings, orders on Wallet), and the money is on Wallet. The studio is
+// created the first time any My Business page opens. A team member sees only
+// the parts they were given, and the tasks given to them.
+export default async function StudioDashboardPage() {
   const { scope, studio, access, session } = await requireStudio("anyone");
   const today = localDate(new Date(), scope.timeZone);
   const can = (area: Parameters<typeof canUse>[1]) => canUse(access, area);
@@ -76,20 +63,8 @@ export default async function StudioDashboardPage({
           </Loading>
         </HomeSection>
       ) : null}
-      {/* Shown only when there are some, so nothing stands in for it while it loads. */}
-      <span id="requests" className="-mt-4 block scroll-mt-24" />
-      {can("bookings") ? (
-        <Suspense fallback={null}>
-          <Requests scope={scope} />
-        </Suspense>
-      ) : null}
-      {can("money") ? (
-        <Suspense fallback={null}>
-          <OrderRequests scope={scope} />
-        </Suspense>
-      ) : null}
       <HomeSection title="Your packages" href={can("catalog") ? "/studio/offerings" : undefined}>
-        <Loading skeleton={<RowsSkeleton rows={3} />}>
+        <Loading skeleton={<Skeleton className="h-64 w-full rounded-3xl" />}>
           <Packages scope={scope} />
         </Loading>
       </HomeSection>
@@ -101,32 +76,15 @@ export default async function StudioDashboardPage({
           </Loading>
         </section>
       ) : null}
-      <section>
-        <SectionLabel>{can("projects") ? "Tasks to do" : "Your tasks"}</SectionLabel>
+      <HomeSection title={can("projects") ? "Tasks to do" : "Your tasks"} href="/studio/tasks">
         <Loading skeleton={<RowsSkeleton rows={4} />}>
           <Todo scope={scope} today={today} access={access} />
         </Loading>
-      </section>
+      </HomeSection>
       {access.owner ? (
         <Suspense fallback={<Skeleton className="h-6 w-full" />}>
           <Usage scope={scope} />
         </Suspense>
-      ) : null}
-      {/* Amounts in the studio's own currency. */}
-      {can("money") ? (
-        <CurrencySymbolProvider symbol={scope.currency}>
-          <Loading
-            skeleton={
-              <div className="space-y-6">
-                <ChipRowSkeleton count={5} />
-                <StatTilesSkeleton />
-                <ChartsSkeleton />
-              </div>
-            }
-          >
-            <Accounts scope={scope} searchParams={searchParams} />
-          </Loading>
-        </CurrencySymbolProvider>
       ) : null}
     </>
   );
@@ -134,31 +92,6 @@ export default async function StudioDashboardPage({
 
 async function Usage({ scope }: { scope: TenantScope }) {
   return <UsageBar usage={await photos.usage(scope)} />;
-}
-
-// Clients who booked online: first thing the studio sees until it answers.
-async function Requests({ scope }: { scope: TenantScope }) {
-  const requests = await bookings.requests(scope);
-  if (!requests.length) return null;
-  return (
-    <section>
-      <SectionLabel>Booking requests ({requests.length})</SectionLabel>
-      <BookingsList bookings={requests} scope={scope} basePath="/studio/bookings" empty="" />
-    </section>
-  );
-}
-
-// Clients who asked for a product online: Confirm makes the invoice.
-async function OrderRequests({ scope }: { scope: TenantScope }) {
-  const requests = await productRequests.open(scope);
-  if (!requests.length) return null;
-  const paid = await paidForStudioRequests(requests.map((r) => r.id));
-  return (
-    <section>
-      <SectionLabel>Order requests ({requests.length})</SectionLabel>
-      <ProductRequestsList requests={requests} paid={paid} scope={scope} invoicesPath="/studio/invoices" clientsPath="/studio/clients" />
-    </section>
-  );
 }
 
 /** The shortcuts this person can use; Vendors is on its way. */
@@ -201,7 +134,7 @@ async function Hero({ scope, studioId, access }: { scope: TenantScope; studioId:
       <HomeHero
         title={`${waiting} client${waiting === 1 ? " is" : "s are"} waiting`}
         text="Answer their booking and order requests: confirming makes the invoice."
-        cta={{ label: "Review requests", href: "#requests" }}
+        cta={{ label: "Review requests", href: bookingRequests.length ? "/studio/bookings" : "/studio/wallet" }}
         imageUrl={imageUrl}
       />
     );
@@ -222,12 +155,13 @@ async function NextEvents({ scope, today }: { scope: TenantScope; today: string 
   const serviceOf = new Map(onSale.map((o) => [o.id, o.serviceId]));
   const covers = await serviceCovers(scope, upcoming.flatMap((b) => serviceOf.get(b.offeringId ?? "") ?? []));
   return (
-    <EventRail
-      events={upcoming.map((b) => ({
+    <CardRail
+      cards={upcoming.map((b) => ({
         id: b.id,
         href: `/studio/bookings/${b.id}`,
         title: b.title,
-        when: [formatDay(scope, b.date), timeSpan(b), b.location].filter(Boolean).join(" · "),
+        meta: [formatDay(scope, b.date), timeSpan(b), b.location].filter(Boolean).join(" · "),
+        metaIcon: "calendar" as const,
         tag: BOOKING_STATUS_LABELS[b.status],
         price: b.amount ? formatAmount(scope, b.amount) : null,
         imageUrl: covers.get(serviceOf.get(b.offeringId ?? "") ?? "") ?? null,
@@ -237,7 +171,7 @@ async function NextEvents({ scope, today }: { scope: TenantScope; today: string 
   );
 }
 
-// What the studio sells: every package on sale, by service.
+// What the studio sells: every package on sale as cards to swipe through, by service.
 async function Packages({ scope }: { scope: TenantScope }) {
   const onSale = await offerings.onSale(scope, "service");
   if (!onSale.length) {
@@ -250,10 +184,10 @@ async function Packages({ scope }: { scope: TenantScope }) {
       packages={onSale.map((o) => ({
         id: o.id,
         href: "/studio/offerings",
-        name: o.name,
-        group: o.serviceName,
+        title: o.name,
+        tag: o.serviceName,
         price: o.price > 0 ? formatAmount(scope, o.price) : "On request",
-        detail: o.inclusions.length ? o.inclusions.join(" · ") : o.description,
+        meta: o.inclusions.length ? o.inclusions.join(" · ") : o.description,
         imageUrl: covers.get(o.serviceId) ?? null,
       }))}
     />
@@ -267,20 +201,7 @@ async function InHand({ scope }: { scope: TenantScope }) {
 
 // Everyone's, for those who run the projects; else only the caller's own.
 async function Todo({ scope, today, access }: { scope: TenantScope; today: string; access: StudioAccess }) {
-  if (access.owner || canUse(access, "projects")) {
-    const todo = await tasks.open(scope);
-    return <TaskRows tasks={todo.slice(0, 6)} today={today} scope={scope} editable showProject empty="Nothing to do." />;
-  }
-  const mine = await tasks.open(scope, access.memberId);
-  return <TaskRows tasks={mine} today={today} scope={scope} editable="status" showProject projectPath={null} empty="Nothing given to you right now." />;
-}
-
-async function Accounts({ scope, searchParams }: { scope: TenantScope; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  const view = await studioAccounts.overview(scope, periodFrom(await searchParams));
-  return (
-    <div className="space-y-6">
-      <PeriodPicker period={view.period} />
-      <AccountsOverview view={view} links={LINKS} showHeld={false} />
-    </div>
-  );
+  const all = access.owner || canUse(access, "projects");
+  const todo = await tasks.open(scope, all || access.owner ? undefined : access.memberId);
+  return <TodoList tasks={all ? todo.slice(0, 8) : todo} today={today} projectPath={all ? "/studio/projects" : null} />;
 }

@@ -161,7 +161,7 @@ function StudioTopbar({ brand, user, owner }: { brand: StudioBrand; user: { name
   );
 }
 
-// Phones: Dashboard, Bookings, Projects and Clients on the bar; the rest, and
+// Phones: Dashboard, Wallet, Projects and Clients on the bar; the rest, and
 // the way back to Aming, in "More".
 function StudioHomeBar({ nav }: { nav: StudioNavSection[] }) {
   const items = nav.flatMap((s) => s.items.map((i) => ({ ...i, section: s.label ?? undefined })));

@@ -1,4 +1,4 @@
-import { EventRail, HomeGreeting, HomeHero, HomeSection, Icon, QuickActions, RoundLink } from "@repo/ui/home/HomeBits";
+import { CardRail, HomeGreeting, HomeHero, HomeSection, Icon, QuickActions, RoundLink } from "@repo/ui/home/HomeBits";
 import { PackageList } from "@repo/ui/home/PackageList";
 
 // A studio's home, on sample data: who's here, the next thing to do, the
@@ -29,11 +29,11 @@ export default function HomeStudio() {
         ]}
       />
       <HomeSection title="Next events" href="#">
-        <EventRail
-          events={[
-            { id: "1", href: "#", title: "Grace & John wedding", when: "Sat 12 Dec · 10:00–18:00 · Munyonyo", tag: "Confirmed", price: "UGX 2,500,000", imageUrl: PHOTO, person: "Grace Nakato" },
-            { id: "2", href: "#", title: "Okello introduction", when: "Sun 20 Dec · All day · Gulu", tag: "Tentative", price: "UGX 1,800,000", imageUrl: null, person: "John Okello" },
-            { id: "3", href: "#", title: "Family portrait", when: "Mon 28 Dec · 14:00–16:00", tag: "Requested", price: "UGX 350,000", imageUrl: PHOTO, person: "Sarah Namuli" },
+        <CardRail
+          cards={[
+            { id: "1", href: "#", title: "Grace & John wedding", meta: "Sat 12 Dec · 10:00–18:00 · Munyonyo", metaIcon: "calendar", tag: "Confirmed", price: "UGX 2,500,000", imageUrl: PHOTO, person: "Grace Nakato" },
+            { id: "2", href: "#", title: "Okello introduction", meta: "Sun 20 Dec · All day · Gulu", metaIcon: "calendar", tag: "Tentative", price: "UGX 1,800,000", imageUrl: null, person: "John Okello" },
+            { id: "3", href: "#", title: "Family portrait", meta: "Mon 28 Dec · 14:00–16:00", metaIcon: "calendar", tag: "Requested", price: "UGX 350,000", imageUrl: PHOTO, person: "Sarah Namuli" },
           ]}
         />
       </HomeSection>
@@ -41,10 +41,10 @@ export default function HomeStudio() {
         <PackageList
           allLabel="All packages"
           packages={[
-            { id: "a", href: "#", name: "Gold", group: "Wedding", price: "UGX 4,500,000", detail: "12 hours · 500 photos · Album", imageUrl: PHOTO },
-            { id: "b", href: "#", name: "Silver", group: "Wedding", price: "UGX 2,500,000", detail: "8 hours · 300 photos", imageUrl: PHOTO },
-            { id: "c", href: "#", name: "Studio session", group: "Portraits", price: "UGX 350,000", detail: "1 hour · 20 photos", imageUrl: null },
-            { id: "d", href: "#", name: "Custom", group: "Events", price: "On request", detail: null, imageUrl: null },
+            { id: "a", href: "#", title: "Gold", tag: "Wedding", price: "UGX 4,500,000", meta: "12 hours · 500 photos · Album", imageUrl: PHOTO },
+            { id: "b", href: "#", title: "Silver", tag: "Wedding", price: "UGX 2,500,000", meta: "8 hours · 300 photos", imageUrl: PHOTO },
+            { id: "c", href: "#", title: "Studio session", tag: "Portraits", price: "UGX 350,000", meta: "1 hour · 20 photos", imageUrl: null },
+            { id: "d", href: "#", title: "Custom", tag: "Events", price: "On request", meta: null, imageUrl: null },
           ]}
         />
       </HomeSection>

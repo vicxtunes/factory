@@ -14,7 +14,6 @@ import { UrgencyBadge } from "./UrgencyBadge";
 // The caller owns the tasks — `onToggle` / `onAdd` report changes, and
 // `today` is passed in (not read from the clock) so server and client agree
 // on which group a task is in. Only which groups are collapsed lives here.
-// Draft — lives in the Design Room until a page adopts it.
 
 export interface TaskListItem {
   key: string;

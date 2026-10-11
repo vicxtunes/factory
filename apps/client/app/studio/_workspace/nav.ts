@@ -39,6 +39,7 @@ export const STUDIO_NAV: StudioNavSection[] = [
     id: "clients",
     label: "Clients & money",
     items: [
+      { href: "/studio/wallet", label: "Wallet", icon: "payment", need: "money" },
       { href: "/studio/clients", label: "Clients", icon: "clients", need: "clients" },
       { href: "/studio/quotations", label: "Quotations", icon: "invoice", need: "money" },
       { href: "/studio/invoices", label: "Invoices", icon: "payment", need: "money" },
@@ -63,7 +64,7 @@ export function studioNavFor(access: StudioAccess): StudioNavSection[] {
 }
 
 /** On the phone's bar (those the person can use); everything else is in "More". */
-export const STUDIO_TABS = ["/studio", "/studio/bookings", "/studio/projects", "/studio/clients"];
+export const STUDIO_TABS = ["/studio", "/studio/wallet", "/studio/projects", "/studio/clients"];
 
 const TITLES: Record<string, string> = {
   "/studio/bookings/new": "New booking",

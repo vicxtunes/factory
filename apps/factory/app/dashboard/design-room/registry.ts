@@ -206,8 +206,8 @@ export const COMPONENTS: RoomComponent[] = [
     name: "Home screen",
     category: "Flows",
     status: "live",
-    source: "packages/ui/home/HomeBits.tsx (HomeGreeting, HomeHero, QuickActions, HomeSection, EventRail), packages/ui/home/PackageList.tsx",
-    summary: "A dashboard's first screen: a greeting, a dark banner with the one thing to do next, shortcut tiles (one can be marked Soon), what's coming up as cards to swipe through, and what's on sale as rows filtered by chips.",
+    source: "packages/ui/home/HomeBits.tsx (HomeGreeting, HomeHero, QuickActions, HomeSection, CardRail), packages/ui/home/PackageList.tsx",
+    summary: "A dashboard's first screen: a greeting, a dark banner with the one thing to do next, shortcut tiles (one can be marked Soon), and cards to swipe through: what's coming up, and what's on sale filtered by chips.",
     examples: [{ title: "A studio's home", file: "home/studio.tsx", Demo: HomeStudio }],
   },
   {
@@ -461,7 +461,7 @@ export const COMPONENTS: RoomComponent[] = [
     slug: "task-list",
     name: "My tasks",
     category: "Project management",
-    status: "draft",
+    status: "live",
     source: "packages/ui/TaskList.tsx",
     summary: "Personal to-do list grouped by due date — Overdue, Today, Next 7 days, Later, No date — with tick-to-complete and quick add.",
     examples: [
