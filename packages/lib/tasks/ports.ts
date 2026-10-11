@@ -8,7 +8,7 @@ import type { TenantScope } from "@repo/lib/tenancy/types";
 import type { Task, TaskInput, TaskStatus } from "./core/model";
 
 export interface TaskStore {
-  list(scope: TenantScope, filter: { projectId?: string; assigneeId?: string; open?: boolean }): Promise<Task[]>;
+  list(scope: TenantScope, filter: { projectId?: string; assigneeId?: string; open?: boolean; doneSince?: string }): Promise<Task[]>;
   get(scope: TenantScope, id: string): Promise<Task | null>;
   create(scope: TenantScope, input: TaskInput): Promise<string>;
   /** Changes title, assignee, due day and priority (never the project). */

@@ -57,6 +57,8 @@ export const supabaseTaskStore: TaskStore = {
     if (filter.projectId) query = query.eq("project_id", filter.projectId);
     if (filter.assigneeId) query = query.eq("assignee_id", filter.assigneeId);
     if (filter.open) query = query.neq("status", "done");
+    // Not done, or done lately (an ISO time): what a board shows.
+    if (filter.doneSince) query = query.or(`status.neq.done,done_at.gte.${filter.doneSince}`);
     const { data, error } = await query.returns<Row[]>();
     if (error) fail("list tasks", error);
     return data.map(toTask);

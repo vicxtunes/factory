@@ -15,7 +15,6 @@ import { ActionMenu } from "./ActionMenu";
 // handed into its `actions`), and moves come back through `onMove` /
 // `onColumnMove` — apply them with `moveCard` / `moveColumn` below. Leaving
 // out `onColumnMove` makes the columns fixed.
-// Draft — lives in the Design Room until a page adopts it.
 
 export interface KanbanColumn {
   key: string;

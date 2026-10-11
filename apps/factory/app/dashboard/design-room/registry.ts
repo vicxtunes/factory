@@ -419,7 +419,7 @@ export const COMPONENTS: RoomComponent[] = [
     slug: "task-card",
     name: "Task card",
     category: "Project management",
-    status: "draft",
+    status: "live",
     source: "packages/ui/TaskCard.tsx",
     summary: "Compact task summary — title, priority, due date, subtask progress and assignees — for boards and lists.",
     examples: [
@@ -433,7 +433,7 @@ export const COMPONENTS: RoomComponent[] = [
     slug: "kanban-board",
     name: "Kanban board",
     category: "Project management",
-    status: "draft",
+    status: "live",
     source: "packages/ui/KanbanBoard.tsx",
     summary: "Columns of cards — drag cards and columns, or move them from each ⋯ menu on touch and keyboard. WIP limits turn a column amber.",
     examples: [

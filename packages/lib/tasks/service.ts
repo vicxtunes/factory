@@ -25,6 +25,11 @@ export class TaskService {
     return (await this.store.list(scope, { open: true, assigneeId })).sort(byUrgency);
   }
 
+  /** For a board: every task not done yet and those done since `doneSince` (or one person's), most urgent first. */
+  async board(scope: TenantScope, doneSince: string, assigneeId?: string): Promise<Task[]> {
+    return (await this.store.list(scope, { doneSince, assigneeId })).sort(byUrgency);
+  }
+
   /** Adds a task to a project that's still in hand, for an active team member. */
   async create(scope: TenantScope, input: TaskInput): Promise<string> {
     const project = await this.directory.project(scope, input.projectId);

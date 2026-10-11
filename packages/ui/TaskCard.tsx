@@ -15,9 +15,9 @@ import { UrgencyBadge } from "./UrgencyBadge";
 // up to the card's handler. That keeps `actions` (e.g. a "⋯" menu) legal —
 // a button can't nest inside another button — and leaves the card body
 // draggable, which a <button> isn't in Firefox.
-// Draft — lives in the Design Room until a page adopts it.
 export function TaskCard({
   title,
+  caption,
   priority,
   due,
   subtasks,
@@ -26,6 +26,8 @@ export function TaskCard({
   actions,
 }: {
   title: string;
+  /** A quiet line under the title, e.g. the project it belongs to. */
+  caption?: string;
   priority?: Urgency;
   /** Caller formats it ("Due 6 Oct", "2 days overdue") and decides what counts as overdue. */
   due?: { label: string; overdue?: boolean };
@@ -53,6 +55,7 @@ export function TaskCard({
         {priority ? <UrgencyBadge urgency={priority} /> : null}
         {actions}
       </div>
+      {caption ? <p className="-mt-2 truncate text-xs text-muted">{caption}</p> : null}
       {subtasks ? <ProgressBar value={subtasks.done} max={subtasks.total} label="Subtasks done" showValue="fraction" /> : null}
       {due || assignees.length > 0 ? (
         <div className="flex items-center justify-between gap-2">
