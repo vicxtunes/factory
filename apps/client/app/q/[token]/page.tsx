@@ -1,13 +1,19 @@
 import { notFound } from "next/navigation";
 
+import { DocumentPayBar } from "@repo/ui/billing/DocumentPayBar";
 import { QuotationPdf } from "@repo/ui/billing/DocumentPdf";
 import { QuotationAnswer } from "@repo/ui/billing/QuotationAnswer";
 import { canRespondToQuotation, shareTokenSchema } from "@repo/lib/billing/core";
+import { QuotationStatusBadge } from "@repo/ui/billing/StatusBadges";
 import { quotations } from "@repo/lib/billing/server";
+
+import { dueOn } from "../../document-due";
 
 // A studio's quotation link (client.<domain>/q/<token>), sent to its client.
 // No sign-in: holding the link is the permission, and it shows only this one
-// quotation, as its PDF. Standalone, without portal chrome.
+// quotation, as its PDF, with its summary pinned underneath: while it's open,
+// "Approve & Pay" (by mobile money, in full or a deposit) and, behind "•••",
+// accepting without paying or declining. Standalone, without portal chrome.
 
 export const dynamic = "force-dynamic";
 // Private to whoever holds the link: keep it out of search engines.
@@ -24,7 +30,6 @@ export default async function QuotationLinkPage({ params }: { params: Promise<{ 
   return (
     <main className="mx-auto w-full max-w-3xl space-y-4 px-4 py-6 sm:py-10">
       <QuotationPdf quotation={quotation} issuer={issuer} scope={{ currency, locale, timeZone }} />
-      {canRespondToQuotation(quotation.status) ? <QuotationAnswer token={token} studioName={issuer.name} /> : null}
       {quotation.status === "declined" ? (
         <p className="text-center text-sm text-muted">
           Declined{quotation.declineReason ? `: ${quotation.declineReason}` : "."}
@@ -36,6 +41,20 @@ export default async function QuotationLinkPage({ params }: { params: Promise<{ 
       {quotation.status === "expired" ? (
         <p className="text-center text-sm text-muted">This quotation has expired. Ask {issuer.name} for an updated one.</p>
       ) : null}
+      <DocumentPayBar
+        kind="quotation"
+        token={token}
+        number={quotation.number}
+        status={<QuotationStatusBadge status={quotation.status} />}
+        from={issuer.name}
+        to={quotation.billTo.name}
+        amount={quotation.total}
+        amountLabel="Total"
+        due={dueOn(found.scope, "Valid until", quotation.validUntil, quotation.status !== "open")}
+        payable={canRespondToQuotation(quotation.status) && quotation.total > 0}
+        more={canRespondToQuotation(quotation.status) ? <QuotationAnswer token={token} studioName={issuer.name} /> : undefined}
+        scope={{ currency, locale }}
+      />
     </main>
   );
 }

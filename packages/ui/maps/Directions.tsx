@@ -4,10 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import type { GeoJSONSource, Map as MapboxMap, Marker } from "mapbox-gl";
 
 import { Button } from "@repo/ui/Button";
-import { Drawer } from "@repo/ui/Drawer";
+import { BottomSheet } from "@repo/ui/BottomSheet";
 
 import {
-  DEFAULT_CENTER,
   MAPBOX_TOKEN,
   fetchRoute,
   formatDistance,
@@ -15,7 +14,6 @@ import {
   googleDirectionsUrl,
   loadMapbox,
   metersBetween,
-  searchPlaces,
   type Destination,
   type MapPoint,
   type Route,
@@ -28,7 +26,11 @@ const ARRIVED_WITHIN_METERS = 40;
 
 const linkClass = "text-sm font-medium text-brand-600 underline";
 
-/** "Directions": opens the live map to a place, from wherever this device is. */
+/**
+ * "Directions". To a pin: opens the live map, from wherever this device is.
+ * To a place known only by name (a shoot's venue): opens Google Maps, which
+ * finds venues our map doesn't.
+ */
 export function DirectionsButton({
   to,
   name,
@@ -42,14 +44,26 @@ export function DirectionsButton({
   className?: string;
 }) {
   const [open, setOpen] = useState(false);
+  if ("query" in to) {
+    return (
+      <a
+        href={googleDirectionsUrl(to)}
+        target="_blank"
+        rel="noreferrer noopener"
+        className={`inline-flex min-h-11 items-center justify-center rounded-[var(--radius)] border border-gray-300 bg-white px-4 text-sm text-gray-700 shadow-theme-xs hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 ${className}`}
+      >
+        {label}
+      </a>
+    );
+  }
   return (
     <>
       <Button type="button" variant="secondary" className={className} onClick={() => setOpen(true)}>
         {label}
       </Button>
-      <Drawer open={open} onClose={() => setOpen(false)} title={`Directions to ${name}`}>
+      <BottomSheet open={open} onClose={() => setOpen(false)} title={`Directions to ${name}`}>
         {open ? <LiveDirections to={to} /> : null}
-      </Drawer>
+      </BottomSheet>
     </>
   );
 }
@@ -59,32 +73,15 @@ export function DirectionsButton({
  * it moves, with the time and distance left and the next turns. Without a
  * map (no Mapbox token, or location not shared) it offers Google Maps.
  */
-function LiveDirections({ to }: { to: Destination }) {
+function LiveDirections({ to: target }: { to: MapPoint }) {
   const box = useRef<HTMLDivElement>(null);
   const map = useRef<MapboxMap | null>(null);
   const me = useRef<Marker | null>(null);
-  const [target, setTarget] = useState<MapPoint | null>("query" in to ? null : to);
   const [here, setHere] = useState<MapPoint | null>(null);
   const [route, setRoute] = useState<Route | null>(null);
   const [found, setProblem] = useState<string | null>(null);
   const routed = useRef<{ from: MapPoint; at: number } | null>(null);
   const fitted = useRef(false);
-
-  // A place given by name: found on the map first.
-  useEffect(() => {
-    if (!MAPBOX_TOKEN || !("query" in to)) return;
-    let gone = false;
-    searchPlaces(to.query, DEFAULT_CENTER)
-      .then((found) => {
-        if (gone) return;
-        if (found[0]) setTarget(found[0].point);
-        else setProblem("We couldn't find that place on the map.");
-      })
-      .catch(() => !gone && setProblem("We couldn't reach the map."));
-    return () => {
-      gone = true;
-    };
-  }, [to]);
 
   // Where this device is, as it moves.
   useEffect(() => {
@@ -97,9 +94,9 @@ function LiveDirections({ to }: { to: Destination }) {
     return () => navigator.geolocation.clearWatch(watch);
   }, []);
 
-  // The map, once the destination is known.
+  // The map, with the destination's pin.
   useEffect(() => {
-    if (!MAPBOX_TOKEN || !target || !box.current) return;
+    if (!MAPBOX_TOKEN || !box.current) return;
     let gone = false;
     void loadMapbox().then((mapboxgl) => {
       if (gone || !box.current) return;
@@ -126,7 +123,7 @@ function LiveDirections({ to }: { to: Destination }) {
 
   // The route: asked for at the first fix, then when they've moved on or time has passed.
   useEffect(() => {
-    if (!here || !target) return;
+    if (!here) return;
     const last = routed.current;
     if (last && metersBetween(last.from, here) < REROUTE_AFTER_METERS && Date.now() - last.at < REROUTE_AFTER_MS) return;
     routed.current = { from: here, at: Date.now() };
@@ -156,7 +153,7 @@ function LiveDirections({ to }: { to: Destination }) {
   }, [here, route]);
 
   const google = (
-    <a href={googleDirectionsUrl(to)} target="_blank" rel="noreferrer noopener" className={linkClass}>
+    <a href={googleDirectionsUrl(target)} target="_blank" rel="noreferrer noopener" className={linkClass}>
       Open in Google Maps
     </a>
   );
@@ -173,7 +170,7 @@ function LiveDirections({ to }: { to: Destination }) {
 
   // Opened by a tap, so this only ever renders in the browser.
   const problem = found ?? (navigator.geolocation ? null : "This device can't share its location.");
-  const arrived = !!here && !!target && metersBetween(here, target) < ARRIVED_WITHIN_METERS;
+  const arrived = !!here && metersBetween(here, target) < ARRIVED_WITHIN_METERS;
   return (
     <div className="space-y-3">
       <div ref={box} className="h-72 w-full overflow-hidden rounded-xl border border-border" />

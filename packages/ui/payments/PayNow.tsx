@@ -10,9 +10,9 @@ import type { MobileNetwork } from "@repo/lib/wallet/policy";
 import type { MobileMoneyCollection, WalletResult } from "@repo/lib/wallet/types";
 
 /**
- * The optional "Pay now" step after booking or ordering on a studio's page:
- * in full or a deposit, by MTN or Airtel, or skip (the quotation then waits
- * for the studio to confirm). Paying confirms it and makes its invoice.
+ * Paying a studio by mobile money: in full or a deposit, by MTN or Airtel.
+ * After booking or ordering it's optional (skip, and the quotation waits for
+ * the studio to confirm); on a quotation or invoice it's the whole point.
  */
 export function PayNow({
   total,
@@ -32,7 +32,8 @@ export function PayNow({
   start: (amount: number, phone: string) => Promise<WalletResult<MobileMoneyCollection>>;
   check: (id: string) => Promise<WalletResult<MobileMoneyCollection>>;
   onPaid: (amount: number) => void;
-  onSkip: () => void;
+  /** "Skip, pay later", where paying is optional. */
+  onSkip?: () => void;
 }) {
   const [network, setNetwork] = useState<MobileNetwork>("mtn");
   const [how, setHow] = useState<"full" | "deposit">("full");
@@ -70,9 +71,11 @@ export function PayNow({
         ]}
       />
       <MobileMoneyPay key={network} amount={amount} network={network} knownPhone={phone} start={(p) => start(amount, p)} check={check} onDone={() => onPaid(amount)} />
-      <button type="button" onClick={onSkip} className="w-full text-center text-xs text-muted underline-offset-2 hover:underline">
-        Skip, pay later
-      </button>
+      {onSkip ? (
+        <button type="button" onClick={onSkip} className="w-full text-center text-xs text-muted underline-offset-2 hover:underline">
+          Skip, pay later
+        </button>
+      ) : null}
     </div>
   );
 }

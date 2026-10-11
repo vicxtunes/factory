@@ -5,7 +5,8 @@ import { useEffect, useState, useTransition } from "react";
 
 import { StepRail } from "@repo/ui/StepForm";
 import { Button } from "@repo/ui/Button";
-import { Drawer } from "@repo/ui/Drawer";
+import { BottomSheet } from "@repo/ui/BottomSheet";
+import { Confirmation } from "@repo/ui/Confirmation";
 import { Field, TextInput } from "@repo/ui/Field";
 import { PhoneInput } from "@repo/ui/PhoneInput";
 import { bookNow, bookedDaysAt, checkBookingPayment, payForBooking } from "@repo/lib/booking-requests/actions";
@@ -13,7 +14,7 @@ import type { Offering } from "@repo/lib/offerings/core";
 import { formatAmount, formatDay } from "@repo/lib/tenancy/format";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
-import { PayNow } from "./pay-now";
+import { PayNow } from "@repo/ui/payments/PayNow";
 
 type Step = "package" | "date" | "details" | "review" | "pay" | "sent";
 /** The steps shown on the rail, by short name. */
@@ -111,7 +112,7 @@ export function BookNow({
       <Button type="button" className="w-full sm:w-auto sm:self-start" onClick={begin} disabled={packages.length === 0}>
         {picked ? `Book ${picked.name} now` : "Book now"}
       </Button>
-      <Drawer open={open} onClose={() => !pending && setOpen(false)} title={titles[step]}>
+      <BottomSheet open={open} onClose={() => !pending && setOpen(false)} title={step === "sent" ? undefined : titles[step]}>
         <div className="space-y-4">
           {index >= 0 ? <StepRail titles={steps.map((k) => RAIL[k] ?? "")} step={index} reached={index} onGo={(i) => setStep(steps[i])} /> : null}
 
@@ -242,36 +243,35 @@ export function BookNow({
           ) : null}
 
           {step === "sent" && result ? (
-            <div className="space-y-3 text-sm">
-              <p>
-                {paid > 0 ? (
-                  <>
-                    You&apos;re booked with <span className="font-semibold">{studio.name}</span> for {pkg?.name} on {formatDay(scope, date)}, {startTime}–{endTime}.
-                    Paid {formatAmount(scope, paid)}: your invoice shows the payment.
-                  </>
-                ) : (
-                  <>
-                    <span className="font-semibold">{studio.name}</span> has your request for {pkg?.name} on {formatDay(scope, date)}, {startTime}–{endTime}.{" "}
-                    {pkg && pkg.price > 0 ? "Your quotation is ready. Pay any time to confirm the day, or wait for them to confirm." : "They'll confirm it and send your invoice."}
-                  </>
-                )}
-              </p>
-              {result.signedIn ? (
-                <>
-                  <p className="text-muted">Follow it on your page: this phone stays signed in.</p>
+            <Confirmation
+              title={paid > 0 ? "You're booked" : "Request sent"}
+              action={
+                result.signedIn ? (
                   <Link href={`/${studio.slug}/me`}>
-                    <Button className="w-full">Open my page</Button>
+                    <Button className="min-h-12 w-full rounded-full">Open my page</Button>
                   </Link>
-                </>
-              ) : (
-                <p className="text-muted">
-                  This number is already with {studio.name}: they&apos;ll send you the link to your page when they confirm.
-                </p>
-              )}
-            </div>
+                ) : (
+                  <Button type="button" className="min-h-12 w-full rounded-full" onClick={() => setOpen(false)}>
+                    Done
+                  </Button>
+                )
+              }
+            >
+              <p>
+                {pkg?.name} with {studio.name} on {formatDay(scope, date)}, {startTime}–{endTime}.
+              </p>
+              <p className="mt-1">
+                {paid > 0
+                  ? `Paid ${formatAmount(scope, paid)}: your invoice shows the payment.`
+                  : pkg && pkg.price > 0
+                    ? "Your quotation is ready. Pay any time to confirm the day, or wait for them to confirm."
+                    : "They'll confirm it and send your invoice."}
+              </p>
+              {result.signedIn ? null : <p className="mt-1">This number is already with {studio.name}: they&apos;ll send you the link to your page.</p>}
+            </Confirmation>
           ) : null}
         </div>
-      </Drawer>
+      </BottomSheet>
     </>
   );
 }

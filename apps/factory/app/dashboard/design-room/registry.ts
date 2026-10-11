@@ -86,6 +86,9 @@ import SectionLabelBasic from "./examples/section-label/basic";
 import ScrollbarsPanels from "./examples/scrollbars/panels";
 import SkeletonListRow from "./examples/skeleton/list-row";
 import SpinnerSizes from "./examples/spinner/sizes";
+import BottomSheetBasic from "./examples/bottom-sheet/basic";
+import ConfirmationBooked from "./examples/confirmation/booked";
+import DocumentPayBarQuotation from "./examples/document-pay-bar/quotation";
 import StatusGlowBadgeAll from "./examples/status-glow-badge/all";
 import StepFormBooking from "./examples/step-form/booking";
 import StepFormRail from "./examples/step-form/rail";
@@ -169,6 +172,33 @@ export const COMPONENTS: RoomComponent[] = [
       { title: "New booking", file: "step-form/booking.tsx", Demo: StepFormBooking },
       { title: "Rail, five steps", file: "step-form/rail.tsx", Demo: StepFormRail },
     ],
+  },
+  {
+    slug: "bottom-sheet",
+    name: "Bottom sheet",
+    category: "Overlays",
+    status: "live",
+    source: "packages/ui/BottomSheet.tsx",
+    summary: "One short task (pay, book, confirm) in a sheet that rises from the bottom of a phone, under the thumb; a centered card on wide screens. Use the Drawer for long panels.",
+    examples: [{ title: "Pay to confirm", file: "bottom-sheet/basic.tsx", Demo: BottomSheetBasic }],
+  },
+  {
+    slug: "confirmation",
+    name: "Confirmation",
+    category: "Feedback",
+    status: "live",
+    source: "packages/ui/Confirmation.tsx",
+    summary: "The success screen at the end of a task: a ticked seal, what happened, what's next, and the way on.",
+    examples: [{ title: "Booked", file: "confirmation/booked.tsx", Demo: ConfirmationBooked }],
+  },
+  {
+    slug: "document-pay-bar",
+    name: "Document pay bar",
+    category: "Flows",
+    status: "live",
+    source: "packages/ui/billing/DocumentPayBar.tsx (with packages/ui/payments/PayNow.tsx)",
+    summary: "Pinned under a quotation or invoice on its link: what it is, from whom to whom, what's to pay and by when, and one action (Approve & Pay / Pay) that opens the pay sheet and ends on a confirmation.",
+    examples: [{ title: "Quotation", file: "document-pay-bar/quotation.tsx", Demo: DocumentPayBarQuotation }],
   },
   {
     slug: "button",

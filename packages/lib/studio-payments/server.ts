@@ -29,9 +29,12 @@ export async function applyStudioPayment(collectionId: string): Promise<void> {
     const studio = await studios.owned(payment.ownerClientId);
     if (!studio) throw new Error("the studio no longer exists");
     const scope = studioScope(studio);
-    const { invoiceId } = payment.bookingId
-      ? await bookingRequests.confirm(scope, payment.bookingId, ACTOR)
-      : await productRequests.confirm(scope, payment.requestId!);
+    // An invoice paid from its link is there already; a booking or order is confirmed, which makes its invoice.
+    const { invoiceId } = payment.invoiceId
+      ? { invoiceId: payment.invoiceId }
+      : payment.bookingId
+        ? await bookingRequests.confirm(scope, payment.bookingId, ACTOR)
+        : await productRequests.confirm(scope, payment.requestId!);
     // Priced on request: no invoice yet, the money waits in the studio's wallet.
     if (!invoiceId) return;
     const invoice = await invoices.get(scope, invoiceId);

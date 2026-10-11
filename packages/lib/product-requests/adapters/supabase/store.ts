@@ -51,11 +51,12 @@ function fail(what: string, error: { code?: string; message: string }): never {
 const table = () => createAdminClient().from("product_requests");
 
 export const supabaseProductRequestStore = {
-  async list(scope: TenantScope, filter: { customerId?: string; status?: ProductRequestStatus; ids?: string[] }): Promise<ProductRequest[]> {
+  async list(scope: TenantScope, filter: { customerId?: string; status?: ProductRequestStatus; ids?: string[]; quotationId?: string }): Promise<ProductRequest[]> {
     let query = table().select(COLUMNS).eq("tenant_id", scope.tenantId);
     if (filter.customerId) query = query.eq("customer_id", filter.customerId);
     if (filter.status) query = query.eq("status", filter.status);
     if (filter.ids) query = query.in("id", filter.ids);
+    if (filter.quotationId) query = query.eq("quotation_id", filter.quotationId);
     const { data, error } = await query.order("created_at", { ascending: false }).returns<Row[]>();
     if (error) fail("list requests", error);
     return data.map(toRequest);

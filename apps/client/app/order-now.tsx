@@ -5,7 +5,8 @@ import { useState, useTransition } from "react";
 
 import { StepRail } from "@repo/ui/StepForm";
 import { Button } from "@repo/ui/Button";
-import { Drawer } from "@repo/ui/Drawer";
+import { BottomSheet } from "@repo/ui/BottomSheet";
+import { Confirmation } from "@repo/ui/Confirmation";
 import { Field, TextInput } from "@repo/ui/Field";
 import { PhoneInput } from "@repo/ui/PhoneInput";
 import type { Offering } from "@repo/lib/offerings/core";
@@ -14,7 +15,7 @@ import type { OrderNowOutcome } from "@repo/lib/product-requests/core";
 import { formatAmount } from "@repo/lib/tenancy/format";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
-import { PayNow } from "./pay-now";
+import { PayNow } from "@repo/ui/payments/PayNow";
 
 type Step = "size" | "details" | "review" | "pay" | "sent";
 /** The steps shown on the rail, by short name. */
@@ -98,7 +99,7 @@ export function OrderNow({
       <Button type="button" className="w-full sm:w-auto sm:self-start" onClick={begin} disabled={sizes.length === 0}>
         {picked ? `Order ${picked.name} now` : "Order now"}
       </Button>
-      <Drawer open={open} onClose={() => !pending && setOpen(false)} title={titles[step]}>
+      <BottomSheet open={open} onClose={() => !pending && setOpen(false)} title={step === "sent" ? undefined : titles[step]}>
         <div className="space-y-4">
           {index >= 0 ? <StepRail titles={steps.map((k) => RAIL[k] ?? "")} step={index} reached={index} onGo={(i) => setStep(steps[i])} /> : null}
 
@@ -204,31 +205,35 @@ export function OrderNow({
           ) : null}
 
           {step === "sent" && result ? (
-            <div className="space-y-3 text-sm">
-              <p>
-                <span className="font-semibold">{studio.name}</span> has your order: {count} × {size?.serviceName} · {size?.name}.
-                {paid > 0
-                  ? ` Paid ${formatAmount(scope, paid)}: it's confirmed, and your invoice shows the payment.`
-                  : size && size.price > 0
-                    ? " Your quotation is ready. Pay any time to confirm it, or wait for them to confirm."
-                    : ""}
-              </p>
-              {result.signedIn ? (
-                <>
-                  <p className="text-muted">Follow it on your page: this phone stays signed in.</p>
+            <Confirmation
+              title={paid > 0 ? "Order confirmed" : "Order placed"}
+              action={
+                result.signedIn ? (
                   <Link href={`/${studio.slug}/me`}>
-                    <Button className="w-full">Open my page</Button>
+                    <Button className="min-h-12 w-full rounded-full">Open my page</Button>
                   </Link>
-                </>
-              ) : (
-                <p className="text-muted">
-                  This number is already with {studio.name}: they&apos;ll send you the link to your page when they confirm.
-                </p>
-              )}
-            </div>
+                ) : (
+                  <Button type="button" className="min-h-12 w-full rounded-full" onClick={() => setOpen(false)}>
+                    Done
+                  </Button>
+                )
+              }
+            >
+              <p>
+                {count} × {size?.serviceName} · {size?.name} from {studio.name}.
+              </p>
+              <p className="mt-1">
+                {paid > 0
+                  ? `Paid ${formatAmount(scope, paid)}: your invoice shows the payment.`
+                  : size && size.price > 0
+                    ? "Your quotation is ready. Pay any time to confirm it, or wait for them to confirm."
+                    : "They'll confirm it and send your invoice."}
+              </p>
+              {result.signedIn ? null : <p className="mt-1">This number is already with {studio.name}: they&apos;ll send you the link to your page.</p>}
+            </Confirmation>
           ) : null}
         </div>
-      </Drawer>
+      </BottomSheet>
     </>
   );
 }

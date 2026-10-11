@@ -52,7 +52,7 @@ interface Payee {
 
 async function prompt(
   payee: Payee,
-  input: { amount: number; phone: string; orderId: string | null; productRequestId?: string | null; bookingId?: string | null; description: string },
+  input: { amount: number; phone: string; orderId: string | null; productRequestId?: string | null; bookingId?: string | null; documentId?: string | null; description: string },
 ): Promise<MobileMoneyCollection> {
   if (!hivepay.isConfigured()) throw new WalletError("Mobile money payments aren't available yet. Please pay another way.");
   const amountError = checkMobileMoneyAmount(input.amount);
@@ -65,7 +65,7 @@ async function prompt(
   // too soon) would put two charges on the client's phone.
   const waiting = await repo.pendingCollection(
     payee.clientId,
-    { orderId: input.orderId, productRequestId: input.productRequestId ?? null, bookingId: input.bookingId ?? null },
+    { orderId: input.orderId, productRequestId: input.productRequestId ?? null, bookingId: input.bookingId ?? null, documentId: input.documentId ?? null },
     new Date(Date.now() - ONE_PROMPT_AT_A_TIME_MS),
   );
   if (waiting) return toView(waiting);
@@ -76,6 +76,7 @@ async function prompt(
     orderId: input.orderId,
     productRequestId: input.productRequestId ?? null,
     bookingId: input.bookingId ?? null,
+    documentId: input.documentId ?? null,
     amount: input.amount,
     phone: phone.store,
     createdByName: payee.payerName,
@@ -129,9 +130,10 @@ export async function startOrderPayment(viewer: ClientViewer, input: { orderId: 
  */
 export async function startStudioRequestPayment(input: {
   ownerClientId: string;
-  /** What's paid for: the order request, or the booking. */
+  /** What's paid for: the order request, the booking, or the invoice. */
   requestId?: string;
   bookingId?: string;
+  invoiceId?: string;
   studioName: string;
   payerName: string;
   amount: number;
@@ -139,7 +141,7 @@ export async function startStudioRequestPayment(input: {
 }): Promise<MobileMoneyCollection> {
   return prompt(
     { clientId: input.ownerClientId, payerName: input.payerName },
-    { amount: input.amount, phone: input.phone, orderId: null, productRequestId: input.requestId, bookingId: input.bookingId, description: input.studioName },
+    { amount: input.amount, phone: input.phone, orderId: null, productRequestId: input.requestId, bookingId: input.bookingId, documentId: input.invoiceId, description: input.studioName },
   );
 }
 
@@ -149,18 +151,20 @@ export async function studioPayment(id: string): Promise<{
   ownerClientId: string;
   requestId: string | null;
   bookingId: string | null;
+  invoiceId: string | null;
   amount: number;
   reference: string;
   succeeded: boolean;
   applied: boolean;
 } | null> {
   const row = await repo.getCollection(id);
-  if (!row || (!row.product_request_id && !row.booking_id)) return null;
+  if (!row || (!row.product_request_id && !row.booking_id && !row.billing_document_id)) return null;
   return {
     id: row.id,
     ownerClientId: row.client_id,
     requestId: row.product_request_id,
     bookingId: row.booking_id,
+    invoiceId: row.billing_document_id,
     amount: row.amount,
     reference: toHivepayReference(row.id),
     succeeded: row.status === "succeeded",
@@ -174,7 +178,7 @@ export const releaseStudioPaymentApply = repo.releaseCollectionApply;
 /** The studio page following a customer's payment. The collection id (a uuid only that page has) is the key. */
 export async function checkStudioRequestPayment(id: string): Promise<MobileMoneyCollection> {
   const row = await repo.getCollection(id);
-  if (!row?.product_request_id && !row?.booking_id) throw new WalletError("Payment not found.");
+  if (!row?.product_request_id && !row?.booking_id && !row?.billing_document_id) throw new WalletError("Payment not found.");
   const asked = row.status === "pending" && Date.now() - Date.parse(row.created_at) > ASK_PROVIDER_AFTER_MS;
   return toView(asked ? await reconcile(row) : row);
 }

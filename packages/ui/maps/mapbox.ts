@@ -7,7 +7,7 @@ export interface MapPoint {
   lng: number;
 }
 
-/** Where directions lead: a pin, or a place by name (found on the map when it's opened). */
+/** Where directions lead: a pin (the live map), or a place by name (handed to Google Maps, which knows venues). */
 export type Destination = MapPoint | { query: string };
 
 export const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? "";
@@ -28,12 +28,16 @@ export function googleDirectionsUrl(to: Destination): string {
   return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}`;
 }
 
-/** Places matching what was typed, nearest `near` first. */
+/** Where place search looks. Mapbox knows Uganda's towns, areas and roads, but few venues by name. */
+const SEARCH_COUNTRY = "ug";
+
+/** Areas, roads and towns matching what was typed, nearest `near` first: for getting the map close before placing the pin. */
 export async function searchPlaces(text: string, near: MapPoint, signal?: AbortSignal): Promise<{ name: string; place: string; point: MapPoint }[]> {
   const url = new URL("https://api.mapbox.com/search/geocode/v6/forward");
   url.searchParams.set("q", text);
   url.searchParams.set("proximity", `${near.lng},${near.lat}`);
   url.searchParams.set("limit", "5");
+  url.searchParams.set("country", SEARCH_COUNTRY);
   url.searchParams.set("access_token", MAPBOX_TOKEN);
   const res = await fetch(url, { signal });
   if (!res.ok) return [];
