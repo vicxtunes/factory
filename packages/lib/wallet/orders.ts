@@ -6,8 +6,9 @@ import "server-only";
 
 import { WalletError, walletErrorMessage } from "./server/errors";
 import type { WalletActor } from "./server/identity";
+import * as mobileMoney from "./server/mobile-money";
 import * as service from "./server/service";
-import type { OrderPaymentExcessDisposition, OrderPaymentRecord, PaymentMethod } from "./types";
+import type { MobileMoneyCollection, OrderPaymentExcessDisposition, OrderPaymentRecord, PaymentMethod } from "./types";
 
 /**
  * Called when an order is cancelled: everything paid for it goes back to the
@@ -76,4 +77,14 @@ export async function paidByOrders(orderIds: string[]): Promise<Record<string, n
 /** Payments and refunds for one order, oldest first. */
 export async function orderPaymentHistory(orderId: string): Promise<OrderPaymentRecord[]> {
   return service.orderPaymentHistory(orderId);
+}
+
+/** A mobile money prompt for an order paid from its invoice link (no sign-in; the caller has matched the link to the order). */
+export async function startOrderLinkPayment(input: { orderId: string; phone: string; amount?: number }): Promise<MobileMoneyCollection> {
+  return mobileMoney.startOrderLinkPayment(input);
+}
+
+/** How that prompt is going. */
+export async function checkOrderLinkPayment(collectionId: string): Promise<MobileMoneyCollection> {
+  return mobileMoney.checkOrderLinkPayment(collectionId);
 }

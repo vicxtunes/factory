@@ -10,6 +10,7 @@ import { PayNow } from "@repo/ui/payments/PayNow";
 import { approveAndPayQuotation, checkDocumentPayment, payInvoiceByLink } from "@repo/lib/billing/actions";
 import { formatAmount } from "@repo/lib/tenancy/format";
 import type { TenantScope } from "@repo/lib/tenancy/types";
+import type { MobileMoneyCollection, WalletResult } from "@repo/lib/wallet/types";
 
 const chip = "inline-flex min-w-0 items-center rounded-full bg-background px-3 py-1.5 text-sm font-medium";
 
@@ -30,6 +31,8 @@ export function DocumentPayBar({
   amountLabel,
   due,
   payable,
+  pay,
+  payNote,
   more,
   scope,
 }: {
@@ -48,6 +51,13 @@ export function DocumentPayBar({
   due: { label: string; date: string; away: string | null; late: boolean } | null;
   /** Whether it can be paid here now. */
   payable: boolean;
+  /** How it's paid when it isn't a studio's document on `token` (the factory's own invoices, packages/ui/invoices/InvoiceLinkPayBar). */
+  pay?: {
+    start: (amount: number, phone: string) => Promise<WalletResult<MobileMoneyCollection>>;
+    check: (id: string) => Promise<WalletResult<MobileMoneyCollection>>;
+  };
+  /** Under the pay form: another way to pay (bank details). */
+  payNote?: ReactNode;
   /** Other answers (accept without paying, decline): shown in a sheet behind "•••". */
   more?: ReactNode;
   scope: Pick<TenantScope, "currency" | "locale">;
@@ -121,14 +131,17 @@ export function DocumentPayBar({
 
       <BottomSheet open={sheet === "pay"} onClose={close} title={paid === null ? (kind === "quotation" ? "Approve & pay" : "Pay this invoice") : undefined}>
         {paid === null ? (
-          <PayNow
-            total={amount}
-            format={money}
-            phone={null}
-            start={(a, phone) => (kind === "quotation" ? approveAndPayQuotation(token, { amount: a, phone }) : payInvoiceByLink(token, { amount: a, phone }))}
-            check={checkDocumentPayment}
-            onPaid={setPaid}
-          />
+          <div className="space-y-4">
+            <PayNow
+              total={amount}
+              format={money}
+              phone={null}
+              start={pay?.start ?? ((a, phone) => (kind === "quotation" ? approveAndPayQuotation(token, { amount: a, phone }) : payInvoiceByLink(token, { amount: a, phone })))}
+              check={pay?.check ?? checkDocumentPayment}
+              onPaid={setPaid}
+            />
+            {payNote}
+          </div>
         ) : (
           <Confirmation
             title="Paid"

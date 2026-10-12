@@ -1,9 +1,10 @@
 import "server-only";
 
-// The weekly summary of what each client owes: a push, and an email when
-// there's one on file. Best-effort per client: one that fails is logged and
-// the rest still go out. invoice_reminders keeps it to once a day per client,
-// so a second run (a retried cron call) sends nothing.
+// A reminder to every client who owes, sent when staff press "Send
+// reminders" (Accounts → Client accounts): a push, and an email when there's
+// one on file. Best-effort per client: one that fails is logged and the rest
+// still go out. invoice_reminders keeps it to once a day per client, so a
+// second press the same day sends nothing more.
 
 import { localDate } from "@repo/lib/accounting/core/period";
 import { clientUrl } from "@repo/lib/client-portal/paths";
@@ -12,12 +13,12 @@ import { resendMailer } from "@repo/lib/studio-access/adapters/resend/mailer";
 import { LOGO_CID } from "@repo/lib/studio-access/core/emails";
 import { resolveTenantScope } from "@repo/lib/tenancy/server/resolve";
 
-import { weeklyReminder } from "../reminder";
+import { owingReminder } from "../reminder";
 import * as directory from "./directory";
 import * as repo from "./repository";
 import { unpaid } from "./service";
 
-export async function sendWeeklySummaries(): Promise<{ clients: number; reminded: number }> {
+export async function sendOwingReminders(): Promise<{ clients: number; reminded: number }> {
   const scope = await resolveTenantScope();
   const today = localDate(new Date(), scope.timeZone);
   const payUrl = clientUrl("/payment");
@@ -35,7 +36,7 @@ export async function sendWeeklySummaries(): Promise<{ clients: number; reminded
     if (!contact) continue;
     try {
       if (!(await repo.claimReminder(clientId, today))) continue;
-      const reminder = weeklyReminder(contact.name, invoices, today, payUrl, `cid:${LOGO_CID}`);
+      const reminder = owingReminder(contact.name, invoices, today, payUrl, `cid:${LOGO_CID}`);
       await notifyActor({ type: "client", id: clientId }, { ...reminder.push, url: payUrl });
       if (contact.email) await resendMailer.send({ to: contact.email, ...reminder.email });
       reminded += 1;

@@ -148,6 +148,14 @@ business. One prompt at a time per payment: a second tap within 3 minutes gets t
   `NEXT_PUBLIC_CLIENT_ORIGIN`), so nothing needs setting in HivePay's dashboard. Without the keys the
   buttons answer "not available yet".
 
+### From an invoice link, without signing in
+
+`/invoice/<token>` has a pinned **Pay** (packages/ui/invoices/InvoiceLinkPayBar.tsx): holding the
+link is the permission. `startOrderLinkPayment()` (through `orders.ts`, called by
+packages/lib/invoices once it has matched the token to the order) prompts the phone for the
+balance or a part of it, and the collection settles as an order receipt for the order's client.
+An order with no client account can't be paid this way (bank only).
+
 ### Several invoices in one go
 
 From the Wallet page's "You owe" (packages/ui/invoices/ClientUnpaidInvoices.tsx):

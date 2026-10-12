@@ -55,6 +55,34 @@ function CopyButton({ value, label }: { value: string; label: string }) {
   );
 }
 
+/** The business's bank account with copy buttons, and the reference to quote when there is one. */
+export function BankDetails({ reference, extra }: { reference?: string; extra?: ReactNode }) {
+  return (
+    <div className="space-y-3">
+      {reference ? (
+        <p className="text-sm">
+          Reference: <span className="font-semibold">{reference}</span>
+        </p>
+      ) : null}
+      <section className="rounded-2xl border border-border bg-surface p-4 shadow-theme-xs">
+        <h3 className="text-sm font-semibold">{BANK.title}</h3>
+        <dl className="mt-2 divide-y divide-border">
+          {BANK.fields.map((field) => (
+            <div key={field.label} className="flex items-center justify-between gap-3 py-2">
+              <div className="min-w-0">
+                <dt className="text-xs text-muted">{field.label}</dt>
+                <dd className="break-words text-sm font-medium tabular-nums">{field.value}</dd>
+              </div>
+              {field.copyable ? <CopyButton value={field.value} label={field.label} /> : null}
+            </div>
+          ))}
+        </dl>
+      </section>
+      {extra}
+    </div>
+  );
+}
+
 export function PaymentMethods({
   orderNo,
   pay,
@@ -96,28 +124,7 @@ export function PaymentMethods({
       </div>
 
       {choice === "bank" ? (
-        <div className="space-y-3">
-          {orderNo ? (
-            <p className="text-sm">
-              Reference: <span className="font-semibold">{orderNo}</span>
-            </p>
-          ) : null}
-          <section className="rounded-2xl border border-border bg-surface p-4 shadow-theme-xs">
-            <h3 className="text-sm font-semibold">{BANK.title}</h3>
-            <dl className="mt-2 divide-y divide-border">
-              {BANK.fields.map((field) => (
-                <div key={field.label} className="flex items-center justify-between gap-3 py-2">
-                  <div className="min-w-0">
-                    <dt className="text-xs text-muted">{field.label}</dt>
-                    <dd className="break-words text-sm font-medium tabular-nums">{field.value}</dd>
-                  </div>
-                  {field.copyable ? <CopyButton value={field.value} label={field.label} /> : null}
-                </div>
-              ))}
-            </dl>
-          </section>
-          {bankExtra}
-        </div>
+        <BankDetails reference={orderNo} extra={bankExtra} />
       ) : pay === "top-up" ? (
         <MobileMoneyTopUp key={choice} network={choice} />
       ) : pay && "orderIds" in pay ? (

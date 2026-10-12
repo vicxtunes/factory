@@ -107,10 +107,8 @@ export async function startTopUp(viewer: ClientViewer, input: { amount: number; 
   return prompt({ clientId: viewer.id, payerName: viewer.name }, { amount: input.amount, phone: input.phone, orderId: null, description: "Aming wallet top-up" });
 }
 
-/** "Pay with mobile money" on an order: prompts for what's still due. */
-export async function startOrderPayment(viewer: ClientViewer, input: { orderId: string; phone: string }): Promise<MobileMoneyCollection> {
-  const order = await directory.loadOrder(input.orderId);
-  if (!order || order.clientId !== viewer.id) throw new WalletError("Order not found.");
+/** Checks the order can be paid now and prompts `phone` for `amount` (what's still due when left out; never more). */
+async function promptForOrder(order: directory.WalletOrder, payee: Payee, input: { phone: string; amount?: number }): Promise<MobileMoneyCollection> {
   if (!isOrderPayable({ approval_status: order.approvalStatus, cancelled_at: order.cancelledAt })) {
     throw new WalletError(order.cancelledAt ? "This order was cancelled." : "This order isn't confirmed yet, so it can't be paid.");
   }
@@ -121,7 +119,37 @@ export async function startOrderPayment(viewer: ClientViewer, input: { orderId: 
   await directory.fixOrderPrice(order);
   const due = order.amount - ((await repo.paidByOrder([order.id]))[order.id] ?? 0);
   if (due <= 0) throw new WalletError("This order is already fully paid.");
-  return prompt({ clientId: viewer.id, payerName: viewer.name }, { amount: due, phone: input.phone, orderId: order.id, description: `Aming order ${order.orderNo}` });
+  const amount = input.amount ?? due;
+  if (amount > due) throw new WalletError(`That's more than what's left to pay (${due.toLocaleString("en-UG")}).`);
+  return prompt(payee, { amount, phone: input.phone, orderId: order.id, description: `Aming order ${order.orderNo}` });
+}
+
+/** "Pay with mobile money" on an order: prompts for what's still due, or a part of it. */
+export async function startOrderPayment(viewer: ClientViewer, input: { orderId: string; phone: string; amount?: number }): Promise<MobileMoneyCollection> {
+  const order = await directory.loadOrder(input.orderId);
+  if (!order || order.clientId !== viewer.id) throw new WalletError("Order not found.");
+  return promptForOrder(order, { clientId: viewer.id, payerName: viewer.name }, input);
+}
+
+/**
+ * Paying an order from its invoice link, without signing in: holding the link
+ * is the permission (the caller, packages/lib/invoices, has matched the token
+ * to the order). The payment goes on the order for its client, as theirs would.
+ */
+export async function startOrderLinkPayment(input: { orderId: string; phone: string; amount?: number }): Promise<MobileMoneyCollection> {
+  const order = await directory.loadOrder(input.orderId);
+  if (!order) throw new WalletError("Order not found.");
+  const client = order.clientId ? await directory.loadClient(order.clientId) : null;
+  if (!client) throw new WalletError("This invoice can't be paid online. Please pay by bank, or call us.");
+  return promptForOrder(order, { clientId: client.id, payerName: client.name }, input);
+}
+
+/** The invoice link following its payment. The collection id (a uuid only that page has) is the key. */
+export async function checkOrderLinkPayment(id: string): Promise<MobileMoneyCollection> {
+  const row = await repo.getCollection(id);
+  if (!row?.order_id) throw new WalletError("Payment not found.");
+  const asked = row.status === "pending" && Date.now() - Date.parse(row.created_at) > ASK_PROVIDER_AFTER_MS;
+  return toView(asked ? await reconcile(row) : row);
 }
 
 /**

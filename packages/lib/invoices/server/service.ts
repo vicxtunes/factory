@@ -527,6 +527,12 @@ export async function clientOwnsOrder(clientId: string, orderId: string): Promis
 
 // --- Public (anyone holding the link) ---------------------------------------
 
+/** The order an invoice link is for, or null for an unknown / revoked link. */
+export async function orderIdByToken(token: string): Promise<string | null> {
+  if (!isWellFormedToken(token)) return null;
+  return (await repo.byToken(token))?.order_id ?? null;
+}
+
 export async function byToken(token: string): Promise<InvoiceView | null> {
   if (!isWellFormedToken(token)) return null;
   const invoice = await repo.byToken(token);
