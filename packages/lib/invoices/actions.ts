@@ -15,10 +15,11 @@ import { WalletError } from "@repo/lib/wallet/orders";
 import type { OrderPaymentExcessDisposition, PaymentMethod } from "@repo/lib/wallet/types";
 
 import { InvoiceError } from "./server/errors";
-import { requireBoss, requireClientId, requireStaff } from "./server/identity";
+import { getClientIdOrNull, requireBoss, requireClientId, requireStaff } from "./server/identity";
 import * as directory from "./server/directory";
 import * as service from "./server/service";
 import type {
+  ClientInvoiceRow,
   ClientOrderDocument,
   DiscountHistoryEntry,
   DraftLine,
@@ -26,6 +27,7 @@ import type {
   InvoiceResult,
   InvoiceSettingsInput,
   InvoiceView,
+  Owing,
   StaffInvoiceView,
 } from "./types";
 import { clientPath } from "@repo/lib/client-portal/paths";
@@ -44,7 +46,7 @@ async function run<T>(fn: () => Promise<T>): Promise<{ ok: true; data?: T } | { 
 }
 
 function refresh() {
-  for (const path of ["/dashboard/invoices", "/dashboard/wallets", clientPath("/payment"), clientPath("/orders")]) {
+  for (const path of ["/dashboard/invoices", "/dashboard/wallets", clientPath(), clientPath("/payment"), clientPath("/orders")]) {
     revalidatePath(path);
   }
 }
@@ -214,4 +216,17 @@ export async function getMyInvoiceLink(
   orderId: string,
 ): Promise<InvoiceResult<ClientOrderDocument | null>> {
   return run(async () => service.linkForClientOrder(await requireClientId(), orderId));
+}
+
+/** The signed-in client's invoices with something still to pay, oldest first. */
+export async function listMyUnpaidInvoices(): Promise<InvoiceResult<ClientInvoiceRow[]>> {
+  return run(async () => service.listUnpaidForClient(await requireClientId()));
+}
+
+/** What the signed-in client owes in all, for the banners on the money pages. Null when signed out or all paid up. */
+export async function getMyOwing(): Promise<Owing | null> {
+  const clientId = await getClientIdOrNull();
+  if (!clientId) return null;
+  const rows = await service.unpaid(clientId);
+  return rows.length ? { owed: rows.reduce((sum, r) => sum + r.balance, 0), count: rows.length } : null;
 }

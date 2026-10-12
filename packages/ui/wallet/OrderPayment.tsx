@@ -9,6 +9,10 @@ import { Field, TextInput } from "@repo/ui/Field";
 import { paymentMethodLabel } from "@repo/lib/wallet/policy";
 import { getOrderPayment, payOrderFromWallet, refundOrderToWallet } from "@repo/lib/wallet/actions";
 import type { OrderPaymentState } from "@repo/lib/wallet/types";
+import { getMyOwing } from "@repo/lib/invoices/actions";
+import type { Owing } from "@repo/lib/invoices/types";
+
+import { OwingBanner } from "../invoices/OwingBanner";
 
 import { parseAmount, useMoney } from "./shared";
 import { clientPath } from "@repo/lib/client-portal/paths";
@@ -63,6 +67,10 @@ export function ClientOrderPayment({ orderId }: { orderId: string }) {
   const { state, setState } = useOrderPayment(orderId);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  const [owing, setOwing] = useState<Owing | null>(null);
+  useEffect(() => {
+    getMyOwing().then(setOwing, () => {});
+  }, []);
 
   // Nothing to show until the order can take a payment (priced, confirmed,
   // not cancelled) — unless money was already paid, which is always shown.
@@ -89,6 +97,8 @@ export function ClientOrderPayment({ orderId }: { orderId: string }) {
 
   return (
     <section aria-label="Payment" className="space-y-2 rounded-2xl border border-border bg-surface p-4">
+      {/* Owing on other invoices too: the Wallet clears them together. */}
+      {owing && owing.owed > due ? <OwingBanner owing={owing} /> : null}
       <PaidSummary state={state} />
       {state.payable && due > 0 ? (
         balance > 0 ? (

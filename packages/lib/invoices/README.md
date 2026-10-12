@@ -28,6 +28,16 @@ link they can open without signing in.
   downloads and prints; each item's progress is in the client portal. **Reset link**
   replaces it; the old link stops working.
 
+- **What a client owes** is the first thing on their Wallet page (`/payment`): the total, how much
+  is overdue, and every invoice with something still to pay, oldest first, each with a tick. They
+  pay one, several or all: from the wallet (oldest first, as far as the balance goes), with one
+  MTN / Airtel prompt for the lot, or by bank (packages/lib/wallet). A one-line "You owe … Pay now"
+  banner shows on home, on an invoice or pro forma, and in an order's payment panel; the sidebar's
+  Wallet link carries a dot.
+- **Reminders**: a push when an invoice is generated, and a **weekly summary** (Mondays 9:00
+  Kampala) to every client who owes: a push, and an email listing the invoices when there's an
+  email on file. See "Reminders" below.
+
 Screens: the Invoice panel in the staff order detail, `/dashboard/invoices` (list with outstanding
 total and status filters), the public page `/invoice/<token>` in the client app (`client.<domain>/invoice/<token>`), and "View invoice" on the client's own order in the portal.
 
@@ -83,6 +93,19 @@ the payment's id, which is how the history can say "Mobile money · Ref MP123".
 - Links always point at the client app (`NEXT_PUBLIC_CLIENT_ORIGIN`, defaulting in production to
   `https://amingspace.com`), wherever they're made (see `server/links.ts`). In local development
   without that setting, they use the current origin.
+
+## Reminders
+
+- The wording is in `reminder.ts` (pure, `reminder.test.ts`); sending is `server/reminders.ts`.
+- Vercel Cron (`apps/client/vercel.json`, `0 6 * * 1` UTC) calls `/api/reminders/invoices` in the
+  client app with `Authorization: Bearer $CRON_SECRET`. Set `CRON_SECRET` in the client app's
+  Vercel project; without it the route answers 401 to everyone.
+- `invoice_reminders` (client, day) keeps it to once a day per client, so a retried or repeated
+  call sends nothing more.
+- What's owed comes from the `accounting_sale_documents` view (total and paid per invoice), the
+  same numbers as Accounts → Client accounts.
+- To try it: `curl -H "Authorization: Bearer <secret>" <client app>/api/reminders/invoices`
+  → `{ clients, reminded }`. Without Resend keys outside production, emails print in the server log.
 
 ## Layout
 

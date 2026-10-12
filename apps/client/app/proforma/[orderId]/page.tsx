@@ -1,8 +1,10 @@
 import { BackLink } from "@repo/ui/navigation/back";
 import { notFound, redirect } from "next/navigation";
 
+import { OwingBanner } from "@repo/ui/invoices/OwingBanner";
 import { InvoicePdf } from "@repo/ui/invoices/InvoicePdf";
 import { PaymentMethods } from "@repo/ui/payments/PaymentMethods";
+import { getMyOwing } from "@repo/lib/invoices/actions";
 import { getProformaForViewer } from "@repo/lib/invoices/public";
 import { SUPPORT_PHONE_DISPLAY } from "@repo/lib/support/constants";
 
@@ -21,12 +23,18 @@ export default async function ProformaPage({ params }: { params: Promise<{ order
   if (!result) notFound();
   if ("invoiceUrl" in result) redirect(result.invoiceUrl);
   const invoice = result.view;
+  const owing = await getMyOwing().catch(() => null);
 
   return (
     <main className="mx-auto w-full max-w-3xl px-4 py-6 sm:py-10 print:max-w-none print:p-0">
       <BackLink href="/orders" className="mb-3 inline-block text-sm font-medium text-brand-600 underline print:hidden">
         ← Back to orders
       </BackLink>
+      {owing ? (
+        <div className="mb-3">
+          <OwingBanner owing={owing} />
+        </div>
+      ) : null}
       <InvoicePdf invoice={invoice} />
       {/* Paying early is fine when the estimate is complete (no photo books waiting for a price). */}
       {invoice.complete && invoice.balance > 0 && !invoice.order.cancelled ? (

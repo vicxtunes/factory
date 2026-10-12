@@ -52,7 +52,7 @@ interface Payee {
 
 async function prompt(
   payee: Payee,
-  input: { amount: number; phone: string; orderId: string | null; productRequestId?: string | null; bookingId?: string | null; documentId?: string | null; description: string },
+  input: { amount: number; phone: string; orderId: string | null; orderIds?: string[] | null; productRequestId?: string | null; bookingId?: string | null; documentId?: string | null; description: string },
 ): Promise<MobileMoneyCollection> {
   if (!hivepay.isConfigured()) throw new WalletError("Mobile money payments aren't available yet. Please pay another way.");
   const amountError = checkMobileMoneyAmount(input.amount);
@@ -65,7 +65,7 @@ async function prompt(
   // too soon) would put two charges on the client's phone.
   const waiting = await repo.pendingCollection(
     payee.clientId,
-    { orderId: input.orderId, productRequestId: input.productRequestId ?? null, bookingId: input.bookingId ?? null, documentId: input.documentId ?? null },
+    { orderId: input.orderId, orderIds: input.orderIds ?? null, productRequestId: input.productRequestId ?? null, bookingId: input.bookingId ?? null, documentId: input.documentId ?? null },
     new Date(Date.now() - ONE_PROMPT_AT_A_TIME_MS),
   );
   if (waiting) return toView(waiting);
@@ -74,6 +74,7 @@ async function prompt(
     provider: PROVIDER,
     clientId: payee.clientId,
     orderId: input.orderId,
+    orderIds: input.orderIds ?? null,
     productRequestId: input.productRequestId ?? null,
     bookingId: input.bookingId ?? null,
     documentId: input.documentId ?? null,
@@ -121,6 +122,37 @@ export async function startOrderPayment(viewer: ClientViewer, input: { orderId: 
   const due = order.amount - ((await repo.paidByOrder([order.id]))[order.id] ?? 0);
   if (due <= 0) throw new WalletError("This order is already fully paid.");
   return prompt({ clientId: viewer.id, payerName: viewer.name }, { amount: due, phone: input.phone, orderId: order.id, description: `Aming order ${order.orderNo}` });
+}
+
+/**
+ * "Pay" on several invoices at once: one prompt for everything still due on
+ * them. Settling puts the money on each in the order given (oldest first).
+ */
+export async function startOrdersPayment(viewer: ClientViewer, input: { orderIds: string[]; phone: string }): Promise<MobileMoneyCollection> {
+  const ids = [...new Set(input.orderIds)];
+  if (ids.length === 1) return startOrderPayment(viewer, { orderId: ids[0], phone: input.phone });
+
+  const orders = [];
+  for (const id of ids) {
+    const order = await directory.loadOrder(id);
+    if (!order || order.clientId !== viewer.id) throw new WalletError("Order not found.");
+    if (order.amount == null || !isOrderPayable({ approval_status: order.approvalStatus, cancelled_at: order.cancelledAt })) continue;
+    await directory.fixOrderPrice(order);
+    orders.push({ id: order.id, amount: order.amount });
+  }
+  const { data: invoiced, error } = await createAdminClient().from("invoices").select("order_id").in("order_id", orders.map((o) => o.id));
+  if (error) throw new Error(error.message);
+  const hasInvoice = new Set((invoiced ?? []).map((i) => i.order_id as string));
+  const paid = await repo.paidByOrder(orders.map((o) => o.id));
+  const owing = orders.filter((o) => hasInvoice.has(o.id) && o.amount - (paid[o.id] ?? 0) > 0);
+  if (!owing.length) throw new WalletError("These invoices are already fully paid.");
+  if (owing.length === 1) return startOrderPayment(viewer, { orderId: owing[0].id, phone: input.phone });
+
+  const amount = owing.reduce((sum, o) => sum + o.amount - (paid[o.id] ?? 0), 0);
+  return prompt(
+    { clientId: viewer.id, payerName: viewer.name },
+    { amount, phone: input.phone, orderId: null, orderIds: owing.map((o) => o.id), description: `Aming: ${owing.length} invoices` },
+  );
 }
 
 /**
@@ -213,6 +245,7 @@ async function reconcile(row: repo.CollectionRow): Promise<repo.CollectionRow> {
 
 async function announce(row: repo.CollectionRow): Promise<void> {
   if (row.product_request_id) return notifier.studioCustomerPaid(row.client_id, row.amount);
+  if (row.order_ids) return notifier.mobileMoneyReceivedForInvoices(row.client_id, row.amount, row.order_ids.length);
   const order = row.order_id ? await directory.loadOrder(row.order_id) : null;
   await notifier.mobileMoneyReceived(row.client_id, row.amount, order?.orderNo ?? null);
 }

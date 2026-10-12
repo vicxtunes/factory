@@ -46,6 +46,11 @@ export async function mobileMoneyReceived(clientId: string, amount: number, orde
   );
 }
 
+/** One prompt that cleared several invoices went through. */
+export async function mobileMoneyReceivedForInvoices(clientId: string, amount: number, invoices: number): Promise<void> {
+  await pushClient(clientId, "Payment received", `${formatMoney(amount)} by mobile money for ${invoices} invoices. Thank you!`);
+}
+
 /** A studio's customer paid for an order request: it's in the owner's wallet. */
 export async function studioCustomerPaid(ownerClientId: string, amount: number): Promise<void> {
   await notifyActor(

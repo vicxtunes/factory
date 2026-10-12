@@ -148,6 +148,17 @@ business. One prompt at a time per payment: a second tap within 3 minutes gets t
   `NEXT_PUBLIC_CLIENT_ORIGIN`), so nothing needs setting in HivePay's dashboard. Without the keys the
   buttons answer "not available yet".
 
+### Several invoices in one go
+
+From the Wallet page's "You owe" (packages/ui/invoices/ClientUnpaidInvoices.tsx):
+
+- **From the wallet**: `payOrdersFromWallet(orderIds)` pays each order in turn, oldest first, until
+  the balance runs out.
+- **One MTN / Airtel prompt**: `payOrdersWithMobileMoney(orderIds, phone)`. The amount is what's
+  due on those orders, worked out on the server. The collection carries `order_ids` (`order_id`
+  null); settling records an **order receipt on each** in that order for what it still owes, and
+  anything left (one paid meanwhile, cancelled) goes to the wallet (migration `20261021100000`).
+
 ## Adding another payment provider
 
 Follow HivePay's shape: an adapter in `server/providers/<name>.ts`, rows in

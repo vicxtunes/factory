@@ -71,6 +71,14 @@ Relevant code:
 
 This does not create a new outside payment source. It records a wallet ledger row with `kind = 'order_payment'` and a `wallet` method when there is no linked payment row.
 
+The Wallet page starts with **You owe**: every invoice with something still to pay. The client ticks one, several or all and pays them together: from the wallet (oldest first, as far as the balance goes) or with one MTN / Airtel prompt, which records an order receipt on each invoice (see 7). Clients who owe get a weekly summary by push and email (`packages/lib/invoices/README.md`).
+
+Relevant code:
+
+- `packages/lib/invoices/actions.ts` — `listMyUnpaidInvoices()`, `getMyOwing()`
+- `packages/lib/wallet/actions.ts` — `payOrdersFromWallet()`, `payOrdersWithMobileMoney()`
+- `packages/ui/invoices/ClientUnpaidInvoices.tsx` — the list and the pay sheet
+
 ### 6) External invoice and order payments
 
 When staff record cash, mobile money, or bank money already received for an invoice, it is stored in `order_payment_receipts`. The transaction applies only the remaining due to the order; the receipt does not pass through the wallet. The database function locks the order and performs the receipt and any chosen wallet credit atomically.

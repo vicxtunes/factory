@@ -3,7 +3,9 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 
+import { getMyOwing } from "@repo/lib/invoices/actions";
 import { ChatIcon } from "@repo/ui/chat/icons";
 import {
   AgentsIcon,
@@ -52,6 +54,12 @@ const ICONS: Partial<Record<ClientNavItem["icon"], typeof OrdersIcon>> = {
 export function ClientSidebar({ signedIn }: { signedIn: boolean }) {
   const pathname = usePathname();
   const sections = clientNavFor(signedIn);
+  // A dot on Wallet while invoices are unpaid; asked again on each page, so it goes once they're cleared.
+  const [owes, setOwes] = useState(false);
+  useEffect(() => {
+    if (!signedIn) return;
+    getMyOwing().then((owing) => setOwes(owing !== null), () => {});
+  }, [signedIn, pathname]);
 
   return (
     <aside
@@ -82,6 +90,9 @@ export function ClientSidebar({ signedIn }: { signedIn: boolean }) {
                         <Icon className={`h-5 w-5 ${active ? "menu-item-icon-active" : "menu-item-icon-inactive"}`} />
                       ) : null}
                       {item.label}
+                      {owes && item.href === "/payment" ? (
+                        <span className="ml-auto size-2 rounded-full bg-error-500" aria-label="You have unpaid invoices" />
+                      ) : null}
                     </Link>
                   </li>
                 );

@@ -25,10 +25,10 @@ export interface EmailLinks {
   logo: string | null;
 }
 
-const escape = (s: string) =>
+export const escape = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 
-const paragraphs = (text: string) =>
+export const paragraphs = (text: string) =>
   text
     .split(/\n{2,}/)
     .map((p) => `<p style="margin:0 0 16px;font-size:15px;line-height:1.55;color:#374151">${escape(p).replace(/\n/g, "<br>")}</p>`)
@@ -37,10 +37,10 @@ const paragraphs = (text: string) =>
 /** A link only if it's a full address: a bare path is dead in an email. */
 const absolute = (href: string) => /^https?:\/\//.test(href);
 
-const FOOTER = `This is an automatic email from ${BRAND}. Replies to it aren't read.`;
+export const FOOTER = `This is an automatic email from ${BRAND}. Replies to it aren't read.`;
 
 /** The frame every email shares: the brand, a white card, the footer. */
-function layout(links: EmailLinks, body: string, button?: { label: string; href: string }): string {
+export function layout(links: EmailLinks, body: string, button?: { label: string; href: string }): string {
   const logo = links.logo
     ? `<img src="${escape(links.logo)}" width="32" height="32" alt="" style="display:inline-block;vertical-align:middle;border-radius:8px;border:0">&nbsp;&nbsp;`
     : "";
@@ -58,7 +58,7 @@ function layout(links: EmailLinks, body: string, button?: { label: string; href:
 </table></td></tr></table></body></html>`;
 }
 
-const heading = (text: string) => `<h1 style="margin:0 0 16px;font-size:20px;line-height:1.3;color:#111827">${escape(text)}</h1>`;
+export const heading = (text: string) => `<h1 style="margin:0 0 16px;font-size:20px;line-height:1.3;color:#111827">${escape(text)}</h1>`;
 
 /** A 6-digit code to verify the owner's email. */
 export function codeEmail(links: EmailLinks, studio: string, code: string): Email {

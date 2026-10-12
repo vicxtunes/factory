@@ -95,6 +95,15 @@ export async function payOrderFromWallet(orderId: string): Promise<WalletResult<
   });
 }
 
+/** "Pay from wallet" on several invoices, oldest first, as far as the balance goes. */
+export async function payOrdersFromWallet(orderIds: string[]): Promise<WalletResult<{ paidNow: number; balance: number }>> {
+  return run(async () => {
+    const result = await service.payOrders(await requireClient(), orderIds);
+    refreshMoneyPages();
+    return result;
+  });
+}
+
 /** "Top up with mobile money": the phone is prompted for `amount`, which lands in the wallet. */
 export async function topUpWithMobileMoney(amount: number, phone: string): Promise<WalletResult<MobileMoneyCollection>> {
   return run(async () => mobileMoney.startTopUp(await requireClient(), { amount, phone }));
@@ -103,6 +112,11 @@ export async function topUpWithMobileMoney(amount: number, phone: string): Promi
 /** "Pay with mobile money" on an order: prompts for what's due. */
 export async function payOrderWithMobileMoney(orderId: string, phone: string): Promise<WalletResult<MobileMoneyCollection>> {
   return run(async () => mobileMoney.startOrderPayment(await requireClient(), { orderId, phone }));
+}
+
+/** One prompt for everything due on several invoices. */
+export async function payOrdersWithMobileMoney(orderIds: string[], phone: string): Promise<WalletResult<MobileMoneyCollection>> {
+  return run(async () => mobileMoney.startOrdersPayment(await requireClient(), { orderIds, phone }));
 }
 
 /** The payment screen asking how its prompt is going. Refreshes the money pages once it's through. */

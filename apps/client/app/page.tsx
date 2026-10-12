@@ -1,8 +1,10 @@
 import { Header } from "@repo/ui/Header";
 import { BannerSkeleton, ChartsSkeleton, ChipRowSkeleton, StatTilesSkeleton } from "@repo/ui/skeletons/blocks";
 import { Loading } from "@repo/ui/skeletons/Loading";
+import { OwingBanner } from "@repo/ui/invoices/OwingBanner";
 import { WalletSummaryCard } from "@repo/ui/wallet/WalletSummaryCard";
 import { getClientSession } from "@repo/lib/auth/session";
+import { getMyOwing } from "@repo/lib/invoices/actions";
 import { fetchClientItems, fetchMarketingSlides } from "@repo/lib/queries";
 import { STUDIOS_ENABLED } from "@repo/lib/studios/feature";
 import { getMyWalletSummary } from "@repo/lib/wallet/actions";
@@ -57,19 +59,24 @@ export default async function ClientSidePage({
 }
 
 async function Home({ clientId }: { clientId: string }) {
-  const [items, slides, wallet] = await Promise.all([
+  const [items, slides, wallet, owing] = await Promise.all([
     fetchClientItems(clientId),
     fetchMarketingSlides(true),
     getMyWalletSummary(),
+    // Like the wallet: if it can't load, the home screen still works without it.
+    getMyOwing().catch(() => null),
   ]);
   return (
-    // Cancelled orders aren't work in progress — keep them out of the stats.
-    <ClientDashboard
-      items={items.filter((i) => !i.order.cancelled_at)}
-      slides={slides}
-      // If the wallet can't load, the home screen still works — it just has no balance card.
-      wallet={wallet.ok ? <WalletSummaryCard summary={wallet.data} /> : null}
-    />
+    <div className="space-y-6">
+      {owing ? <OwingBanner owing={owing} /> : null}
+      {/* Cancelled orders aren't work in progress — keep them out of the stats. */}
+      <ClientDashboard
+        items={items.filter((i) => !i.order.cancelled_at)}
+        slides={slides}
+        // If the wallet can't load, the home screen still works — it just has no balance card.
+        wallet={wallet.ok ? <WalletSummaryCard summary={wallet.data} /> : null}
+      />
+    </div>
   );
 }
 

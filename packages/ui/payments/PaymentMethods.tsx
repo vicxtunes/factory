@@ -4,13 +4,18 @@ import { useState, type ReactNode } from "react";
 
 import { PAYMENT_METHODS } from "@repo/lib/payments/details";
 
+import { payOrdersWithMobileMoney } from "@repo/lib/wallet/actions";
+
+import { MobileMoneyPay } from "../wallet/MobileMoneyPay";
 import { MobileMoneyTopUp } from "../wallet/MobileMoneyTopUp";
 import { OrderMobileMoney } from "../wallet/OrderMobileMoney";
 
 // "How to pay": pick MTN, Airtel or Bank.
 //
-//   MTN / Airtel   the in-app phone prompt for `pay` — an order (its id) or a
-//                  wallet top-up; without `pay`, a line saying when.
+//   MTN / Airtel   the in-app phone prompt for `pay` — an order (its id),
+//                  several orders' invoices at once (one prompt for `amount`,
+//                  what's due on them) or a wallet top-up; without `pay`, a
+//                  line saying when.
 //   Bank           the business's account (packages/lib/payments/details.ts)
 //                  with copy buttons, then `bankExtra` if any.
 //
@@ -56,8 +61,8 @@ export function PaymentMethods({
   bankExtra,
 }: {
   orderNo?: string;
-  /** What MTN / Airtel pays: an order, or a wallet top-up. */
-  pay?: { orderId: string } | "top-up";
+  /** What MTN / Airtel pays: an order, several at once, or a wallet top-up. */
+  pay?: { orderId: string } | { orderIds: string[]; amount: number } | "top-up";
   bankExtra?: ReactNode;
 }) {
   const [choice, setChoice] = useState<Choice>("mtn");
@@ -115,6 +120,8 @@ export function PaymentMethods({
         </div>
       ) : pay === "top-up" ? (
         <MobileMoneyTopUp key={choice} network={choice} />
+      ) : pay && "orderIds" in pay ? (
+        <MobileMoneyPay key={choice} amount={pay.amount} network={choice} start={(phone) => payOrdersWithMobileMoney(pay.orderIds, phone)} />
       ) : pay ? (
         <OrderMobileMoney key={choice} orderId={pay.orderId} network={choice} />
       ) : (
