@@ -21,7 +21,7 @@ import { clientPath } from "@repo/lib/client-portal/paths";
 // Loads its own data, so the order screens don't need to know about wallets.
 //
 //   <ClientOrderPayment>  the client: paid / still to pay, "Pay from wallet"
-//                         (MTN / Airtel is in the order's "How to pay")
+//                         (MTN / Airtel is the order's "Pay" button, packages/ui/payments/OrderPayButton)
 //   <StaffOrderPayment>   staff: paid / still to pay, "Refund to wallet"
 
 function useOrderPayment(orderId: string) {

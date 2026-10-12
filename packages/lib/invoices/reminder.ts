@@ -1,5 +1,5 @@
-// The weekly "what you owe" summary: its push and its email. Pure; edit the
-// wording here.
+// The "what you owe" reminder staff send: its push and its email. Pure; edit
+// the wording here.
 
 import { formatMoney } from "@repo/lib/currency/format";
 import { FOOTER, escape, heading, layout, paragraphs, type Email } from "@repo/lib/studio-access/core/emails";
@@ -11,7 +11,7 @@ export interface OwedInvoice {
   balance: number;
 }
 
-export interface WeeklyReminder {
+export interface OwingReminder {
   owed: number;
   overdue: number;
   push: { title: string; body: string };
@@ -22,7 +22,7 @@ export interface WeeklyReminder {
 const day = (iso: string) => iso.split("-").reverse().join("-");
 
 /** `today` is the business's date (YYYY-MM-DD); `payUrl` the Wallet page, `logo` the email's logo source. */
-export function weeklyReminder(name: string, invoices: OwedInvoice[], today: string, payUrl: string, logo: string | null): WeeklyReminder {
+export function owingReminder(name: string, invoices: OwedInvoice[], today: string, payUrl: string, logo: string | null): OwingReminder {
   const late = (i: OwedInvoice) => i.dueDate != null && i.dueDate < today;
   const owed = invoices.reduce((sum, i) => sum + i.balance, 0);
   const overdue = invoices.filter(late).reduce((sum, i) => sum + i.balance, 0);

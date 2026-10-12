@@ -109,9 +109,9 @@ export async function topUpWithMobileMoney(amount: number, phone: string): Promi
   return run(async () => mobileMoney.startTopUp(await requireClient(), { amount, phone }));
 }
 
-/** "Pay with mobile money" on an order: prompts for what's due. */
-export async function payOrderWithMobileMoney(orderId: string, phone: string): Promise<WalletResult<MobileMoneyCollection>> {
-  return run(async () => mobileMoney.startOrderPayment(await requireClient(), { orderId, phone }));
+/** "Pay with mobile money" on an order: prompts for what's due, or for `amount` of it. */
+export async function payOrderWithMobileMoney(orderId: string, phone: string, amount?: number): Promise<WalletResult<MobileMoneyCollection>> {
+  return run(async () => mobileMoney.startOrderPayment(await requireClient(), { orderId, phone, amount }));
 }
 
 /** One prompt for everything due on several invoices. */

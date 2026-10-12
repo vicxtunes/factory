@@ -71,7 +71,7 @@ Relevant code:
 
 This does not create a new outside payment source. It records a wallet ledger row with `kind = 'order_payment'` and a `wallet` method when there is no linked payment row.
 
-The Wallet page starts with **You owe**: every invoice with something still to pay. The client ticks one, several or all and pays them together: from the wallet (oldest first, as far as the balance goes) or with one MTN / Airtel prompt, which records an order receipt on each invoice (see 7). Clients who owe get a weekly summary by push and email (`packages/lib/invoices/README.md`).
+The Wallet page starts with **You owe**: every invoice with something still to pay. The client ticks one, several or all and pays them together: from the wallet (oldest first, as far as the balance goes) or with one MTN / Airtel prompt, which records an order receipt on each invoice (see 7). Staff remind everyone who owes, by push and email, with **Send reminders** on Accounts → Client accounts (`packages/lib/invoices/README.md`).
 
 Relevant code:
 

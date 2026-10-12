@@ -11,10 +11,14 @@
 
 import { revalidatePath } from "next/cache";
 
-import { WalletError } from "@repo/lib/wallet/orders";
-import type { OrderPaymentExcessDisposition, PaymentMethod } from "@repo/lib/wallet/types";
+import { WalletError, checkOrderLinkPayment, startOrderLinkPayment } from "@repo/lib/wallet/orders";
+import type { MobileMoneyCollection, OrderPaymentExcessDisposition, PaymentMethod } from "@repo/lib/wallet/types";
+
+import { canViewAccounts } from "@repo/lib/accounting/policy";
+import type { AppRole } from "@repo/lib/types";
 
 import { InvoiceError } from "./server/errors";
+import { sendOwingReminders } from "./server/reminders";
 import { getClientIdOrNull, requireBoss, requireClientId, requireStaff } from "./server/identity";
 import * as directory from "./server/directory";
 import * as service from "./server/service";
@@ -209,6 +213,15 @@ export async function saveInvoiceSettings(input: InvoiceSettingsInput): Promise<
   });
 }
 
+/** "Send reminders": a push and an email to every client who owes, at most once a day each. Whoever may see Accounts. */
+export async function sendInvoiceReminders(): Promise<InvoiceResult<{ clients: number; reminded: number }>> {
+  return run(async () => {
+    const staff = await requireStaff();
+    if (!canViewAccounts(staff.role as AppRole)) throw new InvoiceError("Only the boss and supervisors can send reminders.");
+    return sendOwingReminders();
+  });
+}
+
 // --- Client ----------------------------------------------------------------
 
 /** For one of the signed-in client's orders: the invoice link, or the pro forma's when not invoiced yet. */
@@ -229,4 +242,24 @@ export async function getMyOwing(): Promise<Owing | null> {
   if (!clientId) return null;
   const rows = await service.unpaid(clientId);
   return rows.length ? { owed: rows.reduce((sum, r) => sum + r.balance, 0), count: rows.length } : null;
+}
+
+// --- Anyone with the invoice's link ------------------------------------------
+
+/** "Pay" on a shared invoice, without signing in: an MTN / Airtel prompt for `amount` (the balance, or part of it). */
+export async function payInvoiceLink(token: string, input: { amount: number; phone: string }): Promise<InvoiceResult<MobileMoneyCollection>> {
+  return run(async () => {
+    const orderId = await service.orderIdByToken(token);
+    if (!orderId) throw new InvoiceError("This invoice link no longer works. Ask for a new one.");
+    return startOrderLinkPayment({ orderId, amount: input.amount, phone: input.phone });
+  });
+}
+
+/** The invoice page following its prompt. Refreshes the pages that show the invoice once it's through. */
+export async function checkInvoiceLinkPayment(collectionId: string): Promise<InvoiceResult<MobileMoneyCollection>> {
+  return run(async () => {
+    const collection = await checkOrderLinkPayment(collectionId);
+    if (collection.status === "succeeded") refresh();
+    return collection;
+  });
 }

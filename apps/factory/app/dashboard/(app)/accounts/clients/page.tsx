@@ -1,3 +1,4 @@
+import { SendRemindersButton } from "@repo/ui/invoices/SendRemindersButton";
 import { CustomerAccountsTable } from "@repo/ui/accounting/CustomerAccountsTable";
 import { RowsSkeleton } from "@repo/ui/skeletons/blocks";
 import { Loading } from "@repo/ui/skeletons/Loading";
@@ -11,7 +12,10 @@ export default async function ClientAccountsPage() {
 
   return (
     <div className="space-y-6">
-      <p className="text-sm text-muted">What each client has been invoiced, has paid and still owes, all time.</p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-muted">What each client has been invoiced, has paid and still owes, all time.</p>
+        <SendRemindersButton />
+      </div>
       <Loading skeleton={<RowsSkeleton />}>
         <Accounts />
       </Loading>

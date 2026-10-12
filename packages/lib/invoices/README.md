@@ -23,8 +23,10 @@ link they can open without signing in.
   uploaded or drawn on a pad, printed on the signature line (else left blank to sign by hand).
   Images are PNGs in the public `marketing-media` bucket under `invoice/`. Seeded from the sample invoice. Payment instructions
   come from the app's payment details (`packages/lib/payments/details.ts`), the same ones as the Wallet page.
-- **Share**: copy the link or send it on WhatsApp. The client's page shows the invoice, its
-  payment history and how to pay. The invoice shows as its PDF, page by page, exactly as it
+- **Share**: copy the link or send it on WhatsApp. The client's page shows the invoice and its
+  payment history, with its summary and **Pay** pinned underneath: MTN / Airtel in full or in
+  part, or the bank details. No sign-in needed (`payInvoiceLink()`; the money goes on the order
+  for its client, exactly as their own payment would). The invoice shows as its PDF, page by page, exactly as it
   downloads and prints; each item's progress is in the client portal. **Reset link**
   replaces it; the old link stops working.
 
@@ -34,9 +36,9 @@ link they can open without signing in.
   MTN / Airtel prompt for the lot, or by bank (packages/lib/wallet). A one-line "You owe … Pay now"
   banner shows on home, on an invoice or pro forma, and in an order's payment panel; the sidebar's
   Wallet link carries a dot.
-- **Reminders**: a push when an invoice is generated, and a **weekly summary** (Mondays 9:00
-  Kampala) to every client who owes: a push, and an email listing the invoices when there's an
-  email on file. See "Reminders" below.
+- **Reminders**: a push when an invoice is generated, and **Send reminders** on Accounts → Client
+  accounts (boss, supervisors): a push to every client who owes, and an email listing the invoices
+  when there's an email on file. See "Reminders" below.
 
 Screens: the Invoice panel in the staff order detail, `/dashboard/invoices` (list with outstanding
 total and status filters), the public page `/invoice/<token>` in the client app (`client.<domain>/invoice/<token>`), and "View invoice" on the client's own order in the portal.
@@ -96,16 +98,14 @@ the payment's id, which is how the history can say "Mobile money · Ref MP123".
 
 ## Reminders
 
+- Nothing is scheduled: reminders go out when staff press **Send reminders**
+  (`sendInvoiceReminders()`, `packages/ui/invoices/SendRemindersButton.tsx`).
 - The wording is in `reminder.ts` (pure, `reminder.test.ts`); sending is `server/reminders.ts`.
-- Vercel Cron (`apps/client/vercel.json`, `0 6 * * 1` UTC) calls `/api/reminders/invoices` in the
-  client app with `Authorization: Bearer $CRON_SECRET`. Set `CRON_SECRET` in the client app's
-  Vercel project; without it the route answers 401 to everyone.
-- `invoice_reminders` (client, day) keeps it to once a day per client, so a retried or repeated
-  call sends nothing more.
+- `invoice_reminders` (client, day) keeps it to once a day per client, so a second press the same
+  day sends nothing more.
 - What's owed comes from the `accounting_sale_documents` view (total and paid per invoice), the
-  same numbers as Accounts → Client accounts.
-- To try it: `curl -H "Authorization: Bearer <secret>" <client app>/api/reminders/invoices`
-  → `{ clients, reminded }`. Without Resend keys outside production, emails print in the server log.
+  same numbers as the Client accounts table.
+- Without Resend keys outside production, emails print in the server log.
 
 ## Layout
 
@@ -152,7 +152,7 @@ money only through `packages/lib/wallet/orders.ts`.
 | Receptionist / supervisor / boss | Everything above (`isManagerRole`, like wallets and clients). |
 | Boss | Invoice settings. |
 | Signed-in client | Get the link for their own orders' invoices. |
-| Anyone with the link | View that invoice. |
+| Anyone with the link | View that invoice, and pay it by MTN / Airtel (in full or in part). |
 
 Invoices are only generated for **confirmed** orders (the price is agreed). An order with no client
 account can be invoiced, but payments can't be recorded against it until it's linked to a client,

@@ -190,7 +190,7 @@ export async function loadOrders(orderIds: string[]): Promise<Record<string, Inv
   return Object.fromEntries((data ?? []).map((o) => [o.id, toOrder(o)]));
 }
 
-/** Name and email of each client, for the weekly reminder. */
+/** Name and email of each client, for the reminder staff send. */
 export async function loadClientContacts(clientIds: string[]): Promise<Record<string, { name: string; email: string | null }>> {
   if (!clientIds.length) return {};
   const { data, error } = await createAdminClient().from("clients").select("id, name, email").in("id", clientIds);

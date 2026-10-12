@@ -1,12 +1,10 @@
 "use client";
 
-import { useRef } from "react";
-
 import { ClientOrderChat } from "@repo/ui/chat/OrderChat";
 import { MediaLinks } from "@repo/ui/media/MediaLinks";
 import { Collapsible, PriceHero } from "@repo/ui/order/OrderSummary";
 import { ItemAttributes } from "@repo/ui/order/ItemAttributes";
-import { PaymentMethods } from "@repo/ui/payments/PaymentMethods";
+import { OrderPayButton } from "@repo/ui/payments/OrderPayButton";
 import { ClientOrderPayment } from "@repo/ui/wallet/OrderPayment";
 import { ClientInvoiceLink } from "@repo/ui/invoices/ClientInvoiceLink";
 import { UrgencyBadge } from "@repo/ui/UrgencyBadge";
@@ -52,16 +50,8 @@ export function ClientItemDetail({ item, orderItems }: { item: OrderItemWithOrde
   const symbol = useCurrencySymbol();
   const photoLink = item.media_link ?? item.order.media_link;
   const { amount } = orderAmount(orderItems.length ? orderItems : [item]);
-  const howToPayRef = useRef<HTMLDetailsElement>(null);
   const photoCount = item.media.length + (photoLink && item.media.length === 0 ? 1 : 0);
   const attributes = [item.product_type, item.size, item.cover_type, item.lamination_type, item.box_type].filter(Boolean);
-
-  function openHowToPay() {
-    const el = howToPayRef.current;
-    if (!el) return;
-    el.open = true;
-    el.scrollIntoView({ behavior: "smooth", block: "start" });
-  }
 
   return (
     <div className="space-y-3 text-sm">
@@ -84,13 +74,7 @@ export function ClientItemDetail({ item, orderItems }: { item: OrderItemWithOrde
           }
         >
           <ClientInvoiceLink orderId={item.order_id} />
-          <button
-            type="button"
-            onClick={openHowToPay}
-            className="inline-flex min-h-10 items-center rounded-[var(--radius)] bg-brand-500 px-4 text-sm font-semibold text-white hover:bg-brand-600"
-          >
-            How to pay
-          </button>
+          <OrderPayButton orderId={item.order_id} orderNo={item.order.order_no} />
         </PriceHero>
       )}
 
@@ -144,12 +128,6 @@ export function ClientItemDetail({ item, orderItems }: { item: OrderItemWithOrde
           <MediaLinks media={item.media} legacyLink={photoLink} editable={false} />
         </Collapsible>
       ) : null}
-
-      <Collapsible ref={howToPayRef} title="How to pay" summary="MTN, Airtel or bank">
-        <PaymentMethods orderNo={item.order.order_no} pay={{ orderId: item.order_id }} />
-      </Collapsible>
-
-      
     </div>
   );
 }
