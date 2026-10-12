@@ -253,6 +253,27 @@ export async function payOrder(viewer: ClientViewer, orderId: string): Promise<O
   return { ...(await orderState(fresh ?? order, balance)), paidNow };
 }
 
+/** "Pay from wallet" on several invoices: each in turn (oldest first) until the balance runs out. */
+export async function payOrders(viewer: ClientViewer, orderIds: string[]): Promise<{ paidNow: number; balance: number }> {
+  let { balance } = await repo.getBalance(viewer.id);
+  let paidNow = 0;
+  let refused: WalletError | null = null;
+  for (const orderId of new Set(orderIds)) {
+    if (balance <= 0) break;
+    try {
+      const state = await payOrder(viewer, orderId);
+      paidNow += state.paidNow;
+      balance = state.walletBalance ?? 0;
+    } catch (err) {
+      // One that can't be paid (paid meanwhile, cancelled) doesn't hold up the rest.
+      if (!(err instanceof WalletError)) throw err;
+      refused = err;
+    }
+  }
+  if (paidNow === 0 && refused) throw refused;
+  return { paidNow, balance };
+}
+
 // --- Staff -----------------------------------------------------------------
 
 export async function getAllTransactionHistory(filters: TransactionHistoryFilters = {}): Promise<TransactionHistoryPage> {

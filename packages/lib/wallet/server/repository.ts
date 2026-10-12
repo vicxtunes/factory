@@ -423,6 +423,8 @@ export interface CollectionRow {
   provider_ref: string | null;
   client_id: string;
   order_id: string | null;
+  /** Several orders paid by one prompt, oldest first (order_id is then null). */
+  order_ids: string[] | null;
   product_request_id: string | null;
   booking_id: string | null;
   billing_document_id: string | null;
@@ -436,7 +438,7 @@ export interface CollectionRow {
   created_at: string;
 }
 
-const COLLECTION_COLUMNS = "id, provider, provider_ref, client_id, order_id, product_request_id, booking_id, billing_document_id, applied_at, amount, phone, network, status, failure_reason, created_at";
+const COLLECTION_COLUMNS = "id, provider, provider_ref, client_id, order_id, order_ids, product_request_id, booking_id, billing_document_id, applied_at, amount, phone, network, status, failure_reason, created_at";
 
 function normaliseCollection(row: CollectionRow): CollectionRow {
   return { ...row, amount: num(row.amount) };
@@ -446,6 +448,7 @@ export async function insertCollection(input: {
   provider: string;
   clientId: string;
   orderId: string | null;
+  orderIds: string[] | null;
   productRequestId: string | null;
   bookingId: string | null;
   documentId: string | null;
@@ -459,6 +462,7 @@ export async function insertCollection(input: {
       provider: input.provider,
       client_id: input.clientId,
       order_id: input.orderId,
+      order_ids: input.orderIds,
       product_request_id: input.productRequestId,
       booking_id: input.bookingId,
       billing_document_id: input.documentId,
@@ -482,10 +486,10 @@ export async function getCollection(id: string): Promise<CollectionRow | null> {
   return data ? normaliseCollection(data) : null;
 }
 
-/** The client's newest prompt for the same payment (an order, a studio request, or a top-up) still waiting since `since`, if any. */
+/** The client's newest prompt for the same payment (an order, several orders, a studio request, or a top-up) still waiting since `since`, if any. */
 export async function pendingCollection(
   clientId: string,
-  target: { orderId: string | null; productRequestId: string | null; bookingId: string | null; documentId: string | null },
+  target: { orderId: string | null; orderIds: string[] | null; productRequestId: string | null; bookingId: string | null; documentId: string | null },
   since: Date,
 ): Promise<CollectionRow | null> {
   let query = createAdminClient()
@@ -496,6 +500,8 @@ export async function pendingCollection(
     .not("provider_ref", "is", null)
     .gte("created_at", since.toISOString());
   query = target.orderId ? query.eq("order_id", target.orderId) : query.is("order_id", null);
+  // The same set of orders (a top-up also has no order_id, so "is null" matters).
+  query = target.orderIds ? query.contains("order_ids", target.orderIds).containedBy("order_ids", target.orderIds) : query.is("order_ids", null);
   query = target.productRequestId ? query.eq("product_request_id", target.productRequestId) : query.is("product_request_id", null);
   query = target.bookingId ? query.eq("booking_id", target.bookingId) : query.is("booking_id", null);
   query = target.documentId ? query.eq("billing_document_id", target.documentId) : query.is("billing_document_id", null);

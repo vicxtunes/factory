@@ -90,6 +90,7 @@ import BottomSheetBasic from "./examples/bottom-sheet/basic";
 import ConfirmationBooked from "./examples/confirmation/booked";
 import DocumentPayBarQuotation from "./examples/document-pay-bar/quotation";
 import HomeStudio from "./examples/home/studio";
+import UnpaidInvoicesWallet from "./examples/unpaid-invoices/wallet";
 import StatusGlowBadgeAll from "./examples/status-glow-badge/all";
 import StepFormBooking from "./examples/step-form/booking";
 import StepFormRail from "./examples/step-form/rail";
@@ -200,6 +201,15 @@ export const COMPONENTS: RoomComponent[] = [
     source: "packages/ui/billing/DocumentPayBar.tsx (with packages/ui/payments/PayNow.tsx)",
     summary: "Pinned under a quotation or invoice on its link: what it is, from whom to whom, what's to pay and by when, and one action (Approve & Pay / Pay) that opens the pay sheet and ends on a confirmation.",
     examples: [{ title: "Quotation", file: "document-pay-bar/quotation.tsx", Demo: DocumentPayBarQuotation }],
+  },
+  {
+    slug: "unpaid-invoices",
+    name: "Unpaid invoices (You owe)",
+    category: "Flows",
+    status: "live",
+    source: "packages/ui/invoices/ClientUnpaidInvoices.tsx, packages/ui/invoices/OwingBanner.tsx",
+    summary: "What a client owes, first on their Wallet page: the total, every unpaid invoice with a tick, and Pay for one, several or all (wallet, one MTN / Airtel prompt, or bank). The one-line banner is what the other money pages show.",
+    examples: [{ title: "On the Wallet", file: "unpaid-invoices/wallet.tsx", Demo: UnpaidInvoicesWallet }],
   },
   {
     slug: "home",

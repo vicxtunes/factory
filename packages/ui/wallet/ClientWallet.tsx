@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, type ReactNode } from "react";
 
 import { Button } from "@repo/ui/Button";
 import { PaymentMethods } from "@repo/ui/payments/PaymentMethods";
@@ -8,7 +8,8 @@ import type { WalletView } from "@repo/lib/wallet/types";
 
 import { BalanceCard, EntryLine, Panel, PaymentLine } from "./shared";
 
-// The client's wallet: balance first, then "Add funds" — MTN / Airtel right
+// The client's wallet: what they owe first (`owing`, when there's anything),
+// then the balance, then "Add funds" — MTN / Airtel right
 // here (a prompt on their phone), or the bank details (staff add a bank
 // transfer once they see it on the statement) — then any older deposit
 // reports still waiting for confirmation, and the full history.
@@ -24,9 +25,12 @@ import { BalanceCard, EntryLine, Panel, PaymentLine } from "./shared";
 // look right on desktop.
 export function ClientWallet({
   wallet,
+  owing,
   startAdding = false,
 }: {
   wallet: WalletView;
+  /** "You owe" and the unpaid invoices (packages/ui/invoices/ClientUnpaidInvoices), above the balance. */
+  owing?: ReactNode;
   /** Open "Add funds" straight away (the home screen's Add funds button links here with ?add=1). */
   startAdding?: boolean;
 }) {
@@ -48,13 +52,16 @@ export function ClientWallet({
           join the outer stack as siblings; from lg up it's a real column. */}
       <div className="contents lg:flex lg:min-w-0 lg:flex-col lg:gap-4">
         <div className="order-1 space-y-4">
+          {owing}
           <BalanceCard balance={wallet.balance}>
             <Button onClick={openAdd}>Add funds</Button>
           </BalanceCard>
-          <p className="text-xs text-muted">
-            Pay for any order from your balance: open the order and tap{" "}
-            <span className="font-medium">Pay from wallet</span>.
-          </p>
+          {owing ? null : (
+            <p className="text-xs text-muted">
+              Pay for any order from your balance: open the order and tap{" "}
+              <span className="font-medium">Pay from wallet</span>.
+            </p>
+          )}
         </div>
 
         <div className="order-4">

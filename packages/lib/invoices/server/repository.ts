@@ -61,6 +61,54 @@ export async function list(limit: number): Promise<InvoiceRow[]> {
   return data ?? [];
 }
 
+/** An invoice with its order's total and what's been paid on it (the accounting_sale_documents view). */
+export interface SaleRow {
+  id: string;
+  number: string;
+  issued_at: string;
+  due_date: string | null;
+  order_id: string;
+  order_no: string;
+  customer_id: string | null;
+  customer_name: string;
+  total: number | string;
+  paid: number | string;
+}
+
+// PostgREST returns at most this many rows per request.
+const PAGE = 1000;
+
+/** Every invoice on a live (not cancelled) order, oldest first: one client's, or everyone's. */
+export async function listSales(clientId: string | null): Promise<SaleRow[]> {
+  const rows: SaleRow[] = [];
+  for (let from = 0; ; from += PAGE) {
+    let query = createAdminClient()
+      .from("accounting_sale_documents")
+      .select("id, number, issued_at, due_date, order_id, order_no, customer_id, customer_name, total, paid")
+      .eq("cancelled", false);
+    if (clientId) query = query.eq("customer_id", clientId);
+    const { data, error } = await query.order("issued_at").order("id").range(from, from + PAGE - 1).returns<SaleRow[]>();
+    if (error) fail(error);
+    rows.push(...(data ?? []));
+    if (!data || data.length < PAGE) return rows;
+  }
+}
+
+export async function shareTokens(invoiceIds: string[]): Promise<Record<string, string>> {
+  if (!invoiceIds.length) return {};
+  const { data, error } = await createAdminClient().from("invoices").select("id, share_token").in("id", invoiceIds);
+  if (error) fail(error);
+  return Object.fromEntries((data ?? []).map((i) => [i.id as string, i.share_token as string]));
+}
+
+/** Takes today's turn at reminding this client: false when they've already been reminded today. */
+export async function claimReminder(clientId: string, sentOn: string): Promise<boolean> {
+  const { error } = await createAdminClient().from("invoice_reminders").insert({ client_id: clientId, sent_on: sentOn });
+  if (error?.code === "23505") return false;
+  if (error) fail(error);
+  return true;
+}
+
 /** Inserts the invoice; if the order already has one (two staff clicking at once), returns that one instead. */
 export async function insert(input: {
   orderId: string;

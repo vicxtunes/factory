@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { OwingBanner } from "@repo/ui/invoices/OwingBanner";
 import { InvoicePdf } from "@repo/ui/invoices/InvoicePdf";
 import { PaymentMethods } from "@repo/ui/payments/PaymentMethods";
+import { getMyOwing } from "@repo/lib/invoices/actions";
 import { getInvoiceByToken } from "@repo/lib/invoices/public";
 import { SUPPORT_PHONE_DISPLAY } from "@repo/lib/support/constants";
 
@@ -18,10 +20,17 @@ export default async function InvoicePage({ params }: { params: Promise<{ token:
   const { token } = await params;
   const invoice = await getInvoiceByToken(token);
   if (!invoice) notFound();
+  // Signed in and owing on more than this invoice: say so (this one is paid right here).
+  const owing = await getMyOwing().catch(() => null);
 
   return (
     <main className="mx-auto w-full max-w-3xl px-4 py-6 sm:py-10 print:max-w-none print:p-0">
       <p className="mb-3 text-sm text-muted print:hidden">Questions? Call or WhatsApp {SUPPORT_PHONE_DISPLAY}.</p>
+      {owing && owing.owed > invoice.balance ? (
+        <div className="mb-3">
+          <OwingBanner owing={owing} />
+        </div>
+      ) : null}
       <InvoicePdf invoice={invoice} />
       {/* On screen only: the same payment details with copy buttons, for paying from a phone. */}
       {invoice.balance > 0 && !invoice.order.cancelled ? (

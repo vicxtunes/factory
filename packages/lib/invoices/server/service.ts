@@ -15,9 +15,12 @@ import {
   recordOrderPayment,
 } from "@repo/lib/wallet/orders";
 import type { OrderPaymentExcessDisposition, PaymentMethod } from "@repo/lib/wallet/types";
+import { formatMoney } from "@repo/lib/currency/format";
+import { notifyActor } from "@repo/lib/push/send";
 
 import { MAX_NOTES_LENGTH, invoiceBalance, invoiceDiscount, invoiceNumber, invoiceStatus, isWellFormedToken } from "../policy";
 import type {
+  ClientInvoiceRow,
   ClientOrderDocument,
   DraftLine,
   InvoiceIssuer,
@@ -252,7 +255,15 @@ export async function generate(
     notes: cleanNotes(input.notes),
     createdBy: staff,
   });
-  return staffView(invoice);
+  const view = await staffView(invoice);
+  // Best-effort (notifyActor never throws): the client hears there's something to pay.
+  if (order.clientId) {
+    await notifyActor(
+      { type: "client", id: order.clientId },
+      { title: "New invoice", body: `Invoice ${view.invoiceNo} for ${formatMoney(view.amount)} is ready. Tap to pay.`, url: clientPath("/payment") },
+    );
+  }
+  return view;
 }
 
 /** Changes line prices on an existing invoice; the order's price follows. */
@@ -391,6 +402,39 @@ export async function list(): Promise<InvoiceListRow[]> {
 }
 
 // --- Client ----------------------------------------------------------------
+
+/** Invoices with something still to pay, oldest first: one client's, or everyone's (with whose each is). */
+export async function unpaid(clientId: string | null): Promise<(InvoiceListRow & { clientId: string | null })[]> {
+  return (await repo.listSales(clientId)).flatMap((row) => {
+    const amount = Number(row.total);
+    const paid = Number(row.paid);
+    const balance = invoiceBalance(amount, paid);
+    if (balance <= 0) return [];
+    return [
+      {
+        id: row.id,
+        invoiceNo: row.number,
+        orderId: row.order_id,
+        orderNo: row.order_no,
+        clientId: row.customer_id,
+        clientName: row.customer_name,
+        issuedAt: row.issued_at,
+        dueDate: row.due_date,
+        status: invoiceStatus(amount, paid, false),
+        amount,
+        paid,
+        balance,
+      },
+    ];
+  });
+}
+
+/** What the client still owes, for the Wallet page's "You owe". */
+export async function listUnpaidForClient(clientId: string): Promise<ClientInvoiceRow[]> {
+  const rows = await unpaid(clientId);
+  const tokens = await repo.shareTokens(rows.map((r) => r.id));
+  return Promise.all(rows.map(async (r) => ({ ...r, href: await invoiceUrl(tokens[r.id] ?? "") })));
+}
 
 /**
  * What a signed-in client can open for their own order: the invoice once

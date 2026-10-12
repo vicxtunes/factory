@@ -135,6 +135,17 @@ export interface InvoiceListRow {
   balance: number;
 }
 
+/** An invoice the signed-in client still owes on, with its link. */
+export interface ClientInvoiceRow extends InvoiceListRow {
+  href: string;
+}
+
+/** What a client owes in all. */
+export interface Owing {
+  owed: number;
+  count: number;
+}
+
 /** What a client can open for their order: the invoice, or before that the pro forma (estimate). */
 export interface ClientOrderDocument {
   kind: "invoice" | "proforma";

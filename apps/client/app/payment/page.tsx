@@ -1,10 +1,15 @@
 import { redirect } from "next/navigation";
 
+import { ClientUnpaidInvoices } from "@repo/ui/invoices/ClientUnpaidInvoices";
 import { ClientWallet } from "@repo/ui/wallet/ClientWallet";
 import { PanelStackSkeleton } from "@repo/ui/skeletons/blocks";
 import { Loading } from "@repo/ui/skeletons/Loading";
 import { getClientSession } from "@repo/lib/auth/session";
+import { listMyUnpaidInvoices } from "@repo/lib/invoices/actions";
+import { resolveTenantScope } from "@repo/lib/tenancy/server/resolve";
 import { getMyWallet } from "@repo/lib/wallet/actions";
+
+import { dueOn } from "../document-due";
 
 import { ClientShell } from "../shell";
 
@@ -23,7 +28,7 @@ export default async function ClientPaymentPage({ searchParams }: { searchParams
         <div>
           <h2 className="text-lg font-semibold">Wallet</h2>
           <p className="mt-1 text-sm text-muted">
-            Pay upfront and keep a balance with us, then pay for orders from it in one tap.
+            What you owe and what you hold with us. Clear one invoice, several or all of them here.
           </p>
         </div>
         <Loading skeleton={<PanelStackSkeleton count={3} />}>
@@ -35,7 +40,15 @@ export default async function ClientPaymentPage({ searchParams }: { searchParams
 }
 
 async function Wallet({ startAdding }: { startAdding: boolean }) {
-  const wallet = await getMyWallet();
+  const [wallet, unpaid, scope] = await Promise.all([getMyWallet(), listMyUnpaidInvoices(), resolveTenantScope()]);
   if (!wallet.ok) return <p className="rounded-2xl border border-border bg-surface p-4 text-sm text-error-600">{wallet.error}</p>;
-  return <ClientWallet wallet={wallet.data} startAdding={startAdding} />;
+  // If the invoices can't load, the wallet still works: it just has no "You owe".
+  const invoices = unpaid.ok ? unpaid.data.map((i) => ({ ...i, due: dueOn(scope, "Due", i.dueDate, false) })) : [];
+  return (
+    <ClientWallet
+      wallet={wallet.data}
+      startAdding={startAdding}
+      owing={invoices.length ? <ClientUnpaidInvoices invoices={invoices} walletBalance={wallet.data.balance} /> : null}
+    />
+  );
 }
