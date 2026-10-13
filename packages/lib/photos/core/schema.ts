@@ -4,7 +4,7 @@ import { z } from "zod";
 
 import { optionalText } from "@repo/lib/kernel/core";
 
-import { formatBytes, MAX_FILES_PER_BATCH, MAX_LARGE_BYTES, MAX_THUMB_BYTES, MAX_VIDEO_BYTES, VIDEO_TYPES, type VideoContentType } from "./rules";
+import { formatBytes, MAX_FILES_PER_BATCH, MAX_LARGE_BYTES, MAX_THUMB_BYTES, MAX_VIDEO_BYTES, SPACE_PACKS_GB, VIDEO_TYPES, type VideoContentType } from "./rules";
 
 export const albumIdSchema = z.uuid("That album doesn't exist.");
 export const photoIdSchema = z.uuid("That photo doesn't exist.");
@@ -59,3 +59,12 @@ export const shareTokenSchema = z.string().regex(/^[A-Za-z0-9_-]{32,128}$/, "Thi
 
 /** The boss sets a studio's allowance in whole GB. */
 export const quotaGbSchema = z.number("Enter a number of GB.").int("Use whole GB.").min(0, "Can't be negative.").max(1000, "That's more than 1 TB.");
+
+/** Buying extra storage: one of the sizes on sale, at the price the buyer saw (whole shillings). */
+export const buySpaceSchema = z.object({
+  gb: z.number().refine((gb) => (SPACE_PACKS_GB as readonly number[]).includes(gb), "Choose one of the sizes."),
+  amount: z.number().int().positive(),
+});
+
+/** The boss's price for a GB of extra storage, in whole shillings; 0 takes it off sale. */
+export const spacePriceSchema = z.number("Enter a price.").int("Use whole shillings.").min(0, "Can't be negative.").max(10_000_000, "That's too much for a GB.");

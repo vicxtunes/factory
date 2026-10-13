@@ -24,10 +24,12 @@ import { offerings } from "@repo/lib/offerings/server";
 import {
   albumIdSchema,
   albumInputSchema,
+  buySpaceSchema,
   captionSchema,
   photoIdSchema,
   quotaGbSchema,
   shareExpirySchema,
+  spacePriceSchema,
   uploadConfirmSchema,
   uploadStartSchema,
   videoUploadConfirmSchema,
@@ -202,5 +204,24 @@ export async function setStudioStorageQuota(studioId: unknown, gb: unknown): Pro
     const id = parseInput(studioIdSchema, studioId);
     await photos.setQuota(id, parseInput(quotaGbSchema, gb) * 1024 ** 3);
     revalidatePath(`/dashboard/studios/${id}`);
+  });
+}
+
+/** The studio's owner buys extra storage from their wallet (it's their Aming account's). */
+export async function buyStorageSpace(input: unknown): Promise<Result> {
+  return runAction("photos", async () => {
+    const { scope, session } = await studioOfCaller();
+    await photos.buySpace(scope, parseInput(buySpaceSchema, input), { clientId: session.client_id, name: session.name });
+    touched();
+  });
+}
+
+/** The boss sets what a GB of extra storage costs; 0 takes it off sale. */
+export async function setStorageSpacePrice(pricePerGb: unknown): Promise<Result> {
+  return runAction("photos", async () => {
+    const session = await getDashboardSession();
+    if (!session || !canViewAllStudios(session.role)) throw new PhotoError("Only the boss can change the price of storage.");
+    await photos.setSpacePrice(parseInput(spacePriceSchema, pricePerGb));
+    revalidatePath("/dashboard/studios");
   });
 }

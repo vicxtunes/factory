@@ -53,6 +53,7 @@ export const STUDIO_NAV: StudioNavSection[] = [
       { href: "/studio/offerings", label: "Packages & Services", icon: "products", need: "catalog" },
       { href: "/studio/products", label: "Products", icon: "placeOrder", need: "catalog" },
       { href: "/studio/showroom", label: "Showroom", icon: "showroom", need: "catalog" },
+      { href: "/studio/files", label: "Files", icon: "files", need: "files" },
       { href: "/studio/profile", label: "Business profile", icon: "settings" },
     ],
   },
