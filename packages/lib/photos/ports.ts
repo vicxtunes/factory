@@ -23,6 +23,16 @@ export interface ObjectStore {
 export interface PhotoRepository {
   usage(scope: TenantScope): Promise<Usage>;
   setQuota(tenantId: string, quotaBytes: number): Promise<boolean>;
+  /** What a GB of extra storage costs (whole shillings); null when it isn't on sale. */
+  spacePrice(): Promise<number | null>;
+  setSpacePrice(pricePerGb: number | null): Promise<void>;
+  /**
+   * Buys `gb` of extra storage from the studio owner's wallet for `amount`
+   * (the price the buyer saw), raising the allowance, all or nothing (in the
+   * database). Throws PhotoError when it isn't on sale, the price changed,
+   * the wallet is short or the allowance would pass its ceiling.
+   */
+  buySpace(scope: TenantScope, gb: number, amount: number, buyer: { clientId: string; name: string }): Promise<void>;
 
   /** Portfolio albums only (deliveries are reached through their project). */
   albums(scope: TenantScope): Promise<Album[]>;

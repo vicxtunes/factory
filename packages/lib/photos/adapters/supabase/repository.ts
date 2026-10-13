@@ -87,6 +87,11 @@ function fail(what: string, error: { code?: string; message: string }): never {
   if (error.code === "23503" && error.message.includes("photo_albums_service_fkey")) throw new PhotoError("That service no longer exists.");
   if (error.message.includes("PHOTOS:over_quota")) throw new PhotoError("Not enough space left for that. Delete some photos, or ask Aming for more space.");
   if (error.message.includes("PHOTOS:no_album")) throw new PhotoError("That album no longer exists.");
+  if (error.message.includes("STORAGE:not_for_sale")) throw new PhotoError("Extra storage isn't on sale right now. Ask Aming for more space.");
+  if (error.message.includes("STORAGE:price_changed")) throw new PhotoError("The price just changed. Check the new price and try again.");
+  if (error.message.includes("STORAGE:too_much")) throw new PhotoError("That's more storage than a business can have. Ask Aming for more space.");
+  if (error.message.includes("STORAGE:no_owner")) throw new PhotoError("This business can't buy storage.");
+  if (error.message.includes("WALLET:insufficient_funds")) throw new PhotoError("There isn't enough in your wallet for that. Add funds, then try again.");
   throw new Error(`photos: could not ${what}: ${error.message}`);
 }
 
@@ -103,6 +108,25 @@ export const supabasePhotoRepository: PhotoRepository = {
     if (e1) fail("read the storage allowance", e1);
     if (e2) fail("read the storage used", e2);
     return { usedBytes: Number(used), quotaBytes: Number(tenant.storage_quota_bytes) };
+  },
+
+  async spacePrice() {
+    const { data, error } = await db().from("storage_pricing").select("price_per_gb").maybeSingle<{ price_per_gb: number | string }>();
+    if (error) fail("read the storage price", error);
+    return data ? Number(data.price_per_gb) : null;
+  },
+
+  async setSpacePrice(pricePerGb) {
+    const { error } =
+      pricePerGb === null
+        ? await db().from("storage_pricing").delete().eq("only_row", true)
+        : await db().from("storage_pricing").upsert({ only_row: true, price_per_gb: pricePerGb, updated_at: new Date().toISOString() });
+    if (error) fail("set the storage price", error);
+  },
+
+  async buySpace(scope, gb, amount, buyer) {
+    const { error } = await db().rpc("storage_buy", { p_tenant: scope.tenantId, p_gb: gb, p_amount: amount, p_actor_id: buyer.clientId, p_actor_name: buyer.name });
+    if (error) fail("buy storage", error);
   },
 
   async setQuota(tenantId, quotaBytes) {

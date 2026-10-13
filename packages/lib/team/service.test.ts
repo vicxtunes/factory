@@ -98,7 +98,7 @@ test("access: the owner reaches everything; a member only the areas given, never
 test("presets: named back from the areas, in any order; anything else is custom", () => {
   assert.equal(presetOf(["money", "clients"]), "accounts");
   assert.equal(presetOf([]), "tasks");
-  assert.equal(presetOf(["catalog", "money", "clients", "projects", "bookings"]), "manager");
+  assert.equal(presetOf(["files", "catalog", "money", "clients", "projects", "bookings"]), "manager");
   assert.equal(presetOf(["bookings"]), "custom");
   assert.deepEqual(parseInput(accessSchema, ["money", "money", "clients"]), ["money", "clients"]);
   assert.throws(() => parseInput(accessSchema, ["team"]), /Choose from the list/);

@@ -50,6 +50,21 @@ export class PhotoService {
     if (!(await this.repo.setQuota(tenantId, quotaBytes))) throw new PhotoError("That business no longer exists.");
   }
 
+  /** What a GB of extra storage costs (whole shillings); null when it isn't on sale. */
+  async spacePrice(): Promise<number | null> {
+    return this.repo.spacePrice();
+  }
+
+  /** The boss sets the price of a GB of extra storage; 0 takes it off sale. */
+  async setSpacePrice(pricePerGb: number): Promise<void> {
+    await this.repo.setSpacePrice(pricePerGb > 0 ? pricePerGb : null);
+  }
+
+  /** The studio's owner buys extra storage from their wallet, at the price they saw. */
+  async buySpace(scope: TenantScope, input: { gb: number; amount: number }, buyer: { clientId: string; name: string }): Promise<void> {
+    await this.repo.buySpace(scope, input.gb, input.amount, buyer);
+  }
+
   // ── Albums ─────────────────────────────────────────────────────────────
 
   /** Every album (or only public ones), in order, with cover links. */

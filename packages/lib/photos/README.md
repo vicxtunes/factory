@@ -55,10 +55,18 @@ never shared by link: it's shown through the service's page. Managed on the serv
 
 ## The allowance
 
-- Photos and services' preview videos share it (`photos_used_bytes()`).
+- Photos, services' preview videos and the studio's files (packages/lib/files/README.md) share it
+  (`photos_used_bytes()`).
 - Every studio starts with **1 GB** (`tenants.storage_quota_bytes`). The boss sets it per studio
   on the studio's page in the staff app.
-- A **usage bar** shows on the studio's dashboard and Showroom pages, warning at 80%.
+- A **usage bar** shows on the studio's dashboard, Showroom and Files pages, warning at 80%.
+- **Buying more:** the owner buys 1, 5, 10 or 50 GB on the Files page (**Get more space**), paid
+  once from their Aming wallet (shillings) and theirs to keep.
+  - The boss sets the price of a GB on the staff app's Studios page (`storage_pricing`, one row);
+    0 takes it off sale, and the button goes.
+  - `storage_buy()` does it in one transaction: the wallet pays (never below zero), the allowance
+    goes up, the purchase is recorded (`storage_purchases`). It takes the price the buyer saw, so
+    a price changed meanwhile takes nothing. A studio stops at 1 TB.
 - When it's full, uploads are refused: "Not enough space: … left of 1 GB. Delete some photos, or
   ask Aming for more space."
 
@@ -73,7 +81,9 @@ never shared by link: it's shown through the service's page. Managed on the serv
 | A project's page → **Client photos** | Studio owner | Create the gallery, upload, manage, share by link (expiry, WhatsApp, stop) |
 | `/<studio>/me/photos/<project>` | The signed-in client | Their photos: masonry, full screen, Download, Download all |
 | `/<studio>/g/<secret>` | Anyone with the link | The same, without signing in, while the link lasts |
+| My Business → **Files** (`/studio/files`) | Studio owner | Usage, and **Get more space** (while it's on sale) |
 | Staff app → People → Studios → a studio | Boss | The studio's usage, and its allowance (GB) |
+| Staff app → People → Studios | Boss | The price of a GB of extra storage |
 
 A service's page can show its photos in Aming's 3D scene (`packages/ui/showroom/ShowroomScene.tsx`),
 which takes any two image URLs.
@@ -132,9 +142,10 @@ packages/lib/photos/
   server.ts, actions.ts
 packages/ui/photos/  browser.ts (resize, signed PUT), PhotoUploader, UsageBar, AlbumControls, DownloadAll,
                      ProjectGalleryPanel,
-                     MasonryGallery (+ full-screen viewer), QuotaForm.
+                     MasonryGallery (+ full-screen viewer), QuotaForm, BuySpace, SpacePriceForm.
 supabase/migrations/20261003200000_studio_photos.sql
 supabase/migrations/20261004100000_photo_deliveries.sql   delivery albums, share links
+supabase/migrations/20261022100000_studio_files.sql       buying storage (with studio files)
 ```
 
 ## Testing

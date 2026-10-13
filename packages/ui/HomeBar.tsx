@@ -14,6 +14,7 @@ import {
   DashboardIcon,
   DesignersIcon,
   DisplayIcon,
+  FilesIcon,
   HistoryIcon,
   InvoiceIcon,
   MarketingIcon,
@@ -68,6 +69,7 @@ const ICONS = {
   studio: StudioIcon,
   calendar: CalendarIcon,
   tasks: TasksIcon,
+  files: FilesIcon,
   back: BackIcon,
 } as const;
 
