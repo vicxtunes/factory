@@ -24,6 +24,7 @@ function fakes(quotaBytes = 10 * MB) {
   const services = new Set(["studio-a/weddings", "studio-b/portraits"]);
   const blank = { kind: "portfolio" as const, projectId: null, serviceId: null, videoKey: null, videoBytes: null, shareToken: null, shareExpiresOn: null, coverPhotoId: null, photoCount: 0, coverThumbKey: null, coverLargeKey: null };
   let n = 0;
+  let price: number | null = null;
   const objects: ObjectStore = {
     putUrl: async (key, type) => `put://${key}?type=${type}`,
     getUrl: async (key) => `get://${key}`,
@@ -41,6 +42,13 @@ function fakes(quotaBytes = 10 * MB) {
   const repo: PhotoRepository = {
     usage: async (s) => ({ usedBytes: used(s.tenantId), quotaBytes: quotas.get(s.tenantId)! }),
     setQuota: async (t, q) => !!(quotas.has(t) && quotas.set(t, q)),
+    spacePrice: async () => price,
+    setSpacePrice: async (p) => void (price = p),
+    buySpace: async (s, gb, amount) => {
+      if (price === null) throw new PhotoError("Extra storage isn't on sale right now.");
+      if (gb * price !== amount) throw new PhotoError("The price just changed.");
+      quotas.set(s.tenantId, quotas.get(s.tenantId)! + gb * 1024 ** 3);
+    },
     albums: async (s) => albums.filter((a) => a.tenantId === s.tenantId && a.kind === "portfolio"),
     album: async (s, id) => mine(s, id) ?? null,
     albumBySlug: async (s, slug) => albums.find((a) => a.tenantId === s.tenantId && a.slug === slug) ?? null,
@@ -309,4 +317,18 @@ test("videos only go on the studio's own service albums", async () => {
   const album = await service.openServiceGallery(studioA, "weddings", "Weddings");
   await assert.rejects(service.startVideoUpload(studioB, { albumId: album, bytes: MB, contentType: "video/mp4" }), /no longer exists/);
   await assert.rejects(service.removeVideo(studioB, album), /no longer exists/);
+});
+
+test("extra storage: off sale until the boss prices it, then bought at the price seen", async () => {
+  const { service } = fakes(10 * MB);
+  const buyer = { clientId: "owner-a", name: "Amina" };
+  assert.equal(await service.spacePrice(), null);
+  await assert.rejects(service.buySpace(studioA, { gb: 5, amount: 25_000 }, buyer), /isn't on sale/);
+  await service.setSpacePrice(5_000);
+  await assert.rejects(service.buySpace(studioA, { gb: 5, amount: 20_000 }, buyer), /price just changed/);
+  await service.buySpace(studioA, { gb: 5, amount: 25_000 }, buyer);
+  assert.equal((await service.usage(studioA)).quotaBytes, 10 * MB + 5 * 1024 ** 3);
+  assert.equal((await service.usage(studioB)).quotaBytes, 10 * MB, "only the buyer's studio grows");
+  await service.setSpacePrice(0);
+  assert.equal(await service.spacePrice(), null, "a price of 0 takes it off sale");
 });

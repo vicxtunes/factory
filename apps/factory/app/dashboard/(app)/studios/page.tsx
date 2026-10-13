@@ -1,10 +1,13 @@
 import Link from "next/link";
 
+import { SpacePriceForm } from "@repo/ui/photos/SpacePriceForm";
 import { StudioStatusBadge } from "@repo/ui/studio-access/StatusBadge";
 import { StudiosTable } from "@repo/ui/studios/StudiosTable";
 import { SectionLabel } from "@repo/ui/SectionLabel";
+import { Skeleton } from "@repo/ui/Skeleton";
 import { RowsSkeleton } from "@repo/ui/skeletons/blocks";
 import { Loading } from "@repo/ui/skeletons/Loading";
+import { photos } from "@repo/lib/photos/server";
 import { studioAccess } from "@repo/lib/studio-access/server";
 import { requireStudiosOversight, studios } from "@repo/lib/studios/server";
 import { resolveTenantScope } from "@repo/lib/tenancy/server/resolve";
@@ -26,6 +29,12 @@ export default async function StudiosPage() {
         <SectionLabel>All businesses</SectionLabel>
         <Loading skeleton={<RowsSkeleton />}>
           <All />
+        </Loading>
+      </section>
+      <section>
+        <SectionLabel>Extra storage</SectionLabel>
+        <Loading skeleton={<Skeleton className="h-16 w-full" />}>
+          <SpacePrice />
         </Loading>
       </section>
     </div>
@@ -61,6 +70,10 @@ async function Waiting() {
       )}
     </>
   );
+}
+
+async function SpacePrice() {
+  return <SpacePriceForm pricePerGb={await photos.spacePrice()} />;
 }
 
 async function All() {

@@ -44,9 +44,18 @@ export const r2ObjectStore: ObjectStore = {
   // The content type is signed, so the upload must use it.
   putUrl: (key, contentType, expires) => presign("PUT", key, expires, { "content-type": contentType }),
 
-  // response-content-disposition is signed too: the browser saves the file instead of opening it.
+  // response-content-disposition is signed too: the browser saves the file instead of opening it,
+  // under its real name (filename*), or a plain one where that isn't understood.
   getUrl: (key, expires, downloadAs) =>
-    presign("GET", key, expires, {}, downloadAs ? { "response-content-disposition": `attachment; filename="${downloadAs.replace(/[^\w.-]/g, "_")}"` } : {}),
+    presign(
+      "GET",
+      key,
+      expires,
+      {},
+      downloadAs
+        ? { "response-content-disposition": `attachment; filename="${downloadAs.replace(/[^\w.-]/g, "_")}"; filename*=UTF-8''${encodeURIComponent(downloadAs)}` }
+        : {},
+    ),
 
   async size(key) {
     const res = await call("HEAD", key);

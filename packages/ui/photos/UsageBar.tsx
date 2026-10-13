@@ -7,7 +7,7 @@ export function UsageBar({ usage }: { usage: Usage }) {
   return (
     <div className="space-y-1">
       <div className="flex justify-between text-xs">
-        <span className="text-muted">Photo storage</span>
+        <span className="text-muted">Storage</span>
         <span className="tnum">
           {formatBytes(usage.usedBytes)} of {formatBytes(usage.quotaBytes)} used
         </span>
@@ -16,7 +16,7 @@ export function UsageBar({ usage }: { usage: Usage }) {
         <div className={`h-full ${tone}`} style={{ width: `${Math.min(100, Math.round(share * 100))}%` }} />
       </div>
       {share >= 1 ? (
-        <p className="text-xs text-error-600 dark:text-error-400">Storage is full. Delete some photos, or ask Aming for more space.</p>
+        <p className="text-xs text-error-600 dark:text-error-400">Storage is full. Delete something, or get more space.</p>
       ) : share >= WARN_AT ? (
         <p className="text-xs text-warning-700 dark:text-warning-400">Storage is almost full.</p>
       ) : null}

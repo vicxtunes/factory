@@ -6,7 +6,7 @@
 // brand and document settings.
 
 /** The parts of a studio a member can be given. */
-export const AREAS = ["bookings", "projects", "clients", "money", "catalog"] as const;
+export const AREAS = ["bookings", "projects", "clients", "money", "catalog", "files"] as const;
 export type Area = (typeof AREAS)[number];
 
 export const AREA_LABELS: Record<Area, { label: string; hint: string }> = {
@@ -15,6 +15,7 @@ export const AREA_LABELS: Record<Area, { label: string; hint: string }> = {
   clients: { label: "Clients", hint: "The client list, their details and their page links" },
   money: { label: "Money", hint: "Quotations, invoices, payments, order requests and the accounts" },
   catalog: { label: "Packages, products & showroom", hint: "What the studio sells and its public albums" },
+  files: { label: "Files", hint: "The studio's stored files and folders" },
 };
 
 /** Ready-made choices; anything else is "custom". */
