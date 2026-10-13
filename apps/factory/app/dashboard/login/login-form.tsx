@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@repo/ui/Button";
@@ -8,9 +8,11 @@ import { Field, TextInput } from "@repo/ui/Field";
 import { PasswordInput } from "@repo/ui/PasswordInput";
 import { SectionLabel } from "@repo/ui/SectionLabel";
 import { signIn } from "../actions";
+import { ResetForm } from "./reset-form";
 
 export function LoginForm() {
   const router = useRouter();
+  const [resetting, setResetting] = useState(false);
   const [state, action, pending] = useActionState(
     async (prev: { error?: string }, formData: FormData) => {
       const res = await signIn(prev, formData);
@@ -26,25 +28,38 @@ export function LoginForm() {
   return (
     <div className="rounded-[var(--radius)] border border-border bg-surface p-6 shadow-theme-sm">
       <SectionLabel>Receptionist, supervisor &amp; boss</SectionLabel>
-      <form action={action} className="space-y-4">
-        <Field label="Email">
-          <TextInput name="email" type="email" autoComplete="email" required />
-        </Field>
-        <Field label="Password">
-          <PasswordInput name="password" autoComplete="current-password" required />
-        </Field>
-        {state.error ? (
-          <p className="text-sm text-[var(--rush)]">{state.error}</p>
-        ) : null}
-        <Button
-          variant="primary"
-          type="submit"
-          className="w-full"
-          loading={pending} disabled={pending}
-        >
-          {pending ? "Signing in…" : "Sign in"}
-        </Button>
-      </form>
+      {resetting ? (
+        <ResetForm onBack={() => setResetting(false)} />
+      ) : (
+        <form action={action} className="space-y-4">
+          <Field label="Email">
+            <TextInput name="email" type="email" autoComplete="email" required />
+          </Field>
+          <Field label="Password">
+            <PasswordInput name="password" autoComplete="current-password" required />
+          </Field>
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={() => setResetting(true)}
+              className="text-xs text-muted underline-offset-2 hover:underline"
+            >
+              Forgot password?
+            </button>
+          </div>
+          {state.error ? (
+            <p className="text-sm text-[var(--rush)]">{state.error}</p>
+          ) : null}
+          <Button
+            variant="primary"
+            type="submit"
+            className="w-full"
+            loading={pending} disabled={pending}
+          >
+            {pending ? "Signing in…" : "Sign in"}
+          </Button>
+        </form>
+      )}
     </div>
   );
 }
