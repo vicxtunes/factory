@@ -4,8 +4,8 @@ import { useState, useTransition } from "react";
 
 import { Button } from "@repo/ui/Button";
 import { Field, TextArea } from "@repo/ui/Field";
-import { Collapsible, PriceHero } from "@repo/ui/order/OrderSummary";
-import { PaymentMethods } from "@repo/ui/payments/PaymentMethods";
+import { PriceHero } from "@repo/ui/order/OrderSummary";
+import { PayLater } from "@repo/ui/payments/OrderPayButton";
 import { ClientInvoiceLink, ClientOrderEstimate } from "@repo/ui/invoices/ClientInvoiceLink";
 import type { OrderItemWithOrder } from "@repo/lib/types";
 
@@ -83,7 +83,7 @@ export function ClientQuoteReview({
         >
           <ClientInvoiceLink orderId={orderId} />
         </PriceHero>
-        <HowToPay orderNo={order.order_no} />
+        <PayLater orderNo={order.order_no} />
       </div>
     );
   }
@@ -127,16 +127,7 @@ export function ClientQuoteReview({
         </div>
       ) : null}
 
-      <HowToPay orderNo={order.order_no} />
+      <PayLater orderNo={order.order_no} />
     </div>
-  );
-}
-
-// Instructions only: the price is already shown once, at the top.
-function HowToPay({ orderNo }: { orderNo: string }) {
-  return (
-    <Collapsible title="How to pay" summary="MTN, Airtel or bank">
-      <PaymentMethods orderNo={orderNo} />
-    </Collapsible>
   );
 }

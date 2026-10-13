@@ -14,11 +14,12 @@ import { revalidatePath } from "next/cache";
 import { WalletError, checkOrderLinkPayment, startOrderLinkPayment } from "@repo/lib/wallet/orders";
 import type { MobileMoneyCollection, OrderPaymentExcessDisposition, PaymentMethod } from "@repo/lib/wallet/types";
 
+import { countAttempt, tooManyAttempts } from "@repo/lib/auth/attempts";
 import { canViewAccounts } from "@repo/lib/accounting/policy";
 import type { AppRole } from "@repo/lib/types";
 
 import { InvoiceError } from "./server/errors";
-import { sendOwingReminders } from "./server/reminders";
+import { sendOwingReminders, type RemindersSent } from "./server/reminders";
 import { getClientIdOrNull, requireBoss, requireClientId, requireStaff } from "./server/identity";
 import * as directory from "./server/directory";
 import * as service from "./server/service";
@@ -214,7 +215,7 @@ export async function saveInvoiceSettings(input: InvoiceSettingsInput): Promise<
 }
 
 /** "Send reminders": a push and an email to every client who owes, at most once a day each. Whoever may see Accounts. */
-export async function sendInvoiceReminders(): Promise<InvoiceResult<{ clients: number; reminded: number }>> {
+export async function sendInvoiceReminders(): Promise<InvoiceResult<RemindersSent>> {
   return run(async () => {
     const staff = await requireStaff();
     if (!canViewAccounts(staff.role as AppRole)) throw new InvoiceError("Only the boss and supervisors can send reminders.");
@@ -251,6 +252,10 @@ export async function payInvoiceLink(token: string, input: { amount: number; pho
   return run(async () => {
     const orderId = await service.orderIdByToken(token);
     if (!orderId) throw new InvoiceError("This invoice link no longer works. Ask for a new one.");
+    // Nobody's signed in here, so cap the prompts one link can send (5 in 15 minutes).
+    const key = `invoice-pay:${orderId}`;
+    if (await tooManyAttempts(key)) throw new InvoiceError("Too many payment tries on this invoice. Please wait 15 minutes, or pay by bank.");
+    await countAttempt(key);
     return startOrderLinkPayment({ orderId, amount: input.amount, phone: input.phone });
   });
 }

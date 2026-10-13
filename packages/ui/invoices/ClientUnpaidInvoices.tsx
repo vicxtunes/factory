@@ -9,6 +9,7 @@ import { Confirmation } from "@repo/ui/Confirmation";
 import { PaymentMethods } from "@repo/ui/payments/PaymentMethods";
 import type { ClientInvoiceRow } from "@repo/lib/invoices/types";
 import { payOrdersFromWallet } from "@repo/lib/wallet/actions";
+import { MOBILE_MONEY_MAX } from "@repo/lib/wallet/policy";
 
 import { Panel, useMoney } from "../wallet/shared";
 import { InvoiceStatusBadge } from "./InvoiceStatusBadge";
@@ -42,6 +43,14 @@ export function ClientUnpaidInvoices({ invoices, walletBalance }: { invoices: Un
   const total = sum(chosen);
   const fromWallet = Math.min(walletBalance, total);
   const count = (n: number) => `${n} invoice${n === 1 ? "" : "s"}`;
+  // One MTN / Airtel prompt can't take more than this: said before they tap Pay, not after.
+  const overLimit =
+    total > MOBILE_MONEY_MAX ? (
+      <p className="rounded-xl bg-warning-50 px-3 py-2 text-xs text-warning-700 dark:bg-warning-500/15 dark:text-warning-500">
+        MTN and Airtel take up to {money(MOBILE_MONEY_MAX)} at a time.{" "}
+        {chosen.length > 1 ? "Untick some to pay by mobile money, or pay these by bank." : "Pay this one by bank, or in parts from its own page (View)."}
+      </p>
+    ) : null;
 
   function toggle(id: string) {
     setUnticked((before) => {
@@ -150,6 +159,7 @@ export function ClientUnpaidInvoices({ invoices, walletBalance }: { invoices: Un
         <Button className="mt-2 w-full" disabled={!chosen.length} onClick={() => setOpen(true)}>
           {chosen.length ? `Pay ${money(total)} · ${count(chosen.length)}` : "Tick the invoices to pay"}
         </Button>
+        {overLimit ? <div className="mt-2">{overLimit}</div> : null}
       </Panel>
 
       <BottomSheet open={open} onClose={close} title={paid === null ? `Pay ${money(total)}` : undefined}>
@@ -183,6 +193,7 @@ export function ClientUnpaidInvoices({ invoices, walletBalance }: { invoices: Un
             ) : null}
             <div className="space-y-2">
               <h3 className="text-sm font-semibold">{walletBalance > 0 ? "Or pay by" : "Pay by"}</h3>
+              {overLimit}
               <PaymentMethods
                 // A new set of invoices is a new payment: don't keep a finished prompt on screen.
                 key={chosen.map((i) => i.id).join()}

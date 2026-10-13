@@ -84,6 +84,8 @@ export interface HomeBarLink {
   newTab?: boolean;
   /** "More" sheet only: a heading shown above the first link of each section. */
   section?: string;
+  /** A red dot: something here needs attention. In "More", the More button carries it too. */
+  dot?: boolean;
 }
 
 function MoreIcon({ className }: { className?: string }) {
@@ -235,6 +237,7 @@ export function HomeBar({
                 >
                   <Icon className="h-5 w-5" />
                   {link.label}
+                  {link.dot ? <span className="ml-auto size-2 rounded-full bg-error-500" aria-label="Needs attention" /> : null}
                 </Link>
               </Fragment>
             );
@@ -295,8 +298,11 @@ export function HomeBar({
             type="button"
             aria-expanded={moreOpen}
             onClick={() => setMoreOpen((v) => !v)}
-            className="flex min-w-0 flex-col items-center pb-1.5 focus-visible:outline-2 focus-visible:outline-brand-500"
+            className="relative flex min-w-0 flex-col items-center pb-1.5 focus-visible:outline-2 focus-visible:outline-brand-500"
           >
+            {more.some((l) => l.dot) ? (
+              <span className="absolute left-1/2 top-0 ml-2.5 size-2.5 rounded-full border-2 border-surface bg-error-500" aria-label="Needs attention" />
+            ) : null}
             <BarItem current={activeSlot === tabs.length} label="More">
               <MoreIcon className="h-6 w-6" />
             </BarItem>

@@ -3,9 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
 
-import { getMyOwing } from "@repo/lib/invoices/actions";
 import { ChatIcon } from "@repo/ui/chat/icons";
 import {
   AgentsIcon,
@@ -23,6 +21,7 @@ import {
   SupportIcon,
 } from "@repo/ui/icons";
 
+import { useOwes } from "./use-owes";
 import { clientNavFor, isCurrentClientPage, type ClientNavItem } from "./nav";
 
 // Same shape as app/dashboard/sidebar.tsx — fixed logo header + icon nav
@@ -54,12 +53,7 @@ const ICONS: Partial<Record<ClientNavItem["icon"], typeof OrdersIcon>> = {
 export function ClientSidebar({ signedIn }: { signedIn: boolean }) {
   const pathname = usePathname();
   const sections = clientNavFor(signedIn);
-  // A dot on Wallet while invoices are unpaid; asked again on each page, so it goes once they're cleared.
-  const [owes, setOwes] = useState(false);
-  useEffect(() => {
-    if (!signedIn) return;
-    getMyOwing().then((owing) => setOwes(owing !== null), () => {});
-  }, [signedIn, pathname]);
+  const owes = useOwes(signedIn);
 
   return (
     <aside
