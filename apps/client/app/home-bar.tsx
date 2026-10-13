@@ -4,12 +4,15 @@ import { HomeBar, type HomeBarLink } from "@repo/ui/HomeBar";
 
 import { logoutClient } from "./actions";
 import { clientNavFor } from "./nav";
+import { useOwes } from "./use-owes";
 
 // Client portal on phones: the four places clients live in (Dashboard,
 // Orders, Showroom, Chat) on the bar; everything else, Support included,
 // sits in "More", in the same sections as the desktop sidebar (both come
 // from ./nav.ts).
 export function ClientHomeBar() {
+  // The home bar is only shown signed in. A dot on Wallet (and on More, where it lives) while invoices are unpaid.
+  const owes = useOwes(true);
   const tabs: HomeBarLink[] = [
     { href: "/", label: "Dashboard", icon: "dashboard", exact: true },
     { href: "/orders", label: "My orders", barLabel: "Orders", icon: "orders" },
@@ -21,7 +24,13 @@ export function ClientHomeBar() {
   const more: HomeBarLink[] = clientNavFor(true).flatMap((section) =>
     section.items
       .filter((item) => !onBar.has(item.href))
-      .map((item) => ({ href: item.href, label: item.label, icon: item.icon, section: section.label ?? undefined })),
+      .map((item) => ({
+        href: item.href,
+        label: item.label,
+        icon: item.icon,
+        section: section.label ?? undefined,
+        dot: owes && item.href === "/payment",
+      })),
   );
 
   return <HomeBar tabs={tabs} more={more} logout={logoutClient} afterLogout="/" />;

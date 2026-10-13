@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 
 import { OwingBanner } from "@repo/ui/invoices/OwingBanner";
 import { InvoicePdf } from "@repo/ui/invoices/InvoicePdf";
-import { PaymentMethods } from "@repo/ui/payments/PaymentMethods";
+import { PayLater } from "@repo/ui/payments/OrderPayButton";
 import { getMyOwing } from "@repo/lib/invoices/actions";
 import { getProformaForViewer } from "@repo/lib/invoices/public";
 import { SUPPORT_PHONE_DISPLAY } from "@repo/lib/support/constants";
@@ -36,11 +36,10 @@ export default async function ProformaPage({ params }: { params: Promise<{ order
         </div>
       ) : null}
       <InvoicePdf invoice={invoice} />
-      {/* Paying early is fine when the estimate is complete (no photo books waiting for a price). */}
+      {/* Paying early by bank is fine when the estimate is complete (no photo books waiting for a price); in the app, once it's invoiced. */}
       {invoice.complete && invoice.balance > 0 && !invoice.order.cancelled ? (
-        <section className="mt-4 space-y-2 print:hidden">
-          <h2 className="text-sm font-semibold">Pay now</h2>
-          <PaymentMethods orderNo={invoice.order.orderNo} pay={{ orderId: orderId }} />
+        <section className="mt-4 print:hidden">
+          <PayLater orderNo={invoice.order.orderNo} />
         </section>
       ) : null}
       <p className="mt-4 text-center text-sm text-muted print:hidden">Questions? Call or WhatsApp {SUPPORT_PHONE_DISPLAY}.</p>

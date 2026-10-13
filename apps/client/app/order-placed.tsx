@@ -1,42 +1,26 @@
 "use client";
 
-import { useRef } from "react";
 import Link from "next/link";
 
-import { Collapsible, PriceHero } from "@repo/ui/order/OrderSummary";
-import { PaymentMethods } from "@repo/ui/payments/PaymentMethods";
+import { PriceHero } from "@repo/ui/order/OrderSummary";
+import { PayLater } from "@repo/ui/payments/OrderPayButton";
 import { useCurrencySymbol } from "@repo/lib/currency/CurrencySymbolProvider";
 import { formatMoney } from "@repo/lib/currency/format";
 
 // Shown in place of the order form once placeOrder succeeds: a big tick, the
 // order number, then a nudge to pay. Two flavours:
 // - Pay now: the catalog gave a full total and nothing needs a call first,
-//   so we show the amount and step-by-step instructions.
+//   so we show the amount, and how it's paid (in the app once we've confirmed
+//   and invoiced it, or by bank meanwhile).
 // - Wait for confirmation: photo books (the receptionist phones first) or an
-//   order with an unpriced item — the final price isn't known yet, so the
-//   details are shown for reference but we ask them not to pay yet. They pay
-//   later from the order's "How to pay" section (item-detail / quote-review).
+//   order with an unpriced item — the final price isn't known yet, so we ask
+//   them not to pay yet. They pay later from the order's "Pay" button.
 
 function CheckIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className={className} aria-hidden>
       <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
     </svg>
-  );
-}
-
-function Steps({ steps }: { steps: React.ReactNode[] }) {
-  return (
-    <ol className="space-y-2 text-left text-sm">
-      {steps.map((step, i) => (
-        <li key={i} className="flex gap-3">
-          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-600 text-xs font-semibold text-white">
-            {i + 1}
-          </span>
-          <span className="pt-0.5">{step}</span>
-        </li>
-      ))}
-    </ol>
   );
 }
 
@@ -54,17 +38,8 @@ export function OrderPlaced({
   const symbol = useCurrencySymbol();
   const payNow = total != null && !needsReview;
   const ref = <span className="font-semibold">{orderNo}</span>;
-  const howToPayRef = useRef<HTMLDetailsElement>(null);
-
-  function openHowToPay() {
-    const el = howToPayRef.current;
-    if (!el) return;
-    el.open = true;
-    el.scrollIntoView({ behavior: "smooth", block: "start" });
-  }
-
   // Laid out for phones: a compact "placed" line, the price front and
-  // centre, and the payment steps folded away until wanted.
+  // centre, then how it's paid.
   return (
     <div className="mx-auto w-full max-w-lg space-y-3">
       <div className="flex items-center gap-3 rounded-2xl border border-border bg-surface p-4 shadow-theme-xs">
@@ -82,19 +57,7 @@ export function OrderPlaced({
       </div>
 
       {payNow ? (
-        <PriceHero
-          label="Amount to pay"
-          price={formatMoney(total, symbol)}
-          note={<>Use {ref} as your payment reference.</>}
-        >
-          <button
-            type="button"
-            onClick={openHowToPay}
-            className="inline-flex min-h-10 items-center rounded-[var(--radius)] bg-brand-500 px-4 text-sm font-semibold text-white hover:bg-brand-600"
-          >
-            How to pay
-          </button>
-        </PriceHero>
+        <PriceHero label="Amount to pay" price={formatMoney(total, symbol)} note={<>Use {ref} as your payment reference.</>} />
       ) : (
         <PriceHero
           tone="pending"
@@ -116,29 +79,7 @@ export function OrderPlaced({
         </div>
       ) : null}
 
-      <Collapsible
-        ref={howToPayRef}
-        title="How to pay"
-        summary={payNow ? "MTN, Airtel or bank" : "For later, once we confirm the price"}
-      >
-        <div className="space-y-4">
-          <Steps
-            steps={
-              payNow
-                ? [
-                    <>We confirm your order and send the invoice.</>,
-                    <>Open the order and pay by MTN or Airtel: approve the prompt on your phone.</>,
-                    <>Or pay by bank, using {ref} as the reference.</>,
-                  ]
-                : [
-                    <>Wait for our call or message confirming the final price.</>,
-                    <>Then open the order and pay by MTN or Airtel, or by bank using {ref} as the reference.</>,
-                  ]
-            }
-          />
-          <PaymentMethods orderNo={orderNo} />
-        </div>
-      </Collapsible>
+      {payNow ? <PayLater orderNo={orderNo} /> : null}
 
       <div className="flex flex-col gap-2 pt-1 sm:flex-row">
         <Link

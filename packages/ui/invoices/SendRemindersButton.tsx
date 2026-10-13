@@ -16,15 +16,21 @@ export function SendRemindersButton() {
     start(async () => {
       const res = await sendInvoiceReminders();
       if (!res.ok) return setNote({ text: res.error, error: true });
-      const { clients, reminded } = res.data;
+      const { clients, reminded, emailed, emailsFailed } = res.data;
       const people = (n: number) => `${n} client${n === 1 ? "" : "s"}`;
+      if (reminded > 0 && emailsFailed > 0) {
+        return setNote({
+          text: `Reminded ${people(reminded)} by notification, but ${emailsFailed} of ${emailed + emailsFailed} emails couldn't be sent. Check the email settings.`,
+          error: true,
+        });
+      }
       setNote({
         text:
           clients === 0
             ? "Nobody owes anything."
             : reminded === 0
               ? "Everyone who owes was already reminded today."
-              : `Reminded ${people(reminded)}${reminded < clients ? `; ${clients - reminded} already reminded today` : ""}.`,
+              : `Reminded ${people(reminded)} (${emailed} by email too)${reminded < clients ? `; ${clients - reminded} already reminded today` : ""}.`,
       });
     });
   }

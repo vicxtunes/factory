@@ -15,6 +15,26 @@ import { BankDetails } from "./PaymentMethods";
 import { PayNow } from "./PayNow";
 
 /**
+ * For an order that can't be paid in the app yet (not confirmed or invoiced):
+ * says when it can, with the bank details as the way to pay meanwhile.
+ */
+export function PayLater({ orderNo }: { orderNo: string }) {
+  return (
+    <div className="space-y-3">
+      <p className="rounded-xl border border-border px-4 py-3 text-sm text-muted">
+        You can pay here by MTN or Airtel once we confirm your order. We&apos;ll notify you when your invoice is ready.
+      </p>
+      <details className="rounded-2xl border border-border px-4 py-3">
+        <summary className="cursor-pointer text-sm font-medium">Pay by bank instead</summary>
+        <div className="mt-3">
+          <BankDetails reference={orderNo} />
+        </div>
+      </details>
+    </div>
+  );
+}
+
+/**
  * "Pay" on one of the signed-in client's orders: a sheet with what's left to
  * pay, by MTN / Airtel in full or in part (their number on file offered
  * first), the bank details as the other way, and a confirmation at the end.
@@ -91,10 +111,7 @@ export function OrderPayButton({ orderId, orderNo }: { orderId: string; orderNo:
         ) : state.due === 0 ? (
           <p className={`${note} font-medium text-success-600 dark:text-success-500`}>✓ Paid in full</p>
         ) : !state.payable || state.due == null ? (
-          <div className="space-y-4">
-            <p className={note}>You can pay here by MTN or Airtel once we confirm your order.</p>
-            {bank}
-          </div>
+          <PayLater orderNo={orderNo} />
         ) : (
           <div className="space-y-4">
             <PayNow
