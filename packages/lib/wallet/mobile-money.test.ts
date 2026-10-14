@@ -47,3 +47,15 @@ test("HivePay reference: at most 30 letters and digits, and back to the same col
   assert.equal(fromHivepayReference("ORD-1001"), null, "not ours");
   assert.equal(fromHivepayReference("AM" + "z".repeat(25)), null, "too big for a uuid");
 });
+
+test("HivePay payout reference: a withdrawal's, never mistaken for a collection's", async () => {
+  const { fromHivepayReference, fromPayoutReference, toHivepayReference, toPayoutReference } = await import("./server/providers/hivepay-reference");
+  for (const id of ["ffffffff-ffff-ffff-ffff-ffffffffffff", crypto.randomUUID()]) {
+    const payout = toPayoutReference(id);
+    assert.ok(payout.length <= 30, `${payout} is ${payout.length} chars`);
+    assert.match(payout, /^WD[0-9a-z]+$/);
+    assert.equal(fromPayoutReference(payout), id);
+    assert.equal(fromHivepayReference(payout), null, "a payout isn't a collection");
+    assert.equal(fromPayoutReference(toHivepayReference(id)), null, "a collection isn't a payout");
+  }
+});

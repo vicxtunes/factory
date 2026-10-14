@@ -3,17 +3,21 @@ import "server-only";
 // The Business card: what a business's customers pay it by mobile money, kept
 // apart from its owner's own Aming card (the wallet). Reads of its tables and
 // the calls to its database functions, which do their own locking and checks
-// (20261023100000_business_card.sql).
+// (20261023100000_business_card.sql), and its withdrawals, which go out
+// through HivePay's payouts once staff approve them
+// (20261026100000_withdrawal_payouts.sql).
 
 import { parsePhone } from "@repo/lib/kernel/core/phone";
 import { createAdminClient } from "@repo/lib/supabase/admin";
 
-import { HISTORY_LIMIT, MAX_REFERENCE_LENGTH, MIN_WITHDRAWAL, checkAmount, cleanReason, cleanText } from "../policy";
+import { HISTORY_LIMIT, MAX_WITHDRAWAL, MIN_WITHDRAWAL, checkAmount, cleanReason } from "../policy";
 import { WALLET_TERMS_VERSION } from "../terms";
 import type { BusinessCardEntry, BusinessCardMonth, BusinessCardView, CardName, PendingWithdrawal, Withdrawal } from "../types";
 import { WalletError, throwDbError } from "./errors";
 import type { StaffViewer, WalletActor } from "./identity";
 import * as notifier from "./notifier";
+import * as hivepay from "./providers/hivepay";
+import { toPayoutReference } from "./providers/hivepay-reference";
 
 /** How many months the card's chart covers. */
 const MONTHS = 7;
@@ -22,7 +26,7 @@ const WITHDRAWALS_SHOWN = 10;
 /** Largest single move or withdrawal (UGX). A sanity cap on typos. */
 const MAX_MOVE = 100_000_000;
 
-const WITHDRAWAL_COLUMNS = "id, amount, phone, status, reference, reason, created_at";
+const WITHDRAWAL_COLUMNS = "id, amount, phone, status, reference, reason, payout_fee, last_error, created_at";
 
 interface WithdrawalRow {
   id: string;
@@ -31,6 +35,8 @@ interface WithdrawalRow {
   status: Withdrawal["status"];
   reference: string | null;
   reason: string | null;
+  payout_fee: number | null;
+  last_error: string | null;
   created_at: string;
 }
 
@@ -41,8 +47,13 @@ const toWithdrawal = (r: WithdrawalRow): Withdrawal => ({
   status: r.status,
   reference: r.reference,
   reason: r.reason,
+  payoutFee: r.payout_fee === null ? null : Number(r.payout_fee),
+  lastError: r.last_error,
   createdAt: r.created_at,
 });
+
+/** The gateway is only asked about a payout once it has had this long. */
+const ASK_GATEWAY_AFTER_MS = 10_000;
 
 function actorArgs(actor: WalletActor) {
   return { p_actor_type: actor.type, p_actor_id: actor.id, p_actor_name: actor.name };
@@ -87,6 +98,8 @@ function lastMonths(timeZone: string): string[] {
 
 /** The card as its business sees it: balance, history, withdrawals and its last months, in the business's time zone. */
 export async function getBusinessCard(tenantId: string, timeZone: string): Promise<BusinessCardView> {
+  // Payouts the gateway may have answered since: settled first, so the card is current.
+  await reconcileSending(tenantId);
   const db = createAdminClient();
   const months = lastMonths(timeZone);
   const [state, entries, withdrawals, movements] = await Promise.all([
@@ -166,7 +179,8 @@ export async function moveBetweenCards(tenantId: string, to: CardName, amount: n
 
 /** The owner asks for money from the Business card on a mobile money number. It leaves the card now; staff send it. */
 export async function requestWithdrawal(tenantId: string, amount: number, phoneText: string, actor: WalletActor): Promise<void> {
-  checkMove(amount, MIN_WITHDRAWAL);
+  const problem = checkAmount(amount, { min: MIN_WITHDRAWAL, max: MAX_WITHDRAWAL, label: "A withdrawal" });
+  if (problem) throw new WalletError(problem);
   const phone = parsePhone(phoneText);
   if (!phone.ok) throw new WalletError(phone.error);
   if (!phone.store.startsWith("+256")) throw new WalletError("Withdrawals go to MTN and Airtel Uganda numbers.");
@@ -190,12 +204,13 @@ async function businessesOf(tenantIds: string[]): Promise<Map<string, { name: st
   return new Map((data ?? []).map((t) => [t.id, { name: t.name, ownerClientId: t.owner_client_id }]));
 }
 
-/** The staff queue: withdrawals waiting to be sent, oldest first. */
+/** The staff queue: withdrawals waiting for approval or being sent, oldest first. */
 export async function listPendingWithdrawals(): Promise<PendingWithdrawal[]> {
+  await reconcileSending(null);
   const { data, error } = await createAdminClient()
     .from("business_withdrawals")
     .select(`${WITHDRAWAL_COLUMNS}, tenant_id, requested_by_name`)
-    .eq("status", "pending")
+    .in("status", ["pending", "sending"])
     .order("created_at")
     .returns<(WithdrawalRow & { tenant_id: string; requested_by_name: string })[]>();
   if (error) throwDbError(error);
@@ -203,19 +218,83 @@ export async function listPendingWithdrawals(): Promise<PendingWithdrawal[]> {
   return (data ?? []).map((r) => ({ ...toWithdrawal(r), businessName: businesses.get(r.tenant_id)?.name ?? "A business", requestedByName: r.requested_by_name }));
 }
 
+/** The withdrawal's owner is told how it went (best effort). */
+async function tellOwner(withdrawalId: string, reason: string | null): Promise<void> {
+  const { data } = await createAdminClient().from("business_withdrawals").select("amount, phone, tenant_id").eq("id", withdrawalId).maybeSingle<{ amount: number; phone: string; tenant_id: string }>();
+  if (!data) return;
+  const owner = (await businessesOf([data.tenant_id])).get(data.tenant_id)?.ownerClientId;
+  if (owner) await notifier.withdrawalAnswered(owner, Number(data.amount), data.phone, reason);
+}
+
 /**
- * Staff answer a waiting withdrawal: sent (`text` is the mobile money
- * transaction id), or not (`text` is why, and the money goes back on the card).
+ * Staff approve a waiting withdrawal: it's marked as being sent (so it can't
+ * go twice), then handed to HivePay. If HivePay doesn't take it (its balance,
+ * the number), it waits again, with why. Its outcome comes later
+ * (reconcilePayout).
  */
-export async function resolveWithdrawal(staff: StaffViewer, id: string, paid: boolean, text: string): Promise<void> {
+export async function approveWithdrawal(staff: StaffViewer, id: string): Promise<void> {
+  if (!hivepay.isConfigured()) throw new WalletError("Payouts aren't set up on this server (HivePay keys).");
   const db = createAdminClient();
-  const answer = paid ? cleanText(text, MAX_REFERENCE_LENGTH) : cleanReason(text);
-  if (!answer) throw new WalletError(paid ? "Enter the mobile money transaction ID, so the payment can be traced." : "Say why it wasn't sent: the business's owner sees it.");
-  const { data: row, error: readError } = await db.from("business_withdrawals").select("phone, tenant_id").eq("id", id).maybeSingle<{ phone: string; tenant_id: string }>();
-  if (readError) throwDbError(readError);
-  if (!row) throw new WalletError("Withdrawal not found.");
-  const { data, error } = await db.rpc("business_withdraw_resolve", { p_withdrawal: id, p_paid: paid, p_text: answer, ...actorArgs(staff) });
+  const { data, error } = await db.rpc("business_withdraw_approve", { p_withdrawal: id, p_actor_name: staff.name });
   if (error) throwDbError(error);
-  const owner = (await businessesOf([row.tenant_id])).get(row.tenant_id)?.ownerClientId;
-  if (owner) await notifier.withdrawalAnswered(owner, Number((data as { amount: number }).amount), row.phone, paid ? null : answer);
+  const w = data as { amount: number; phone: string };
+  let sent: Awaited<ReturnType<typeof hivepay.send>>;
+  try {
+    sent = await hivepay.send({ reference: toPayoutReference(id), phone: w.phone, amount: Number(w.amount), description: "Business card withdrawal" });
+  } catch (err) {
+    // No answer: HivePay may or may not have it. It stays "being sent", and its status settles it.
+    console.error("hivepay send threw:", id, err);
+    return;
+  }
+  if (!sent.ok) {
+    console.error("hivepay send refused:", id, sent.status, sent.message);
+    const why = sent.status === 402 ? "Not enough in Aming's mobile money account to send it." : sent.message;
+    const { error: back } = await db.rpc("business_withdraw_not_taken", { p_withdrawal: id, p_error: why });
+    if (back) throwDbError(back);
+    throw new WalletError(`Not sent: ${why}`);
+  }
+  const { error: taken } = await db.rpc("business_withdraw_taken", { p_withdrawal: id, p_gateway_reference: sent.gatewayRef, p_fee: sent.fee });
+  if (taken) throwDbError(taken);
+}
+
+/** Asks HivePay how a payout being sent went, and settles it: sent, or failed and back on the card. */
+export async function reconcilePayout(id: string): Promise<void> {
+  const db = createAdminClient();
+  const { data: row } = await db.from("business_withdrawals").select("status, payout_fee, gateway_reference").eq("id", id).maybeSingle<{ status: string; payout_fee: number | null; gateway_reference: string | null }>();
+  if (row?.status !== "sending") return;
+  const res = await hivepay.status(toPayoutReference(id));
+  if (!res.ok || res.status === "pending") return;
+  const delivered = res.status === "success";
+  const reason = delivered ? null : "The mobile money network turned it down.";
+  const { data: changed, error } = await db.rpc("business_withdraw_payout_result", {
+    p_withdrawal: id,
+    p_delivered: delivered,
+    p_fee: row.payout_fee,
+    p_gateway_reference: res.gatewayRef ?? row.gateway_reference,
+    p_reason: reason,
+  });
+  if (error) throwDbError(error);
+  if (changed) await tellOwner(id, reason);
+}
+
+/** Every payout still being sent (one business's, or all of them), asked about once it has had a moment. */
+async function reconcileSending(tenantId: string | null): Promise<void> {
+  let query = createAdminClient()
+    .from("business_withdrawals")
+    .select("id")
+    .eq("status", "sending")
+    .lt("sent_at", new Date(Date.now() - ASK_GATEWAY_AFTER_MS).toISOString());
+  if (tenantId) query = query.eq("tenant_id", tenantId);
+  const { data, error } = await query.returns<{ id: string }[]>();
+  if (error) throwDbError(error);
+  await Promise.all((data ?? []).map((w) => reconcilePayout(w.id).catch((err) => console.error("payout check failed:", w.id, err))));
+}
+
+/** Staff refuse a waiting withdrawal (the owner sees why): the money goes back on the card. */
+export async function refuseWithdrawal(staff: StaffViewer, id: string, reasonText: string): Promise<void> {
+  const reason = cleanReason(reasonText);
+  if (!reason) throw new WalletError("Say why it isn't being sent: the business's owner sees it.");
+  const { error } = await createAdminClient().rpc("business_withdraw_resolve", { p_withdrawal: id, p_paid: false, p_text: reason, ...actorArgs(staff) });
+  if (error) throwDbError(error);
+  await tellOwner(id, reason);
 }

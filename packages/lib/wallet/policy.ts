@@ -10,8 +10,9 @@ export const MIN_DEPOSIT = 1_000;
 export const MAX_DEPOSIT = 100_000_000;
 /** Aming's share of every customer payment collected for a business. The database takes it (provider_collection_settle()); this only words it. */
 export const COLLECTION_FEE_PERCENT = 5;
-/** Smallest withdrawal from a Business card (UGX): what mobile money will carry. */
-export const MIN_WITHDRAWAL = 5_000;
+/** A withdrawal from a Business card (UGX) goes out through HivePay, within its limits per payout. */
+export const MIN_WITHDRAWAL = 500;
+export const MAX_WITHDRAWAL = 5_000_000;
 /** Largest single staff adjustment (UGX), either direction. */
 export const MAX_ADJUSTMENT = 100_000_000;
 

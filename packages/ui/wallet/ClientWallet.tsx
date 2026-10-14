@@ -1,7 +1,8 @@
 "use client";
 
-import { useRef, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
+import { FormSheet } from "@repo/ui/FormSheet";
 import { PaymentMethods } from "@repo/ui/payments/PaymentMethods";
 import type { WalletView } from "@repo/lib/wallet/types";
 
@@ -9,14 +10,11 @@ import { Panel, PaymentLine } from "./shared";
 import { WalletHome } from "./WalletHome";
 
 // The client's own wallet: their Aming card first, what they owe under it
-// (`owing`, when there's anything), the card's transactions, then "Add funds" —
-// MTN / Airtel right here (a prompt on their phone), or the bank details
-// (staff add a bank transfer once they see it on the statement) — then any
-// older deposit reports still waiting for confirmation.
-//
-// Layout: one column on phones and tablets. From `lg` up it becomes a
-// two-column grid — card + transactions on the left, the "add funds" flow and
-// pending deposits in a narrower rail on the right.
+// (`owing`, when there's anything), and the card's transactions. "Add funds"
+// (MTN / Airtel right here, a prompt on their phone, or the bank details:
+// staff add a bank transfer once they see it on the statement) opens over the
+// page: a sheet on a phone, a side panel on a desktop. Older deposit reports
+// still waiting for confirmation sit in a rail beside it from `lg` up.
 //
 // The left column has a hard 20rem floor. If the page shell is narrower than
 // 20rem + 22rem + gap, the grid will overflow rather than crush the balance
@@ -34,16 +32,13 @@ export function ClientWallet({
   /** Open "Add funds" straight away (the home screen's Add funds button links here with ?add=1). */
   startAdding?: boolean;
 }) {
-  const addRef = useRef<HTMLDivElement>(null);
   const [adding, setAdding] = useState(startAdding);
 
   const hasPending = wallet.pending.length > 0;
   const hasClosed = wallet.closed.length > 0;
-  const showAside = adding || hasPending;
 
   function openAdd() {
     setAdding(true);
-    requestAnimationFrame(() => addRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
   }
 
   return (
@@ -74,25 +69,18 @@ export function ClientWallet({
         ) : null}
       </div>
 
-      {/* Right rail — same `contents` trick, ordered so phones still read
-          card → add funds → waiting. */}
-      {showAside ? (
-        <div className="contents lg:flex lg:min-w-0 lg:flex-col lg:gap-4">
-          {adding ? (
-            <div ref={addRef} className="order-2 scroll-mt-4 space-y-3">
-              <Panel title="Add funds to your Aming card">
-                <PaymentMethods
-                  pay="top-up"
-                  bankExtra={
-                    <p className="text-xs text-muted">
-                      We add bank transfers to your wallet once we see them on our statement.
-                    </p>
-                  }
-                />
-              </Panel>
-            </div>
-          ) : null}
+      {/* Over the page, not below it: a sheet on a phone, a side panel on a desktop. */}
+      <FormSheet open={adding} onClose={() => setAdding(false)} title="Add funds to your Aming card">
+        <PaymentMethods
+          pay="top-up"
+          bankExtra={<p className="text-xs text-muted">We add bank transfers to your wallet once we see them on our statement.</p>}
+        />
+      </FormSheet>
 
+      {/* Right rail — same `contents` trick, ordered so phones still read
+          card → waiting. */}
+      {hasPending ? (
+        <div className="contents lg:flex lg:min-w-0 lg:flex-col lg:gap-4">
           {hasPending ? (
             <div className="order-3">
               <Panel title="Waiting for confirmation">

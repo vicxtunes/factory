@@ -21,10 +21,10 @@ import type { MobileMoneyCollection } from "../types";
 import * as directory from "./directory";
 import { WalletError } from "./errors";
 import type { ClientViewer } from "./identity";
-import { businessTermsAccepted } from "./business";
+import { businessTermsAccepted, reconcilePayout } from "./business";
 import * as notifier from "./notifier";
 import * as hivepay from "./providers/hivepay";
-import { fromHivepayReference, toHivepayReference } from "./providers/hivepay-reference";
+import { fromHivepayReference, fromPayoutReference, toHivepayReference } from "./providers/hivepay-reference";
 import * as repo from "./repository";
 
 const PROVIDER = "hivepay";
@@ -306,6 +306,12 @@ export async function handleWebhook(rawBody: string, signature: string | null): 
     reference = typeof ref === "string" ? ref : null;
   } catch {
     return answer(400);
+  }
+  // A withdrawal's payout delivered or failed: settled from HivePay's own status, like a collection.
+  const withdrawalId = reference ? fromPayoutReference(reference) : null;
+  if (withdrawalId) {
+    await reconcilePayout(withdrawalId);
+    return answer(200);
   }
   // Ours stand for a collection id (see hivepay-reference.ts); anything else isn't a collection we started.
   const collectionId = reference ? fromHivepayReference(reference) : null;

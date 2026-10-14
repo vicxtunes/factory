@@ -112,7 +112,7 @@ Relevant code:
 
 A studio's customer paying for a booking, an order request or an invoice by MTN / Airtel is not paying Aming. That money lands on the business's **Business card** (`business_wallets`, `business_wallet_transactions`), never in its owner's wallet. The owner's wallet is their **Aming card**: their own money with Aming.
 
-- The owner moves money between the two cards (`wallet_transfer()`), and withdraws from the Business card to their phone: the amount leaves the card at once, and staff send it and mark it sent, or return it with a reason (**Withdrawals to send** on `/dashboard/wallets`).
+- The owner moves money between the two cards (`wallet_transfer()`), and withdraws from the Business card to their phone: the amount leaves the card at once, staff approve it on `/dashboard/wallets` (**Withdrawals**), and HivePay's payouts send it. A failed payout, or one staff refuse, goes back on the card.
 - Only the owner transfers or withdraws. Anyone can add money.
 
 Details: `packages/lib/wallet/README.md` → "Two cards".

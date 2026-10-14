@@ -3,9 +3,10 @@ import "server-only";
 import { verifyHivepaySignature } from "./hivepay-signature";
 
 // HivePay (https://hivepay.site/docs): MTN / Airtel Uganda mobile money.
-// The only file that talks to HivePay — the wallet service calls these three
-// functions and never sees HivePay's API. Settings (the client app, where
-// clients pay and the webhook arrives):
+// The only file that talks to HivePay — the wallet service calls these
+// functions and never sees HivePay's API. Settings (both apps: the client app,
+// where clients pay and the webhook arrives; the staff app, which sends
+// withdrawals):
 //   HIVEPAY_API_KEY, HIVEPAY_API_SECRET, HIVEPAY_ACCOUNT_NUMBER   dashboard → API keys
 //   HIVEPAY_WEBHOOK_SECRET                                        dashboard → webhooks
 
@@ -65,7 +66,27 @@ export async function collect(input: {
   return { ok: true, gatewayRef: res.data.gateway_reference, network: res.data.network ?? null };
 }
 
-/** The transaction as HivePay sees it — what the app trusts before settling. */
+/**
+ * Sends `amount` to `phone` (a payout). HivePay takes its fee from the amount,
+ * so the phone receives amount − fee. `reference` is our withdrawal's; the
+ * outcome comes later (status(), or the webhook). Not taken: `status` is
+ * HivePay's HTTP answer (402: its balance is short; 422: number or amount).
+ */
+export async function send(input: {
+  reference: string;
+  phone: string;
+  amount: number;
+  description: string;
+}): Promise<{ ok: true; gatewayRef: string; fee: number } | { ok: false; status: number; message: string }> {
+  const res = await call<{ gateway_reference: string; fee?: number }>("/send-money", {
+    method: "POST",
+    body: JSON.stringify({ phone_number: input.phone, amount: input.amount, description: input.description.slice(0, 100), reference: input.reference }),
+  });
+  if (!res.ok) return res;
+  return { ok: true, gatewayRef: res.data.gateway_reference, fee: Number(res.data.fee ?? 0) };
+}
+
+/** The transaction (a collection or a payout) as HivePay sees it — what the app trusts before settling. */
 export async function status(
   reference: string,
 ): Promise<{ ok: true; status: ProviderStatus; amount: number; gatewayRef: string | null } | { ok: false; message: string }> {
