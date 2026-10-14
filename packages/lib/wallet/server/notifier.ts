@@ -6,6 +6,7 @@ import "server-only";
 
 import { formatMoney } from "@repo/lib/currency/format";
 import { notifyActor } from "@repo/lib/push/send";
+import { createAdminClient } from "@repo/lib/supabase/admin";
 import { clientPath } from "@repo/lib/client-portal/paths";
 
 const CLIENT_URL = clientPath("/payment");
@@ -51,11 +52,24 @@ export async function mobileMoneyReceivedForInvoices(clientId: string, amount: n
   await pushClient(clientId, "Payment received", `${formatMoney(amount)} by mobile money for ${invoices} invoices. Thank you!`);
 }
 
-/** A studio's customer paid for an order request: it's on the Business card. */
-export async function studioCustomerPaid(ownerClientId: string, amount: number): Promise<void> {
+/** A studio's customer paid for an order request, a booking or an invoice: it's on the Business card. */
+export async function studioCustomerPaid(ownerClientId: string, amount: number, forWhat: "an order" | "a booking" | "an invoice"): Promise<void> {
   await notifyActor(
     { type: "client", id: ownerClientId },
-    { title: "Customer paid", body: `${formatMoney(amount)} by mobile money for an order. It's on your Business card.`, url: "/studio/wallet" },
+    { title: "Customer paid", body: `${formatMoney(amount)} by mobile money for ${forWhat}. It's on your Business card.`, url: "/studio/wallet" },
+  );
+}
+
+/** Staff who manage wallets (receptionist, supervisor, boss) are told a business owner asked for a withdrawal to approve. */
+export async function withdrawalToApprove(businessName: string, amount: number): Promise<void> {
+  const { data: managers } = await createAdminClient().from("profiles").select("id").in("role", ["receptionist", "supervisor", "boss"]);
+  await Promise.all(
+    (managers ?? []).map((m: { id: string }) =>
+      notifyActor(
+        { type: "dashboard_user", id: m.id },
+        { title: "Withdrawal to approve", body: `${businessName} asked to withdraw ${formatMoney(amount)} from its Business card.`, url: "/dashboard/wallets" },
+      ),
+    ),
   );
 }
 
