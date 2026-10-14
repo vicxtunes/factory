@@ -27,7 +27,7 @@ export interface PhotoRepository {
   spacePrice(): Promise<number | null>;
   setSpacePrice(pricePerGb: number | null): Promise<void>;
   /**
-   * Buys `gb` of extra storage from the studio owner's wallet for `amount`
+   * Buys `gb` of extra storage from the studio owner's Aming card (their wallet) for `amount`
    * (the price the buyer saw), raising the allowance, all or nothing (in the
    * database). Throws PhotoError when it isn't on sale, the price changed,
    * the wallet is short or the allowance would pass its ceiling.

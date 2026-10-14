@@ -36,6 +36,7 @@ export function BookNow({
   signedInPhone = null,
   today,
   showPrices,
+  payOnline,
   scope,
 }: {
   studio: { name: string; slug: string };
@@ -49,6 +50,8 @@ export function BookNow({
   /** The studio's today ("yyyy-mm-dd"): the first day that can be booked. */
   today: string;
   showPrices: boolean;
+  /** Whether the studio takes mobile money in the app (it has agreed to the wallet's terms). Otherwise there's no pay step. */
+  payOnline: boolean;
   scope: Pick<TenantScope, "currency" | "locale" | "timeZone">;
 }) {
   const [open, setOpen] = useState(false);
@@ -97,7 +100,7 @@ export function BookNow({
       setResult(res.data);
       setPaid(0);
       // A priced package can be paid for now; one priced on request waits for the business.
-      setStep(showPrices && pkg && pkg.price > 0 ? "pay" : "sent");
+      setStep(payOnline && showPrices && pkg && pkg.price > 0 ? "pay" : "sent");
     });
   }
 
@@ -267,7 +270,9 @@ export function BookNow({
                 {paid > 0
                   ? `Paid ${formatAmount(scope, paid)}: your invoice shows the payment.`
                   : pkg && pkg.price > 0
-                    ? "Your quotation is ready. Pay any time to confirm the day, or wait for them to confirm."
+                    ? payOnline
+                      ? "Your quotation is ready. Pay any time to confirm the day, or wait for them to confirm."
+                      : "Your quotation is ready. They'll confirm it and tell you how to pay."
                     : "They'll confirm it and send your invoice."}
               </p>
               {result.signedIn ? null : <p className="mt-1">This number is already with {studio.name}: they&apos;ll send you the link to your page.</p>}

@@ -15,14 +15,17 @@
 import { revalidatePath } from "next/cache";
 
 import { WalletError } from "./server/errors";
-import { requireClient, requireStaff, getViewer } from "./server/identity";
+import { requireBusinessOwner, requireClient, requireStaff, getViewer } from "./server/identity";
+import * as business from "./server/business";
 import * as mobileMoney from "./server/mobile-money";
 import * as service from "./server/service";
 import type {
+  CardName,
   MobileMoneyCollection,
   OrderPaymentState,
   PaymentMethod,
   PendingDeposit,
+  PendingWithdrawal,
   TransactionHistoryFilters,
   TransactionHistoryPage,
   WalletListRow,
@@ -139,6 +142,38 @@ export async function getOrderPayment(orderId: string): Promise<WalletResult<Ord
   });
 }
 
+// --- A business's owner, on their two cards ---------------------------------
+
+/** The owner agrees to the wallet's terms (./terms.ts): their Business card comes on, and their customers can pay in the app. */
+export async function acceptWalletTerms(): Promise<WalletResult> {
+  return run(async () => {
+    const { tenantId, owner } = await requireBusinessOwner();
+    await business.acceptBusinessTerms(tenantId, owner);
+    refreshMoneyPages();
+    revalidatePath("/studio/wallet");
+  });
+}
+
+/** Moves `amount` to `to` from the owner's other card. */
+export async function moveMoneyBetweenCards(to: CardName, amount: number): Promise<WalletResult> {
+  return run(async () => {
+    const { tenantId, owner } = await requireBusinessOwner();
+    await business.moveBetweenCards(tenantId, to === "aming" ? "aming" : "business", amount, owner);
+    refreshMoneyPages();
+    revalidatePath("/studio/wallet");
+  });
+}
+
+/** Asks for `amount` from the Business card on a mobile money number; staff send it. */
+export async function withdrawFromBusinessCard(amount: number, phone: string): Promise<WalletResult> {
+  return run(async () => {
+    const { tenantId, owner } = await requireBusinessOwner();
+    await business.requestWithdrawal(tenantId, amount, phone, owner);
+    refreshMoneyPages();
+    revalidatePath("/studio/wallet");
+  });
+}
+
 // --- Staff -----------------------------------------------------------------
 
 export async function listWallets(): Promise<WalletResult<WalletListRow[]>> {
@@ -215,5 +250,22 @@ export async function refundOrderToWallet(
     const refunded = await service.refundOrder(await requireStaff(), orderId, amount, reason.trim() || null);
     refreshMoneyPages();
     return refunded;
+  });
+}
+
+/** Withdrawals from Business cards waiting to be sent. */
+export async function listPendingWithdrawals(): Promise<WalletResult<PendingWithdrawal[]>> {
+  return run(async () => {
+    await requireStaff();
+    return business.listPendingWithdrawals();
+  });
+}
+
+/** Sent (`text`: the mobile money transaction id) or not (`text`: why, and the money goes back on the card). */
+export async function resolveWithdrawal(id: string, paid: boolean, text: string): Promise<WalletResult> {
+  return run(async () => {
+    await business.resolveWithdrawal(await requireStaff(), id, paid, text);
+    refreshMoneyPages();
+    revalidatePath("/studio/wallet");
   });
 }

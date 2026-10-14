@@ -11,9 +11,9 @@ import { SPACE_PACKS_GB } from "@repo/lib/photos/core";
 import { formatAmount } from "@repo/lib/tenancy/format";
 
 /**
- * The studio's owner buys extra storage from their wallet: pick a size, see
+ * The studio's owner buys extra storage from their Aming card: pick a size, see
  * its price against the balance, buy. Short of funds, it points to the wallet.
- * The wallet is Aming's, in shillings, whatever currency the studio bills in.
+ * The card is in shillings, whatever currency the studio bills in.
  */
 export function BuySpace({ pricePerGb, balance, locale }: { pricePerGb: number; balance: number; locale: string }) {
   const router = useRouter();
@@ -47,7 +47,7 @@ export function BuySpace({ pricePerGb, balance, locale }: { pricePerGb: number; 
           </div>
         ) : (
           <div className="space-y-4">
-            <p className="text-sm text-muted">Extra storage for your files and photos, paid once from your wallet and yours to keep.</p>
+            <p className="text-sm text-muted">Extra storage for your files and photos, paid once from your Aming card and yours to keep.</p>
             <div role="radiogroup" aria-label="How much" className="grid grid-cols-2 gap-2">
               {SPACE_PACKS_GB.map((size) => (
                 <button
@@ -64,12 +64,12 @@ export function BuySpace({ pricePerGb, balance, locale }: { pricePerGb: number; 
               ))}
             </div>
             <p className="flex justify-between text-sm">
-              <span className="text-muted">In your wallet</span>
+              <span className="text-muted">On your Aming card</span>
               <span className="tnum">{money(balance)}</span>
             </p>
             {short ? (
               <p className="text-sm text-warning-700 dark:text-warning-400">
-                That&apos;s {money(amount - balance)} more than is in your wallet.{" "}
+                That&apos;s {money(amount - balance)} more than is on your Aming card.{" "}
                 <Link href="/payment" className="font-medium underline">
                   Add funds
                 </Link>

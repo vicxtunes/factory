@@ -91,7 +91,7 @@ function fail(what: string, error: { code?: string; message: string }): never {
   if (error.message.includes("STORAGE:price_changed")) throw new PhotoError("The price just changed. Check the new price and try again.");
   if (error.message.includes("STORAGE:too_much")) throw new PhotoError("That's more storage than a business can have. Ask Aming for more space.");
   if (error.message.includes("STORAGE:no_owner")) throw new PhotoError("This business can't buy storage.");
-  if (error.message.includes("WALLET:insufficient_funds")) throw new PhotoError("There isn't enough in your wallet for that. Add funds, then try again.");
+  if (error.message.includes("WALLET:insufficient_funds")) throw new PhotoError("There isn't enough on your Aming card for that. Add funds, then try again.");
   throw new Error(`photos: could not ${what}: ${error.message}`);
 }
 

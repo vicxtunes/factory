@@ -8,11 +8,13 @@ import { HomeBar, type HomeBarLink } from "@repo/ui/HomeBar";
 import { BackButton } from "@repo/ui/navigation/back";
 import { NotificationBell } from "@repo/ui/notifications/NotificationBell";
 import {
+  AccountsIcon,
   AgentsIcon,
   BackIcon,
   CalendarIcon,
   ClientsIcon,
   DashboardIcon,
+  FilesIcon,
   InvoiceIcon,
   PaymentIcon,
   PlaceOrderIcon,
@@ -46,6 +48,8 @@ const ICONS: Partial<Record<StudioNavItem["icon"], typeof DashboardIcon>> = {
   clients: ClientsIcon,
   invoice: InvoiceIcon,
   payment: PaymentIcon,
+  accounts: AccountsIcon,
+  files: FilesIcon,
   products: ProductsIcon,
   placeOrder: PlaceOrderIcon,
   showroom: ShowroomIcon,

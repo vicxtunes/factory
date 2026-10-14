@@ -18,17 +18,14 @@ import { QuickActions } from "./quick-actions";
 // Same shape as app/dashboard/(app)/page.tsx's overview — the exact
 // StatCard/StatusBarChart/UrgencyDonutChart components, reused as-is,
 // scoped to this one client's own items instead of the whole shop.
-// Phones: the wallet card full-width above the quick actions. Desktop: one
-// row of four equal tiles, the wallet first, instead of a stretched card with
-// a gap in the middle.
+// Phones: the wallet card full-width above the quick actions. Desktop: the
+// card at its own width, the quick actions in the rest of the row.
 function TopRow({ wallet }: { wallet?: ReactNode }) {
   if (!wallet) return <QuickActions />;
   return (
-    <div className="grid gap-3 lg:grid-cols-4">
-      <div className="lg:col-span-1">{wallet}</div>
-      <div className="lg:col-span-3">
-        <QuickActions />
-      </div>
+    <div className="grid gap-3 lg:grid-cols-[19.5rem_1fr]">
+      <div className="max-w-[19.5rem]">{wallet}</div>
+      <QuickActions />
     </div>
   );
 }

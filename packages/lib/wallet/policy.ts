@@ -2,12 +2,16 @@
 // so forms can check input before sending it and the server re-checks the
 // same rules before touching money.
 
-import type { PaymentMethod, PaymentStatus, WalletEntryKind } from "./types";
+import type { BusinessEntryKind, PaymentMethod, PaymentStatus, WalletEntryKind } from "./types";
 
 /** Smallest deposit a client can report (UGX). Stops typos like "5" for 5,000. */
 export const MIN_DEPOSIT = 1_000;
 /** Largest single deposit (UGX). A sanity cap on typos, not a business limit; raise if needed. */
 export const MAX_DEPOSIT = 100_000_000;
+/** Aming's share of every customer payment collected for a business. The database takes it (provider_collection_settle()); this only words it. */
+export const COLLECTION_FEE_PERCENT = 5;
+/** Smallest withdrawal from a Business card (UGX): what mobile money will carry. */
+export const MIN_WITHDRAWAL = 5_000;
 /** Largest single staff adjustment (UGX), either direction. */
 export const MAX_ADJUSTMENT = 100_000_000;
 
@@ -49,6 +53,16 @@ export const ENTRY_LABELS: Record<WalletEntryKind, string> = {
   order_payment: "Order payment",
   refund: "Refund",
   adjustment: "Adjustment",
+  transfer: "Card transfer",
+};
+
+export const BUSINESS_ENTRY_LABELS: Record<BusinessEntryKind, string> = {
+  customer_payment: "Customer payment",
+  fee: "Aming fee",
+  transfer_in: "From Aming card",
+  transfer_out: "To Aming card",
+  withdrawal: "Withdrawal",
+  withdrawal_returned: "Withdrawal returned",
 };
 
 /** A whole, positive shilling amount within [min, max], or an error sentence. */

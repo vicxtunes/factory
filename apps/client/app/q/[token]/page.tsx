@@ -6,6 +6,7 @@ import { QuotationAnswer } from "@repo/ui/billing/QuotationAnswer";
 import { canRespondToQuotation, shareTokenSchema } from "@repo/lib/billing/core";
 import { QuotationStatusBadge } from "@repo/ui/billing/StatusBadges";
 import { quotations } from "@repo/lib/billing/server";
+import { businessTermsAccepted } from "@repo/lib/wallet/studio";
 
 import { dueOn } from "../../document-due";
 
@@ -26,6 +27,8 @@ export default async function QuotationLinkPage({ params }: { params: Promise<{ 
   if (!token || !found) notFound();
   const { quotation, issuer } = found;
   const { currency, locale, timeZone } = found.scope;
+  // Mobile money in the app, once the studio has agreed to the wallet's terms: else the client accepts, and pays as the studio says.
+  const payOnline = canRespondToQuotation(quotation.status) && quotation.total > 0 && (await businessTermsAccepted(found.scope.tenantId));
 
   return (
     <main className="mx-auto w-full max-w-3xl space-y-4 px-4 py-6 sm:py-10">
@@ -51,7 +54,7 @@ export default async function QuotationLinkPage({ params }: { params: Promise<{ 
         amount={quotation.total}
         amountLabel="Total"
         due={dueOn(found.scope, "Valid until", quotation.validUntil, quotation.status !== "open")}
-        payable={canRespondToQuotation(quotation.status) && quotation.total > 0}
+        payable={payOnline}
         more={canRespondToQuotation(quotation.status) ? <QuotationAnswer token={token} studioName={issuer.name} /> : undefined}
         scope={{ currency, locale }}
       />

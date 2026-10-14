@@ -12,7 +12,7 @@ import { files } from "@repo/lib/files/server";
 import { photos } from "@repo/lib/photos/server";
 import { requireStudio } from "@repo/lib/studios/server";
 import type { TenantScope } from "@repo/lib/tenancy/types";
-import { studioWalletBalance } from "@repo/lib/wallet/studio";
+import { amingCardBalance } from "@repo/lib/wallet/studio";
 
 export const metadata = { title: "Files · My Business" };
 
@@ -37,13 +37,13 @@ export default async function StudioFilesPage({ searchParams }: { searchParams: 
   );
 }
 
-// Buying is the owner's (it's their Aming wallet that pays), and only while the boss has it on sale.
+// Buying is the owner's (it's their Aming card that pays), and only while the boss has it on sale.
 async function Storage({ scope, ownerClientId }: { scope: TenantScope; ownerClientId: string | null }) {
   const [usage, pricePerGb] = await Promise.all([files.usage(scope), ownerClientId ? photos.spacePrice() : null]);
   return (
     <div className="space-y-2">
       <UsageBar usage={usage} />
-      {ownerClientId && pricePerGb ? <BuySpace pricePerGb={pricePerGb} balance={await studioWalletBalance(ownerClientId)} locale={scope.locale} /> : null}
+      {ownerClientId && pricePerGb ? <BuySpace pricePerGb={pricePerGb} balance={await amingCardBalance(ownerClientId)} locale={scope.locale} /> : null}
     </div>
   );
 }

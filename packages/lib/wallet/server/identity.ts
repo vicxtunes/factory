@@ -4,7 +4,9 @@ import "server-only";
 // auth. Two kinds of people use wallets: the client who owns one, and staff
 // (dashboard users) who manage them. Workers and designers never see money.
 
+import { AppError } from "@repo/lib/kernel/core";
 import { getClientSession, getDashboardSession } from "@repo/lib/auth/session";
+import { studioOfCaller } from "@repo/lib/studios/server";
 import { isManagerRole } from "@repo/lib/types";
 
 import { WalletError } from "./errors";
@@ -32,6 +34,21 @@ export async function requireClient(): Promise<ClientViewer> {
   const session = await getClientSession();
   if (!session) throw new WalletError("Please sign in to use your wallet.");
   return { type: "client", id: session.client_id, name: session.name };
+}
+
+/**
+ * The signed-in owner of an open business, with that business, or throws.
+ * The owner alone: a team member, whatever their access, is refused.
+ */
+export async function requireBusinessOwner(): Promise<{ tenantId: string; owner: ClientViewer }> {
+  try {
+    const { scope, session } = await studioOfCaller();
+    return { tenantId: scope.tenantId, owner: { type: "client", id: session.client_id, name: session.name } };
+  } catch (err) {
+    // The business module's own refusals are sentences for the person.
+    if (err instanceof AppError) throw new WalletError(err.message);
+    throw err;
+  }
 }
 
 /** A signed-in dashboard user allowed to manage wallets, or throws. */

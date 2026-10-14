@@ -24,6 +24,7 @@ export function ServiceShowcase({
   service,
   media,
   showPrices,
+  payOnline,
   signedIn,
   signedInPhone,
   today,
@@ -37,6 +38,8 @@ export function ServiceShowcase({
   media: { coverUrl: string | null; videoUrl: string | null; gallery: ShowcaseMedia[] };
   /** The studio's choice: off, every package reads "Price on request". */
   showPrices: boolean;
+  /** Whether the studio takes mobile money in the app. */
+  payOnline: boolean;
   /** This device is signed in at the studio: booking needs no name or phone. */
   signedIn: boolean;
   /** Their number on file, when signed in. */
@@ -119,6 +122,7 @@ export function ServiceShowcase({
             signedIn={signedIn}
             signedInPhone={signedInPhone}
             showPrices={showPrices}
+            payOnline={payOnline}
             scope={scope}
           />
         ) : (
@@ -131,6 +135,7 @@ export function ServiceShowcase({
             signedInPhone={signedInPhone}
             today={today}
             showPrices={showPrices}
+            payOnline={payOnline}
             scope={scope}
           />
         )

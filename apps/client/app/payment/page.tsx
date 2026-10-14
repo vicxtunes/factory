@@ -25,12 +25,6 @@ export default async function ClientPaymentPage({ searchParams }: { searchParams
   return (
     <ClientShell signedIn name={session.name} avatarUrl={session.avatarUrl}>
       <div className="mx-auto lg:mx-12 w-full max-w-lg space-y-5">
-        <div>
-          <h2 className="text-lg font-semibold">Wallet</h2>
-          <p className="mt-1 text-sm text-muted">
-            What you owe and what you hold with us. Clear one invoice, several or all of them here.
-          </p>
-        </div>
         <Loading skeleton={<PanelStackSkeleton count={3} />}>
           <Wallet startAdding={params.add === "1"} />
         </Loading>
@@ -39,6 +33,7 @@ export default async function ClientPaymentPage({ searchParams }: { searchParams
   );
 }
 
+// A client's own wallet: their Aming card alone. A business's card is in its own Wallet (My Business → Wallet).
 async function Wallet({ startAdding }: { startAdding: boolean }) {
   const [wallet, unpaid, scope] = await Promise.all([getMyWallet(), listMyUnpaidInvoices(), resolveTenantScope()]);
   if (!wallet.ok) return <p className="rounded-2xl border border-border bg-surface p-4 text-sm text-error-600">{wallet.error}</p>;

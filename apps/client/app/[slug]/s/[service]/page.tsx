@@ -8,6 +8,7 @@ import { notFound, permanentRedirect } from "next/navigation";
 import { offerings } from "@repo/lib/offerings/server";
 import { studioAccess } from "@repo/lib/studio-access/server";
 import { portalClient, studioAtSlug } from "@repo/lib/studio-portal/server";
+import { businessTermsAccepted } from "@repo/lib/wallet/studio";
 
 import { ServiceShowcase } from "../../../service-showcase";
 import { serviceMedia } from "../../media";
@@ -67,7 +68,7 @@ async function Showcase({
   signedIn: boolean;
   signedInPhone: string | null;
 }) {
-  const [media, settings] = await Promise.all([serviceMedia(at.scope, found.id), offerings.settings(at.scope)]);
+  const [media, settings, payOnline] = await Promise.all([serviceMedia(at.scope, found.id), offerings.settings(at.scope), businessTermsAccepted(at.studio.id)]);
   return (
     <ServiceShowcase
       kind="service"
@@ -77,6 +78,8 @@ async function Showcase({
       media={media}
       // The studio's choices (Packages & Services): 3D or carousel, prices shown or not.
       showPrices={settings.showPrices}
+      // Mobile money in the app, once the studio has agreed to the wallet's terms.
+      payOnline={payOnline}
       signedIn={signedIn}
       signedInPhone={signedInPhone}
       today={localDate(new Date(), at.scope.timeZone)}

@@ -21,6 +21,7 @@ import type { MobileMoneyCollection } from "../types";
 import * as directory from "./directory";
 import { WalletError } from "./errors";
 import type { ClientViewer } from "./identity";
+import { businessTermsAccepted } from "./business";
 import * as notifier from "./notifier";
 import * as hivepay from "./providers/hivepay";
 import { fromHivepayReference, toHivepayReference } from "./providers/hivepay-reference";
@@ -185,10 +186,13 @@ export async function startOrdersPayment(viewer: ClientViewer, input: { orderIds
 
 /**
  * A studio's customer paying for their order request: the money goes to the
- * studio owner's wallet. The caller (packages/lib/product-requests) checks
+ * studio's Business card, once its owner has agreed to the wallet's terms
+ * (./business.ts). The caller (packages/lib/product-requests) checks
  * this device may pay for the request and that `amount` is within its total.
  */
 export async function startStudioRequestPayment(input: {
+  /** The business being paid: it must have agreed to the wallet's terms. */
+  tenantId: string;
   ownerClientId: string;
   /** What's paid for: the order request, the booking, or the invoice. */
   requestId?: string;
@@ -199,6 +203,7 @@ export async function startStudioRequestPayment(input: {
   amount: number;
   phone: string;
 }): Promise<MobileMoneyCollection> {
+  if (!(await businessTermsAccepted(input.tenantId))) throw new WalletError(`${input.studioName} doesn't take payments in the app. Pay them directly.`);
   return prompt(
     { clientId: input.ownerClientId, payerName: input.payerName },
     { amount: input.amount, phone: input.phone, orderId: null, productRequestId: input.requestId, bookingId: input.bookingId, documentId: input.invoiceId, description: input.studioName },

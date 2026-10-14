@@ -51,10 +51,20 @@ export async function mobileMoneyReceivedForInvoices(clientId: string, amount: n
   await pushClient(clientId, "Payment received", `${formatMoney(amount)} by mobile money for ${invoices} invoices. Thank you!`);
 }
 
-/** A studio's customer paid for an order request: it's in the owner's wallet. */
+/** A studio's customer paid for an order request: it's on the Business card. */
 export async function studioCustomerPaid(ownerClientId: string, amount: number): Promise<void> {
   await notifyActor(
     { type: "client", id: ownerClientId },
-    { title: "Customer paid", body: `${formatMoney(amount)} by mobile money for an order. It's in your wallet.`, url: "/studio" },
+    { title: "Customer paid", body: `${formatMoney(amount)} by mobile money for an order. It's on your Business card.`, url: "/studio/wallet" },
+  );
+}
+
+/** Staff answered a withdrawal from the Business card. `reason` null: it was sent. */
+export async function withdrawalAnswered(ownerClientId: string, amount: number, phone: string, reason: string | null): Promise<void> {
+  await notifyActor(
+    { type: "client", id: ownerClientId },
+    reason === null
+      ? { title: "Withdrawal sent", body: `${formatMoney(amount)} was sent to ${phone}.`, url: "/studio/wallet" }
+      : { title: "Withdrawal not sent", body: `${formatMoney(amount)} is back on your Business card: ${reason}`, url: "/studio/wallet" },
   );
 }

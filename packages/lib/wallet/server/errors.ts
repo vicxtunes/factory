@@ -35,6 +35,9 @@ const MESSAGES: Record<string, string> = {
   price_below_paid: "The price can't go below what's already been paid. Refund the difference to the wallet first.",
   invalid_amount: "Enter a valid amount.",
   invalid_status: "Invalid status.",
+  no_business: "This account has no business.",
+  terms_not_accepted: "Agree to the wallet terms first: open My Business → Wallet.",
+  withdrawal_not_pending: "This withdrawal was already handled.",
 };
 
 /** The WALLET code in a database error message, if there is one. */
