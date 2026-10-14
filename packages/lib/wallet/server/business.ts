@@ -178,16 +178,29 @@ export async function requestWithdrawal(tenantId: string, amount: number, phoneT
   }
 }
 
+/** The businesses behind some withdrawals: name and owner, by id. (A withdrawal points at its card, not its business, so they're read apart.) */
+async function businessesOf(tenantIds: string[]): Promise<Map<string, { name: string; ownerClientId: string | null }>> {
+  if (tenantIds.length === 0) return new Map();
+  const { data, error } = await createAdminClient()
+    .from("tenants")
+    .select("id, name, owner_client_id")
+    .in("id", [...new Set(tenantIds)])
+    .returns<{ id: string; name: string; owner_client_id: string | null }[]>();
+  if (error) throwDbError(error);
+  return new Map((data ?? []).map((t) => [t.id, { name: t.name, ownerClientId: t.owner_client_id }]));
+}
+
 /** The staff queue: withdrawals waiting to be sent, oldest first. */
 export async function listPendingWithdrawals(): Promise<PendingWithdrawal[]> {
   const { data, error } = await createAdminClient()
     .from("business_withdrawals")
-    .select(`${WITHDRAWAL_COLUMNS}, requested_by_name, tenant:tenants (name)`)
+    .select(`${WITHDRAWAL_COLUMNS}, tenant_id, requested_by_name`)
     .eq("status", "pending")
     .order("created_at")
-    .returns<(WithdrawalRow & { requested_by_name: string; tenant: { name: string } | null })[]>();
+    .returns<(WithdrawalRow & { tenant_id: string; requested_by_name: string })[]>();
   if (error) throwDbError(error);
-  return (data ?? []).map((r) => ({ ...toWithdrawal(r), businessName: r.tenant?.name ?? "A business", requestedByName: r.requested_by_name }));
+  const businesses = await businessesOf((data ?? []).map((r) => r.tenant_id));
+  return (data ?? []).map((r) => ({ ...toWithdrawal(r), businessName: businesses.get(r.tenant_id)?.name ?? "A business", requestedByName: r.requested_by_name }));
 }
 
 /**
@@ -198,14 +211,11 @@ export async function resolveWithdrawal(staff: StaffViewer, id: string, paid: bo
   const db = createAdminClient();
   const answer = paid ? cleanText(text, MAX_REFERENCE_LENGTH) : cleanReason(text);
   if (!answer) throw new WalletError(paid ? "Enter the mobile money transaction ID, so the payment can be traced." : "Say why it wasn't sent: the business's owner sees it.");
-  const { data: row, error: readError } = await db.from("business_withdrawals").select("phone, tenant:tenants (owner_client_id)").eq("id", id).maybeSingle<{
-    phone: string;
-    tenant: { owner_client_id: string | null } | null;
-  }>();
+  const { data: row, error: readError } = await db.from("business_withdrawals").select("phone, tenant_id").eq("id", id).maybeSingle<{ phone: string; tenant_id: string }>();
   if (readError) throwDbError(readError);
   if (!row) throw new WalletError("Withdrawal not found.");
   const { data, error } = await db.rpc("business_withdraw_resolve", { p_withdrawal: id, p_paid: paid, p_text: answer, ...actorArgs(staff) });
   if (error) throwDbError(error);
-  const owner = row.tenant?.owner_client_id;
+  const owner = (await businessesOf([row.tenant_id])).get(row.tenant_id)?.ownerClientId;
   if (owner) await notifier.withdrawalAnswered(owner, Number((data as { amount: number }).amount), row.phone, paid ? null : answer);
 }
