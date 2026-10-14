@@ -24,7 +24,7 @@ export default async function ClientPaymentPage({ searchParams }: { searchParams
 
   return (
     <ClientShell signedIn name={session.name} avatarUrl={session.avatarUrl}>
-      <div className="mx-auto lg:mx-12 w-full max-w-lg space-y-5">
+      <div className="mx-auto w-full max-w-5xl">
         <Loading skeleton={<PanelStackSkeleton count={3} />}>
           <Wallet startAdding={params.add === "1"} />
         </Loading>

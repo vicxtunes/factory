@@ -156,6 +156,8 @@ export function KanbanBoard({
           setColumnTarget(null);
         }
       }}
+      // A page can stretch the board to the screen's edges through this (apps/client/app/studio/_workspace/shell.tsx).
+      data-kanban=""
       className="flex items-start gap-4 overflow-x-auto pb-1"
       style={{ scrollbarWidth: "none" }}
     >

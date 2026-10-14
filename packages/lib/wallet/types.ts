@@ -239,9 +239,6 @@ export interface BusinessCardView {
   months: BusinessCardMonth[];
 }
 
-/** Which card money moves to. */
-export type CardName = "aming" | "business";
-
 /** What every wallet server action returns. `error` is always safe to show. */
 export type WalletResult<T = undefined> = T extends undefined
   ? { ok: true } | { ok: false; error: string }

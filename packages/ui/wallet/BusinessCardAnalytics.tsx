@@ -1,37 +1,22 @@
 "use client";
 
-// A business's Wallet page: its card (beside the owner's Aming card, for the
-// owner, who also transfers and withdraws from here), then money in and out
-// over the last months and the card's history, on the same panels as the
-// wallet's cards (light or dark with the theme).
+// A business's Wallet page, laid out as a banking dashboard like the client's
+// own (design/ in the repo root): the Business card's balance, beside the
+// owner's Aming card for the owner (who moves money onto it, one way, and
+// withdraws from here),
+// then three tiles: what came in against what went out, money in month by
+// month, and the card's latest transactions.
 
-import { area, curveMonotoneX, line } from "d3-shape";
-import { scaleLinear } from "d3-scale";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { AccountsIcon, HistoryIcon, PaymentIcon } from "@repo/ui/icons";
 import { BUSINESS_ENTRY_LABELS } from "@repo/lib/wallet/policy";
-import type { BusinessCardEntry, BusinessCardMonth, BusinessCardView, CardName } from "@repo/lib/wallet/types";
+import type { BusinessCardEntry, BusinessCardMonth, BusinessCardView } from "@repo/lib/wallet/types";
 
 import { TransferSheet, WithdrawSheet, Withdrawals } from "./CardSheets";
-import { ActionPill, BigMoney, CardsPanel, PANEL, Transactions, cardTail, type CardFace, type TransactionRow } from "./MoneyCards";
+import { Action, Pill, TILE, TileHead, Transactions, type TransactionRow } from "./MoneyCards";
 import { useMoney } from "./shared";
-
-type View = "all" | "income" | "outcome";
-const VIEWS: { key: View; label: string }[] = [
-  { key: "all", label: "All" },
-  { key: "income", label: "Income" },
-  { key: "outcome", label: "Outcome" },
-];
-
-// The chart's two colors, from the theme, a step apart in each mode so they
-// hold against a light surface and a dark one: money in wears the brand
-// color, money out a neutral gray (and a dashed line, so it's never told
-// apart by color alone).
-const CHART_COLORS =
-  "[--money-in:var(--color-brand-500)] [--money-out:var(--color-gray-500)] dark:[--money-in:var(--color-brand-400)] dark:[--money-out:var(--color-gray-400)]";
-const IN = "var(--money-in)";
-const OUT = "var(--money-out)";
 
 function businessRow(entry: BusinessCardEntry): TransactionRow {
   // A customer's payment is named for who paid.
@@ -39,260 +24,175 @@ function businessRow(entry: BusinessCardEntry): TransactionRow {
   return { id: entry.id, title: paid ? entry.actorName : BUSINESS_ENTRY_LABELS[entry.kind], detail: entry.note, amount: entry.amount, createdAt: entry.createdAt };
 }
 
-const monthName = (month: string) => new Date(`${month}-01T00:00:00Z`).toLocaleString("en", { month: "short", timeZone: "UTC" });
+const monthName = (month: string) => new Date(`${month}-01T00:00:00Z`).toLocaleString("en", { month: "long", timeZone: "UTC" });
 
-/** Where the lines sit in the plot's 0–100 box: clear of the value bubble above, off the floor below. */
-const TOP = 30;
-const FLOOR = 92;
-
-/** Money in and out by month, as smooth lines. Pointing at a month names its figures. */
-function MonthsChart({ months, view }: { months: BusinessCardMonth[]; view: View }) {
-  const money = useMoney();
-  const [active, setActive] = useState(months.length - 1);
-  const showIncome = view !== "outcome";
-  const showOutcome = view !== "income";
-
-  // One point in the middle of each month's column, plus one at each edge so the lines run the panel's full width.
-  const n = months.length;
-  const x = (i: number) => ((i + 0.5) / n) * 100;
-  const y = scaleLinear()
-    .domain([0, Math.max(1, ...months.flatMap((m) => [showIncome ? m.income : 0, showOutcome ? m.outcome : 0]))])
-    .range([FLOOR, TOP]);
-  const points = (of: (m: BusinessCardMonth) => number): [number, number][] => [
-    [0, y(of(months[0]))],
-    ...months.map((m, i): [number, number] => [x(i), y(of(m))]),
-    [100, y(of(months[n - 1]))],
-  ];
-  // Monotone: smooth, and never dips below a month's own value.
-  const curve = line().curve(curveMonotoneX);
-  const fill = area().y0(100).curve(curveMonotoneX);
-  const income = points((m) => m.income);
-  const outcome = points((m) => m.outcome);
-
-  const at = months[active];
-  // The marker rides the line the view is about: money in, unless only money out shows.
-  const marked = showIncome ? at.income : at.outcome;
-  const color = showIncome ? IN : OUT;
-  const left = `${x(active)}%`;
-  const top = `${y(marked)}%`;
-
+/** "+12% vs last month", green or red; nothing without a last month to compare with. */
+function Change({ now, before, label }: { now: number; before: number; label: string }) {
+  if (before <= 0) return null;
+  const change = Math.round(((now - before) / before) * 100);
   return (
-    <figure className="-mx-5 mt-4 sm:-mx-6">
-      <div className="relative h-44">
-        <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden className="absolute inset-0 h-full w-full">
-          <defs>
-            <linearGradient id="card-income-fill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0" stopColor={IN} stopOpacity="0.28" />
-              <stop offset="1" stopColor={IN} stopOpacity="0" />
-            </linearGradient>
-          </defs>
-          {showIncome ? <path d={fill(income) ?? undefined} fill="url(#card-income-fill)" /> : null}
-          {showOutcome ? <path d={curve(outcome) ?? undefined} fill="none" stroke={OUT} strokeWidth={2} strokeDasharray="5 4" strokeLinecap="round" vectorEffect="non-scaling-stroke" /> : null}
-          {showIncome ? <path d={curve(income) ?? undefined} fill="none" stroke={IN} strokeWidth={2} strokeLinecap="round" vectorEffect="non-scaling-stroke" /> : null}
+    <p className="text-xs text-muted">
+      <span className={`font-semibold ${change >= 0 ? "text-success-600 dark:text-success-500" : "text-error-600 dark:text-error-500"}`}>
+        {change >= 0 ? "+" : "−"}
+        {Math.abs(change)}%
+      </span>{" "}
+      {label}
+    </p>
+  );
+}
+
+/** What came in against what went out over the months shown: a ring, what's left in its middle. */
+function InAndOut({ income, outcome, span }: { income: number; outcome: number; span: string }) {
+  const money = useMoney();
+  const total = income + outcome;
+  // A ring of circumference 100, so a share is its own dash length.
+  const r = 100 / (2 * Math.PI);
+  const share = total > 0 ? (income / total) * 100 : 0;
+  const gap = income > 0 && outcome > 0 ? 1.5 : 0;
+  const kept = income - outcome;
+  return (
+    <section className={TILE}>
+      <TileHead icon={<PaymentIcon className="h-5 w-5" />} title="In and out" aside={<Pill className="border-border">{span}</Pill>} />
+      <div className="relative mx-auto mt-6 aspect-square w-full max-w-[13rem]">
+        <svg viewBox="0 0 40 40" className="h-full w-full -rotate-90" aria-hidden>
+          <circle cx="20" cy="20" r={r} fill="none" strokeWidth="3.2" className="stroke-gray-100 dark:stroke-white/10" />
+          {outcome > 0 ? (
+            <circle cx="20" cy="20" r={r} fill="none" strokeWidth="3.2" strokeLinecap="round" className="stroke-gray-400" strokeDasharray={`${Math.max(0, 100 - share - 2 * gap)} 100`} strokeDashoffset={-(share + gap)} />
+          ) : null}
+          {income > 0 ? <circle cx="20" cy="20" r={r} fill="none" strokeWidth="3.2" strokeLinecap="round" className="stroke-brand-500" strokeDasharray={`${share} 100`} /> : null}
         </svg>
-        <span
-          aria-hidden
-          className="pointer-events-none absolute inset-y-0 w-9 -translate-x-1/2 opacity-20 transition-[left] duration-200"
-          style={{ left, backgroundImage: `linear-gradient(to bottom, transparent, ${color}, transparent)` }}
-        />
-        <span
-          aria-hidden
-          className="pointer-events-none absolute h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-surface transition-[left,top] duration-200 dark:border-gray-950"
-          style={{ left, top, backgroundColor: color }}
-        />
-        <span
-          className="pointer-events-none absolute -translate-x-1/2 -translate-y-[calc(100%+0.9rem)] whitespace-nowrap rounded-full px-3 py-1 text-sm font-semibold text-white transition-[left,top] duration-200 dark:text-gray-950"
-          style={{ left: `clamp(3.5rem, ${left}, calc(100% - 3.5rem))`, top, backgroundColor: color }}
-        >
-          {money(marked)}
-        </span>
-        <div className="absolute inset-0 flex">
-          {months.map((m, i) => (
-            <button
-              key={m.month}
-              type="button"
-              aria-label={`${monthName(m.month)}: ${money(m.income)} in, ${money(m.outcome)} out`}
-              aria-pressed={i === active}
-              onMouseEnter={() => setActive(i)}
-              onFocus={() => setActive(i)}
-              onClick={() => setActive(i)}
-              className="h-full flex-1 focus-visible:bg-foreground/5 focus-visible:outline-none"
-            />
-          ))}
+        <div className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center">
+          <p className="max-w-full truncate text-xl font-bold tnum sm:text-2xl">{money(Math.abs(kept))}</p>
+          <p className="mt-0.5 text-xs text-muted">{kept >= 0 ? "Kept" : "More out than in"}</p>
         </div>
       </div>
-      <div aria-hidden className="mt-2 flex text-sm">
-        {months.map((m, i) => (
-          <span key={m.month} className={`flex-1 text-center ${i === active ? "font-semibold text-brand-600 dark:text-brand-400" : "text-muted"}`}>
-            {monthName(m.month)}
-          </span>
-        ))}
-      </div>
-      <figcaption className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 px-5 text-xs text-muted sm:px-6">
-        {showIncome ? (
-          <span className="inline-flex items-center gap-1.5">
-            <span aria-hidden className="h-0.5 w-4 rounded-full" style={{ backgroundColor: IN }} />
+      <dl className="mt-6 grid grid-cols-2 gap-3 text-sm">
+        <div className="min-w-0">
+          <dt className="flex items-center gap-2 text-xs text-muted">
+            <span aria-hidden className="h-2 w-2 rounded-full bg-brand-500" />
             Money in
-          </span>
-        ) : null}
-        {showOutcome ? (
-          <span className="inline-flex items-center gap-1.5">
-            <span aria-hidden className="w-4 border-t-2 border-dashed" style={{ borderColor: OUT }} />
+          </dt>
+          <dd className="mt-1 truncate font-semibold tnum">{money(income)}</dd>
+        </div>
+        <div className="min-w-0">
+          <dt className="flex items-center gap-2 text-xs text-muted">
+            <span aria-hidden className="h-2 w-2 rounded-full bg-gray-400" />
             Money out
-          </span>
-        ) : null}
-        <span className="ml-auto tabular-nums text-foreground">
-          {monthName(at.month)}: {money(at.income)} in · {money(at.outcome)} out
-        </span>
-      </figcaption>
-    </figure>
+          </dt>
+          <dd className="mt-1 truncate font-semibold tnum">{money(outcome)}</dd>
+        </div>
+      </dl>
+    </section>
   );
 }
 
-function Tile({ label, amount, color }: { label: string; amount: number; color: string }) {
+/** Money in this month, then each month's beside a bar, the latest first. */
+function MoneyIn({ months }: { months: BusinessCardMonth[] }) {
+  const money = useMoney();
+  const now = months[months.length - 1];
+  const before = months[months.length - 2];
+  const top = Math.max(1, ...months.map((m) => m.income));
   return (
-    <div className="rounded-3xl bg-gray-50 p-4 dark:bg-white/[0.07]">
-      <span aria-hidden className="flex h-10 w-10 items-center justify-center rounded-full text-white dark:text-gray-950" style={{ backgroundColor: color }}>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="h-5 w-5">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M3 8.5h18M5.5 5h13A2.5 2.5 0 0 1 21 7.5v9a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 16.5v-9A2.5 2.5 0 0 1 5.5 5Z" />
-        </svg>
-      </span>
-      <BigMoney amount={amount} className="mt-4 text-xl" />
-      <p className="mt-1 text-xs text-muted">{label}</p>
-    </div>
-  );
-}
-
-/** "+12.5% ↑ Income was up on last month", when there's a last month to compare with. */
-function Change({ months }: { months: BusinessCardMonth[] }) {
-  const now = months[months.length - 1].income;
-  const before = months[months.length - 2]?.income ?? 0;
-  if (before <= 0) return null;
-  const change = ((now - before) / before) * 100;
-  const up = change >= 0;
-  return (
-    <div className="mt-3 rounded-3xl bg-brand-100 px-5 py-4 text-brand-950">
-      <p className="text-2xl font-semibold tabular-nums">
-        {up ? "+" : "−"}
-        {Math.abs(change).toFixed(1)}% <span aria-hidden>{up ? "↑" : "↓"}</span>
-      </p>
-      <p className="text-sm font-medium">Income was {up ? "up" : "down"} on last month</p>
-    </div>
+    <section className={TILE}>
+      <TileHead icon={<AccountsIcon className="h-5 w-5" />} title="Money in" aside={<Pill className="border-border">{monthName(now.month)}</Pill>} />
+      <p className="mt-6 truncate text-3xl font-bold tnum sm:text-4xl">{money(now.income)}</p>
+      <div className="mt-1 min-h-4">
+        <Change now={now.income} before={before?.income ?? 0} label="vs last month" />
+      </div>
+      <ul className="mt-5 space-y-3.5">
+        {[...months].reverse().map((m) => {
+          const current = m === now;
+          return (
+            <li key={m.month}>
+              <div className="flex items-baseline justify-between gap-3 text-xs">
+                <span className={current ? "font-semibold" : "text-muted"}>{monthName(m.month)}</span>
+                <span className={`tnum ${current ? "font-semibold" : "text-muted"}`}>{money(m.income)}</span>
+              </div>
+              <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-gray-100 dark:bg-white/10">
+                <div className={`h-full rounded-full ${current ? "bg-brand-500" : "bg-gray-300 dark:bg-white/25"}`} style={{ width: `${(m.income / top) * 100}%` }} />
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
   );
 }
 
 export function BusinessCardAnalytics({
-  business,
   card,
   owner,
 }: {
-  business: { id: string; name: string };
   card: BusinessCardView;
   /** The owner looking at it: their Aming card sits beside the business's, and they can move money. */
-  owner?: { clientId: string; name: string; amingBalance: number; phone: string | null };
+  owner?: { name: string; amingBalance: number; phone: string | null };
 }) {
   const router = useRouter();
-  const [selected, setSelected] = useState<CardName>("business");
-  const [view, setView] = useState<View>("all");
+  const money = useMoney();
   const [sheet, setSheet] = useState<"transfer" | "withdraw" | null>(null);
   const income = card.months.reduce((sum, m) => sum + m.income, 0);
   const outcome = card.months.reduce((sum, m) => sum + m.outcome, 0);
-  const rows = card.entries.filter((e) => view === "all" || (view === "income" ? e.amount > 0 : e.amount < 0)).map(businessRow);
-
-  const faces: CardFace[] = [
-    { card: "business", name: "Business card", holder: business.name, balance: card.balance, tail: cardTail(business.id) },
-    ...(owner ? [{ card: "aming" as const, name: "Aming card", holder: owner.name, balance: owner.amingBalance, tail: cardTail(owner.clientId) }] : []),
-  ];
+  const span = `${card.months.length} month${card.months.length === 1 ? "" : "s"}`;
+  const now = card.months[card.months.length - 1];
+  const before = card.months[card.months.length - 2];
 
   return (
     <div className="space-y-4">
-      <CardsPanel
-        faces={faces}
-        selected={selected}
-        onSelect={setSelected}
-        actions={
-          owner ? (
-            <>
-              <ActionPill icon="out" onClick={() => setSheet("transfer")}>
-                Transfer
-              </ActionPill>
-              {selected === "business" ? (
-                <ActionPill icon="in" onClick={() => setSheet("withdraw")}>
-                  Withdraw
-                </ActionPill>
-              ) : (
-                // Adding funds is on the owner's own wallet page.
-                <ActionPill icon="in" onClick={() => router.push("/payment?add=1")}>
-                  Add funds
-                </ActionPill>
-              )}
-            </>
-          ) : null
-        }
-      />
-      <section aria-label="Business card, month by month" className={`${PANEL} ${CHART_COLORS}`}>
-        <div role="tablist" aria-label="What to show" className="flex flex-wrap gap-2">
-          {VIEWS.map((v) => (
-            <button
-              key={v.key}
-              type="button"
-              role="tab"
-              aria-selected={view === v.key}
-              onClick={() => setView(v.key)}
-              className={`h-11 rounded-full px-5 text-sm font-medium ${
-                view === v.key ? "bg-brand-500 text-white" : "bg-gray-100 hover:bg-gray-200 dark:bg-white/10 dark:hover:bg-white/15"
-              }`}
-            >
-              {v.label}
-            </button>
-          ))}
-        </div>
-        <MonthsChart months={card.months} view={view} />
-        <div className="mt-5 grid grid-cols-2 gap-3">
-          <Tile label={`Total income, ${card.months.length} months`} amount={income} color={IN} />
-          <Tile label={`Total outcome, ${card.months.length} months`} amount={outcome} color={OUT} />
-        </div>
-        <Change months={card.months} />
-        <div className="mt-6">
-          <Transactions
-            key={view}
-            bare
-            title="Transactions History"
-            rows={rows}
-            empty={view === "all" ? "Nothing yet. What your customers pay you in the app lands here." : "Nothing here yet."}
-          />
-        </div>
-        <table className="sr-only">
-          <caption>Money in and out by month</caption>
-          <thead>
-            <tr>
-              <th>Month</th>
-              <th>In</th>
-              <th>Out</th>
-            </tr>
-          </thead>
-          <tbody>
-            {card.months.map((m) => (
-              <tr key={m.month}>
-                <td>{m.month}</td>
-                <td>{m.income}</td>
-                <td>{m.outcome}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </section>
+      <div className="grid gap-4 lg:grid-cols-5">
+        <section aria-label="Business card" className={`${TILE} flex flex-col ${owner ? "lg:col-span-3" : "lg:col-span-5"}`}>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <Pill className="border-border bg-background">Business card</Pill>
+            <p className="text-xs text-muted">Where customers&apos; mobile money lands</p>
+          </div>
+          <p className="mt-8 text-sm text-muted">Balance</p>
+          <p className="mt-1 break-words text-4xl font-bold tracking-tight tnum sm:text-5xl">{money(card.balance)}</p>
+          <div className="mt-2 min-h-4">
+            <Change now={now.income} before={before?.income ?? 0} label="money in vs last month" />
+          </div>
+          {owner ? (
+            <div className="mt-6 flex flex-wrap gap-2 lg:mt-auto lg:pt-6">
+              <Action variant="solid" onClick={() => setSheet("withdraw")}>
+                Withdraw
+              </Action>
+              <Action variant="outline" onClick={() => setSheet("transfer")}>
+                Move to Aming card
+              </Action>
+            </div>
+          ) : null}
+        </section>
+
+        {owner ? (
+          <section aria-label="Aming card" className="relative flex flex-col overflow-hidden rounded-3xl bg-brand-500 p-5 text-white shadow-theme-xs sm:p-6 lg:col-span-2">
+            <span aria-hidden className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/10" />
+            <Pill className="relative self-start border-white/40">Aming card</Pill>
+            <p className="relative mt-8 truncate text-sm text-white/80">Yours, {owner.name}</p>
+            <p className="relative mt-1 break-words text-3xl font-bold tracking-tight tnum sm:text-4xl">{money(owner.amingBalance)}</p>
+            <p className="relative mt-2 text-xs text-white/80">To pay for things on Aming.</p>
+            <div className="relative mt-6 flex flex-wrap gap-2 lg:mt-auto lg:pt-6">
+              {/* Adding funds is on the owner's own wallet page. */}
+              <Action variant="onBrand" onClick={() => router.push("/payment?add=1")}>
+                Add funds
+              </Action>
+            </div>
+          </section>
+        ) : null}
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <InAndOut income={income} outcome={outcome} span={span} />
+        <MoneyIn months={card.months} />
+        <section className={`${TILE} min-w-0 md:col-span-2 lg:col-span-1`}>
+          <TileHead icon={<HistoryIcon className="h-5 w-5" />} title="Transactions" />
+          <div className="mt-3">
+            <Transactions bare rows={card.entries.map(businessRow)} empty="Nothing yet. What your customers pay you in the app lands here." />
+          </div>
+        </section>
+      </div>
+
       {owner ? (
         <>
           <Withdrawals withdrawals={card.withdrawals} />
-          {/* Opens going the other way from the chosen card: money leaves the one being looked at. */}
-          <TransferSheet
-            key={`transfer-${selected}`}
-            open={sheet === "transfer"}
-            onClose={() => setSheet(null)}
-            to={selected === "business" ? "aming" : "business"}
-            balances={{ business: card.balance, aming: owner.amingBalance }}
-          />
+          <TransferSheet open={sheet === "transfer"} onClose={() => setSheet(null)} balance={card.balance} />
           <WithdrawSheet open={sheet === "withdraw"} onClose={() => setSheet(null)} balance={card.balance} phone={owner.phone} />
         </>
       ) : null}

@@ -20,34 +20,38 @@ function SlideImage({ slide }: { slide: MarketingSlide }) {
   );
 }
 
+/** One slide, tappable when it has a link (external ones open in a new tab). */
+export function MarketingSlideView({ slide }: { slide: MarketingSlide }) {
+  if (!slide.link_url) {
+    return (
+      <div className="block">
+        <SlideImage slide={slide} />
+      </div>
+    );
+  }
+  return /^https?:\/\//i.test(slide.link_url) ? (
+    <a href={slide.link_url} target="_blank" rel="noopener noreferrer" className="block">
+      <SlideImage slide={slide} />
+    </a>
+  ) : (
+    <Link href={slide.link_url} className="block">
+      <SlideImage slide={slide} />
+    </Link>
+  );
+}
+
 // Width is the caller's call (see apps/client/app/dashboard.tsx, which
-// places this inline alongside the metric cards on desktop) — this just
-// fills whatever box it's given; the image scales by width alone, so its
-// height follows automatically via Carousel's autoHeight.
+// places this in the rail on desktop) — this just fills whatever box it's
+// given; the image scales by width alone, so its height follows
+// automatically via Carousel's autoHeight.
 export function MarketingCarousel({ slides }: { slides: MarketingSlide[] }) {
   if (slides.length === 0) return null;
 
   return (
     <Carousel>
-      {slides.map((slide) => {
-        if (!slide.link_url) {
-          return (
-            <div key={slide.id} className="block">
-              <SlideImage slide={slide} />
-            </div>
-          );
-        }
-        const isExternal = /^https?:\/\//i.test(slide.link_url);
-        return isExternal ? (
-          <a key={slide.id} href={slide.link_url} target="_blank" rel="noopener noreferrer" className="block">
-            <SlideImage slide={slide} />
-          </a>
-        ) : (
-          <Link key={slide.id} href={slide.link_url} className="block">
-            <SlideImage slide={slide} />
-          </Link>
-        );
-      })}
+      {slides.map((slide) => (
+        <MarketingSlideView key={slide.id} slide={slide} />
+      ))}
     </Carousel>
   );
 }
