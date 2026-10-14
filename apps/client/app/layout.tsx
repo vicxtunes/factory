@@ -9,6 +9,7 @@ import { BackHistory } from "@repo/ui/navigation/back";
 import { CurrencySymbolProvider } from "@repo/lib/currency/CurrencySymbolProvider";
 import { DEFAULT_CURRENCY_SYMBOL } from "@repo/lib/currency/format";
 import { fetchBaseCurrencySymbol } from "@repo/lib/queries";
+import { IdleLock } from "./idle-lock";
 import { APP_IDENTITY as app } from "./identity";
 import "./globals.css";
 
@@ -76,6 +77,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
           <NavigationProgress />
           <BackHistory />
           <KeepFresh />
+          <IdleLock />
           <CurrencySymbolProvider symbol={symbol}>{children}</CurrencySymbolProvider>
         </SerwistProvider>
       </body>

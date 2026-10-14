@@ -1,12 +1,11 @@
-import { SectionLabel } from "@repo/ui/SectionLabel";
-
 import { ContinueForm } from "./continue-form";
+import { rememberedClient } from "./remembered-device";
 
-export function AuthGate() {
+export async function AuthGate() {
+  const remembered = await rememberedClient();
   return (
-    <div className="rounded-[var(--radius)] border border-border bg-surface p-6 shadow-theme-sm">
-      <SectionLabel>Client sign-in</SectionLabel>
-      <ContinueForm />
+    <div className="w-full rounded-2xl border border-border bg-surface p-6 shadow-theme-lg">
+      <ContinueForm remembered={remembered && { name: remembered.name, avatarUrl: remembered.avatarUrl, unlockWith: remembered.unlockWith }} />
     </div>
   );
 }
