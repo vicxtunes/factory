@@ -20,7 +20,6 @@ import * as business from "./server/business";
 import * as mobileMoney from "./server/mobile-money";
 import * as service from "./server/service";
 import type {
-  CardName,
   MobileMoneyCollection,
   OrderPaymentState,
   PaymentMethod,
@@ -154,11 +153,11 @@ export async function acceptWalletTerms(): Promise<WalletResult> {
   });
 }
 
-/** Moves `amount` to `to` from the owner's other card. */
-export async function moveMoneyBetweenCards(to: CardName, amount: number): Promise<WalletResult> {
+/** Moves `amount` off the Business card onto the owner's Aming card (never back). */
+export async function moveMoneyToAmingCard(amount: number): Promise<WalletResult> {
   return run(async () => {
     const { tenantId, owner } = await requireBusinessOwner();
-    await business.moveBetweenCards(tenantId, to === "aming" ? "aming" : "business", amount, owner);
+    await business.moveToAmingCard(tenantId, amount, owner);
     refreshMoneyPages();
     revalidatePath("/studio/wallet");
   });

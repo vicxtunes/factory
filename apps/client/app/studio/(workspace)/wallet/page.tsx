@@ -25,7 +25,7 @@ export default async function StudioWalletPage() {
 
 // The card is in shillings, whatever currency the studio bills in. Only the
 // owner moves money off it (to their Aming card, or out to their phone).
-async function Card({ scope, studio, owner }: { scope: TenantScope; studio: { id: string; name: string; ownerClientId: string }; owner: string | null }) {
+async function Card({ scope, studio, owner }: { scope: TenantScope; studio: { ownerClientId: string }; owner: string | null }) {
   const [card, amingBalance, phone] = await Promise.all([
     getBusinessCard(scope.tenantId, scope.timeZone),
     owner ? amingCardBalance(studio.ownerClientId) : 0,
@@ -35,9 +35,8 @@ async function Card({ scope, studio, owner }: { scope: TenantScope; studio: { id
   if (!card.termsAccepted) return <WalletTerms owner={!!owner} />;
   return (
     <BusinessCardAnalytics
-      business={{ id: studio.id, name: studio.name }}
       card={card}
-      owner={owner ? { clientId: studio.ownerClientId, name: owner, amingBalance, phone: phone?.ok ? phone.data : null } : undefined}
+      owner={owner ? { name: owner, amingBalance, phone: phone?.ok ? phone.data : null } : undefined}
     />
   );
 }

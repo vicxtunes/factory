@@ -12,7 +12,7 @@ import { createAdminClient } from "@repo/lib/supabase/admin";
 
 import { HISTORY_LIMIT, MAX_WITHDRAWAL, MIN_WITHDRAWAL, checkAmount, cleanReason } from "../policy";
 import { WALLET_TERMS_VERSION } from "../terms";
-import type { BusinessCardEntry, BusinessCardMonth, BusinessCardView, CardName, PendingWithdrawal, Withdrawal } from "../types";
+import type { BusinessCardEntry, BusinessCardMonth, BusinessCardView, PendingWithdrawal, Withdrawal } from "../types";
 import { WalletError, throwDbError } from "./errors";
 import type { StaffViewer, WalletActor } from "./identity";
 import * as notifier from "./notifier";
@@ -161,15 +161,15 @@ function checkMove(amount: number, min = 1): void {
   if (problem) throw new WalletError(problem);
 }
 
-/** The owner moves money to `to` from their other card. Returns both balances. */
-export async function moveBetweenCards(tenantId: string, to: CardName, amount: number, actor: WalletActor): Promise<{ business: number; aming: number }> {
+/** The owner moves money off the Business card onto their Aming card (never back). Returns both balances. */
+export async function moveToAmingCard(tenantId: string, amount: number, actor: WalletActor): Promise<{ business: number; aming: number }> {
   checkMove(amount);
   // An older version agreed to isn't enough (the database only knows that some version was).
   if (!(await businessTermsAccepted(tenantId))) throw new WalletError(TERMS_FIRST);
-  const { data, error } = await createAdminClient().rpc("wallet_transfer", { p_tenant: tenantId, p_to: to, p_amount: amount, p_note: null, ...actorArgs(actor) });
+  const { data, error } = await createAdminClient().rpc("wallet_transfer", { p_tenant: tenantId, p_amount: amount, p_note: null, ...actorArgs(actor) });
   if (error) {
     if (error.message.includes("WALLET:insufficient_funds")) {
-      throw new WalletError(to === "aming" ? "There isn't that much on your Business card." : "There isn't that much on your Aming card.");
+      throw new WalletError("There isn't that much on your Business card.");
     }
     throwDbError(error);
   }

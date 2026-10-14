@@ -20,6 +20,15 @@ const URGENCY_COLORS: Record<string, string> = {
   Rush: "#f04438",
 };
 
+// Same hues as a status everywhere else (../statusColors.ts), keyed by label.
+const STATUS_COLORS: Record<string, string> = {
+  "Not Started": "#98a2b3",
+  "In Production": "#3b82f6",
+  "Quality Check": "#8b5cf6",
+  Ready: "#22c55e",
+  Delivered: "#667085",
+};
+
 export function StatusBarChart({ data }: { data: { label: string; count: number }[] }) {
   return (
     <ResponsiveContainer width="100%" height={260}>
@@ -83,6 +92,41 @@ export function UrgencyDonutChart({ data }: { data: { label: string; count: numb
           iconType="circle"
           wrapperStyle={{ fontSize: 12, color: "var(--muted)" }}
         />
+        <Tooltip
+          contentStyle={{
+            borderRadius: 8,
+            border: "1px solid var(--border)",
+            background: "var(--surface)",
+            fontSize: 13,
+          }}
+        />
+      </PieChart>
+    </ResponsiveContainer>
+  );
+}
+
+/** Items by status as a pie; statuses with nothing in them are left out. */
+export function StatusPieChart({ data }: { data: { label: string; count: number }[] }) {
+  const shown = data.filter((d) => d.count > 0);
+  return (
+    <ResponsiveContainer width="100%" height={260}>
+      <PieChart>
+        <Pie
+          data={shown}
+          dataKey="count"
+          nameKey="label"
+          outerRadius={92}
+          paddingAngle={shown.length > 1 ? 2 : 0}
+          stroke="var(--surface)"
+          // A lone slice is a whole circle: no seam.
+          strokeWidth={shown.length > 1 ? 2 : 0}
+          isAnimationActive={false}
+        >
+          {shown.map((entry) => (
+            <Cell key={entry.label} fill={STATUS_COLORS[entry.label] ?? "#98a2b3"} />
+          ))}
+        </Pie>
+        <Legend verticalAlign="bottom" iconType="circle" wrapperStyle={{ fontSize: 12, color: "var(--muted)" }} />
         <Tooltip
           contentStyle={{
             borderRadius: 8,

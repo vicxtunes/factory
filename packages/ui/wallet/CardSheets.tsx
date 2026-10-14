@@ -1,7 +1,7 @@
 "use client";
 
-// What a business's owner does with their two cards: move money between
-// them, and take money out of the Business card to their phone.
+// What a business's owner does with their Business card: move money onto
+// their Aming card (one way: never back), and take money out to their phone.
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
@@ -9,35 +9,31 @@ import { useState, useTransition } from "react";
 import { FormSheet } from "@repo/ui/FormSheet";
 import { Button } from "@repo/ui/Button";
 import { Field, TextInput } from "@repo/ui/Field";
-import { moveMoneyBetweenCards, withdrawFromBusinessCard } from "@repo/lib/wallet/actions";
+import { moveMoneyToAmingCard, withdrawFromBusinessCard } from "@repo/lib/wallet/actions";
 import { MAX_WITHDRAWAL, MIN_WITHDRAWAL, localPhone } from "@repo/lib/wallet/policy";
-import type { CardName, Withdrawal } from "@repo/lib/wallet/types";
+import type { Withdrawal } from "@repo/lib/wallet/types";
 
 import { formatWhen, parseAmount, useMoney } from "./shared";
 
-const CARD_NAMES: Record<CardName, string> = { business: "Business card", aming: "Aming card" };
-
-/** Moves money to one card from the other. Opens going to `to`. */
-export function TransferSheet({ open, onClose, to: initial, balances }: { open: boolean; onClose: () => void; to: CardName; balances: Record<CardName, number> }) {
+/** Moves money off the Business card onto the owner's Aming card. */
+export function TransferSheet({ open, onClose, balance }: { open: boolean; onClose: () => void; balance: number }) {
   const router = useRouter();
   const money = useMoney();
-  const [to, setTo] = useState<CardName>(initial);
   const [amount, setAmount] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
-  const from: CardName = to === "aming" ? "business" : "aming";
   const value = parseAmount(amount);
-  const tooMuch = value > balances[from];
+  const tooMuch = value > balance;
 
   return (
-    <FormSheet open={open} onClose={onClose} title="Transfer between your cards">
+    <FormSheet open={open} onClose={onClose} title="Move to your Aming card">
       <form
         className="space-y-4"
         onSubmit={(e) => {
           e.preventDefault();
           setError(null);
           start(async () => {
-            const res = await moveMoneyBetweenCards(to, value);
+            const res = await moveMoneyToAmingCard(value);
             if (!res.ok) return setError(res.error);
             setAmount("");
             onClose();
@@ -45,28 +41,14 @@ export function TransferSheet({ open, onClose, to: initial, balances }: { open: 
           });
         }}
       >
-        <div role="radiogroup" aria-label="Which way" className="grid grid-cols-2 gap-2">
-          {(["aming", "business"] as const).map((card) => (
-            <button
-              key={card}
-              type="button"
-              role="radio"
-              aria-checked={to === card}
-              onClick={() => setTo(card)}
-              className={`rounded-xl border p-3 text-left ${to === card ? "border-brand-500 bg-brand-50 dark:bg-brand-500/10" : "border-border bg-background"}`}
-            >
-              <span className="block text-xs text-muted">To</span>
-              <span className="block text-sm font-medium">{CARD_NAMES[card]}</span>
-            </button>
-          ))}
-        </div>
-        <Field label="Amount" hint={`From your ${CARD_NAMES[from]}: ${money(balances[from])} on it.`}>
+        <p className="text-sm text-muted">From your Business card to your Aming card, to pay for things on Aming. It can&apos;t be moved back.</p>
+        <Field label="Amount" hint={`${money(balance)} on your Business card.`}>
           <TextInput inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="e.g. 50000" required />
         </Field>
-        {tooMuch ? <p className="text-sm text-error-600 dark:text-error-400">That&apos;s more than your {CARD_NAMES[from]} holds.</p> : null}
+        {tooMuch ? <p className="text-sm text-error-600 dark:text-error-400">That&apos;s more than your Business card holds.</p> : null}
         {error ? <p className="text-sm text-error-600 dark:text-error-400">{error}</p> : null}
         <Button type="submit" className="w-full" loading={pending} disabled={pending || !(value > 0) || tooMuch}>
-          Transfer{value > 0 ? ` ${money(value)}` : ""}
+          Move{value > 0 ? ` ${money(value)}` : ""}
         </Button>
       </form>
     </FormSheet>
@@ -150,8 +132,8 @@ export function Withdrawals({ withdrawals }: { withdrawals: Withdrawal[] }) {
   const money = useMoney();
   if (withdrawals.length === 0) return null;
   return (
-    <section className="rounded-[1.75rem] border border-border bg-surface p-5 shadow-theme-xs">
-      <h3 className="text-base font-semibold">Withdrawals</h3>
+    <section className="rounded-3xl border border-border bg-surface p-5 shadow-theme-xs sm:p-6">
+      <h2 className="text-base font-semibold">Withdrawals</h2>
       <ul className="mt-1 divide-y divide-border">
         {withdrawals.map((w) => (
           <li key={w.id} className="flex items-start justify-between gap-3 py-3">

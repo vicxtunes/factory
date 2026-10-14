@@ -11,7 +11,7 @@ import { Button } from "@repo/ui/Button";
 import { acceptWalletTerms } from "@repo/lib/wallet/actions";
 import { WALLET_TERMS } from "@repo/lib/wallet/terms";
 
-import { PANEL } from "./MoneyCards";
+import { TILE } from "./MoneyCards";
 
 export function WalletTerms({ owner }: { owner: boolean }) {
   const router = useRouter();
@@ -20,7 +20,7 @@ export function WalletTerms({ owner }: { owner: boolean }) {
   const [pending, start] = useTransition();
 
   return (
-    <section aria-labelledby="wallet-terms" className={PANEL}>
+    <section aria-labelledby="wallet-terms" className={TILE}>
       <h2 id="wallet-terms" className="text-xl font-semibold">
         Wallet terms
       </h2>

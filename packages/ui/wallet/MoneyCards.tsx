@@ -1,154 +1,46 @@
 "use client";
 
-// The two cards a wallet screen is built around (packages/lib/wallet/README.md
-// → "Two cards"): the panel with the total, the actions and the cards to pick
-// from, and the list of a card's latest transactions under it. The panel
-// follows the theme: light on a light screen, dark on a dark one.
+// The pieces the wallet screens are built from (packages/lib/wallet/README.md
+// → "Two cards"): the dashboard tiles the Wallet pages are laid out in, and a
+// card's latest transactions.
 
-import { useRef, useState, type ReactNode } from "react";
-import type { Swiper as SwiperInstance } from "swiper";
-import { Swiper, SwiperSlide } from "swiper/react";
-
-import "swiper/css";
-
-import type { CardName } from "@repo/lib/wallet/types";
+import { useState, type ReactNode } from "react";
 
 import { useMoney } from "./shared";
 
-/**
- * The two cards' colors, from the theme: the Business card is the brand color
- * (Aming's orange, or the business's own in its workspace), the Aming card
- * its pale tint.
- */
-const SKINS: Record<CardName, string> = { business: "bg-brand-500 text-white", aming: "bg-brand-100 text-brand-950" };
+/** A tile on a Wallet page, laid out as a banking dashboard (design/ in the repo root). */
+export const TILE = "rounded-3xl border border-border bg-surface p-5 shadow-theme-xs sm:p-6";
 
-export interface CardFace {
-  card: CardName;
-  /** "Business card" / "Aming card". */
-  name: string;
-  /** Whose it is: the business, or the person. */
-  holder: string;
-  balance: number;
-  /** The four characters after the dots: decoration, from the holder's own id. */
-  tail: string;
-}
-
-/** The last four characters of an id, for a card's face. */
-export function cardTail(id: string): string {
-  return id.replace(/[^0-9a-z]/gi, "").slice(-4).toUpperCase();
-}
-
-/** An amount with its currency quieter than its figure: "UGX" dim, "367,289" bright. */
-export function BigMoney({ amount, className = "" }: { amount: number; className?: string }) {
-  const money = useMoney();
-  const [symbol, ...figure] = money(amount).split(" ");
+/** A tile's heading: a round icon, the title, and something small at the right. */
+export function TileHead({ icon, title, aside }: { icon: ReactNode; title: string; aside?: ReactNode }) {
   return (
-    <p className={`font-semibold tabular-nums tracking-tight ${className}`}>
-      {figure.join(" ")}
-      <span className="ml-1.5 text-[0.55em] font-medium opacity-50">{symbol}</span>
-    </p>
+    <div className="flex items-center justify-between gap-3">
+      <div className="flex items-center gap-3">
+        <span aria-hidden className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border">
+          {icon}
+        </span>
+        <h2 className="text-base font-semibold">{title}</h2>
+      </div>
+      {aside}
+    </div>
   );
 }
 
-/** A card's face. With `onSelect` it's a button, dimmed while another card is the chosen one. */
-export function MoneyCard({ face, selected = true, onSelect }: { face: CardFace; selected?: boolean; onSelect?: () => void }) {
-  const money = useMoney();
-  const body = (
-    <>
-      <span aria-hidden className="absolute -bottom-28 -right-16 h-72 w-72 rounded-full bg-white/15" />
-      <span aria-hidden className="absolute -bottom-20 -right-8 h-52 w-52 rounded-full bg-white/15" />
-      <span className="relative flex items-start justify-between">
-        <span aria-hidden className="block h-4 w-14 rounded-[3px] bg-current" />
-        <span className="text-xs font-semibold">{face.name}</span>
-      </span>
-      <span className="relative mt-7 block whitespace-nowrap text-lg font-semibold tracking-[0.12em]">
-        <span aria-hidden>**** **** **** </span>
-        {face.tail}
-      </span>
-      <span className="relative mt-5 flex items-end justify-between gap-3">
-        <span className="shrink-0">
-          <span className="block text-[11px] font-medium opacity-70">Balance</span>
-          <span className="block text-xl font-semibold tabular-nums">{money(face.balance)}</span>
-        </span>
-        <span className="min-w-0 text-right">
-          <span className="block text-[11px] font-medium opacity-70">Held by</span>
-          <span className="block truncate text-sm font-semibold">{face.holder}</span>
-        </span>
-      </span>
-    </>
-  );
-  const shape = `relative block h-[11.75rem] w-full overflow-hidden rounded-[1.6rem] p-5 text-left transition-opacity duration-300 ${SKINS[face.card]}`;
-  return onSelect ? (
-    <button type="button" aria-pressed={selected} onClick={onSelect} className={`${shape} ${selected ? "" : "opacity-60 hover:opacity-80"}`}>
-      {body}
-    </button>
-  ) : (
-    <div className={shape}>{body}</div>
-  );
+export function Pill({ children, className = "" }: { children: ReactNode; className?: string }) {
+  return <span className={`inline-flex h-8 shrink-0 items-center rounded-full border px-3 text-xs font-medium ${className}`}>{children}</span>;
 }
 
-/** The panel's ground in each mode: the surface with a wash of the brand color, or near-black. */
-export const PANEL =
-  "overflow-hidden rounded-[2rem] border border-border bg-surface bg-[radial-gradient(120%_60%_at_0%_0%,var(--color-brand-50)_0%,transparent_60%)] p-5 text-foreground shadow-theme-xs sm:p-6 dark:border-white/10 dark:bg-gray-950 dark:bg-[radial-gradient(120%_60%_at_0%_0%,var(--color-gray-800)_0%,var(--color-gray-950)_60%)] dark:shadow-none";
-
-/** A round-iconed pill on the panel: Transfer, Add funds, Withdraw. */
-export function ActionPill({ icon, children, onClick }: { icon: "out" | "in"; children: ReactNode; onClick: () => void }) {
+/** A tile's button: brand-filled, outlined, or pale on a brand-colored tile. */
+export function Action({ variant, onClick, children }: { variant: "solid" | "outline" | "onBrand"; onClick: () => void; children: ReactNode }) {
+  const look = {
+    solid: "bg-brand-500 text-white hover:bg-brand-600",
+    outline: "border border-border bg-surface hover:bg-background",
+    onBrand: "bg-white/20 text-white hover:bg-white/30",
+  }[variant];
   return (
-    <button type="button" onClick={onClick} className="inline-flex h-12 items-center gap-2.5 rounded-full bg-gray-100 pl-2 pr-5 text-sm font-medium hover:bg-gray-200 dark:bg-white/10 dark:hover:bg-white/15">
-      <span aria-hidden className="flex h-8 w-8 items-center justify-center rounded-full border border-gray-300 dark:border-white/40">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className={`h-4 w-4 ${icon === "in" ? "rotate-180" : ""}`}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M7 17 17 7M9 7h8v8" />
-        </svg>
-      </span>
+    <button type="button" onClick={onClick} className={`inline-flex h-11 items-center justify-center rounded-full px-5 text-sm font-semibold ${look}`}>
       {children}
     </button>
-  );
-}
-
-/**
- * The panel: everything held, the actions for the chosen card, and the
- * cards side by side. Swiping to a card chooses it, and so does tapping it.
- * With one card there's nothing to choose.
- */
-export function CardsPanel({
-  greeting,
-  faces,
-  selected,
-  onSelect,
-  actions,
-}: {
-  greeting?: ReactNode;
-  faces: CardFace[];
-  selected: CardName;
-  onSelect: (card: CardName) => void;
-  actions: ReactNode;
-}) {
-  const total = faces.reduce((sum, f) => sum + f.balance, 0);
-  const swiper = useRef<SwiperInstance | null>(null);
-  return (
-    <section aria-label="Your cards" className={PANEL}>
-      {greeting}
-      <p className="text-sm text-muted">Total balance</p>
-      <BigMoney amount={total} className="mt-1 text-[2.6rem] leading-none" />
-      <div className="mt-5 flex flex-wrap gap-3">{actions}</div>
-      <p className="mt-7 text-sm font-medium">{faces.length > 1 ? "My Cards" : "My Card"}</p>
-      {/* Out to the panel's edges, so the next card shows at the side. */}
-      <Swiper
-        className="!-mx-5 mt-3 !px-5 sm:!-mx-6 sm:!px-6"
-        slidesPerView="auto"
-        spaceBetween={16}
-        speed={450}
-        initialSlide={Math.max(0, faces.findIndex((f) => f.card === selected))}
-        onSwiper={(sw) => (swiper.current = sw)}
-        onSlideChange={(sw) => onSelect(faces[sw.activeIndex].card)}
-      >
-        {faces.map((face, i) => (
-          <SwiperSlide key={face.card} className="!w-[88%] max-w-[19.5rem]">
-            <MoneyCard face={face} selected={face.card === selected} onSelect={faces.length > 1 ? () => swiper.current?.slideTo(i) : undefined} />
-          </SwiperSlide>
-        ))}
-      </Swiper>
-    </section>
   );
 }
 
@@ -169,16 +61,16 @@ const shortDay = (iso: string) => new Date(iso).toLocaleDateString(undefined, { 
 const LATEST = 5;
 
 /** A card's transactions: the latest few, then all of them. `bare` sits on the panel, without a card of its own. */
-export function Transactions({ title, rows, empty, bare = false }: { title: string; rows: TransactionRow[]; empty: string; bare?: boolean }) {
+export function Transactions({ title, rows, empty, bare = false }: { title?: string; rows: TransactionRow[]; empty: string; bare?: boolean }) {
   const money = useMoney();
   const [all, setAll] = useState(false);
   const shown = all ? rows : rows.slice(0, LATEST);
   return (
     <section className={bare ? "" : "rounded-[1.75rem] border border-border bg-surface p-5 shadow-theme-xs"}>
       <div className="flex items-center justify-between gap-3">
-        <h3 className="text-base font-semibold">{title}</h3>
+        {title ? <h3 className="text-base font-semibold">{title}</h3> : null}
         {rows.length > LATEST ? (
-          <button type="button" onClick={() => setAll(!all)} className="text-sm text-muted hover:underline">
+          <button type="button" onClick={() => setAll(!all)} className="ml-auto text-sm text-muted hover:underline">
             {all ? "Show fewer" : "See all"}
           </button>
         ) : null}

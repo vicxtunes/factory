@@ -182,6 +182,11 @@ function StudioHomeBar({ nav }: { nav: StudioNavSection[] }) {
   return <HomeBar tabs={tabs} more={more} logout={logoutClient} afterLogout="/" />;
 }
 
+// Pages built around a kanban board: the full width of the screen, the board
+// out to its edges (past the page's padding) so no column is cut off by a margin.
+const BOARD_PAGES = ["/studio/projects", "/studio/tasks"];
+const BOARD_BLEED = "[&_[data-kanban]]:-mx-4 [&_[data-kanban]]:px-4 sm:[&_[data-kanban]]:-mx-6 sm:[&_[data-kanban]]:px-6";
+
 /**
  * My Studio's own frame: the studio's workflow only, apart from the Aming
  * marketplace (which keeps ClientShell). "Back to Aming" returns there.
@@ -202,13 +207,14 @@ export function StudioShell({
   children: React.ReactNode;
 }) {
   const nav = studioNavFor(access);
+  const wide = BOARD_PAGES.includes(usePathname());
   return (
     <div className="min-h-screen">
       <StudioSidebar brand={brand} nav={nav} switcher={switcher} />
       <div className="flex min-h-screen flex-col md:pl-64">
         <StudioTopbar brand={brand} user={user} owner={access.owner} />
         <main className="flex-1 bg-background px-4 py-6 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:px-6 md:pb-6">
-          <div className="mx-auto max-w-5xl space-y-4">
+          <div className={`space-y-4 ${wide ? BOARD_BLEED : "mx-auto max-w-5xl"}`}>
             {switcher ? <div className="-mx-4 -mt-6 sm:-mx-6 md:hidden">{switcher}</div> : null}
             {children}
           </div>

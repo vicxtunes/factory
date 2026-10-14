@@ -79,9 +79,11 @@ A client who owns a business has two cards, each with its own balance and its ow
   (halves up). The card is credited the whole payment and the fee comes off as its own row (kind
   `fee`, once per prompt), so the history shows both. The rate is in `provider_collection_settle()`;
   `COLLECTION_FEE_PERCENT` only words it. Top-ups to the owner's own card carry no fee.
-- **Transfer** (`wallet_transfer()`): the owner moves money between their two cards, either way, in
-  one transaction. The Business card's row is `transfer_in` / `transfer_out`; the Aming card's is a
-  ledger row of kind `transfer`. Neither card can go below zero.
+- **Transfer** (`wallet_transfer()`): the owner moves money off the Business card onto their Aming
+  card, in one transaction. One way only: money never moves from the Aming card to the Business card
+  (since `20261027100000_one_way_transfer.sql`; older `transfer_in` rows stay in the history). The
+  Business card's row is `transfer_out`; the Aming card's is a ledger row of kind `transfer`. The
+  Business card can't go below zero.
 - **Withdraw** (`business_withdraw_request()`): the owner asks for money from the Business card on
   an MTN / Airtel number, UGX 500 to 5,000,000 at a time (HivePay's limits) and never more than the
   card holds. It leaves the card at once and waits for staff (migration `20261026100000`):
@@ -119,10 +121,11 @@ A client who owns a business has two cards, each with its own balance and its ow
 - **When the cards were split** (migration `20261023100000`), what each business's customers had
   already paid moved from its owner's wallet to its Business card, as far as it was still there.
 
-Screens: `/payment` shows both cards on one panel (`packages/ui/wallet/WalletHome.tsx`: total,
-Transfer, Add funds or Withdraw, the chosen card's latest transactions); `/studio/wallet` is the
-Business card (`BusinessCardAnalytics.tsx`: balance, money in and out by month, history,
-withdrawals).
+Screens, both laid out as a banking dashboard (`design/` in the repo root): `/payment` is the
+client's Aming card (`packages/ui/wallet/ClientWallet.tsx`: balance and Add funds, latest
+transactions, what they owe and deposits waiting); `/studio/wallet` is the Business card
+(`BusinessCardAnalytics.tsx`: balance with Withdraw and Move to Aming card, the owner's Aming card
+beside it, money in and out by month, history, withdrawals).
 
 ## Layout
 

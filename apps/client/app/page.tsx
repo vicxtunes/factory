@@ -5,7 +5,8 @@ import { OwingBanner } from "@repo/ui/invoices/OwingBanner";
 import { WalletSummaryCard } from "@repo/ui/wallet/WalletSummaryCard";
 import { getClientSession } from "@repo/lib/auth/session";
 import { getMyOwing } from "@repo/lib/invoices/actions";
-import { fetchClientItems, fetchMarketingSlides } from "@repo/lib/queries";
+import { isOptionCategory } from "@repo/lib/catalog-options";
+import { fetchClientItems, fetchMarketingSlides, fetchProductCatalog } from "@repo/lib/queries";
 import { STUDIOS_ENABLED } from "@repo/lib/studios/feature";
 import { getMyWalletSummary } from "@repo/lib/wallet/actions";
 
@@ -52,29 +53,37 @@ export default async function ClientSidePage({
           </div>
         }
       >
-        <Home client={{ id: session.client_id, name: session.name }} />
+        <Home client={{ id: session.client_id, name: session.name, avatarUrl: session.avatarUrl }} />
       </Loading>
     </ClientShell>
   );
 }
 
-async function Home({ client }: { client: { id: string; name: string } }) {
-  const [items, slides, wallet, owing] = await Promise.all([
+async function Home({ client }: { client: { id: string; name: string; avatarUrl: string | null } }) {
+  const [items, slides, catalog, wallet, owing] = await Promise.all([
     fetchClientItems(client.id),
     fetchMarketingSlides(true),
+    fetchProductCatalog(true),
     getMyWalletSummary(),
     // Like the wallet: if it can't load, the home screen still works without it.
     getMyOwing().catch(() => null),
   ]);
+  // Aming's products (not the packaging and lamination options), the ones with a picture first.
+  const products = catalog
+    .filter((c) => !isOptionCategory(c))
+    .flatMap((c) => c.products.map((product) => ({ product, category: c.name })))
+    .sort((a, b) => Number(!!b.product.display_image_url) - Number(!!a.product.display_image_url));
   return (
     <div className="space-y-6">
       {owing ? <OwingBanner owing={owing} /> : null}
       {/* Cancelled orders aren't work in progress — keep them out of the stats. */}
       <ClientDashboard
+        client={client}
         items={items.filter((i) => !i.order.cancelled_at)}
         slides={slides}
-        // If the wallet can't load, the home screen still works — it just has no balance card.
-        wallet={wallet.ok ? <WalletSummaryCard summary={wallet.data} client={client} /> : null}
+        products={products}
+        // If the wallet can't load, the home screen still works — it just has no balance tile.
+        wallet={wallet.ok ? <WalletSummaryCard summary={wallet.data} /> : null}
       />
     </div>
   );
