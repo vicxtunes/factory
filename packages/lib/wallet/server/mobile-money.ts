@@ -277,7 +277,10 @@ async function reconcile(row: repo.CollectionRow): Promise<repo.CollectionRow> {
 }
 
 async function announce(row: repo.CollectionRow): Promise<void> {
-  if (row.product_request_id) return notifier.studioCustomerPaid(row.client_id, row.amount);
+  // A business's customer: the owner hears it's on their Business card.
+  if (row.product_request_id) return notifier.studioCustomerPaid(row.client_id, row.amount, "an order");
+  if (row.booking_id) return notifier.studioCustomerPaid(row.client_id, row.amount, "a booking");
+  if (row.billing_document_id) return notifier.studioCustomerPaid(row.client_id, row.amount, "an invoice");
   if (row.order_ids) return notifier.mobileMoneyReceivedForInvoices(row.client_id, row.amount, row.order_ids.length);
   const order = row.order_id ? await directory.loadOrder(row.order_id) : null;
   await notifier.mobileMoneyReceived(row.client_id, row.amount, order?.orderNo ?? null);

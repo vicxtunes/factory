@@ -9,16 +9,47 @@ import { revalidatePath } from "next/cache";
 
 import { parseInput, type Result } from "@repo/lib/kernel/core";
 import { runAction } from "@repo/lib/kernel/server/action";
+import { notifyActor } from "@repo/lib/push/send";
+import { createAdminClient } from "@repo/lib/supabase/admin";
+import type { TenantScope } from "@repo/lib/tenancy/types";
 import { studioOfCaller } from "@repo/lib/studios/server";
 import { canUse } from "@repo/lib/team/core";
 
 import { taskIdSchema, taskInputSchema, taskStatusSchema } from "./core";
 import { tasks } from "./server";
 
+/**
+ * The team member a task was just given to hears about it, on the account
+ * they joined with (one who hasn't joined has nowhere to hear it). Best
+ * effort: the task stands either way.
+ */
+async function tellAssignee(scope: TenantScope, assigneeId: string | null, title: string, studioName: string): Promise<void> {
+  if (!assigneeId) return;
+  try {
+    const { data } = await createAdminClient()
+      .from("team_members")
+      .select("client_id")
+      .eq("tenant_id", scope.tenantId)
+      .eq("id", assigneeId)
+      .maybeSingle<{ client_id: string | null }>();
+    if (data?.client_id) await notifyActor({ type: "client", id: data.client_id }, { title: `New task from ${studioName}`, body: title, url: "/studio/tasks" });
+  } catch (err) {
+    console.error("tasks: telling the assignee failed:", err);
+  }
+}
+
+/** Who a task is given to now (before an edit changes it). */
+async function assigneeOf(scope: TenantScope, taskId: string): Promise<string | null> {
+  const { data } = await createAdminClient().from("tasks").select("assignee_id").eq("tenant_id", scope.tenantId).eq("id", taskId).maybeSingle<{ assignee_id: string | null }>();
+  return data?.assignee_id ?? null;
+}
+
 export async function createTask(input: unknown): Promise<Result<string>> {
   return runAction("tasks", async () => {
-    const { scope } = await studioOfCaller("projects");
-    const id = await tasks.create(scope, parseInput(taskInputSchema, input));
+    const { scope, studio } = await studioOfCaller("projects");
+    const task = parseInput(taskInputSchema, input);
+    const id = await tasks.create(scope, task);
+    await tellAssignee(scope, task.assigneeId, task.title, studio.name);
     revalidatePath("/studio", "layout");
     return id;
   });
@@ -26,8 +57,13 @@ export async function createTask(input: unknown): Promise<Result<string>> {
 
 export async function updateTask(id: unknown, input: unknown): Promise<Result> {
   return runAction("tasks", async () => {
-    const { scope } = await studioOfCaller("projects");
-    await tasks.update(scope, parseInput(taskIdSchema, id), parseInput(taskInputSchema, input));
+    const { scope, studio } = await studioOfCaller("projects");
+    const taskId = parseInput(taskIdSchema, id);
+    const task = parseInput(taskInputSchema, input);
+    const before = await assigneeOf(scope, taskId);
+    await tasks.update(scope, taskId, task);
+    // Told only when it's given to someone new.
+    if (task.assigneeId !== before) await tellAssignee(scope, task.assigneeId, task.title, studio.name);
     revalidatePath("/studio", "layout");
   });
 }

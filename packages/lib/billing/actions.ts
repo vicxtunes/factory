@@ -19,6 +19,7 @@ import { revalidatePath } from "next/cache";
 import { bookingIdSchema } from "@repo/lib/bookings/core";
 import { bookings } from "@repo/lib/bookings/server";
 import { parseInput, type Result } from "@repo/lib/kernel/core";
+import { notifyActor } from "@repo/lib/push/send";
 import { runAction } from "@repo/lib/kernel/server/action";
 import { productRequests } from "@repo/lib/product-requests/server";
 import { applyStudioPayment } from "@repo/lib/studio-payments/server";
@@ -84,8 +85,30 @@ export async function respondToQuotation(token: unknown, answer: unknown): Promi
     const response = parseInput(quotationResponseSchema, answer);
     await quotations.respond(link, response);
     if (response.decision === "accept") await bookAccepted(link);
+    await tellOwnerOfAnswer(link);
     revalidatePath(`/q/${link}`);
   });
+}
+
+/** The studio's owner hears how their client answered a quotation (best effort: the answer stands either way). */
+async function tellOwnerOfAnswer(link: string): Promise<void> {
+  try {
+    const found = await quotations.byLink(link);
+    const studio = found ? await studios.get(found.scope.tenantId) : null;
+    if (!found || !studio) return;
+    const q = found.quotation;
+    const accepted = q.status === "accepted";
+    await notifyActor(
+      { type: "client", id: studio.ownerClientId },
+      {
+        title: accepted ? "Quotation accepted" : "Quotation declined",
+        body: `${q.billTo.name} ${accepted ? "accepted" : "declined"} ${q.number}${!accepted && q.declineReason ? `: ${q.declineReason}` : "."}`,
+        url: `/studio/quotations/${q.id}`,
+      },
+    );
+  } catch (err) {
+    console.error("billing: telling the owner about a quotation answer failed:", err);
+  }
 }
 
 /** An accepted quotation with a shoot day, booked (tentative). Its answer is recorded either way: a failure here is logged, not shown to the customer. */
