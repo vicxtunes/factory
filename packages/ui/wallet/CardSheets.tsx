@@ -6,11 +6,11 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
-import { BottomSheet } from "@repo/ui/BottomSheet";
+import { FormSheet } from "@repo/ui/FormSheet";
 import { Button } from "@repo/ui/Button";
 import { Field, TextInput } from "@repo/ui/Field";
 import { moveMoneyBetweenCards, withdrawFromBusinessCard } from "@repo/lib/wallet/actions";
-import { MIN_WITHDRAWAL, localPhone } from "@repo/lib/wallet/policy";
+import { MAX_WITHDRAWAL, MIN_WITHDRAWAL, localPhone } from "@repo/lib/wallet/policy";
 import type { CardName, Withdrawal } from "@repo/lib/wallet/types";
 
 import { formatWhen, parseAmount, useMoney } from "./shared";
@@ -27,9 +27,10 @@ export function TransferSheet({ open, onClose, to: initial, balances }: { open: 
   const [pending, start] = useTransition();
   const from: CardName = to === "aming" ? "business" : "aming";
   const value = parseAmount(amount);
+  const tooMuch = value > balances[from];
 
   return (
-    <BottomSheet open={open} onClose={onClose} title="Transfer between your cards">
+    <FormSheet open={open} onClose={onClose} title="Transfer between your cards">
       <form
         className="space-y-4"
         onSubmit={(e) => {
@@ -62,12 +63,13 @@ export function TransferSheet({ open, onClose, to: initial, balances }: { open: 
         <Field label="Amount" hint={`From your ${CARD_NAMES[from]}: ${money(balances[from])} on it.`}>
           <TextInput inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="e.g. 50000" required />
         </Field>
+        {tooMuch ? <p className="text-sm text-error-600 dark:text-error-400">That&apos;s more than your {CARD_NAMES[from]} holds.</p> : null}
         {error ? <p className="text-sm text-error-600 dark:text-error-400">{error}</p> : null}
-        <Button type="submit" className="w-full" loading={pending} disabled={pending || !(value > 0)}>
+        <Button type="submit" className="w-full" loading={pending} disabled={pending || !(value > 0) || tooMuch}>
           Transfer{value > 0 ? ` ${money(value)}` : ""}
         </Button>
       </form>
-    </BottomSheet>
+    </FormSheet>
   );
 }
 
@@ -81,6 +83,7 @@ export function WithdrawSheet({ open, onClose, balance, phone: mine }: { open: b
   const [asked, setAsked] = useState<number | null>(null);
   const [pending, start] = useTransition();
   const value = parseAmount(amount);
+  const tooMuch = value > balance;
 
   function close() {
     setAsked(null);
@@ -89,11 +92,11 @@ export function WithdrawSheet({ open, onClose, balance, phone: mine }: { open: b
   }
 
   return (
-    <BottomSheet open={open} onClose={close} title="Withdraw from your Business card">
+    <FormSheet open={open} onClose={close} title="Withdraw from your Business card">
       {asked ? (
         <div className="space-y-4">
           <p className="text-sm">
-            {money(asked)} is on its way to {phone}. It&apos;s off your card now, and we&apos;ll tell you when it&apos;s sent.
+            You asked for {money(asked)} to {phone}. It&apos;s off your card now, and we&apos;ll tell you when it&apos;s sent.
           </p>
           <Button type="button" className="w-full" onClick={close}>
             Done
@@ -114,25 +117,30 @@ export function WithdrawSheet({ open, onClose, balance, phone: mine }: { open: b
             });
           }}
         >
-          <p className="text-sm text-muted">Aming sends it to your MTN or Airtel number, between 5 minutes and 24 hours after you ask. Only you, the owner, can withdraw.</p>
-          <Field label="Amount" hint={`${money(balance)} on your Business card. From ${money(MIN_WITHDRAWAL)}.`}>
+          <p className="text-sm text-muted">
+            Sent to your MTN or Airtel number through our mobile money provider, after a check by Aming: between 5 minutes and 24 hours after you ask. The
+            provider&apos;s fee comes off what you receive. Only you, the owner, can withdraw.
+          </p>
+          <Field label="Amount" hint={`${money(balance)} on your Business card. From ${money(MIN_WITHDRAWAL)} to ${money(MAX_WITHDRAWAL)} at a time.`}>
             <TextInput inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="e.g. 100000" required />
           </Field>
           <Field label="Mobile money number">
             <TextInput type="tel" inputMode="tel" autoComplete="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="07XX XXX XXX" required />
           </Field>
+          {tooMuch ? <p className="text-sm text-error-600 dark:text-error-400">You can withdraw up to {money(balance)}: what&apos;s on your Business card.</p> : null}
           {error ? <p className="text-sm text-error-600 dark:text-error-400">{error}</p> : null}
-          <Button type="submit" className="w-full" loading={pending} disabled={pending || !(value > 0)}>
+          <Button type="submit" className="w-full" loading={pending} disabled={pending || !(value > 0) || tooMuch}>
             Withdraw{value > 0 ? ` ${money(value)}` : ""}
           </Button>
         </form>
       )}
-    </BottomSheet>
+    </FormSheet>
   );
 }
 
 const STATUS: Record<Withdrawal["status"], { label: string; tone: string }> = {
-  pending: { label: "Being sent", tone: "bg-warning-50 text-warning-700 dark:bg-warning-500/15 dark:text-warning-500" },
+  pending: { label: "Waiting for approval", tone: "bg-warning-50 text-warning-700 dark:bg-warning-500/15 dark:text-warning-500" },
+  sending: { label: "Being sent", tone: "bg-warning-50 text-warning-700 dark:bg-warning-500/15 dark:text-warning-500" },
   paid: { label: "Sent", tone: "bg-success-50 text-success-700 dark:bg-success-500/15 dark:text-success-500" },
   rejected: { label: "Not sent", tone: "bg-gray-100 text-gray-600 dark:bg-white/5 dark:text-gray-400" },
 };
@@ -150,7 +158,9 @@ export function Withdrawals({ withdrawals }: { withdrawals: Withdrawal[] }) {
             <div className="min-w-0">
               <p className="text-sm font-semibold tabular-nums">{money(w.amount)}</p>
               <p className="text-xs text-muted">
-                {[`To ${localPhone(w.phone)}`, w.reference ? `Ref ${w.reference}` : null].filter(Boolean).join(" • ")}
+                {[`To ${localPhone(w.phone)}`, w.payoutFee ? `you received ${money(w.amount - w.payoutFee)} after the provider's ${money(w.payoutFee)} fee` : null, w.reference ? `Ref ${w.reference}` : null]
+                  .filter(Boolean)
+                  .join(" • ")}
                 {/* The server's time zone isn't the reader's. */}
                 <span suppressHydrationWarning> • {formatWhen(w.createdAt)}</span>
               </p>

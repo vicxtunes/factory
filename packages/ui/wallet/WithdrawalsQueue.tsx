@@ -5,22 +5,23 @@ import { useRouter } from "next/navigation";
 
 import { Button } from "@repo/ui/Button";
 import { Field, TextInput } from "@repo/ui/Field";
-import { resolveWithdrawal } from "@repo/lib/wallet/actions";
+import { approveWithdrawal, refuseWithdrawal } from "@repo/lib/wallet/actions";
 import { localPhone } from "@repo/lib/wallet/policy";
 import type { PendingWithdrawal } from "@repo/lib/wallet/types";
 
 import { Panel, formatWhen, useMoney } from "./shared";
 
 // Staff's queue of withdrawals from Business cards (/dashboard/wallets). The
-// money is already off the card: send it by mobile money and record the
-// transaction ID, or say why it wasn't sent, which puts it back.
+// money is already off the card. Approving sends it through the payment
+// gateway (HivePay) to the owner's phone; its answer settles it (failed: back
+// on the card). Refusing, with a reason, puts it back straight away.
 export function WithdrawalsQueue({ withdrawals }: { withdrawals: PendingWithdrawal[] }) {
   return (
-    <Panel title={`Withdrawals to send (${withdrawals.length})`}>
+    <Panel title={`Withdrawals (${withdrawals.length})`}>
       {withdrawals.length ? (
         <>
           <p className="text-xs text-muted">
-            Business owners asked for these from their Business cards. Send each by mobile money, then mark it sent with the transaction ID.
+            Business owners asked for these from their Business cards. Check each, then approve it: it&apos;s sent to their phone through mobile money.
           </p>
           <ul className="divide-y divide-border">
             {withdrawals.map((w) => (
@@ -38,23 +39,17 @@ export function WithdrawalsQueue({ withdrawals }: { withdrawals: PendingWithdraw
 function Row({ withdrawal }: { withdrawal: PendingWithdrawal }) {
   const router = useRouter();
   const money = useMoney();
-  const [answering, setAnswering] = useState<"sent" | "not sent" | null>(null);
-  const [text, setText] = useState("");
+  const [refusing, setRefusing] = useState(false);
+  const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
-  const sent = answering === "sent";
+  const sending = withdrawal.status === "sending";
 
-  function answer(next: "sent" | "not sent") {
-    setAnswering(next);
-    setText("");
-    setError(null);
-  }
-
-  function save() {
+  function act(work: () => Promise<{ ok: boolean; error?: string }>) {
     setError(null);
     start(async () => {
-      const res = await resolveWithdrawal(withdrawal.id, sent, text);
-      if (!res.ok) return setError(res.error);
+      const res = await work();
+      if (!res.ok) setError(res.error ?? "Something went wrong.");
       router.refresh();
     });
   }
@@ -70,29 +65,38 @@ function Row({ withdrawal }: { withdrawal: PendingWithdrawal }) {
             To {localPhone(withdrawal.phone)} · asked by {withdrawal.requestedByName}
           </p>
           <p className="text-[11px] text-muted">{formatWhen(withdrawal.createdAt)}</p>
+          {withdrawal.lastError ? <p className="text-xs text-error-600 dark:text-error-400">Last try not sent: {withdrawal.lastError}</p> : null}
         </div>
-        {answering ? null : (
+        {sending ? (
+          <span className="rounded-full bg-warning-50 px-2 py-0.5 text-[11px] font-medium text-warning-700 dark:bg-warning-500/15 dark:text-warning-500">Being sent</span>
+        ) : refusing ? null : (
           <div className="flex gap-2">
-            <Button className="min-h-9 text-xs" onClick={() => answer("sent")}>
-              Mark sent
+            <Button
+              className="min-h-9 text-xs"
+              loading={pending}
+              onClick={() => {
+                if (window.confirm(`Send ${money(withdrawal.amount)} to ${localPhone(withdrawal.phone)} by mobile money?`)) act(() => approveWithdrawal(withdrawal.id));
+              }}
+            >
+              Approve & send
             </Button>
-            <Button variant="secondary" className="min-h-9 text-xs" onClick={() => answer("not sent")}>
-              Not sent
+            <Button variant="secondary" className="min-h-9 text-xs" disabled={pending} onClick={() => setRefusing(true)}>
+              Refuse
             </Button>
           </div>
         )}
       </div>
-      {answering ? (
+      {refusing ? (
         <div className="flex flex-wrap items-end gap-2">
           <div className="min-w-48 flex-1">
-            <Field label={sent ? "Mobile money transaction ID" : "Why wasn't it sent? (the owner sees this, and the money goes back on their card)"}>
-              <TextInput value={text} onChange={(e) => setText(e.target.value)} maxLength={sent ? 100 : 500} autoFocus />
+            <Field label="Why isn't it being sent? (the owner sees this, and the money goes back on their card)">
+              <TextInput value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} autoFocus />
             </Field>
           </div>
-          <Button variant={sent ? "primary" : "danger"} className="min-h-11 text-xs" loading={pending} onClick={save}>
-            {sent ? "Mark sent" : "Return to card"}
+          <Button variant="danger" className="min-h-11 text-xs" loading={pending} onClick={() => act(() => refuseWithdrawal(withdrawal.id, reason))}>
+            Refuse
           </Button>
-          <button type="button" className="min-h-11 text-xs text-muted" disabled={pending} onClick={() => setAnswering(null)}>
+          <button type="button" className="min-h-11 text-xs text-muted" disabled={pending} onClick={() => setRefusing(false)}>
             Cancel
           </button>
         </div>

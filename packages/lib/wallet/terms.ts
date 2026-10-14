@@ -5,9 +5,9 @@
 // Changing what the terms say: edit the sections and raise the version. Every
 // business is then asked to agree again, and until it does its card is off.
 
-import { COLLECTION_FEE_PERCENT } from "./policy";
+import { COLLECTION_FEE_PERCENT, MAX_WITHDRAWAL, MIN_WITHDRAWAL } from "./policy";
 
-export const WALLET_TERMS_VERSION = 1;
+export const WALLET_TERMS_VERSION = 2;
 
 export interface TermsSection {
   title: string;
@@ -34,8 +34,8 @@ export const WALLET_TERMS: TermsSection[] = [
     title: "Withdrawals and transfers",
     points: [
       "Only the business's owner can withdraw from the Business card or move money between the two cards. Team members can't, whatever access you give them.",
-      "A withdrawal goes to the MTN or Airtel number you give. It leaves your card as soon as you ask, and reaches your phone between 5 minutes and 24 hours later, after security and accountability checks. You're responsible for giving the right number.",
-      "Withdrawal limits follow our mobile money provider's limits, shown when you withdraw.",
+      "A withdrawal is sent to the MTN or Airtel number you give, through our mobile money provider, once Aming has checked it. It leaves your card as soon as you ask, and reaches your phone between 5 minutes and 24 hours later. You're responsible for giving the right number.",
+      `You can withdraw from UGX ${MIN_WITHDRAWAL.toLocaleString("en-UG")} to UGX ${MAX_WITHDRAWAL.toLocaleString("en-UG")} at a time (our provider's limits), and never more than is on your card.`,
       "If a withdrawal can't be sent, the money goes back on your card and you're told why.",
       "Money you move to your Aming card pays for Aming's orders and storage.",
     ],
@@ -44,6 +44,7 @@ export const WALLET_TERMS: TermsSection[] = [
     title: "Fees",
     points: [
       `Aming keeps ${COLLECTION_FEE_PERCENT / 100} of each collection made for your business (${COLLECTION_FEE_PERCENT}%). The whole payment and the fee both show in your card's history, and the rest stays on your card.`,
+      "Our mobile money provider's fee for sending a withdrawal comes off what you receive, and is shown with the withdrawal once it's sent.",
       "We'll tell you before a fee is introduced or changed.",
     ],
   },

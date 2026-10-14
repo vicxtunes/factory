@@ -83,10 +83,18 @@ A client who owns a business has two cards, each with its own balance and its ow
   one transaction. The Business card's row is `transfer_in` / `transfer_out`; the Aming card's is a
   ledger row of kind `transfer`. Neither card can go below zero.
 - **Withdraw** (`business_withdraw_request()`): the owner asks for money from the Business card on
-  an MTN / Airtel number, from 5,000. It leaves the card at once. Staff send it by hand and mark it
-  **sent** with the transaction ID, or **not sent** with a reason, which puts it back
-  (`business_withdraw_resolve()`, kind `withdrawal_returned`). There is no automatic payout: HivePay
-  is only used to collect.
+  an MTN / Airtel number, UGX 500 to 5,000,000 at a time (HivePay's limits) and never more than the
+  card holds. It leaves the card at once and waits for staff (migration `20261026100000`):
+  - **Approve & send** (`business_withdraw_approve()`): marked as being sent first, so a second
+    click can't send it twice, then handed to HivePay's payouts (`POST /send-money`, reference
+    `WD…`). HivePay takes its fee from the amount, so the phone receives amount − fee.
+  - Not taken by HivePay (its balance, the number): it waits again, with why.
+  - HivePay's answer settles it, read from its status API (the webhook only says "look", as for
+    collections): delivered → paid, with the fee; failed → back on the card
+    (`business_withdraw_payout_result()`, kind `withdrawal_returned`). Pages showing withdrawals
+    ask about any still being sent.
+  - **Refuse** with a reason: back on the card at once (`business_withdraw_resolve()`).
+  - The staff app needs the HivePay keys too.
 - **Who can do what:**
   - Anyone can add money: customers pay the Business card, and the owner (or staff, for bank and
     cash) adds funds to the Aming card.
@@ -146,6 +154,7 @@ supabase/migrations/20260930130000_direct_order_payment_receipts.sql
 supabase/migrations/20261023100000_business_card.sql
 supabase/migrations/20261024100000_wallet_terms.sql
 supabase/migrations/20261025100000_collection_fee.sql
+supabase/migrations/20261026100000_withdrawal_payouts.sql
 ```
 
 ### Dependency rules
@@ -244,7 +253,9 @@ both ways and refused past either balance, withdrawals taken once and sent or re
 balances equal to their ledgers' sums, the append-only trigger, Accounts counting the money once,
 and the public roles denied; and the terms: transfers and withdrawals refused until agreed, a
 customer's payment still credited, agreeing once per version and never back to an older one; and
-the fee: 5% as its own row, once, rounded to whole shillings, and none on a top-up. Not yet tried signed in, in a browser.
+the fee: 5% as its own row, once, rounded to whole shillings, and none on a top-up; and payouts:
+approved once, not taken → waiting again, delivered → paid with its fee, failed → back on the card
+once, and refusing only while waiting. Not yet tried signed in, in a browser.
 
 The migration and service were exercised against a local Postgres + PostgREST: idempotent settlement, rejections, partial and full order
 payments, overdraft refusal, concurrent payments (only one succeeds), the price guard, catalog

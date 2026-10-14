@@ -193,14 +193,21 @@ export interface BusinessCardEntry {
   createdAt: string;
 }
 
-/** Money the owner asked for on their phone: waiting for staff, sent, or refused (and put back). */
+/**
+ * Money the owner asked for on their phone: waiting for staff, being sent by
+ * the payment gateway, sent, or refused or failed (and put back on the card).
+ */
 export interface Withdrawal {
   id: string;
   amount: number;
   phone: string;
-  status: "pending" | "paid" | "rejected";
-  /** Paid: the mobile money transaction id. */
+  status: "pending" | "sending" | "paid" | "rejected";
+  /** Paid: the gateway's reference for the payout. */
   reference: string | null;
+  /** Paid: what the gateway took from the amount (the phone received amount − fee). */
+  payoutFee: number | null;
+  /** Pending: why the gateway didn't take it the last time staff approved it. */
+  lastError: string | null;
   /** Rejected: why. */
   reason: string | null;
   createdAt: string;

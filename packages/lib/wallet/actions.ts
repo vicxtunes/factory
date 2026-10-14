@@ -261,10 +261,19 @@ export async function listPendingWithdrawals(): Promise<WalletResult<PendingWith
   });
 }
 
-/** Sent (`text`: the mobile money transaction id) or not (`text`: why, and the money goes back on the card). */
-export async function resolveWithdrawal(id: string, paid: boolean, text: string): Promise<WalletResult> {
+/** Approves a waiting withdrawal: HivePay sends it to the owner's phone. */
+export async function approveWithdrawal(id: string): Promise<WalletResult> {
   return run(async () => {
-    await business.resolveWithdrawal(await requireStaff(), id, paid, text);
+    await business.approveWithdrawal(await requireStaff(), id);
+    refreshMoneyPages();
+    revalidatePath("/studio/wallet");
+  });
+}
+
+/** Refuses a waiting withdrawal (the owner sees `reason`): the money goes back on their card. */
+export async function refuseWithdrawal(id: string, reason: string): Promise<WalletResult> {
+  return run(async () => {
+    await business.refuseWithdrawal(await requireStaff(), id, reason);
     refreshMoneyPages();
     revalidatePath("/studio/wallet");
   });
