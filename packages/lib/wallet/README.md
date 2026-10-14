@@ -60,6 +60,62 @@ function requires an approved order and an invoice, applies no more than the rem
 requires an explicit decision for any excess. Errors a person should see are raised as
 `WALLET:<code>` and turned into sentences by `server/errors.ts`.
 
+## Two cards
+
+A client who owns a business has two cards, each with its own balance and its own history:
+
+| | **Aming card** | **Business card** |
+| --- | --- | --- |
+| What it is | The wallet above: their own money with Aming | What the business's customers pay it by mobile money |
+| Who has one | Every client | Every business (`tenant_id`) |
+| Tables | `wallets`, `wallet_transactions` | `business_wallets`, `business_wallet_transactions` |
+| Money in | Top-ups, deposits, refunds | A customer's payment for a booking, an order request or an invoice |
+| Money out | Aming's orders, extra storage | Withdrawals to the owner's phone |
+
+- **A customer's payment** settles onto the Business card (`provider_collection_settle()` →
+  `business_wallet_post()`, kind `customer_payment`, one per prompt). It makes no `payments` row and
+  never touches the owner's wallet.
+- **Aming's fee** (migration `20261025100000`): 5% of every customer payment, in whole shillings
+  (halves up). The card is credited the whole payment and the fee comes off as its own row (kind
+  `fee`, once per prompt), so the history shows both. The rate is in `provider_collection_settle()`;
+  `COLLECTION_FEE_PERCENT` only words it. Top-ups to the owner's own card carry no fee.
+- **Transfer** (`wallet_transfer()`): the owner moves money between their two cards, either way, in
+  one transaction. The Business card's row is `transfer_in` / `transfer_out`; the Aming card's is a
+  ledger row of kind `transfer`. Neither card can go below zero.
+- **Withdraw** (`business_withdraw_request()`): the owner asks for money from the Business card on
+  an MTN / Airtel number, from 5,000. It leaves the card at once. Staff send it by hand and mark it
+  **sent** with the transaction ID, or **not sent** with a reason, which puts it back
+  (`business_withdraw_resolve()`, kind `withdrawal_returned`). There is no automatic payout: HivePay
+  is only used to collect.
+- **Who can do what:**
+  - Anyone can add money: customers pay the Business card, and the owner (or staff, for bank and
+    cash) adds funds to the Aming card.
+  - Only the business's owner transfers or withdraws (`requireBusinessOwner()`): a team member,
+    whatever their access, is refused. Team members with **Money** see the Business card.
+  - Staff answer withdrawals on `/dashboard/wallets` (**Withdrawals to send**).
+- **The terms come first** (`terms.ts`, migration `20261024100000`). A Business card is off until
+  its owner has agreed to the wallet's current terms, on My Business → Wallet, where the terms
+  stand in the card's place:
+  - its customers aren't offered mobile money anywhere (service and product pages, their own
+    page, quotation and invoice links), and `startStudioRequestPayment()` refuses: they pay the
+    business directly, and it records the payment on the invoice by hand;
+  - nothing moves off the card: `wallet_transfer()` and `business_withdraw_request()` refuse in
+    the database too.
+  - Money a customer already paid still settles onto the card: a payment is never refused.
+  - The agreement is kept on the card (`terms_version`, when, who). Raising
+    `WALLET_TERMS_VERSION` asks every business to agree again.
+- **The Business card's ledger is append-only** like the wallet's (the same trigger).
+- **Accounts** still count a customer's payment as money received and held for the owner
+  (`accounting_money_in`, `accounting_customers.held` = both cards); a transfer between the cards
+  is not a movement.
+- **When the cards were split** (migration `20261023100000`), what each business's customers had
+  already paid moved from its owner's wallet to its Business card, as far as it was still there.
+
+Screens: `/payment` shows both cards on one panel (`packages/ui/wallet/WalletHome.tsx`: total,
+Transfer, Add funds or Withdraw, the chosen card's latest transactions); `/studio/wallet` is the
+Business card (`BusinessCardAnalytics.tsx`: balance, money in and out by month, history,
+withdrawals).
+
 ## Layout
 
 ```
@@ -68,7 +124,10 @@ packages/lib/wallet/
   policy.ts           Limits, labels, input rules. Pure; safe on client and server.
   actions.ts          "use server": the ONLY entry point the browser calls.
   orders.ts           Server-only API for other order code (cancellation refund, error text, invoices).
+  terms.ts            The wallet's terms and their version. Pure.
+  studio.ts           Server-only API for a business's money: its customers' payments, its Business card.
   server/
+    business.ts       The Business card: reads, transfers, withdrawals.
     service.ts        Use cases: check input and who's asking, call the repository, side effects.
     repository.ts     All queries against wallets/payments/wallet_transactions + the RPC calls.
     identity.ts       Adapter: app auth → client or staff viewer.       (touches packages/lib/auth)
@@ -84,6 +143,9 @@ packages/ui/wallet/    React UI. Talks only to packages/lib/wallet/{actions,type
 
 supabase/migrations/20260927100000_client_wallet.sql
 supabase/migrations/20260930130000_direct_order_payment_receipts.sql
+supabase/migrations/20261023100000_business_card.sql
+supabase/migrations/20261024100000_wallet_terms.sql
+supabase/migrations/20261025100000_collection_fee.sql
 ```
 
 ### Dependency rules
@@ -174,6 +236,15 @@ Follow HivePay's shape: an adapter in `server/providers/<name>.ts`, rows in
 after confirming success with the provider's own API.
 
 ## Testing notes
+
+The two cards (migration `20261023100000`) were exercised on an in-process Postgres with every
+migration applied: the one-off move of earlier customer payments (capped at what was left), a
+customer's payment landing on the Business card once, top-ups still reaching the wallet, transfers
+both ways and refused past either balance, withdrawals taken once and sent or returned once,
+balances equal to their ledgers' sums, the append-only trigger, Accounts counting the money once,
+and the public roles denied; and the terms: transfers and withdrawals refused until agreed, a
+customer's payment still credited, agreeing once per version and never back to an older one; and
+the fee: 5% as its own row, once, rounded to whole shillings, and none on a top-up. Not yet tried signed in, in a browser.
 
 The migration and service were exercised against a local Postgres + PostgREST: idempotent settlement, rejections, partial and full order
 payments, overdraft refusal, concurrent payments (only one succeeds), the price guard, catalog

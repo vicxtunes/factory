@@ -126,7 +126,7 @@ async function walletStep<T>(work: () => Promise<T>): Promise<T> {
   }
 }
 
-/** Prompts `phone` for `amount` towards an invoice; the money goes to the studio owner's wallet. */
+/** Prompts `phone` for `amount` towards an invoice; the money goes to the studio's Business card. */
 async function promptForInvoice(scope: TenantScope, invoiceId: string, amount: number, phone: unknown): Promise<MobileMoneyCollection> {
   const invoice = await invoices.get(scope, invoiceId);
   const studio = await studios.get(scope.tenantId);
@@ -136,6 +136,7 @@ async function promptForInvoice(scope: TenantScope, invoiceId: string, amount: n
   if (amount > invoice.balance) throw new BillingError("That's more than what's left to pay.");
   return walletStep(() =>
     startStudioRequestPayment({
+      tenantId: studio.id,
       ownerClientId: studio.ownerClientId,
       invoiceId,
       studioName: studio.name,
@@ -169,7 +170,7 @@ export async function approveAndPayQuotation(token: unknown, input: { amount: un
     const waiting = booking?.status === "requested" ? { bookingId: booking.id } : request?.status === "requested" ? { requestId: request.id } : null;
     if (waiting && quotation.status === "open") {
       return walletStep(() =>
-        startStudioRequestPayment({ ...waiting, ownerClientId: studio.ownerClientId, studioName: studio.name, payerName: quotation.billTo.name, amount, phone: String(input.phone ?? "") }),
+        startStudioRequestPayment({ ...waiting, tenantId: studio.id, ownerClientId: studio.ownerClientId, studioName: studio.name, payerName: quotation.billTo.name, amount, phone: String(input.phone ?? "") }),
       );
     }
 

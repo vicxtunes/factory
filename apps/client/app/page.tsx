@@ -52,15 +52,15 @@ export default async function ClientSidePage({
           </div>
         }
       >
-        <Home clientId={session.client_id} />
+        <Home client={{ id: session.client_id, name: session.name }} />
       </Loading>
     </ClientShell>
   );
 }
 
-async function Home({ clientId }: { clientId: string }) {
+async function Home({ client }: { client: { id: string; name: string } }) {
   const [items, slides, wallet, owing] = await Promise.all([
-    fetchClientItems(clientId),
+    fetchClientItems(client.id),
     fetchMarketingSlides(true),
     getMyWalletSummary(),
     // Like the wallet: if it can't load, the home screen still works without it.
@@ -74,7 +74,7 @@ async function Home({ clientId }: { clientId: string }) {
         items={items.filter((i) => !i.order.cancelled_at)}
         slides={slides}
         // If the wallet can't load, the home screen still works — it just has no balance card.
-        wallet={wallet.ok ? <WalletSummaryCard summary={wallet.data} /> : null}
+        wallet={wallet.ok ? <WalletSummaryCard summary={wallet.data} client={client} /> : null}
       />
     </div>
   );

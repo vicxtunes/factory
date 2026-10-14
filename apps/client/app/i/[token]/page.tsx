@@ -5,6 +5,7 @@ import { InvoicePdf } from "@repo/ui/billing/DocumentPdf";
 import { InvoiceStatusBadge } from "@repo/ui/billing/StatusBadges";
 import { shareTokenSchema } from "@repo/lib/billing/core";
 import { invoices } from "@repo/lib/billing/server";
+import { businessTermsAccepted } from "@repo/lib/wallet/studio";
 
 import { dueOn } from "../../document-due";
 
@@ -24,6 +25,8 @@ export default async function InvoiceLinkPage({ params }: { params: Promise<{ to
   const { currency, locale, timeZone } = found.scope;
   const { invoice } = found;
   const settled = invoice.balance <= 0 || !!invoice.voidedAt;
+  // Mobile money in the app, once the studio has agreed to the wallet's terms: else it's paid as the invoice says.
+  const payOnline = !settled && (await businessTermsAccepted(found.scope.tenantId));
 
   return (
     <main className="mx-auto w-full max-w-3xl px-4 py-6 sm:py-10">
@@ -38,7 +41,7 @@ export default async function InvoiceLinkPage({ params }: { params: Promise<{ to
         amount={settled ? invoice.total : invoice.balance}
         amountLabel={invoice.voidedAt ? "Total" : settled ? "Paid" : invoice.balance < invoice.total ? "Left to pay" : "To pay"}
         due={dueOn(found.scope, "Due", invoice.dueDate, settled)}
-        payable={!settled}
+        payable={payOnline}
         scope={{ currency, locale }}
       />
     </main>

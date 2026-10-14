@@ -18,6 +18,11 @@ const nextConfig: NextConfig = {
   // Monorepo: shared code lives in ../../packages, so trace the standalone
   // build from the repo root or those files are left out of it.
   outputFileTracingRoot: path.join(import.meta.dirname, "../.."),
+  // Dev only: other hosts allowed to load the dev server's scripts, e.g. this
+  // machine's network address when opening the app on a phone
+  // (DEV_ALLOWED_ORIGINS=192.168.1.20 in .env.local, comma-separated). Without
+  // it Next blocks them, and nothing on the page responds to taps.
+  allowedDevOrigins: process.env.DEV_ALLOWED_ORIGINS?.split(",").map((host) => host.trim()).filter(Boolean),
   images: {
     remotePatterns: supabaseUrl
       ? [

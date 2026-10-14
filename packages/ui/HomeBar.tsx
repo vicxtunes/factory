@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 
 import {
+  AccountsIcon,
   AdminsIcon,
   AgentsIcon,
   AnnouncementIcon,
@@ -48,6 +49,7 @@ import { useCloseOnBack } from "@repo/ui/navigation/back";
 
 const ICONS = {
   dashboard: DashboardIcon,
+  accounts: AccountsIcon,
   orders: OrdersIcon,
   clients: ClientsIcon,
   agents: AgentsIcon,

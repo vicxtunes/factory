@@ -61,8 +61,8 @@ async function walletStep<T>(work: () => Promise<T>): Promise<T> {
 
 /**
  * Pay for a booking just asked for (or the signed-in client's own) by MTN /
- * Airtel: its price, or a deposit towards it. The money goes to the business
- * owner's wallet; once it's through, the booking is confirmed and the payment
+ * Airtel: its price, or a deposit towards it. The money goes to the business's
+ * Business card; once it's through, the booking is confirmed and the payment
  * is on its invoice (packages/lib/studio-payments).
  */
 export async function payForBooking(slug: unknown, input: { bookingId: unknown; amount: unknown; phone: unknown }): Promise<Result<MobileMoneyCollection>> {
@@ -80,6 +80,7 @@ export async function payForBooking(slug: unknown, input: { bookingId: unknown; 
     if (amount > booking.amount) throw new BookingRequestError("That's more than the booking costs.");
     return walletStep(() =>
       startStudioRequestPayment({
+        tenantId: at.studio.id,
         ownerClientId: at.studio.ownerClientId,
         bookingId,
         studioName: at.studio.name,

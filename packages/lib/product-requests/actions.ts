@@ -4,7 +4,7 @@
 //
 // - "Order now" (public, on a product's page): by the studio's address,
 //   never a tenant id from the browser; no sign-in needed. Then, optionally,
-//   pay for it by MTN / Airtel: the money goes to the studio owner's wallet.
+//   pay for it by MTN / Airtel: the money goes to the studio's Business card.
 // - Confirm / decline (the studio owner): the studio comes from the owner's
 //   session; an id from another studio is simply "not found".
 
@@ -51,7 +51,7 @@ async function walletStep<T>(work: () => Promise<T>): Promise<T> {
 /**
  * Pay for a request just sent (or the signed-in client's own) by MTN /
  * Airtel: up to its total, or any amount when it's priced on request. The
- * money goes to the studio owner's wallet.
+ * money goes to the studio's Business card.
  */
 export async function payForProductRequest(
   slug: unknown,
@@ -72,6 +72,7 @@ export async function payForProductRequest(
     if (total > 0 && amount > total) throw new ProductRequestError("That's more than the order costs.");
     return walletStep(() =>
       startStudioRequestPayment({
+        tenantId: at.studio.id,
         ownerClientId: at.studio.ownerClientId,
         requestId,
         studioName: at.studio.name,

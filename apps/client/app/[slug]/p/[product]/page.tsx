@@ -9,6 +9,7 @@ import { amingShowcaseMedia, withOwnMedia } from "@repo/lib/offerings/core";
 import { amingProducts, offerings } from "@repo/lib/offerings/server";
 import { studioAccess } from "@repo/lib/studio-access/server";
 import { portalClient, studioAtSlug } from "@repo/lib/studio-portal/server";
+import { businessTermsAccepted } from "@repo/lib/wallet/studio";
 
 import { ServiceShowcase } from "../../../service-showcase";
 import { serviceMedia } from "../../media";
@@ -71,7 +72,7 @@ async function Showcase({
   signedIn: boolean;
   signedInPhone: string | null;
 }) {
-  const [own, settings] = await Promise.all([serviceMedia(at.scope, found.id), offerings.settings(at.scope)]);
+  const [own, settings, payOnline] = await Promise.all([serviceMedia(at.scope, found.id), offerings.settings(at.scope), businessTermsAccepted(at.studio.id)]);
   // A picked product: the studio's own photos and video, then Aming's (less those it left out).
   const media = source ? withOwnMedia(own, amingShowcaseMedia(source, found.hiddenMedia)) : own;
   return (
@@ -82,6 +83,8 @@ async function Showcase({
       service={found}
       media={media}
       showPrices={settings.showPrices}
+      // Mobile money in the app, once the studio has agreed to the wallet's terms.
+      payOnline={payOnline}
       signedIn={signedIn}
       signedInPhone={signedInPhone}
       today={localDate(new Date(), at.scope.timeZone)}

@@ -17,6 +17,7 @@ import { studioOrders } from "@repo/lib/studio-orders/server";
 import { studioAccess } from "@repo/lib/studio-access/server";
 import type { SignInRecord } from "@repo/lib/studio-portal/core";
 import { portalClient, studioAtSlug } from "@repo/lib/studio-portal/server";
+import { businessTermsAccepted } from "@repo/lib/wallet/studio";
 
 import { StudioShell } from "../studio-shell";
 
@@ -71,6 +72,9 @@ async function Home({ at, me, slug }: { at: NonNullable<Awaited<ReturnType<typeo
     Promise.all(invoiceList.filter((i) => i.status !== "void").map(async (i) => ({ ...i, url: invoiceUrl((await invoices.get(scope, i.id))!.shareToken) }))),
   ]);
 
+  // Mobile money in the app, once the studio has agreed to the wallet's terms.
+  const payOnline = await businessTermsAccepted(at.studio.id);
+
   return (
     <ClientPortalHome
       view={{
@@ -94,7 +98,7 @@ async function Home({ at, me, slug }: { at: NonNullable<Awaited<ReturnType<typeo
           <DirectionsButton to={at.studio.location ?? { query: at.studio.address! }} name={at.studio.name} className="min-h-9 text-xs" />
         ) : null
       }
-      pay={(target) => <PayRequestButton slug={slug} phone={me.phone ?? null} scope={{ currency: scope.currency, locale: scope.locale }} {...target} />}
+      pay={payOnline ? (target) => <PayRequestButton slug={slug} phone={me.phone ?? null} scope={{ currency: scope.currency, locale: scope.locale }} {...target} /> : undefined}
     />
   );
 }

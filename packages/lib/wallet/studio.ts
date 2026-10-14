@@ -1,11 +1,13 @@
 import "server-only";
 
-// Studio customers paying for their bookings and order requests by mobile money — the
-// wallet module's entry point for packages/lib/product-requests (the money
-// goes to the studio owner's wallet; see server/mobile-money.ts).
+// The wallet module's entry point for a business's money: its customers
+// paying for bookings and order requests by mobile money (onto its Business
+// card; see server/mobile-money.ts), and the Business card itself
+// (server/business.ts).
 
 import { getBalance } from "./server/repository";
 
+export { businessTermsAccepted, getBusinessCard } from "./server/business";
 export {
   checkStudioRequestPayment,
   claimStudioPaymentApply,
@@ -16,7 +18,7 @@ export {
 } from "./server/mobile-money";
 export { WalletError } from "./server/errors";
 
-/** What's in a studio's wallet (its owner's): where its customers' mobile money lands. */
-export async function studioWalletBalance(ownerClientId: string): Promise<number> {
+/** What's on a business owner's Aming card (their own wallet): what pays for Aming's orders and extra storage. */
+export async function amingCardBalance(ownerClientId: string): Promise<number> {
   return (await getBalance(ownerClientId)).balance;
 }

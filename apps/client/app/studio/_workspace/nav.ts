@@ -40,6 +40,7 @@ export const STUDIO_NAV: StudioNavSection[] = [
     label: "Clients & money",
     items: [
       { href: "/studio/wallet", label: "Wallet", icon: "payment", need: "money" },
+      { href: "/studio/accounts", label: "Accounts", icon: "accounts", need: "money" },
       { href: "/studio/clients", label: "Clients", icon: "clients", need: "clients" },
       { href: "/studio/quotations", label: "Quotations", icon: "invoice", need: "money" },
       { href: "/studio/invoices", label: "Invoices", icon: "payment", need: "money" },

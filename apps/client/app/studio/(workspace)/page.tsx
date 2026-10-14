@@ -30,7 +30,7 @@ export const metadata = { title: "My Business" };
 // The studio's home: who's here, the one thing to do next, the usual
 // shortcuts, the next events and the packages on sale as cards, then the
 // work in hand. Requests are answered where they belong (bookings on
-// Bookings, orders on Wallet), and the money is on Wallet. The studio is
+// Bookings, orders on Accounts), and the money is on Wallet and Accounts. The studio is
 // created the first time any My Business page opens. A team member sees only
 // the parts they were given, and the tasks given to them.
 export default async function StudioDashboardPage() {
@@ -134,7 +134,7 @@ async function Hero({ scope, studioId, access }: { scope: TenantScope; studioId:
       <HomeHero
         title={`${waiting} client${waiting === 1 ? " is" : "s are"} waiting`}
         text="Answer their booking and order requests: confirming makes the invoice."
-        cta={{ label: "Review requests", href: bookingRequests.length ? "/studio/bookings" : "/studio/wallet" }}
+        cta={{ label: "Review requests", href: bookingRequests.length ? "/studio/bookings" : "/studio/accounts" }}
         imageUrl={imageUrl}
       />
     );

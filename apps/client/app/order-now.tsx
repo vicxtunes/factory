@@ -26,7 +26,7 @@ const RAIL: Partial<Record<Step, string>> = { size: "Size", details: "Details", 
  * the size and how many, who they are unless they're signed in at the
  * studio, a last look, and the order goes straight to the studio. Then they
  * may pay now by MTN / Airtel — in full or a deposit — or skip; the money
- * goes to the studio's wallet. A new
+ * goes to the studio's Business card. A new
  * client is signed in to their page on this phone for good; a number the
  * studio already knows gets their page from the studio.
  */
@@ -38,6 +38,7 @@ export function OrderNow({
   signedIn,
   signedInPhone = null,
   showPrices,
+  payOnline,
   scope,
 }: {
   studio: { name: string; slug: string };
@@ -49,6 +50,8 @@ export function OrderNow({
   /** The signed-in client's number on file: what mobile money prompts unless they choose another. */
   signedInPhone?: string | null;
   showPrices: boolean;
+  /** Whether the studio takes mobile money in the app (it has agreed to the wallet's terms). Otherwise there's no pay step. */
+  payOnline: boolean;
   scope: Pick<TenantScope, "currency" | "locale">;
 }) {
   const [open, setOpen] = useState(false);
@@ -85,7 +88,7 @@ export function OrderNow({
       if (!res.ok) return setError(res.error);
       setResult(res.data);
       setPaid(0);
-      setStep("pay");
+      setStep(payOnline ? "pay" : "sent");
     });
   }
 
@@ -229,7 +232,9 @@ export function OrderNow({
                 {paid > 0
                   ? `Paid ${formatAmount(scope, paid)}: your invoice shows the payment.`
                   : size && size.price > 0
-                    ? "Your quotation is ready. Pay any time to confirm it, or wait for them to confirm."
+                    ? payOnline
+                      ? "Your quotation is ready. Pay any time to confirm it, or wait for them to confirm."
+                      : "Your quotation is ready. They'll confirm it and tell you how to pay."
                     : "They'll confirm it and send your invoice."}
               </p>
               {result.signedIn ? null : <p className="mt-1">This number is already with {studio.name}: they&apos;ll send you the link to your page.</p>}

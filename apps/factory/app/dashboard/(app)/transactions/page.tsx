@@ -189,7 +189,9 @@ async function Results({ history, filters }: { history: History; filters: { q?: 
                         ? "Refund"
                         : item.kind === "adjustment"
                           ? "Adjustment"
-                          : "Deposit";
+                          : item.kind === "transfer"
+                            ? "Card transfer"
+                            : "Deposit";
                 const sign = item.amount < 0 ? "−" : "+";
 
                 return (

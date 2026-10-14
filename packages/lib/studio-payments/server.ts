@@ -1,7 +1,7 @@
 import "server-only";
 
 // A studio's customer paid for a booking or an order by mobile money (the
-// money is in the studio owner's wallet: packages/lib/wallet). This puts the
+// money is on the studio's Business card: packages/lib/wallet). This puts the
 // payment where the studio and the client look for it: the request is
 // confirmed, its invoice made (from the quotation it got when it was asked
 // for) and the payment recorded on that invoice.
@@ -35,7 +35,7 @@ export async function applyStudioPayment(collectionId: string): Promise<void> {
       : payment.bookingId
         ? await bookingRequests.confirm(scope, payment.bookingId, ACTOR)
         : await productRequests.confirm(scope, payment.requestId!);
-    // Priced on request: no invoice yet, the money waits in the studio's wallet.
+    // Priced on request: no invoice yet, the money waits on the studio's Business card.
     if (!invoiceId) return;
     const invoice = await invoices.get(scope, invoiceId);
     const amount = Math.min(payment.amount, invoice?.balance ?? 0);

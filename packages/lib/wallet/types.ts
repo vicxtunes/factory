@@ -6,8 +6,8 @@ export type PaymentMethod = "bank_transfer" | "mobile_money" | "cash" | "card" |
 
 export type PaymentStatus = "pending" | "succeeded" | "failed" | "cancelled";
 
-/** One ledger row's type. deposit/refund add money, order_payment takes it, adjustment is either. */
-export type WalletEntryKind = "deposit" | "order_payment" | "refund" | "adjustment";
+/** One ledger row's type. deposit/refund add money, order_payment takes it, adjustment and transfer (to or from the Business card) are either. */
+export type WalletEntryKind = "deposit" | "order_payment" | "refund" | "adjustment" | "transfer";
 export type TransactionHistoryKind = WalletEntryKind | "deposit_report" | "order_payment_report";
 
 export interface TransactionHistoryFilters {
@@ -175,6 +175,65 @@ export interface MobileMoneyCollection {
   orderId: string | null;
   network: string | null;
 }
+
+// --- The Business card (a business's own: what its customers pay it) ---------
+
+export type BusinessEntryKind = "customer_payment" | "fee" | "transfer_in" | "transfer_out" | "withdrawal" | "withdrawal_returned";
+
+/** One line of a Business card's history. */
+export interface BusinessCardEntry {
+  id: string;
+  kind: BusinessEntryKind;
+  /** Signed: positive added to the balance, negative took from it. */
+  amount: number;
+  balanceAfter: number;
+  note: string | null;
+  /** Who did it: for a customer's payment, the customer. */
+  actorName: string;
+  createdAt: string;
+}
+
+/** Money the owner asked for on their phone: waiting for staff, sent, or refused (and put back). */
+export interface Withdrawal {
+  id: string;
+  amount: number;
+  phone: string;
+  status: "pending" | "paid" | "rejected";
+  /** Paid: the mobile money transaction id. */
+  reference: string | null;
+  /** Rejected: why. */
+  reason: string | null;
+  createdAt: string;
+}
+
+/** A waiting withdrawal in the staff queue. */
+export interface PendingWithdrawal extends Withdrawal {
+  businessName: string;
+  requestedByName: string;
+}
+
+/** Money in and out of a Business card in one month ("2026-10"). */
+export interface BusinessCardMonth {
+  month: string;
+  income: number;
+  outcome: number;
+}
+
+/** A Business card as its business sees it. */
+export interface BusinessCardView {
+  /** Whether the business's owner has agreed to the wallet's current terms (./terms.ts): until then the card is off. */
+  termsAccepted: boolean;
+  balance: number;
+  /** Newest first. */
+  entries: BusinessCardEntry[];
+  /** Newest first: the waiting ones, and the last few answered. */
+  withdrawals: Withdrawal[];
+  /** The last seven months, oldest first. */
+  months: BusinessCardMonth[];
+}
+
+/** Which card money moves to. */
+export type CardName = "aming" | "business";
 
 /** What every wallet server action returns. `error` is always safe to show. */
 export type WalletResult<T = undefined> = T extends undefined

@@ -2,20 +2,20 @@
 
 import { useRef, useState, type ReactNode } from "react";
 
-import { Button } from "@repo/ui/Button";
 import { PaymentMethods } from "@repo/ui/payments/PaymentMethods";
 import type { WalletView } from "@repo/lib/wallet/types";
 
-import { BalanceCard, EntryLine, Panel, PaymentLine } from "./shared";
+import { Panel, PaymentLine } from "./shared";
+import { WalletHome } from "./WalletHome";
 
-// The client's wallet: what they owe first (`owing`, when there's anything),
-// then the balance, then "Add funds" — MTN / Airtel right
-// here (a prompt on their phone), or the bank details (staff add a bank
-// transfer once they see it on the statement) — then any older deposit
-// reports still waiting for confirmation, and the full history.
+// The client's own wallet: their Aming card first, what they owe under it
+// (`owing`, when there's anything), the card's transactions, then "Add funds" —
+// MTN / Airtel right here (a prompt on their phone), or the bank details
+// (staff add a bank transfer once they see it on the statement) — then any
+// older deposit reports still waiting for confirmation.
 //
 // Layout: one column on phones and tablets. From `lg` up it becomes a
-// two-column grid — balance + history on the left, the "add funds" flow and
+// two-column grid — card + transactions on the left, the "add funds" flow and
 // pending deposits in a narrower rail on the right.
 //
 // The left column has a hard 20rem floor. If the page shell is narrower than
@@ -29,13 +29,13 @@ export function ClientWallet({
   startAdding = false,
 }: {
   wallet: WalletView;
-  /** "You owe" and the unpaid invoices (packages/ui/invoices/ClientUnpaidInvoices), above the balance. */
+  /** "You owe" and the unpaid invoices (packages/ui/invoices/ClientUnpaidInvoices), under the cards. */
   owing?: ReactNode;
   /** Open "Add funds" straight away (the home screen's Add funds button links here with ?add=1). */
   startAdding?: boolean;
 }) {
   const addRef = useRef<HTMLDivElement>(null);
-  const [adding, setAdding] = useState(startAdding || (wallet.entries.length === 0 && wallet.pending.length === 0));
+  const [adding, setAdding] = useState(startAdding);
 
   const hasPending = wallet.pending.length > 0;
   const hasClosed = wallet.closed.length > 0;
@@ -52,30 +52,13 @@ export function ClientWallet({
           join the outer stack as siblings; from lg up it's a real column. */}
       <div className="contents lg:flex lg:min-w-0 lg:flex-col lg:gap-4">
         <div className="order-1 space-y-4">
-          {owing}
-          <BalanceCard balance={wallet.balance}>
-            <Button onClick={openAdd}>Add funds</Button>
-          </BalanceCard>
+          <WalletHome wallet={wallet} owing={owing} onAddFunds={openAdd} />
           {owing ? null : (
             <p className="text-xs text-muted">
-              Pay for any order from your balance: open the order and tap{" "}
+              Pay for any order from your Aming card: open the order and tap{" "}
               <span className="font-medium">Pay from wallet</span>.
             </p>
           )}
-        </div>
-
-        <div className="order-4">
-          <Panel title="History">
-            {wallet.entries.length ? (
-              <ul className="divide-y divide-border">
-                {wallet.entries.map((e) => (
-                  <EntryLine key={e.id} entry={e} />
-                ))}
-              </ul>
-            ) : (
-              <p className="py-3 text-sm text-muted">No wallet activity yet.</p>
-            )}
-          </Panel>
         </div>
 
         {hasClosed ? (
@@ -92,12 +75,12 @@ export function ClientWallet({
       </div>
 
       {/* Right rail — same `contents` trick, ordered so phones still read
-          balance → add funds → waiting → history. */}
+          card → add funds → waiting. */}
       {showAside ? (
         <div className="contents lg:flex lg:min-w-0 lg:flex-col lg:gap-4">
           {adding ? (
             <div ref={addRef} className="order-2 scroll-mt-4 space-y-3">
-              <Panel title="Add funds">
+              <Panel title="Add funds to your Aming card">
                 <PaymentMethods
                   pay="top-up"
                   bankExtra={
