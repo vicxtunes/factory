@@ -17,6 +17,10 @@ import MediaLinksLegacyLink from "./examples/media-links/legacy-link";
 import MediaLinksPrinting from "./examples/media-links/printing";
 import PhotoUploaderAlbum from "./examples/photo-uploader/album";
 import UploadRowStates from "./examples/upload-row/states";
+import FileBrowserDrive from "./examples/file-browser/drive";
+import FileBrowserEmpty from "./examples/file-browser/empty";
+import FileBrowserSharedViewer from "./examples/file-browser/shared-viewer";
+import FileBrowserChoosing from "./examples/file-browser/choosing";
 import UploadThumbsStates from "./examples/upload-thumbs/states";
 import UploadThumbsTryIt from "./examples/upload-thumbs/try-it";
 import UploadRowTryIt from "./examples/upload-row/try-it";
@@ -707,6 +711,20 @@ export const COMPONENTS: RoomComponent[] = [
     examples: [
       { title: "Album grid", file: "album-card/grid.tsx", Demo: AlbumCardGrid },
       { title: "Single album", file: "album-card/single.tsx", Demo: AlbumCardSingle },
+    ],
+  },
+  {
+    slug: "file-browser",
+    name: "Files (drive)",
+    category: "Uploads & downloads",
+    status: "live",
+    source: "packages/ui/files/FileBrowser.tsx (FileBrowser, FolderArt)",
+    summary: "A business's files, worked like a desktop: folders and files as icons (picture previews, coloured type badges) or details; click selects, double-click opens, right-click for Open, Rename in place, Move, Delete and Share (clients, team members or a link, as viewer, contributor or editor); F2, Delete, drag onto a folder to move, drop files anywhere to upload. My Business → Files; shared folders on a client's page and by link.",
+    examples: [
+      { title: "A business's drive (click into folders)", file: "file-browser/drive.tsx", Demo: FileBrowserDrive },
+      { title: "Empty folder", file: "file-browser/empty.tsx", Demo: FileBrowserEmpty },
+      { title: "Shared with a client (viewer)", file: "file-browser/shared-viewer.tsx", Demo: FileBrowserSharedViewer },
+      { title: "A client choosing photos (task)", file: "file-browser/choosing.tsx", Demo: FileBrowserChoosing },
     ],
   },
   {

@@ -17,7 +17,10 @@ tenant-scoped, so a future product (vendors, service providers) reuses it.
   `projects_set_status()`), so the history can't miss or invent a move. A move happens only if
   the project is still at the stage the service saw.
 - **A project's page brings it together:** client, stage, its booking (day, time, place), the
-  money (the invoice from the booking's quotation: paid, left, status), notes and history.
+  money (the invoice from the booking's quotation: paid, left, status), its files, notes and
+  history.
+- **Every project has a folder in Files** (Projects → its title), made with it by the database and
+  renamed with it (packages/lib/files/README.md → "Project folders").
 - **Who acted:** today the studio owner (team members get no logins yet). The history stores the
   name as it was, ready for team members later.
 

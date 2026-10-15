@@ -8,6 +8,7 @@ import { timeSpan } from "@repo/ui/bookings/BookingBits";
 import { PipelineSteps, ProjectHistory } from "@repo/ui/projects/ProjectBits";
 import { ProjectStatusButtons } from "@repo/ui/projects/ProjectControls";
 import { DeleteButton } from "@repo/ui/DeleteButton";
+import { FolderArt } from "@repo/ui/files/FolderArt";
 import { deleteProject } from "@repo/lib/projects/actions";
 import { ProjectGalleryPanel } from "@repo/ui/photos/ProjectGalleryPanel";
 import { SectionLabel } from "@repo/ui/SectionLabel";
@@ -22,6 +23,7 @@ import { bookings } from "@repo/lib/bookings/server";
 import { projectIdSchema, type Project } from "@repo/lib/projects/core";
 import { projects } from "@repo/lib/projects/server";
 import { customers } from "@repo/lib/customers/server";
+import { files } from "@repo/lib/files/server";
 import { photos } from "@repo/lib/photos/server";
 import { studioOrders } from "@repo/lib/studio-orders/server";
 import { portal, studioUrl } from "@repo/lib/studio-portal/server";
@@ -86,6 +88,14 @@ export default async function StudioProjectPage({ params }: { params: Promise<{ 
           <Tasks scope={scope} project={p} />
         </Loading>
       </section>
+      {canUse(access, "files") ? (
+        <section className="space-y-3">
+          <SectionLabel>Files</SectionLabel>
+          <Suspense fallback={<Skeleton className="h-20 w-full rounded-2xl" />}>
+            <ProjectFiles scope={scope} project={p} />
+          </Suspense>
+        </section>
+      ) : null}
       <section className="space-y-3">
         <SectionLabel>Client photos</SectionLabel>
         <Loading skeleton={<PanelStackSkeleton count={1} />}>
@@ -160,13 +170,38 @@ async function BookingAndMoney({ scope, project: p, money }: { scope: TenantScop
   );
 }
 
+// Tasks for the team or the client; with the project's folders, also choosing photos or giving feedback on them.
 async function Tasks({ scope, project: p }: { scope: TenantScope; project: Project }) {
-  const [work, members] = await Promise.all([tasks.forProject(scope, p.id), team.active(scope)]);
+  const [work, members, folderId] = await Promise.all([
+    tasks.forProject(scope, p.id),
+    team.active(scope),
+    files.projectFolder(scope, p.id),
+  ]);
+  const folders = folderId ? await files.foldersWithin(scope, folderId) : [];
   return (
     <>
       <TaskRows tasks={work} today={localDate(new Date(), scope.timeZone)} scope={scope} editable empty="No tasks yet." />
-      <AddTaskForm projectId={p.id} team={members.map((m) => ({ id: m.id, name: m.name }))} />
+      <AddTaskForm projectId={p.id} team={members.map((m) => ({ id: m.id, name: m.name }))} client={{ id: p.customerId, name: p.customerName }} folders={folders} />
     </>
+  );
+}
+
+// Its folder in Files (Projects → its title), made with the project.
+async function ProjectFiles({ scope, project: p }: { scope: TenantScope; project: Project }) {
+  const folderId = await files.projectFolder(scope, p.id);
+  if (!folderId) return <p className="text-sm text-muted">This project has no folder.</p>;
+  return (
+    <Link
+      href={`/studio/files?folder=${folderId}`}
+      className="flex items-center gap-4 rounded-2xl border border-border bg-surface p-4 shadow-theme-xs transition hover:border-brand-500/40 hover:shadow-md"
+    >
+      <FolderArt className="h-10 w-12 shrink-0" />
+      <span className="min-w-0 flex-1">
+        <span className="block font-medium">Project files</span>
+        <span className="block text-xs text-muted">Contracts, raw footage, edits: anything for this project, in Files → Projects.</span>
+      </span>
+      <span className="text-sm font-medium text-brand-600">Open</span>
+    </Link>
   );
 }
 

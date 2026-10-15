@@ -1,6 +1,6 @@
 # Tasks module
 
-Work on a project: what, who (a team member, or unassigned), by when, and how urgent. For studios,
+Work on a project: what, who (a team member, the project's client, or unassigned), by when, and how urgent. For studios,
 tasks live on a project's page, with **My Business → Tasks** for everything still to do. Generic and
 tenant-scoped.
 
@@ -19,6 +19,17 @@ tenant-scoped.
   - for a team member who signs in without projects, only theirs (dashboard and Tasks page): they
     can start and finish them, and the server refuses a status change on anyone else's;
   - the studio's open tasks and team for the boss, read-only.
+
+## Tasks for clients
+
+- A task can be given to the **project's own client** instead of a team member (never both; never
+  another client). It shows on their page (`/<studio>/me`, "For you to do").
+- **Kinds:** a to-do; **Choose photos** (a folder, and how many: at least / at most); **Give
+  feedback** (a folder). The kind, folder and picks are set when the task is made.
+- Choosing and feedback happen in Files, in the task's folder (packages/lib/files/README.md →
+  "Choosing"): the client sends their choice or says they're done, which marks the task done and
+  tells the owner. Reopening the task lets them change it.
+- Giving a task in a folder shares the folder with whoever it's for (packages/lib/files).
 
 ## Studio separation
 

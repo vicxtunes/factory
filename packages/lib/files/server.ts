@@ -4,11 +4,13 @@ import "server-only";
 // for the files, the database for the records. Pages and actions import from
 // here.
 
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 
 import { r2ObjectStore } from "@repo/lib/photos/adapters/r2/store";
 
 import { supabaseFileRepository } from "./adapters/supabase/repository";
 import { FileService } from "./service";
 
-export const files = new FileService(supabaseFileRepository, r2ObjectStore, randomUUID);
+const newToken = () => randomBytes(32).toString("base64url");
+
+export const files = new FileService(supabaseFileRepository, r2ObjectStore, randomUUID, newToken);
