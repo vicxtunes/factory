@@ -108,3 +108,22 @@ test("renaming many: find and replace, and clashes, empty and too long names fla
   assert.equal(planRenames(items.slice(0, 1), { mode: "pattern", pattern: " / ", start: 1, digits: 1, order: "name" }, [])[0].problem, "Needs a name.");
   assert.equal(planRenames(items.slice(0, 1), { mode: "pattern", pattern: "x".repeat(250), start: 1, digits: 1, order: "name" }, [])[0].problem, "Too long.");
 });
+
+test("renaming many by caption: repeated names numbered, a photo with no caption flagged", () => {
+  const items = [
+    { kind: "file" as const, id: "1", name: "IMG_01.jpg", createdAt: null, caption: "Nakato Sarah" },
+    { kind: "file" as const, id: "2", name: "IMG_02.jpg", createdAt: null, caption: "Joel" },
+    { kind: "file" as const, id: "3", name: "IMG_03.JPG", createdAt: null, caption: "joel" },
+    { kind: "file" as const, id: "4", name: "IMG_04.jpg", createdAt: null, caption: null },
+  ];
+  const plan = planRenames(items, { mode: "pattern", pattern: "{caption}", start: 1, digits: 1, order: "name", dedupe: true }, ["Nakato Sarah.jpg"]);
+  assert.deepEqual(
+    plan.map((p) => [p.to, p.problem]),
+    [
+      ["Nakato Sarah (2).jpg", null],
+      ["Joel.jpg", null],
+      ["joel (2).JPG", null],
+      ["", "Needs a name."],
+    ],
+  );
+});

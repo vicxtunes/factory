@@ -21,6 +21,15 @@ export interface ObjectStore {
   move(fromKey: string, toKey: string): Promise<void>;
   /** Deletes files; missing ones are fine. */
   remove(keys: string[]): Promise<void>;
+  /** A file's bytes, or null when it isn't there. */
+  read(key: string): Promise<Uint8Array | null>;
+  /** Stores bytes the server made (a picture's small copies). */
+  write(key: string, body: Uint8Array, contentType: string): Promise<void>;
+}
+
+/** Makes a picture's small copies: a preview (1,600 px) and a thumbnail (400 px), JPEG, upright, no metadata. */
+export interface Previewer {
+  make(original: Uint8Array): Promise<{ preview: Uint8Array; thumb: Uint8Array }>;
 }
 
 export interface FileRepository {
@@ -40,7 +49,7 @@ export interface FileRepository {
   files(scope: TenantScope, folderId: string | null): Promise<StoredFile[]>;
   file(scope: TenantScope, id: string): Promise<StoredFile | null>;
   /** Records an uploaded file. Throws FileError when it doesn't fit the allowance (checked in the database), the name is taken or the folder is gone. */
-  record(scope: TenantScope, file: Omit<StoredFile, "createdAt">): Promise<void>;
+  record(scope: TenantScope, file: Omit<StoredFile, "createdAt" | "caption" | "previewBytes">): Promise<void>;
   /** Renames and/or moves a file. False when it isn't this tenant's; throws FileError when the name is taken there. */
   updateFile(scope: TenantScope, id: string, file: { folderId: string | null; name: string }): Promise<boolean>;
   /** Deletes the record; returns its key. Null when it isn't this tenant's. */
@@ -60,6 +69,12 @@ export interface FileRepository {
   updateShare(scope: TenantScope, id: string, settings: ShareSettings): Promise<boolean>;
   /** False when it isn't this tenant's. */
   deleteShare(scope: TenantScope, id: string): Promise<boolean>;
+  /** Records a picture's small copies (their bytes together). False when it isn't this tenant's. */
+  setPreviewBytes(scope: TenantScope, id: string, bytes: number): Promise<boolean>;
+  /** The files directly in these folders that are pictures without small copies yet. */
+  needingPreviews(scope: TenantScope, folderIds: string[]): Promise<StoredFile[]>;
+  /** False when it isn't this tenant's. */
+  setCaption(scope: TenantScope, id: string, caption: string | null): Promise<boolean>;
   /**
    * Renames many at once, all or nothing (never the Projects folder or a
    * project's). Throws FileError when one is gone or a new name clashes.

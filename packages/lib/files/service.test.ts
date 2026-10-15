@@ -34,8 +34,18 @@ function fakes(quotaBytes = 10 * MB) {
       objects.delete(from);
     },
     remove: async (keys) => keys.forEach((k) => objects.delete(k)),
+    read: async (key) => (objects.has(key) ? new Uint8Array(objects.get(key)!) : null),
+    write: async (key, body) => void objects.set(key, body.byteLength),
   };
-  const used = (t: string) => files.filter((f) => f.tenantId === t).reduce((s, f) => s + f.bytes, 0);
+  /** Small copies: a preview a tenth of the original, a thumbnail a hundredth (failing for a "broken" one). */
+  const previewer = {
+    make: async (original: Uint8Array) => {
+      if (original.byteLength === 13) throw new Error("not a picture sharp can read");
+      return { preview: new Uint8Array(Math.ceil(original.byteLength / 10)), thumb: new Uint8Array(Math.ceil(original.byteLength / 100)) };
+    },
+  };
+  // What the database counts: each file and its small copies.
+  const used = (t: string) => files.filter((f) => f.tenantId === t).reduce((s, f) => s + f.bytes + f.previewBytes, 0);
   const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
   const folderTaken = (t: string, parentId: string | null, name: string, except?: string) =>
     folders.some((f) => f.tenantId === t && f.parentId === parentId && same(f.name, name) && f.id !== except);
@@ -73,7 +83,7 @@ function fakes(quotaBytes = 10 * MB) {
     record: async (s, f) => {
       if (used(s.tenantId) + f.bytes > quotaBytes) throw new FileError("Not enough space left for that.");
       if (fileTaken(s.tenantId, f.folderId, f.name)) throw new FileError("There's already a file with that name here.");
-      files.push({ ...f, tenantId: s.tenantId, createdAt: "2026-10-13T00:00:00Z" });
+      files.push({ ...f, caption: null, previewBytes: 0, tenantId: s.tenantId, createdAt: "2026-10-13T00:00:00Z" });
     },
     updateFile: async (s, id, f) => {
       const file = files.find((x) => x.tenantId === s.tenantId && x.id === id);
@@ -108,6 +118,17 @@ function fakes(quotaBytes = 10 * MB) {
     deleteShare: async (s, id) => {
       const i = shares.findIndex((x) => x.tenantId === s.tenantId && x.id === id);
       return i >= 0 && shares.splice(i, 1).length > 0;
+    },
+    setPreviewBytes: async (s, id, bytes) => {
+      const file = files.find((f) => f.tenantId === s.tenantId && f.id === id);
+      if (file) file.previewBytes = bytes;
+      return !!file;
+    },
+    needingPreviews: async (s, folderIds) => files.filter((f) => f.tenantId === s.tenantId && folderIds.includes(f.folderId!) && f.previewBytes === 0 && f.contentType.startsWith("image/")),
+    setCaption: async (s, id, caption) => {
+      const file = files.find((f) => f.tenantId === s.tenantId && f.id === id);
+      if (file) file.caption = caption;
+      return !!file;
     },
     renameMany: async (s, batch) => {
       const fs = batch.folders.map((x) => ({ x, f: folders.find((f) => f.tenantId === s.tenantId && f.id === x.id && !f.projectId && !f.holdsProjects) }));
@@ -156,12 +177,12 @@ function fakes(quotaBytes = 10 * MB) {
       return share ? { tenantId: share.tenantId, share } : null;
     },
   };
-  const service = new FileService(repo, store, () => `f${++n}`, () => `token-${++n}`);
+  const service = new FileService(repo, store, () => `f${++n}`, () => `token-${++n}`, previewer);
   /** Uploads one file the way the browser does: ask, PUT (here: set its real size), confirm. */
-  async function upload(s: TenantScope, folderId: string | null, name: string, bytes: number, claimed = bytes, access?: FileAccess) {
-    const [ticket] = await service.startUpload(s, folderId, [{ name, bytes: claimed, contentType: "application/pdf" }], access);
+  async function upload(s: TenantScope, folderId: string | null, name: string, bytes: number, claimed = bytes, access?: FileAccess, contentType = "application/pdf") {
+    const [ticket] = await service.startUpload(s, folderId, [{ name, bytes: claimed, contentType }], access);
     objects.set(`incoming/${s.tenantId}/file-${ticket.fileId}`, bytes);
-    await service.confirmUpload(s, { folderId, fileId: ticket.fileId, name, contentType: "application/pdf" }, access);
+    await service.confirmUpload(s, { folderId, fileId: ticket.fileId, name, contentType }, access);
     return ticket.fileId;
   }
   return { service, objects, files, folders, upload, choosing };
@@ -530,4 +551,86 @@ test("a task's folder is shared with its client once, never lowering a share the
   await service.ensureShared(studioA, raw, { kind: "member", memberId: "m1" }, "viewer");
   assert.equal((await service.shares(studioA)).length, 2);
   assert.equal((await service.list(studioA, raw, await service.memberAccess(studioA, "m1")))?.rights.change, true);
+});
+
+// ── Captions ───────────────────────────────────────────────────────────────
+
+test("captions: the business writes them; a client only through their naming task, in its folder", async () => {
+  const { service, nakato, raw, contract, clip, secret } = await sharedDrive();
+  await service.setCaption(studioA, contract, "Nakato Sarah, Joel K.");
+  assert.equal((await service.list(studioA, nakato))?.files.find((f) => f.id === contract)?.caption, "Nakato Sarah, Joel K.");
+  await service.share(studioA, nakato, { kind: "client", customerId: "c1" }, settings("viewer", false));
+  const client = await service.clientAccess(studioA, "c1");
+  // A viewer can't caption on their own…
+  await assert.rejects(service.setCaption(studioA, clip, "Amina", client), says(/can't rename, move or delete/));
+  // …but can through their task, on the files in its folder only.
+  await service.setCaption(studioA, clip, "Amina", client, { folderId: raw });
+  await assert.rejects(service.setCaption(studioA, contract, "x", client, { folderId: raw }), says(/this task's folder/));
+  await assert.rejects(service.setCaption(studioA, secret, "x", client, { folderId: nakato }), says(/file no longer exists/));
+  await service.setCaption(studioA, clip, null, client, { folderId: nakato });
+  assert.equal((await service.list(studioA, raw))?.files[0].caption, null);
+  await assert.rejects(service.setCaption(studioB, contract, "x"), says(/file no longer exists/));
+});
+
+// ── Small copies of pictures ───────────────────────────────────────────────
+
+test("a picture gets a preview and a thumbnail when it's uploaded; they show instead of it, and go with it", async () => {
+  const { service, objects, upload } = fakes();
+  const id = await upload(studioA, null, "IMG_01.JPG", 2 * MB, 2 * MB, undefined, "image/jpeg");
+  const key = `studios/studio-a/files/${id}`;
+  assert.deepEqual([...objects.keys()].sort(), [key, `${key}-preview.jpg`, `${key}-thumb.jpg`]);
+  const [file] = (await service.list(studioA, null))!.files;
+  assert.equal(file.previewUrl, `get://${key}-preview.jpg?as=`);
+  assert.equal(file.thumbUrl, `get://${key}-thumb.jpg?as=`);
+  assert.equal(file.downloadUrl, `get://${key}?as=IMG_01.JPG`, "the original is still the download");
+  // The copies count toward the storage.
+  assert.ok((await service.usage(studioA)).usedBytes > 2 * MB);
+  await service.deleteFile(studioA, id);
+  assert.equal(objects.size, 0);
+});
+
+test("proofs never show the original: no copies yet and no downloads means nothing, until they're made", async () => {
+  const { service, files, upload, nakato } = await sharedDrive();
+  const photo = await upload(studioA, nakato, "kid.jpg", 3 * MB, 3 * MB, undefined, "image/jpeg");
+  // As if uploaded before copies were made.
+  files.find((f) => f.id === photo)!.previewBytes = 0;
+  await service.share(studioA, nakato, { kind: "client", customerId: "c1" }, settings("viewer", false));
+  const client = await service.clientAccess(studioA, "c1");
+  const before = (await service.list(studioA, nakato, client))!.files.find((f) => f.id === photo)!;
+  assert.deepEqual([before.previewUrl, before.thumbUrl, before.downloadUrl], [null, null, null]);
+  // The business still sees it (it may download it anyway).
+  assert.ok((await service.list(studioA, nakato))!.files.find((f) => f.id === photo)!.previewUrl?.endsWith("as=kid.jpg"));
+  assert.equal(await service.ensurePreviews(studioA, nakato), 0);
+  const after = (await service.list(studioA, nakato, client))!.files.find((f) => f.id === photo)!;
+  assert.ok(after.previewUrl?.endsWith("-preview.jpg?as="));
+  assert.equal(after.downloadUrl, null);
+});
+
+test("a picture whose copies can't be made still uploads; a PDF gets none", async () => {
+  const { service, objects, upload } = fakes();
+  const broken = await upload(studioA, null, "odd.png", 13, 13, undefined, "image/png");
+  const pdf = await upload(studioA, null, "terms.pdf", MB);
+  assert.deepEqual([...objects.keys()].sort(), [`studios/studio-a/files/${broken}`, `studios/studio-a/files/${pdf}`].sort());
+  assert.equal((await service.list(studioA, null))!.files.find((f) => f.id === pdf)!.thumbUrl, null);
+});
+
+// ── Downloads ──────────────────────────────────────────────────────────────
+
+test("a folder downloads with its folders as paths, as originals or optimised copies, only where downloads are allowed", async () => {
+  const { service, upload, nakato, raw, contract } = await sharedDrive();
+  const photo = await upload(studioA, raw, "IMG_01.HEIC", 2 * MB, 2 * MB, undefined, "image/heic");
+  await upload(studioA, raw, "IMG_01.jpg", MB, MB, undefined, "image/jpeg");
+  const originals = await service.downloads(studioA, { folderId: nakato }, "original");
+  assert.deepEqual(originals.map((d) => d.path), ["contract.pdf", "Raw/clip.pdf", "Raw/IMG_01.HEIC", "Raw/IMG_01.jpg"]);
+  const optimised = await service.downloads(studioA, { folderId: nakato }, "optimised");
+  assert.deepEqual(optimised.map((d) => d.path), ["contract.pdf", "Raw/clip.pdf", "Raw/IMG_01.jpg", "Raw/IMG_01 (2).jpg"]);
+  assert.ok(optimised.find((d) => d.path === "Raw/IMG_01.jpg")!.url.includes(`${photo}-preview.jpg`));
+  assert.deepEqual((await service.downloads(studioA, { fileIds: [contract] }, "optimised")).map((d) => d.path), ["contract.pdf"]);
+  // Shared without downloads: nothing.
+  await service.share(studioA, nakato, { kind: "client", customerId: "c1" }, settings("viewer", false));
+  const client = await service.clientAccess(studioA, "c1");
+  await assert.rejects(service.downloads(studioA, { fileIds: [contract] }, "original", client), says(/can't be downloaded/));
+  assert.deepEqual(await service.downloads(studioA, { folderId: nakato }, "original", client), []);
+  assert.equal((await service.list(studioA, raw, client))!.files.find((f) => f.id === photo)!.optimisedUrl ?? null, null);
+  assert.ok((await service.list(studioA, raw))!.files.find((f) => f.id === photo)!.optimisedUrl?.endsWith("as=IMG_01.jpg"));
 });

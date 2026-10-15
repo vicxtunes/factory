@@ -14,7 +14,7 @@ export const taskInputSchema = z
     customerId: z.uuid("Choose the client.").nullable().default(null),
     dueOn: z.iso.date("Choose a valid due date.").nullable(),
     priority: z.enum(["low", "normal", "high"], "Choose a priority."),
-    kind: z.enum(["todo", "choose", "feedback"], "Choose what kind of task.").default("todo"),
+    kind: z.enum(["todo", "choose", "feedback", "name"], "Choose what kind of task.").default("todo"),
     folderId: z.uuid("Choose a folder.").nullable().default(null),
     pickMin: z.number().int().min(0, "Can't be below 0.").max(10000).nullable().default(null),
     pickMax: z.number().int().min(1, "At least 1.").max(10000, "At most 10,000.").nullable().default(null),
