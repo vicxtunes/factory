@@ -600,7 +600,10 @@ test("proofs never show the original: no copies yet and no downloads means nothi
   assert.deepEqual([before.previewUrl, before.thumbUrl, before.downloadUrl], [null, null, null]);
   // The business still sees it (it may download it anyway).
   assert.ok((await service.list(studioA, nakato))!.files.find((f) => f.id === photo)!.previewUrl?.endsWith("as=kid.jpg"));
+  // Waiting for copies, even where the original can stand in (the business may download it).
+  assert.ok(FileService.missingPreviews((await service.list(studioA, nakato))!));
   assert.equal(await service.ensurePreviews(studioA, nakato), 0);
+  assert.ok(!FileService.missingPreviews((await service.list(studioA, nakato))!));
   const after = (await service.list(studioA, nakato, client))!.files.find((f) => f.id === photo)!;
   assert.ok(after.previewUrl?.endsWith("-preview.jpg?as="));
   assert.equal(after.downloadUrl, null);
