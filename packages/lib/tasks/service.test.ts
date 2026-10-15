@@ -31,11 +31,21 @@ function fakes() {
       ),
     get: async (s, id) => mine(s, id) ?? null,
     create: async (s, input) => {
-      rows.push({ ...input, id: `t${rows.length + 1}`, tenantId: s.tenantId, projectTitle: "", assigneeName: null, customerName: null, status: "pending", doneAt: null });
+      rows.push({ ...input, id: `t${rows.length + 1}`, tenantId: s.tenantId, projectTitle: "", assigneeName: null, customerName: null, shareToken: null, status: "pending", doneAt: null });
       return `t${rows.length}`;
     },
     update: async (s, id, input) => !!(mine(s, id) && Object.assign(mine(s, id)!, input)),
     setStatus: async (s, id, status) => !!(mine(s, id) && Object.assign(mine(s, id)!, { status, doneAt: status === "done" ? "now" : null })),
+    setShareToken: async (s, id, token) => {
+      const row = mine(s, id);
+      if (!row) return null;
+      row.shareToken ??= token;
+      return row.shareToken;
+    },
+    byShareToken: async (token) => {
+      const row = rows.find((r) => r.shareToken === token);
+      return row ? { tenantId: row.tenantId, task: row } : null;
+    },
     remove: async (s, id) => {
       const i = rows.findIndex((r) => r.tenantId === s.tenantId && r.id === id);
       if (i < 0) return false;
@@ -47,7 +57,8 @@ function fakes() {
     project: async (s, id) => projects.get(`${s.tenantId}/${id}`) ?? null,
     member: async (s, id) => members.get(`${s.tenantId}/${id}`) ?? null,
   };
-  return { service: new TaskService(store, directory), rows };
+  let n = 0;
+  return { service: new TaskService(store, directory, () => `secret-${++n}`), rows };
 }
 
 const cull: TaskInput = {
@@ -124,4 +135,20 @@ test("a task can go to the project's own client (choosing photos, say), and thei
   await assert.rejects(service.update(studioA, todo, { ...cull, assigneeId: null, customerId: "amina" }), /own client only/);
   await service.update(studioA, todo, { ...cull, assigneeId: null, customerId: "nakato" });
   assert.equal((await service.forClient(studioA, "nakato")).length, 2);
+});
+
+test("a client's task with photos gets one link, opening at its studio only; a team task has none", async () => {
+  const { service } = fakes();
+  const naming = { ...cull, assigneeId: null, customerId: "nakato", title: "Name the children", kind: "name" as const, folderId: "f1" };
+  const id = await service.create(studioA, naming);
+  const token = await service.shareToken(studioA, id);
+  assert.equal(await service.shareToken(studioA, id), token, "the same link every time");
+  assert.equal((await service.byShareToken(studioA, token))?.id, id);
+  assert.equal(await service.byShareToken(studioB, token), null);
+  assert.equal(await service.byShareToken(studioA, "nope"), null);
+  const team = await service.create(studioA, cull);
+  await assert.rejects(service.shareToken(studioA, team), /Only a client's task/);
+  await assert.rejects(service.shareToken(studioB, id), TaskError);
+  await service.remove(studioA, id);
+  assert.equal(await service.byShareToken(studioA, token), null, "gone with the task");
 });

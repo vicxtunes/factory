@@ -6,7 +6,7 @@ import { useState, useTransition } from "react";
 
 import { Button } from "@repo/ui/Button";
 import { Field, Select, TextInput } from "@repo/ui/Field";
-import { createTask, removeTask, setTaskStatus } from "@repo/lib/tasks/actions";
+import { createTask, removeTask, setTaskStatus, taskLink } from "@repo/lib/tasks/actions";
 import { isOverdue, TASK_KIND_LABELS, TASK_PRIORITY_LABELS, type Task, type TaskKind, type TaskPriority } from "@repo/lib/tasks/core";
 import { formatDay } from "@repo/lib/tenancy/format";
 import type { TenantScope } from "@repo/lib/tenancy/types";
@@ -54,6 +54,24 @@ export function TaskRows({
   empty?: string;
 }) {
   const { error, pending, run } = useTaskAction();
+  const [copied, setCopied] = useState<string | null>(null);
+  /** A client's task link (no sign-in), copied to send them. */
+  function copyLink(id: string) {
+    run(async () => {
+      const res = await taskLink(id);
+      if (!res.ok) return res;
+      try {
+        await navigator.clipboard.writeText(res.data);
+        setCopied(id);
+        setTimeout(() => setCopied(null), 2500);
+        return { ok: true };
+      } catch {
+        // No clipboard (an old browser): show it to copy by hand.
+        window.prompt("Copy this link and send it to your client:", res.data);
+        return { ok: true };
+      }
+    });
+  }
   if (tasks.length === 0) return <p className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted">{empty}</p>;
 
   return (
@@ -93,11 +111,27 @@ export function TaskRows({
                   ]
                     .filter(Boolean)
                     .join(" · ")}
+                  {editable === true && t.customerId && t.folderId && t.kind !== "todo" ? (
+                    <>
+                      {" · "}
+                      <button type="button" disabled={pending} onClick={() => copyLink(t.id)} className="text-brand-600 hover:underline">
+                        {copied === t.id ? "Link copied: send it to them" : "Copy link for the client"}
+                      </button>
+                    </>
+                  ) : null}
                   {t.folderId && filesPath ? (
                     <>
                       {" · "}
                       <Link href={`${filesPath}?folder=${t.folderId}&task=${t.id}`} className="text-brand-600 hover:underline">
-                        {t.kind === "choose" ? (done ? "See their choice" : "Open the photos") : t.kind === "feedback" ? "See comments" : "Open folder"}
+                        {t.kind === "choose"
+                          ? done
+                            ? "See their choice"
+                            : "Open the photos"
+                          : t.kind === "feedback"
+                            ? "See comments"
+                            : t.kind === "name"
+                              ? "See the names"
+                              : "Open folder"}
                       </Link>
                     </>
                   ) : null}
@@ -205,7 +239,15 @@ export function AddTaskForm({
           onChange={(e) => setTitle(e.target.value)}
           required
           maxLength={200}
-          placeholder={kind === "choose" ? "Choose your 40 album photos" : kind === "feedback" ? "Tell us what to change" : "Cull and colour-correct the ceremony"}
+          placeholder={
+            kind === "choose"
+              ? "Choose your 40 album photos"
+              : kind === "feedback"
+                ? "Tell us what to change"
+                : kind === "name"
+                  ? "Write the children's names on their photos"
+                  : "Cull and colour-correct the ceremony"
+          }
         />
       </Field>
       <div className="grid gap-3 sm:grid-cols-3">

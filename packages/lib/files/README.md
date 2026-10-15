@@ -2,7 +2,7 @@
 
 Any file a business keeps (contracts, design files, videos, zips), in folders, stored **as
 uploaded** in **Cloudflare R2** within the same **storage allowance** as its photos
-(packages/lib/photos/README.md → "The allowance"). For studios it's **My Business → Files**.
+(packages/lib/photos/README.md → "The allowance"). For studios it's **My Business → Drive**.
 Generic and tenant-scoped.
 
 - **Folders** nest to any depth. One name per place, whatever the capitals.
@@ -10,7 +10,31 @@ Generic and tenant-scoped.
   gets a number: "report (2).pdf".
 - **Rename, move, delete** on every row. A folder moves with everything in it, never into itself.
   Deleting a folder deletes what's in it, at any depth, and frees the space.
-- **Download:** a file's name is a signed link (an hour) that saves it under its real name.
+- **Download:** a file's name is a signed link (an hour) that saves it under its real name. A
+  picture offers its **original** or its **optimised** copy; chosen files, or a folder with
+  everything in it (its folders as paths), download as a **zip** of either, made in the browser in
+  parts (300 files or 500 MB each).
+
+## Small copies of pictures (previews)
+
+- After a picture is uploaded (JPEG, PNG, WebP, HEIC, AVIF, TIFF, GIF; up to 80 MB), the server
+  makes two copies with sharp: a **preview** (1,600 px, ~200–400 KB) and a **thumbnail** (400 px),
+  JPEG, turned upright, **without location or camera details**. They sit beside the original
+  (`<key>-preview.jpg`, `<key>-thumb.jpg`), count toward the storage, and go when it's deleted.
+- Tiles load thumbnails and the viewer the preview, so folders open fast. The original is only
+  fetched to download it.
+- **Proofs never get the original:** where downloads aren't allowed (task links, shares without
+  downloads), a picture shows only as its copies; without them yet it shows "Preparing…".
+- Pictures uploaded before copies existed (or whose copies failed) get them in the background
+  (`after()`), a batch at a time, whenever their folder is opened or a task is given on it.
+
+## Proofs (task links)
+
+Photos still in production, on a client's task link or task page: watermarked ("PROOF · the
+business"), the browser's own Save / Copy image menu and dragging blocked, Ctrl/⌘+S and +P
+blocked, nothing printed, and the photos covered while the page isn't in front (most desktop
+screenshot tools take focus first) or after Print Screen. A page can't stop a phone's screenshot or
+a photo of the screen: the watermark, and only ever sending the preview, are what protect them.
 - **Who:** the owner, and team members given the **Files** area (packages/lib/team), have
   everything. A manager has it. Anyone else sees only what's shared with them (below).
 
@@ -106,6 +130,18 @@ member):
 - Giving a task in a folder shares the folder: with the client to look at, without downloads (proofs);
   with a team member without the Files area, as an editor. A share they have stays as it is.
 
+## Naming photos (captions)
+
+- A file has a **caption**: a few words about it; for a school's photos, the children in each one
+  ("Nakato Sarah, Joel K."). The business (and editors) write them; it shows under the file.
+- A **Name the photos** task (packages/lib/tasks) gives a folder to the project's client (the
+  school), shared to look at without downloads: a name box under every photo (and in the viewer),
+  Enter saves and goes to the next, "12 / 40 named", then **Send names**; the owner is told how
+  many were named. They can caption only the files in the task's folder, only until they send.
+- The business opens the task's folder from the task: the names under each photo, **Use names as
+  file names** (Rename many with `{caption}`, repeated names numbered: "Joel.jpg", "Joel (2).jpg";
+  photos with no name are flagged) and **Download list** (a CSV: file, names, folder).
+
 ## How files are stored
 
 - **Straight to R2:** the server hands out short-lived (15 min) signed upload links, 20 files a
@@ -168,6 +204,7 @@ supabase/migrations/20261101100000_folder_shares.sql
 supabase/migrations/20261102100000_files_rename_many.sql
 supabase/migrations/20261103100000_file_comments.sql
 supabase/migrations/20261104100000_client_tasks.sql   (file_picks, files_pick())
+supabase/migrations/20261105100000_file_captions.sql  (files.caption, the "name" task kind)
 ```
 
 ## Testing

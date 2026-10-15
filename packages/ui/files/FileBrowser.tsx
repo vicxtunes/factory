@@ -11,6 +11,8 @@ import { ContextMenu, type ContextEntry } from "@repo/ui/files/ContextMenu";
 import { FileViewer } from "@repo/ui/files/FileViewer";
 import { FolderArt } from "@repo/ui/files/FolderArt";
 import { PackagesPanel } from "@repo/ui/files/PackagesPanel";
+import { ProofCover, useProofShield, Watermark } from "@repo/ui/files/proof";
+import { saveAsZips } from "@repo/ui/files/zip";
 import { ShareDialog, type SharePeople } from "@repo/ui/files/ShareDialog";
 import { uploadServiceMedia } from "@repo/ui/files/media-upload";
 import { putSigned } from "@repo/ui/photos/browser";
@@ -18,6 +20,8 @@ import {
   confirmFileUpload,
   createFolder,
   deleteFile,
+  captionFile,
+  downloadLinks,
   finishTask,
   pickFile,
   deleteFolder,
@@ -54,7 +58,7 @@ type View = "grid" | "list";
 export interface FolderTask {
   id: string;
   title: string;
-  kind: "todo" | "choose" | "feedback";
+  kind: "todo" | "choose" | "feedback" | "name";
   pickMin: number | null;
   pickMax: number | null;
   dueOn: string | null;
@@ -173,13 +177,23 @@ function Picture({ entry: e, large, shared }: { entry: Entry; large: boolean; sh
       </span>
     );
   }
-  // A service's photos are already resized for the web, so they always show.
-  if (e.file.previewUrl && e.file.contentType.startsWith("image/") && (e.file.bytes <= PREVIEW_BYTES || e.file.media)) {
+  // A picture's tile is its thumbnail; before it has one, a small original (a service's photos are already small).
+  const image = e.file.contentType.startsWith("image/");
+  const tile = image ? (e.file.thumbUrl ?? (e.file.previewUrl && (e.file.bytes <= PREVIEW_BYTES || e.file.media) ? e.file.previewUrl : null)) : null;
+  if (tile) {
     return (
       <span className="relative inline-flex">
         {/* eslint-disable-next-line @next/next/no-img-element -- a signed, short-lived storage link */}
-        <img src={e.file.previewUrl} alt="" loading="lazy" draggable={false} className={`rounded-md object-cover shadow-sm ${large ? "h-14 w-16" : "h-5 w-6"}`} />
+        <img src={tile} alt="" loading="lazy" decoding="async" draggable={false} className={`rounded-md object-cover shadow-sm ${large ? "h-14 w-16" : "h-5 w-6"}`} />
         {e.file.media?.kind === "photo" && e.file.media.cover ? corner(ICONS.star, "-right-1", "The cover") : null}
+      </span>
+    );
+  }
+  // A proof whose small copies aren't made yet: never the original.
+  if (image && !e.file.previewUrl && !e.file.downloadUrl) {
+    return (
+      <span className={`inline-flex animate-pulse items-center justify-center rounded-md bg-background text-center text-muted ${large ? "h-14 w-16 text-[9px]" : "h-5 w-6 text-[6px]"}`}>
+        Preparing…
       </span>
     );
   }
@@ -299,6 +313,7 @@ export function FileBrowser({
   topLabel = "Files",
   sharing,
   task,
+  protect,
 }: {
   listing: FolderListing;
   basePath: string;
@@ -311,20 +326,29 @@ export function FileBrowser({
   sharing?: { shares: FolderShare[]; people: SharePeople; linkBase: string | null };
   /** A task being done here (?task=): picks and Send, or comments and Done. */
   task?: FolderTask;
+  /**
+   * Proofs (photos still in production): watermarked, no saving or printing
+   * them from the page, covered when it loses focus (see ./proof.tsx).
+   */
+  protect?: { watermark: string };
 }) {
   const router = useRouter();
   const here = listing.folder?.id ?? null;
   const rights = listing.rights;
+  const covered = useProofShield(!!protect);
   const view = useSyncExternalStore(subscribeView, readView, () => "grid" as const);
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   /** On a phone: taps pick items instead of opening them (from "Select" in the long-press menu). */
   const [selecting, setSelecting] = useState(false);
   const [naming, setNaming] = useState<Naming | null>(null);
-  const [renaming, setRenaming] = useState<Entry[] | null>(null);
+  const [renaming, setRenaming] = useState<{ entries: Entry[]; pattern?: string; dedupe?: boolean } | null>(null);
   const [moving, setMoving] = useState<{ entries: Entry[]; value: string } | null>(null);
   const [picks, setPicks] = useState<ReadonlySet<string>>(() => new Set(task?.picks ?? []));
   const [onlyPicked, setOnlyPicked] = useState(false);
+  /** Captions as typed (a "name" task), and as last saved. */
+  const [captions, setCaptions] = useState<ReadonlyMap<string, string>>(() => new Map(listing.files.map((f) => [f.id, f.caption ?? ""])));
+  const savedCaptions = useRef<Map<string, string>>(new Map(listing.files.map((f) => [f.id, f.caption ?? ""])));
   const [copied, setCopied] = useState(false);
   /** The file open in the viewer: its place among the files shown. */
   const [viewing, setViewing] = useState<number | null>(null);
@@ -389,6 +413,64 @@ export function FileBrowser({
       setError(res.error);
     });
   }
+  // A "name" task: a name box under each photo; Enter saves and goes to the next.
+  const namingTask = task?.kind === "name";
+  const canName = namingTask && task.mine && !task.done;
+  const named = listing.files.filter((f) => (captions.get(f.id) ?? "").trim()).length;
+  function saveCaption(fileId: string) {
+    const value = (captions.get(fileId) ?? "").trim();
+    if (value === savedCaptions.current.get(fileId)) return;
+    savedCaptions.current.set(fileId, value);
+    setError(null);
+    captionFile(via, fileId, value, task?.id).then((res) => {
+      if (res.ok) return router.refresh();
+      savedCaptions.current.delete(fileId);
+      setError(res.error);
+    });
+  }
+  function captionBox(fileId: string, className: string) {
+    if (!namingTask) return null;
+    if (!canName) {
+      const text = captions.get(fileId);
+      return <p className={`truncate text-center text-xs ${text ? "font-medium" : "text-muted italic"} ${className}`}>{text || "No name yet"}</p>;
+    }
+    return (
+      <input
+        data-caption
+        aria-label="Names on this photo"
+        value={captions.get(fileId) ?? ""}
+        placeholder="Names…"
+        maxLength={500}
+        onChange={(ev) => setCaptions((c) => new Map(c).set(fileId, ev.target.value))}
+        onBlur={() => saveCaption(fileId)}
+        onKeyDown={(ev) => {
+          ev.stopPropagation();
+          if (ev.key !== "Enter") return;
+          ev.preventDefault();
+          // On to the next photo's box (blurring this one saves it).
+          const boxes = [...(area.current?.querySelectorAll<HTMLInputElement>("input[data-caption]") ?? [])];
+          const at = boxes.indexOf(ev.currentTarget);
+          const next = at >= 0 ? boxes[at + 1] : undefined;
+          if (next) next.focus();
+          else ev.currentTarget.blur();
+        }}
+        onClick={(ev) => ev.stopPropagation()}
+        className={`w-full rounded-md border border-border bg-surface px-1.5 py-1 text-center text-xs outline-none focus:border-brand-500 ${className}`}
+      />
+    );
+  }
+  /** The names as a list to download: each file with the names on it. */
+  function downloadNames() {
+    const cell = (v: string) => `"${v.replace(/"/g, '""')}"`;
+    const rows = [["File", "Names", "Folder"], ...listing.files.map((f) => [f.name, captions.get(f.id) ?? "", listing.folder?.name ?? topLabel])];
+    const blob = new Blob([rows.map((r) => r.map(cell).join(",")).join("\n")], { type: "text/csv" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `${listing.folder?.name ?? "names"} - names.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
   async function copyForLightroom() {
     // Names without extensions, commas between: Lightroom's text filter finds any of them.
     const names = listing.files.filter((f) => picks.has(f.id)).map((f) => (f.name.lastIndexOf(".") > 0 ? f.name.slice(0, f.name.lastIndexOf(".")) : f.name));
@@ -481,7 +563,32 @@ export function FileBrowser({
     if (e.kind === "folder") router.push(href(e.id));
     else setViewing(shownFiles.findIndex((f) => f.id === e.id));
   }
-  const download = (e: Entry) => e.kind === "file" && e.file.downloadUrl && window.location.assign(e.file.downloadUrl);
+  const download = (url: string | null | undefined) => url && window.location.assign(url);
+
+  // Zips (made in the browser): chosen files, or a folder with everything in it, as originals or optimised copies.
+  const [zipping, setZipping] = useState<string | null>(null);
+  function zip(pick: { fileIds: string[] } | { folderId: string }, name: string, version: "original" | "optimised") {
+    setError(null);
+    setZipping("Getting the list…");
+    downloadLinks(via, { pick, version })
+      .then(async (res) => {
+        if (!res.ok) throw new Error(res.error);
+        if (res.data.length === 0) throw new Error("There's nothing here you can download.");
+        await saveAsZips(res.data, version === "optimised" ? `${name} (optimised)` : name, setZipping);
+      })
+      .catch((err: unknown) => {
+        setZipping(null);
+        setError(err instanceof Error ? err.message : "The zip couldn't be made.");
+      });
+  }
+  /** "Download as zip" for files you may download (not the Business folders, which aren't stored files). */
+  const zipMenu = (pick: { fileIds: string[] } | { folderId: string }, name: string, what: string): ContextEntry[] =>
+    rights.download && !listing.folder?.business && !zipping
+      ? [
+          { label: `Download ${what} as zip (originals)`, onSelect: () => zip(pick, name, "original") },
+          { label: `Download ${what} as zip (optimised)`, onSelect: () => zip(pick, name, "optimised") },
+        ]
+      : [];
 
   const sharedFolders = new Set(sharing?.shares.map((s) => s.folderId));
   /** Whether the person may rename, move or delete `e`. */
@@ -502,7 +609,7 @@ export function FileBrowser({
     }
     const many = actOn(e);
     if (!many.every(changeable)) return;
-    if (many.length > 1) return setRenaming(many);
+    if (many.length > 1) return setRenaming({ entries: many });
     selectOnly(keyOf(e));
     setNaming({ key: keyOf(e), value: e.name });
   }
@@ -627,11 +734,13 @@ export function FileBrowser({
   function manyMenu(items: Entry[]): ContextEntry[] {
     const all = items.every(changeable);
     const places = all ? destinations(items) : [];
+    const fileIds = items.flatMap((e) => (e.kind === "file" && !e.file.media ? [e.id] : []));
     return [
       { note: `${items.length} selected` },
+      ...(fileIds.length ? zipMenu({ fileIds }, listing.folder?.name ?? topLabel, fileIds.length === items.length ? `${fileIds.length} files` : `the ${fileIds.length} files`) : []),
       ...(all
         ? ([
-            { label: `Rename ${items.length} items…`, onSelect: () => setRenaming(items) },
+            { label: `Rename ${items.length} items…`, onSelect: () => setRenaming({ entries: items }) },
             ...(places.length ? [{ label: `Move ${items.length} items to…`, onSelect: () => setMoving({ entries: items, value: places[0].value }) }] : []),
             "-",
             { label: `Delete ${items.length} items`, danger: true, onSelect: () => remove(items[0]) },
@@ -651,8 +760,17 @@ export function FileBrowser({
         ? [{ label: "Open", onSelect: () => open(e) }]
         : [
             { label: e.file.media ? "Open" : "Open and comment", onSelect: () => open(e) },
-            ...(e.file.downloadUrl ? [{ label: "Download", onSelect: () => download(e) }] : [{ note: "Shared with you to look at, without downloads." }]),
+            ...(e.file.optimisedUrl
+              ? [
+                  { label: "Download original", onSelect: () => download(e.file.downloadUrl) },
+                  { label: "Download optimised", onSelect: () => download(e.file.optimisedUrl) },
+                ]
+              : e.file.downloadUrl
+                ? [{ label: "Download", onSelect: () => download(e.file.downloadUrl) }]
+                : [{ note: "Shared with you to look at, without downloads." }]),
           ];
+    // A folder downloads with everything in it.
+    const folderZip = e.kind === "folder" && !e.folder.business ? zipMenu({ folderId: e.id }, e.name, "folder") : [];
     const share: ContextEntry[] = e.kind === "folder" && shareable(e.folder) ? [{ label: sharedFolders.has(e.id) ? "Sharing…" : "Share…", onSelect: () => setSharingFolder(e.folder) }] : [];
     if (e.kind === "file" && e.file.media) {
       const media = e.file.media;
@@ -683,12 +801,13 @@ export function FileBrowser({
         : e.kind === "folder" && e.folder.holdsProjects
           ? "Holds a folder for every project. It stays as it is."
           : "Made with its project and named after it. Rename the project to rename it.";
-      return [...opener, ...select, ...share, "-", { note }];
+      return [...opener, ...folderZip, ...select, ...share, "-", { note }];
     }
-    if (!rights.change) return [...opener, ...select, ...share];
+    if (!rights.change) return [...opener, ...folderZip, ...select, ...share];
     const places = destinations([e]);
     return [
       ...opener,
+      ...folderZip,
       ...select,
       ...share,
       "-",
@@ -703,6 +822,8 @@ export function FileBrowser({
     ...(canNewFolder ? [{ label: bizNew ?? "New folder", onSelect: newFolder }] : []),
     ...(rights.add ? ([{ label: mediaFolder ? "Add photos or a video" : "Upload files", onSelect: () => pickRef.current?.click() }, "-"] satisfies ContextEntry[]) : []),
     ...(entries.length ? ([{ label: "Select all", onSelect: () => setSelected(new Set(entries.map(keyOf))) }, "-"] satisfies ContextEntry[]) : []),
+    ...(here ? zipMenu({ folderId: here }, listing.folder?.name ?? topLabel, "this folder") : []),
+    ...(here && rights.download && !listing.folder?.business ? (["-"] satisfies ContextEntry[]) : []),
     { label: "Tiles", checked: view === "grid", onSelect: () => chooseView("grid") },
     { label: "Details", checked: view === "list", onSelect: () => chooseView("list") },
   ];
@@ -870,7 +991,7 @@ export function FileBrowser({
 
   return (
     <div
-      className="relative space-y-4"
+      className={`relative space-y-4 ${protect ? "select-none print:hidden" : ""}`}
       onDragOver={(e) => {
         if (!e.dataTransfer.types.includes("Files") || uploading || !rights.add) return;
         e.preventDefault();
@@ -1008,12 +1129,21 @@ export function FileBrowser({
             <p className="text-xs text-muted">
               {choosing
                 ? `${task.mine ? "Choose" : "Choosing"} ${task.pickMin ? `${task.pickMin} to ${task.pickMax}` : `up to ${task.pickMax}`}: tap ♥ on a photo, or open it to look closer.`
-                : task.mine
+                : namingTask
+                  ? task.mine
+                    ? "Type the names of the people in each photo under it (commas between several), then press Enter for the next. Open a photo to look closer."
+                    : "Their names show under each photo."
+                  : task.mine
                   ? "Open a photo (double-click or tap) to comment on it; pin a comment to a spot to show exactly where."
                   : "Their comments show on each photo (the number on it): open one to read and resolve them."}
               {task.dueOn ? ` Due ${formatDay(scope, task.dueOn)}.` : ""}
             </p>
           </div>
+          {namingTask ? (
+            <span className="rounded-full bg-surface px-3 py-1 text-sm font-semibold tabular-nums shadow-sm">
+              {named} / {listing.files.length} named
+            </span>
+          ) : null}
           {choosing ? (
             <span className="rounded-full bg-surface px-3 py-1 text-sm font-semibold tabular-nums shadow-sm">
               {picks.size}
@@ -1021,16 +1151,46 @@ export function FileBrowser({
             </span>
           ) : null}
           {task.done ? (
-            <span className="text-sm font-medium text-success-600 dark:text-success-500">✓ {choosing ? "Sent" : "Done"}</span>
+            <span className="text-sm font-medium text-success-600 dark:text-success-500">✓ {choosing || namingTask ? "Sent" : "Done"}</span>
           ) : task.mine ? (
             <Button
               className="min-h-9"
               loading={pending}
               disabled={choosing && picks.size < Math.max(1, task.pickMin ?? 1)}
-              onClick={() => window.confirm(choosing ? `Send your ${picks.size} choices? You can't change them after, unless the business reopens it.` : "Done giving feedback?") && run(() => finishTask(via, task.id))}
+              onClick={() =>
+                window.confirm(
+                  choosing
+                    ? `Send your ${picks.size} choices? You can't change them after, unless the business reopens it.`
+                    : namingTask
+                      ? `Send the names${named < listing.files.length ? ` (${listing.files.length - named} photo${listing.files.length - named === 1 ? " has" : "s have"} none)` : ""}? You can't change them after, unless the business reopens it.`
+                      : "Done giving feedback?",
+                ) && run(() => finishTask(via, task.id))
+              }
             >
-              {choosing ? "Send my choice" : "I'm done"}
+              {choosing ? "Send my choice" : namingTask ? "Send names" : "I'm done"}
             </Button>
+          ) : null}
+          {namingTask && !task.mine && named ? (
+            <>
+              {rights.change ? (
+                <Button
+                  variant="secondary"
+                  className="min-h-9"
+                  onClick={() =>
+                    setRenaming({
+                      entries: entries.filter((e) => e.kind === "file" && (captions.get(e.id) ?? "").trim()),
+                      pattern: "{caption}",
+                      dedupe: true,
+                    })
+                  }
+                >
+                  Use names as file names
+                </Button>
+              ) : null}
+              <Button variant="secondary" className="min-h-9" onClick={downloadNames}>
+                Download list
+              </Button>
+            </>
           ) : null}
           {choosing && !task.mine && picks.size ? (
             <>
@@ -1051,7 +1211,7 @@ export function FileBrowser({
           <span className="font-medium">{chosen.length} selected</span>
           {chosen.length > 1 && chosen.every(changeable) ? (
             <>
-              <Button variant="ghost" className="min-h-8" onClick={() => setRenaming(chosen)}>
+              <Button variant="ghost" className="min-h-8" onClick={() => setRenaming({ entries: chosen })}>
                 Rename
               </Button>
               {destinations(chosen).length ? (
@@ -1073,6 +1233,11 @@ export function FileBrowser({
       {listing.note ? <p className="text-sm text-muted">{listing.note}</p> : null}
       {listing.packages && mediaFolder ? <PackagesPanel serviceId={mediaFolder.serviceId} packages={listing.packages} /> : null}
       {error ? <p className="text-sm text-error-600 dark:text-error-400">{error}</p> : null}
+      {zipping ? (
+        <p role="status" className="text-sm text-muted">
+          {zipping} Keep this page open until the zip downloads.
+        </p>
+      ) : null}
 
       {uploads.length > 0 ? (
         <section aria-label="Uploads" className="space-y-2 rounded-2xl border border-border bg-surface p-3 shadow-theme-xs">
@@ -1146,6 +1311,11 @@ export function FileBrowser({
             {entries.map((e) => (
               <li key={keyOf(e)} className="relative">
                 {e.kind === "file" ? heart(e.id, "absolute top-1 left-1") : null}
+                {protect && e.kind === "file" && e.file.previewUrl && e.file.contentType.startsWith("image/") ? (
+                  <span className="pointer-events-none absolute inset-x-2 top-2 h-16">
+                    <Watermark text={protect.watermark} />
+                  </span>
+                ) : null}
                 {naming?.key === keyOf(e) ? (
                   <div className={editingTile}>
                     <span className="flex h-16 items-center">
@@ -1159,8 +1329,10 @@ export function FileBrowser({
                       <Glyph entry={e} large shared={sharedFolders.has(e.id) && e.kind === "folder"} />
                     </span>
                     <span className={`w-full text-xs leading-tight break-words ${selected.has(keyOf(e)) && chosen.length === 1 ? "" : "line-clamp-2"}`}>{e.name}</span>
+                    {e.kind === "file" && e.file.caption && !namingTask ? <span className="w-full truncate text-[11px] text-muted">{e.file.caption}</span> : null}
                   </button>
                 )}
+                {e.kind === "file" ? captionBox(e.id, "mt-1") : null}
               </li>
             ))}
           </ul>
@@ -1210,10 +1382,12 @@ export function FileBrowser({
                         <span className="flex min-w-0 items-center gap-3">
                           {glyph}
                           <span className="truncate">{e.name}</span>
+                          {e.kind === "file" && e.file.caption && !namingTask ? <span className="hidden truncate text-xs text-muted md:inline">{e.file.caption}</span> : null}
                         </span>
                         {cells}
                       </button>
                     )}
+                    {e.kind === "file" ? captionBox(e.id, "mt-1 mb-2 ml-12 max-w-sm text-left") : null}
                   </li>
                 );
               })}
@@ -1246,7 +1420,9 @@ export function FileBrowser({
           canResolve={rights.change}
           canDelete={rights.share}
           extra={
-            choosing
+            namingTask
+              ? (f) => captionBox(f.id, "min-w-56 text-left")
+              : choosing
               ? (f) =>
                   canPick || picks.has(f.id) ? (
                     <Button variant={picks.has(f.id) ? "primary" : "secondary"} className="min-h-9" disabled={!canPick} onClick={() => togglePick(f.id)}>
@@ -1258,13 +1434,22 @@ export function FileBrowser({
           onIndex={setViewing}
           onClose={() => setViewing(null)}
           onChanged={() => router.refresh()}
+          watermark={protect?.watermark}
         />
       ) : null}
 
       {renaming ? (
         <BatchRename
-          items={renaming.map((e) => ({ kind: e.kind, id: e.id, name: e.name, createdAt: e.kind === "file" ? e.file.createdAt : null }))}
-          others={[...listing.folders, ...listing.files].filter((x) => !renaming.some((e) => e.id === x.id)).map((x) => x.name)}
+          items={renaming.entries.map((e) => ({
+            kind: e.kind,
+            id: e.id,
+            name: e.name,
+            createdAt: e.kind === "file" ? e.file.createdAt : null,
+            caption: e.kind === "file" ? (captions.get(e.id) ?? e.file.caption) : null,
+          }))}
+          others={[...listing.folders, ...listing.files].filter((x) => !renaming.entries.some((e) => e.id === x.id)).map((x) => x.name)}
+          initialPattern={renaming.pattern}
+          initialDedupe={renaming.dedupe}
           folderName={listing.folder?.name ?? null}
           pending={pending}
           error={error}
@@ -1290,6 +1475,8 @@ export function FileBrowser({
           onClose={() => setMenu(null)}
         />
       ) : null}
+
+      {covered ? <ProofCover /> : null}
 
       {sharing && sharingFolder ? (
         <ShareDialog

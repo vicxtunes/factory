@@ -1,11 +1,13 @@
 import { BackLink } from "@repo/ui/navigation/back";
 import { notFound, redirect } from "next/navigation";
+import { after } from "next/server";
 
 import { FileBrowser, type FolderTask } from "@repo/ui/files/FileBrowser";
 import { RowsSkeleton } from "@repo/ui/skeletons/blocks";
 import { Loading } from "@repo/ui/skeletons/Loading";
 import { folderIdSchema, type FileAccess } from "@repo/lib/files/core";
 import { files } from "@repo/lib/files/server";
+import { FileService } from "@repo/lib/files/service";
 import { portalClient, studioAtSlug } from "@repo/lib/studio-portal/server";
 import { taskIdSchema } from "@repo/lib/tasks/core";
 import { tasks } from "@repo/lib/tasks/server";
@@ -36,7 +38,7 @@ export default async function ClientFilesPage({ params, searchParams }: { params
         ← {at.studio.name}
       </BackLink>
       <Loading skeleton={<RowsSkeleton />}>
-        <Browser scope={at.scope} slug={slug} folderId={folderId} access={access} customerId={me.customerId} taskId={taskParam} />
+        <Browser scope={at.scope} slug={slug} studioName={at.studio.name} folderId={folderId} access={access} customerId={me.customerId} taskId={taskParam} />
       </Loading>
     </main>
   );
@@ -45,6 +47,7 @@ export default async function ClientFilesPage({ params, searchParams }: { params
 async function Browser({
   scope,
   slug,
+  studioName,
   folderId,
   access,
   customerId,
@@ -52,6 +55,7 @@ async function Browser({
 }: {
   scope: TenantScope;
   slug: string;
+  studioName: string;
   folderId: string | null;
   access: FileAccess;
   customerId: string;
@@ -59,6 +63,7 @@ async function Browser({
 }) {
   const listing = await files.list(scope, folderId, access);
   if (!listing) notFound();
+  if (folderId && FileService.missingPreviews(listing)) after(() => files.ensurePreviews(scope, folderId));
   // Only their own task.
   const id = taskIdSchema.safeParse(taskId);
   const found = id.success ? await tasks.get(scope, id.data) : null;
@@ -85,6 +90,8 @@ async function Browser({
       via={{ as: "client", slug }}
       topLabel="Shared with you"
       task={task}
+      // A task's photos are proofs: watermarked, nothing to save from the page.
+      protect={task ? { watermark: `PROOF · ${studioName}` } : undefined}
     />
   );
 }

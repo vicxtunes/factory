@@ -3,12 +3,14 @@ import "server-only";
 // Whose files a request reaches, and with what rights, from where it comes
 // (`Via`): the studio's workspace (everything with the Files area or as the
 // owner; otherwise what's shared with the member), a client's own page (what's
-// shared with them) or a share link (what it opens, while it lasts). Worked
-// out from the session or the link, never from what the browser claims.
+// shared with them), a share link (what it opens, while it lasts) or a
+// client's task link (its folder, to look at, and that task only). Worked out
+// from the session or the link, never from what the browser claims.
 
 import { localDate } from "@repo/lib/accounting/core/period";
 import { portalClient, studioAtSlug } from "@repo/lib/studio-portal/server";
 import { studioOfCaller } from "@repo/lib/studios/server";
+import { tasks } from "@repo/lib/tasks/server";
 import { canUse } from "@repo/lib/team/core";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
@@ -22,7 +24,7 @@ export interface FilesCaller {
   /** Who they are, for what they write (comments): someone with a link names themself. */
   who: Commenter | null;
   /** Which of the business's people they are, for the tasks given to them. */
-  person: { kind: "owner" } | { kind: "member"; memberId: string } | { kind: "client"; customerId: string } | { kind: "guest" };
+  person: { kind: "owner" } | { kind: "member"; memberId: string } | { kind: "client"; customerId: string; onlyTask?: string } | { kind: "guest" };
   /** The business, to tell its owner when a client finishes a task. */
   studio: { name: string; ownerClientId: string };
 }
@@ -48,6 +50,18 @@ export async function filesCaller(via: Via): Promise<FilesCaller> {
       access: await files.clientAccess(at.scope, me.customerId),
       who: { kind: "client", name: me.name },
       person: { kind: "client", customerId: me.customerId },
+      studio,
+    };
+  }
+  if (via.as === "task") {
+    const task = await tasks.byShareToken(at.scope, via.token);
+    if (!task?.folderId || !task.customerId) throw new FileError("This link has stopped working. Ask the business for a new one.");
+    return {
+      scope: at.scope,
+      // The task's folder, to look at (pictures show, nothing downloads).
+      access: { kind: "shared", grants: [{ folderId: task.folderId, role: "viewer", canDownload: false }] },
+      who: { kind: "client", name: task.customerName ?? "Client" },
+      person: { kind: "client", customerId: task.customerId, onlyTask: task.id },
       studio,
     };
   }

@@ -73,9 +73,11 @@ export async function businessListing(scope: TenantScope, folderId: string): Pro
     name: `${p.caption?.trim() || `Photo ${String(i + 1).padStart(2, "0")}`}.jpg`,
     bytes: p.bytes,
     contentType: "image/jpeg",
+    caption: p.caption,
     createdAt: null,
     downloadUrl: p.largeUrl,
     previewUrl: p.largeUrl,
+    thumbUrl: p.thumbUrl,
     media: { kind: "photo", albumId: album!.id, cover: album!.coverPhotoId ? album!.coverPhotoId === p.id : i === 0 },
   }));
   files.sort((a, b) => Number(b.media?.kind === "photo" && b.media.cover) - Number(a.media?.kind === "photo" && a.media.cover));
@@ -86,9 +88,11 @@ export async function businessListing(scope: TenantScope, folderId: string): Pro
       name: "Preview video",
       bytes: album.videoBytes ?? 0,
       contentType: "video/mp4",
+      caption: null,
       createdAt: null,
       downloadUrl: album.videoUrl,
       previewUrl: album.videoUrl,
+      thumbUrl: null,
       media: { kind: "video", albumId: album.id },
     });
   }

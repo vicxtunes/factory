@@ -2,8 +2,10 @@ import "server-only";
 
 // The task service wired to this app's adapters. Pages and actions import from here.
 
+import { randomBytes } from "node:crypto";
+
 import { supabaseTaskDirectory } from "./adapters/supabase/directory";
 import { supabaseTaskStore } from "./adapters/supabase/store";
 import { TaskService } from "./service";
 
-export const tasks = new TaskService(supabaseTaskStore, supabaseTaskDirectory);
+export const tasks = new TaskService(supabaseTaskStore, supabaseTaskDirectory, () => randomBytes(32).toString("base64url"));

@@ -18,7 +18,23 @@ export const DEFAULT_CONTENT_TYPE = "application/octet-stream";
  * never the name a person typed.
  */
 export function fileKeys(tenantId: string, fileId: string) {
-  return { incoming: `incoming/${tenantId}/file-${fileId}`, final: `studios/${tenantId}/files/${fileId}` };
+  return { incoming: `incoming/${tenantId}/file-${fileId}`, final: `studios/${tenantId}/files/${fileId}`, ...copyKeys(`studios/${tenantId}/files/${fileId}`) };
+}
+
+/** Where a picture's small copies go, beside the file itself. */
+export function copyKeys(key: string) {
+  return { preview: `${key}-preview.jpg`, thumb: `${key}-thumb.jpg` };
+}
+
+/** A file's key with its copies' (deleting it deletes them). */
+export const withCopies = (key: string) => [key, copyKeys(key).preview, copyKeys(key).thumb];
+
+/** Pictures up to this size get small copies (bigger ones are left as they are). */
+export const MAX_PREVIEW_SOURCE_BYTES = 80 * 1024 * 1024;
+
+/** Whether the server makes small copies of a file: a picture it can read, not too big. */
+export function previewable(contentType: string, bytes: number): boolean {
+  return /^image\/(jpeg|png|webp|heic|heif|avif|tiff|gif)$/.test(contentType) && bytes <= MAX_PREVIEW_SOURCE_BYTES;
 }
 
 /** A name as stored: no path separators or control characters, spaces tidied. Empty when nothing is left. */
