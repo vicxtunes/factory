@@ -5,7 +5,8 @@ import { WalletTerms } from "@repo/ui/wallet/WalletTerms";
 import { requireStudio } from "@repo/lib/studios/server";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 import { getMyPhone } from "@repo/lib/wallet/actions";
-import { amingCardBalance, getBusinessCard } from "@repo/lib/wallet/studio";
+import { amingCard, businessTermsAccepted, getBusinessCard, storedPin, unlockedUntil } from "@repo/lib/wallet/studio";
+import { RelockAt, WalletLock } from "@repo/ui/wallet/WalletPin";
 
 export const metadata = { title: "Wallet · My Business" };
 
@@ -18,25 +19,43 @@ export default async function StudioWalletPage() {
 
   return (
     <Loading skeleton={<Skeleton className="h-[40rem] w-full rounded-[2rem]" />}>
-      <Card scope={scope} studio={studio} owner={access.owner ? session.name : null} />
+      <Card scope={scope} studio={studio} viewerId={session.client_id} owner={access.owner ? session.name : null} />
     </Loading>
   );
 }
 
 // The card is in shillings, whatever currency the studio bills in. Only the
 // owner moves money off it (to their Aming card, or out to their phone).
-async function Card({ scope, studio, owner }: { scope: TenantScope; studio: { ownerClientId: string }; owner: string | null }) {
-  const [card, amingBalance, phone] = await Promise.all([
+async function Card({
+  scope,
+  studio,
+  viewerId,
+  owner,
+}: {
+  scope: TenantScope;
+  studio: { name: string; ownerClientId: string };
+  viewerId: string;
+  owner: string | null;
+}) {
+  // Off until the owner agrees to the wallet's terms: the terms stand in its place.
+  if (!(await businessTermsAccepted(scope.tenantId))) return <WalletTerms owner={!!owner} />;
+  // Its figures need the viewer's wallet PIN, so nothing is loaded until it's
+  // unlocked. Just agreed to the terms: the next step is choosing the PIN.
+  const until = await unlockedUntil(viewerId);
+  if (!until) return <WalletLock hasPin={!!(await storedPin(viewerId))} />;
+  const [card, aming, phone] = await Promise.all([
     getBusinessCard(scope.tenantId, scope.timeZone),
-    owner ? amingCardBalance(studio.ownerClientId) : 0,
+    owner ? amingCard(studio.ownerClientId) : null,
     owner ? getMyPhone() : null,
   ]);
-  // Off until the owner agrees to the wallet's terms: the terms stand in its place.
-  if (!card.termsAccepted) return <WalletTerms owner={!!owner} />;
   return (
-    <BusinessCardAnalytics
-      card={card}
-      owner={owner ? { name: owner, amingBalance, phone: phone?.ok ? phone.data : null } : undefined}
-    />
+    <>
+      <RelockAt until={until} />
+      <BusinessCardAnalytics
+        studioName={studio.name}
+        card={card}
+        owner={owner && aming ? { name: owner, aming, phone: phone?.ok ? phone.data : null } : undefined}
+      />
+    </>
   );
 }

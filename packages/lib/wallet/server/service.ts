@@ -215,15 +215,18 @@ export async function getMyPhone(viewer: ClientViewer): Promise<string | null> {
 }
 
 export async function getMyWallet(viewer: ClientViewer): Promise<WalletView> {
-  return walletView(viewer.id, viewer.name);
+  const [view, card] = await Promise.all([walletView(viewer.id, viewer.name), repo.walletCard(viewer.id)]);
+  return { ...view, card };
 }
 
 export async function getMyWalletSummary(viewer: ClientViewer): Promise<WalletSummary> {
-  const [{ balance }, pending] = await Promise.all([
+  const [{ balance }, pending, card] = await Promise.all([
     repo.getBalance(viewer.id),
     repo.listPayments(viewer.id, ["pending"], 50),
+    repo.walletCard(viewer.id),
   ]);
   return {
+    card,
     balance,
     pendingCount: pending.length,
     pendingAmount: pending.reduce((sum, p) => sum + p.amount, 0),

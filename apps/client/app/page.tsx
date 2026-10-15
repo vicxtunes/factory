@@ -78,7 +78,7 @@ async function Home({ client }: { client: { id: string; name: string; avatarUrl:
         slides={slides}
         products={products}
         // If the wallet can't load, the home screen still works — it just has no balance tile.
-        wallet={wallet.ok ? <WalletSummaryCard summary={wallet.data} /> : null}
+        wallet={wallet.ok ? <WalletSummaryCard summary={wallet.data} holder={client.name} /> : null}
       />
     </div>
   );

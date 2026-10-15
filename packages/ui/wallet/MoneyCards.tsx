@@ -38,7 +38,7 @@ export function Action({ variant, onClick, children }: { variant: "solid" | "out
     onBrand: "bg-white/20 text-white hover:bg-white/30",
   }[variant];
   return (
-    <button type="button" onClick={onClick} className={`inline-flex h-11 items-center justify-center rounded-full px-5 text-sm font-semibold ${look}`}>
+    <button type="button" onClick={onClick} className={`inline-flex h-11 items-center justify-center gap-2 rounded-full px-5 text-sm font-semibold ${look}`}>
       {children}
     </button>
   );

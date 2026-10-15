@@ -12,7 +12,7 @@ import { createAdminClient } from "@repo/lib/supabase/admin";
 
 import { HISTORY_LIMIT, MAX_WITHDRAWAL, MIN_WITHDRAWAL, checkAmount, cleanReason } from "../policy";
 import { WALLET_TERMS_VERSION } from "../terms";
-import type { BusinessCardEntry, BusinessCardMonth, BusinessCardView, PendingWithdrawal, Withdrawal } from "../types";
+import type { BusinessCardEntry, BusinessCardMonth, BusinessCardView, PendingWithdrawal, WalletCard, Withdrawal } from "../types";
 import { WalletError, throwDbError } from "./errors";
 import type { StaffViewer, WalletActor } from "./identity";
 import * as notifier from "./notifier";
@@ -60,14 +60,18 @@ function actorArgs(actor: WalletActor) {
 }
 
 /** The card's balance, and whether its business has agreed to the current terms. No row yet: no customer has paid, and nobody has agreed. */
-async function cardState(tenantId: string): Promise<{ balance: number; termsAccepted: boolean }> {
+async function cardState(tenantId: string): Promise<{ balance: number; termsAccepted: boolean; card: WalletCard | null }> {
   const { data, error } = await createAdminClient()
     .from("business_wallets")
-    .select("balance, terms_version")
+    .select("balance, terms_version, card_number, created_at")
     .eq("tenant_id", tenantId)
-    .maybeSingle<{ balance: number; terms_version: number | null }>();
+    .maybeSingle<{ balance: number; terms_version: number | null; card_number: string; created_at: string }>();
   if (error) throwDbError(error);
-  return { balance: Number(data?.balance ?? 0), termsAccepted: (data?.terms_version ?? 0) >= WALLET_TERMS_VERSION };
+  return {
+    balance: Number(data?.balance ?? 0),
+    termsAccepted: (data?.terms_version ?? 0) >= WALLET_TERMS_VERSION,
+    card: data ? { number: data.card_number, since: data.created_at } : null,
+  };
 }
 
 /**

@@ -8,6 +8,7 @@ import { PaymentMethods } from "@repo/ui/payments/PaymentMethods";
 import { ENTRY_LABELS, METHOD_LABELS } from "@repo/lib/wallet/policy";
 import type { WalletEntry, WalletView } from "@repo/lib/wallet/types";
 
+import { BankCard } from "./BankCard";
 import { Action, Pill, TILE, TileHead, Transactions, type TransactionRow } from "./MoneyCards";
 import { Panel, PaymentLine, useMoney } from "./shared";
 
@@ -43,20 +44,21 @@ export function ClientWallet({
   return (
     <div className="space-y-4">
       <div className="grid gap-4 lg:grid-cols-5">
-        <section aria-label="Aming card" className={`${TILE} flex flex-col lg:col-span-3`}>
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <Pill className="border-border bg-background">Aming card</Pill>
-            <p className="truncate text-xs text-muted">{wallet.clientName}</p>
-          </div>
-          <p className="mt-8 text-sm text-muted">Balance</p>
-          <p className="mt-1 break-words text-4xl font-bold tracking-tight tnum sm:text-5xl">{money(wallet.balance)}</p>
-          <p className="mt-2 min-h-4 text-xs text-muted">{waiting > 0 ? `${money(waiting)} waiting for confirmation` : null}</p>
-          <div className="mt-6 flex flex-wrap gap-2 lg:mt-auto lg:pt-6">
-            <Action variant="solid" onClick={() => setAdding(true)}>
-              Add funds
-            </Action>
-          </div>
-        </section>
+        <div className="space-y-3 lg:col-span-3">
+          <BankCard
+            label="Aming card"
+            holder={wallet.clientName}
+            balance={money(wallet.balance)}
+            card={wallet.card ?? null}
+            tone="brand"
+            onAdd={() => setAdding(true)}
+            addLabel="Add funds"
+          />
+          {waiting > 0 ? <p className="text-xs text-muted">{money(waiting)} waiting for confirmation</p> : null}
+          <Action variant="solid" onClick={() => setAdding(true)}>
+            Add funds
+          </Action>
+        </div>
 
         <section aria-label="Paying with your wallet" className="relative flex flex-col overflow-hidden rounded-3xl bg-brand-500 p-5 text-white shadow-theme-xs sm:p-6 lg:col-span-2">
           <span aria-hidden className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/10" />

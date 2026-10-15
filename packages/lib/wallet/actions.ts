@@ -18,6 +18,7 @@ import { WalletError } from "./server/errors";
 import { requireBusinessOwner, requireClient, requireStaff, getViewer } from "./server/identity";
 import * as business from "./server/business";
 import * as mobileMoney from "./server/mobile-money";
+import { requireUnlocked } from "./server/pin";
 import * as service from "./server/service";
 import type {
   MobileMoneyCollection,
@@ -91,7 +92,9 @@ export async function getMyWalletSummary(): Promise<WalletResult<WalletSummary>>
 
 export async function payOrderFromWallet(orderId: string): Promise<WalletResult<OrderPaymentState & { paidNow: number }>> {
   return run(async () => {
-    const result = await service.payOrder(await requireClient(), orderId);
+    const viewer = await requireClient();
+    await requireUnlocked(viewer.id);
+    const result = await service.payOrder(viewer, orderId);
     refreshMoneyPages();
     return result;
   });
@@ -100,7 +103,9 @@ export async function payOrderFromWallet(orderId: string): Promise<WalletResult<
 /** "Pay from wallet" on several invoices, oldest first, as far as the balance goes. */
 export async function payOrdersFromWallet(orderIds: string[]): Promise<WalletResult<{ paidNow: number; balance: number }>> {
   return run(async () => {
-    const result = await service.payOrders(await requireClient(), orderIds);
+    const viewer = await requireClient();
+    await requireUnlocked(viewer.id);
+    const result = await service.payOrders(viewer, orderIds);
     refreshMoneyPages();
     return result;
   });
@@ -157,6 +162,7 @@ export async function acceptWalletTerms(): Promise<WalletResult> {
 export async function moveMoneyToAmingCard(amount: number): Promise<WalletResult> {
   return run(async () => {
     const { tenantId, owner } = await requireBusinessOwner();
+    await requireUnlocked(owner.id);
     await business.moveToAmingCard(tenantId, amount, owner);
     refreshMoneyPages();
     revalidatePath("/studio/wallet");
@@ -167,6 +173,7 @@ export async function moveMoneyToAmingCard(amount: number): Promise<WalletResult
 export async function withdrawFromBusinessCard(amount: number, phone: string): Promise<WalletResult> {
   return run(async () => {
     const { tenantId, owner } = await requireBusinessOwner();
+    await requireUnlocked(owner.id);
     await business.requestWithdrawal(tenantId, amount, phone, owner);
     refreshMoneyPages();
     revalidatePath("/studio/wallet");

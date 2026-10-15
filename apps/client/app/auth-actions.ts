@@ -2,11 +2,12 @@
 
 import { createHmac, randomInt, randomUUID, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
-import { createClient as createStatelessClient } from "@supabase/supabase-js";
 
 import { createAdminClient } from "@repo/lib/supabase/admin";
 import { createClient } from "@repo/lib/supabase/server";
 import { countAttempt, tooManyAttempts } from "@repo/lib/auth/attempts";
+import { passwordMatches } from "@repo/lib/auth/password";
+import { lockWallet } from "@repo/lib/wallet/server/pin";
 import { getClientSession } from "@repo/lib/auth/session";
 import { signPayload, verifyPayload } from "@repo/lib/auth/cookies";
 import {
@@ -182,21 +183,6 @@ async function sendCode(flow: Pick<Flow, "purpose" | "email" | "phone" | "client
   return { ok: true, step: "code", sentTo: maskEmail(to) };
 }
 
-/**
- * Whether the password is right for this email. Checked with a throwaway,
- * cookie-less client; the session Supabase makes is revoked at once (that one
- * only: the default scope would sign them out on every other device) — the
- * real one comes only after the emailed code.
- */
-async function passwordMatches(email: string, password: string): Promise<boolean> {
-  const supabase = createStatelessClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error || !data.session) return false;
-  await createAdminClient().auth.admin.signOut(data.session.access_token, "local");
-  return true;
-}
 
 /**
  * Creates the auth user with this password, or sets the password on the
@@ -423,5 +409,6 @@ export async function lockIfRemembered(): Promise<boolean> {
   const [session, remembered] = await Promise.all([getClientSession(), rememberedClient()]);
   if (!session || session.client_id !== remembered?.clientId) return false;
   await (await createClient()).auth.signOut({ scope: "local" });
+  await lockWallet();
   return true;
 }
