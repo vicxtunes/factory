@@ -10,12 +10,12 @@ export const supabaseTaskDirectory: TaskDirectory = {
   async project(scope, id) {
     const { data, error } = await createAdminClient()
       .from("projects")
-      .select("status")
+      .select("status, customer_id")
       .eq("tenant_id", scope.tenantId)
       .eq("id", id)
-      .maybeSingle<{ status: string }>();
+      .maybeSingle<{ status: string; customer_id: string }>();
     if (error) throw new Error(`tasks: could not load the project: ${error.message}`);
-    return data ? { completed: data.status === "completed" } : null;
+    return data ? { completed: data.status === "completed", customerId: data.customer_id } : null;
   },
 
   async member(scope, id) {

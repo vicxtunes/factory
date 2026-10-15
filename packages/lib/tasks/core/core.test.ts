@@ -12,6 +12,12 @@ const task = (o: Partial<Task>): Task => ({
   title: "x",
   assigneeId: null,
   assigneeName: null,
+  customerId: null,
+  customerName: null,
+  kind: "todo",
+  folderId: null,
+  pickMin: null,
+  pickMax: null,
   dueOn: null,
   priority: "normal",
   status: "pending",
@@ -43,4 +49,20 @@ test("task input", () => {
   assert.throws(() => parseInput(taskInputSchema, { ...ok, priority: "urgent" }), /priority/);
   assert.throws(() => parseInput(taskInputSchema, { ...ok, assigneeId: "joel" }), /from the team/);
   assert.throws(() => parseInput(taskInputSchema, { ...ok, title: "" }), /Describe the task/);
+});
+
+test("a task for a client, or to choose or give feedback, says enough", () => {
+  const base = { projectId: "0b6c1d5e-0000-4000-8000-000000000001", title: "Choose your album photos", assigneeId: null, dueOn: null, priority: "normal" };
+  const client = "0b6c1d5e-0000-4000-8000-000000000002";
+  const folder = "0b6c1d5e-0000-4000-8000-000000000003";
+  // Old callers send none of the new fields: a to-do for nobody in particular.
+  assert.deepEqual(parseInput(taskInputSchema, base), { ...base, customerId: null, kind: "todo", folderId: null, pickMin: null, pickMax: null });
+  const choose = parseInput(taskInputSchema, { ...base, customerId: client, kind: "choose", folderId: folder, pickMin: 30, pickMax: 40 });
+  assert.deepEqual([choose.kind, choose.pickMin, choose.pickMax], ["choose", 30, 40]);
+  // Picks only belong to choosing.
+  assert.deepEqual(parseInput(taskInputSchema, { ...base, kind: "feedback", folderId: folder, pickMax: 5 }).pickMax, null);
+  assert.throws(() => parseInput(taskInputSchema, { ...base, kind: "choose", folderId: folder }), /how many photos/);
+  assert.throws(() => parseInput(taskInputSchema, { ...base, kind: "feedback" }), /Choose the folder/);
+  assert.throws(() => parseInput(taskInputSchema, { ...base, kind: "choose", folderId: folder, pickMin: 5, pickMax: 2 }), /least can't be more/);
+  assert.throws(() => parseInput(taskInputSchema, { ...base, assigneeId: client, customerId: client }), /not both/);
 });

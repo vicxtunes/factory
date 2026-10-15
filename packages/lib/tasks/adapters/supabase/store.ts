@@ -7,7 +7,7 @@ import "server-only";
 
 import { createAdminClient } from "@repo/lib/supabase/admin";
 
-import type { Task, TaskInput, TaskPriority, TaskStatus } from "../../core/model";
+import type { Task, TaskInput, TaskKind, TaskPriority, TaskStatus } from "../../core/model";
 import { TaskError, type TaskStore } from "../../ports";
 
 interface Row {
@@ -15,17 +15,24 @@ interface Row {
   project_id: string;
   title: string;
   assignee_id: string | null;
+  customer_id: string | null;
+  kind: TaskKind;
+  folder_id: string | null;
+  pick_min: number | null;
+  pick_max: number | null;
   due_on: string | null;
   priority: TaskPriority;
   status: TaskStatus;
   done_at: string | null;
   project: { title: string } | null;
   assignee: { name: string } | null;
+  customer: { name: string } | null;
 }
 
-const COLUMNS = `id, project_id, title, assignee_id, due_on, priority, status, done_at,
+const COLUMNS = `id, project_id, title, assignee_id, customer_id, kind, folder_id, pick_min, pick_max, due_on, priority, status, done_at,
   project:projects!tasks_tenant_id_project_id_fkey (title),
-  assignee:team_members!tasks_tenant_id_assignee_id_fkey (name)`;
+  assignee:team_members!tasks_tenant_id_assignee_id_fkey (name),
+  customer:customers!tasks_customer_fkey (name)`;
 
 const toTask = (r: Row): Task => ({
   id: r.id,
@@ -34,18 +41,30 @@ const toTask = (r: Row): Task => ({
   title: r.title,
   assigneeId: r.assignee_id,
   assigneeName: r.assignee?.name ?? null,
+  customerId: r.customer_id,
+  customerName: r.customer?.name ?? null,
+  kind: r.kind,
+  folderId: r.folder_id,
+  pickMin: r.pick_min,
+  pickMax: r.pick_max,
   dueOn: r.due_on,
   priority: r.priority,
   status: r.status,
   doneAt: r.done_at,
 });
 
-/** The writable columns, named one by one. */
-const toColumns = (t: Omit<TaskInput, "projectId">) => ({ title: t.title, assignee_id: t.assigneeId, due_on: t.dueOn, priority: t.priority });
+/** The columns an edit writes, named one by one (kind, folder and picks are set when it's made). */
+const toColumns = (t: Pick<TaskInput, "title" | "assigneeId" | "customerId" | "dueOn" | "priority">) => ({
+  title: t.title,
+  assignee_id: t.assigneeId,
+  customer_id: t.customerId,
+  due_on: t.dueOn,
+  priority: t.priority,
+});
 
 function fail(what: string, error: { code?: string; message: string }): never {
   // A project or team member from another studio: the composite keys caught it.
-  if (error.code === "23503") throw new TaskError("That project or team member doesn't belong to your business.");
+  if (error.code === "23503") throw new TaskError("That project, client, folder or team member doesn't belong to your business.");
   throw new Error(`tasks: could not ${what}: ${error.message}`);
 }
 
@@ -56,6 +75,7 @@ export const supabaseTaskStore: TaskStore = {
     let query = table().select(COLUMNS).eq("tenant_id", scope.tenantId);
     if (filter.projectId) query = query.eq("project_id", filter.projectId);
     if (filter.assigneeId) query = query.eq("assignee_id", filter.assigneeId);
+    if (filter.customerId) query = query.eq("customer_id", filter.customerId);
     if (filter.open) query = query.neq("status", "done");
     // Not done, or done lately (an ISO time): what a board shows.
     if (filter.doneSince) query = query.or(`status.neq.done,done_at.gte.${filter.doneSince}`);
@@ -72,7 +92,15 @@ export const supabaseTaskStore: TaskStore = {
 
   async create(scope, input) {
     const { data, error } = await table()
-      .insert({ ...toColumns(input), project_id: input.projectId, tenant_id: scope.tenantId })
+      .insert({
+        ...toColumns(input),
+        kind: input.kind,
+        folder_id: input.folderId,
+        pick_min: input.pickMin,
+        pick_max: input.pickMax,
+        project_id: input.projectId,
+        tenant_id: scope.tenantId,
+      })
       .select("id")
       .single<{ id: string }>();
     if (error) fail("add the task", error);

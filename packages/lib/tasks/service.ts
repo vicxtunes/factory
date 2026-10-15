@@ -8,6 +8,7 @@ import { byUrgency, type Task, type TaskInput, type TaskStatus } from "./core";
 import { TaskError, type TaskDirectory, type TaskStore } from "./ports";
 
 const GONE = "That task no longer exists.";
+const OTHER_CLIENT = "A task can go to this project's own client only.";
 
 export class TaskService {
   constructor(
@@ -30,19 +31,32 @@ export class TaskService {
     return (await this.store.list(scope, { doneSince, assigneeId })).sort(byUrgency);
   }
 
-  /** Adds a task to a project that's still in hand, for an active team member. */
+  /** A client's tasks (open first, most urgent first): what their page asks of them. */
+  async forClient(scope: TenantScope, customerId: string): Promise<Task[]> {
+    return (await this.store.list(scope, { customerId })).sort(byUrgency);
+  }
+
+  async get(scope: TenantScope, id: string): Promise<Task | null> {
+    return this.store.get(scope, id);
+  }
+
+  /** Adds a task to a project that's still in hand, for an active team member or the project's own client. */
   async create(scope: TenantScope, input: TaskInput): Promise<string> {
     const project = await this.directory.project(scope, input.projectId);
     if (!project) throw new TaskError("That project no longer exists.");
     if (project.completed) throw new TaskError("This project is completed.");
     await this.checkAssignee(scope, input.assigneeId, null);
+    if (input.customerId && input.customerId !== project.customerId) throw new TaskError(OTHER_CLIENT);
     return this.store.create(scope, input);
   }
 
-  async update(scope: TenantScope, id: string, input: Omit<TaskInput, "projectId">): Promise<void> {
+  async update(scope: TenantScope, id: string, input: Pick<TaskInput, "title" | "assigneeId" | "customerId" | "dueOn" | "priority">): Promise<void> {
     const current = await this.store.get(scope, id);
     if (!current) throw new TaskError(GONE);
     await this.checkAssignee(scope, input.assigneeId, current.assigneeId);
+    if (input.customerId && input.customerId !== current.customerId && input.customerId !== (await this.directory.project(scope, current.projectId))?.customerId) {
+      throw new TaskError(OTHER_CLIENT);
+    }
     if (!(await this.store.update(scope, id, input))) throw new TaskError(GONE);
   }
 

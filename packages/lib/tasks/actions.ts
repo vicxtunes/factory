@@ -15,8 +15,25 @@ import type { TenantScope } from "@repo/lib/tenancy/types";
 import { studioOfCaller } from "@repo/lib/studios/server";
 import { canUse } from "@repo/lib/team/core";
 
-import { taskIdSchema, taskInputSchema, taskStatusSchema } from "./core";
+import { files } from "@repo/lib/files/server";
+import { team } from "@repo/lib/team/server";
+
+import { taskIdSchema, taskInputSchema, taskStatusSchema, type TaskInput } from "./core";
 import { tasks } from "./server";
+
+/**
+ * Whoever a task in a folder is given to can open the folder: the client as
+ * a viewer without downloads (proofs to choose from or comment on), a team
+ * member without the Files area as an editor. A share they already have
+ * stays as it is.
+ */
+async function openFolderFor(scope: TenantScope, task: Pick<TaskInput, "folderId" | "customerId" | "assigneeId">): Promise<void> {
+  if (!task.folderId) return;
+  if (task.customerId) return files.ensureShared(scope, task.folderId, { kind: "client", customerId: task.customerId }, "viewer", false);
+  if (!task.assigneeId) return;
+  const member = await team.get(scope, task.assigneeId);
+  if (member && !member.access.includes("files")) await files.ensureShared(scope, task.folderId, { kind: "member", memberId: member.id }, "editor");
+}
 
 /**
  * The team member a task was just given to hears about it, on the account
@@ -49,6 +66,7 @@ export async function createTask(input: unknown): Promise<Result<string>> {
     const { scope, studio } = await studioOfCaller("projects");
     const task = parseInput(taskInputSchema, input);
     const id = await tasks.create(scope, task);
+    await openFolderFor(scope, task);
     await tellAssignee(scope, task.assigneeId, task.title, studio.name);
     revalidatePath("/studio", "layout");
     return id;
@@ -62,6 +80,7 @@ export async function updateTask(id: unknown, input: unknown): Promise<Result> {
     const task = parseInput(taskInputSchema, input);
     const before = await assigneeOf(scope, taskId);
     await tasks.update(scope, taskId, task);
+    await openFolderFor(scope, { ...task, folderId: (await tasks.get(scope, taskId))?.folderId ?? null });
     // Told only when it's given to someone new.
     if (task.assigneeId !== before) await tellAssignee(scope, task.assigneeId, task.title, studio.name);
     revalidatePath("/studio", "layout");

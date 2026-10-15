@@ -7,7 +7,7 @@ import { useState, useTransition } from "react";
 import { Button } from "@repo/ui/Button";
 import { Field, Select, TextInput } from "@repo/ui/Field";
 import { createTask, removeTask, setTaskStatus } from "@repo/lib/tasks/actions";
-import { isOverdue, TASK_PRIORITY_LABELS, type Task, type TaskPriority } from "@repo/lib/tasks/core";
+import { isOverdue, TASK_KIND_LABELS, TASK_PRIORITY_LABELS, type Task, type TaskKind, type TaskPriority } from "@repo/lib/tasks/core";
 import { formatDay } from "@repo/lib/tenancy/format";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
@@ -40,6 +40,7 @@ export function TaskRows({
   editable,
   showProject = false,
   projectPath = "/studio/projects",
+  filesPath = "/studio/files",
   empty = "No tasks.",
 }: {
   tasks: Task[];
@@ -48,6 +49,8 @@ export function TaskRows({
   editable: boolean | "status";
   showProject?: boolean;
   projectPath?: string | null;
+  /** Where a task's folder opens (with the task, to see its picks); null: not linked. */
+  filesPath?: string | null;
   empty?: string;
 }) {
   const { error, pending, run } = useTaskAction();
@@ -72,16 +75,32 @@ export function TaskRows({
                 />
               ) : null}
               <div className="min-w-0 flex-1">
-                <p className={done ? "text-muted line-through" : "font-medium"}>{t.title}</p>
+                <p className={done ? "text-muted line-through" : "font-medium"}>
+                  {t.title}
+                  {t.kind !== "todo" ? (
+                    <span className="ml-2 rounded-full bg-brand-50 px-2 py-0.5 align-middle text-[10px] font-medium text-brand-700 dark:bg-brand-500/15 dark:text-brand-300">
+                      {TASK_KIND_LABELS[t.kind]}
+                      {t.kind === "choose" ? ` · ${t.pickMin ? `${t.pickMin}–` : "up to "}${t.pickMax}` : ""}
+                    </span>
+                  ) : null}
+                </p>
                 <p className="text-xs text-muted">
                   {[
-                    t.assigneeName ?? "Unassigned",
+                    t.customerName ? `${t.customerName} (client)` : (t.assigneeName ?? "Unassigned"),
                     t.dueOn ? `due ${formatDay(scope, t.dueOn)}` : null,
                     t.priority !== "normal" ? `${TASK_PRIORITY_LABELS[t.priority]} priority` : null,
                     t.status === "in_progress" ? "In progress" : null,
                   ]
                     .filter(Boolean)
                     .join(" · ")}
+                  {t.folderId && filesPath ? (
+                    <>
+                      {" · "}
+                      <Link href={`${filesPath}?folder=${t.folderId}&task=${t.id}`} className="text-brand-600 hover:underline">
+                        {t.kind === "choose" ? (done ? "See their choice" : "Open the photos") : t.kind === "feedback" ? "See comments" : "Open folder"}
+                      </Link>
+                    </>
+                  ) : null}
                   {showProject ? (
                     <>
                       {" · "}
@@ -125,18 +144,52 @@ export function TaskRows({
   );
 }
 
-/** Adds a task to a project: what, who, by when, how urgent. */
-export function AddTaskForm({ projectId, team }: { projectId: string; team: { id: string; name: string }[] }) {
+/**
+ * Adds a task to a project: what, who (a team member, or the project's
+ * client), by when, how urgent, and (with folders) what kind: a to-do, choosing
+ * photos from a folder (how many) or giving feedback on them. A client's task
+ * shares its folder with them; it shows on their page.
+ */
+export function AddTaskForm({
+  projectId,
+  team,
+  client,
+  folders = [],
+}: {
+  projectId: string;
+  team: { id: string; name: string }[];
+  /** The project's client, who can be given tasks too. */
+  client?: { id: string; name: string };
+  /** The project's folders in Files, for tasks that need one. */
+  folders?: { id: string; label: string }[];
+}) {
   const { error, pending, run } = useTaskAction();
   const [title, setTitle] = useState("");
-  const [assigneeId, setAssigneeId] = useState("");
+  const [who, setWho] = useState("");
   const [dueOn, setDueOn] = useState("");
   const [priority, setPriority] = useState<TaskPriority>("normal");
+  const [kind, setKind] = useState<TaskKind>("todo");
+  const [folderId, setFolderId] = useState(folders[0]?.id ?? "");
+  const [pickMin, setPickMin] = useState("");
+  const [pickMax, setPickMax] = useState("");
 
+  const forClient = who === "client";
   function submit(e: React.FormEvent) {
     e.preventDefault();
     run(
-      () => createTask({ projectId, title, assigneeId: assigneeId || null, dueOn: dueOn || null, priority }),
+      () =>
+        createTask({
+          projectId,
+          title,
+          assigneeId: who && !forClient ? who : null,
+          customerId: forClient ? client?.id : null,
+          dueOn: dueOn || null,
+          priority,
+          kind,
+          folderId: kind !== "todo" || forClient ? folderId || null : null,
+          pickMin: pickMin ? Number(pickMin) : null,
+          pickMax: pickMax ? Number(pickMax) : null,
+        }),
       () => {
         setTitle("");
         setDueOn("");
@@ -147,17 +200,28 @@ export function AddTaskForm({ projectId, team }: { projectId: string; team: { id
   return (
     <form onSubmit={submit} className="space-y-3 rounded-2xl border border-border bg-surface p-4 shadow-theme-xs">
       <Field label="New task">
-        <TextInput value={title} onChange={(e) => setTitle(e.target.value)} required maxLength={200} placeholder="Cull and colour-correct the ceremony" />
+        <TextInput
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          required
+          maxLength={200}
+          placeholder={kind === "choose" ? "Choose your 40 album photos" : kind === "feedback" ? "Tell us what to change" : "Cull and colour-correct the ceremony"}
+        />
       </Field>
       <div className="grid gap-3 sm:grid-cols-3">
         <Field label="Who">
-          <Select value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)}>
+          <Select value={who} onChange={(e) => setWho(e.target.value)}>
             <option value="">Unassigned</option>
-            {team.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name}
-              </option>
-            ))}
+            {client ? <option value="client">{client.name} (the client)</option> : null}
+            {team.length ? (
+              <optgroup label="Team">
+                {team.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                  </option>
+                ))}
+              </optgroup>
+            ) : null}
           </Select>
         </Field>
         <Field label="Due">
@@ -173,6 +237,43 @@ export function AddTaskForm({ projectId, team }: { projectId: string; team: { id
           </Select>
         </Field>
       </div>
+      {folders.length ? (
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Field label="Kind">
+            <Select value={kind} onChange={(e) => setKind(e.target.value as TaskKind)}>
+              {(Object.keys(TASK_KIND_LABELS) as TaskKind[]).map((k) => (
+                <option key={k} value={k}>
+                  {TASK_KIND_LABELS[k]}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          {kind !== "todo" || forClient ? (
+            <Field label="Folder">
+              <Select value={folderId} onChange={(e) => setFolderId(e.target.value)}>
+                {folders.map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {f.label}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          ) : null}
+          {kind === "choose" ? (
+            <div className="grid grid-cols-2 gap-2">
+              <Field label="At least">
+                <TextInput type="number" min={0} value={pickMin} onChange={(e) => setPickMin(e.target.value)} placeholder="30" />
+              </Field>
+              <Field label="At most">
+                <TextInput type="number" min={1} value={pickMax} onChange={(e) => setPickMax(e.target.value)} required placeholder="40" />
+              </Field>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+      {forClient && (kind !== "todo" || folderId) ? (
+        <p className="text-xs text-muted">The folder is shared with {client?.name} to look at (no downloads), and the task shows on their page.</p>
+      ) : null}
       {error ? <p className="text-sm text-error-600 dark:text-error-400">{error}</p> : null}
       <Button type="submit" loading={pending}>
         Add task
