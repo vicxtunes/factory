@@ -13,17 +13,25 @@ const studioB = scope("studio-b");
 
 function fakes() {
   const rows: (Task & { tenantId: string })[] = [];
-  const projects = new Map([["studio-a/wedding", { completed: false }], ["studio-a/old", { completed: true }]]);
+  const projects = new Map([
+    ["studio-a/wedding", { completed: false, customerId: "nakato" }],
+    ["studio-a/old", { completed: true, customerId: "nakato" }],
+  ]);
   const members = new Map([["studio-a/joel", { archived: false }], ["studio-a/gone", { archived: true }]]);
   const mine = (s: TenantScope, id: string) => rows.find((r) => r.tenantId === s.tenantId && r.id === id);
   const store: TaskStore = {
     list: async (s, f) =>
       rows.filter(
-        (r) => r.tenantId === s.tenantId && (!f.projectId || r.projectId === f.projectId) && (!f.assigneeId || r.assigneeId === f.assigneeId) && (!f.open || r.status !== "done"),
+        (r) =>
+          r.tenantId === s.tenantId &&
+          (!f.projectId || r.projectId === f.projectId) &&
+          (!f.assigneeId || r.assigneeId === f.assigneeId) &&
+          (!f.customerId || r.customerId === f.customerId) &&
+          (!f.open || r.status !== "done"),
       ),
     get: async (s, id) => mine(s, id) ?? null,
     create: async (s, input) => {
-      rows.push({ ...input, id: `t${rows.length + 1}`, tenantId: s.tenantId, projectTitle: "", assigneeName: null, status: "pending", doneAt: null });
+      rows.push({ ...input, id: `t${rows.length + 1}`, tenantId: s.tenantId, projectTitle: "", assigneeName: null, customerName: null, status: "pending", doneAt: null });
       return `t${rows.length}`;
     },
     update: async (s, id, input) => !!(mine(s, id) && Object.assign(mine(s, id)!, input)),
@@ -42,7 +50,18 @@ function fakes() {
   return { service: new TaskService(store, directory), rows };
 }
 
-const cull: TaskInput = { projectId: "wedding", title: "Cull photos", assigneeId: "joel", dueOn: "2026-10-10", priority: "high" };
+const cull: TaskInput = {
+  projectId: "wedding",
+  title: "Cull photos",
+  assigneeId: "joel",
+  customerId: null,
+  dueOn: "2026-10-10",
+  priority: "high",
+  kind: "todo",
+  folderId: null,
+  pickMin: null,
+  pickMax: null,
+};
 
 test("tasks go on projects in hand, to active team members", async () => {
   const { service } = fakes();
@@ -92,4 +111,17 @@ test("a team member moves only the tasks given to them", async () => {
   await assert.rejects(service.setStatus(studioA, someoneElses, "done", "joel"), /Only the person it's given to/);
   await service.setStatus(studioA, someoneElses, "done");
   assert.equal(rows[1].status, "done", "the owner, or Projects & tasks, moves any");
+});
+
+test("a task can go to the project's own client (choosing photos, say), and their page lists it", async () => {
+  const { service } = fakes();
+  const choose = { ...cull, assigneeId: null, customerId: "nakato", title: "Choose 40 for the album", kind: "choose" as const, folderId: "f1", pickMin: 30, pickMax: 40 };
+  const id = await service.create(studioA, choose);
+  assert.deepEqual((await service.forClient(studioA, "nakato")).map((t) => [t.id, t.kind, t.pickMax]), [[id, "choose", 40]]);
+  assert.deepEqual(await service.forClient(studioA, "amina"), []);
+  await assert.rejects(service.create(studioA, { ...choose, customerId: "amina" }), /own client only/);
+  const todo = await service.create(studioA, cull);
+  await assert.rejects(service.update(studioA, todo, { ...cull, assigneeId: null, customerId: "amina" }), /own client only/);
+  await service.update(studioA, todo, { ...cull, assigneeId: null, customerId: "nakato" });
+  assert.equal((await service.forClient(studioA, "nakato")).length, 2);
 });

@@ -7,6 +7,8 @@ import type { Usage } from "@repo/lib/photos/core";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
 import type { Folder, StoredFile } from "./core/model";
+import type { Commenter, FileComment } from "./core/comments";
+import type { FolderShare, ShareRole } from "./core/sharing";
 
 export interface ObjectStore {
   /** A signed, short-lived link the browser can PUT one file to (with this content type). */
@@ -43,6 +45,54 @@ export interface FileRepository {
   updateFile(scope: TenantScope, id: string, file: { folderId: string | null; name: string }): Promise<boolean>;
   /** Deletes the record; returns its key. Null when it isn't this tenant's. */
   deleteFile(scope: TenantScope, id: string): Promise<string | null>;
+
+  /** Every share the studio has, with the client's or member's name. */
+  shares(scope: TenantScope): Promise<FolderShare[]>;
+  /**
+   * Shares a folder. Throws FileError when it's already shared with that
+   * client or member (or by link), or the folder, client or member is gone.
+   */
+  createShare(
+    scope: TenantScope,
+    share: { folderId: string; target: { kind: "link"; token: string } | { kind: "client"; customerId: string } | { kind: "member"; memberId: string }; settings: ShareSettings },
+  ): Promise<string>;
+  /** False when it isn't this tenant's. */
+  updateShare(scope: TenantScope, id: string, settings: ShareSettings): Promise<boolean>;
+  /** False when it isn't this tenant's. */
+  deleteShare(scope: TenantScope, id: string): Promise<boolean>;
+  /**
+   * Renames many at once, all or nothing (never the Projects folder or a
+   * project's). Throws FileError when one is gone or a new name clashes.
+   */
+  renameMany(scope: TenantScope, items: { folders: { id: string; name: string }[]; files: { id: string; name: string }[] }): Promise<void>;
+  /** A file's comments, oldest first. */
+  comments(scope: TenantScope, fileId: string): Promise<FileComment[]>;
+  /** How many comments are open on each of these files (none: left out). */
+  openCommentCounts(scope: TenantScope, fileIds: string[]): Promise<Map<string, number>>;
+  /** Throws FileError when the file is gone. */
+  addComment(scope: TenantScope, comment: { fileId: string; author: Commenter; body: string; pin: { x: number; y: number } | null }): Promise<FileComment>;
+  /** The comment's file, or null when it isn't this tenant's. */
+  commentFile(scope: TenantScope, id: string): Promise<string | null>;
+  /** False when it isn't this tenant's. */
+  setCommentResolved(scope: TenantScope, id: string, resolved: boolean): Promise<boolean>;
+  deleteComment(scope: TenantScope, id: string): Promise<boolean>;
+  /**
+   * Picks (or unpicks) a file in a "choose" task, never beyond its most;
+   * returns how many are picked now. Throws FileError when the task is gone,
+   * done or full.
+   */
+  pick(scope: TenantScope, taskId: string, fileId: string, picked: boolean): Promise<number>;
+  /** The files picked in a task, earliest first. */
+  picks(scope: TenantScope, taskId: string): Promise<string[]>;
+  /** The share behind a link, in whichever studio it is. */
+  shareByToken(token: string): Promise<{ tenantId: string; share: FolderShare } | null>;
+}
+
+export interface ShareSettings {
+  role: ShareRole;
+  canDownload: boolean;
+  /** Links only: the last day it works. */
+  expiresOn: string | null;
 }
 
 /** A problem the person should see (the message is safe to show). */

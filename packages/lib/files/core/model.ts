@@ -4,12 +4,31 @@
 // as uploaded in an object store (Cloudflare R2), in folders, within the same
 // storage allowance as its photos (packages/lib/photos).
 
+import type { FolderRights } from "./sharing";
+
 export interface Folder {
   id: string;
   /** The folder it's in; null at the top. */
   parentId: string | null;
   name: string;
+  /** The project it's the folder of (named after it, made with it); null for any other folder. */
+  projectId: string | null;
+  /** The folder at the top that holds every project's folder. */
+  holdsProjects: boolean;
+  /** One of the Business folders: a view of the business's services and products and their media, not a stored folder. */
+  business?: BusinessFolder;
 }
+
+/**
+ * Business (the top), Services or Products (a group), a category, or one
+ * service or product (an item: its photos and preview video, `albumId` once
+ * it has any).
+ */
+export type BusinessFolder =
+  | { kind: "root" }
+  | { kind: "group"; offering: "service" | "product" }
+  | { kind: "category"; categoryId: string }
+  | { kind: "item"; serviceId: string; albumId: string | null; fromAming: boolean };
 
 export interface StoredFile {
   id: string;
@@ -24,12 +43,23 @@ export interface StoredFile {
   createdAt: string;
 }
 
-/** A file ready to show: a short-lived link that saves it under its name. */
-export interface FileView extends Omit<StoredFile, "key"> {
-  downloadUrl: string;
+/** A file ready to show: a short-lived link that saves it under its name (null when a share doesn't allow downloads). */
+export interface FileView extends Omit<StoredFile, "key" | "createdAt"> {
+  downloadUrl: string | null;
+  /**
+   * A short-lived link to show it (a picture, video or PDF): there even
+   * without downloads, so a client can look at proofs they may not save.
+   */
+  previewUrl: string | null;
+  /** ISO timestamp; null when not known (a service's photos). */
+  createdAt: string | null;
+  /** Comments not yet resolved (stored files only). */
+  openComments?: number;
+  /** In a Business folder: one of a service's or product's photos, or its preview video. */
+  media?: { kind: "photo"; albumId: string; cover: boolean } | { kind: "video"; albumId: string };
 }
 
-/** One folder's contents, with the way back up and every folder (for "Move to"). */
+/** One folder's contents, with the way back up, every folder the person can see (for "Move to") and what they may do here. */
 export interface FolderListing {
   /** Null at the top. */
   folder: Folder | null;
@@ -38,6 +68,11 @@ export interface FolderListing {
   folders: Folder[];
   files: FileView[];
   allFolders: Folder[];
+  rights: FolderRights;
+  /** Where the person may add (and so move) things: the top, and which folders. */
+  addable: { top: boolean; folders: string[] };
+  /** A word about this folder, shown above what's in it. */
+  note?: string;
 }
 
 /** One file the browser is about to upload. */

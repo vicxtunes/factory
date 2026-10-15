@@ -47,6 +47,18 @@ export function uniqueName(name: string, taken: Iterable<string>): string {
   }
 }
 
+/**
+ * The Projects folder and each project's folder (kept by the database), and
+ * the Business folders (views of the business's services and products): they
+ * open (and some take files), but are never renamed, moved or deleted here.
+ */
+export function isLocked(folder: Folder): boolean {
+  return folder.holdsProjects || folder.projectId !== null || folder.business !== undefined;
+}
+
+/** Whether a file can be shown in the browser (a picture, video or PDF), not only downloaded. */
+export const showable = (contentType: string) => /^(image|video)\//.test(contentType) || contentType === "application/pdf";
+
 /** From the top down to `folderId` (empty when it isn't among `folders`). */
 export function pathTo(folders: Folder[], folderId: string | null): Folder[] {
   const byId = new Map(folders.map((f) => [f.id, f]));
