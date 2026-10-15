@@ -6,9 +6,11 @@ import { useRef, useState, useSyncExternalStore, useTransition, type DragEvent }
 
 import { Button } from "@repo/ui/Button";
 import { BatchRename } from "@repo/ui/files/BatchRename";
+import { createInBusiness, deleteInBusiness, moveInBusiness, newBusinessName, renameInBusiness } from "@repo/ui/files/business-actions";
 import { ContextMenu, type ContextEntry } from "@repo/ui/files/ContextMenu";
 import { FileViewer } from "@repo/ui/files/FileViewer";
 import { FolderArt } from "@repo/ui/files/FolderArt";
+import { PackagesPanel } from "@repo/ui/files/PackagesPanel";
 import { ShareDialog, type SharePeople } from "@repo/ui/files/ShareDialog";
 import { uploadServiceMedia } from "@repo/ui/files/media-upload";
 import { putSigned } from "@repo/ui/photos/browser";
@@ -166,7 +168,7 @@ function Picture({ entry: e, large, shared }: { entry: Entry; large: boolean; sh
     return (
       <span className="relative inline-flex">
         <FolderArt className={large ? "h-14 w-[4.5rem]" : "h-5 w-6"} />
-        {isLocked(e.folder) ? corner(ICONS.lock, "-right-1", "Kept with its project") : null}
+        {isLocked(e.folder) && !e.folder.business ? corner(ICONS.lock, "-right-1", "Kept with its project") : null}
         {shared ? corner(ICONS.people, "-left-1", "Shared") : null}
       </span>
     );
@@ -484,8 +486,20 @@ export function FileBrowser({
   const sharedFolders = new Set(sharing?.shares.map((s) => s.folderId));
   /** Whether the person may rename, move or delete `e`. */
   const changeable = (e: Entry) => rights.change && !isLockedEntry(e);
+  /** A Business category, service or product: renamed, moved and deleted for real (packages/lib/offerings). */
+  const bizOf = (e: Entry) => (e.kind === "folder" && (e.folder.business?.kind === "category" || e.folder.business?.kind === "item") ? e.folder.business : null);
+  /** Aming's products keep Aming's names. */
+  const bizRenamable = (e: Entry) => {
+    const b = bizOf(e);
+    return b !== null && !(b.kind === "item" && b.fromAming);
+  };
 
   function rename(e: Entry) {
+    if (bizOf(e)) {
+      if (!bizRenamable(e) || actOn(e).length > 1) return;
+      selectOnly(keyOf(e));
+      return setNaming({ key: keyOf(e), value: e.name });
+    }
     const many = actOn(e);
     if (!many.every(changeable)) return;
     if (many.length > 1) return setRenaming(many);
@@ -495,14 +509,17 @@ export function FileBrowser({
 
   /** A service's or product's folder takes photos and a video, not folders. */
   const mediaFolder = listing.folder?.business?.kind === "item" ? listing.folder.business : null;
-  const canNewFolder = rights.add && !mediaFolder;
+  /** In Services or Products: a new category; in a category: a new service or product. */
+  const bizHere = listing.folder?.business ?? null;
+  const bizNew = bizHere ? newBusinessName(bizHere) : null;
+  const canNewFolder = bizHere ? bizNew !== null : rights.add;
   const shareable = (f: Folder) => sharing !== undefined && f.business === undefined;
 
   function newFolder() {
     if (!canNewFolder) return;
     setQuery("");
     clearSelection();
-    setNaming({ key: NEW, value: uniqueName("New folder", listing.folders.map((f) => f.name)) });
+    setNaming({ key: NEW, value: uniqueName(bizNew ?? "New folder", listing.folders.map((f) => f.name)) });
   }
 
   function saveName() {
@@ -510,10 +527,13 @@ export function FileBrowser({
     const value = naming.value.trim();
     if (naming.key === NEW) {
       if (!value) return setNaming(null);
+      if (bizHere) return run(() => createInBusiness(bizHere, value), () => setNaming(null));
       return run(() => createFolder(via, { parentId: here, name: value }), () => setNaming(null));
     }
     const e = entries.find((x) => keyOf(x) === naming.key);
     if (!e || !value || value === e.name) return setNaming(null);
+    const b = bizOf(e);
+    if (b) return run(() => renameInBusiness(b, value), () => setNaming(null));
     run(() => (e.kind === "folder" ? renameFolder(via, e.id, value) : renameFile(via, e.id, value)), () => setNaming(null));
   }
 
@@ -527,6 +547,17 @@ export function FileBrowser({
 
   function remove(e: Entry) {
     if (e.kind === "file" && e.file.media) return removeMedia(e);
+    const b = bizOf(e);
+    if (b) {
+      if (actOn(e).length > 1) return;
+      const inside = listing.allFolders.filter((f) => f.parentId === e.id).length;
+      const question =
+        b.kind === "category"
+          ? `Delete the category "${e.name}"${inside ? ` with its ${inside} ${b.offering === "service" ? "service" : "product"}${inside === 1 ? "" : "s"}, their packages and photos` : ""}? This can't be undone.`
+          : `Delete "${e.name}" with its ${b.offering === "service" ? "packages" : "sizes"} and photos? Quotations and invoices keep their copy. This can't be undone.`;
+      if (!window.confirm(question)) return;
+      return run(() => deleteInBusiness(b), clearSelection);
+    }
     const many = actOn(e);
     if (!many.every(changeable)) return;
     const folders = many.filter((x) => x.kind === "folder").length;
@@ -551,12 +582,29 @@ export function FileBrowser({
 
   /** Whether `e` can go into folder `to` (null: the top): somewhere the person may add, not where it is, and a folder never into itself. */
   function canMove(e: Entry, to: string | null) {
+    const b = bizOf(e);
+    if (b) {
+      // A service or product moves into another category of its kind.
+      if (b.kind !== "item" || e.kind !== "folder" || !to || to === e.folder.parentId) return false;
+      const target = listing.allFolders.find((f) => f.id === to)?.business;
+      return target?.kind === "category" && target.offering === b.offering;
+    }
     if (!changeable(e) || to === here) return false;
     if (!(to === null ? listing.addable.top : listing.addable.folders.includes(to))) return false;
     return !(e.kind === "folder" && to && isWithin(listing.allFolders, to, e.id));
   }
 
   function move(items: Entry[], to: string | null) {
+    const target = listing.allFolders.find((f) => f.id === to)?.business;
+    if (target && items.every((x) => bizOf(x))) {
+      return run(
+        () => each(items, (x) => moveInBusiness(bizOf(x)!, target)),
+        () => {
+          setMoving(null);
+          clearSelection();
+        },
+      );
+    }
     run(
       () => each(items, (e) => (e.kind === "folder" ? moveFolder(via, e.id, to) : moveFile(via, e.id, to))),
       () => {
@@ -615,12 +663,23 @@ export function FileBrowser({
         { label: media.kind === "video" ? "Remove video" : "Delete", danger: true, onSelect: () => removeMedia(e) },
       ];
     }
+    const b = bizOf(e);
+    if (b) {
+      const places = destinations([e]);
+      return [
+        ...opener,
+        ...select,
+        "-",
+        ...(bizRenamable(e) ? [{ label: "Rename", onSelect: () => rename(e) }] : [{ note: "Picked from Aming: it keeps Aming's name." }]),
+        ...(places.length ? [{ label: "Move to category…", onSelect: () => setMoving({ entries: [e], value: places[0].value }) }] : []),
+        "-",
+        { label: "Delete", danger: true, onSelect: () => remove(e) },
+      ];
+    }
     if (isLockedEntry(e)) {
       const business = e.kind === "folder" ? e.folder.business : undefined;
       const note = business
-        ? business.kind === "item"
-          ? "Named after it: rename it on Packages & Services or Products."
-          : "Follows what your business sells: add and rename on Packages & Services or Products."
+        ? "What your business sells: open it to add, rename or move categories, services and products."
         : e.kind === "folder" && e.folder.holdsProjects
           ? "Holds a folder for every project. It stays as it is."
           : "Made with its project and named after it. Rename the project to rename it.";
@@ -641,7 +700,7 @@ export function FileBrowser({
   }
 
   const backgroundMenu: ContextEntry[] = [
-    ...(canNewFolder ? [{ label: "New folder", onSelect: newFolder }] : []),
+    ...(canNewFolder ? [{ label: bizNew ?? "New folder", onSelect: newFolder }] : []),
     ...(rights.add ? ([{ label: mediaFolder ? "Add photos or a video" : "Upload files", onSelect: () => pickRef.current?.click() }, "-"] satisfies ContextEntry[]) : []),
     ...(entries.length ? ([{ label: "Select all", onSelect: () => setSelected(new Set(entries.map(keyOf))) }, "-"] satisfies ContextEntry[]) : []),
     { label: "Tiles", checked: view === "grid", onSelect: () => chooseView("grid") },
@@ -680,7 +739,7 @@ export function FileBrowser({
     };
     return {
       "data-item": key,
-      draggable: changeable(e),
+      draggable: changeable(e) || bizOf(e)?.kind === "item",
       title: e.kind === "file" ? [e.name, formatBytes(e.file.bytes), e.file.createdAt ? formatDay(scope, e.file.createdAt) : null].filter(Boolean).join(" · ") : e.name,
       onPointerDown: (ev: React.PointerEvent) => {
         clearTimeout(press.current.timer);
@@ -730,7 +789,7 @@ export function FileBrowser({
         if (Date.now() - press.current.at > 500 && !selected.has(key)) selectOnly(key);
       },
       onDragStart: (ev: DragEvent) => {
-        dragged.current = actOn(e).filter(changeable);
+        dragged.current = actOn(e).filter((x) => changeable(x) || bizOf(x)?.kind === "item");
         ev.dataTransfer.setData(DRAG_TYPE, key);
         ev.dataTransfer.effectAllowed = "move";
       },
@@ -861,7 +920,7 @@ export function FileBrowser({
           {canNewFolder ? (
             <Button variant="secondary" className="min-h-10" onClick={newFolder} disabled={pending}>
               <Icon d={ICONS.folderPlus} />
-              New folder
+              {bizNew ?? "New folder"}
             </Button>
           ) : null}
           {rights.add ? (
@@ -1012,6 +1071,7 @@ export function FileBrowser({
       ) : null}
 
       {listing.note ? <p className="text-sm text-muted">{listing.note}</p> : null}
+      {listing.packages && mediaFolder ? <PackagesPanel serviceId={mediaFolder.serviceId} packages={listing.packages} /> : null}
       {error ? <p className="text-sm text-error-600 dark:text-error-400">{error}</p> : null}
 
       {uploads.length > 0 ? (
@@ -1061,7 +1121,9 @@ export function FileBrowser({
             <p className="text-sm text-muted">
               {query
                 ? `Nothing here matches "${query.trim()}".`
-                : !rights.add
+                : bizNew
+                  ? `Nothing here yet. Press "${bizNew}" (or right-click) to add one.`
+                  : !rights.add
                   ? here
                     ? "This folder is empty."
                     : "Nothing has been shared with you yet."

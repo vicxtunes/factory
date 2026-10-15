@@ -27,8 +27,8 @@ export interface Folder {
 export type BusinessFolder =
   | { kind: "root" }
   | { kind: "group"; offering: "service" | "product" }
-  | { kind: "category"; categoryId: string }
-  | { kind: "item"; serviceId: string; albumId: string | null; fromAming: boolean };
+  | { kind: "category"; categoryId: string; offering: "service" | "product" }
+  | { kind: "item"; serviceId: string; albumId: string | null; fromAming: boolean; offering: "service" | "product" };
 
 export interface StoredFile {
   id: string;
@@ -73,6 +73,15 @@ export interface FolderListing {
   addable: { top: boolean; folders: string[] };
   /** A word about this folder, shown above what's in it. */
   note?: string;
+  /** A service's packages (a product's sizes), in a Business folder: shown above its photos. */
+  packages?: {
+    offering: "service" | "product";
+    currency: string;
+    locale: string;
+    /** False for a product picked from Aming: its sizes are Aming's (prices are set on Products). */
+    editable: boolean;
+    items: { id: string; name: string; price: number; description: string | null; inclusions: string[] }[];
+  };
 }
 
 /** One file the browser is about to upload. */

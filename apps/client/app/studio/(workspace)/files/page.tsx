@@ -22,7 +22,7 @@ import { team } from "@repo/lib/team/server";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 import { amingCardBalance } from "@repo/lib/wallet/studio";
 
-export const metadata = { title: "Files · My Business" };
+export const metadata = { title: "Drive · My Business" };
 
 const VIA = { as: "studio" } as const;
 
@@ -96,7 +96,7 @@ async function folderTask(scope: TenantScope, taskParam: string | undefined, mem
 async function Business({ scope, folderId }: { scope: TenantScope; folderId: string }) {
   const listing = await businessListing(scope, folderId);
   if (!listing) notFound();
-  return <FileBrowser listing={listing} basePath="/studio/files" scope={{ locale: scope.locale, timeZone: scope.timeZone }} via={VIA} />;
+  return <FileBrowser listing={listing} basePath="/studio/files" scope={{ locale: scope.locale, timeZone: scope.timeZone }} via={VIA} topLabel="Drive" />;
 }
 
 // Buying is the owner's (it's their Aming card that pays), and only while the boss has it on sale.
@@ -128,7 +128,7 @@ async function Browser({
   // At the top, Business comes first (with Projects and the rest).
   const root = business && folderId === null ? businessTree([], new Map())[0] : undefined;
   const listing = root ? { ...found, folders: [root, ...found.folders] } : found;
-  const browser = { listing, basePath: "/studio/files", scope: { locale: scope.locale, timeZone: scope.timeZone }, via: VIA, task };
+  const browser = { listing, basePath: "/studio/files", scope: { locale: scope.locale, timeZone: scope.timeZone }, via: VIA, task, topLabel: "Drive" };
   if (access.kind !== "full") return <FileBrowser {...browser} topLabel="Shared with you" />;
   // Whoever has everything shares: with clients, with team members who haven't the Files area, or by link.
   const [shares, clientList, members, slug] = await Promise.all([files.shares(scope), customers.list(scope), team.active(scope), portal.currentSlug(scope.tenantId)]);
