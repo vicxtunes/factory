@@ -2,11 +2,13 @@
 
 import { createHmac, randomInt, randomUUID, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
-import { createClient as createStatelessClient } from "@supabase/supabase-js";
 
 import { createAdminClient } from "@repo/lib/supabase/admin";
 import { createClient } from "@repo/lib/supabase/server";
 import { countAttempt, tooManyAttempts } from "@repo/lib/auth/attempts";
+import { passwordMatches } from "@repo/lib/auth/password";
+import { lockWallet } from "@repo/lib/wallet/server/pin";
+import { getClientSession } from "@repo/lib/auth/session";
 import { signPayload, verifyPayload } from "@repo/lib/auth/cookies";
 import {
   exactClientMatch,
@@ -19,6 +21,9 @@ import { notifyActor } from "@repo/lib/push/send";
 import { LOGO_CID, maskEmail, signInCodeEmail } from "@repo/lib/studio-access/core";
 import { resendMailer } from "@repo/lib/studio-access/adapters/resend/mailer";
 
+import { forgetDevice, rememberDevice, rememberedClient } from "./remembered-device";
+import { linkClient, openSession, signInRemembered } from "./sign-in";
+
 // Client sign-in (clients, studio owners and their team members alike):
 //
 //   Sign in          email or phone + password  → code to the email on file → in
@@ -27,6 +32,9 @@ import { resendMailer } from "@repo/lib/studio-access/adapters/resend/mailer";
 //
 // "Forgot password" is also how an older account (phone only, no password)
 // sets its first one; with no email on file it adds one, verified by the code.
+//
+// On a browser that has done the code once, the password alone signs that
+// account back in (unlock, below; ./remembered-device.ts).
 //
 // Studio owners sign in with their studio's email: the one they verified when
 // setting up the studio (tenants.owner_email) finds the owner's account just
@@ -175,36 +183,6 @@ async function sendCode(flow: Pick<Flow, "purpose" | "email" | "phone" | "client
   return { ok: true, step: "code", sentTo: maskEmail(to) };
 }
 
-/**
- * Whether the password is right for this email. Checked with a throwaway,
- * cookie-less client; the session Supabase makes is revoked at once (that one
- * only: the default scope would sign them out on every other device) — the
- * real one comes only after the emailed code.
- */
-async function passwordMatches(email: string, password: string): Promise<boolean> {
-  const supabase = createStatelessClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error || !data.session) return false;
-  await createAdminClient().auth.admin.signOut(data.session.access_token, "local");
-  return true;
-}
-
-/** Signs this browser in as the auth user with this email (Supabase sends nothing). Returns its id. */
-async function openSession(email: string): Promise<string | null> {
-  const { data: link, error: linkError } = await createAdminClient().auth.admin.generateLink({ type: "magiclink", email });
-  if (linkError) {
-    console.error("client login: generateLink failed:", linkError);
-    return null;
-  }
-  const { data, error } = await (await createClient()).auth.verifyOtp({ token_hash: link.properties.hashed_token, type: "magiclink" });
-  if (error || !data.user) {
-    console.error("client login: verifyOtp failed:", error);
-    return null;
-  }
-  return data.user.id;
-}
 
 /**
  * Creates the auth user with this password, or sets the password on the
@@ -225,16 +203,6 @@ async function setAuthPassword(email: string, password: string): Promise<string 
   if (error) return failed("finding the auth user", error);
   const updated = await admin.auth.admin.updateUserById(link.user.id, { password });
   return updated.error ? failed("setting the password", updated.error) : null;
-}
-
-/** One auth user per client: a new email for the client (changed by reception) replaces the old link. */
-async function linkClient(admin: Admin, clientId: string, authUserId: string): Promise<boolean> {
-  await admin.from("client_identities").delete().eq("client_id", clientId).neq("auth_user_id", authUserId);
-  const { error } = await admin
-    .from("client_identities")
-    .upsert({ auth_user_id: authUserId, client_id: clientId }, { onConflict: "auth_user_id" });
-  if (error) console.error("client login: linking identity failed:", error);
-  return !error;
 }
 
 /**
@@ -373,6 +341,7 @@ export async function verifyCode(code: string): Promise<AuthStep> {
     await (await createClient()).auth.signOut({ scope: "local" });
     return { ok: false, error: TRY_AGAIN };
   }
+  await rememberDevice(flow.clientId!);
   return { ok: true, step: "done" };
 }
 
@@ -407,5 +376,39 @@ export async function choosePassword(input: { password: string; confirm: string 
     await (await createClient()).auth.signOut({ scope: "local" });
     return { ok: false, error: TRY_AGAIN };
   }
+  await rememberDevice(clientId);
   return { ok: true, step: "done" };
+}
+
+// --- A remembered browser ---------------------------------------------------------
+
+/** The lock screen: the remembered account's password signs it straight back in, no code. */
+export async function unlock(password: string): Promise<AuthStep> {
+  const client = await rememberedClient();
+  if (!client) return { ok: false, error: "We don't remember this device any more. Sign in again." };
+  const key = `login-pw:${client.clientId}`;
+  if (await tooManyAttempts(key)) return { ok: false, error: "Too many wrong passwords. Wait 15 minutes, or reset your password." };
+  if (!password || password.length > PASSWORD_MAX || !(await passwordMatches(client.email, password))) {
+    await countAttempt(key);
+    return { ok: false, error: "That password isn't right." };
+  }
+  return (await signInRemembered(client)) ? { ok: true, step: "done" } : { ok: false, error: TRY_AGAIN };
+}
+
+/** "Use another account": this browser forgets the remembered one. */
+export async function forgetThisDevice(): Promise<void> {
+  await forgetDevice();
+}
+
+/**
+ * Idle too long (./idle-lock.tsx): signs this browser out, so it opens on the
+ * lock screen. Only when it remembers the signed-in account, else the way
+ * back in would cost them an emailed code. Whether it locked.
+ */
+export async function lockIfRemembered(): Promise<boolean> {
+  const [session, remembered] = await Promise.all([getClientSession(), rememberedClient()]);
+  if (!session || session.client_id !== remembered?.clientId) return false;
+  await (await createClient()).auth.signOut({ scope: "local" });
+  await lockWallet();
+  return true;
 }

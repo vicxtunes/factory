@@ -9,7 +9,7 @@ import { randomUUID } from "node:crypto";
 
 import { createAdminClient } from "@repo/lib/supabase/admin";
 
-import type { PaymentMethod, PaymentStatus, TransactionHistoryKind, WalletEntryKind } from "../types";
+import type { PaymentMethod, PaymentStatus, TransactionHistoryKind, WalletCard, WalletEntryKind } from "../types";
 import { throwDbError } from "./errors";
 import type { WalletActor } from "./identity";
 
@@ -77,6 +77,20 @@ export async function getBalance(clientId: string): Promise<{ balance: number; c
   if (error) throwDbError(error);
   // No row yet = nothing ever deposited.
   return { balance: num(data?.balance), currency: data?.currency ?? "UGX", updatedAt: data?.updated_at ?? null };
+}
+
+/** The client's Aming card, opening their wallet if this is its first look (the number comes with it). */
+export async function walletCard(clientId: string): Promise<WalletCard> {
+  const db = createAdminClient();
+  const opened = await db.from("wallets").upsert({ client_id: clientId }, { onConflict: "client_id", ignoreDuplicates: true });
+  if (opened.error) throwDbError(opened.error);
+  const { data, error } = await db
+    .from("wallets")
+    .select("card_number, created_at")
+    .eq("client_id", clientId)
+    .single<{ card_number: string; created_at: string }>();
+  if (error) throwDbError(error);
+  return { number: data.card_number, since: data.created_at };
 }
 
 export async function listEntries(clientId: string, limit: number): Promise<EntryRow[]> {

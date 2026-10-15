@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { createAdminClient } from "@repo/lib/supabase/admin";
 import { createClient } from "@repo/lib/supabase/server";
+import { lockWallet } from "@repo/lib/wallet/server/pin";
 import { getClientSession } from "@repo/lib/auth/session";
 import { logOrderEvent, resolveActor } from "@repo/lib/audit/log";
 import { buildAndInsertOrder } from "@repo/lib/orders/create";
@@ -22,6 +23,7 @@ export async function logoutClient(): Promise<void> {
   const supabase = await createClient();
   // This device only: the default signs the account out everywhere.
   await supabase.auth.signOut({ scope: "local" });
+  await lockWallet();
 }
 
 export interface ClientOrderPayload {

@@ -84,7 +84,15 @@ export interface WalletEntry {
 }
 
 /** A wallet as its owner (or staff looking at it) sees it. */
+/** A wallet's card: its number for life (never a payment card's) and when it was opened. */
+export interface WalletCard {
+  number: string;
+  since: string;
+}
+
 export interface WalletView {
+  /** The client's own Aming card (their own wallet page only). */
+  card?: WalletCard;
   clientId: string;
   clientName: string;
   balance: number;
@@ -99,6 +107,7 @@ export interface WalletView {
 
 /** Just enough for a balance card (e.g. on the client's home screen). */
 export interface WalletSummary {
+  card: WalletCard;
   balance: number;
   /** Deposits reported but not yet confirmed. */
   pendingCount: number;
@@ -228,6 +237,8 @@ export interface BusinessCardMonth {
 
 /** A Business card as its business sees it. */
 export interface BusinessCardView {
+  /** Null until its first row: terms agreed, or a first payment. */
+  card: WalletCard | null;
   /** Whether the business's owner has agreed to the wallet's current terms (./terms.ts): until then the card is off. */
   termsAccepted: boolean;
   balance: number;

@@ -141,3 +141,6 @@ export interface PayableOrder {
 export function isOrderPayable(order: PayableOrder): boolean {
   return order.approval_status === "approved" && !order.cancelled_at;
 }
+
+/** What a money move answers while the wallet is locked (server/pin.ts); the browser asks for the PIN when it sees it. */
+export const PIN_NEEDED = "Enter your wallet PIN first.";

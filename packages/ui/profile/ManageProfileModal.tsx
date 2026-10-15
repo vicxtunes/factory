@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useRef, useState, useTransition, type ReactNode } from "react";
 
 import { Button } from "@repo/ui/Button";
 import { Field, TextInput } from "@repo/ui/Field";
@@ -36,6 +36,7 @@ export function ManageProfileModal({
   name,
   avatarUrl,
   signInEmail,
+  extra,
   onSaved,
 }: {
   open: boolean;
@@ -44,6 +45,8 @@ export function ManageProfileModal({
   avatarUrl: string | null;
   /** The client portal shows the email its sign-in uses, so nobody has to guess it. */
   signInEmail?: string | null;
+  /** More settings under the name (the client portal's "Unlock this device"). */
+  extra?: ReactNode;
   // Called after any successful change (photo or name) — callers typically
   // router.refresh() so the rest of the page (e.g. the user menu itself)
   // picks up the fresh session data.
@@ -134,7 +137,7 @@ export function ManageProfileModal({
         role="dialog"
         aria-modal="true"
         aria-label="Manage profile"
-        className="w-full max-w-sm rounded-[var(--radius)] border border-border bg-surface p-6 shadow-theme-xl"
+        className="max-h-full w-full max-w-sm overflow-y-auto rounded-[var(--radius)] border border-border bg-surface p-6 shadow-theme-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-2">
@@ -235,6 +238,7 @@ export function ManageProfileModal({
             Save name
           </Button>
         </form>
+        {extra}
       </div>
     </div>
   );

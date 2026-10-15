@@ -39,7 +39,15 @@ export function PasswordInput(props: InputHTMLAttributes<HTMLInputElement>) {
 
   return (
     <div className="relative">
-      <TextInput {...props} type={visible ? "text" : "password"} className={`pr-10 ${props.className ?? ""}`} />
+      {/* Shown, it's a text field: keep phone keyboards from capitalizing or correcting it. */}
+      <TextInput
+        autoCapitalize="none"
+        autoCorrect="off"
+        spellCheck={false}
+        {...props}
+        type={visible ? "text" : "password"}
+        className={`pr-10 ${props.className ?? ""}`}
+      />
       <button
         type="button"
         onClick={() => setVisible((v) => !v)}

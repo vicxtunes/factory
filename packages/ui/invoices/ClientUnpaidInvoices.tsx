@@ -9,6 +9,7 @@ import { Confirmation } from "@repo/ui/Confirmation";
 import { PaymentMethods } from "@repo/ui/payments/PaymentMethods";
 import type { ClientInvoiceRow } from "@repo/lib/invoices/types";
 import { payOrdersFromWallet } from "@repo/lib/wallet/actions";
+import { usePinRetry } from "@repo/ui/wallet/WalletPin";
 import { MOBILE_MONEY_MAX } from "@repo/lib/wallet/policy";
 
 import { Panel, useMoney } from "../wallet/shared";
@@ -33,6 +34,8 @@ export function ClientUnpaidInvoices({ invoices, walletBalance }: { invoices: Un
   const [paid, setPaid] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  // Paying from the wallet needs the wallet PIN.
+  const { withPin, sheet } = usePinRetry();
 
   if (!invoices.length) return null;
 
@@ -63,7 +66,7 @@ export function ClientUnpaidInvoices({ invoices, walletBalance }: { invoices: Un
   function payFromWallet() {
     setError(null);
     start(async () => {
-      const res = await payOrdersFromWallet(chosen.map((i) => i.orderId));
+      const res = await withPin(() => payOrdersFromWallet(chosen.map((i) => i.orderId)));
       if (!res.ok) return setError(res.error);
       setPaid(res.data.paidNow);
       router.refresh();
@@ -78,6 +81,7 @@ export function ClientUnpaidInvoices({ invoices, walletBalance }: { invoices: Un
 
   return (
     <div className="space-y-3">
+      {sheet}
       <section
         aria-label="What you owe"
         className={`rounded-2xl border p-4 ${

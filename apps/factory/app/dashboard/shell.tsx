@@ -30,7 +30,7 @@ export function DashboardShell({
       <NotificationGate />
       <AnnouncementPopup />
       <DashboardSidebar role={role} email={email} />
-      <div className="flex min-h-screen flex-col lg:pl-64">
+      <div className="sidebar-offset flex min-h-screen flex-col lg:pl-(--sidebar-w)">
         <DashboardTopbar
           email={email}
           fullName={fullName}

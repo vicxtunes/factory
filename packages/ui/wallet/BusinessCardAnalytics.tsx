@@ -1,8 +1,8 @@
 "use client";
 
 // A business's Wallet page, laid out as a banking dashboard like the client's
-// own (design/ in the repo root): the Business card's balance, beside the
-// owner's Aming card for the owner (who moves money onto it, one way, and
+// own (design/ in the repo root): the Business card, drawn as a bank card
+// (./BankCard.tsx), beside the owner's Aming card for the owner (who moves money onto it, one way, and
 // withdraws from here),
 // then three tiles: what came in against what went out, money in month by
 // month, and the card's latest transactions.
@@ -12,8 +12,9 @@ import { useState } from "react";
 
 import { AccountsIcon, HistoryIcon, PaymentIcon } from "@repo/ui/icons";
 import { BUSINESS_ENTRY_LABELS } from "@repo/lib/wallet/policy";
-import type { BusinessCardEntry, BusinessCardMonth, BusinessCardView } from "@repo/lib/wallet/types";
+import type { BusinessCardEntry, BusinessCardMonth, BusinessCardView, WalletCard } from "@repo/lib/wallet/types";
 
+import { BankCard } from "./BankCard";
 import { TransferSheet, WithdrawSheet, Withdrawals } from "./CardSheets";
 import { Action, Pill, TILE, TileHead, Transactions, type TransactionRow } from "./MoneyCards";
 import { useMoney } from "./shared";
@@ -25,6 +26,26 @@ function businessRow(entry: BusinessCardEntry): TransactionRow {
 }
 
 const monthName = (month: string) => new Date(`${month}-01T00:00:00Z`).toLocaleString("en", { month: "long", timeZone: "UTC" });
+
+/** Money leaving the card: an arrow up out of a tray. */
+function WithdrawIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5" aria-hidden="true">
+      <path d="M12 15V3m0 0L7.5 7.5M12 3l4.5 4.5" />
+      <path d="M3.75 14.25v4.5A2.25 2.25 0 0 0 6 21h12a2.25 2.25 0 0 0 2.25-2.25v-4.5" />
+    </svg>
+  );
+}
+
+/** From one card to the other: two arrows passing. */
+function TransferIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5" aria-hidden="true">
+      <path d="M7.5 21 3 16.5m0 0L7.5 12M3 16.5h13.5" />
+      <path d="M16.5 3 21 7.5m0 0L16.5 12M21 7.5H7.5" />
+    </svg>
+  );
+}
 
 /** "+12% vs last month", green or red; nothing without a last month to compare with. */
 function Change({ now, before, label }: { now: number; before: number; label: string }) {
@@ -120,12 +141,15 @@ function MoneyIn({ months }: { months: BusinessCardMonth[] }) {
 }
 
 export function BusinessCardAnalytics({
+  studioName,
   card,
   owner,
 }: {
+  /** The name on the Business card. */
+  studioName: string;
   card: BusinessCardView;
   /** The owner looking at it: their Aming card sits beside the business's, and they can move money. */
-  owner?: { name: string; amingBalance: number; phone: string | null };
+  owner?: { name: string; aming: { balance: number; card: WalletCard }; phone: string | null };
 }) {
   const router = useRouter();
   const money = useMoney();
@@ -138,43 +162,45 @@ export function BusinessCardAnalytics({
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-4 lg:grid-cols-5">
-        <section aria-label="Business card" className={`${TILE} flex flex-col ${owner ? "lg:col-span-3" : "lg:col-span-5"}`}>
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <Pill className="border-border bg-background">Business card</Pill>
-            <p className="text-xs text-muted">Where customers&apos; mobile money lands</p>
-          </div>
-          <p className="mt-8 text-sm text-muted">Balance</p>
-          <p className="mt-1 break-words text-4xl font-bold tracking-tight tnum sm:text-5xl">{money(card.balance)}</p>
-          <div className="mt-2 min-h-4">
+      <div className={`grid gap-4 ${owner ? "md:grid-cols-2" : "md:max-w-md"}`}>
+        <div className="space-y-3">
+          <BankCard
+            label="Business card"
+            holder={studioName}
+            balance={money(card.balance)}
+            card={card.card}
+            tone="dark"
+            // Only reached with the wallet PIN entered.
+            startHidden={false}
+          />
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            {owner ? (
+              <div className="flex flex-wrap gap-2">
+                <Action variant="solid" onClick={() => setSheet("withdraw")}>
+                  <WithdrawIcon />
+                  Withdraw
+                </Action>
+                <Action variant="outline" onClick={() => setSheet("transfer")}>
+                  <TransferIcon />
+                  Move to Aming card
+                </Action>
+              </div>
+            ) : null}
             <Change now={now.income} before={before?.income ?? 0} label="money in vs last month" />
           </div>
-          {owner ? (
-            <div className="mt-6 flex flex-wrap gap-2 lg:mt-auto lg:pt-6">
-              <Action variant="solid" onClick={() => setSheet("withdraw")}>
-                Withdraw
-              </Action>
-              <Action variant="outline" onClick={() => setSheet("transfer")}>
-                Move to Aming card
-              </Action>
-            </div>
-          ) : null}
-        </section>
+        </div>
 
         {owner ? (
-          <section aria-label="Aming card" className="relative flex flex-col overflow-hidden rounded-3xl bg-brand-500 p-5 text-white shadow-theme-xs sm:p-6 lg:col-span-2">
-            <span aria-hidden className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/10" />
-            <Pill className="relative self-start border-white/40">Aming card</Pill>
-            <p className="relative mt-8 truncate text-sm text-white/80">Yours, {owner.name}</p>
-            <p className="relative mt-1 break-words text-3xl font-bold tracking-tight tnum sm:text-4xl">{money(owner.amingBalance)}</p>
-            <p className="relative mt-2 text-xs text-white/80">To pay for things on Aming.</p>
-            <div className="relative mt-6 flex flex-wrap gap-2 lg:mt-auto lg:pt-6">
-              {/* Adding funds is on the owner's own wallet page. */}
-              <Action variant="onBrand" onClick={() => router.push("/payment?add=1")}>
-                Add funds
-              </Action>
-            </div>
-          </section>
+          <BankCard
+            label="Aming card"
+            holder={owner.name}
+            balance={money(owner.aming.balance)}
+            card={owner.aming.card}
+            tone="brand"
+            // Adding funds is on the owner's own wallet page.
+            onAdd={() => router.push("/payment?add=1")}
+            addLabel="Add funds"
+          />
         ) : null}
       </div>
 

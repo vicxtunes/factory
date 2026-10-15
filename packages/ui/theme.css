@@ -164,6 +164,75 @@ body {
   background: var(--navy-900);
 }
 
+/* Collapsible sidebar (packages/ui/navigation/sidebar.tsx): the <html>
+   element carries data-sidebar="collapsed" (set before paint by
+   sidebar-init.ts), the sidebar and the page's left padding both follow
+   --sidebar-w, and collapsed it shows icons only — .sidebar-label text
+   hides, .sidebar-mark (the small logo) shows, and hovering a link shows
+   its data-tip name beside it. */
+:root {
+  --sidebar-w: 16rem;
+}
+:root[data-sidebar="collapsed"] {
+  --sidebar-w: 4.5rem;
+}
+.sidebar {
+  width: var(--sidebar-w);
+  transition: width 200ms ease;
+}
+.sidebar-offset {
+  transition: padding-left 200ms ease;
+}
+.sidebar-mark {
+  display: none;
+}
+:root[data-sidebar="collapsed"] .sidebar .sidebar-label {
+  display: none;
+}
+:root[data-sidebar="collapsed"] .sidebar .sidebar-mark {
+  display: block;
+}
+:root[data-sidebar="collapsed"] .sidebar .menu-item {
+  justify-content: center;
+  padding-inline: 0;
+}
+:root[data-sidebar="collapsed"] .sidebar .sidebar-head {
+  justify-content: center;
+  padding-inline: 0;
+}
+/* A group's dropdown (navigation/SidebarGroup.tsx) is a normal list again. */
+:root[data-sidebar="collapsed"] .sidebar .sidebar-dropdown .menu-item {
+  justify-content: flex-start;
+  padding-inline: 0.75rem;
+}
+/* Tooltips stick out past the sidebar, so its lists mustn't clip them. */
+:root[data-sidebar="collapsed"] .sidebar nav {
+  overflow: visible;
+}
+:root[data-sidebar="collapsed"] .sidebar [data-tip]:hover::after,
+:root[data-sidebar="collapsed"] .sidebar [data-tip]:focus-visible::after {
+  content: attr(data-tip);
+  position: absolute;
+  left: calc(100% + 0.75rem);
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 60;
+  white-space: nowrap;
+  border-radius: 0.5rem;
+  background: var(--foreground);
+  color: var(--background);
+  padding: 0.25rem 0.625rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sidebar,
+  .sidebar-offset {
+    transition: none;
+  }
+}
+
 /* Sidebar nav item states, ported from TailAdmin's menu-item utilities. */
 @utility menu-item {
   @apply relative flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors;

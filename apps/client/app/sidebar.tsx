@@ -21,6 +21,8 @@ import {
   SupportIcon,
 } from "@repo/ui/icons";
 
+import { SidebarToggle } from "@repo/ui/navigation/sidebar";
+
 import { useOwes } from "./use-owes";
 import { clientNavFor, isCurrentClientPage, type ClientNavItem } from "./nav";
 
@@ -49,7 +51,8 @@ const ICONS: Partial<Record<ClientNavItem["icon"], typeof OrdersIcon>> = {
 // Desktop/tablet only (md+). On phones navigation is the bottom home bar
 // (./home-bar.tsx) — no hamburger, no slide-out drawer. The links and their
 // sections come from ./nav.ts; sections are headed, not collapsible — there
-// are few enough links that everything can stay in view.
+// are few enough links that everything can stay in view. It collapses to
+// icons (@repo/ui/navigation/sidebar).
 export function ClientSidebar({ signedIn }: { signedIn: boolean }) {
   const pathname = usePathname();
   const sections = clientNavFor(signedIn);
@@ -57,16 +60,17 @@ export function ClientSidebar({ signedIn }: { signedIn: boolean }) {
 
   return (
     <aside
-      className="fixed inset-y-0 left-0 z-50 hidden w-64 flex-col border-r border-border bg-surface md:flex"
+      className="sidebar fixed inset-y-0 left-0 z-50 hidden flex-col border-r border-border bg-surface md:flex"
     >
-      <div className="flex h-16 shrink-0 items-center gap-2 border-b border-border px-5">
-        <Image src="/aming-logo-header.png" alt="AMING" width={193} height={40} className="h-7 w-auto" priority />
-      </div>
+      <header className="sidebar-head flex h-16 shrink-0 items-center gap-2 border-b border-border px-5">
+        <Image src="/aming-logo-header.png" alt="AMING" width={193} height={40} className="sidebar-label h-7 w-auto" priority />
+        <Image src="/icon-192.png" alt="AMING" width={64} height={64} className="sidebar-mark h-8 w-8 rounded-lg" />
+      </header>
       <nav aria-label="Client portal" className="flex-1 space-y-5 overflow-y-auto px-3 py-4">
         {sections.map((section) => (
           <div key={section.id}>
             {section.label ? (
-              <p className="mb-1 px-3 text-xs font-semibold uppercase tracking-wide text-muted">{section.label}</p>
+              <p className="sidebar-label mb-1 px-3 text-xs font-semibold uppercase tracking-wide text-muted">{section.label}</p>
             ) : null}
             <ul className="space-y-1">
               {section.items.map((item) => {
@@ -78,12 +82,13 @@ export function ClientSidebar({ signedIn }: { signedIn: boolean }) {
                       href={item.href}
                       prefetch
                       aria-current={active ? "page" : undefined}
+                      data-tip={item.label}
                       className={`menu-item ${active ? "menu-item-active" : "menu-item-inactive"}`}
                     >
                       {Icon ? (
                         <Icon className={`h-5 w-5 ${active ? "menu-item-icon-active" : "menu-item-icon-inactive"}`} />
                       ) : null}
-                      {item.label}
+                      <span className="sidebar-label">{item.label}</span>
                       {owes && item.href === "/payment" ? (
                         <span className="ml-auto size-2 rounded-full bg-error-500" aria-label="You have unpaid invoices" />
                       ) : null}
@@ -95,6 +100,7 @@ export function ClientSidebar({ signedIn }: { signedIn: boolean }) {
           </div>
         ))}
       </nav>
+      <SidebarToggle />
     </aside>
   );
 }

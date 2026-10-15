@@ -15,6 +15,7 @@ import type { Owing } from "@repo/lib/invoices/types";
 import { OwingBanner } from "../invoices/OwingBanner";
 
 import { parseAmount, useMoney } from "./shared";
+import { usePinRetry } from "./WalletPin";
 import { clientPath } from "@repo/lib/client-portal/paths";
 
 // An order's payment state, dropped into an order screen by order id.
@@ -67,6 +68,8 @@ export function ClientOrderPayment({ orderId }: { orderId: string }) {
   const { state, setState } = useOrderPayment(orderId);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  // "Pay from wallet" needs the wallet PIN (./WalletPin.tsx).
+  const { withPin, sheet } = usePinRetry();
   const [owing, setOwing] = useState<Owing | null>(null);
   useEffect(() => {
     getMyOwing().then(setOwing, () => {});
@@ -88,7 +91,7 @@ export function ClientOrderPayment({ orderId }: { orderId: string }) {
     if (!window.confirm(message)) return;
     setError(null);
     start(async () => {
-      const res = await payOrderFromWallet(orderId);
+      const res = await withPin(() => payOrderFromWallet(orderId));
       if (!res.ok) return setError(res.error);
       setState(res.data);
       router.refresh();
@@ -97,6 +100,7 @@ export function ClientOrderPayment({ orderId }: { orderId: string }) {
 
   return (
     <section aria-label="Payment" className="space-y-2 rounded-2xl border border-border bg-surface p-4">
+      {sheet}
       {/* Owing on other invoices too: the Wallet clears them together. */}
       {owing && owing.owed > due ? <OwingBanner owing={owing} /> : null}
       <PaidSummary state={state} />

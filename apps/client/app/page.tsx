@@ -1,4 +1,3 @@
-import { Header } from "@repo/ui/Header";
 import { BannerSkeleton, ChartsSkeleton, ChipRowSkeleton, StatTilesSkeleton } from "@repo/ui/skeletons/blocks";
 import { Loading } from "@repo/ui/skeletons/Loading";
 import { OwingBanner } from "@repo/ui/invoices/OwingBanner";
@@ -10,11 +9,12 @@ import { fetchClientItems, fetchMarketingSlides, fetchProductCatalog } from "@re
 import { STUDIOS_ENABLED } from "@repo/lib/studios/feature";
 import { getMyWalletSummary } from "@repo/lib/wallet/actions";
 
-import { AuthGate } from "./auth-gate";
 import { ClientDashboard } from "./dashboard";
 import { Landing } from "./landing";
+import { rememberedClient } from "./remembered-device";
 import { ClientShell } from "./shell";
 import { ShowroomView } from "./showroom-view";
+import { SignInOverlay } from "./sign-in-overlay";
 
 
 export default async function ClientSidePage({
@@ -27,17 +27,12 @@ export default async function ClientSidePage({
   if (!session) {
     // Signed-out visitors land on Aming Space's landing page (the public
     // showroom while studios are off); the sign-in form only shows when asked
-    // for (?signin=1, e.g. from the topbar's Log in link).
+    // for (?signin=1, e.g. from the topbar's Log in link) — or straight away
+    // on a browser that remembers its account: the lock screen.
     const params = await searchParams;
-    if (!params.signin) return STUDIOS_ENABLED ? <Landing /> : <ShowroomView />;
-    return (
-      <>
-        <Header surface="Client Portal" />
-        <main className="mx-auto w-full max-w-md flex-1 px-4 py-8">
-          <AuthGate />
-        </main>
-      </>
-    );
+    const front = STUDIOS_ENABLED ? <Landing /> : <ShowroomView />;
+    if (!params.signin && !(await rememberedClient())) return front;
+    return <SignInOverlay behind={front} />;
   }
 
   return (
@@ -83,7 +78,7 @@ async function Home({ client }: { client: { id: string; name: string; avatarUrl:
         slides={slides}
         products={products}
         // If the wallet can't load, the home screen still works — it just has no balance tile.
-        wallet={wallet.ok ? <WalletSummaryCard summary={wallet.data} /> : null}
+        wallet={wallet.ok ? <WalletSummaryCard summary={wallet.data} holder={client.name} /> : null}
       />
     </div>
   );

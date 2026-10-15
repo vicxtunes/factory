@@ -6,6 +6,8 @@ import { useEffect, useRef, useState } from "react";
 
 import { HomeBar, type HomeBarLink } from "@repo/ui/HomeBar";
 import { BackButton } from "@repo/ui/navigation/back";
+import { SidebarToggle } from "@repo/ui/navigation/sidebar";
+import { SidebarGroup, useOpenGroups } from "@repo/ui/navigation/SidebarGroup";
 import { NotificationBell } from "@repo/ui/notifications/NotificationBell";
 import {
   AccountsIcon,
@@ -80,50 +82,63 @@ export function StudioMark({ brand, size }: { brand: Pick<StudioBrand, "name" | 
 // Desktop/tablet (md+): the studio's mark and name, its menu, and the way back to Aming.
 function StudioSidebar({ brand, nav, switcher }: { brand: StudioBrand; nav: StudioNavSection[]; switcher: React.ReactNode }) {
   const pathname = usePathname();
+  const groupsOpen = useOpenGroups("studio-sidebar-open-groups");
   return (
-    <aside className="fixed inset-y-0 left-0 z-50 hidden w-64 flex-col border-r border-border bg-surface md:flex">
-      <div className="flex h-16 shrink-0 items-center gap-3 border-b border-border px-5">
+    <aside className="sidebar fixed inset-y-0 left-0 z-50 hidden flex-col border-r border-border bg-surface md:flex">
+      <header className="sidebar-head flex h-16 shrink-0 items-center gap-3 border-b border-border px-5">
         <StudioMark brand={brand} size="md" />
-        <div className="min-w-0">
+        <div className="sidebar-label min-w-0">
           <p className="truncate text-sm font-semibold">{brand.name}</p>
           <p className="text-xs text-muted">My Business</p>
         </div>
-      </div>
-      {switcher}
-      <nav aria-label="My Business" className="flex-1 space-y-5 overflow-y-auto px-3 py-4">
-        {nav.map((section) => (
-          <div key={section.id}>
-            {section.label ? (
-              <p className="mb-1 px-3 text-xs font-semibold uppercase tracking-wide text-muted">{section.label}</p>
-            ) : null}
-            <ul className="space-y-1">
-              {section.items.map((item) => {
-                const Icon = ICONS[item.icon];
-                const active = isCurrentStudioPage(pathname, item);
-                return (
-                  <li key={item.href}>
-                    <Link
-                      href={item.href}
-                      prefetch
-                      aria-current={active ? "page" : undefined}
-                      className={`menu-item ${active ? "menu-item-active" : "menu-item-inactive"}`}
-                    >
-                      {Icon ? <Icon className={`h-5 w-5 ${active ? "menu-item-icon-active" : "menu-item-icon-inactive"}`} /> : null}
-                      {item.label}
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        ))}
+      </header>
+      <div className="sidebar-label">{switcher}</div>
+      <nav aria-label="My Business" className="flex-1 overflow-y-auto px-3 py-4">
+        <ul className="space-y-1">
+          {nav.map((section) => {
+            const links = section.items.map((item) => ({ ...item, active: isCurrentStudioPage(pathname, item) }));
+            const GroupIcon = section.icon ? ICONS[section.icon] : undefined;
+            if (section.label && GroupIcon) {
+              const holdsCurrent = links.some((l) => l.active);
+              return (
+                <SidebarGroup
+                  key={section.id}
+                  id={`studio-${section.id}`}
+                  label={section.label}
+                  icon={GroupIcon}
+                  links={links}
+                  open={groupsOpen.isOpen(section.id, holdsCurrent)}
+                  onToggle={() => groupsOpen.toggle(section.id, holdsCurrent)}
+                />
+              );
+            }
+            return links.map((item) => {
+              const Icon = ICONS[item.icon];
+              return (
+                <li key={item.href}>
+                  <Link
+                    href={item.href}
+                    prefetch
+                    aria-current={item.active ? "page" : undefined}
+                    data-tip={item.label}
+                    className={`menu-item ${item.active ? "menu-item-active" : "menu-item-inactive"}`}
+                  >
+                    {Icon ? <Icon className={`h-5 w-5 ${item.active ? "menu-item-icon-active" : "menu-item-icon-inactive"}`} /> : null}
+                    <span className="sidebar-label">{item.label}</span>
+                  </Link>
+                </li>
+              );
+            });
+          })}
+        </ul>
       </nav>
       <div className="border-t border-border p-3">
-        <Link href="/" className="menu-item menu-item-inactive">
+        <Link href="/" data-tip="Back to Aming" className="menu-item menu-item-inactive">
           <BackIcon className="h-5 w-5 menu-item-icon-inactive" />
-          Back to Aming
+          <span className="sidebar-label">Back to Aming</span>
         </Link>
       </div>
+      <SidebarToggle />
     </aside>
   );
 }
@@ -211,7 +226,7 @@ export function StudioShell({
   return (
     <div className="min-h-screen">
       <StudioSidebar brand={brand} nav={nav} switcher={switcher} />
-      <div className="flex min-h-screen flex-col md:pl-64">
+      <div className="sidebar-offset flex min-h-screen flex-col md:pl-(--sidebar-w)">
         <StudioTopbar brand={brand} user={user} owner={access.owner} />
         <main className="flex-1 bg-background px-4 py-6 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:px-6 md:pb-6">
           <div className={`space-y-4 ${wide ? BOARD_BLEED : "mx-auto max-w-5xl"}`}>
