@@ -39,7 +39,7 @@ export function GraphicsShell({
       <NotificationGate />
       <AnnouncementPopup />
       <GraphicsSidebar />
-      <div className="flex min-h-screen flex-col md:pl-64">
+      <div className="sidebar-offset flex min-h-screen flex-col md:pl-(--sidebar-w)">
         <GraphicsTopbar name={name} avatarUrl={avatarUrl} />
         {/* Extra bottom padding on mobile so content clears the fixed home bar. */}
         <main className="flex-1 bg-background px-4 py-6 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:px-6 md:pb-6">

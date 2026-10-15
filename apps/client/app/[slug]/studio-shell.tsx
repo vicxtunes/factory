@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { ClientsIcon, ShowroomIcon } from "@repo/ui/icons";
+import { SidebarToggle } from "@repo/ui/navigation/sidebar";
 import { PortalStayIn } from "@repo/ui/studio-portal/PortalForms";
 
 import { StudioMark } from "../studio/_workspace/shell";
@@ -42,25 +43,26 @@ export function StudioShell({
   return (
     <div className="min-h-screen">
       {signedInAs ? <PortalStayIn slug={studio.slug} /> : null}
-      <aside className="fixed inset-y-0 left-0 z-50 hidden w-64 flex-col border-r border-border bg-surface md:flex">
-        <Link href={home} className="flex h-16 shrink-0 items-center gap-2.5 border-b border-border px-5">
+      <aside className="sidebar fixed inset-y-0 left-0 z-50 hidden flex-col border-r border-border bg-surface md:flex">
+        <Link href={home} className="sidebar-head flex h-16 shrink-0 items-center gap-2.5 border-b border-border px-5">
           <StudioMark brand={studio} size="md" />
-          <span className="truncate font-semibold">{studio.name}</span>
+          <span className="sidebar-label truncate font-semibold">{studio.name}</span>
         </Link>
         <nav aria-label={studio.name} className="flex-1 overflow-y-auto px-3 py-4">
           <ul className="space-y-1">
             {items.map(({ href, label, Icon, active }) => (
               <li key={href}>
-                <Link href={href} aria-current={active ? "page" : undefined} className={`menu-item ${active ? "menu-item-active" : "menu-item-inactive"}`}>
+                <Link href={href} aria-current={active ? "page" : undefined} data-tip={label} className={`menu-item ${active ? "menu-item-active" : "menu-item-inactive"}`}>
                   <Icon className={`h-5 w-5 ${active ? "menu-item-icon-active" : "menu-item-icon-inactive"}`} />
-                  {label}
+                  <span className="sidebar-label">{label}</span>
                 </Link>
               </li>
             ))}
           </ul>
         </nav>
+        <SidebarToggle />
       </aside>
-      <div className="flex min-h-screen flex-col md:pl-64">
+      <div className="sidebar-offset flex min-h-screen flex-col md:pl-(--sidebar-w)">
         <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-3 border-b border-border bg-surface px-4 sm:px-6">
           {/* Phones have no side menu: the studio's mark leads the bar instead. */}
           <Link href={home} className="md:hidden" aria-label={studio.name}>

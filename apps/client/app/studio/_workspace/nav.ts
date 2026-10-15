@@ -1,6 +1,7 @@
 // My Studio's navigation, defined once: the studio workspace is its own app,
 // separate from the Aming marketplace (../../nav.ts). The desktop sidebar shows
-// these sections; the phone home bar puts the first four on the bar and the
+// the top section's links, then each other section as a group that opens
+// (a dropdown beside its icon when the sidebar is collapsed); the phone home bar puts the first four on the bar and the
 // rest in "More". To add, move or rename a studio page, edit this file only.
 
 import type { HomeBarIcon } from "@repo/ui/HomeBar";
@@ -20,6 +21,8 @@ export interface StudioNavSection {
   id: string;
   /** Null for the top section, which has no heading. */
   label: string | null;
+  /** The group's icon in the sidebar (sections with a heading). */
+  icon?: HomeBarIcon;
   items: StudioNavItem[];
 }
 
@@ -28,6 +31,7 @@ export const STUDIO_NAV: StudioNavSection[] = [
   {
     id: "work",
     label: "Work",
+    icon: "tasks",
     items: [
       { href: "/studio/bookings", label: "Bookings", icon: "calendar", need: "bookings" },
       { href: "/studio/projects", label: "Projects", icon: "studio", need: "projects" },
@@ -38,6 +42,7 @@ export const STUDIO_NAV: StudioNavSection[] = [
   {
     id: "clients",
     label: "Clients & money",
+    icon: "payment",
     items: [
       { href: "/studio/wallet", label: "Wallet", icon: "payment", need: "money" },
       { href: "/studio/accounts", label: "Accounts", icon: "accounts", need: "money" },
@@ -50,13 +55,19 @@ export const STUDIO_NAV: StudioNavSection[] = [
   {
     id: "studio",
     label: "Business",
+    icon: "studio",
     items: [
       { href: "/studio/offerings", label: "Packages & Services", icon: "products", need: "catalog" },
       { href: "/studio/products", label: "Products", icon: "placeOrder", need: "catalog" },
       { href: "/studio/showroom", label: "Showroom", icon: "showroom", need: "catalog" },
       { href: "/studio/files", label: "Files", icon: "files", need: "files" },
-      { href: "/studio/profile", label: "Business profile", icon: "settings" },
     ],
+  },
+  {
+    id: "settings",
+    label: "Settings",
+    icon: "settings",
+    items: [{ href: "/studio/profile", label: "Business profile", icon: "settings" }],
   },
 ];
 

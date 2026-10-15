@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 
 import { OrdersIcon, SupportIcon } from "@repo/ui/icons";
 import { ChatIcon } from "@repo/ui/chat/icons";
+import { SidebarToggle } from "@repo/ui/navigation/sidebar";
 
 import { GRAPHICS_NAV, isCurrentGraphicsPage, type GraphicsNavItem } from "./nav";
 
@@ -21,15 +22,16 @@ export function GraphicsSidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="fixed inset-y-0 left-0 z-50 hidden w-64 flex-col border-r border-border bg-surface md:flex">
-      <div className="flex h-16 shrink-0 items-center gap-2 border-b border-border px-5">
-        <Image src="/aming-logo-header.png" alt="AMING" width={193} height={40} className="h-7 w-auto" priority />
-      </div>
+    <aside className="sidebar fixed inset-y-0 left-0 z-50 hidden flex-col border-r border-border bg-surface md:flex">
+      <header className="sidebar-head flex h-16 shrink-0 items-center gap-2 border-b border-border px-5">
+        <Image src="/aming-logo-header.png" alt="AMING" width={193} height={40} className="sidebar-label h-7 w-auto" priority />
+        <Image src="/icon-192.png" alt="AMING" width={64} height={64} className="sidebar-mark h-8 w-8 rounded-lg" />
+      </header>
       <nav aria-label="Graphics" className="flex-1 space-y-5 overflow-y-auto px-3 py-4">
         {GRAPHICS_NAV.map((section) => (
           <div key={section.id}>
             {section.label ? (
-              <p className="mb-1 px-3 text-xs font-semibold uppercase tracking-wide text-muted">{section.label}</p>
+              <p className="sidebar-label mb-1 px-3 text-xs font-semibold uppercase tracking-wide text-muted">{section.label}</p>
             ) : null}
             <ul className="space-y-1">
               {section.items.map((item) => {
@@ -41,12 +43,13 @@ export function GraphicsSidebar() {
                       href={item.href}
                       prefetch
                       aria-current={active ? "page" : undefined}
+                      data-tip={item.label}
                       className={`menu-item ${active ? "menu-item-active" : "menu-item-inactive"}`}
                     >
                       {Icon ? (
                         <Icon className={`h-5 w-5 ${active ? "menu-item-icon-active" : "menu-item-icon-inactive"}`} />
                       ) : null}
-                      {item.label}
+                      <span className="sidebar-label">{item.label}</span>
                     </Link>
                   </li>
                 );
@@ -55,6 +58,7 @@ export function GraphicsSidebar() {
           </div>
         ))}
       </nav>
+      <SidebarToggle />
     </aside>
   );
 }
