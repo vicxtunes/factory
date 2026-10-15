@@ -58,7 +58,7 @@ const PICTURES = [
 let n = 0;
 function file(folderId: string | null, name: string, bytes: number, contentType: string, createdAt: string, downloadUrl = "#"): FileView {
   const real = downloadUrl !== "#";
-  return { id: `file-${++n}`, folderId, name, bytes, contentType, createdAt, downloadUrl, previewUrl: real && /^(image|video)\/|pdf$/.test(contentType) ? downloadUrl : null };
+  return { id: `file-${++n}`, folderId, name, bytes, contentType, caption: null, createdAt, downloadUrl, previewUrl: real && /^(image|video)\/|pdf$/.test(contentType) ? downloadUrl : null, thumbUrl: real && contentType.startsWith("image/") ? downloadUrl : null };
 }
 const photo = (folderId: string | null, i: number, createdAt: string) =>
   file(folderId, `${PICTURES[i][0]}.svg`, 240_000 + i * 17_000, "image/svg+xml", createdAt, PICTURES[i][1]);

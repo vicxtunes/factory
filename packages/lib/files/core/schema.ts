@@ -81,6 +81,8 @@ export const viaSchema = z.discriminatedUnion("as", [
   z.object({ as: z.literal("studio") }),
   z.object({ as: z.literal("client"), slug: z.string().min(1).max(100) }),
   z.object({ as: z.literal("link"), slug: z.string().min(1).max(100), token: shareTokenSchema }),
+  // A client's task opened by its link, without signing in.
+  z.object({ as: z.literal("task"), slug: z.string().min(1).max(100), token: shareTokenSchema }),
 ]);
 export type Via = z.infer<typeof viaSchema>;
 
@@ -91,4 +93,20 @@ export const renameManySchema = z.object({
     .array(z.object({ kind: z.enum(["file", "folder"]), id: z.uuid("That item no longer exists."), name: z.string().max(MAX_FILE_NAME) }))
     .min(1, "Choose something to rename.")
     .max(1000, "Rename at most 1,000 at a time."),
+});
+
+/** A file's caption: the children in a photo, say. Blank clears it. */
+export const captionSchema = z
+  .string()
+  .trim()
+  .max(500, "Keep it under 500 characters.")
+  .transform((c) => c.replace(/\s+/g, " ") || null);
+
+/** Files to download (chosen ones, or a folder with everything in it), as originals or optimised copies. */
+export const downloadSchema = z.object({
+  pick: z.union([
+    z.object({ fileIds: z.array(z.uuid("That file doesn't exist.")).min(1).max(2000, "Download at most 2,000 at a time.") }),
+    z.object({ folderId: z.uuid("That folder doesn't exist.") }),
+  ]),
+  version: z.enum(["original", "optimised"]),
 });

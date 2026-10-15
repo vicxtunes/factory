@@ -72,7 +72,7 @@ async function Home({ at, me, slug }: { at: NonNullable<Awaited<ReturnType<typeo
     studioOrders.forStudio(scope),
     files.clientAccess(scope, id),
     // What the studio asked of them (choosing photos, feedback, anything else): open ones, and choices they sent.
-    tasks.forClient(scope, id).then((all) => all.filter((t) => t.status !== "done" || t.kind === "choose")),
+    tasks.forClient(scope, id).then((all) => all.filter((t) => t.status !== "done" || t.kind === "choose" || t.kind === "name")),
   ]);
   // Their delivered photos: one gallery per project, if the studio made one.
   const galleries = await Promise.all(theirProjects.map((p) => photos.delivery(scope, p.id)));

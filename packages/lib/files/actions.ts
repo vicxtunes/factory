@@ -18,8 +18,10 @@ import { tasks } from "@repo/lib/tasks/server";
 
 import { filesCaller, type FilesCaller } from "./access";
 import {
+  captionSchema,
   commentIdSchema,
   commentInputSchema,
+  downloadSchema,
   fileIdSchema,
   fileNameSchema,
   folderIdSchema,
@@ -130,6 +132,17 @@ export async function renameMany(via: unknown, input: unknown): Promise<Result> 
   });
 }
 
+// ── Downloads ─────────────────────────────────────────────────────────────
+
+/** Links for a zip: chosen files or a folder with everything in it, as originals or optimised copies. */
+export async function downloadLinks(via: unknown, input: unknown): Promise<Result<{ path: string; url: string; bytes: number }[]>> {
+  return runAction("files", async () => {
+    const { scope, access } = await caller(via);
+    const { pick, version } = parseInput(downloadSchema, input);
+    return files.downloads(scope, pick, version, access);
+  });
+}
+
 // ── Comments ──────────────────────────────────────────────────────────────
 
 export async function fileComments(via: unknown, fileId: unknown): Promise<Result<FileComment[]>> {
@@ -176,7 +189,7 @@ async function myTask(found: FilesCaller, taskId: unknown) {
   const p = found.person;
   const mine =
     task &&
-    (p.kind === "client" ? task.customerId === p.customerId : p.kind === "member" ? task.assigneeId === p.memberId || found.access.kind === "full" : p.kind === "owner");
+    (p.kind === "client" ? task.customerId === p.customerId && (!p.onlyTask || p.onlyTask === task.id) : p.kind === "member" ? task.assigneeId === p.memberId || found.access.kind === "full" : p.kind === "owner");
   if (!task || !mine) throw new FileError("That task isn't yours, or is gone.");
   return task;
 }
@@ -192,8 +205,28 @@ export async function pickFile(via: unknown, taskId: unknown, fileId: unknown, p
 }
 
 /**
- * Sends a choice (a "choose" task, within its least and most) or says the
- * feedback is given: the task is done, and the business's owner hears.
+ * Sets a file's caption: whoever may change files there, or (`taskId`) the
+ * person whose open "name the photos" task covers it.
+ */
+export async function captionFile(via: unknown, fileId: unknown, caption: unknown, taskId?: unknown): Promise<Result> {
+  return runAction("files", async () => {
+    const found = await caller(via);
+    let task: { folderId: string | null } | undefined;
+    if (taskId !== undefined && taskId !== null) {
+      const mine = await myTask(found, taskId);
+      if (mine.kind !== "name") throw new FileError("This task isn't for naming photos.");
+      if (mine.status === "done") throw new FileError("The names are already sent. Ask the business to reopen it to change them.");
+      task = mine;
+    }
+    await files.setCaption(found.scope, parseInput(fileIdSchema, fileId), parseInput(captionSchema, caption), found.access, task);
+    touched();
+  });
+}
+
+/**
+ * Sends a choice (a "choose" task, within its least and most), the names (a
+ * "name" task) or says the feedback is given: the task is done, and the
+ * business's owner hears.
  */
 export async function finishTask(via: unknown, taskId: unknown): Promise<Result> {
   return runAction("files", async () => {
@@ -206,6 +239,10 @@ export async function finishTask(via: unknown, taskId: unknown): Promise<Result>
       const least = Math.max(1, task.pickMin ?? 1);
       if (count < least) throw new FileError(`Choose at least ${least} (you have ${count}).`);
       told = `${found.who?.name ?? "Your client"} chose ${count} for "${task.title}"`;
+    }
+    if (task.kind === "name" && task.folderId) {
+      const there = (await files.list(found.scope, task.folderId, found.access))?.files ?? [];
+      told = `${found.who?.name ?? "Your client"} named ${there.filter((f) => f.caption).length} of ${there.length} photos in "${task.title}"`;
     }
     await tasks.setStatus(found.scope, task.id, "done");
     if (found.person.kind === "client") {

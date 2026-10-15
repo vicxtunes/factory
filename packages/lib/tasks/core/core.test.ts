@@ -14,6 +14,7 @@ const task = (o: Partial<Task>): Task => ({
   assigneeName: null,
   customerId: null,
   customerName: null,
+  shareToken: null,
   kind: "todo",
   folderId: null,
   pickMin: null,
@@ -63,6 +64,8 @@ test("a task for a client, or to choose or give feedback, says enough", () => {
   assert.deepEqual(parseInput(taskInputSchema, { ...base, kind: "feedback", folderId: folder, pickMax: 5 }).pickMax, null);
   assert.throws(() => parseInput(taskInputSchema, { ...base, kind: "choose", folderId: folder }), /how many photos/);
   assert.throws(() => parseInput(taskInputSchema, { ...base, kind: "feedback" }), /Choose the folder/);
+  assert.throws(() => parseInput(taskInputSchema, { ...base, kind: "name" }), /Choose the folder/);
+  assert.equal(parseInput(taskInputSchema, { ...base, customerId: client, kind: "name", folderId: folder }).kind, "name");
   assert.throws(() => parseInput(taskInputSchema, { ...base, kind: "choose", folderId: folder, pickMin: 5, pickMax: 2 }), /least can't be more/);
   assert.throws(() => parseInput(taskInputSchema, { ...base, assigneeId: client, customerId: client }), /not both/);
 });

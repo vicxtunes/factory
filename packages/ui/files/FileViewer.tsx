@@ -7,6 +7,7 @@ import { commentOnFile, deleteComment, fileComments, resolveComment } from "@rep
 import { COMMENT_AUTHOR_LABELS, type FileComment, type FileView, type Via } from "@repo/lib/files/core";
 import { formatBytes } from "@repo/lib/photos/core";
 import { formatDay } from "@repo/lib/tenancy/format";
+import { Watermark } from "@repo/ui/files/proof";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
 const GUEST_KEY = "files-guest-name";
@@ -20,7 +21,20 @@ function readGuestName(): string {
 }
 
 /** The file itself, as big as it fits: a picture (with its comments' pins), a video, a PDF, or what it is with Download. */
-function Stage({ file, pins, placing, onPlace }: { file: FileView; pins: { n: number; x: number; y: number; open: boolean }[]; placing: boolean; onPlace: (x: number, y: number) => void }) {
+function Stage({
+  file,
+  pins,
+  placing,
+  onPlace,
+  watermark,
+}: {
+  file: FileView;
+  pins: { n: number; x: number; y: number; open: boolean }[];
+  placing: boolean;
+  onPlace: (x: number, y: number) => void;
+  /** Proofs: a watermark across it, no saving it from the page. */
+  watermark?: string;
+}) {
   const url = file.previewUrl;
   if (url && file.contentType.startsWith("image/")) {
     return (
@@ -35,8 +49,9 @@ function Stage({ file, pins, placing, onPlace }: { file: FileView; pins: { n: nu
             const r = e.currentTarget.getBoundingClientRect();
             onPlace((e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height);
           }}
-          className={`max-h-[calc(100dvh-8rem)] max-w-full object-contain select-none ${placing ? "cursor-crosshair" : ""}`}
+          className={`max-h-[calc(100dvh-8rem)] max-w-full object-contain select-none [-webkit-touch-callout:none] ${placing ? "cursor-crosshair" : ""}`}
         />
+        {watermark ? <Watermark text={watermark} large /> : null}
         {pins.map((p) => (
           <span
             key={p.n}
@@ -49,12 +64,26 @@ function Stage({ file, pins, placing, onPlace }: { file: FileView; pins: { n: nu
       </div>
     );
   }
-  if (url && file.contentType.startsWith("video/")) return <video src={url} controls className="max-h-[calc(100dvh-8rem)] max-w-full" />;
-  if (url && file.contentType === "application/pdf") return <iframe src={url} title={file.name} className="h-[calc(100dvh-8rem)] w-full rounded-lg bg-white" />;
+  if (url && file.contentType.startsWith("video/")) {
+    return (
+      <div className="relative" data-proof={watermark ? "" : undefined}>
+        <video src={url} controls controlsList={watermark ? "nodownload noplaybackrate" : undefined} disablePictureInPicture={!!watermark} className="max-h-[calc(100dvh-8rem)] max-w-full" />
+        {watermark ? <Watermark text={watermark} large /> : null}
+      </div>
+    );
+  }
+  // A PDF's own viewer can save it: proofs don't open it here.
+  if (url && file.contentType === "application/pdf" && !watermark) return <iframe src={url} title={file.name} className="h-[calc(100dvh-8rem)] w-full rounded-lg bg-white" />;
   return (
     <div className="space-y-2 text-center text-white/80">
       <p className="text-5xl font-semibold">{file.name.includes(".") ? file.name.split(".").pop()!.toUpperCase() : "FILE"}</p>
-      <p className="text-sm">{file.downloadUrl ? "No preview for this kind of file: download it to open it." : "Shared with you to look at, without downloads."}</p>
+      <p className="text-sm">
+        {file.downloadUrl
+          ? "No preview for this kind of file: download it to open it."
+          : file.contentType.startsWith("image/")
+            ? "The preview of this photo is being prepared: look again in a minute."
+            : "Shared with you to look at, without downloads."}
+      </p>
     </div>
   );
 }
@@ -76,6 +105,7 @@ export function FileViewer({
   onIndex,
   onClose,
   onChanged,
+  watermark,
 }: {
   files: FileView[];
   index: number;
@@ -89,6 +119,8 @@ export function FileViewer({
   onClose: () => void;
   /** After a comment changes, so counts on the tiles follow. */
   onChanged: () => void;
+  /** Proofs (still in production): watermarked, nothing to save from the page. */
+  watermark?: string;
 }) {
   const file = files[index];
   const [comments, setComments] = useState<FileComment[] | null>(null);
@@ -189,7 +221,7 @@ export function FileViewer({
           </span>
         </div>
         <div className="flex min-h-0 flex-1 items-center justify-center p-3">
-          <Stage file={file} pins={pins} placing={placing} onPlace={(x, y) => (setPin({ x, y }), setPlacing(false), panel.current?.querySelector("textarea")?.focus())} />
+          <Stage file={file} pins={pins} placing={placing} watermark={watermark} onPlace={(x, y) => (setPin({ x, y }), setPlacing(false), panel.current?.querySelector("textarea")?.focus())} />
         </div>
         {index > 0 ? (
           <button type="button" aria-label="Previous" onClick={() => go(index - 1)} className="absolute top-1/2 left-2 rounded-full bg-black/40 px-3 py-2 text-xl text-white hover:bg-black/60">
@@ -209,10 +241,20 @@ export function FileViewer({
             {formatBytes(file.bytes)}
             {file.createdAt ? ` · ${formatDay(scope, file.createdAt)}` : ""}
           </p>
+          {file.caption && !extra ? <p className="text-sm font-medium">{file.caption}</p> : null}
           <div className="flex flex-wrap gap-2">
             {file.downloadUrl ? (
               <a href={file.downloadUrl} className="inline-flex min-h-9 items-center rounded-[var(--radius)] border border-border px-3 text-sm hover:bg-background">
-                Download
+                {file.optimisedUrl ? "Download original" : "Download"}
+              </a>
+            ) : null}
+            {file.optimisedUrl ? (
+              <a
+                href={file.optimisedUrl}
+                title="The 1,600 px copy: quick to send and share"
+                className="inline-flex min-h-9 items-center rounded-[var(--radius)] border border-border px-3 text-sm hover:bg-background"
+              >
+                Download optimised
               </a>
             ) : null}
             {extra?.(file)}

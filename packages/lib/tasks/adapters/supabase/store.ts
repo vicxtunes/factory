@@ -12,6 +12,7 @@ import { TaskError, type TaskStore } from "../../ports";
 
 interface Row {
   id: string;
+  tenant_id: string;
   project_id: string;
   title: string;
   assignee_id: string | null;
@@ -20,6 +21,7 @@ interface Row {
   folder_id: string | null;
   pick_min: number | null;
   pick_max: number | null;
+  share_token: string | null;
   due_on: string | null;
   priority: TaskPriority;
   status: TaskStatus;
@@ -29,7 +31,7 @@ interface Row {
   customer: { name: string } | null;
 }
 
-const COLUMNS = `id, project_id, title, assignee_id, customer_id, kind, folder_id, pick_min, pick_max, due_on, priority, status, done_at,
+const COLUMNS = `id, tenant_id, project_id, title, assignee_id, customer_id, kind, folder_id, pick_min, pick_max, share_token, due_on, priority, status, done_at,
   project:projects!tasks_tenant_id_project_id_fkey (title),
   assignee:team_members!tasks_tenant_id_assignee_id_fkey (name),
   customer:customers!tasks_customer_fkey (name)`;
@@ -47,6 +49,7 @@ const toTask = (r: Row): Task => ({
   folderId: r.folder_id,
   pickMin: r.pick_min,
   pickMax: r.pick_max,
+  shareToken: r.share_token,
   dueOn: r.due_on,
   priority: r.priority,
   status: r.status,
@@ -121,6 +124,21 @@ export const supabaseTaskStore: TaskStore = {
       .select("id");
     if (error) fail("change the task", error);
     return data.length === 1;
+  },
+
+  async setShareToken(scope, id, token) {
+    // Only where there's none yet: two copies at once keep the first.
+    const { error } = await table().update({ share_token: token }).eq("tenant_id", scope.tenantId).eq("id", id).is("share_token", null);
+    if (error) fail("make the task's link", error);
+    const { data, error: readError } = await table().select("share_token").eq("tenant_id", scope.tenantId).eq("id", id).maybeSingle<{ share_token: string | null }>();
+    if (readError) fail("read the task's link", readError);
+    return data?.share_token ?? null;
+  },
+
+  async byShareToken(token) {
+    const { data, error } = await table().select(COLUMNS).eq("share_token", token).maybeSingle<Row>();
+    if (error) fail("open the task's link", error);
+    return data ? { tenantId: data.tenant_id, task: toTask(data) } : null;
   },
 
   async remove(scope, id) {

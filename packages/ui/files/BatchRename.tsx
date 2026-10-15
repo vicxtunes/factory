@@ -27,6 +27,8 @@ export function BatchRename({
   items,
   others,
   folderName,
+  initialPattern,
+  initialDedupe = false,
   pending,
   error,
   onApply,
@@ -36,13 +38,18 @@ export function BatchRename({
   /** Names in the folder that aren't being renamed. */
   others: string[];
   folderName: string | null;
+  /** Start from this pattern ("{caption}": their names), instead of one made from the names. */
+  initialPattern?: string;
+  /** Number repeated names instead of flagging them. */
+  initialDedupe?: boolean;
   pending: boolean;
   error: string | null;
   onApply: (renames: { kind: "file" | "folder"; id: string; name: string }[]) => void;
   onClose: () => void;
 }) {
   const [mode, setMode] = useState<RenameRule["mode"]>("pattern");
-  const [pattern, setPattern] = useState(() => startingPattern(items, folderName));
+  const [pattern, setPattern] = useState(() => initialPattern ?? startingPattern(items, folderName));
+  const [dedupe, setDedupe] = useState(initialDedupe);
   const [start, setStart] = useState(1);
   const [digits, setDigits] = useState(Math.max(2, String(items.length).length));
   const [order, setOrder] = useState<"name" | "date">("name");
@@ -50,7 +57,7 @@ export function BatchRename({
   const [replace, setReplace] = useState("");
   const [matchCase, setMatchCase] = useState(false);
 
-  const rule: RenameRule = mode === "pattern" ? { mode, pattern, start, digits, order } : { mode, find, replace, matchCase };
+  const rule: RenameRule = mode === "pattern" ? { mode, pattern, start, digits, order, dedupe } : { mode, find, replace, matchCase };
   const plan = planRenames(items, rule, others);
   const changes = plan.filter((p) => p.to !== p.from);
   const problems = plan.filter((p) => p.problem).length;
@@ -83,9 +90,12 @@ export function BatchRename({
               <input value={pattern} onChange={(e) => setPattern(e.target.value)} autoFocus className={`${field} w-full`} />
             </label>
             <p className="text-xs text-muted">
-              <code>{"{#}"}</code> the number · <code>{"{name}"}</code> the old name · <code>{"{date}"}</code> the day it was added. Extensions stay.
+              <code>{"{#}"}</code> the number · <code>{"{name}"}</code> the old name · <code>{"{date}"}</code> the day it was added · <code>{"{caption}"}</code> its
+              caption (the names on it). Extensions stay.
             </p>
-            {!patternNumbers(pattern) && items.length > 1 ? <p className="text-xs text-amber-700 dark:text-amber-300">Add {"{#}"} so each gets its own number.</p> : null}
+            {!patternNumbers(pattern) && !dedupe && items.length > 1 ? (
+              <p className="text-xs text-amber-700 dark:text-amber-300">Add {"{#}"} so each gets its own number, or number repeated names below.</p>
+            ) : null}
             <div className="flex flex-wrap gap-3 text-xs text-muted">
               <label className="flex items-center gap-1.5">
                 Start at
@@ -100,6 +110,10 @@ export function BatchRename({
                     </option>
                   ))}
                 </select>
+              </label>
+              <label className="flex items-center gap-1.5">
+                <input type="checkbox" checked={dedupe} onChange={(e) => setDedupe(e.target.checked)} />
+                Number repeated names (Joel, Joel (2))
               </label>
               <label className="flex items-center gap-1.5">
                 Number by

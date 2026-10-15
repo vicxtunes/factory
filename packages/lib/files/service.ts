@@ -9,6 +9,7 @@ import type { TenantScope } from "@repo/lib/tenancy/types";
 import {
   canSee,
   cleanName,
+  copyKeys,
   fileKeys,
   FULL_ACCESS,
   isLocked,
@@ -16,8 +17,10 @@ import {
   linkLive,
   MAX_FILE_BYTES,
   pathTo,
+  previewable,
   rightsIn,
   showable,
+  withCopies,
   sharedRoots,
   uniqueName,
   type Commenter,
@@ -33,11 +36,16 @@ import {
   type UploadFile,
   type UploadTicket,
 } from "./core";
-import { FileError, type FileRepository, type ObjectStore, type ShareSettings } from "./ports";
+import { FileError, type FileRepository, type ObjectStore, type Previewer, type ShareSettings } from "./ports";
 
 /** Upload links last 15 minutes; download links an hour. */
 const UPLOAD_SECONDS = 15 * 60;
 const VIEW_SECONDS = 60 * 60;
+/** Without small copies yet, a picture up to this size is its own tile. */
+const THUMB_FROM_ORIGINAL = 5 * 1024 * 1024;
+/** Small copies made at a time, and in one go (the rest next time). */
+const PREVIEW_POOL = 4;
+const PREVIEW_BATCH = 60;
 
 const NO_FOLDER = "That folder no longer exists.";
 const NO_FILE = "That file no longer exists.";
@@ -50,6 +58,9 @@ const CANT_CHANGE = "You can't rename, move or delete things here: ask the busin
 
 const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" });
 
+/** An optimised copy's name: the original's, as a JPEG ("IMG_01.HEIC" → "IMG_01.jpg"). */
+const optimisedName = (name: string) => `${name.lastIndexOf(".") > 0 ? name.slice(0, name.lastIndexOf(".")) : name}.jpg`;
+
 function refuseLocked(folder: Folder) {
   if (isLocked(folder)) throw new FileError(folder.holdsProjects ? LOCKED_PROJECTS : LOCKED_PROJECT);
 }
@@ -61,6 +72,7 @@ export class FileService {
     private readonly newId: () => string,
     /** An unguessable secret for a share link. */
     private readonly newToken: () => string,
+    private readonly previewer: Previewer,
   ) {}
 
   async usage(scope: TenantScope): Promise<Usage> {
@@ -92,10 +104,23 @@ export class FileService {
       path: roots ? path.slice(Math.max(0, path.findIndex((f) => roots.has(f.id)))) : path,
       folders: roots && folderId === null ? visible.filter((f) => roots.has(f.id)) : visible.filter((f) => f.parentId === folderId),
       files: await Promise.all(
-        files.map(async ({ key, ...f }) => {
-          // Shown even when downloads are off (it's a look, not a copy to keep); saved only when they're on.
-          const url = rights.download || showable(f.contentType) ? await this.objects.getUrl(key, VIEW_SECONDS, f.name) : null;
-          return { ...f, downloadUrl: rights.download ? url : null, previewUrl: showable(f.contentType) ? url : null, openComments: open.get(f.id) ?? 0 };
+        files.map(async ({ key, previewBytes, ...f }) => {
+          const download = rights.download ? await this.objects.getUrl(key, VIEW_SECONDS, f.name) : null;
+          const view = { ...f, downloadUrl: download, openComments: open.get(f.id) ?? 0 };
+          // A picture shows as its small copies; never as the original unless it may be downloaded anyway.
+          if (previewBytes > 0) {
+            const copies = copyKeys(key);
+            const [previewUrl, thumbUrl, optimisedUrl] = await Promise.all([
+              this.objects.getUrl(copies.preview, VIEW_SECONDS, ""),
+              this.objects.getUrl(copies.thumb, VIEW_SECONDS, ""),
+              rights.download ? this.objects.getUrl(copies.preview, VIEW_SECONDS, optimisedName(f.name)) : null,
+            ]);
+            return { ...view, previewUrl, thumbUrl, optimisedUrl };
+          }
+          if (f.contentType.startsWith("image/")) return { ...view, previewUrl: download, thumbUrl: download && f.bytes <= THUMB_FROM_ORIGINAL ? download : null };
+          // A video or PDF is shown as it is, even when downloads are off (it's a look, not a copy to keep).
+          const shown = showable(f.contentType) ? (download ?? (await this.objects.getUrl(key, VIEW_SECONDS, f.name))) : null;
+          return { ...view, previewUrl: shown, thumbUrl: null };
         }),
       ),
       allFolders: visible,
@@ -145,7 +170,7 @@ export class FileService {
     await this.changeable(scope, access, id);
     const keys = await this.repo.deleteFolder(scope, id);
     if (keys === null) throw new FileError(NO_FOLDER);
-    await this.objects.remove(keys);
+    await this.objects.remove(keys.flatMap(withCopies));
   }
 
   // ── Files ──────────────────────────────────────────────────────────────
@@ -200,6 +225,102 @@ export class FileService {
       await this.objects.remove([keys.final]);
       throw err;
     }
+    await this.makePreviews(scope, { id: input.fileId, key: keys.final, contentType: input.contentType, bytes });
+  }
+
+  // ── Small copies of pictures ─────────────────────────────────────────────
+
+  /**
+   * Makes a picture's preview and thumbnail from the original and records
+   * them. False when it isn't a picture that gets them, or making them
+   * failed (it stays shown as it is, or not at all where it can't be).
+   */
+  async makePreviews(scope: TenantScope, file: Pick<StoredFile, "id" | "key" | "contentType" | "bytes">): Promise<boolean> {
+    if (!previewable(file.contentType, file.bytes)) return false;
+    try {
+      const original = await this.objects.read(file.key);
+      if (!original) return false;
+      const { preview, thumb } = await this.previewer.make(original);
+      const copies = copyKeys(file.key);
+      await Promise.all([this.objects.write(copies.preview, preview, "image/jpeg"), this.objects.write(copies.thumb, thumb, "image/jpeg")]);
+      return this.repo.setPreviewBytes(scope, file.id, preview.byteLength + thumb.byteLength);
+    } catch (err) {
+      console.error(`files: no previews for ${file.id}:`, err);
+      return false;
+    }
+  }
+
+  /**
+   * Links to download files, for a zip: chosen ones (`fileIds`), or a folder
+   * with everything in it (paths keep its folders), each as its original or
+   * its optimised copy (a picture's preview; anything else as it is). Only
+   * what the person may download; at most 2,000.
+   */
+  async downloads(
+    scope: TenantScope,
+    pick: { fileIds: string[] } | { folderId: string },
+    version: "original" | "optimised",
+    access: FileAccess = FULL_ACCESS,
+  ): Promise<{ path: string; url: string; bytes: number }[]> {
+    const folders = await this.repo.folders(scope);
+    const mayDownload = (folderId: string | null) => canSee(folders, access, folderId) && rightsIn(folders, access, folderId).download;
+    let chosen: { file: StoredFile; dir: string }[];
+    if ("fileIds" in pick) {
+      const found = await Promise.all(pick.fileIds.map((id) => this.repo.file(scope, id)));
+      if (found.some((f) => !f || !mayDownload(f.folderId))) throw new FileError("Some of those can't be downloaded (gone, or shared without downloads).");
+      chosen = found.map((file) => ({ file: file!, dir: "" }));
+    } else {
+      if (!folders.some((f) => f.id === pick.folderId) || !canSee(folders, access, pick.folderId)) throw new FileError(NO_FOLDER);
+      const from = pathTo(folders, pick.folderId).length - 1;
+      const tree = folders.filter((f) => isWithin(folders, f.id, pick.folderId) && mayDownload(f.id));
+      chosen = (
+        await Promise.all(
+          tree.map(async (f) => {
+            const dir = pathTo(folders, f.id).slice(from + 1).map((p) => p.name).join("/");
+            return (await this.repo.files(scope, f.id)).map((file) => ({ file, dir }));
+          }),
+        )
+      ).flat();
+    }
+    if (chosen.length > 2000) throw new FileError("That's more than 2,000 files: download a folder inside it instead.");
+    const taken = new Map<string, string[]>();
+    return Promise.all(
+      chosen
+        .sort((a, b) => a.dir.localeCompare(b.dir) || byName(a.file, b.file))
+        .map(({ file, dir }) => {
+          const optimised = version === "optimised" && file.previewBytes > 0;
+          // Optimised copies are JPEGs: "a.png" and "a.jpg" would meet, so names are kept apart.
+          const names = taken.get(dir) ?? [];
+          const name = uniqueName(optimised ? optimisedName(file.name) : file.name, names);
+          taken.set(dir, [...names, name]);
+          const key = optimised ? copyKeys(file.key).preview : file.key;
+          return this.objects.getUrl(key, VIEW_SECONDS, name).then((url) => ({ path: dir ? `${dir}/${name}` : name, url, bytes: optimised ? file.previewBytes : file.bytes }));
+        }),
+    );
+  }
+
+  /** Whether some pictures in this listing have no small copies yet (their thumbnails are missing). */
+  static missingPreviews(listing: Pick<FolderListing, "files">): boolean {
+    return listing.files.some((f) => !f.media && !f.thumbUrl && f.contentType.startsWith("image/"));
+  }
+
+  /**
+   * Makes the missing small copies of the pictures in a folder (and the
+   * folders in it), a batch at a time; returns how many are still missing.
+   * Run where waiting doesn't matter (after a response).
+   */
+  async ensurePreviews(scope: TenantScope, folderId: string): Promise<number> {
+    const folders = await this.repo.folders(scope);
+    const tree = folders.filter((f) => isWithin(folders, f.id, folderId)).map((f) => f.id);
+    const missing = (await this.repo.needingPreviews(scope, tree)).filter((f) => previewable(f.contentType, f.bytes));
+    const batch = missing.slice(0, PREVIEW_BATCH);
+    let next = 0;
+    await Promise.all(
+      Array.from({ length: Math.min(PREVIEW_POOL, batch.length) }, async () => {
+        while (next < batch.length) await this.makePreviews(scope, batch[next++]);
+      }),
+    );
+    return missing.length - batch.length;
   }
 
   async renameFile(scope: TenantScope, id: string, name: string, access: FileAccess = FULL_ACCESS): Promise<void> {
@@ -219,7 +340,7 @@ export class FileService {
     await this.changeableFile(scope, access, id);
     const key = await this.repo.deleteFile(scope, id);
     if (key === null) throw new FileError(NO_FILE);
-    await this.objects.remove([key]);
+    await this.objects.remove(withCopies(key));
   }
 
   /**
@@ -257,6 +378,24 @@ export class FileService {
     if (clash(here.files.map((f) => renamed.files.get(f.id) ?? f.name))) throw new FileError("Two files would have the same name.");
     const list = (m: Map<string, string>) => [...m].map(([id, name]) => ({ id, name }));
     await this.repo.renameMany(scope, { folders: list(renamed.folders), files: list(renamed.files) });
+  }
+
+  // ── Captions ─────────────────────────────────────────────────────────────
+
+  /**
+   * Sets (or, blank, clears) a file's caption: whoever may change what's in
+   * its folder, or, with `task` (an open "name" task of theirs: the caller
+   * checks), anyone who can see it, on the files in the task's folder.
+   */
+  async setCaption(scope: TenantScope, fileId: string, caption: string | null, access: FileAccess = FULL_ACCESS, task?: { folderId: string | null }): Promise<void> {
+    const file = await this.visibleFile(scope, access, fileId);
+    const folders = await this.repo.folders(scope);
+    if (task) {
+      if (!task.folderId || !isWithin(folders, file.folderId, task.folderId)) throw new FileError("Name the photos in this task's folder.");
+    } else {
+      this.allowed(rightsIn(folders, access, file.folderId), "change");
+    }
+    if (!(await this.repo.setCaption(scope, fileId, caption))) throw new FileError(NO_FILE);
   }
 
   // ── Comments ─────────────────────────────────────────────────────────────

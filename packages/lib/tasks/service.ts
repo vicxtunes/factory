@@ -14,6 +14,8 @@ export class TaskService {
   constructor(
     private readonly store: TaskStore,
     private readonly directory: TaskDirectory,
+    /** An unguessable secret for a client task's link. */
+    private readonly newToken: () => string,
   ) {}
 
   /** A project's tasks, open first, most urgent first. */
@@ -65,6 +67,27 @@ export class TaskService {
   async setStatus(scope: TenantScope, id: string, status: TaskStatus, onlyFor?: string): Promise<void> {
     if (onlyFor !== undefined && (await this.store.get(scope, id))?.assigneeId !== onlyFor) throw new TaskError("Only the person it's given to can move this task.");
     if (!(await this.store.setStatus(scope, id, status))) throw new TaskError(GONE);
+  }
+
+  /**
+   * The secret for a client's task link (made the first time): only a task
+   * for the client, in a folder, opens without signing in.
+   */
+  async shareToken(scope: TenantScope, id: string): Promise<string> {
+    const task = await this.store.get(scope, id);
+    if (!task) throw new TaskError(GONE);
+    if (!task.customerId || !task.folderId || task.kind === "todo") throw new TaskError("Only a client's task with photos (choosing, feedback or naming) has a link.");
+    const token = task.shareToken ?? (await this.store.setShareToken(scope, id, this.newToken()));
+    if (!token) throw new TaskError(GONE);
+    return token;
+  }
+
+  /** The task behind a link, at this studio only, while it's still a client's task with a folder. */
+  async byShareToken(scope: TenantScope, token: string): Promise<Task | null> {
+    const found = await this.store.byShareToken(token);
+    if (!found || found.tenantId !== scope.tenantId) return null;
+    const t = found.task;
+    return t.customerId && t.folderId && t.kind !== "todo" ? t : null;
   }
 
   async remove(scope: TenantScope, id: string): Promise<void> {

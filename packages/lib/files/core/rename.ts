@@ -1,14 +1,16 @@
 // Renaming many files and folders at once. Pure.
 //
 // Either a pattern ("Nakato-Wedding-{#}": {name} is the old name, {#} the
-// number, {date} the day it was added) or find and replace. A file keeps its
+// number, {date} the day it was added, {caption} its caption) or find and
+// replace. With `dedupe`, a name that would clash gets a number instead
+// ("Joel.jpg", "Joel (2).jpg"). A file keeps its
 // extension; names are cleaned as one typed by hand would be, and a new name
 // may not clash with another in the folder (whatever the capitals).
 
 import { cleanName, MAX_FILE_NAME, MAX_FOLDER_NAME } from "./rules";
 
 export type RenameRule =
-  | { mode: "pattern"; pattern: string; start: number; digits: number; order: "name" | "date" }
+  | { mode: "pattern"; pattern: string; start: number; digits: number; order: "name" | "date"; dedupe?: boolean }
   | { mode: "replace"; find: string; replace: string; matchCase: boolean };
 
 export interface RenameItem {
@@ -17,6 +19,7 @@ export interface RenameItem {
   name: string;
   /** ISO timestamp, when known (files). */
   createdAt: string | null;
+  caption?: string | null;
 }
 
 export interface RenamePlan {
@@ -53,13 +56,25 @@ export function planRenames(items: RenameItem[], rule: RenameRule, others: strin
       base = rule.pattern
         .replaceAll("{name}", stem)
         .replaceAll("{#}", number)
-        .replaceAll("{date}", item.createdAt?.slice(0, 10) ?? "");
+        .replaceAll("{date}", item.createdAt?.slice(0, 10) ?? "")
+        .replaceAll("{caption}", item.caption ?? "");
     } else {
       base = rule.find ? stem.replace(new RegExp(escapeRegExp(rule.find), rule.matchCase ? "g" : "gi"), rule.replace) : stem;
     }
     return { kind: item.kind, id: item.id, from: item.name, to: cleanName(base) ? cleanName(base) + extension : "" };
   });
 
+  if (rule.mode === "pattern" && rule.dedupe) {
+    // Repeated names are numbered, in order: the first keeps its name.
+    const used = new Set(others.map((n) => n.toLowerCase()));
+    for (const p of planned) {
+      if (!p.to) continue;
+      const dot = p.kind === "file" ? p.to.lastIndexOf(".") : -1;
+      const [stem, extension] = dot > 0 ? [p.to.slice(0, dot), p.to.slice(dot)] : [p.to, ""];
+      for (let n = 2; used.has(p.to.toLowerCase()); n++) p.to = `${stem} (${n})${extension}`;
+      used.add(p.to.toLowerCase());
+    }
+  }
   const taken = new Map<string, number>();
   for (const name of [...others, ...planned.map((p) => p.to)]) taken.set(name.toLowerCase(), (taken.get(name.toLowerCase()) ?? 0) + 1);
   return planned.map((p) => ({

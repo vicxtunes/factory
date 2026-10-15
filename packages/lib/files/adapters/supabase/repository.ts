@@ -30,6 +30,8 @@ interface FileRow {
   key: string;
   bytes: number | string;
   content_type: string;
+  caption: string | null;
+  preview_bytes: number | string;
   created_at: string;
 }
 
@@ -89,7 +91,7 @@ const toComment = (r: CommentRow): FileComment => ({
 });
 
 const FOLDER = "id, parent_id, name, project_id, holds_projects";
-const FILE = "id, folder_id, name, key, bytes, content_type, created_at";
+const FILE = "id, folder_id, name, key, bytes, content_type, caption, preview_bytes, created_at";
 
 const toFolder = (r: FolderRow): Folder => ({ id: r.id, parentId: r.parent_id, name: r.name, projectId: r.project_id, holdsProjects: r.holds_projects });
 
@@ -101,6 +103,8 @@ const toFile = (r: FileRow): StoredFile => ({
   // bigint may arrive as a string.
   bytes: Number(r.bytes),
   contentType: r.content_type,
+  caption: r.caption,
+  previewBytes: Number(r.preview_bytes),
   createdAt: r.created_at,
 });
 
@@ -256,6 +260,33 @@ export const supabaseFileRepository: FileRepository = {
   async deleteShare(scope, id) {
     const { data, error } = await db().from("folder_shares").delete().eq("tenant_id", scope.tenantId).eq("id", id).select("id");
     if (error) fail("stop the share", error);
+    return data.length > 0;
+  },
+
+  async setPreviewBytes(scope, id, bytes) {
+    const { data, error } = await db().from("files").update({ preview_bytes: bytes }).eq("tenant_id", scope.tenantId).eq("id", id).select("id");
+    if (error) fail("record the previews", error);
+    return data.length > 0;
+  },
+
+  async needingPreviews(scope, folderIds) {
+    if (folderIds.length === 0) return [];
+    const { data, error } = await db()
+      .from("files")
+      .select(FILE)
+      .eq("tenant_id", scope.tenantId)
+      .in("folder_id", folderIds)
+      .eq("preview_bytes", 0)
+      .like("content_type", "image/%")
+      .order("created_at")
+      .returns<FileRow[]>();
+    if (error) fail("list the pictures needing previews", error);
+    return data.map(toFile);
+  },
+
+  async setCaption(scope, id, caption) {
+    const { data, error } = await db().from("files").update({ caption }).eq("tenant_id", scope.tenantId).eq("id", id).select("id");
+    if (error) fail("save the caption", error);
     return data.length > 0;
   },
 

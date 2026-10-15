@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
+import { after } from "next/server";
 
 import { FileBrowser, type FolderTask } from "@repo/ui/files/FileBrowser";
 import { BuySpace } from "@repo/ui/photos/BuySpace";
@@ -12,6 +13,7 @@ import { filesCaller } from "@repo/lib/files/access";
 import { businessListing } from "@repo/lib/files/business";
 import { businessTree, folderIdSchema, isBusinessId, type FileAccess } from "@repo/lib/files/core";
 import { files } from "@repo/lib/files/server";
+import { FileService } from "@repo/lib/files/service";
 import { photos } from "@repo/lib/photos/server";
 import { portal, studioUrl } from "@repo/lib/studio-portal/server";
 import { requireStudio } from "@repo/lib/studios/server";
@@ -125,6 +127,8 @@ async function Browser({
 }) {
   const found = await files.list(scope, folderId, access);
   if (!found) notFound();
+  // Pictures uploaded before small copies existed get them now, in the background.
+  if (folderId && FileService.missingPreviews(found)) after(() => files.ensurePreviews(scope, folderId));
   // At the top, Business comes first (with Projects and the rest).
   const root = business && folderId === null ? businessTree([], new Map())[0] : undefined;
   const listing = root ? { ...found, folders: [root, ...found.folders] } : found;

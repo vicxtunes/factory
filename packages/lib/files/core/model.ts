@@ -39,18 +39,26 @@ export interface StoredFile {
   key: string;
   bytes: number;
   contentType: string;
+  /** A few words about it: for a school's photos, the children in each one. */
+  caption: string | null;
+  /** A picture's small copies (preview and thumbnail) together; 0 until they're made. */
+  previewBytes: number;
   /** ISO timestamp. */
   createdAt: string;
 }
 
 /** A file ready to show: a short-lived link that saves it under its name (null when a share doesn't allow downloads). */
-export interface FileView extends Omit<StoredFile, "key" | "createdAt"> {
+export interface FileView extends Omit<StoredFile, "key" | "createdAt" | "previewBytes"> {
   downloadUrl: string | null;
   /**
    * A short-lived link to show it (a picture, video or PDF): there even
    * without downloads, so a client can look at proofs they may not save.
    */
   previewUrl: string | null;
+  /** A small copy for tiles (a picture's thumbnail); null when there's none to show. */
+  thumbUrl: string | null;
+  /** A picture's optimised copy (its preview) to download instead of the original; null when there's none or no downloads. */
+  optimisedUrl?: string | null;
   /** ISO timestamp; null when not known (a service's photos). */
   createdAt: string | null;
   /** Comments not yet resolved (stored files only). */

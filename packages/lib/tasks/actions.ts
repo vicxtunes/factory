@@ -6,12 +6,14 @@
 // Every action: whose studio → parse the input (zod) → service → Result.
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 
 import { parseInput, type Result } from "@repo/lib/kernel/core";
 import { runAction } from "@repo/lib/kernel/server/action";
 import { notifyActor } from "@repo/lib/push/send";
 import { createAdminClient } from "@repo/lib/supabase/admin";
 import type { TenantScope } from "@repo/lib/tenancy/types";
+import { portal, studioUrl } from "@repo/lib/studio-portal/server";
 import { studioOfCaller } from "@repo/lib/studios/server";
 import { canUse } from "@repo/lib/team/core";
 
@@ -19,6 +21,7 @@ import { files } from "@repo/lib/files/server";
 import { team } from "@repo/lib/team/server";
 
 import { taskIdSchema, taskInputSchema, taskStatusSchema, type TaskInput } from "./core";
+import { TaskError } from "./ports";
 import { tasks } from "./server";
 
 /**
@@ -29,6 +32,9 @@ import { tasks } from "./server";
  */
 async function openFolderFor(scope: TenantScope, task: Pick<TaskInput, "folderId" | "customerId" | "assigneeId">): Promise<void> {
   if (!task.folderId) return;
+  // The photos' small copies, ready before the client opens it (proofs never show originals).
+  const folderId = task.folderId;
+  after(() => files.ensurePreviews(scope, folderId));
   if (task.customerId) return files.ensureShared(scope, task.folderId, { kind: "client", customerId: task.customerId }, "viewer", false);
   if (!task.assigneeId) return;
   const member = await team.get(scope, task.assigneeId);
@@ -94,6 +100,20 @@ export async function setTaskStatus(id: unknown, status: unknown): Promise<Resul
     const onlyFor = access.owner || canUse(access, "projects") ? undefined : access.memberId;
     await tasks.setStatus(scope, parseInput(taskIdSchema, id), parseInput(taskStatusSchema, status), onlyFor);
     revalidatePath("/studio", "layout");
+  });
+}
+
+/**
+ * The link to send a client for their task (choosing, feedback or naming):
+ * it opens without signing in, only that task and its photos.
+ */
+export async function taskLink(id: unknown): Promise<Result<string>> {
+  return runAction("tasks", async () => {
+    const { scope } = await studioOfCaller("projects");
+    const token = await tasks.shareToken(scope, parseInput(taskIdSchema, id));
+    const slug = await portal.currentSlug(scope.tenantId);
+    if (!slug) throw new TaskError("Set your business's page address first, so the link has somewhere to open.");
+    return studioUrl(`${slug}/t/${token}`);
   });
 }
 

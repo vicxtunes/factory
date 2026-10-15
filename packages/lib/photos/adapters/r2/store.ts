@@ -40,6 +40,21 @@ async function call(method: string, key: string, headers: Record<string, string>
   return client.fetch(`${base}/${path(key)}`, { method, headers });
 }
 
+/** A file's bytes, or null when it isn't there (Drive reads a picture to make its small copies). */
+export async function r2Read(key: string): Promise<Uint8Array | null> {
+  const res = await call("GET", key);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`photos: could not read ${key}: HTTP ${res.status}`);
+  return new Uint8Array(await res.arrayBuffer());
+}
+
+/** Stores bytes the server made. */
+export async function r2Write(key: string, body: Uint8Array, contentType: string): Promise<void> {
+  const { base, client } = settings();
+  const res = await client.fetch(`${base}/${path(key)}`, { method: "PUT", body: new Uint8Array(body), headers: { "content-type": contentType } });
+  if (!res.ok) throw new Error(`photos: could not write ${key}: HTTP ${res.status}`);
+}
+
 export const r2ObjectStore: ObjectStore = {
   // The content type is signed, so the upload must use it.
   putUrl: (key, contentType, expires) => presign("PUT", key, expires, { "content-type": contentType }),

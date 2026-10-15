@@ -25,11 +25,16 @@ tenant-scoped.
 - A task can be given to the **project's own client** instead of a team member (never both; never
   another client). It shows on their page (`/<studio>/me`, "For you to do").
 - **Kinds:** a to-do; **Choose photos** (a folder, and how many: at least / at most); **Give
-  feedback** (a folder). The kind, folder and picks are set when the task is made.
+  feedback** (a folder); **Name the photos** (a folder: a caption on each, e.g. the children in a
+  school's photos). The kind, folder and picks are set when the task is made.
 - Choosing and feedback happen in Files, in the task's folder (packages/lib/files/README.md →
   "Choosing"): the client sends their choice or says they're done, which marks the task done and
   tells the owner. Reopening the task lets them change it.
 - Giving a task in a folder shares the folder with whoever it's for (packages/lib/files).
+- **No sign-in needed:** a client's task with photos (choosing, feedback, naming) has **Copy link
+  for the client** on its row: `client.<domain>/<studio>/t/<secret>`, made the first time it's
+  copied. Whoever holds it sees only that task's folder (pictures show, nothing downloads) and does
+  that task only; it works only at that studio's address and dies with the task.
 
 ## Studio separation
 
