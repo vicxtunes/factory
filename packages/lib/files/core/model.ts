@@ -59,6 +59,8 @@ export interface FileView extends Omit<StoredFile, "key" | "createdAt" | "previe
   thumbUrl: string | null;
   /** A picture's optimised copy (its preview) to download instead of the original; null when there's none or no downloads. */
   optimisedUrl?: string | null;
+  /** A picture whose small copies aren't made yet (they will be). */
+  awaitingCopies?: boolean;
   /** ISO timestamp; null when not known (a service's photos). */
   createdAt: string | null;
   /** Comments not yet resolved (stored files only). */

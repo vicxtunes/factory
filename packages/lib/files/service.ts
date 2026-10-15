@@ -106,7 +106,7 @@ export class FileService {
       files: await Promise.all(
         files.map(async ({ key, previewBytes, ...f }) => {
           const download = rights.download ? await this.objects.getUrl(key, VIEW_SECONDS, f.name) : null;
-          const view = { ...f, downloadUrl: download, openComments: open.get(f.id) ?? 0 };
+          const view = { ...f, downloadUrl: download, openComments: open.get(f.id) ?? 0, awaitingCopies: previewBytes === 0 && previewable(f.contentType, f.bytes) };
           // A picture shows as its small copies; never as the original unless it may be downloaded anyway.
           if (previewBytes > 0) {
             const copies = copyKeys(key);
@@ -299,9 +299,9 @@ export class FileService {
     );
   }
 
-  /** Whether some pictures in this listing have no small copies yet (their thumbnails are missing). */
+  /** Whether some pictures in this listing have no small copies yet. */
   static missingPreviews(listing: Pick<FolderListing, "files">): boolean {
-    return listing.files.some((f) => !f.media && !f.thumbUrl && f.contentType.startsWith("image/"));
+    return listing.files.some((f) => f.awaitingCopies);
   }
 
   /**
