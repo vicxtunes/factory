@@ -62,8 +62,9 @@ test("Business: Services and Products, each category, each service or product wi
       ["business-item-p1", "business-category-c2", "Classic"],
     ],
   );
-  assert.deepEqual(tree[4].business, { kind: "item", serviceId: "s1", albumId: "a1", fromAming: false });
-  assert.deepEqual(tree[6].business, { kind: "item", serviceId: "p1", albumId: null, fromAming: true });
+  assert.deepEqual(tree[3].business, { kind: "category", categoryId: "c1", offering: "service" });
+  assert.deepEqual(tree[4].business, { kind: "item", serviceId: "s1", albumId: "a1", fromAming: false, offering: "service" });
+  assert.deepEqual(tree[6].business, { kind: "item", serviceId: "p1", albumId: null, fromAming: true, offering: "product" });
   assert.ok(tree.every(isLocked));
   assert.deepEqual(pathTo(tree, "business-item-s1").map((f) => f.name), ["Business", "Services", "Weddings", "Wedding Photography"]);
   assert.ok(isBusinessId(BUSINESS_ROOT) && isBusinessId("business-item-s1"));

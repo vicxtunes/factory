@@ -50,6 +50,23 @@ Like Google Drive. Whoever has everything right-clicks a folder → **Share…**
   outside a share are "not found".
 - Deleting the folder, client or member ends their shares (`folder_shares`, cascades).
 
+## Business (what the business sells)
+
+Drive → **Business** → Services / Products → each category → each service or product. Not stored
+folders: a view of packages/lib/offerings and packages/lib/photos, and changes go through their
+own actions (and rules), the same as on Packages & Services and Products. Only for whoever
+manages the catalog (Packages & showroom).
+
+- **New category** in Services or Products; **New service / New product** in a category, named in
+  place like a new folder.
+- **Rename** a category, service or product in place (a product picked from Aming keeps Aming's
+  name); **Delete** it for good (a category with everything in it); drag a service onto another
+  category, or **Move to category…**.
+- In a service's or product's folder: its **packages** (a product's **sizes**): add, change and
+  delete them (name, price, description, what's included); then its photos (the cover starred)
+  and preview video: drop photos to add them (resized for the web), a video to replace the preview,
+  **Make cover**, **Delete**.
+
 ## Working like a desktop
 
 - **Select:** click; Ctrl/⌘-click adds or removes one; Shift-click a range; drag a box over the

@@ -1,9 +1,10 @@
 // The Business folders: a view of what the business sells, in Files. Pure.
 //
 // Business → Services / Products → each category → each service or product,
-// whose folder holds its photos and preview video (packages/lib/photos). They
-// aren't stored folders: their ids are made from what they show, they follow
-// its names, and they're never renamed, moved, deleted or shared here.
+// whose folder holds its packages (a product's sizes), photos and preview
+// video. They aren't stored folders: their ids are made from what they show,
+// and creating, renaming, moving or deleting one here does it to the
+// category, service or product itself (packages/lib/offerings). Never shared.
 
 import type { Folder } from "./model";
 
@@ -43,9 +44,9 @@ export function businessTree(categories: BusinessCategory[], albums: Map<string,
     folder(GROUP.product, BUSINESS_ROOT, "Products", { kind: "group", offering: "product" }),
   ];
   for (const c of categories) {
-    tree.push(folder(CATEGORY + c.id, GROUP[c.kind], c.name, { kind: "category", categoryId: c.id }));
+    tree.push(folder(CATEGORY + c.id, GROUP[c.kind], c.name, { kind: "category", categoryId: c.id, offering: c.kind }));
     for (const s of c.services) {
-      tree.push(folder(ITEM + s.id, CATEGORY + c.id, s.name, { kind: "item", serviceId: s.id, albumId: albums.get(s.id) ?? null, fromAming: s.fromAming }));
+      tree.push(folder(ITEM + s.id, CATEGORY + c.id, s.name, { kind: "item", serviceId: s.id, albumId: albums.get(s.id) ?? null, fromAming: s.fromAming, offering: c.kind }));
     }
   }
   return tree;
