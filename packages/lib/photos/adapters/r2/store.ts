@@ -69,16 +69,17 @@ export async function r2Read(key: string): Promise<Uint8Array | null> {
   return new Uint8Array(await res.arrayBuffer());
 }
 
-/** Stores bytes the server made. */
+/**
+ * Stores bytes the server made, as a browser upload does: a signed PUT link,
+ * then the body with its length (R2 refuses a streamed body: HTTP 411).
+ */
 export async function r2Write(key: string, body: Uint8Array, contentType: string): Promise<void> {
-  const { base, client } = settings();
   // What the server makes (a picture's small copies) never changes under its key: kept by browsers for a year.
-  const res = await client.fetch(`${base}/${path(key)}`, {
-    method: "PUT",
-    body: new Uint8Array(body),
-    headers: { "content-type": contentType, "cache-control": "public, max-age=31536000, immutable" },
-  });
-  if (!res.ok) throw new Error(`photos: could not write ${key}: HTTP ${res.status}`);
+  const headers = { "content-type": contentType, "cache-control": "public, max-age=31536000, immutable" };
+  const url = await presign("PUT", key, 300, headers);
+  // A byte array, not a stream: fetch sends its length.
+  const res = await fetch(url, { method: "PUT", body: new Uint8Array(body), headers });
+  if (!res.ok) throw new Error(`photos: could not write ${key}: HTTP ${res.status} ${await res.text()}`);
 }
 
 export const r2ObjectStore: ObjectStore = {
