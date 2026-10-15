@@ -1,9 +1,11 @@
 import { notFound, permanentRedirect } from "next/navigation";
+import { after } from "next/server";
 
 import { FileBrowser } from "@repo/ui/files/FileBrowser";
 import { localDate } from "@repo/lib/accounting/core/period";
 import { folderIdSchema, shareTokenSchema } from "@repo/lib/files/core";
 import { files } from "@repo/lib/files/server";
+import { FileService } from "@repo/lib/files/service";
 import { studioAtSlug } from "@repo/lib/studio-portal/server";
 
 // A folder shared by link: client.<domain>/<studio>/f/<secret>(?folder=<id>).
@@ -29,7 +31,9 @@ export default async function SharedFolderPage({ params, searchParams }: { param
   const { folder } = await searchParams;
   const folderId = folder === undefined ? access.grants[0].folderId : folderIdSchema.safeParse(folder).data;
   const listing = folderId ? await files.list(at.scope, folderId, access) : null;
-  if (!listing) notFound();
+  if (!listing || !folderId) notFound();
+  // Pictures without their small copies yet: make them now, so they show (and load fast) next time.
+  if (FileService.missingPreviews(listing)) after(() => files.ensurePreviews(at.scope, folderId));
 
   return (
     <main className="mx-auto w-full max-w-6xl space-y-6 px-4 py-8">

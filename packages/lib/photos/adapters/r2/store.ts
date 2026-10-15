@@ -25,14 +25,35 @@ function settings() {
 /** A key as a URL path: each segment encoded, slashes kept. */
 const path = (key: string) => key.split("/").map(encodeURIComponent).join("/");
 
-async function presign(method: "GET" | "PUT", key: string, expires: number, headers: Record<string, string> = {}, params: Record<string, string> = {}): Promise<string> {
+async function presign(
+  method: "GET" | "PUT",
+  key: string,
+  expires: number,
+  headers: Record<string, string> = {},
+  params: Record<string, string> = {},
+  /** Sign as of this moment ("20261015T180000Z") instead of now. */
+  datetime?: string,
+): Promise<string> {
   const { base, client } = settings();
   const url = new URL(`${base}/${path(key)}`);
   url.searchParams.set("X-Amz-Expires", String(expires));
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
   // allHeaders: sign the headers given too (an upload's content type), not just the host.
-  const signed = await client.sign(new Request(url, { method, headers }), { aws: { signQuery: true, allHeaders: true } });
+  const signed = await client.sign(new Request(url, { method, headers }), { aws: { signQuery: true, allHeaders: true, datetime } });
   return signed.url;
+}
+
+/**
+ * A link to look at a file that stays the same for the whole hour: signed as
+ * of the hour's start, and good for an hour more than asked, so the browser
+ * (and Cloudflare) can keep the picture instead of fetching it again on every
+ * page load.
+ */
+function viewUrl(key: string, expires: number): Promise<string> {
+  const hour = new Date();
+  hour.setUTCMinutes(0, 0, 0);
+  const datetime = hour.toISOString().replace(/[-:]|\.\d{3}/g, "");
+  return presign("GET", key, expires + 3600, {}, {}, datetime);
 }
 
 async function call(method: string, key: string, headers: Record<string, string> = {}): Promise<Response> {
@@ -51,7 +72,12 @@ export async function r2Read(key: string): Promise<Uint8Array | null> {
 /** Stores bytes the server made. */
 export async function r2Write(key: string, body: Uint8Array, contentType: string): Promise<void> {
   const { base, client } = settings();
-  const res = await client.fetch(`${base}/${path(key)}`, { method: "PUT", body: new Uint8Array(body), headers: { "content-type": contentType } });
+  // What the server makes (a picture's small copies) never changes under its key: kept by browsers for a year.
+  const res = await client.fetch(`${base}/${path(key)}`, {
+    method: "PUT",
+    body: new Uint8Array(body),
+    headers: { "content-type": contentType, "cache-control": "public, max-age=31536000, immutable" },
+  });
   if (!res.ok) throw new Error(`photos: could not write ${key}: HTTP ${res.status}`);
 }
 
@@ -59,18 +85,15 @@ export const r2ObjectStore: ObjectStore = {
   // The content type is signed, so the upload must use it.
   putUrl: (key, contentType, expires) => presign("PUT", key, expires, { "content-type": contentType }),
 
-  // response-content-disposition is signed too: the browser saves the file instead of opening it,
-  // under its real name (filename*), or a plain one where that isn't understood.
+  // To look at (no name): the same link all hour, so it's kept. To save: response-content-disposition is
+  // signed too, so the browser saves the file instead of opening it, under its real name (filename*),
+  // or a plain one where that isn't understood.
   getUrl: (key, expires, downloadAs) =>
-    presign(
-      "GET",
-      key,
-      expires,
-      {},
-      downloadAs
-        ? { "response-content-disposition": `attachment; filename="${downloadAs.replace(/[^\w.-]/g, "_")}"; filename*=UTF-8''${encodeURIComponent(downloadAs)}` }
-        : {},
-    ),
+    downloadAs
+      ? presign("GET", key, expires, {}, {
+          "response-content-disposition": `attachment; filename="${downloadAs.replace(/[^\w.-]/g, "_")}"; filename*=UTF-8''${encodeURIComponent(downloadAs)}`,
+        })
+      : viewUrl(key, expires),
 
   async size(key) {
     const res = await call("HEAD", key);
