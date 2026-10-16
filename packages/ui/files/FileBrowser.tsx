@@ -406,6 +406,8 @@ export function FileBrowser({
   const [moving, setMoving] = useState<{ entries: Entry[]; value: string } | null>(null);
   const [picks, setPicks] = useState<ReadonlySet<string>>(() => new Set(task?.picks ?? []));
   const [onlyPicked, setOnlyPicked] = useState(false);
+  /** "Send?" before a task is sent, as a sheet. */
+  const [confirming, setConfirming] = useState(false);
   /** Captions as typed (a "name" task), and as last saved. */
   const [captions, setCaptions] = useState<ReadonlyMap<string, string>>(() => new Map(listing.files.map((f) => [f.id, f.caption ?? ""])));
   const savedCaptions = useRef<Map<string, string>>(new Map(listing.files.map((f) => [f.id, f.caption ?? ""])));
@@ -1212,87 +1214,114 @@ export function FileBrowser({
       ) : null}
 
       {task && task.kind !== "todo" ? (
-        <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-brand-500/40 bg-brand-50/60 px-4 py-3 text-sm dark:bg-brand-500/10">
-          <div className="min-w-0 flex-1">
-            <p className="font-medium">{task.mine ? task.title : `${task.forName ?? "Their"}${task.forName ? "'s" : ""} task: ${task.title}`}</p>
-            <p className="text-xs text-muted">
-              {choosing
-                ? `${task.mine ? "Choose" : "Choosing"} ${task.pickMin ? `${task.pickMin} to ${task.pickMax}` : `up to ${task.pickMax}`}: tap ♥ on a photo, or open it to look closer.`
-                : namingTask
+        // The task, set out to read on a phone: what it is and when it's due, one line of how, how far along, and Send.
+        <section aria-label="Your task" className="rounded-2xl border border-border bg-surface p-4 shadow-theme-xs sm:flex sm:items-center sm:gap-6">
+          <div className="min-w-0 flex-1 space-y-1.5">
+            <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold tracking-wide uppercase">
+              <span className="rounded-full bg-brand-50 px-2 py-0.5 text-brand-700 dark:bg-brand-500/15 dark:text-brand-300">
+                {choosing ? "Choose photos" : namingTask ? "Name the photos" : "Give feedback"}
+              </span>
+              {task.dueOn && !task.done ? <span className="rounded-full bg-background px-2 py-0.5 text-muted">Due {formatDay(scope, task.dueOn)}</span> : null}
+              {task.done ? <span className="rounded-full bg-success-50 px-2 py-0.5 text-success-700 dark:bg-success-500/15 dark:text-success-500">✓ {choosing || namingTask ? "Sent" : "Done"}</span> : null}
+            </div>
+            <h3 className="text-base leading-snug font-semibold">{task.mine || !task.forName ? task.title : `${task.forName}: ${task.title}`}</h3>
+            <p className="text-sm text-muted">
+              {task.done && task.mine
+                ? "Thank you, it's with the business. To change anything, ask them to reopen it."
+                : choosing
                   ? task.mine
-                    ? "Type the names of the people in each photo under it (commas between several), then press Enter for the next. Open a photo to look closer."
-                    : "Their names show under each photo."
-                  : task.mine
-                  ? "Open a photo (double-click or tap) to comment on it; pin a comment to a spot to show exactly where."
-                  : "Their comments show on each photo (the number on it): open one to read and resolve them."}
-              {task.dueOn ? ` Due ${formatDay(scope, task.dueOn)}.` : ""}
+                    ? `Tap ♥ on the ${task.pickMin ? `${task.pickMin} to ${task.pickMax}` : `${task.pickMax} or fewer`} you want. Open a photo to see it bigger.`
+                    : `Choosing ${task.pickMin ? `${task.pickMin} to ${task.pickMax}` : `up to ${task.pickMax}`}: their picks have a ♥.`
+                  : namingTask
+                    ? task.mine
+                      ? "Type the names under each photo, commas between several. Enter goes to the next."
+                      : "Their names show under each photo."
+                    : task.mine
+                      ? "Open a photo to comment on it. Pin a comment to point at a spot."
+                      : "Their comments show on each photo: open one to read and resolve them."}
             </p>
           </div>
-          {namingTask ? (
-            <span className="rounded-full bg-surface px-3 py-1 text-sm font-semibold tabular-nums shadow-sm">
-              {named} / {listing.files.length} named
-            </span>
+          {choosing || namingTask ? (
+            <div className="mt-4 space-y-1.5 sm:mt-0 sm:w-56">
+              <div className="flex items-baseline justify-between text-xs">
+                <span className="text-muted">{choosing ? (task.pickMin && picks.size < task.pickMin ? `At least ${task.pickMin}` : "Chosen") : "Named"}</span>
+                <span className="text-sm font-semibold tabular-nums">
+                  {choosing ? picks.size : named} / {choosing ? (task.pickMax ?? listing.files.length) : listing.files.length}
+                </span>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-background" role="progressbar" aria-valuemin={0} aria-valuemax={choosing ? (task.pickMax ?? listing.files.length) : listing.files.length} aria-valuenow={choosing ? picks.size : named}>
+                <div
+                  className="h-full rounded-full bg-brand-500 transition-[width] duration-300"
+                  style={{ width: `${Math.min(100, Math.round((100 * (choosing ? picks.size : named)) / Math.max(1, choosing ? (task.pickMax ?? listing.files.length) : listing.files.length)))}%` }}
+                />
+              </div>
+            </div>
           ) : null}
-          {choosing ? (
-            <span className="rounded-full bg-surface px-3 py-1 text-sm font-semibold tabular-nums shadow-sm">
-              {picks.size}
-              {task.pickMax ? ` / ${task.pickMax}` : ""} chosen
-            </span>
-          ) : null}
-          {task.done ? (
-            <span className="text-sm font-medium text-success-600 dark:text-success-500">✓ {choosing || namingTask ? "Sent" : "Done"}</span>
-          ) : task.mine ? (
-            <Button
-              className="min-h-9"
-              loading={pending}
-              disabled={choosing && picks.size < Math.max(1, task.pickMin ?? 1)}
-              onClick={() =>
-                window.confirm(
-                  choosing
-                    ? `Send your ${picks.size} choices? You can't change them after, unless the business reopens it.`
-                    : namingTask
-                      ? `Send the names${named < listing.files.length ? ` (${listing.files.length - named} photo${listing.files.length - named === 1 ? " has" : "s have"} none)` : ""}? You can't change them after, unless the business reopens it.`
-                      : "Done giving feedback?",
-                ) && run(() => finishTask(via, task.id))
-              }
-            >
-              {choosing ? "Send my choice" : namingTask ? "Send names" : "I'm done"}
-            </Button>
-          ) : null}
-          {namingTask && !task.mine && named ? (
-            <>
-              {rights.change ? (
-                <Button
-                  variant="secondary"
-                  className="min-h-9"
-                  onClick={() =>
-                    setRenaming({
-                      entries: entries.filter((e) => e.kind === "file" && (captions.get(e.id) ?? "").trim()),
-                      pattern: "{caption}",
-                      dedupe: true,
-                    })
-                  }
-                >
-                  Use names as file names
+          <div className="mt-4 flex flex-col gap-2 sm:mt-0 sm:shrink-0 sm:flex-row sm:items-center">
+            {!task.done && task.mine ? (
+              <Button className="min-h-11 w-full sm:w-auto" loading={pending} disabled={choosing && picks.size < Math.max(1, task.pickMin ?? 1)} onClick={() => setConfirming(true)}>
+                {choosing ? "Send my choice" : namingTask ? "Send names" : "I'm done"}
+              </Button>
+            ) : null}
+            {namingTask && !task.mine && named ? (
+              <>
+                {rights.change ? (
+                  <Button
+                    variant="secondary"
+                    className="min-h-11 w-full sm:w-auto"
+                    onClick={() =>
+                      setRenaming({
+                        entries: entries.filter((e) => e.kind === "file" && (captions.get(e.id) ?? "").trim()),
+                        pattern: "{caption}",
+                        dedupe: true,
+                      })
+                    }
+                  >
+                    Use names as file names
+                  </Button>
+                ) : null}
+                <Button variant="secondary" className="min-h-11 w-full sm:w-auto" onClick={downloadNames}>
+                  Download list
                 </Button>
-              ) : null}
-              <Button variant="secondary" className="min-h-9" onClick={downloadNames}>
-                Download list
+              </>
+            ) : null}
+            {choosing && !task.mine && picks.size ? (
+              <>
+                <label className="flex min-h-11 items-center gap-2 text-sm">
+                  <input type="checkbox" checked={onlyPicked} onChange={(e) => setOnlyPicked(e.target.checked)} />
+                  Only chosen
+                </label>
+                <Button variant="secondary" className="min-h-11 w-full sm:w-auto" onClick={copyForLightroom}>
+                  {copied ? "Copied" : "Copy for Lightroom"}
+                </Button>
+              </>
+            ) : null}
+          </div>
+        </section>
+      ) : null}
+      {task && confirming ? (
+        <BottomSheet open onClose={() => setConfirming(false)} title={choosing ? "Send your choice?" : namingTask ? "Send the names?" : "Finished?"}>
+          <div className="space-y-4 text-sm">
+            <p>
+              {choosing
+                ? `You've chosen ${picks.size} photo${picks.size === 1 ? "" : "s"}.`
+                : namingTask
+                  ? named < listing.files.length
+                    ? `${listing.files.length - named} of ${listing.files.length} photos still have no name.`
+                    : `All ${listing.files.length} photos have names.`
+                  : "The business will see your comments."}{" "}
+              {choosing || namingTask ? "Once sent, they can't be changed unless the business reopens the task." : ""}
+            </p>
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <Button variant="secondary" className="min-h-11" onClick={() => setConfirming(false)}>
+                Keep going
               </Button>
-            </>
-          ) : null}
-          {choosing && !task.mine && picks.size ? (
-            <>
-              <label className="flex items-center gap-1.5 text-xs">
-                <input type="checkbox" checked={onlyPicked} onChange={(e) => setOnlyPicked(e.target.checked)} />
-                Only chosen
-              </label>
-              <Button variant="secondary" className="min-h-9" onClick={copyForLightroom}>
-                {copied ? "Copied" : "Copy for Lightroom"}
+              <Button className="min-h-11" loading={pending} onClick={() => run(() => finishTask(via, task.id), () => setConfirming(false))}>
+                {choosing ? "Send my choice" : namingTask ? "Send names" : "Yes, I'm done"}
               </Button>
-            </>
-          ) : null}
-        </div>
+            </div>
+          </div>
+        </BottomSheet>
       ) : null}
 
       {chosen.length > 1 || selecting ? (
