@@ -1,6 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import type { Swiper as Slider } from "swiper";
+import { Keyboard, Virtual } from "swiper/modules";
+import { Swiper, SwiperSlide } from "swiper/react";
+
+import "swiper/css";
+import "swiper/css/virtual";
 
 import { Button } from "@repo/ui/Button";
 import { commentOnFile, deleteComment, fileComments, resolveComment } from "@repo/lib/files/actions";
@@ -131,6 +137,9 @@ export function FileViewer({
   const [showResolved, setShowResolved] = useState(false);
   const [guestName, setGuestName] = useState(readGuestName);
   const [sending, setSending] = useState(false);
+  /** Narrower than a laptop: details and comments are a sheet over the photo, opened from the bar below it. */
+  const [sheet, setSheet] = useState(false);
+  const slider = useRef<Slider | null>(null);
   const panel = useRef<HTMLDivElement>(null);
   // Comments are for stored files; a Business photo has none.
   const commentable = !file.media;
@@ -152,9 +161,8 @@ export function FileViewer({
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if ((e.target as HTMLElement).closest("input, textarea")) return;
+      // The arrow keys are the slider's.
       if (e.key === "Escape") onClose();
-      if (e.key === "ArrowRight" && index < files.length - 1) onIndex(index + 1);
-      if (e.key === "ArrowLeft" && index > 0) onIndex(index - 1);
     }
     document.addEventListener("keydown", onKey);
     const before = document.body.style.overflow;
@@ -163,7 +171,7 @@ export function FileViewer({
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = before;
     };
-  }, [index, files.length, onIndex, onClose]);
+  }, [onClose]);
 
   function go(i: number) {
     setComments(null);
@@ -209,33 +217,79 @@ export function FileViewer({
   if (pin) pins.push({ n: pinned.length + 1, x: pin.x, y: pin.y, open: true });
 
   return (
-    <div role="dialog" aria-modal="true" aria-label={file.name} className="fixed inset-0 z-50 flex flex-col bg-gray-950/95 lg:flex-row">
+    <div role="dialog" aria-modal="true" aria-label={file.name} className="fixed inset-0 z-50 flex flex-col bg-gray-950 lg:flex-row lg:bg-gray-950/95">
       <div className="relative flex min-h-0 flex-1 flex-col">
         <div className="flex items-center gap-2 px-3 py-2 text-sm text-white">
           <button type="button" onClick={onClose} aria-label="Close" className="rounded-lg px-2 py-1 hover:bg-white/10">
             ✕
           </button>
           <span className="min-w-0 flex-1 truncate font-medium">{file.name}</span>
-          <span className="hidden text-xs text-white/60 sm:inline">
+          <span className="text-xs text-white/60">
             {index + 1} of {files.length}
           </span>
         </div>
-        <div className="flex min-h-0 flex-1 items-center justify-center p-3">
-          <Stage file={file} pins={pins} placing={placing} watermark={watermark} onPlace={(x, y) => (setPin({ x, y }), setPlacing(false), panel.current?.querySelector("textarea")?.focus())} />
+        {/*
+          Swiper: the photo follows the finger and snaps to the next, with
+          momentum; mouse drag and the arrow keys too. Only the photos near
+          this one are in the page (virtual), so a big folder stays smooth.
+          Held still while a comment is being pinned.
+        */}
+        <div className="relative min-h-0 flex-1">
+          <Swiper
+            className="!absolute inset-0"
+            modules={[Virtual, Keyboard]}
+            virtual={{ addSlidesBefore: 1, addSlidesAfter: 1 }}
+            keyboard={{ enabled: true }}
+            initialSlide={index}
+            spaceBetween={24}
+            grabCursor
+            allowTouchMove={!placing}
+            onSwiper={(s) => (slider.current = s)}
+            onSlideChange={(s) => go(s.activeIndex)}
+          >
+            {files.map((f, i) => (
+              <SwiperSlide key={f.id} virtualIndex={i} className="!flex items-center justify-center lg:p-3">
+                <Stage
+                  file={f}
+                  pins={i === index ? pins : []}
+                  placing={i === index && placing}
+                  watermark={watermark}
+                  onPlace={(x, y) => (setPin({ x, y }), setPlacing(false), setSheet(true), panel.current?.querySelector("textarea")?.focus())}
+                />
+              </SwiperSlide>
+            ))}
+          </Swiper>
         </div>
+        {placing ? <p className="absolute inset-x-0 top-12 text-center text-sm text-white lg:hidden">Tap the spot on the photo</p> : null}
         {index > 0 ? (
-          <button type="button" aria-label="Previous" onClick={() => go(index - 1)} className="absolute top-1/2 left-2 rounded-full bg-black/40 px-3 py-2 text-xl text-white hover:bg-black/60">
+          <button type="button" aria-label="Previous" onClick={() => slider.current?.slidePrev()} className="absolute top-1/2 left-2 z-10 hidden rounded-full bg-black/40 px-3 py-2 text-xl text-white hover:bg-black/60 sm:block">
             ‹
           </button>
         ) : null}
         {index < files.length - 1 ? (
-          <button type="button" aria-label="Next" onClick={() => go(index + 1)} className="absolute top-1/2 right-2 rounded-full bg-black/40 px-3 py-2 text-xl text-white hover:bg-black/60">
+          <button type="button" aria-label="Next" onClick={() => slider.current?.slideNext()} className="absolute top-1/2 right-2 z-10 hidden rounded-full bg-black/40 px-3 py-2 text-xl text-white hover:bg-black/60 sm:block">
             ›
           </button>
         ) : null}
+        {/* Narrower than a laptop: what you can do, under the photo; details and comments open as a sheet. */}
+        <div className="flex items-center gap-2 px-3 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] text-sm text-white lg:hidden">
+          {extra?.(file)}
+          {commentable || file.downloadUrl ? (
+            <button type="button" onClick={() => setSheet(true)} className="ml-auto rounded-full bg-white/10 px-4 py-2 font-medium active:bg-white/20">
+              {commentable ? `💬 Comments${(comments ?? []).filter((c) => !c.resolvedAt).length ? ` (${(comments ?? []).filter((c) => !c.resolvedAt).length})` : ""}` : "Download"}
+            </button>
+          ) : null}
+        </div>
       </div>
 
-      <aside ref={panel} className="flex max-h-[45dvh] w-full flex-col border-t border-border bg-surface text-sm lg:max-h-none lg:w-96 lg:border-t-0 lg:border-l">
+      {sheet ? <button type="button" aria-label="Close" onClick={() => setSheet(false)} className="fixed inset-0 z-10 bg-black/40 lg:hidden" /> : null}
+      <aside
+        ref={panel}
+        className={`${sheet ? "fixed inset-x-0 bottom-0 z-20 flex max-h-[80dvh] rounded-t-2xl shadow-2xl" : "hidden"} w-full flex-col bg-surface pb-[env(safe-area-inset-bottom)] text-sm lg:static lg:z-auto lg:flex lg:max-h-none lg:w-96 lg:rounded-none lg:border-l lg:border-border lg:pb-0 lg:shadow-none`}
+      >
+        <div className="flex justify-center pt-2 lg:hidden">
+          <button type="button" aria-label="Close" onClick={() => setSheet(false)} className="h-1.5 w-10 rounded-full bg-border" />
+        </div>
         <div className="space-y-2 border-b border-border p-4">
           <p className="text-xs text-muted">
             {formatBytes(file.bytes)}
@@ -336,10 +390,11 @@ export function FileViewer({
                 {file.previewUrl && file.contentType.startsWith("image/") ? (
                   <button
                     type="button"
-                    onClick={() => (pin ? setPin(null) : setPlacing(!placing))}
+                    // On a phone the sheet steps aside so the photo can be tapped.
+                    onClick={() => (pin ? setPin(null) : (setPlacing(!placing), setSheet(false)))}
                     className={`rounded-lg px-2 py-1 text-xs ${placing || pin ? "bg-brand-100 text-brand-700 dark:bg-brand-500/20 dark:text-brand-300" : "text-muted hover:bg-background"}`}
                   >
-                    {pin ? "Unpin" : placing ? "Click the picture…" : "📍 Pin to a spot"}
+                    {pin ? "Unpin" : placing ? "Tap the picture…" : "📍 Pin to a spot"}
                   </button>
                 ) : null}
                 <Button type="submit" className="ml-auto min-h-9" disabled={!body.trim() || sending} loading={sending}>

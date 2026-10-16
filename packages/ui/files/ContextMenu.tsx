@@ -2,14 +2,62 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
+import { BottomSheet } from "@repo/ui/BottomSheet";
+
 export type ContextEntry = { label: string; onSelect: () => void; danger?: boolean; checked?: boolean } | { note: string } | "-";
+
+type MenuProps = { x: number; y: number; label: string; title?: string; entries: ContextEntry[]; onClose: () => void };
+
+/**
+ * A menu for something: on a phone, a sheet from the bottom (big buttons,
+ * what it's for on top, closed by the backdrop, Escape or Back); wider, a
+ * right-click menu at the point.
+ */
+export function ContextMenu(props: MenuProps) {
+  // Only ever shown after a tap or click, so the window is there to ask.
+  const [phone] = useState(() => window.matchMedia("(max-width: 639px)").matches);
+  return phone ? <SheetMenu {...props} /> : <PointMenu {...props} />;
+}
+
+function SheetMenu({ label, title, entries, onClose }: MenuProps) {
+  return (
+    <BottomSheet open onClose={onClose} title={title ?? label}>
+      <div role="menu" aria-label={label} className="-mx-2 text-base">
+        {entries.map((entry, i) =>
+          entry === "-" ? (
+            <div key={i} role="separator" className="my-1 h-px bg-border" />
+          ) : "note" in entry ? (
+            <p key={i} className="px-3 py-2 text-sm text-muted">
+              {entry.note}
+            </p>
+          ) : (
+            <button
+              key={i}
+              type="button"
+              role={entry.checked === undefined ? "menuitem" : "menuitemradio"}
+              aria-checked={entry.checked}
+              onClick={() => {
+                onClose();
+                entry.onSelect();
+              }}
+              className={`flex min-h-12 w-full items-center gap-3 rounded-xl px-3 text-left active:bg-background ${entry.danger ? "text-error-600 dark:text-error-400" : ""}`}
+            >
+              <span className="w-4 text-sm">{entry.checked ? "✓" : ""}</span>
+              {entry.label}
+            </button>
+          ),
+        )}
+      </div>
+    </BottomSheet>
+  );
+}
 
 /**
  * A right-click menu at a point on the screen (kept inside it): arrow keys
  * move, Enter picks, Escape, a click elsewhere or scrolling closes. Focus
  * goes back where it was.
  */
-export function ContextMenu({ x, y, label, entries, onClose }: { x: number; y: number; label: string; entries: ContextEntry[]; onClose: () => void }) {
+function PointMenu({ x, y, label, entries, onClose }: MenuProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [at, setAt] = useState({ left: x, top: y });
 
