@@ -5,8 +5,11 @@ import { FileBrowser } from "@repo/ui/files/FileBrowser";
 import { folderIdSchema, shareTokenSchema } from "@repo/lib/files/core";
 import { files } from "@repo/lib/files/server";
 import { FileService } from "@repo/lib/files/service";
+import { studioAccess } from "@repo/lib/studio-access/server";
 import { studioAtSlug } from "@repo/lib/studio-portal/server";
 import { tasks } from "@repo/lib/tasks/server";
+
+import { StudioShell } from "../../studio-shell";
 
 // A client's task opened by its link: client.<domain>/<studio>/t/<secret>
 // (?folder=<id> inside its folder). No sign-in: holding the link is the
@@ -38,32 +41,32 @@ export default async function TaskLinkPage({ params, searchParams }: { params: P
   const taskFolder = task.folderId;
   if (FileService.missingPreviews(listing)) after(() => files.ensurePreviews(at.scope, taskFolder));
 
+  // In the business's own frame (its logo and name); no "My page": the link is all they need.
+  const logoUrl = await studioAccess.logoUrl(at.studio.logoKey);
   return (
-    <main className="mx-auto w-full max-w-6xl space-y-6 px-4 py-8">
-      <p className="text-sm text-muted">
-        From {at.studio.name}
-        {task.customerName ? ` for ${task.customerName}` : ""}
-      </p>
-      <FileBrowser
-        listing={listing}
-        basePath={`/${slug}/t/${secret.data}`}
-        scope={{ locale: at.scope.locale, timeZone: at.scope.timeZone }}
-        via={{ as: "task", slug, token: secret.data }}
-        topLabel="Your photos"
-        protect={{ watermark: `PROOF · ${at.studio.name}` }}
-        task={{
-          id: task.id,
-          title: task.title,
-          kind: task.kind,
-          pickMin: task.pickMin,
-          pickMax: task.pickMax,
-          dueOn: task.dueOn,
-          done: task.status === "done",
-          picks: task.kind === "choose" ? await files.picks(at.scope, task.id) : [],
-          mine: true,
-          forName: null,
-        }}
-      />
-    </main>
+    <StudioShell studio={{ name: at.studio.name, logoUrl, slug }} signedInAs={null} title={task.customerName ? `For ${task.customerName}` : "Your photos"}>
+      <div className="mx-auto w-full max-w-6xl">
+        <FileBrowser
+          listing={listing}
+          basePath={`/${slug}/t/${secret.data}`}
+          scope={{ locale: at.scope.locale, timeZone: at.scope.timeZone }}
+          via={{ as: "task", slug, token: secret.data }}
+          topLabel="Your photos"
+          protect={{ watermark: `PROOF · ${at.studio.name}` }}
+          task={{
+            id: task.id,
+            title: task.title,
+            kind: task.kind,
+            pickMin: task.pickMin,
+            pickMax: task.pickMax,
+            dueOn: task.dueOn,
+            done: task.status === "done",
+            picks: task.kind === "choose" ? await files.picks(at.scope, task.id) : [],
+            mine: true,
+            forName: null,
+          }}
+        />
+      </div>
+    </StudioShell>
   );
 }

@@ -6,7 +6,10 @@ import { localDate } from "@repo/lib/accounting/core/period";
 import { folderIdSchema, shareTokenSchema } from "@repo/lib/files/core";
 import { files } from "@repo/lib/files/server";
 import { FileService } from "@repo/lib/files/service";
-import { studioAtSlug } from "@repo/lib/studio-portal/server";
+import { studioAccess } from "@repo/lib/studio-access/server";
+import { portalClient, studioAtSlug } from "@repo/lib/studio-portal/server";
+
+import { StudioShell } from "../../studio-shell";
 
 // A folder shared by link: client.<domain>/<studio>/f/<secret>(?folder=<id>).
 // No sign-in: holding the link is the permission, as far as the share goes
@@ -35,16 +38,19 @@ export default async function SharedFolderPage({ params, searchParams }: { param
   // Pictures without their small copies yet: make them now, so they show (and load fast) next time.
   if (FileService.missingPreviews(listing)) after(() => files.ensurePreviews(at.scope, folderId));
 
+  // In the business's own frame: its logo and name, as on its other pages.
+  const [logoUrl, me] = await Promise.all([studioAccess.logoUrl(at.studio.logoKey), portalClient(at.studio.id)]);
   return (
-    <main className="mx-auto w-full max-w-6xl space-y-6 px-4 py-8">
-      <p className="text-sm text-muted">Shared with you by {at.studio.name}</p>
-      <FileBrowser
-        listing={listing}
-        basePath={`/${slug}/f/${secret.data}`}
-        scope={{ locale: at.scope.locale, timeZone: at.scope.timeZone }}
-        via={{ as: "link", slug, token: secret.data }}
-        topLabel="Shared with you"
-      />
-    </main>
+    <StudioShell studio={{ name: at.studio.name, logoUrl, slug }} signedInAs={me?.name ?? null} title="Shared with you">
+      <div className="mx-auto w-full max-w-6xl">
+        <FileBrowser
+          listing={listing}
+          basePath={`/${slug}/f/${secret.data}`}
+          scope={{ locale: at.scope.locale, timeZone: at.scope.timeZone }}
+          via={{ as: "link", slug, token: secret.data }}
+          topLabel="Shared with you"
+        />
+      </div>
+    </StudioShell>
   );
 }
