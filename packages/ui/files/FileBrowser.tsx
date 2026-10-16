@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRef, useState, useSyncExternalStore, useTransition, type DragEvent } from "react";
 
+import { BottomSheet } from "@repo/ui/BottomSheet";
 import { Button } from "@repo/ui/Button";
 import { BatchRename } from "@repo/ui/files/BatchRename";
 import { createInBusiness, deleteInBusiness, moveInBusiness, newBusinessName, renameInBusiness } from "@repo/ui/files/business-actions";
@@ -139,6 +140,9 @@ const ICONS = {
   folderPlus: "M12 10.5v6m3-3H9m4.06-7.19-2.12-2.12a1.5 1.5 0 0 0-1.061-.44H4.5A2.25 2.25 0 0 0 2.25 6v12a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9a2.25 2.25 0 0 0-2.25-2.25h-5.379a1.5 1.5 0 0 1-1.06-.44Z",
   upload: "M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5",
   chevron: "m8.25 4.5 7.5 7.5-7.5 7.5",
+  back: "M15.75 19.5 8.25 12l7.5-7.5",
+  plus: "M12 4.5v15m7.5-7.5h-15",
+  more: "M12 6.75a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5ZM12 12.75a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5ZM12 18.75a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5Z",
   people:
     "M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z",
   star: "M11.48 3.499a.562.562 0 0 1 1.04 0l2.125 5.111a.563.563 0 0 0 .475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 0 0-.182.557l1.285 5.385a.562.562 0 0 1-.84.61l-4.725-2.885a.562.562 0 0 0-.586 0L6.982 20.54a.562.562 0 0 1-.84-.61l1.285-5.386a.562.562 0 0 0-.182-.557l-4.204-3.602a.562.562 0 0 1 .321-.988l5.518-.442a.563.563 0 0 0 .475-.345L11.48 3.5Z",
@@ -162,6 +166,52 @@ function Glyph({ entry: e, large, shared = false }: { entry: Entry; large: boole
   );
 }
 
+/** A picture's tile: its thumbnail; before it has one, a small original (a service's photos are already small). */
+function tileOf(file: FileView): string | null {
+  if (!file.contentType.startsWith("image/")) return null;
+  return file.thumbUrl ?? (file.previewUrl && (file.bytes <= PREVIEW_BYTES || file.media) ? file.previewUrl : null);
+}
+
+/**
+ * How an item looks on a phone: a folder as a row, a photo as a square
+ * filling its cell (like a phone's gallery), anything else as its type over
+ * its name.
+ */
+function PhoneTile({ entry: e, selected, shared }: { entry: Entry; selected: boolean; shared: boolean }) {
+  if (e.kind === "folder") {
+    const tag = e.folder.business ? null : e.folder.holdsProjects ? "Every project" : e.folder.projectId ? "Project" : shared ? "Shared" : null;
+    return (
+      <span className="flex w-full items-center gap-3 pr-10 text-left">
+        <FolderArt className="h-9 w-11 shrink-0" />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-medium">{e.name}</span>
+          {tag ? <span className="block text-xs text-muted">{tag}</span> : null}
+        </span>
+      </span>
+    );
+  }
+  const tile = tileOf(e.file);
+  return (
+    <span className="relative block w-full">
+      <span className="flex aspect-square w-full items-center justify-center overflow-hidden bg-background">
+        {tile ? (
+          // eslint-disable-next-line @next/next/no-img-element -- a signed, short-lived storage link
+          <img src={tile} alt={e.name} loading="lazy" decoding="async" draggable={false} className="h-full w-full object-cover" />
+        ) : (
+          <Picture entry={e} large shared={false} />
+        )}
+      </span>
+      {tile ? null : <span className="block truncate px-1 py-1 text-center text-[11px]">{e.name}</span>}
+      {e.file.openComments ? (
+        <span className="absolute right-1 bottom-1 rounded-full bg-brand-500 px-1.5 text-[10px] font-semibold text-white shadow-sm">{e.file.openComments}</span>
+      ) : null}
+      {selected ? (
+        <span className="absolute top-1 right-1 flex h-6 w-6 items-center justify-center rounded-full bg-brand-500 text-xs text-white shadow ring-2 ring-white">✓</span>
+      ) : null}
+    </span>
+  );
+}
+
 function Picture({ entry: e, large, shared }: { entry: Entry; large: boolean; shared: boolean }) {
   const corner = (d: string, side: string, label: string) => (
     <span title={label} className={`absolute -bottom-1 ${side} rounded-full bg-surface text-muted shadow-sm ${large ? "p-1" : "p-px"}`}>
@@ -179,7 +229,7 @@ function Picture({ entry: e, large, shared }: { entry: Entry; large: boolean; sh
   }
   // A picture's tile is its thumbnail; before it has one, a small original (a service's photos are already small).
   const image = e.file.contentType.startsWith("image/");
-  const tile = image ? (e.file.thumbUrl ?? (e.file.previewUrl && (e.file.bytes <= PREVIEW_BYTES || e.file.media) ? e.file.previewUrl : null)) : null;
+  const tile = tileOf(e.file);
   if (tile) {
     return (
       <span className="relative inline-flex">
@@ -199,6 +249,15 @@ function Picture({ entry: e, large, shared }: { entry: Entry; large: boolean; sh
   }
   return <KindBadge file={e.file} large={large} />;
 }
+
+// A phone (narrower than the sm breakpoint): menus and forms come up as bottom sheets.
+const PHONE = "(max-width: 639px)";
+function subscribePhone(onChange: () => void): () => void {
+  const query = window.matchMedia(PHONE);
+  query.addEventListener("change", onChange);
+  return () => query.removeEventListener("change", onChange);
+}
+const isPhone = () => window.matchMedia(PHONE).matches;
 
 // The tiles / details choice, kept per browser (and followed across its tabs).
 const viewListeners = new Set<() => void>();
@@ -336,6 +395,7 @@ export function FileBrowser({
   const here = listing.folder?.id ?? null;
   const rights = listing.rights;
   const covered = useProofShield(!!protect);
+  const phone = useSyncExternalStore(subscribePhone, isPhone, () => false);
   const view = useSyncExternalStore(subscribeView, readView, () => "grid" as const);
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
@@ -352,6 +412,8 @@ export function FileBrowser({
   const [copied, setCopied] = useState(false);
   /** The file open in the viewer: its place among the files shown. */
   const [viewing, setViewing] = useState<number | null>(null);
+  /** On a phone: the + button's sheet (Upload, New folder, Share). */
+  const [adding, setAdding] = useState(false);
   const [box, setBox] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
   const [sharingFolder, setSharingFolder] = useState<Folder | null>(null);
   /** The right-click menu, and whether a long press opened it (it then offers Select). */
@@ -905,10 +967,6 @@ export function FileBrowser({
           showMenu(r.left + r.width / 2, r.top + r.height / 2);
         }
       },
-      // Tabbing to an item selects it (a click selects on its own, with its keys).
-      onFocus: () => {
-        if (Date.now() - press.current.at > 500 && !selected.has(key)) selectOnly(key);
-      },
       onDragStart: (ev: DragEvent) => {
         dragged.current = actOn(e).filter((x) => changeable(x) || bizOf(x)?.kind === "item");
         ev.dataTransfer.setData(DRAG_TYPE, key);
@@ -1007,7 +1065,30 @@ export function FileBrowser({
         if (!uploading && rights.add && e.dataTransfer.files.length) upload([...e.dataTransfer.files]);
       }}
     >
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      {/* On a phone: back, and where you are. */}
+      <div className="flex min-w-0 items-center gap-1 sm:hidden">
+        {listing.path.length ? (
+          <Link
+            href={href(listing.path.length > 1 ? listing.path[listing.path.length - 2].id : null)}
+            aria-label={`Back to ${listing.path.length > 1 ? listing.path[listing.path.length - 2].name : topLabel}`}
+            className="-ml-2 rounded-full p-2 text-muted active:bg-background"
+          >
+            <Icon d={ICONS.back} className="h-5 w-5" />
+          </Link>
+        ) : null}
+        <h2 className="truncate text-lg font-semibold">{listing.folder?.name ?? topLabel}</h2>
+      </div>
+      <input
+        ref={pickRef}
+        type="file"
+        multiple
+        hidden
+        onChange={(e) => {
+          if (e.target.files?.length) upload([...e.target.files]);
+          e.target.value = "";
+        }}
+      />
+      <div className="hidden flex-wrap items-center justify-between gap-3 sm:flex">
         {/* The way back up; drag an item onto a folder here to move it up. */}
         <nav aria-label="Folder" className="flex min-w-0 flex-wrap items-center gap-1 text-lg">
           {[null, ...listing.path].map((f, i) => {
@@ -1050,16 +1131,6 @@ export function FileBrowser({
               {mediaFolder ? "Add photos or video" : "Upload"}
             </Button>
           ) : null}
-          <input
-            ref={pickRef}
-            type="file"
-            multiple
-            hidden
-            onChange={(e) => {
-              if (e.target.files?.length) upload([...e.target.files]);
-              e.target.value = "";
-            }}
-          />
         </div>
       </div>
 
@@ -1091,7 +1162,25 @@ export function FileBrowser({
         </div>
       </div>
 
-      {moving ? (
+      {moving && phone ? (
+        <BottomSheet open onClose={() => setMoving(null)} title={`Move ${moving.entries.length > 1 ? `${moving.entries.length} items` : `"${moving.entries[0].name}"`} to`}>
+          <ul className="-mx-2">
+            {destinations(moving.entries).map((d) => (
+              <li key={d.value}>
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => move(moving.entries, d.value === TOP ? null : d.value)}
+                  className="flex min-h-12 w-full items-center gap-3 rounded-xl px-3 text-left active:bg-background"
+                >
+                  <FolderArt className="h-7 w-8 shrink-0" />
+                  <span className="truncate">{d.label}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </BottomSheet>
+      ) : moving ? (
         <form
           className="flex flex-wrap items-center gap-2 rounded-2xl border border-brand-500/40 bg-surface p-3 shadow-theme-xs"
           onSubmit={(e) => {
@@ -1299,9 +1388,10 @@ export function FileBrowser({
             {rights.add ? <p className="text-xs text-muted">Any file, up to {formatBytes(MAX_FILE_BYTES)} each, kept as it is.</p> : null}
           </div>
         ) : view === "grid" ? (
-          <ul className="grid grid-cols-[repeat(auto-fill,minmax(6.5rem,1fr))] gap-1 sm:grid-cols-[repeat(auto-fill,minmax(7.5rem,1fr))]">
+          // A phone: folders as rows, then photos three to a row, square (a gallery); wider: tiles.
+          <ul className="grid grid-cols-3 gap-0.5 sm:grid-cols-[repeat(auto-fill,minmax(7.5rem,1fr))] sm:gap-1">
             {newFolderShown ? (
-              <li className={editingTile}>
+              <li className={`col-span-3 sm:col-span-1 ${editingTile}`}>
                 <span className="flex h-16 items-center">
                   <FolderArt className="h-14 w-[4.5rem]" />
                 </span>
@@ -1309,12 +1399,27 @@ export function FileBrowser({
               </li>
             ) : null}
             {entries.map((e) => (
-              <li key={keyOf(e)} className="relative">
+              <li key={keyOf(e)} className={`relative ${e.kind === "folder" ? "col-span-3 mb-1 sm:col-span-1 sm:mb-0" : ""}`}>
                 {e.kind === "file" ? heart(e.id, "absolute top-1 left-1") : null}
                 {protect && e.kind === "file" && e.file.previewUrl && e.file.contentType.startsWith("image/") ? (
-                  <span className="pointer-events-none absolute inset-x-2 top-2 h-16">
+                  <span className="pointer-events-none absolute inset-x-0 top-0 aspect-square sm:inset-x-2 sm:top-2 sm:aspect-auto sm:h-16">
                     <Watermark text={protect.watermark} />
                   </span>
+                ) : null}
+                {/* A phone has no right-click: a folder's options are on its ⋮. */}
+                {e.kind === "folder" && naming?.key !== keyOf(e) ? (
+                  <button
+                    type="button"
+                    aria-label={`Options for ${e.name}`}
+                    onClick={(ev) => {
+                      const r = ev.currentTarget.getBoundingClientRect();
+                      if (!selected.has(keyOf(e))) selectOnly(keyOf(e));
+                      setMenu({ x: r.left, y: r.bottom, entry: e, touch: true });
+                    }}
+                    className="absolute top-1/2 right-1 z-10 -translate-y-1/2 rounded-full p-2 text-muted active:bg-background sm:hidden"
+                  >
+                    <Icon d={ICONS.more} className="h-5 w-5" />
+                  </button>
                 ) : null}
                 {naming?.key === keyOf(e) ? (
                   <div className={editingTile}>
@@ -1324,12 +1429,19 @@ export function FileBrowser({
                     {nameInput(e.kind === "file", "w-full text-center text-xs")}
                   </div>
                 ) : (
-                  <button type="button" {...itemProps(e)} className={`flex w-full flex-col items-center gap-1.5 rounded-xl p-2 text-center ${itemLook} ${stateClass(e)}`}>
-                    <span className="flex h-16 items-center">
+                  <button
+                    type="button"
+                    {...itemProps(e)}
+                    className={`flex w-full flex-col items-center gap-1.5 text-center ${e.kind === "folder" ? "rounded-xl px-3 py-2.5" : "rounded-none"} sm:rounded-xl sm:p-2 ${itemLook} ${stateClass(e)}`}
+                  >
+                    <span className="flex w-full sm:hidden">
+                      <PhoneTile entry={e} selected={selected.has(keyOf(e)) && (chosen.length > 1 || selecting)} shared={sharedFolders.has(e.id)} />
+                    </span>
+                    <span className="hidden h-16 items-center sm:flex">
                       <Glyph entry={e} large shared={sharedFolders.has(e.id) && e.kind === "folder"} />
                     </span>
-                    <span className={`w-full text-xs leading-tight break-words ${selected.has(keyOf(e)) && chosen.length === 1 ? "" : "line-clamp-2"}`}>{e.name}</span>
-                    {e.kind === "file" && e.file.caption && !namingTask ? <span className="w-full truncate text-[11px] text-muted">{e.file.caption}</span> : null}
+                    <span className={`hidden w-full text-xs leading-tight break-words sm:block ${selected.has(keyOf(e)) && chosen.length === 1 ? "" : "line-clamp-2"}`}>{e.name}</span>
+                    {e.kind === "file" && e.file.caption && !namingTask ? <span className="hidden w-full truncate text-[11px] text-muted sm:block">{e.file.caption}</span> : null}
                   </button>
                 )}
                 {e.kind === "file" ? captionBox(e.id, "mt-1") : null}
@@ -1401,7 +1513,42 @@ export function FileBrowser({
         {rights.change ? " · F2 renames · drag onto a folder to move" : ""}
         {rights.add ? " · drop files anywhere to upload" : ""}
       </p>
-      <p className="text-xs text-muted sm:hidden">Tap to open · press and hold for options or to select several</p>
+      {/* On a phone, adding is the + button's. */}
+      {listing.folder && shareable(listing.folder) || canNewFolder || rights.add ? (
+        <button
+          type="button"
+          aria-label="Add or share"
+          onClick={() => setAdding(true)}
+          disabled={uploading}
+          className="fixed right-4 bottom-24 z-30 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-500 text-white shadow-lg active:scale-95 sm:hidden"
+        >
+          <Icon d={ICONS.plus} className="h-7 w-7" />
+        </button>
+      ) : null}
+      {adding ? (
+        <BottomSheet open onClose={() => setAdding(false)} title={listing.folder?.name ?? topLabel}>
+          <div className="grid gap-2">
+            {rights.add ? (
+              <Button className="min-h-12 justify-start" onClick={() => (setAdding(false), pickRef.current?.click())}>
+                <Icon d={ICONS.upload} className="h-5 w-5" />
+                {mediaFolder ? "Add photos or a video" : "Upload photos or files"}
+              </Button>
+            ) : null}
+            {canNewFolder ? (
+              <Button variant="secondary" className="min-h-12 justify-start" onClick={() => (setAdding(false), newFolder())}>
+                <Icon d={ICONS.folderPlus} className="h-5 w-5" />
+                {bizNew ?? "New folder"}
+              </Button>
+            ) : null}
+            {listing.folder && shareable(listing.folder) ? (
+              <Button variant="secondary" className="min-h-12 justify-start" onClick={() => (setAdding(false), setSharingFolder(listing.folder))}>
+                <Icon d={ICONS.people} className="h-5 w-5" />
+                Share this folder
+              </Button>
+            ) : null}
+          </div>
+        </BottomSheet>
+      ) : null}
 
       {box ? (
         <div
@@ -1471,6 +1618,7 @@ export function FileBrowser({
           x={menu.x}
           y={menu.y}
           label={menu.entry ? `Options for ${menu.entry.name}` : "Folder options"}
+          title={menu.entry ? (actOn(menu.entry).length > 1 ? `${chosen.length} selected` : menu.entry.name) : (listing.folder?.name ?? topLabel)}
           entries={menu.entry ? itemMenu(menu.entry, menu.touch ?? false) : backgroundMenu}
           onClose={() => setMenu(null)}
         />
