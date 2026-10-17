@@ -1,9 +1,12 @@
 // The studios module's records. Pure; safe on client and server.
 //
 // A studio is a tenant (packages/lib/tenancy) owned by one Aming client: the
-// client's own photography business inside the system.
+// client's own business inside the system: a photography studio, or a vendor
+// (./kinds.ts). An account may own one of each.
 
 import type { StudioStatus } from "@repo/lib/studio-access/core";
+
+import type { BusinessKind } from "./kinds";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
 /** A point on the map. */
@@ -26,6 +29,10 @@ export interface Studio extends StudioProfile {
   /** The studio's tenant id: every studio record carries it. */
   id: string;
   ownerClientId: string;
+  /** A photography studio, or a vendor. */
+  kind: BusinessKind;
+  /** A vendor's category (./kinds.ts); null for a studio. */
+  vendorCategory: string | null;
   /** How the studio's money and dates are shown (see TenantScope). */
   currency: string;
   locale: string;
@@ -54,4 +61,10 @@ export interface StudioOwner {
   clientId: string;
   /** The new studio's starting name, until the owner changes it. */
   name: string;
+}
+
+/** The businesses an account owns: one of each kind, at most. */
+export interface OwnedBusinesses {
+  studio: Studio | null;
+  vendor: Studio | null;
 }

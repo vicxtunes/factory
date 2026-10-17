@@ -2,6 +2,8 @@
 
 import { z } from "zod";
 
+import { VENDOR_CATEGORIES } from "./kinds";
+
 import { optionalEmail, optionalPhone, optionalText } from "@repo/lib/kernel/core";
 
 import { normalizeHex } from "./brand";
@@ -27,3 +29,9 @@ export const brandColorSchema = z.object({
     return hex ?? "";
   }),
 });
+
+/** What a business is: a studio, or a vendor and its category (one of ./kinds.ts's). */
+export const businessKindSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("studio") }),
+  z.object({ kind: z.literal("vendor"), category: z.string().refine((id) => VENDOR_CATEGORIES.some((c) => c.id === id), "Choose what your business does.") }),
+]);

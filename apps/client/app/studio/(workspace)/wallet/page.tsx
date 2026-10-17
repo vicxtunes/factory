@@ -4,6 +4,7 @@ import { BusinessCardAnalytics } from "@repo/ui/wallet/BusinessCardAnalytics";
 import { WalletTerms } from "@repo/ui/wallet/WalletTerms";
 import { requireStudio } from "@repo/lib/studios/server";
 import type { TenantScope } from "@repo/lib/tenancy/types";
+import { FEE_PERCENT, type BusinessKind } from "@repo/lib/studios/core";
 import { getMyPhone } from "@repo/lib/wallet/actions";
 import { amingCard, businessTermsAccepted, getBusinessCard, storedPin, unlockedUntil } from "@repo/lib/wallet/studio";
 import { RelockAt, WalletLock } from "@repo/ui/wallet/WalletPin";
@@ -33,12 +34,12 @@ async function Card({
   owner,
 }: {
   scope: TenantScope;
-  studio: { name: string; ownerClientId: string };
+  studio: { name: string; ownerClientId: string; kind: BusinessKind };
   viewerId: string;
   owner: string | null;
 }) {
   // Off until the owner agrees to the wallet's terms: the terms stand in its place.
-  if (!(await businessTermsAccepted(scope.tenantId))) return <WalletTerms owner={!!owner} />;
+  if (!(await businessTermsAccepted(scope.tenantId))) return <WalletTerms owner={!!owner} feePercent={FEE_PERCENT[studio.kind]} />;
   // Its figures need the viewer's wallet PIN, so nothing is loaded until it's
   // unlocked. Just agreed to the terms: the next step is choosing the PIN.
   const until = await unlockedUntil(viewerId);
