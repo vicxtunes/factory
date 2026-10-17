@@ -14,13 +14,17 @@ import {
   verifyStudioEmail,
 } from "@repo/lib/studio-access/actions";
 import { setStudioSlug } from "@repo/lib/studio-portal/actions";
+import { setMyBusinessKind } from "@repo/lib/studios/actions";
+import { KindPicker, type KindChoice } from "@repo/ui/studios/KindPicker";
 
 import { LogoUploader } from "./LogoUploader";
-import { SetupActions, SetupSplit, SetupWelcome, type SetupStep } from "./SetupLayouts";
+import { SetupActions, SetupSplit, type SetupStep } from "./SetupLayouts";
 
 /** Everything the wizard shows, as the server sees it now. */
 export interface SetupView {
   status: "onboarding" | "changes_requested";
+  /** What the business is: a studio, or a vendor and its category. */
+  kind: KindChoice;
   /** Why Aming sent it back, when it did. */
   reviewNote: string | null;
   /** The form's starting values: saved ones, else suggestions from the owner's Aming account. */
@@ -93,10 +97,10 @@ export function OnboardingWizard({ view }: { view: SetupView }) {
     return (
       <SetupSplit
         steps={steps}
-        title="Set up your business"
-        description="Run your photography business from one place, next to your Aming orders. It takes about 5 minutes; Aming then reviews your business before it opens."
+        title="What kind of business is it?"
+        description="Run your business from one place: clients, bookings, invoices and payments. It takes about 5 minutes; Aming then reviews your business before it opens."
       >
-        <SetupWelcome onStart={() => setStep("details")} />
+        <KindStep view={view} onDone={() => setStep("details")} />
       </SetupSplit>
     );
   }
@@ -132,6 +136,36 @@ export function OnboardingWizard({ view }: { view: SetupView }) {
 }
 
 type StepProps = { view: SetupView; back: { onClick: () => void }; onDone: () => void };
+
+/** First: a photography studio, or a vendor (what it does). Saved before the details. */
+function KindStep({ view, onDone }: { view: SetupView; onDone: () => void }) {
+  const router = useRouter();
+  const [choice, setChoice] = useState<KindChoice>(view.kind);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+  return (
+    <>
+      <KindPicker value={choice} onChange={setChoice} />
+      <ErrorText error={error} />
+      <SetupActions>
+        <Button
+          loading={pending}
+          onClick={() =>
+            start(async () => {
+              setError(null);
+              const res = await setMyBusinessKind(choice);
+              if (!res.ok) return setError(res.error);
+              router.refresh();
+              onDone();
+            })
+          }
+        >
+          Continue
+        </Button>
+      </SetupActions>
+    </>
+  );
+}
 
 function DetailsStep({ view, back, onDone }: StepProps) {
   const router = useRouter();

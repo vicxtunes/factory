@@ -31,6 +31,7 @@ import type { StudioAccess } from "@repo/lib/team/core";
 
 import { getMyNotifications, logoutClient } from "../../actions";
 import { ClientUserMenu } from "../../user-menu";
+import type { BusinessKind } from "@repo/lib/studios/core";
 import { isCurrentStudioPage, STUDIO_TABS, studioNavFor, studioPageTitle, type StudioNavItem, type StudioNavSection } from "./nav";
 
 /** How the studio presents itself in its own workspace. */
@@ -210,6 +211,7 @@ export function StudioShell({
   brand,
   user,
   access,
+  kind,
   switcher,
   children,
 }: {
@@ -217,11 +219,13 @@ export function StudioShell({
   user: { name: string; avatarUrl: string | null };
   /** The owner sees the whole menu; a team member what they were given. */
   access: StudioAccess;
+  /** A photography studio or a vendor: some pages are a studio's only. */
+  kind: BusinessKind;
   /** Choosing between the businesses the account opens, when there's more than one. */
   switcher: React.ReactNode;
   children: React.ReactNode;
 }) {
-  const nav = studioNavFor(access);
+  const nav = studioNavFor(access, kind);
   const wide = BOARD_PAGES.includes(usePathname());
   return (
     <div className="min-h-screen">

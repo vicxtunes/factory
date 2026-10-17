@@ -214,6 +214,8 @@ export async function startStudioRequestPayment(input: {
 export async function studioPayment(id: string): Promise<{
   id: string;
   ownerClientId: string;
+  /** The business it was paid to: the one its booking, request or invoice belongs to. */
+  tenantId: string | null;
   requestId: string | null;
   bookingId: string | null;
   invoiceId: string | null;
@@ -224,9 +226,16 @@ export async function studioPayment(id: string): Promise<{
 } | null> {
   const row = await repo.getCollection(id);
   if (!row || (!row.product_request_id && !row.booking_id && !row.billing_document_id)) return null;
+  const [table, key] = row.billing_document_id
+    ? (["billing_documents", row.billing_document_id] as const)
+    : row.booking_id
+      ? (["bookings", row.booking_id] as const)
+      : (["product_requests", row.product_request_id!] as const);
+  const { data: owner } = await createAdminClient().from(table).select("tenant_id").eq("id", key).maybeSingle<{ tenant_id: string }>();
   return {
     id: row.id,
     ownerClientId: row.client_id,
+    tenantId: owner?.tenant_id ?? null,
     requestId: row.product_request_id,
     bookingId: row.booking_id,
     invoiceId: row.billing_document_id,

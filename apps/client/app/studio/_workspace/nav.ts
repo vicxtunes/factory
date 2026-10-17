@@ -5,6 +5,7 @@
 // rest in "More". To add, move or rename a studio page, edit this file only.
 
 import type { HomeBarIcon } from "@repo/ui/HomeBar";
+import type { BusinessKind } from "@repo/lib/studios/core";
 import { canUse, type Area, type StudioAccess } from "@repo/lib/team/core";
 
 export interface StudioNavItem {
@@ -15,6 +16,8 @@ export interface StudioNavItem {
   exact?: boolean;
   /** Who sees it besides the owner: team members with this area, or "anyone" on the team. None: the owner only. */
   need?: Area | "anyone";
+  /** Only for these kinds of business (none: every kind). */
+  kinds?: BusinessKind[];
 }
 
 export interface StudioNavSection {
@@ -66,7 +69,8 @@ export const STUDIO_NAV: StudioNavSection[] = [
     icon: "studio",
     items: [
       { href: "/studio/offerings", label: "Packages & Services", icon: "products", need: "catalog" },
-      { href: "/studio/products", label: "Products", icon: "placeOrder", need: "catalog" },
+      // Aming's prints and photobooks, sold on by photography studios.
+      { href: "/studio/products", label: "Products", icon: "placeOrder", need: "catalog", kinds: ["studio"] },
       { href: "/studio/showroom", label: "Showroom", icon: "showroom", need: "catalog" },
     ],
   },
@@ -78,9 +82,11 @@ export const STUDIO_NAV: StudioNavSection[] = [
   },
 ];
 
-/** The menu as `access` sees it: the owner all of it, a team member what they were given (empty sections left out). */
-export function studioNavFor(access: StudioAccess): StudioNavSection[] {
-  return STUDIO_NAV.map((s) => ({ ...s, items: s.items.filter((i) => i.need === "anyone" || canUse(access, i.need)) })).filter((s) => s.items.length > 0);
+/** The menu as `access` sees it in a business of `kind`: the owner all of it, a team member what they were given (empty sections left out). */
+export function studioNavFor(access: StudioAccess, kind: BusinessKind): StudioNavSection[] {
+  return STUDIO_NAV.map((s) => ({ ...s, items: s.items.filter((i) => (!i.kinds || i.kinds.includes(kind)) && (i.need === "anyone" || canUse(access, i.need))) })).filter(
+    (s) => s.items.length > 0,
+  );
 }
 
 /** On the phone's bar (those the person can use); everything else is in "More". */

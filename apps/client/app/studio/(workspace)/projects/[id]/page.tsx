@@ -102,8 +102,8 @@ export default async function StudioProjectPage({ params }: { params: Promise<{ 
           <Photos scope={scope} project={p} />
         </Loading>
       </section>
-      {/* Placed under the owner's own Aming account: theirs alone. */}
-      {access.owner ? (
+      {/* Placed under the owner's own Aming account: theirs alone (a photography studio's: prints, albums, frames). */}
+      {access.owner && studio.kind === "studio" ? (
         <section className="space-y-3">
           <SectionLabel>Aming orders</SectionLabel>
           <Loading skeleton={<RowsSkeleton rows={2} />}>
