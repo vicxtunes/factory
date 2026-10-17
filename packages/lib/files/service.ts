@@ -451,6 +451,31 @@ export class FileService {
   }
 
   /**
+   * Once a choice is sent: a new folder (`name`, numbered if taken) inside the
+   * task's folder, with the chosen files moved into it (a name already there
+   * gets a number). Done for the business, whoever sent it. Returns the
+   * folder's id.
+   */
+  async gatherPicks(scope: TenantScope, task: { id: string; folderId: string }, name: string): Promise<string> {
+    const folders = await this.repo.folders(scope);
+    if (!folders.some((f) => f.id === task.folderId)) throw new FileError(NO_FOLDER);
+    const folderId = await this.repo.createFolder(scope, {
+      parentId: task.folderId,
+      name: uniqueName(cleanName(name).slice(0, 120) || "Chosen", folders.filter((f) => f.parentId === task.folderId).map((f) => f.name)),
+    });
+    const taken: string[] = [];
+    for (const id of await this.repo.picks(scope, task.id)) {
+      const file = await this.repo.file(scope, id);
+      // A pick from outside the task's folder (moved away since) stays where it is.
+      if (!file || !isWithin(folders, file.folderId, task.folderId)) continue;
+      const fileName = uniqueName(file.name, taken);
+      taken.push(fileName);
+      await this.repo.updateFile(scope, id, { folderId, name: fileName });
+    }
+    return folderId;
+  }
+
+  /**
    * Makes sure a client or team member given a task in a folder can open it:
    * shares it with them (as `role`) unless it, or a folder above it, already
    * is. An existing share is never lowered.
