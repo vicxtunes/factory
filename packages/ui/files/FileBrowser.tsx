@@ -409,6 +409,8 @@ export function FileBrowser({
   const [onlyPicked, setOnlyPicked] = useState(() => task?.kind === "choose" && task.done && !task.mine && task.picks.length > 0);
   /** "Send?" before a task is sent, as a sheet. */
   const [confirming, setConfirming] = useState(false);
+  /** Where "Download chosen ▾" opened its choice. */
+  const [downloadMenu, setDownloadMenu] = useState<{ x: number; y: number } | null>(null);
   /** Captions as typed (a "name" task), and as last saved. */
   const [captions, setCaptions] = useState<ReadonlyMap<string, string>>(() => new Map(listing.files.map((f) => [f.id, f.caption ?? ""])));
   const savedCaptions = useRef<Map<string, string>>(new Map(listing.files.map((f) => [f.id, f.caption ?? ""])));
@@ -1215,100 +1217,130 @@ export function FileBrowser({
       ) : null}
 
       {task && task.kind !== "todo" ? (
-        // The task, set out to read on a phone: what it is and when it's due, one line of how, how far along, and Send.
-        <section aria-label="Your task" className="rounded-2xl border border-border bg-surface p-4 shadow-theme-xs sm:flex sm:items-center sm:gap-6">
-          <div className="min-w-0 flex-1 space-y-1.5">
-            <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold tracking-wide uppercase">
-              <span className="rounded-full bg-brand-50 px-2 py-0.5 text-brand-700 dark:bg-brand-500/15 dark:text-brand-300">
-                {choosing ? "Choose photos" : namingTask ? "Name the photos" : "Give feedback"}
-              </span>
-              {task.dueOn && !task.done ? <span className="rounded-full bg-background px-2 py-0.5 text-muted">Due {formatDay(scope, task.dueOn)}</span> : null}
-              {task.done ? <span className="rounded-full bg-success-50 px-2 py-0.5 text-success-700 dark:bg-success-500/15 dark:text-success-500">✓ {choosing || namingTask ? "Sent" : "Done"}</span> : null}
-            </div>
-            <h3 className="text-base leading-snug font-semibold">{task.mine || !task.forName ? task.title : `${task.forName}: ${task.title}`}</h3>
-            <p className="text-sm text-muted">
-              {task.done && task.mine
-                ? "Thank you, it's with the business. To change anything, ask them to reopen it."
-                : choosing
-                  ? task.mine
-                    ? `Tap ♥ on the ${task.pickMin ? `${task.pickMin} to ${task.pickMax}` : `${task.pickMax} or fewer`} you want. Open a photo to see it bigger.`
-                    : `Choosing ${task.pickMin ? `${task.pickMin} to ${task.pickMax}` : `up to ${task.pickMax}`}: their picks have a ♥.`
-                  : namingTask
-                    ? task.mine
-                      ? "Type the names under each photo, commas between several. Enter goes to the next."
-                      : "Their names show under each photo."
-                    : task.mine
-                      ? "Open a photo to comment on it. Pin a comment to point at a spot."
-                      : "Their comments show on each photo: open one to read and resolve them."}
-            </p>
-          </div>
-          {choosing || namingTask ? (
-            <div className="mt-4 space-y-1.5 sm:mt-0 sm:w-56">
-              <div className="flex items-baseline justify-between text-xs">
-                <span className="text-muted">{choosing ? (task.pickMin && picks.size < task.pickMin ? `At least ${task.pickMin}` : "Chosen") : "Named"}</span>
-                <span className="text-sm font-semibold tabular-nums">
-                  {choosing ? picks.size : named} / {choosing ? (task.pickMax ?? listing.files.length) : listing.files.length}
+        // The task, stacked at every width: what it is, for whom and when; one line of how; how far along; then what can be done.
+        <section aria-label="The task" className="space-y-4 rounded-2xl border border-border bg-surface p-4 shadow-theme-xs sm:p-5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0 space-y-1.5">
+              <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold tracking-wide whitespace-nowrap uppercase">
+                <span className="rounded-full bg-brand-50 px-2.5 py-0.5 text-brand-700 dark:bg-brand-500/15 dark:text-brand-300">
+                  {choosing ? "Choose photos" : namingTask ? "Name the photos" : "Give feedback"}
                 </span>
+                {task.dueOn && !task.done ? <span className="rounded-full bg-background px-2.5 py-0.5 text-muted">Due {formatDay(scope, task.dueOn)}</span> : null}
+                {task.done ? <span className="rounded-full bg-success-50 px-2.5 py-0.5 text-success-700 dark:bg-success-500/15 dark:text-success-500">✓ {choosing || namingTask ? "Sent" : "Done"}</span> : null}
               </div>
-              <div className="h-2 overflow-hidden rounded-full bg-background" role="progressbar" aria-valuemin={0} aria-valuemax={choosing ? (task.pickMax ?? listing.files.length) : listing.files.length} aria-valuenow={choosing ? picks.size : named}>
-                <div
-                  className="h-full rounded-full bg-brand-500 transition-[width] duration-300"
-                  style={{ width: `${Math.min(100, Math.round((100 * (choosing ? picks.size : named)) / Math.max(1, choosing ? (task.pickMax ?? listing.files.length) : listing.files.length)))}%` }}
-                />
-              </div>
+              <h3 className="text-lg leading-snug font-semibold">{task.title}</h3>
+              {!task.mine && task.forName ? <p className="text-sm font-medium">For {task.forName}</p> : null}
+              <p className="text-sm text-muted">
+                {task.done && task.mine
+                  ? "Thank you, it's with the business. To change anything, ask them to reopen it."
+                  : choosing
+                    ? task.mine
+                      ? `Tap ♥ on the ${task.pickMin ? `${task.pickMin} to ${task.pickMax}` : `${task.pickMax} or fewer`} you want. Open a photo to see it bigger.`
+                      : task.done
+                        ? "Their choice is in. The chosen photos are marked ♥."
+                        : `They're choosing ${task.pickMin ? `${task.pickMin} to ${task.pickMax}` : `up to ${task.pickMax}`}; their picks so far are marked ♥.`
+                    : namingTask
+                      ? task.mine
+                        ? "Type the names under each photo, commas between several. Enter goes to the next."
+                        : "Their names show under each photo."
+                      : task.mine
+                        ? "Open a photo to comment on it. Pin a comment to point at a spot."
+                        : "Their comments show on each photo: open one to read and resolve them."}
+              </p>
             </div>
-          ) : null}
-          <div className="mt-4 flex flex-col gap-2 sm:mt-0 sm:shrink-0 sm:flex-row sm:items-center">
             {!task.done && task.mine ? (
-              <Button className="min-h-11 w-full sm:w-auto" loading={pending} disabled={choosing && picks.size < Math.max(1, task.pickMin ?? 1)} onClick={() => setConfirming(true)}>
+              <Button className="min-h-11 w-full shrink-0 sm:w-auto" loading={pending} disabled={choosing && picks.size < Math.max(1, task.pickMin ?? 1)} onClick={() => setConfirming(true)}>
                 {choosing ? "Send my choice" : namingTask ? "Send names" : "I'm done"}
               </Button>
             ) : null}
-            {namingTask && !task.mine && named ? (
-              <>
-                {rights.change ? (
-                  <Button
-                    variant="secondary"
-                    className="min-h-11 w-full sm:w-auto"
-                    onClick={() =>
-                      setRenaming({
-                        entries: entries.filter((e) => e.kind === "file" && (captions.get(e.id) ?? "").trim()),
-                        pattern: "{caption}",
-                        dedupe: true,
-                      })
-                    }
-                  >
-                    Use names as file names
-                  </Button>
-                ) : null}
-                <Button variant="secondary" className="min-h-11 w-full sm:w-auto" onClick={downloadNames}>
+          </div>
+
+          {choosing || namingTask ? (
+            <div className="max-w-xl space-y-1.5">
+              <div className="flex items-baseline justify-between text-xs">
+                <span className="text-muted">{choosing ? (task.pickMin && picks.size < task.pickMin ? `At least ${task.pickMin}` : "Chosen") : "Named"}</span>
+                <span className="text-sm font-semibold tabular-nums">
+                  {choosing ? picks.size : named} of (choosing ? (task.pickMax ?? listing.files.length) : listing.files.length)
+                </span>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-background" role="progressbar" aria-valuemin={0} aria-valuemax={(choosing ? (task.pickMax ?? listing.files.length) : listing.files.length)} aria-valuenow={choosing ? picks.size : named}>
+                <div className="h-full rounded-full bg-brand-500 transition-[width] duration-300" style={{ width: `${Math.min(100, Math.round((100 * (choosing ? picks.size : named)) / Math.max(1, (choosing ? (task.pickMax ?? listing.files.length) : listing.files.length))))}%` }} />
+              </div>
+            </div>
+          ) : null}
+
+          {/* What the business can do with it. */}
+          {(choosing && !task.mine && picks.size) || (namingTask && !task.mine && named) ? (
+            <div className="flex flex-wrap items-center gap-2 border-t border-border pt-4">
+              {choosing ? (
+                <div role="group" aria-label="Show" className="flex rounded-xl border border-border bg-background p-1">
+                  {[false, true].map((only) => (
+                    <button
+                      key={String(only)}
+                      type="button"
+                      aria-pressed={onlyPicked === only}
+                      onClick={() => setOnlyPicked(only)}
+                      className={`min-h-9 rounded-lg px-3 text-sm font-medium transition-colors ${onlyPicked === only ? "bg-surface text-foreground shadow-theme-xs" : "text-muted"}`}
+                    >
+                      {only ? `♥ Chosen (${picks.size})` : `All (${listing.files.length})`}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+              {choosing ? (
+                <Button variant="secondary" className="min-h-11" onClick={copyForLightroom}>
+                  {copied ? "Copied ✓" : "Copy for Lightroom"}
+                </Button>
+              ) : null}
+              {namingTask && rights.change ? (
+                <Button
+                  variant="secondary"
+                  className="min-h-11"
+                  onClick={() =>
+                    setRenaming({
+                      entries: entries.filter((e) => e.kind === "file" && (captions.get(e.id) ?? "").trim()),
+                      pattern: "{caption}",
+                      dedupe: true,
+                    })
+                  }
+                >
+                  Use names as file names
+                </Button>
+              ) : null}
+              {namingTask ? (
+                <Button variant="secondary" className="min-h-11" onClick={downloadNames}>
                   Download list
                 </Button>
-              </>
-            ) : null}
-            {choosing && !task.mine && picks.size ? (
-              <>
-                <label className="flex min-h-11 items-center gap-2 text-sm">
-                  <input type="checkbox" checked={onlyPicked} onChange={(e) => setOnlyPicked(e.target.checked)} />
-                  Only chosen
-                </label>
-                <Button variant="secondary" className="min-h-11 w-full sm:w-auto" onClick={copyForLightroom}>
-                  {copied ? "Copied" : "Copy for Lightroom"}
+              ) : null}
+              {choosing && rights.download ? (
+                <Button
+                  variant="secondary"
+                  className="min-h-11"
+                  disabled={!!zipping}
+                  onClick={(ev) => {
+                    const r = ev.currentTarget.getBoundingClientRect();
+                    setDownloadMenu({ x: r.left, y: r.bottom + 4 });
+                  }}
+                >
+                  Download chosen ▾
                 </Button>
-                {rights.download ? (
-                  <>
-                    <Button variant="secondary" className="min-h-11 w-full sm:w-auto" disabled={!!zipping} onClick={() => zip({ fileIds: [...picks] }, `${task.title} - chosen`, "original")}>
-                      Download chosen
-                    </Button>
-                    <Button variant="secondary" className="min-h-11 w-full sm:w-auto" disabled={!!zipping} onClick={() => zip({ fileIds: [...picks] }, `${task.title} - chosen`, "optimised")}>
-                      Download chosen (optimised)
-                    </Button>
-                  </>
-                ) : null}
-              </>
-            ) : null}
-          </div>
+              ) : null}
+            </div>
+          ) : null}
         </section>
+      ) : null}
+      {task && downloadMenu ? (
+        <ContextMenu
+          x={downloadMenu.x}
+          y={downloadMenu.y}
+          label="Download the chosen photos"
+          title={`Download the ${picks.size} chosen`}
+          entries={[
+            { label: "Originals (full size)", onSelect: () => zip({ fileIds: [...picks] }, `${task.title} - chosen`, "original") },
+            { label: "Optimised (quick to send)", onSelect: () => zip({ fileIds: [...picks] }, `${task.title} - chosen`, "optimised") },
+          ]}
+          onClose={() => setDownloadMenu(null)}
+        />
       ) : null}
       {task && confirming ? (
         <BottomSheet open onClose={() => setConfirming(false)} title={choosing ? "Send your choice?" : namingTask ? "Send the names?" : "Finished?"}>
@@ -1429,7 +1461,7 @@ export function FileBrowser({
           </div>
         ) : view === "grid" ? (
           // A phone: folders as rows, then photos three to a row, square (a gallery); wider: tiles.
-          <ul className="grid grid-cols-3 gap-0.5 sm:grid-cols-[repeat(auto-fill,minmax(7.5rem,1fr))] sm:gap-1">
+          <ul className="grid grid-cols-3 gap-0.5 sm:grid-cols-[repeat(auto-fill,minmax(9.5rem,1fr))] sm:gap-2">
             {newFolderShown ? (
               <li className={`col-span-3 sm:col-span-1 ${editingTile}`}>
                 <span className="flex h-16 items-center">
@@ -1440,9 +1472,9 @@ export function FileBrowser({
             ) : null}
             {entries.map((e) => (
               <li key={keyOf(e)} className={`relative ${e.kind === "folder" ? "col-span-3 mb-1 sm:col-span-1 sm:mb-0" : ""}`}>
-                {e.kind === "file" ? heart(e.id, "absolute top-1 left-1") : null}
+                {e.kind === "file" ? heart(e.id, "absolute top-1 left-1 sm:top-3.5 sm:left-3.5") : null}
                 {protect && e.kind === "file" && e.file.previewUrl && e.file.contentType.startsWith("image/") ? (
-                  <span className="pointer-events-none absolute inset-x-0 top-0 aspect-square sm:inset-x-2 sm:top-2 sm:aspect-auto sm:h-16">
+                  <span className="pointer-events-none absolute inset-x-0 top-0 aspect-square sm:inset-x-2 sm:top-2">
                     <Watermark text={protect.watermark} />
                   </span>
                 ) : null}
@@ -1477,9 +1509,23 @@ export function FileBrowser({
                     <span className="flex w-full sm:hidden">
                       <PhoneTile entry={e} selected={selected.has(keyOf(e)) && (chosen.length > 1 || selecting)} shared={sharedFolders.has(e.id)} />
                     </span>
-                    <span className="hidden h-16 items-center sm:flex">
-                      <Glyph entry={e} large shared={sharedFolders.has(e.id) && e.kind === "folder"} />
-                    </span>
+                    {/* Wider: a picture shows big, square; anything else as its icon. */}
+                    {e.kind === "file" && tileOf(e.file) ? (
+                      <span className="relative hidden aspect-square w-full overflow-hidden rounded-lg bg-background sm:block">
+                        {/* eslint-disable-next-line @next/next/no-img-element -- a signed, short-lived storage link */}
+                        <img src={tileOf(e.file)!} alt="" loading="lazy" decoding="async" draggable={false} className="h-full w-full object-cover" />
+                        {e.file.openComments ? (
+                          <span className="absolute right-1.5 bottom-1.5 rounded-full bg-brand-500 px-1.5 text-[10px] font-semibold text-white shadow-sm">{e.file.openComments}</span>
+                        ) : null}
+                        {e.file.media?.kind === "photo" && e.file.media.cover ? (
+                          <span className="absolute right-1.5 top-1.5 rounded-full bg-surface/90 px-1.5 text-[10px] font-semibold shadow-sm">★ Cover</span>
+                        ) : null}
+                      </span>
+                    ) : (
+                      <span className="hidden h-16 items-center sm:flex">
+                        <Glyph entry={e} large shared={sharedFolders.has(e.id) && e.kind === "folder"} />
+                      </span>
+                    )}
                     <span className={`hidden w-full text-xs leading-tight break-words sm:block ${selected.has(keyOf(e)) && chosen.length === 1 ? "" : "line-clamp-2"}`}>{e.name}</span>
                     {e.kind === "file" && e.file.caption && !namingTask ? <span className="hidden w-full truncate text-[11px] text-muted sm:block">{e.file.caption}</span> : null}
                   </button>
