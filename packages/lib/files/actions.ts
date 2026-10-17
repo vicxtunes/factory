@@ -226,7 +226,8 @@ export async function captionFile(via: unknown, fileId: unknown, caption: unknow
 /**
  * Sends a choice (a "choose" task, within its least and most), the names (a
  * "name" task) or says the feedback is given: the task is done, and the
- * business's owner hears.
+ * business's owner hears. A choice's photos are moved into a "Chosen by …"
+ * folder inside the task's folder.
  */
 export async function finishTask(via: unknown, taskId: unknown): Promise<Result> {
   return runAction("files", async () => {
@@ -245,17 +246,39 @@ export async function finishTask(via: unknown, taskId: unknown): Promise<Result>
       told = `${found.who?.name ?? "Your client"} named ${there.filter((f) => f.caption).length} of ${there.length} photos in "${task.title}"`;
     }
     await tasks.setStatus(found.scope, task.id, "done");
+    // The choice is fixed now: its photos go into their own folder (best effort: the picks stay marked either way).
+    let opens = task.folderId ? `/studio/files?folder=${task.folderId}&task=${task.id}` : "/studio/tasks";
+    if (task.kind === "choose" && task.folderId) {
+      try {
+        const chosen = await files.gatherPicks(found.scope, { id: task.id, folderId: task.folderId }, `Chosen by ${found.who?.name ?? task.customerName ?? "the client"}`);
+        opens = `/studio/files?folder=${chosen}&task=${task.id}`;
+      } catch (err) {
+        console.error("files: gathering the chosen photos failed:", err);
+      }
+    }
     if (found.person.kind === "client") {
       // Best effort: the task is done either way.
       try {
         // Straight to what they did: the task's photos, their picks or names marked.
-        const url = task.folderId ? `/studio/files?folder=${task.folderId}&task=${task.id}` : "/studio/tasks";
-        await notifyActor({ type: "client", id: found.studio.ownerClientId }, { title: found.studio.name, body: told, url });
+        await notifyActor({ type: "client", id: found.studio.ownerClientId }, { title: found.studio.name, body: told, url: opens });
       } catch (err) {
         console.error("files: telling the owner failed:", err);
       }
     }
     revalidatePath("/studio", "layout");
+  });
+}
+
+/** The business puts a sent choice's photos into a "Chosen by …" folder (for one sent before this was automatic, or again). */
+export async function gatherChoice(taskId: unknown): Promise<Result<string>> {
+  return runAction("files", async () => {
+    const found = await caller({ as: "studio" });
+    if (found.access.kind !== "full") throw new FileError("Only the business can do this.");
+    const task = await tasks.get(found.scope, parseInput(taskIdSchema, taskId));
+    if (!task || task.kind !== "choose" || !task.folderId) throw new FileError("That task isn't a choice of photos in a folder.");
+    const folder = await files.gatherPicks(found.scope, { id: task.id, folderId: task.folderId }, `Chosen by ${task.customerName ?? task.assigneeName ?? "the client"}`);
+    touched();
+    return folder;
   });
 }
 

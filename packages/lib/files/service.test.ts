@@ -637,3 +637,20 @@ test("a folder downloads with its folders as paths, as originals or optimised co
   assert.equal((await service.list(studioA, raw, client))!.files.find((f) => f.id === photo)!.optimisedUrl ?? null, null);
   assert.ok((await service.list(studioA, raw))!.files.find((f) => f.id === photo)!.optimisedUrl?.endsWith("as=IMG_01.jpg"));
 });
+
+test("a sent choice's photos move into a 'Chosen by …' folder inside the task's folder", async () => {
+  const { service, upload, choosing, nakato, raw, contract, clip, amina, secret } = await sharedDrive();
+  const twin = await upload(studioA, nakato, "clip.pdf", MB);
+  choosing.set("t1", { tenantId: "studio-a", max: 9, done: false, picks: [contract, clip, twin, secret] });
+  const folder = await service.gatherPicks(studioA, { id: "t1", folderId: nakato }, "Chosen by Nakato");
+  const there = (await service.list(studioA, folder))!;
+  assert.equal(there.folder?.name, "Chosen by Nakato");
+  assert.equal(there.folder?.parentId, nakato);
+  assert.deepEqual(there.files.map((f) => f.name).sort(), ["clip (2).pdf", "clip.pdf", "contract.pdf"]);
+  assert.deepEqual((await service.list(studioA, raw))!.files, []);
+  // Outside the task's folder: left where it is.
+  assert.deepEqual((await service.list(studioA, amina))!.files.map((f) => f.id), [secret]);
+  // A second round gets its own folder.
+  const again = await service.gatherPicks(studioA, { id: "t1", folderId: nakato }, "Chosen by Nakato");
+  assert.equal((await service.list(studioA, again))!.folder?.name, "Chosen by Nakato (2)");
+});
