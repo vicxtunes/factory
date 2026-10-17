@@ -405,7 +405,8 @@ export function FileBrowser({
   const [renaming, setRenaming] = useState<{ entries: Entry[]; pattern?: string; dedupe?: boolean } | null>(null);
   const [moving, setMoving] = useState<{ entries: Entry[]; value: string } | null>(null);
   const [picks, setPicks] = useState<ReadonlySet<string>>(() => new Set(task?.picks ?? []));
-  const [onlyPicked, setOnlyPicked] = useState(false);
+  // A sent choice opens on just the chosen photos (the business looking at it).
+  const [onlyPicked, setOnlyPicked] = useState(() => task?.kind === "choose" && task.done && !task.mine && task.picks.length > 0);
   /** "Send?" before a task is sent, as a sheet. */
   const [confirming, setConfirming] = useState(false);
   /** Captions as typed (a "name" task), and as last saved. */
@@ -1294,6 +1295,16 @@ export function FileBrowser({
                 <Button variant="secondary" className="min-h-11 w-full sm:w-auto" onClick={copyForLightroom}>
                   {copied ? "Copied" : "Copy for Lightroom"}
                 </Button>
+                {rights.download ? (
+                  <>
+                    <Button variant="secondary" className="min-h-11 w-full sm:w-auto" disabled={!!zipping} onClick={() => zip({ fileIds: [...picks] }, `${task.title} - chosen`, "original")}>
+                      Download chosen
+                    </Button>
+                    <Button variant="secondary" className="min-h-11 w-full sm:w-auto" disabled={!!zipping} onClick={() => zip({ fileIds: [...picks] }, `${task.title} - chosen`, "optimised")}>
+                      Download chosen (optimised)
+                    </Button>
+                  </>
+                ) : null}
               </>
             ) : null}
           </div>
