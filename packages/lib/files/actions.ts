@@ -248,7 +248,9 @@ export async function finishTask(via: unknown, taskId: unknown): Promise<Result>
     if (found.person.kind === "client") {
       // Best effort: the task is done either way.
       try {
-        await notifyActor({ type: "client", id: found.studio.ownerClientId }, { title: found.studio.name, body: told, url: "/studio/tasks" });
+        // Straight to what they did: the task's photos, their picks or names marked.
+        const url = task.folderId ? `/studio/files?folder=${task.folderId}&task=${task.id}` : "/studio/tasks";
+        await notifyActor({ type: "client", id: found.studio.ownerClientId }, { title: found.studio.name, body: told, url });
       } catch (err) {
         console.error("files: telling the owner failed:", err);
       }
