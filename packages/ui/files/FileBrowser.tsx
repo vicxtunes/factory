@@ -24,6 +24,7 @@ import {
   captionFile,
   downloadLinks,
   finishTask,
+  gatherChoice,
   pickFile,
   deleteFolder,
   moveFile,
@@ -1286,6 +1287,23 @@ export function FileBrowser({
                     </button>
                   ))}
                 </div>
+              ) : null}
+              {/* Sent before choices were gathered automatically: no "Chosen by …" folder yet. */}
+              {choosing && task.done && rights.change && via.as === "studio" && ![listing.folder, ...listing.folders].some((f) => f?.name.startsWith("Chosen by")) ? (
+                <Button
+                  variant="secondary"
+                  className="min-h-11"
+                  loading={pending}
+                  onClick={() =>
+                    run(async () => {
+                      const res = await gatherChoice(task.id);
+                      if (res.ok) router.push(`${href(res.data)}&task=${task.id}`);
+                      return res;
+                    })
+                  }
+                >
+                  Put the chosen in a folder
+                </Button>
               ) : null}
               {choosing ? (
                 <Button variant="secondary" className="min-h-11" onClick={copyForLightroom}>
