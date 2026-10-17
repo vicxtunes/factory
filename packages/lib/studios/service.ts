@@ -2,20 +2,37 @@
 // runs on any store (tests use an in-memory one, ./service.test.ts).
 // Callers check who's asking and parse the input first (./actions.ts).
 
-import { readableBrandColor, type Studio, type StudioListing, type StudioOwner, type StudioProfile } from "./core";
-import type { StudioStore } from "./ports";
+import { readableBrandColor, vendorCategory, type BusinessKind, type OwnedBusinesses, type Studio, type StudioListing, type StudioOwner, type StudioProfile } from "./core";
+import { StudioError, type StudioStore } from "./ports";
 
 export class StudioService {
   constructor(private readonly store: StudioStore) {}
 
-  /** The owner's studio, created the first time they open it. */
-  async open(owner: StudioOwner): Promise<Studio> {
-    return (await this.store.findByOwner(owner.clientId)) ?? this.store.create(owner);
+  /**
+   * The owner's business of a kind, created the first time they open it (a
+   * vendor with its category). A studio is what an account starts with.
+   */
+  async open(owner: StudioOwner, kind: BusinessKind = "studio", category: string | null = null): Promise<Studio> {
+    const mine = (await this.store.findByOwner(owner.clientId)).find((b) => b.kind === kind);
+    if (mine) return mine;
+    if (kind === "vendor" && !vendorCategory(category)) throw new StudioError("Choose what your business does.");
+    return this.store.create(owner, kind, kind === "vendor" ? category : null);
   }
 
-  /** The client's studio, if they've opened one (none is created). */
-  async owned(clientId: string): Promise<Studio | null> {
-    return this.store.findByOwner(clientId);
+  /** The account's businesses, if it has opened any (none is created). */
+  async owned(clientId: string): Promise<OwnedBusinesses> {
+    const all = await this.store.findByOwner(clientId);
+    return { studio: all.find((b) => b.kind === "studio") ?? null, vendor: all.find((b) => b.kind === "vendor") ?? null };
+  }
+
+  /**
+   * Changes what a business is, while it's being set up (the caller checks
+   * its status and that it's the caller's own): a studio, or a vendor and
+   * its category.
+   */
+  async setKind(studioId: string, kind: BusinessKind, category: string | null): Promise<Studio> {
+    if (kind === "vendor" && !vendorCategory(category)) throw new StudioError("Choose what your business does.");
+    return this.store.setKind(studioId, kind, kind === "vendor" ? category : null);
   }
 
   /**

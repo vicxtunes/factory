@@ -7,11 +7,13 @@ import "server-only";
 import { createAdminClient } from "@repo/lib/supabase/admin";
 
 import type { Studio, StudioListing } from "../../core/model";
-import type { StudioStore } from "../../ports";
+import { StudioError, type StudioStore } from "../../ports";
 
 interface Row {
   id: string;
   owner_client_id: string;
+  kind: Studio["kind"];
+  vendor_category: string | null;
   name: string;
   phone: string | null;
   email: string | null;
@@ -27,11 +29,13 @@ interface Row {
   brand_color: string | null;
 }
 
-const COLUMNS = "id, owner_client_id, name, phone, email, address, latitude, longitude, currency, locale, time_zone, created_at, status, logo_key, brand_color";
+const COLUMNS = "id, owner_client_id, kind, vendor_category, name, phone, email, address, latitude, longitude, currency, locale, time_zone, created_at, status, logo_key, brand_color";
 
 const toStudio = (r: Row): Studio => ({
   id: r.id,
   ownerClientId: r.owner_client_id,
+  kind: r.kind,
+  vendorCategory: r.vendor_category,
   name: r.name,
   phone: r.phone,
   email: r.email,
@@ -61,24 +65,37 @@ const studios = () => createAdminClient().from("tenants").select(COLUMNS).not("o
 
 export const supabaseStudioStore: StudioStore = {
   async findByOwner(clientId) {
-    const { data, error } = await studios().eq("owner_client_id", clientId).maybeSingle<Row>();
+    const { data, error } = await studios().eq("owner_client_id", clientId).order("created_at").returns<Row[]>();
     if (error) fail("load the business", error);
-    return data ? toStudio(data) : null;
+    return data.map(toStudio);
   },
 
-  async create(owner) {
+  async create(owner, kind, vendorCategory) {
     const { data, error } = await createAdminClient()
       .from("tenants")
-      .insert({ owner_client_id: owner.clientId, name: owner.name })
+      .insert({ owner_client_id: owner.clientId, name: owner.name, kind, vendor_category: vendorCategory })
       .select(COLUMNS)
       .single<Row>();
     if (data) return toStudio(data);
     // Opened twice at once: the other request created it first.
     if (error?.code === UNIQUE_VIOLATION) {
-      const existing = await this.findByOwner(owner.clientId);
+      const existing = (await this.findByOwner(owner.clientId)).find((b) => b.kind === kind);
       if (existing) return existing;
     }
     fail("create the business", error ?? { message: "no row returned" });
+  },
+
+  async setKind(id, kind, vendorCategory) {
+    const { data, error } = await createAdminClient()
+      .from("tenants")
+      .update({ kind, vendor_category: vendorCategory })
+      .eq("id", id)
+      .not("owner_client_id", "is", null)
+      .select(COLUMNS)
+      .single<Row>();
+    if (error?.code === UNIQUE_VIOLATION) throw new StudioError(`You already have a ${kind === "vendor" ? "vendor business" : "studio"}: switch to it from the business menu.`);
+    if (error) fail("save what the business is", error);
+    return toStudio(data);
   },
 
   async updateProfile(id, profile) {

@@ -8,8 +8,6 @@ import type { BusinessEntryKind, PaymentMethod, PaymentStatus, WalletEntryKind }
 export const MIN_DEPOSIT = 1_000;
 /** Largest single deposit (UGX). A sanity cap on typos, not a business limit; raise if needed. */
 export const MAX_DEPOSIT = 100_000_000;
-/** Aming's share of every customer payment collected for a business. The database takes it (provider_collection_settle()); this only words it. */
-export const COLLECTION_FEE_PERCENT = 5;
 /** A withdrawal from a Business card (UGX) goes out through HivePay, within its limits per payout. */
 export const MIN_WITHDRAWAL = 500;
 export const MAX_WITHDRAWAL = 5_000_000;
