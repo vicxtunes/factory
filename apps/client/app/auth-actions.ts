@@ -136,6 +136,17 @@ async function findClient(admin: Admin, method: Method, identifier: string): Pro
   return (await findClients(admin, method, identifier))[0] ?? null;
 }
 
+/**
+ * Whether a new account can't have this email: a client or studio owner has
+ * it, or any sign-in does (Aming's staff too). Sign-up never takes over one.
+ */
+async function emailInUse(admin: Admin, email: string): Promise<boolean> {
+  if (await findClient(admin, "email", email)) return true;
+  const { data, error } = await admin.rpc("sign_in_email_taken", { p_email: email });
+  if (error) throw new Error(`client login: checking the email failed: ${error.message}`);
+  return data === true;
+}
+
 async function emailTakenByOtherClient(admin: Admin, email: string, clientId: string | null): Promise<boolean> {
   const hits = await findClientCandidates(admin, { email, excludeId: clientId });
   return hits.some((c) => c.match_reason === "email");
@@ -296,25 +307,37 @@ export async function startSignUp(input: { name: string; email: string; phone: s
   if (!phone.ok) return { ok: false, error: phone.error };
 
   const admin = createAdminClient();
-  if ((await findClient(admin, "phone", phone.store)) || (await findClient(admin, "email", email))) {
+  if ((await findClient(admin, "phone", phone.store)) || (await emailInUse(admin, email))) {
     return { ok: false, error: "There's already an account with that phone number or email. Sign in, or reset your password." };
   }
   return sendCode({ purpose: "signup", email, phone: phone.store, clientId: null, name });
 }
 
-/** Vendor sign-up: name and email (no phone); the code verifies the email. The password comes with the code (finishVendorSignUp). */
-export async function startVendorSignUp(input: { name: string; email: string; password: string; confirm: string }): Promise<AuthStep> {
+/**
+ * Vendor sign-up's contact screen: their name, an email and maybe a phone no
+ * account has yet. Checked as they leave it, and again before the code goes.
+ */
+export async function checkVendorContact(input: { name: string; email: string; phone: string }): Promise<{ ok: true; email: string; phone: string | null; name: string } | { ok: false; error: string }> {
   const checked = checkName(input.name);
   if (!checked.ok) return checked;
   const email = cleanEmail(input.email);
   if (!email) return { ok: false, error: "Enter a valid email address." };
+  const phone = input.phone.trim() ? parsePhone(input.phone) : null;
+  if (phone && !phone.ok) return { ok: false, error: phone.error };
+  const admin = createAdminClient();
+  if (await emailInUse(admin, email)) return { ok: false, error: "That email already has an account. Log in instead, or use another email." };
+  if (phone && (await findClient(admin, "phone", phone.store))) return { ok: false, error: "That phone number already has an account. Log in instead, or leave it out." };
+  return { ok: true, email, phone: phone?.store ?? null, name: checked.name };
+}
+
+/** Vendor sign-up: the contact details and a password; the code verifies the email. The password comes again with the code (finishVendorSignUp). */
+export async function startVendorSignUp(input: { name: string; email: string; phone: string; password: string; confirm: string }): Promise<AuthStep> {
+  const contact = await checkVendorContact(input);
+  if (!contact.ok) return contact;
   // Checked now as well as at the end, so a bad password is caught before the email.
   const passwordError = checkPassword(input);
   if (passwordError) return { ok: false, error: passwordError };
-  if (await findClient(createAdminClient(), "email", email)) {
-    return { ok: false, error: "There's already an account with that email. Log in instead, or reset your password." };
-  }
-  return sendCode({ purpose: "signup", email, phone: null, clientId: null, name: checked.name });
+  return sendCode({ purpose: "signup", email: contact.email, phone: contact.phone, clientId: null, name: contact.name });
 }
 
 /**
@@ -398,6 +421,7 @@ export async function finishVendorSignUp(input: { code: string; password: string
   if (passwordError) return { ok: false, error: passwordError };
   const codeError = await checkCode(flow, input.code);
   if (codeError) return { ok: false, error: codeError };
+  if (await emailInUse(createAdminClient(), flow.email)) return { ok: false, error: "That email already has an account. Log in instead." };
   return finishAccount(flow, input.password);
 }
 

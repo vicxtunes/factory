@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { NewAlbumForm } from "@repo/ui/photos/AlbumControls";
 import { UsageBar } from "@repo/ui/photos/UsageBar";
+import { ShowOnAming } from "@repo/ui/studios/ShowOnAming";
 import { Skeleton } from "@repo/ui/Skeleton";
 import { ProductGridSkeleton } from "@repo/ui/skeletons/blocks";
 import { Loading } from "@repo/ui/skeletons/Loading";
@@ -13,12 +14,13 @@ import type { TenantScope } from "@repo/lib/tenancy/types";
 export const metadata = { title: "Showroom · My Business" };
 
 export default async function StudioShowroomPage() {
-  const { scope } = await requireStudio("catalog");
+  const { scope, studio, access } = await requireStudio("catalog");
   return (
     <>
       <p className="text-sm text-muted">
         Your best work, in albums. Public albums show on your business&apos;s page in a 3D showroom, and each has its own address to share.
       </p>
+      {access.owner ? <ShowOnAming on={studio.showOnAming} /> : null}
       <Suspense fallback={<Skeleton className="h-6 w-full" />}>
         <Usage scope={scope} />
       </Suspense>

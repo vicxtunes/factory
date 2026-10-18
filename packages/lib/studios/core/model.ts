@@ -6,7 +6,7 @@
 
 import type { StudioStatus } from "@repo/lib/studio-access/core";
 
-import type { BusinessKind } from "./kinds";
+import type { BusinessKind, SocialNetwork } from "./kinds";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
 /** A point on the map. */
@@ -43,7 +43,21 @@ export interface Studio extends StudioProfile {
   logoKey: string | null;
   /** Its public pages' color (core/brand.ts), already readable; null until chosen. */
   brandColor: string | null;
+  /** Its public albums and services show in the feed on Aming's front page (it opts in). */
+  showOnAming: boolean;
+  /** A vendor's answers at sign-up; null for a studio, or a vendor that joined before. */
+  vendorProfile: VendorProfile | null;
   /** When the studio password was set: a device's unlock must carry the same. */
+}
+
+/** Who a vendor is and what they offer (sign-up's questions, /vendors/join). */
+export interface VendorProfile {
+  /** A freelancer on their own, or a company or team. */
+  as: "individual" | "business";
+  /** What they offer: from VENDOR_SKILLS, or their own words. */
+  skills: string[];
+  /** Plain handles (and a website without its scheme), by network. */
+  socials: Partial<Record<SocialNetwork, string>>;
 }
 
 /** The scope every studio-owned record is read and written in. */
