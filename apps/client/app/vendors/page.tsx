@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { HomeGreeting, HomeHero, HomeSection } from "@repo/ui/home/HomeBits";
@@ -92,18 +91,7 @@ function MyVendorHome({ owner, vendor }: { owner: string; vendor: Vendor }) {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <div className="flex">
-        <Sidebar
-          name={vendor.name}
-          label={label}
-          footer={
-            <>
-              <Link href="/?client=1" className="block rounded-lg px-3 py-2 text-sm font-medium text-muted hover:bg-background hover:text-foreground">
-                My orders &amp; bookings
-              </Link>
-              <LogOut />
-            </>
-          }
-        />
+        <Sidebar name={vendor.name} label={label} footer={<LogOut />} />
         <main className="mx-auto w-full max-w-3xl space-y-8 px-4 py-6 sm:px-6 lg:py-8">
           <div className="flex items-start justify-between gap-3">
             <HomeGreeting name={owner} avatarUrl={null} subtitle={`${vendor.name} · ${label}`} />
