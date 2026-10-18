@@ -159,6 +159,9 @@ export default async function VendorsPage({ searchParams }: { searchParams: Prom
             </Link>
           ))}
         </span>
+        <Link href="/vendors/join" className="rounded-full bg-brand-500 px-3 py-1 text-xs font-semibold text-white hover:bg-brand-600">
+          Join as a vendor
+        </Link>
       </div>
 
       <div className="flex">
