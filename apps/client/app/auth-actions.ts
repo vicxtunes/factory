@@ -29,6 +29,10 @@ import { linkClient, openSession, signInRemembered } from "./sign-in";
 //   Sign in          email or phone + password  → code to the email on file → in
 //   Create account   name, email, phone          → code → choose a password  → in
 //   Forgot password  email or phone              → code → new password       → in
+//   Vendor sign-up   name, email, password       → code                      → in
+//                    (/vendors/join: the password stays in the browser until the
+//                    code is in, then both come together; it opens their vendor
+//                    business next)
 //
 // "Forgot password" is also how an older account (phone only, no password)
 // sets its first one; with no email on file it adds one, verified by the code.
@@ -270,13 +274,22 @@ export async function signIn(input: { method: Method; identifier: string; passwo
   return { ok: false, error: inactive ? "This account is inactive — contact us for help." : wrong };
 }
 
-/** Create account: name, email and phone; the code verifies the email, then they choose a password. */
-export async function startSignUp(input: { name: string; email: string; phone: string }): Promise<AuthStep> {
-  // Their full name or studio name, so reception knows who they're dealing
-  // with. At least two letters, so a number or "." won't do.
-  const name = input.name.trim().replace(/\s+/g, " ");
+/**
+ * Their full name or studio name, so reception knows who they're dealing
+ * with. At least two letters, so a number or "." won't do.
+ */
+function checkName(input: string): { ok: true; name: string } | { ok: false; error: string } {
+  const name = input.trim().replace(/\s+/g, " ");
   if ((name.match(/\p{L}/gu)?.length ?? 0) < 2) return { ok: false, error: "Enter your full name or business name." };
   if (name.length > NAME_MAX) return { ok: false, error: `Name must be ${NAME_MAX} characters or fewer.` };
+  return { ok: true, name };
+}
+
+/** Create account: name, email and phone; the code verifies the email, then they choose a password. */
+export async function startSignUp(input: { name: string; email: string; phone: string }): Promise<AuthStep> {
+  const checked = checkName(input.name);
+  if (!checked.ok) return checked;
+  const { name } = checked;
   const email = cleanEmail(input.email);
   if (!email) return { ok: false, error: "Enter a valid email address." };
   const phone = parsePhone(input.phone);
@@ -287,6 +300,21 @@ export async function startSignUp(input: { name: string; email: string; phone: s
     return { ok: false, error: "There's already an account with that phone number or email. Sign in, or reset your password." };
   }
   return sendCode({ purpose: "signup", email, phone: phone.store, clientId: null, name });
+}
+
+/** Vendor sign-up: name and email (no phone); the code verifies the email. The password comes with the code (finishVendorSignUp). */
+export async function startVendorSignUp(input: { name: string; email: string; password: string; confirm: string }): Promise<AuthStep> {
+  const checked = checkName(input.name);
+  if (!checked.ok) return checked;
+  const email = cleanEmail(input.email);
+  if (!email) return { ok: false, error: "Enter a valid email address." };
+  // Checked now as well as at the end, so a bad password is caught before the email.
+  const passwordError = checkPassword(input);
+  if (passwordError) return { ok: false, error: passwordError };
+  if (await findClient(createAdminClient(), "email", email)) {
+    return { ok: false, error: "There's already an account with that email. Log in instead, or reset your password." };
+  }
+  return sendCode({ purpose: "signup", email, phone: null, clientId: null, name: checked.name });
 }
 
 /**
@@ -316,19 +344,25 @@ export async function startReset(input: { method: Method; identifier: string; em
 
 // --- Step 2: the emailed code ---------------------------------------------------
 
+/** Whether the code is the one emailed in this flow: what to tell them when it isn't, else null. Wrong ones are counted. */
+async function checkCode(flow: Flow, code: string): Promise<string | null> {
+  const codeKey = `login-code:${flow.nonce}`;
+  const tooMany = "Too many wrong codes. Ask for a new one.";
+  if (await tooManyAttempts(codeKey)) return tooMany;
+  const given = Buffer.from(hashCode(flow.nonce, flow.email, code.replace(/\s/g, "")));
+  const expected = Buffer.from(flow.codeHash);
+  if (given.length !== expected.length || !timingSafeEqual(given, expected)) {
+    return (await countAttempt(codeKey)) ? tooMany : "That code is wrong. Check the email and try again.";
+  }
+  return null;
+}
+
 /** Checks the code. Signing in finishes here; sign up and reset go on to choose a password. */
 export async function verifyCode(code: string): Promise<AuthStep> {
   const flow = await currentFlow();
   if (!flow || flow.verified) return { ok: false, error: "That code has expired — start again." };
-
-  const codeKey = `login-code:${flow.nonce}`;
-  const tooMany = "Too many wrong codes. Ask for a new one.";
-  if (await tooManyAttempts(codeKey)) return { ok: false, error: tooMany };
-  const given = Buffer.from(hashCode(flow.nonce, flow.email, code.replace(/\s/g, "")));
-  const expected = Buffer.from(flow.codeHash);
-  if (given.length !== expected.length || !timingSafeEqual(given, expected)) {
-    return { ok: false, error: (await countAttempt(codeKey)) ? tooMany : "That code is wrong. Check the email and try again." };
-  }
+  const codeError = await checkCode(flow, code);
+  if (codeError) return { ok: false, error: codeError };
 
   if (flow.purpose !== "signin") {
     await saveFlow({ ...flow, verified: true });
@@ -351,12 +385,34 @@ export async function verifyCode(code: string): Promise<AuthStep> {
 export async function choosePassword(input: { password: string; confirm: string }): Promise<AuthStep> {
   const flow = await currentFlow();
   if (!flow?.verified) return { ok: false, error: "That sign-in has expired — start again." };
-  if (input.password.length < PASSWORD_MIN) return { ok: false, error: `Use at least ${PASSWORD_MIN} characters.` };
-  if (input.password.length > PASSWORD_MAX) return { ok: false, error: `Keep the password under ${PASSWORD_MAX} characters.` };
-  if (input.password !== input.confirm) return { ok: false, error: "The two passwords don't match." };
+  const passwordError = checkPassword(input);
+  if (passwordError) return { ok: false, error: passwordError };
+  return finishAccount(flow, input.password);
+}
 
+/** Vendor sign-up's last step: the emailed code and the password chosen at the start; makes the account and signs in. */
+export async function finishVendorSignUp(input: { code: string; password: string; confirm: string }): Promise<AuthStep> {
+  const flow = await currentFlow();
+  if (!flow || flow.verified || flow.purpose !== "signup") return { ok: false, error: "That code has expired — start again." };
+  const passwordError = checkPassword(input);
+  if (passwordError) return { ok: false, error: passwordError };
+  const codeError = await checkCode(flow, input.code);
+  if (codeError) return { ok: false, error: codeError };
+  return finishAccount(flow, input.password);
+}
+
+/** What's wrong with a new password, or null. */
+function checkPassword(input: { password: string; confirm: string }): string | null {
+  if (input.password.length < PASSWORD_MIN) return `Use at least ${PASSWORD_MIN} characters.`;
+  if (input.password.length > PASSWORD_MAX) return `Keep the password under ${PASSWORD_MAX} characters.`;
+  if (input.password !== input.confirm) return "The two passwords don't match.";
+  return null;
+}
+
+/** Sets the password, creates the account (sign up) or saves its first email (reset), and signs in. The email is verified. */
+async function finishAccount(flow: Flow, password: string): Promise<AuthStep> {
   // The password first: if Supabase refuses it, nothing else has changed yet.
-  const passwordError = await setAuthPassword(flow.email, input.password);
+  const passwordError = await setAuthPassword(flow.email, password);
   if (passwordError) return { ok: false, error: passwordError };
 
   const admin = createAdminClient();
