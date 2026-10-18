@@ -5,7 +5,7 @@
 // Changing what the terms say: edit the sections and raise the version. Every
 // business is then asked to agree again, and until it does its card is off.
 
-import { MAX_WITHDRAWAL, MIN_WITHDRAWAL } from "./policy";
+import { COLLECTION_FEE_PERCENT, MAX_WITHDRAWAL, MIN_WITHDRAWAL } from "./policy";
 
 export const WALLET_TERMS_VERSION = 2;
 
@@ -14,8 +14,7 @@ export interface TermsSection {
   points: string[];
 }
 
-/** The terms for a business whose customer payments pay Aming `feePercent` (5 for a studio, 10 for a vendor). */
-export const walletTerms = (feePercent: number): TermsSection[] => [
+export const WALLET_TERMS: TermsSection[] = [
   {
     title: "What these terms cover",
     points: [
@@ -44,7 +43,7 @@ export const walletTerms = (feePercent: number): TermsSection[] => [
   {
     title: "Fees",
     points: [
-      `Aming keeps ${feePercent}% of each payment your customers make to your business in the app. The whole payment and the fee both show in your card's history, and the rest stays on your card.`,
+      `Aming keeps ${COLLECTION_FEE_PERCENT / 100} of each collection made for your business (${COLLECTION_FEE_PERCENT}%). The whole payment and the fee both show in your card's history, and the rest stays on your card.`,
       "Our mobile money provider's fee for sending a withdrawal comes off what you receive, and is shown with the withdrawal once it's sent.",
       "We'll tell you before a fee is introduced or changed.",
     ],

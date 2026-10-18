@@ -36,7 +36,7 @@ test("the feed takes turns between businesses, keeping each one's order", () => 
     href: `/${business}/gallery/${id}`,
     coverUrl: "",
     photoCount: 1,
-    business: { id: business, name: business, slug: business, logoUrl: null, brandColor: null, kind: "studio", vendorCategory: null },
+    business: { id: business, name: business, slug: business, logoUrl: null, brandColor: null },
   });
   const feed = mixFeed([item("a", "a1"), item("a", "a2"), item("a", "a3"), item("b", "b1"), item("c", "c1"), item("c", "c2")]);
   assert.deepEqual(

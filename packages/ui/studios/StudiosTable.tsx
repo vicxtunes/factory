@@ -1,10 +1,10 @@
 import Link from "next/link";
 
 import { StudioStatusBadge } from "@repo/ui/studio-access/StatusBadge";
-import { businessKindLabel, type StudioListing } from "@repo/lib/studios/core";
+import type { StudioListing } from "@repo/lib/studios/core";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
-/** Every business on the platform (photography studios and vendors), for the boss. */
+/** Every studio on the platform, for the boss. */
 export function StudiosTable({ studios, scope }: { studios: StudioListing[]; scope: Pick<TenantScope, "locale" | "timeZone"> }) {
   if (studios.length === 0) {
     return (
@@ -21,7 +21,6 @@ export function StudiosTable({ studios, scope }: { studios: StudioListing[]; sco
         <thead>
           <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted">
             <th className="px-4 py-2 font-medium">Business</th>
-            <th className="px-4 py-2 font-medium">Kind</th>
             <th className="px-4 py-2 font-medium">Status</th>
             <th className="px-4 py-2 font-medium">Owner</th>
             <th className="px-4 py-2 font-medium">Contact</th>
@@ -35,11 +34,6 @@ export function StudiosTable({ studios, scope }: { studios: StudioListing[]; sco
                 <Link href={`/dashboard/studios/${s.id}`} className="font-medium hover:underline">
                   {s.name}
                 </Link>
-              </td>
-              <td className="px-4 py-2 whitespace-nowrap">
-                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${s.kind === "vendor" ? "bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-300" : "bg-background text-muted"}`}>
-                  {businessKindLabel(s.kind, s.vendorCategory)}
-                </span>
               </td>
               <td className="px-4 py-2">
                 <StudioStatusBadge status={s.status} />

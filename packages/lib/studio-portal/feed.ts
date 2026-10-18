@@ -28,7 +28,7 @@ async function businessFeed(studio: Studio): Promise<FeedItem[]> {
       offerings.showroom(scope, "service"),
     ]);
     if (!slug) return [];
-    const business = { id: studio.id, name: studio.name, slug, logoUrl, brandColor: studio.brandColor, kind: studio.kind, vendorCategory: studio.vendorCategory };
+    const business = { id: studio.id, name: studio.name, slug, logoUrl, brandColor: studio.brandColor };
     const services = await Promise.all(
       showroom.flatMap((c) => c.services).map(async (s) => ({ service: s, album: await photos.serviceGallery(scope, s.id) })),
     );

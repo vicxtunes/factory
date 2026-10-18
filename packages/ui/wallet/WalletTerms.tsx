@@ -9,12 +9,11 @@ import { useState, useTransition } from "react";
 
 import { Button } from "@repo/ui/Button";
 import { acceptWalletTerms } from "@repo/lib/wallet/actions";
-import { walletTerms } from "@repo/lib/wallet/terms";
+import { WALLET_TERMS } from "@repo/lib/wallet/terms";
 
 import { TILE } from "./MoneyCards";
 
-/** `feePercent`: what Aming keeps of this business's customer payments (its kind's rate). */
-export function WalletTerms({ owner, feePercent }: { owner: boolean; feePercent: number }) {
+export function WalletTerms({ owner }: { owner: boolean }) {
   const router = useRouter();
   const [agreed, setAgreed] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -31,7 +30,7 @@ export function WalletTerms({ owner, feePercent }: { owner: boolean; feePercent:
           : "This business's wallet is off until its owner agrees to these. Until then its customers aren't offered mobile money in the app."}
       </p>
       <ol className="mt-5 space-y-4">
-        {walletTerms(feePercent).map((section, i) => (
+        {WALLET_TERMS.map((section, i) => (
           <li key={section.title}>
             <h3 className="text-sm font-semibold">
               {i + 1}. {section.title}
