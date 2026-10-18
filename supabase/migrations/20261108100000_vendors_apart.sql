@@ -28,19 +28,8 @@ create table vendors (
 -- The server only (service role).
 alter table vendors enable row level security;
 
--- Vendors who joined as businesses (20261106100000) move here. Checked
--- beforehand: the one there is (a test) has no records in any business table.
-insert into vendors (client_id, name, kind, category, skills, socials, created_at)
-select t.owner_client_id,
-       t.name,
-       coalesce(t.vendor_profile ->> 'as', 'individual'),
-       t.vendor_category,
-       coalesce(array(select jsonb_array_elements_text(t.vendor_profile -> 'skills')), '{}'),
-       coalesce(t.vendor_profile -> 'socials', '{}'),
-       t.created_at
-  from tenants t
- where t.kind = 'vendor';
-
+-- The vendor that joined as a business (20261106100000) was a test, with no
+-- records in any business table (checked beforehand): it goes, not moved.
 delete from tenants where kind = 'vendor';
 
 -- ── Businesses are studios again ───────────────────────────────────────────
