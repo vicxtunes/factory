@@ -2,6 +2,5 @@
 // imports (enforced by eslint.config.mjs).
 
 export * from "./brand";
-export * from "./kinds";
 export * from "./model";
 export * from "./schema";

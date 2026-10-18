@@ -1,3 +1,5 @@
+import { redirect } from "next/navigation";
+
 import { BannerSkeleton, ChartsSkeleton, ChipRowSkeleton, StatTilesSkeleton } from "@repo/ui/skeletons/blocks";
 import { Loading } from "@repo/ui/skeletons/Loading";
 import { OwingBanner } from "@repo/ui/invoices/OwingBanner";
@@ -7,6 +9,7 @@ import { getMyOwing } from "@repo/lib/invoices/actions";
 import { isOptionCategory } from "@repo/lib/catalog-options";
 import { fetchClientItems, fetchMarketingSlides, fetchProductCatalog } from "@repo/lib/queries";
 import { STUDIOS_ENABLED } from "@repo/lib/studios/feature";
+import { vendors } from "@repo/lib/vendors/server";
 import { getMyWalletSummary } from "@repo/lib/wallet/actions";
 
 import { ClientDashboard } from "./dashboard";
@@ -20,7 +23,7 @@ import { SignInOverlay } from "./sign-in-overlay";
 export default async function ClientSidePage({
   searchParams,
 }: {
-  searchParams: Promise<{ signin?: string }>;
+  searchParams: Promise<{ signin?: string; client?: string }>;
 }) {
   const session = await getClientSession();
 
@@ -34,6 +37,9 @@ export default async function ClientSidePage({
     if (!params.signin && !(await rememberedClient())) return front;
     return <SignInOverlay behind={front} />;
   }
+
+  // A vendor's account opens on its vendor side; its client side is one link away (?client=1).
+  if (!(await searchParams).client && (await vendors.mine(session.client_id))) redirect("/vendors");
 
   return (
     <ClientShell signedIn name={session.name} avatarUrl={session.avatarUrl}>

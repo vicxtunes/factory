@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { contrastWithWhite, type Studio, type StudioListing } from "./core";
-import { StudioError, type StudioStore } from "./ports";
+import type { StudioStore } from "./ports";
 import { StudioService } from "./service";
 
 // The service against an in-memory StudioStore: no database needed.
@@ -12,13 +12,11 @@ function memoryStore() {
   let clock = 0;
   const listing = (s: Studio): StudioListing => ({ ...s, ownerName: `client ${s.ownerClientId}` });
   const store: StudioStore = {
-    findByOwner: async (clientId) => [...rows.values()].filter((s) => s.ownerClientId === clientId),
-    create: async (owner, kind, vendorCategory) => {
+    findByOwner: async (clientId) => [...rows.values()].find((s) => s.ownerClientId === clientId) ?? null,
+    create: async (owner) => {
       const studio: Studio = {
         id: `t${rows.size + 1}`,
         ownerClientId: owner.clientId,
-        kind,
-        vendorCategory,
         name: owner.name,
         phone: null,
         email: null,
@@ -32,7 +30,6 @@ function memoryStore() {
         logoKey: null,
         brandColor: null,
         showOnAming: false,
-        vendorProfile: null,
       };
       rows.set(studio.id, studio);
       return studio;
@@ -47,22 +44,10 @@ function memoryStore() {
       rows.set(id, studio);
       return studio;
     },
-    setVendorProfile: async (id, name, vendorProfile) => {
-      const studio = { ...rows.get(id)!, vendorProfile, ...(name ? { name } : {}) };
-      rows.set(id, studio);
-      return studio;
-    },
     setShowOnAming: async (id, showOnAming) => {
       const studio = { ...rows.get(id)!, showOnAming };
       rows.set(id, studio);
       return studio;
-    },
-    setKind: async (id, kind, vendorCategory) => {
-      const studio = rows.get(id)!;
-      if ([...rows.values()].some((s) => s.id !== id && s.ownerClientId === studio.ownerClientId && s.kind === kind)) throw new StudioError("You already have one.");
-      const changed = { ...studio, kind, vendorCategory };
-      rows.set(id, changed);
-      return changed;
     },
     list: async () => [...rows.values()].map(listing),
     get: async (id) => (rows.has(id) ? listing(rows.get(id)!) : null),
@@ -117,48 +102,4 @@ test("the boss's list is newest first", async () => {
   await service.open(amina);
   await service.open(brian);
   assert.deepEqual((await service.list()).map((s) => s.ownerClientId), ["c-brian", "c-amina"]);
-});
-
-test("an account owns a studio and a vendor business at most, each opened once; a vendor needs its category", async () => {
-  const { store, rows } = memoryStore();
-  const service = new StudioService(store);
-  const studio = await service.open(amina);
-  await assert.rejects(service.open(amina, "vendor", null), /what your business does/);
-  await assert.rejects(service.open(amina, "vendor", "astronaut"), /what your business does/);
-  const vendor = await service.open(amina, "vendor", "videographer");
-  assert.deepEqual([studio.kind, vendor.kind, vendor.vendorCategory], ["studio", "vendor", "videographer"]);
-  assert.equal((await service.open(amina, "vendor", "decor")).id, vendor.id, "the same vendor business, not a second");
-  assert.deepEqual(await service.owned(amina.clientId), { studio, vendor });
-  assert.deepEqual(await service.owned(brian.clientId), { studio: null, vendor: null });
-  assert.equal(rows.size, 2);
-});
-
-test("while setting up, a business can become the other kind, unless the owner has one of that kind", async () => {
-  const { store } = memoryStore();
-  const service = new StudioService(store);
-  const first = await service.open(brian);
-  const editor = await service.setKind(first.id, "vendor", "photo_editor");
-  assert.deepEqual([editor.kind, editor.vendorCategory], ["vendor", "photo_editor"]);
-  assert.deepEqual([(await service.setKind(first.id, "studio", "decor")).vendorCategory], [null], "a studio has no category");
-  await service.setKind(first.id, "vendor", "photo_editor");
-  await service.open(brian, "studio");
-  await assert.rejects(service.setKind(first.id, "studio", null), /already have one/);
-  await assert.rejects(service.setKind(first.id, "vendor", "nope"), /what your business does/);
-});
-
-test("a vendor joins with its answers, named as it chose; one past set-up keeps what it is", async () => {
-  const { store, rows } = memoryStore();
-  const service = new StudioService(store);
-  const owner = { clientId: "c9", name: "Kato Brian" };
-  const profile = { as: "business" as const, skills: ["Colour correction"], socials: { instagram: "kato.edits" } };
-  const vendor = await service.joinAsVendor(owner, { category: "photo_editor", businessName: "Kato Edits", profile });
-  assert.equal(vendor.kind, "vendor");
-  assert.equal(vendor.vendorCategory, "photo_editor");
-  assert.equal(vendor.name, "Kato Edits");
-  assert.deepEqual(vendor.vendorProfile, profile);
-
-  rows.set(vendor.id, { ...rows.get(vendor.id)!, status: "active" });
-  const again = await service.joinAsVendor(owner, { category: "photo_editor", businessName: "Other", profile: { ...profile, skills: ["Culling"] } });
-  assert.equal(again.name, "Kato Edits");
-  assert.deepEqual(again.vendorProfile, profile);
 });

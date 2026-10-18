@@ -2,8 +2,6 @@
 // show it (tenants.show_on_aming). Each tile is a public album or a service
 // with photos, and opens that business's page for it. Pure.
 
-import type { BusinessKind } from "@repo/lib/studios/core";
-
 export interface FeedItem {
   /** The album's id: unique across the feed. */
   id: string;
@@ -19,8 +17,6 @@ export interface FeedItem {
     slug: string;
     logoUrl: string | null;
     brandColor: string | null;
-    kind: BusinessKind;
-    vendorCategory: string | null;
   };
 }
 

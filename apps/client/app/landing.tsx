@@ -59,7 +59,7 @@ export async function Landing() {
       <main>
         <section className="mx-auto max-w-[1600px] px-4 pt-6 pb-4 sm:px-6 sm:pt-10">
           <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">Discover photographers and the people who work with them.</h1>
-          <p className="mt-2 max-w-2xl text-muted">Albums and services from studios, photo editors and videographers on Aming. Open one to see more and book.</p>
+          <p className="mt-2 max-w-2xl text-muted">Albums and services from photographers and studios on Aming. Open one to see more and book.</p>
         </section>
 
         <ExploreFeed items={feed} />
