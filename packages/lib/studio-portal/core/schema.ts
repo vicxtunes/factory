@@ -4,13 +4,14 @@ import { z } from "zod";
 
 import { parsePhone } from "@repo/lib/kernel/core";
 
-import { SLUG_PATTERN } from "./rules";
+import { RESERVED_SLUGS, SLUG_PATTERN } from "./rules";
 
 export const slugSchema = z
   .string("Choose an address.")
   .trim()
   .toLowerCase()
-  .regex(SLUG_PATTERN, "Use 3–40 lowercase letters, numbers and hyphens, e.g. amina-studio.");
+  .regex(SLUG_PATTERN, "Use 3–40 lowercase letters, numbers and hyphens, e.g. amina-studio.")
+  .refine((slug) => !RESERVED_SLUGS.has(slug), "That address is Aming's own: choose another.");
 
 /** A set-up link's secret as made by the server: base64url, 43 characters for 32 bytes. */
 export const inviteTokenSchema = z.string().regex(/^[A-Za-z0-9_-]{32,128}$/, "This link isn't valid.");

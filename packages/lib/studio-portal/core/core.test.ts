@@ -18,6 +18,9 @@ test("slug rules", () => {
   for (const bad of ["ab", "-amina", "amina-", "amina studio", "amina_studio", "x".repeat(41)]) {
     assert.throws(() => parseInput(slugSchema, bad), /lowercase letters/, bad);
   }
+  // The app's own pages' addresses can't be a business's.
+  for (const taken of ["vendors", "studio", "Orders"]) assert.throws(() => parseInput(slugSchema, taken), /Aming's own/, taken);
+  assert.equal(slugFromName("Studio"), "studio-business");
 });
 
 test("phones are stored in one form", () => {
