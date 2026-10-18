@@ -48,7 +48,7 @@ export const STUDIO_CHOICE_COOKIE = "studio_as";
 
 const ownerOf = (session: ClientSession): StudioOwner => ({ clientId: session.client_id, name: session.name });
 
-/** The businesses an account can open: its own (a studio and a vendor business, at most) and the ones it works for (active ones only). */
+/** The businesses an account can open: its own (if it has one) and the ones it works for (active ones only). */
 export const studiosOf = cache(async (clientId: string) => {
   const [owned, memberships] = await Promise.all([studios.owned(clientId), team.membershipsOf(clientId)]);
   const working = (await Promise.all(memberships.map(async (m) => ({ membership: m, studio: await studios.get(m.tenantId) })))).filter(
@@ -58,25 +58,22 @@ export const studiosOf = cache(async (clientId: string) => {
 });
 
 /**
- * The signed-in client's business, or null when signed out or studios are
- * off: the one this device chose (one of their own, or one they work for),
- * else their own (the studio first), else the first they work for, else a
- * studio of their own, opened on first use.
+ * The signed-in client's studio, or null when signed out or studios are off.
+ * One they work for when this device chose it (or they have none of their
+ * own), else their own, opened on first use.
  */
 const callerStudio = cache(async (): Promise<CallerStudio | null> => {
   if (!STUDIOS_ENABLED) return null;
   const session = await getClientSession();
   if (!session) return null;
   const { owned, working } = await studiosOf(session.client_id);
-  const mine = [owned.studio, owned.vendor].filter((b): b is Studio => b !== null);
   const chosen = (await cookies()).get(STUDIO_CHOICE_COOKIE)?.value;
-  const own = mine.find((b) => b.id === chosen);
-  const member = own ? undefined : (working.find((w) => w.studio.id === chosen) ?? (mine.length ? undefined : working[0]));
+  const member = working.find((w) => w.studio.id === chosen) ?? (owned ? undefined : working[0]);
   if (member) {
     const access: StudioAccess = { owner: false, memberId: member.membership.memberId, areas: member.membership.access };
     return { session, studio: member.studio, scope: studioScope(member.studio), access };
   }
-  const studio = own ?? mine[0] ?? (await studios.open(ownerOf(session)));
+  const studio = owned ?? (await studios.open(ownerOf(session)));
   return { session, studio, scope: studioScope(studio), access: { owner: true } };
 });
 

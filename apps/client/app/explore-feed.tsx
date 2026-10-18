@@ -4,33 +4,17 @@ import Link from "next/link";
 import { useState } from "react";
 
 import type { FeedItem } from "@repo/lib/studio-portal/core";
-import { businessKindLabel, studioInitials, vendorCategory, VENDOR_GROUPS, type VendorGroup } from "@repo/lib/studios/core";
+import { studioInitials } from "@repo/lib/studios/core";
 
-// The work grid on Aming's front page (landing.tsx), like Behance's: search
-// and fields of work on top, then the work as big tiles, each one opening
-// its business's page for it.
-
-type Field = { id: string; label: string; matches: (b: FeedItem["business"]) => boolean };
-
-const FIELDS: Field[] = [
-  { id: "all", label: "All", matches: () => true },
-  { id: "studio", label: "Photography", matches: (b) => b.kind === "studio" },
-  { id: "photo_editor", label: "Photo editing", matches: (b) => b.vendorCategory === "photo_editor" },
-  { id: "videographer", label: "Video", matches: (b) => b.vendorCategory === "videographer" },
-  ...(Object.keys(VENDOR_GROUPS) as VendorGroup[])
-    .filter((g) => g !== "photo")
-    .map((g) => ({ id: g, label: VENDOR_GROUPS[g], matches: (b: FeedItem["business"]) => vendorCategory(b.vendorCategory)?.group === g })),
-];
+// The work grid on Aming's front page (landing.tsx), like Behance's: a
+// search on top, then the work as big tiles, each one opening its studio's
+// page for it.
 
 export function ExploreFeed({ items }: { items: FeedItem[] }) {
-  const [field, setField] = useState("all");
   const [query, setQuery] = useState("");
-  // Photography and its vendors always; the other fields once someone shows work in them.
-  const fields = FIELDS.filter((f, i) => i < 4 || items.some((item) => f.matches(item.business)));
   const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
   const shown = items.filter((item) => {
-    if (!FIELDS.find((f) => f.id === field)!.matches(item.business)) return false;
-    const text = `${item.title} ${item.business.name} ${businessKindLabel(item.business.kind, item.business.vendorCategory)}`.toLowerCase();
+    const text = `${item.title} ${item.business.name}`.toLowerCase();
     return words.every((w) => text.includes(w));
   });
 
@@ -48,25 +32,10 @@ export function ExploreFeed({ items }: { items: FeedItem[] }) {
               type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search photographers, editors, work…"
+              placeholder="Search studios and their work…"
               className="h-11 w-full rounded-full border border-border bg-surface pr-4 pl-10 text-sm outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
             />
           </label>
-          <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-0.5 sm:-mx-6 sm:px-6 md:mx-0 md:px-0 [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: "none" }}>
-            {fields.map((f) => (
-              <button
-                key={f.id}
-                type="button"
-                aria-pressed={field === f.id}
-                onClick={() => setField(f.id)}
-                className={`h-9 shrink-0 rounded-full px-4 text-sm font-medium transition-colors ${
-                  field === f.id ? "bg-foreground text-background" : "bg-gray-100 text-foreground hover:bg-gray-200 dark:bg-white/10 dark:hover:bg-white/15"
-                }`}
-              >
-                {f.label}
-              </button>
-            ))}
-          </div>
         </div>
       </div>
 
@@ -76,8 +45,8 @@ export function ExploreFeed({ items }: { items: FeedItem[] }) {
             <p className="font-semibold">{items.length === 0 ? "Work from businesses on Aming shows here" : "Nothing matches that yet"}</p>
             <p className="mx-auto mt-1 max-w-md text-sm text-muted">
               {items.length === 0
-                ? "Photographers, photo editors and videographers on Aming can show their albums and services here."
-                : "Try another word, or another field of work."}
+                ? "Studios on Aming can show their albums and services here."
+                : "Try another word."}
             </p>
           </div>
         ) : (
@@ -124,7 +93,6 @@ function WorkTile({ item }: { item: FeedItem }) {
           )}
           <span className="truncate text-sm font-semibold">{business.name}</span>
         </Link>
-        <span className="shrink-0 text-xs text-muted">{businessKindLabel(business.kind, business.vendorCategory)}</span>
       </div>
     </article>
   );

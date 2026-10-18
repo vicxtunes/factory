@@ -33,7 +33,7 @@ import { team } from "@repo/lib/team/server";
 import { CurrencySymbolProvider } from "@repo/lib/currency/CurrencySymbolProvider";
 import { customers } from "@repo/lib/customers/server";
 import { offerings } from "@repo/lib/offerings/server";
-import { businessKindLabel, FEE_PERCENT, studioIdSchema, studioScope } from "@repo/lib/studios/core";
+import { studioIdSchema, studioScope } from "@repo/lib/studios/core";
 import { requireStudiosOversight, studios } from "@repo/lib/studios/server";
 import type { StudioListing } from "@repo/lib/studios/core";
 import type { TenantScope } from "@repo/lib/tenancy/types";
@@ -66,9 +66,6 @@ export default async function StudioPage({
           ← Businesses
         </BackLink>
         <h2 className="mt-1 text-xl font-semibold">{studio.name}</h2>
-        <p className="text-sm text-muted">
-          {businessKindLabel(studio.kind, studio.vendorCategory)} · Aming&apos;s fee {FEE_PERCENT[studio.kind]}%
-        </p>
       </div>
       <Loading skeleton={<PanelStackSkeleton count={1} />}>
         <About studio={studio} scope={scope} />

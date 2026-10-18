@@ -20,24 +20,6 @@ creates is tagged with its tenant id.
 - **Boss oversight.** The boss sees every studio at `/dashboard/studios`. Supervisors and
   receptionists don't.
 
-## Kinds of business
-
-A business is a **photography studio** or a **vendor** (`tenants.kind`). A vendor has a
-**category** (`tenants.vendor_category`): photo editors and videographers first (Aming's focus),
-then event, beauty and transport vendors (`core/kinds.ts`; the list lives there, so a new category
-needs no migration).
-
-- **Set-up asks first** what the business is (`KindPicker`); it can change while it's being set up
-  (`setMyBusinessKind`).
-- **One of each per account:** an owner with a studio can open a vendor business beside it (or the
-  other way round) from the business switcher (`openBusiness`), and switches between them like a
-  team member switches businesses (`chooseStudio`, by id). A business's sign-in email may be the
-  same as its owner's other business's.
-- **What differs:** a vendor's menu has no Products (Aming's prints and photobooks) and its
-  projects no Aming orders. **Aming's fee** is 10% of a vendor's customer payments, 5% of a
-  studio's (`business_fee_percent()`, `FEE_PERCENT`); the wallet terms say which.
-- The boss's Businesses list shows each one's kind.
-
 ## Who reaches what
 
 | Who | Can |
@@ -74,7 +56,6 @@ packages/ui/studios/  StudioProfileForm (client), StudiosTable (boss).
 apps/client/app/studio/                       My Business.
 apps/factory/app/dashboard/(app)/studios/     The boss's list and one studio.
 supabase/migrations/20261003100000_studios.sql
-supabase/migrations/20261106100000_vendors.sql     kinds, one of each per owner, the fee by kind
 ```
 
 ## Data

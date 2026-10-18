@@ -7,15 +7,8 @@ import { Button } from "@repo/ui/Button";
 import { Field, TextInput } from "@repo/ui/Field";
 import { PasswordInput } from "@repo/ui/PasswordInput";
 import { PhoneInput } from "@repo/ui/PhoneInput";
-import { joinAsVendor } from "@repo/lib/studios/actions";
-import {
-  SOCIAL_NETWORKS,
-  VENDOR_CATEGORIES,
-  VENDOR_SKILLS,
-  vendorCategory,
-  type SocialNetwork,
-  type VendorProfile,
-} from "@repo/lib/studios/core";
+import { joinAsVendor } from "@repo/lib/vendors/actions";
+import { SOCIAL_NETWORKS, VENDOR_CATEGORIES, VENDOR_SKILLS, vendorCategory, type SocialNetwork, type VendorKind } from "@repo/lib/vendors/core";
 
 import { checkVendorContact, finishVendorSignUp, startVendorSignUp } from "../../auth-actions";
 
@@ -58,7 +51,7 @@ export function VendorJoin({ signedInAs }: { signedInAs: string | null }) {
   const router = useRouter();
   const steps: Step[] = signedInAs ? ["who", "what", "offer", "socials"] : ["who", "what", "offer", "contact", "socials", "password", "code"];
   const [step, setStep] = useState<Step>("who");
-  const [as, setAs] = useState<VendorProfile["as"] | null>(null);
+  const [as, setAs] = useState<VendorKind | null>(null);
   const [businessName, setBusinessName] = useState("");
   const [category, setCategory] = useState<string | null>(null);
   const [skills, setSkills] = useState<string[]>([]);
@@ -83,7 +76,7 @@ export function VendorJoin({ signedInAs }: { signedInAs: string | null }) {
 
   /** The account is signed in: open the vendor side with the answers and go to it. */
   async function join() {
-    const res = await joinAsVendor({ category, as, businessName, skills, socials });
+    const res = await joinAsVendor({ kind: as, businessName, category, skills, socials });
     if (!res.ok) return setError(res.error);
     router.push("/vendors");
     router.refresh();

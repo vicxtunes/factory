@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 
 import { getClientSession } from "@repo/lib/auth/session";
 import { STUDIOS_ENABLED } from "@repo/lib/studios/feature";
-import { studiosOf } from "@repo/lib/studios/server";
+import { vendors } from "@repo/lib/vendors/server";
 
 import { VendorJoin } from "./vendor-join";
 
@@ -17,7 +17,7 @@ export const metadata = { title: "Join as a vendor" };
 export default async function VendorJoinPage() {
   if (!STUDIOS_ENABLED) notFound();
   const session = await getClientSession();
-  if (session && (await studiosOf(session.client_id)).owned.vendor) redirect("/vendors");
+  if (session && (await vendors.mine(session.client_id))) redirect("/vendors");
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="mx-auto flex h-[4.5rem] max-w-xl items-center justify-between gap-4 px-4 sm:px-6">

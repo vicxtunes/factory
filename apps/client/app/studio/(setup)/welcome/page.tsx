@@ -44,7 +44,6 @@ export default async function StudioWelcomePage() {
     <OnboardingWizard
       view={{
         status: a.status,
-        kind: studio.kind === "vendor" && studio.vendorCategory ? { kind: "vendor", category: studio.vendorCategory } : { kind: "studio" },
         reviewNote: a.reviewNote,
         details: {
           name: a.name,

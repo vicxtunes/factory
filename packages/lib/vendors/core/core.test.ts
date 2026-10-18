@@ -16,16 +16,16 @@ test("a social handle however it's typed", () => {
 test("a vendor joining: a business names itself, socials made plain and empty ones dropped", () => {
   const join = parseInput(vendorJoinSchema, {
     category: "videographer",
-    as: "business",
+    kind: "business",
     businessName: " Nambi Films ",
     skills: ["Drone", "Drone", "Wedding films"],
     socials: { instagram: "@nambi.films", tiktok: "", website: "https://nambi.ug" },
   });
   assert.equal(join.businessName, "Nambi Films");
-  assert.deepEqual(join.profile, { as: "business", skills: ["Drone", "Wedding films"], socials: { instagram: "nambi.films", website: "nambi.ug" } });
+  assert.deepEqual(join, { kind: "business", businessName: "Nambi Films", category: "videographer", skills: ["Drone", "Wedding films"], socials: { instagram: "nambi.films", website: "nambi.ug" } });
 
-  const solo = parseInput(vendorJoinSchema, { category: "photo_editor", as: "individual", businessName: "ignored", skills: ["Culling"], socials: {} });
+  const solo = parseInput(vendorJoinSchema, { category: "photo_editor", kind: "individual", businessName: "ignored", skills: ["Culling"], socials: {} });
   assert.equal(solo.businessName, null);
-  assert.throws(() => parseInput(vendorJoinSchema, { category: "photo_editor", as: "business", businessName: "", skills: ["Culling"] }), /business a name/);
-  assert.throws(() => parseInput(vendorJoinSchema, { category: "photo_editor", as: "individual", businessName: "", skills: [] }), /at least one/);
+  assert.throws(() => parseInput(vendorJoinSchema, { category: "photo_editor", kind: "business", businessName: "", skills: ["Culling"] }), /business a name/);
+  assert.throws(() => parseInput(vendorJoinSchema, { category: "photo_editor", kind: "individual", businessName: "", skills: [] }), /at least one/);
 });

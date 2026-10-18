@@ -1,4 +1,3 @@
-import { notFound } from "next/navigation";
 import { CatalogPanel, type AmingCatalog, type ServiceMedia } from "@repo/ui/offerings/CatalogPanel";
 import { RowsSkeleton } from "@repo/ui/skeletons/blocks";
 import { Loading } from "@repo/ui/skeletons/Loading";
@@ -13,9 +12,7 @@ import type { TenantScope } from "@repo/lib/tenancy/types";
 export const metadata = { title: "Products · My Business" };
 
 export default async function StudioProductsPage() {
-  const { scope, studio } = await requireStudio("catalog");
-  // Aming's products are sold on by photography studios only.
-  if (studio.kind !== "studio") notFound();
+  const { scope } = await requireStudio("catalog");
   return (
     <>
       <p className="text-sm text-muted">

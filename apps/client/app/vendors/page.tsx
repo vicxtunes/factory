@@ -17,9 +17,10 @@ import {
   TasksIcon,
 } from "@repo/ui/icons";
 import { getClientSession } from "@repo/lib/auth/session";
-import { FEE_PERCENT, SOCIAL_NETWORKS, studioInitials, vendorCategory, type Studio } from "@repo/lib/studios/core";
+import { studioInitials } from "@repo/lib/studios/core";
 import { STUDIOS_ENABLED } from "@repo/lib/studios/feature";
-import { studiosOf } from "@repo/lib/studios/server";
+import { SOCIAL_NETWORKS, VENDOR_FEE_PERCENT, vendorCategory, type Vendor } from "@repo/lib/vendors/core";
+import { vendors } from "@repo/lib/vendors/server";
 
 import { LogOut } from "./log-out";
 
@@ -58,7 +59,7 @@ interface Sample {
 
 const UGX = (n: number) => `UGX ${n.toLocaleString("en-US")}`;
 
-const fee = (earned: number) => ({ label: `Aming's fee (${FEE_PERCENT.vendor}%)`, value: UGX((earned * FEE_PERCENT.vendor) / 100), note: "Taken as clients pay" });
+const fee = (earned: number) => ({ label: `Aming's fee (${VENDOR_FEE_PERCENT}%)`, value: UGX((earned * VENDOR_FEE_PERCENT) / 100), note: "Taken as clients pay" });
 
 const SAMPLES: Record<Previewed, Sample> = {
   photo_editor: {
@@ -147,7 +148,7 @@ const NAV = [
 export default async function VendorsPage({ searchParams }: { searchParams: Promise<{ as?: string }> }) {
   if (!STUDIOS_ENABLED) notFound();
   const session = await getClientSession();
-  const vendor = session ? (await studiosOf(session.client_id)).owned.vendor : null;
+  const vendor = session ? await vendors.mine(session.client_id) : null;
   if (session && vendor) return <MyVendorHome owner={session.name} vendor={vendor} />;
 
   const as: Previewed = (await searchParams).as === "videographer" ? "videographer" : "photo_editor";
@@ -274,11 +275,10 @@ function Sidebar({ name, label, footer }: { name: string; label: string; footer?
 }
 
 /** A signed-in vendor's own home: their profile as they gave it at sign-up, and their work, empty until photographers book them. */
-function MyVendorHome({ owner, vendor }: { owner: string; vendor: Studio }) {
-  const label = vendorCategory(vendor.vendorCategory)?.label ?? "Vendor";
-  const profile = vendor.vendorProfile;
+function MyVendorHome({ owner, vendor }: { owner: string; vendor: Vendor }) {
+  const label = vendorCategory(vendor.category)?.label ?? "Vendor";
   const socials = SOCIAL_NETWORKS.flatMap((n) => {
-    const handle = profile?.socials[n.id];
+    const handle = vendor.socials[n.id];
     return handle ? [{ ...n, handle, href: `https://${n.prefix}${handle}` }] : [];
   });
   const empty = (text: string) => <p className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted">{text}</p>;
@@ -299,7 +299,7 @@ function MyVendorHome({ owner, vendor }: { owner: string; vendor: Studio }) {
           <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             {[
               { label: "Earned this month", value: "UGX 0" },
-              { label: `Aming's fee`, value: `${FEE_PERCENT.vendor}%`, note: "Of what clients pay" },
+              { label: `Aming's fee`, value: `${VENDOR_FEE_PERCENT}%`, note: "Of what clients pay" },
               { label: "Job requests", value: "0" },
               { label: "Jobs in hand", value: "0" },
             ].map((t) => (
@@ -316,11 +316,11 @@ function MyVendorHome({ owner, vendor }: { owner: string; vendor: Studio }) {
           <section className="space-y-3 rounded-2xl border border-border bg-surface p-5 shadow-theme-xs">
             <div className="flex items-center justify-between gap-3">
               <h3 className="text-lg font-semibold">Your profile</h3>
-              <span className="text-xs text-muted">{profile?.as === "business" ? "Business" : "Individual"}</span>
+              <span className="text-xs text-muted">{vendor.kind === "business" ? "Business" : "Individual"}</span>
             </div>
-            {profile?.skills.length ? (
+            {vendor.skills.length ? (
               <div className="flex flex-wrap gap-2">
-                {profile.skills.map((skill) => (
+                {vendor.skills.map((skill) => (
                   <span key={skill} className="rounded-full border border-border bg-background px-3 py-1 text-sm">
                     {skill}
                   </span>
