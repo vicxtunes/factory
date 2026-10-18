@@ -3,7 +3,7 @@ import { test } from "node:test";
 
 import { parseInput } from "@repo/lib/kernel/core";
 
-import { signInSchema, slugFromName, slugSchema } from "./index";
+import { mixFeed, signInSchema, slugFromName, slugSchema, type FeedItem } from "./index";
 
 test("a suggested slug from a name", () => {
   assert.equal(slugFromName("Amina Studio & Co."), "amina-studio-co");
@@ -26,4 +26,22 @@ test("slug rules", () => {
 test("phones are stored in one form", () => {
   assert.equal(parseInput(signInSchema, { phone: "+256 772 123 456" }).phone, "+256772123456");
   assert.throws(() => parseInput(signInSchema, { phone: "call me" }), /valid phone/);
+});
+
+test("the feed takes turns between businesses, keeping each one's order", () => {
+  const item = (business: string, id: string): FeedItem => ({
+    id,
+    kind: "album",
+    title: id,
+    href: `/${business}/gallery/${id}`,
+    coverUrl: "",
+    photoCount: 1,
+    business: { id: business, name: business, slug: business, logoUrl: null, brandColor: null, kind: "studio", vendorCategory: null },
+  });
+  const feed = mixFeed([item("a", "a1"), item("a", "a2"), item("a", "a3"), item("b", "b1"), item("c", "c1"), item("c", "c2")]);
+  assert.deepEqual(
+    feed.map((i) => i.id),
+    ["a1", "b1", "c1", "a2", "c2", "a3"],
+  );
+  assert.deepEqual(mixFeed([]), []);
 });

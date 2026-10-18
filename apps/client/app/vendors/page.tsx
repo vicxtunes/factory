@@ -18,7 +18,7 @@ import {
 import { FEE_PERCENT, studioInitials, vendorCategory } from "@repo/lib/studios/core";
 import { STUDIOS_ENABLED } from "@repo/lib/studios/feature";
 
-export const metadata = { title: "Vendors · Aming Space" };
+export const metadata = { title: "Vendors" };
 
 // A vendor's workspace with sample data, open to anyone: the vendor
 // interface being shaped before it's wired to real businesses. Photo editors

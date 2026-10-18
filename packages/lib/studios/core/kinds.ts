@@ -18,7 +18,7 @@ export interface VendorCategory {
 export type VendorGroup = "photo" | "decor" | "food" | "entertainment" | "beauty";
 
 export const VENDOR_GROUPS: Record<VendorGroup, string> = {
-  photo: "Photo & video",
+  photo: "Photo, video & design",
   decor: "Decor & venues",
   food: "Food & drink",
   entertainment: "Entertainment",
@@ -29,6 +29,9 @@ export const VENDOR_GROUPS: Record<VendorGroup, string> = {
 export const VENDOR_CATEGORIES: VendorCategory[] = [
   { id: "photo_editor", label: "Photo editor", hint: "Edits and retouches photographers' shoots", group: "photo" },
   { id: "videographer", label: "Videographer", hint: "Films and edits events and stories", group: "photo" },
+  { id: "photographer", label: "Photographer", hint: "Shoots for clients, or for studios as a second shooter", group: "photo" },
+  { id: "graphic_designer", label: "Graphic designer", hint: "Branding, invitations, album covers and posters", group: "photo" },
+  { id: "equipment_hire", label: "Equipment hire", hint: "Cameras, lenses, lights and drones for hire", group: "photo" },
   { id: "decor", label: "Decor", hint: "Event decoration and styling", group: "decor" },
   { id: "venue", label: "Venue", hint: "Halls, gardens and spaces for events", group: "decor" },
   { id: "tents_chairs", label: "Tents & chairs", hint: "Tents, chairs, tables and covers for hire", group: "decor" },
@@ -59,3 +62,51 @@ export function businessKindLabel(kind: BusinessKind, category: string | null): 
 
 /** Aming's fee, in percent of a business's customer payments (the database's business_fee_percent). */
 export const FEE_PERCENT: Record<BusinessKind, number> = { studio: 5, vendor: 10 };
+
+/** What each kind of vendor offers, to pick from at sign-up (they can add their own). */
+export const VENDOR_SKILLS: Record<string, string[]> = {
+  photo_editor: ["Colour correction", "Skin retouching", "Culling", "Background removal", "Album design", "Photo restoration", "Composites", "Batch editing"],
+  videographer: ["Wedding films", "Highlight reels", "Event coverage", "Music videos", "Drone", "Livestreaming", "Video editing", "Corporate & ads"],
+  photographer: ["Weddings", "Portraits", "Events", "Products", "Fashion", "Corporate", "Second shooter", "Drone"],
+  graphic_designer: ["Logos & branding", "Invitations", "Album covers", "Posters & flyers", "Social media graphics", "Photo book layout"],
+  equipment_hire: ["Cameras", "Lenses", "Lighting", "Drones", "Gimbals", "Backdrops", "Studio space"],
+  decor: ["Weddings", "Introductions", "Birthdays", "Corporate events", "Backdrops", "Table styling"],
+  venue: ["Indoor hall", "Garden", "Rooftop", "Beach", "Conference room"],
+  tents_chairs: ["Tents", "Chairs", "Tables", "Covers & linen", "Set-up crew"],
+  florist: ["Bridal bouquets", "Table arrangements", "Venue flowers", "Car decoration"],
+  lighting: ["Stage lighting", "Uplighting", "Fairy lights", "Generators"],
+  catering: ["Buffet", "Plated", "Local dishes", "Continental", "Snacks & bites"],
+  cakes: ["Wedding cakes", "Birthday cakes", "Cupcakes", "Dessert tables"],
+  drinks: ["Mobile bar", "Cocktails", "Soft drinks", "Bar staff"],
+  sound_dj: ["DJ", "PA system", "Microphones", "Live mixing"],
+  mc: ["Weddings", "Introductions", "Corporate", "Bilingual"],
+  band: ["Live band", "Traditional music", "Gospel", "Acoustic"],
+  dancers: ["Traditional dance", "Modern dance", "Choreography"],
+  makeup_hair: ["Bridal makeup", "Event makeup", "Hair styling", "Nails"],
+  bridal_wear: ["Gowns", "Suits", "Traditional wear", "Bridesmaids", "Alterations"],
+  car_hire: ["Bridal car", "Convoy", "Chauffeur", "Vintage cars"],
+};
+
+/** Where a vendor shows their work, in the order sign-up asks. */
+export const SOCIAL_NETWORKS = [
+  { id: "instagram", label: "Instagram", prefix: "instagram.com/" },
+  { id: "tiktok", label: "TikTok", prefix: "tiktok.com/@" },
+  { id: "facebook", label: "Facebook", prefix: "facebook.com/" },
+  { id: "youtube", label: "YouTube", prefix: "youtube.com/@" },
+  { id: "x", label: "X", prefix: "x.com/" },
+  { id: "website", label: "Website", prefix: "" },
+] as const;
+
+export type SocialNetwork = (typeof SOCIAL_NETWORKS)[number]["id"];
+
+/**
+ * A handle as typed ("@kato.films", "https://instagram.com/kato.films/")
+ * made plain ("kato.films"); a website kept whole, without its scheme. Empty
+ * for nothing usable.
+ */
+export function socialHandle(network: SocialNetwork, input: string): string {
+  const raw = input.trim();
+  if (network === "website") return raw.replace(/^https?:\/\//i, "").replace(/\/+$/, "");
+  const path = raw.replace(/^https?:\/\//i, "").replace(/^(www\.|m\.)/i, "").replace(/^[^/]+\.(com|net)\//i, "");
+  return path.replace(/^@/, "").split(/[/?#]/)[0] ?? "";
+}
