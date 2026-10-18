@@ -4,7 +4,7 @@
 import { AppError } from "@repo/lib/kernel/core";
 
 import type { BusinessKind } from "./core/kinds";
-import type { Studio, StudioListing, StudioOwner, StudioProfile } from "./core/model";
+import type { Studio, StudioListing, StudioOwner, StudioProfile, VendorProfile } from "./core/model";
 
 export interface StudioStore {
   /** The account's businesses (one of each kind at most). */
@@ -18,6 +18,9 @@ export interface StudioStore {
   setKind(id: string, kind: BusinessKind, vendorCategory: string | null): Promise<Studio>;
   updateProfile(id: string, profile: StudioProfile): Promise<Studio>;
   setBrandColor(id: string, color: string): Promise<Studio>;
+  setShowOnAming(id: string, on: boolean): Promise<Studio>;
+  /** A vendor's sign-up answers, and its name when it gave one. */
+  setVendorProfile(id: string, name: string | null, profile: VendorProfile): Promise<Studio>;
   /** Every studio, for the boss. */
   list(): Promise<StudioListing[]>;
   get(id: string): Promise<StudioListing | null>;

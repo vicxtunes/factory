@@ -31,6 +31,8 @@ function memoryStore() {
         status: "onboarding",
         logoKey: null,
         brandColor: null,
+        showOnAming: false,
+        vendorProfile: null,
       };
       rows.set(studio.id, studio);
       return studio;
@@ -42,6 +44,16 @@ function memoryStore() {
     },
     setBrandColor: async (id, brandColor) => {
       const studio = { ...rows.get(id)!, brandColor };
+      rows.set(id, studio);
+      return studio;
+    },
+    setVendorProfile: async (id, name, vendorProfile) => {
+      const studio = { ...rows.get(id)!, vendorProfile, ...(name ? { name } : {}) };
+      rows.set(id, studio);
+      return studio;
+    },
+    setShowOnAming: async (id, showOnAming) => {
+      const studio = { ...rows.get(id)!, showOnAming };
       rows.set(id, studio);
       return studio;
     },
@@ -132,4 +144,21 @@ test("while setting up, a business can become the other kind, unless the owner h
   await service.open(brian, "studio");
   await assert.rejects(service.setKind(first.id, "studio", null), /already have one/);
   await assert.rejects(service.setKind(first.id, "vendor", "nope"), /what your business does/);
+});
+
+test("a vendor joins with its answers, named as it chose; one past set-up keeps what it is", async () => {
+  const { store, rows } = memoryStore();
+  const service = new StudioService(store);
+  const owner = { clientId: "c9", name: "Kato Brian" };
+  const profile = { as: "business" as const, skills: ["Colour correction"], socials: { instagram: "kato.edits" } };
+  const vendor = await service.joinAsVendor(owner, { category: "photo_editor", businessName: "Kato Edits", profile });
+  assert.equal(vendor.kind, "vendor");
+  assert.equal(vendor.vendorCategory, "photo_editor");
+  assert.equal(vendor.name, "Kato Edits");
+  assert.deepEqual(vendor.vendorProfile, profile);
+
+  rows.set(vendor.id, { ...rows.get(vendor.id)!, status: "active" });
+  const again = await service.joinAsVendor(owner, { category: "photo_editor", businessName: "Other", profile: { ...profile, skills: ["Culling"] } });
+  assert.equal(again.name, "Kato Edits");
+  assert.deepEqual(again.vendorProfile, profile);
 });

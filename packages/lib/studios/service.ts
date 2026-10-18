@@ -2,7 +2,7 @@
 // runs on any store (tests use an in-memory one, ./service.test.ts).
 // Callers check who's asking and parse the input first (./actions.ts).
 
-import { readableBrandColor, vendorCategory, type BusinessKind, type OwnedBusinesses, type Studio, type StudioListing, type StudioOwner, type StudioProfile } from "./core";
+import { readableBrandColor, vendorCategory, type BusinessKind, type OwnedBusinesses, type Studio, type StudioListing, type StudioOwner, type StudioProfile, type VendorProfile } from "./core";
 import { StudioError, type StudioStore } from "./ports";
 
 export class StudioService {
@@ -46,6 +46,21 @@ export class StudioService {
   /** Sets a studio's brand color (same caller rule as updateProfile), made readable first. */
   async setBrandColor(studioId: string, color: string): Promise<Studio> {
     return this.store.setBrandColor(studioId, readableBrandColor(color));
+  }
+
+  /**
+   * A vendor joining: its business opened with its sign-up answers. One they
+   * already have keeps what it is once it's past its first set-up.
+   */
+  async joinAsVendor(owner: StudioOwner, join: { category: string; businessName: string | null; profile: VendorProfile }): Promise<Studio> {
+    const vendor = await this.open(owner, "vendor", join.category);
+    if (vendor.status !== "onboarding") return vendor;
+    return this.store.setVendorProfile(vendor.id, join.businessName, join.profile);
+  }
+
+  /** Whether the business's work shows in the feed on Aming's front page. */
+  async setShowOnAming(studioId: string, on: boolean): Promise<Studio> {
+    return this.store.setShowOnAming(studioId, on);
   }
 
   /** Every studio, newest first. Boss only (checked by the caller). */

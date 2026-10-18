@@ -6,7 +6,7 @@ import "server-only";
 
 import { createAdminClient } from "@repo/lib/supabase/admin";
 
-import type { Studio, StudioListing } from "../../core/model";
+import type { Studio, StudioListing, VendorProfile } from "../../core/model";
 import { StudioError, type StudioStore } from "../../ports";
 
 interface Row {
@@ -27,9 +27,11 @@ interface Row {
   status: Studio["status"];
   logo_key: string | null;
   brand_color: string | null;
+  show_on_aming: boolean;
+  vendor_profile: VendorProfile | null;
 }
 
-const COLUMNS = "id, owner_client_id, kind, vendor_category, name, phone, email, address, latitude, longitude, currency, locale, time_zone, created_at, status, logo_key, brand_color";
+const COLUMNS = "id, owner_client_id, kind, vendor_category, name, phone, email, address, latitude, longitude, currency, locale, time_zone, created_at, status, logo_key, brand_color, show_on_aming, vendor_profile";
 
 const toStudio = (r: Row): Studio => ({
   id: r.id,
@@ -48,6 +50,8 @@ const toStudio = (r: Row): Studio => ({
   status: r.status,
   logoKey: r.logo_key,
   brandColor: r.brand_color,
+  showOnAming: r.show_on_aming,
+  vendorProfile: r.vendor_profile,
 });
 
 type ListingRow = Row & { owner: { name: string } | null };
@@ -127,6 +131,30 @@ export const supabaseStudioStore: StudioStore = {
       .select(COLUMNS)
       .single<Row>();
     if (error) fail("save the color", error);
+    return toStudio(data);
+  },
+
+  async setVendorProfile(id, name, profile) {
+    const { data, error } = await createAdminClient()
+      .from("tenants")
+      .update({ vendor_profile: profile, ...(name ? { name } : {}) })
+      .eq("id", id)
+      .eq("kind", "vendor")
+      .select(COLUMNS)
+      .single<Row>();
+    if (error) fail("save the vendor's profile", error);
+    return toStudio(data);
+  },
+
+  async setShowOnAming(id, on) {
+    const { data, error } = await createAdminClient()
+      .from("tenants")
+      .update({ show_on_aming: on })
+      .eq("id", id)
+      .not("owner_client_id", "is", null)
+      .select(COLUMNS)
+      .single<Row>();
+    if (error) fail("save the setting", error);
     return toStudio(data);
   },
 

@@ -11,7 +11,7 @@ import { runAction } from "@repo/lib/kernel/server/action";
 
 import { isSettingUp } from "@repo/lib/studio-access/core";
 
-import { brandColorSchema, businessKindSchema, studioIdSchema, studioProfileSchema, type Studio } from "./core";
+import { brandColorSchema, businessKindSchema, showOnAmingSchema, vendorJoinSchema, studioIdSchema, studioProfileSchema, type Studio } from "./core";
 import { StudioError } from "./ports";
 import { getClientSession } from "@repo/lib/auth/session";
 import { ownStudio, STUDIO_CHOICE_COOKIE, studioOfCaller, studios, studiosOf } from "./server";
@@ -35,6 +35,18 @@ export async function saveMyBrandColor(input: unknown): Promise<Result<Studio>> 
     const { studio } = await studioOfCaller();
     const saved = await studios.setBrandColor(studio.id, parseInput(brandColorSchema, input).color);
     revalidatePath("/studio", "layout");
+    return saved;
+  });
+}
+
+/** Shows the owner's business's public work in the feed on Aming's front page, or stops. */
+export async function saveShowOnAming(input: unknown): Promise<Result<Studio>> {
+  return runAction("studios", async () => {
+    const { studio, access } = await studioOfCaller();
+    if (!access.owner) throw new StudioError("Only the business's owner can change this.");
+    const saved = await studios.setShowOnAming(studio.id, parseInput(showOnAmingSchema, input).on);
+    revalidatePath("/studio/showroom");
+    revalidatePath("/");
     return saved;
   });
 }
@@ -73,6 +85,17 @@ export async function openBusiness(input: unknown): Promise<Result> {
     const what = parseInput(businessKindSchema, input);
     const business = await studios.open({ clientId: session.client_id, name: session.name }, what.kind, what.kind === "vendor" ? what.category : null);
     await remember(business.id);
+    revalidatePath("/studio", "layout");
+  });
+}
+
+/** Opens the signed-in account's vendor business with its sign-up answers (/vendors/join), and works in it. */
+export async function joinAsVendor(input: unknown): Promise<Result> {
+  return runAction("studios", async () => {
+    const session = await getClientSession();
+    if (!session) throw new StudioError("Sign in first.");
+    const vendor = await studios.joinAsVendor({ clientId: session.client_id, name: session.name }, parseInput(vendorJoinSchema, input));
+    await remember(vendor.id);
     revalidatePath("/studio", "layout");
   });
 }
