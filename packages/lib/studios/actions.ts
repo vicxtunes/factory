@@ -89,14 +89,13 @@ export async function openBusiness(input: unknown): Promise<Result> {
   });
 }
 
-/** Opens the signed-in account's vendor business with its sign-up answers (/vendors/join), and works in it. */
+/** Opens the signed-in account's vendor side with its sign-up answers (/vendors/join). Its home is /vendors, not the studio workspace. */
 export async function joinAsVendor(input: unknown): Promise<Result> {
   return runAction("studios", async () => {
     const session = await getClientSession();
     if (!session) throw new StudioError("Sign in first.");
-    const vendor = await studios.joinAsVendor({ clientId: session.client_id, name: session.name }, parseInput(vendorJoinSchema, input));
-    await remember(vendor.id);
-    revalidatePath("/studio", "layout");
+    await studios.joinAsVendor({ clientId: session.client_id, name: session.name }, parseInput(vendorJoinSchema, input));
+    revalidatePath("/vendors");
   });
 }
 

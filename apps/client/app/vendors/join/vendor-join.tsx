@@ -81,11 +81,12 @@ export function VendorJoin({ signedInAs }: { signedInAs: string | null }) {
   };
   const toggle = <T,>(list: T[], item: T) => (list.includes(item) ? list.filter((x) => x !== item) : [...list, item]);
 
-  /** The account is signed in: open the vendor business with the answers and go to its set-up. */
+  /** The account is signed in: open the vendor side with the answers and go to it. */
   async function join() {
     const res = await joinAsVendor({ category, as, businessName, skills, socials });
     if (!res.ok) return setError(res.error);
-    router.push("/studio/welcome");
+    router.push("/vendors");
+    router.refresh();
   }
 
   function sendCode() {

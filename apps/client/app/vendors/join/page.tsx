@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 import { getClientSession } from "@repo/lib/auth/session";
 import { STUDIOS_ENABLED } from "@repo/lib/studios/feature";
+import { studiosOf } from "@repo/lib/studios/server";
 
 import { VendorJoin } from "./vendor-join";
 
@@ -11,10 +12,12 @@ export const metadata = { title: "Join as a vendor" };
 
 // A vendor's own way in, one question a screen (./vendor-join.tsx): their
 // answers, then an account with an email and a password (checked by an
-// emailed code), then the business's set-up (/studio/welcome).
+// emailed code), then their own side (/vendors). A vendor who has joined
+// goes straight there.
 export default async function VendorJoinPage() {
   if (!STUDIOS_ENABLED) notFound();
   const session = await getClientSession();
+  if (session && (await studiosOf(session.client_id)).owned.vendor) redirect("/vendors");
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="mx-auto flex h-[4.5rem] max-w-xl items-center justify-between gap-4 px-4 sm:px-6">
