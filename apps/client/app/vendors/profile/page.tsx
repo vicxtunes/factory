@@ -39,7 +39,7 @@ export default async function VendorProfilePage() {
         </div>
 
         <div className="px-4 sm:px-6 lg:px-2">
-          <div className="-mt-14 inline-block rounded-full ring-4 ring-background">
+          <div className="relative z-10 -mt-14 inline-block rounded-full ring-4 ring-background">
             <Avatar name={vendor.name} src={session.avatarUrl ?? undefined} size="lg" className="!size-28 !text-3xl" />
           </div>
 
