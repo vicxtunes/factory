@@ -34,11 +34,8 @@ export async function notifyOrderItem(params: {
     console.error("notifyOrderItem insert threw:", err);
   }
 
-  await notifyActor(params.recipient, {
-    title: params.pushTitle,
-    body: params.message,
-    url: params.url,
-  });
+  // The row above is its bell entry: no inbox copy.
+  await notifyActor(params.recipient, { title: params.pushTitle, body: params.message, url: params.url }, { inbox: false });
 }
 
 // Push-only variant for events the DB trigger already logs as a system
@@ -48,5 +45,5 @@ export async function pushOnlyOrderItem(
   recipient: { type: AuditActorType; id: string },
   payload: { title: string; body: string; url?: string },
 ): Promise<void> {
-  await notifyActor(recipient, payload);
+  await notifyActor(recipient, payload, { inbox: false });
 }

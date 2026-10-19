@@ -29,7 +29,7 @@ import {
 import { studioInitials } from "@repo/lib/studios/core";
 import type { StudioAccess } from "@repo/lib/team/core";
 
-import { getMyNotifications, logoutClient } from "../../actions";
+import { getMyNotifications, markMyNotificationsRead, logoutClient } from "../../actions";
 import { ClientUserMenu } from "../../user-menu";
 import { isCurrentStudioPage, STUDIO_TABS, studioNavFor, studioPageTitle, type StudioNavItem, type StudioNavSection } from "./nav";
 
@@ -173,7 +173,7 @@ function StudioTopbar({ brand, user, owner }: { brand: StudioBrand; user: { name
             <span className="hidden sm:inline">View public page</span>
           </Link>
         ) : null}
-        <NotificationBell fetchNotifications={getMyNotifications} />
+        <NotificationBell fetchNotifications={getMyNotifications} markRead={markMyNotificationsRead} allHref="/studio/notifications" />
         <ClientUserMenu name={user.name} avatarUrl={user.avatarUrl} />
       </div>
     </header>

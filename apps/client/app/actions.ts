@@ -12,6 +12,8 @@ import { applyCancellation, cleanReason, loadCancellableOrder } from "@repo/lib/
 import { isPhotobookCategory } from "@repo/lib/orders/photobook";
 import type { CreateOrderResult, OrderItemInput } from "@repo/lib/orders/types";
 import { projectIdSchema } from "@repo/lib/projects/core";
+import { fetchInbox, markInboxRead } from "@repo/lib/notifications/inbox";
+import { mergeNotices } from "@repo/lib/support/notices";
 import { notifyActor } from "@repo/lib/push/send";
 import { fetchClientNotifications } from "@repo/lib/queries";
 import { linkPlacedOrder } from "@repo/lib/studio-orders/server";
@@ -177,7 +179,15 @@ export async function respondToQuote(
 export async function getMyNotifications(): Promise<NotificationRow[]> {
   const session = await getClientSession();
   if (!session) return [];
-  return fetchClientNotifications(session.client_id, 10);
+  // Their orders' events, and everything else sent to them (wallet, jobs, bookings…).
+  const [events, notices] = await Promise.all([fetchClientNotifications(session.client_id, 10), fetchInbox({ type: "client", id: session.client_id })]);
+  return mergeNotices(events, notices, 15);
+}
+
+/** They opened their bell: what's in it is seen. */
+export async function markMyNotificationsRead(): Promise<void> {
+  const session = await getClientSession();
+  if (session) await markInboxRead({ type: "client", id: session.client_id });
 }
 
 // A client can cancel their own order only while it's still unconfirmed —

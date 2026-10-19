@@ -177,6 +177,8 @@ export async function setSupportReportStatus(id: string, resolved: boolean): Pro
         body: `"${reportSnippet(data.body)}" was marked as resolved.`,
         url: thread ? chatHref(thread) : "/support",
       },
+      // Its bell entry comes from the report itself (notices.ts): no inbox copy.
+      { inbox: false },
     );
   }
   return { ok: true };

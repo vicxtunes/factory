@@ -33,6 +33,7 @@ const toMember = (r: Row): TeamMember => ({
   role: r.role,
   archivedAt: r.archived_at,
   joined: r.client_id !== null,
+  accountId: r.client_id,
   access: r.access,
   invite: r.invite_token && r.invite_expires_at ? { token: r.invite_token, expiresAt: r.invite_expires_at } : null,
 });

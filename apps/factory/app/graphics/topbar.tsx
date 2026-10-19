@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { ChatLauncher } from "@repo/ui/chat/ChatLauncher";
 import { NotificationBell } from "@repo/ui/notifications/NotificationBell";
 
-import { getMyNotifications } from "./actions";
+import { getMyNotifications, markMyNotificationsRead } from "./actions";
 import { GRAPHICS_NAV } from "./nav";
 import { DesignerUserMenu } from "./user-menu";
 
@@ -24,7 +24,7 @@ export function GraphicsTopbar({ name, avatarUrl }: { name: string; avatarUrl: s
       <h1 className="text-base font-semibold">{title}</h1>
       <div className="relative ml-auto flex items-center gap-3">
         <ChatLauncher />
-        <NotificationBell fetchNotifications={getMyNotifications} />
+        <NotificationBell fetchNotifications={getMyNotifications} markRead={markMyNotificationsRead} />
         <DesignerUserMenu name={name} avatarUrl={avatarUrl} />
       </div>
     </header>

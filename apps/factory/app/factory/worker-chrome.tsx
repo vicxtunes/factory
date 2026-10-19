@@ -7,7 +7,7 @@ import { NotificationGate } from "@repo/ui/pwa/NotificationGate";
 import { Header } from "@repo/ui/Header";
 import { HomeBar } from "@repo/ui/HomeBar";
 
-import { getMyNotifications, logoutWorker } from "./actions";
+import { getMyNotifications, markMyNotificationsRead, logoutWorker } from "./actions";
 import { LogoutButton } from "./logout-button";
 
 // The factory worker's page frame (header with board link, bell and logout;
@@ -31,6 +31,7 @@ export function WorkerChrome({ name, children }: { name: string; children: React
             </Link>
             <NotificationBell
               fetchNotifications={getMyNotifications}
+              markRead={markMyNotificationsRead}
               triggerClassName="relative flex h-9 w-9 items-center justify-center rounded-lg text-white/70 hover:text-white hover:bg-white/10"
             />
             <span className="hidden text-white/80 sm:inline">{name}</span>

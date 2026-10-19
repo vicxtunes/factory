@@ -5,6 +5,9 @@ import Link from "next/link";
 
 import { createClient } from "@repo/lib/supabase/browser";
 import type { NotificationRow } from "@repo/lib/types";
+import { entryHeading, entryTone, hasNews } from "@repo/ui/notifications/news";
+
+import { getStaffNotifications, markStaffNotificationsRead } from "./notification-actions";
 
 function relativeTime(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -33,6 +36,26 @@ export function NotificationMenu({ initial }: { initial: NotificationRow[] }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const supabaseRef = useRef(createClient());
+
+  // Opening shows what's there and marks the notices seen (the entries keep their dot until next time).
+  function openBell() {
+    setOpen(true);
+    if (rows.some((r) => r.unread)) void markStaffNotificationsRead();
+  }
+
+  // Notices (withdrawals to approve…) don't come through Realtime: the bell
+  // looks again when the app comes back to the front, and every minute.
+  useEffect(() => {
+    const refresh = () => {
+      if (document.visibilityState === "visible") getStaffNotifications().then(setRows);
+    };
+    document.addEventListener("visibilitychange", refresh);
+    const timer = setInterval(refresh, 60_000);
+    return () => {
+      document.removeEventListener("visibilitychange", refresh);
+      clearInterval(timer);
+    };
+  }, []);
 
   useEffect(() => {
     const supabase = supabaseRef.current;
@@ -68,14 +91,12 @@ export function NotificationMenu({ initial }: { initial: NotificationRow[] }) {
     // off the left side of the screen on narrow viewports.
     <div ref={ref}>
       <button
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => (open ? setOpen(false) : openBell())}
         aria-label="Notifications"
         className="relative flex h-11 w-11 items-center justify-center rounded-lg text-muted hover:bg-gray-100 dark:hover:bg-white/5"
       >
         <BellIcon className="h-5 w-5" />
-        {rows.length > 0 ? (
-          <span className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-error-500" />
-        ) : null}
+        {hasNews(rows) ? <span className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-error-500" /> : null}
       </button>
 
       {open ? (
@@ -88,12 +109,9 @@ export function NotificationMenu({ initial }: { initial: NotificationRow[] }) {
               const body = (
                 <>
                   <div className="flex items-center justify-between gap-2">
-                    <span
-                      className={`text-[0.7rem] font-semibold uppercase tracking-wide ${
-                        n.event_type === "delayed" ? "text-error-600" : "text-success-600"
-                      }`}
-                    >
-                      {n.event_type}
+                    <span className={`flex items-center gap-1.5 text-[0.7rem] font-semibold uppercase tracking-wide ${entryTone(n)}`}>
+                      {n.unread ? <span aria-label="New" className="h-1.5 w-1.5 rounded-full bg-error-500" /> : null}
+                      {entryHeading(n)}
                     </span>
                     <span className="text-xs text-muted">{relativeTime(n.created_at)}</span>
                   </div>
