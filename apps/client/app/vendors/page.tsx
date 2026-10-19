@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { notFound, redirect } from "next/navigation";
 
+import { HomeBar, type HomeBarLink } from "@repo/ui/HomeBar";
 import { HomeGreeting, HomeHero, HomeSection } from "@repo/ui/home/HomeBits";
 import {
   CalendarIcon,
@@ -20,6 +21,7 @@ import { STUDIOS_ENABLED } from "@repo/lib/studios/feature";
 import { SOCIAL_NETWORKS, VENDOR_FEE_PERCENT, vendorCategory, type Vendor } from "@repo/lib/vendors/core";
 import { vendors } from "@repo/lib/vendors/server";
 
+import { logoutClient } from "../actions";
 import { LogOut } from "./log-out";
 
 export const metadata = { title: "Vendors" };
@@ -29,6 +31,14 @@ export const metadata = { title: "Vendors" };
 // sees their own home: who they are, what they offer, and the jobs that will
 // come. Anyone else is sent to join. The jobs, calendar and money aren't
 // wired yet, so the menu's entries don't go anywhere.
+
+/** Phones: the vendor's home and its parts on the bar; Log out in "More". */
+const TABS: HomeBarLink[] = [
+  { href: "/vendors", label: "Home", icon: "dashboard", exact: true },
+  { href: "/vendors#jobs", label: "Jobs", icon: "tasks" },
+  { href: "/vendors#rates", label: "Rates", icon: "products" },
+  { href: "/vendors#profile", label: "Profile", icon: "clients" },
+];
 
 const NAV = [
   { label: "Dashboard", Icon: DashboardIcon, on: true },
@@ -92,13 +102,8 @@ function MyVendorHome({ owner, vendor }: { owner: string; vendor: Vendor }) {
     <div className="min-h-screen bg-background text-foreground">
       <div className="flex">
         <Sidebar name={vendor.name} label={label} footer={<LogOut />} />
-        <main className="mx-auto w-full max-w-3xl space-y-8 px-4 py-6 sm:px-6 lg:py-8">
-          <div className="flex items-start justify-between gap-3">
-            <HomeGreeting name={owner} avatarUrl={null} subtitle={`${vendor.name} · ${label}`} />
-            <div className="lg:hidden">
-              <LogOut />
-            </div>
-          </div>
+        <main className="mx-auto w-full max-w-3xl space-y-8 px-4 py-6 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:px-6 lg:py-8">
+          <HomeGreeting name={owner} avatarUrl={null} subtitle={`${vendor.name} · ${label}`} />
           <HomeHero title="You're on Aming" text="Add your rates and samples of your work, so photographers can book you." cta={{ label: "Add my rates", href: "#rates" }} />
 
           <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -116,9 +121,11 @@ function MyVendorHome({ owner, vendor }: { owner: string; vendor: Vendor }) {
             ))}
           </section>
 
-          <HomeSection title="Job requests">{empty("No requests yet. Photographers on Aming will send them here.")}</HomeSection>
+          <div id="jobs" className="scroll-mt-4">
+            <HomeSection title="Job requests">{empty("No requests yet. Photographers on Aming will send them here.")}</HomeSection>
+          </div>
 
-          <section className="space-y-3 rounded-2xl border border-border bg-surface p-5 shadow-theme-xs">
+          <section id="profile" className="scroll-mt-4 space-y-3 rounded-2xl border border-border bg-surface p-5 shadow-theme-xs">
             <div className="flex items-center justify-between gap-3">
               <h3 className="text-lg font-semibold">Your profile</h3>
               <span className="text-xs text-muted">{vendor.kind === "business" ? "Business" : "Individual"}</span>
@@ -150,6 +157,7 @@ function MyVendorHome({ owner, vendor }: { owner: string; vendor: Vendor }) {
           </div>
         </main>
       </div>
+      <HomeBar tabs={TABS} logout={logoutClient} afterLogout="/" hideFrom="lg" />
     </div>
   );
 }
