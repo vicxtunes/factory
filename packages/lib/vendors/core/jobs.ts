@@ -7,7 +7,7 @@
 //
 // The vendor accepts or declines a request and marks the work delivered; the
 // studio cancels an open job, and approves and pays a delivered one (from
-// its Business card; the vendor's gets the price less Aming's fee).
+// its Business card; the vendor's own wallet gets the price less Aming's fee).
 
 import { VENDOR_FEE_PERCENT } from "./categories";
 

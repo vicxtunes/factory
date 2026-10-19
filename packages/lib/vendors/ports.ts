@@ -16,10 +16,8 @@ export interface VendorStore {
   updateProfile(id: string, profile: VendorProfile): Promise<Vendor>;
   /** Active vendors whose name has every word, and maybe of one category; the newest first. */
   search(words: string[], category: string | null): Promise<Vendor[]>;
-  /** What's on the vendor's Business card (their workspace's); 0 before their first job is paid. */
-  cardBalance(id: string): Promise<number>;
-  /** The vendor's workspace for its files (a tenant with no owner), made on first use. */
-  workspace(id: string): Promise<string>;
+  /** What's in the vendor's wallet; 0 before their first job is paid. */
+  walletBalance(id: string): Promise<number>;
   /** Sets one of the vendor's pictures; returns the key it replaced. */
   setPicture(id: string, which: VendorPicture, key: string): Promise<string | null>;
 }

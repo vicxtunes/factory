@@ -45,7 +45,7 @@ export class VendorJobService {
     await this.jobs.pay(tenantId, id, actor);
     await this.notifier.notify(job.vendor.clientId, {
       title: `${job.studio.name} paid you`,
-      body: `${money(vendorTake(job.price))} is on your Business card.`,
+      body: `${money(vendorTake(job.price))} is in your wallet.`,
       url: `/vendors/jobs/${id}`,
     });
   }

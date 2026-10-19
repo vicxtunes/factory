@@ -74,17 +74,10 @@ export const supabaseVendorStore: VendorStore = {
     return data.map(toVendor);
   },
 
-  async cardBalance(id) {
-    const { data: vendor, error } = await vendors().select("workspace_id").eq("id", id).single<{ workspace_id: string | null }>();
-    if (error) fail("load the vendor", error);
-    if (!vendor.workspace_id) return 0;
-    const { data: card, error: cardError } = await createAdminClient()
-      .from("business_wallets")
-      .select("balance")
-      .eq("tenant_id", vendor.workspace_id)
-      .maybeSingle<{ balance: number | string }>();
-    if (cardError) fail("load the Business card", cardError);
-    return Number(card?.balance ?? 0);
+  async walletBalance(id) {
+    const { data, error } = await createAdminClient().from("vendor_wallets").select("balance").eq("vendor_id", id).maybeSingle<{ balance: number | string }>();
+    if (error) fail("load the wallet", error);
+    return Number(data?.balance ?? 0);
   },
 
   async create(clientId, name, join) {
@@ -118,12 +111,6 @@ export const supabaseVendorStore: VendorStore = {
       .single<Row>();
     if (error) fail("save the profile", error);
     return toVendor(data);
-  },
-
-  async workspace(id) {
-    const { data, error } = await createAdminClient().rpc("vendor_workspace", { p_vendor: id });
-    if (error) fail("open the Drive", error);
-    return data as string;
   },
 
   async setPicture(id, which, key) {

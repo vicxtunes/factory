@@ -7,7 +7,6 @@ import { RowsSkeleton } from "@repo/ui/skeletons/blocks";
 import { Loading } from "@repo/ui/skeletons/Loading";
 import { filesCaller } from "@repo/lib/files/access";
 import { folderIdSchema } from "@repo/lib/files/core";
-import { files } from "@repo/lib/files/server";
 import { FileService } from "@repo/lib/files/service";
 import { JOB_STATUS_LABELS, jobFee, jobIdSchema, reachesFolder, vendorTake } from "@repo/lib/vendors/core";
 import { vendorJobs } from "@repo/lib/vendors/server";
@@ -78,9 +77,9 @@ export default async function VendorJobPage({ params, searchParams }: { params: 
 
 async function JobFiles({ jobId, folderId }: { jobId: string; folderId: string | null }) {
   const via = { as: "job", id: jobId } as const;
-  const { scope, access } = await filesCaller(via);
-  const found = await files.list(scope, folderId, access);
+  const { drive, scope, access } = await filesCaller(via);
+  const found = await drive.list(scope, folderId, access);
   if (!found) notFound();
-  if (folderId && FileService.missingPreviews(found)) after(() => files.ensurePreviews(scope, folderId));
+  if (folderId && FileService.missingPreviews(found)) after(() => drive.ensurePreviews(scope, folderId));
   return <FileBrowser listing={found} basePath={`/vendors/jobs/${jobId}`} scope={{ locale: scope.locale, timeZone: scope.timeZone }} via={via} topLabel="Project files" />;
 }

@@ -15,8 +15,10 @@ set-up, review or workspace. They have their own side of Aming at `/vendors`.
 
 ## Their Drive
 
-`/vendors/drive`: the files module in the vendor's own workspace (a `tenants` row with no owner,
-so never a business), made the first time they open it (`vendor_workspace()`).
+`/vendors/drive`: the files module (packages/lib/files) on the vendor's own tables,
+`vendor_folders` and `vendor_files` (`vendorDrive`, `adapters/supabase/drive.ts`), within their own
+storage allowance (`vendors.storage_quota_bytes`); their files sit under `vendors/<id>/` in the
+bucket. Theirs alone: no shares, task picks or comments.
 
 ## Jobs: studios hiring vendors
 
@@ -29,7 +31,7 @@ request: what's needed, by when, for how much (`core/jobs.ts`, `jobs.ts`).
 - **Files:** from accepting until it's paid, the vendor reaches the project's folder as a
   contributor (download, upload, add folders), on the job's page (`Via` `job`).
 - **Money:** the studio pays from its **Business card** (the Money area or the owner). In one
-  transaction (`vendor_job_pay()`) the studio's card gives the price, the vendor's card (their
-  workspace's) gets it, and Aming's 10% comes off as a `fee` row. A job is paid once.
+  transaction (`vendor_job_pay()`) the studio's card gives the price, the vendor's own **wallet**
+  (`vendor_wallets`) gets it, and Aming's 10% comes off as a `fee` row. A job is paid once.
 - Each side is told in the app: the vendor of a request, a cancellation and a payment; the studio
   owner of an answer and a delivery.

@@ -13,13 +13,13 @@ export const metadata = { title: "Vendors" };
 
 // The vendor's side: someone offering their services to photographers, not
 // a business going through a studio's set-up. A vendor (joined at ./join)
-// sees their home: what's on their Business card, studios' job requests to
+// sees their home: what's in their wallet, studios' job requests to
 // answer, and the jobs in hand (each its own page, ./jobs/[id]). Their Drive
 // is ./drive, their profile ./profile. Anyone else is sent to join.
 
 export default async function VendorsPage() {
   const { session, vendor } = await requireVendor();
-  const [photoUrl, jobs, balance] = await Promise.all([vendors.pictureUrl(vendor.photoKey), vendorJobs.forVendor(session.client_id), vendors.cardBalance(vendor)]);
+  const [photoUrl, jobs, balance] = await Promise.all([vendors.pictureUrl(vendor.photoKey), vendorJobs.forVendor(session.client_id), vendors.walletBalance(vendor)]);
   return <MyVendorHome owner={session.name} avatarUrl={photoUrl ?? session.avatarUrl} vendor={vendor} jobs={jobs} balance={balance} />;
 }
 
@@ -46,7 +46,7 @@ function MyVendorHome({ owner, avatarUrl, vendor, jobs, balance }: { owner: stri
 
         <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {[
-            { label: "Business card", value: money(balance), note: "What studios paid you" },
+            { label: "Wallet", value: money(balance), note: "What studios paid you" },
             { label: `Aming's fee`, value: `${VENDOR_FEE_PERCENT}%`, note: "Of each job's price" },
             { label: "Job requests", value: String(requests.length) },
             { label: "Jobs in hand", value: String(inHand.length) },

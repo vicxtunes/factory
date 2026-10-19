@@ -16,14 +16,17 @@ import { tasks } from "@repo/lib/tasks/server";
 import { canUse } from "@repo/lib/team/core";
 import { studioScope } from "@repo/lib/studios/core";
 import { reachesFolder } from "@repo/lib/vendors/core";
-import { vendorJobs, vendors } from "@repo/lib/vendors/server";
+import { vendorDrive, vendorJobs, vendors } from "@repo/lib/vendors/server";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
 import { FULL_ACCESS, type Commenter, type FileAccess, type Via } from "./core";
 import { FileError } from "./ports";
 import { files } from "./server";
+import type { FileService } from "./service";
 
 export interface FilesCaller {
+  /** The Drive it's in: a studio's (`files`), or a vendor's own (`vendorDrive`). */
+  drive: FileService;
   scope: TenantScope;
   access: FileAccess;
   /** Who they are, for what they write (comments): someone with a link names themself. */
@@ -42,7 +45,8 @@ export async function filesCaller(via: Via): Promise<FilesCaller> {
     const vendor = session ? await vendors.mine(session.client_id) : null;
     if (!session || !vendor) throw new FileError("Sign in as a vendor to see your Drive.");
     return {
-      scope: await vendors.driveScope(vendor),
+      drive: vendorDrive,
+      scope: vendors.driveScope(vendor),
       access: FULL_ACCESS,
       who: { kind: "studio", name: vendor.name },
       person: { kind: "owner" },
@@ -59,6 +63,7 @@ export async function filesCaller(via: Via): Promise<FilesCaller> {
     const folderId = await files.projectFolder(scope, job.projectId);
     if (!folderId) throw new FileError("This project has no folder.");
     return {
+      drive: files,
       scope,
       access: { kind: "shared", grants: [{ folderId, role: "contributor", canDownload: true }] },
       who: { kind: "member", name: job.vendor.name },
@@ -69,7 +74,7 @@ export async function filesCaller(via: Via): Promise<FilesCaller> {
   if (via.as === "studio") {
     const { scope, access, session, studio } = await studioOfCaller("anyone");
     const who: Commenter = { kind: access.owner ? "studio" : "member", name: session.name };
-    const base = { scope, who, studio: { name: studio.name, ownerClientId: studio.ownerClientId } };
+    const base = { drive: files, scope, who, studio: { name: studio.name, ownerClientId: studio.ownerClientId } };
     const person = access.owner ? ({ kind: "owner" } as const) : ({ kind: "member", memberId: access.memberId } as const);
     if (canUse(access, "files")) return { ...base, access: FULL_ACCESS, person };
     return { ...base, access: await files.memberAccess(scope, access.owner ? "" : access.memberId), person };
@@ -81,6 +86,7 @@ export async function filesCaller(via: Via): Promise<FilesCaller> {
     const me = await portalClient(at.studio.id);
     if (!me) throw new FileError("Sign in again to see your files.");
     return {
+      drive: files,
       scope: at.scope,
       access: await files.clientAccess(at.scope, me.customerId),
       who: { kind: "client", name: me.name },
@@ -92,6 +98,7 @@ export async function filesCaller(via: Via): Promise<FilesCaller> {
     const task = await tasks.byShareToken(at.scope, via.token);
     if (!task?.folderId || !task.customerId) throw new FileError("This link has stopped working. Ask the business for a new one.");
     return {
+      drive: files,
       scope: at.scope,
       // The task's folder, to look at (pictures show, nothing downloads).
       access: { kind: "shared", grants: [{ folderId: task.folderId, role: "viewer", canDownload: false }] },
@@ -102,5 +109,5 @@ export async function filesCaller(via: Via): Promise<FilesCaller> {
   }
   const access = await files.linkAccess(at.scope, via.token, localDate(new Date(), at.scope.timeZone));
   if (!access) throw new FileError("This link has stopped working. Ask the business for a new one.");
-  return { scope: at.scope, access, who: null, person: { kind: "guest" }, studio };
+  return { drive: files, scope: at.scope, access, who: null, person: { kind: "guest" }, studio };
 }

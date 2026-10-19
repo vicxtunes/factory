@@ -52,8 +52,8 @@ async function caller(via: unknown) {
 
 export async function createFolder(via: unknown, input: unknown): Promise<Result<string>> {
   return runAction("files", async () => {
-    const { scope, access } = await caller(via);
-    const id = await files.createFolder(scope, parseInput(newFolderSchema, input), access);
+    const { scope, access, drive } = await caller(via);
+    const id = await drive.createFolder(scope, parseInput(newFolderSchema, input), access);
     touched();
     return id;
   });
@@ -61,24 +61,24 @@ export async function createFolder(via: unknown, input: unknown): Promise<Result
 
 export async function renameFolder(via: unknown, id: unknown, name: unknown): Promise<Result> {
   return runAction("files", async () => {
-    const { scope, access } = await caller(via);
-    await files.renameFolder(scope, parseInput(folderIdSchema, id), parseInput(folderNameSchema, name), access);
+    const { scope, access, drive } = await caller(via);
+    await drive.renameFolder(scope, parseInput(folderIdSchema, id), parseInput(folderNameSchema, name), access);
     touched();
   });
 }
 
 export async function moveFolder(via: unknown, id: unknown, toId: unknown): Promise<Result> {
   return runAction("files", async () => {
-    const { scope, access } = await caller(via);
-    await files.moveFolder(scope, parseInput(folderIdSchema, id), parseInput(placeSchema, toId), access);
+    const { scope, access, drive } = await caller(via);
+    await drive.moveFolder(scope, parseInput(folderIdSchema, id), parseInput(placeSchema, toId), access);
     touched();
   });
 }
 
 export async function deleteFolder(via: unknown, id: unknown): Promise<Result> {
   return runAction("files", async () => {
-    const { scope, access } = await caller(via);
-    await files.deleteFolder(scope, parseInput(folderIdSchema, id), access);
+    const { scope, access, drive } = await caller(via);
+    await drive.deleteFolder(scope, parseInput(folderIdSchema, id), access);
     touched();
   });
 }
@@ -86,41 +86,41 @@ export async function deleteFolder(via: unknown, id: unknown): Promise<Result> {
 /** Upload links for a batch of files, if they fit the studio's allowance. */
 export async function startFileUpload(via: unknown, input: unknown): Promise<Result<UploadTicket[]>> {
   return runAction("files", async () => {
-    const { scope, access } = await caller(via);
+    const { scope, access, drive } = await caller(via);
     const { folderId, files: batch } = parseInput(uploadStartSchema, input);
-    return files.startUpload(scope, folderId, batch, access);
+    return drive.startUpload(scope, folderId, batch, access);
   });
 }
 
 /** After the browser uploaded a file: check it, move it into place, record it. */
 export async function confirmFileUpload(via: unknown, input: unknown): Promise<Result> {
   return runAction("files", async () => {
-    const { scope, access } = await caller(via);
-    await files.confirmUpload(scope, parseInput(uploadConfirmSchema, input), access);
+    const { scope, access, drive } = await caller(via);
+    await drive.confirmUpload(scope, parseInput(uploadConfirmSchema, input), access);
     touched();
   });
 }
 
 export async function renameFile(via: unknown, id: unknown, name: unknown): Promise<Result> {
   return runAction("files", async () => {
-    const { scope, access } = await caller(via);
-    await files.renameFile(scope, parseInput(fileIdSchema, id), parseInput(fileNameSchema, name), access);
+    const { scope, access, drive } = await caller(via);
+    await drive.renameFile(scope, parseInput(fileIdSchema, id), parseInput(fileNameSchema, name), access);
     touched();
   });
 }
 
 export async function moveFile(via: unknown, id: unknown, toId: unknown): Promise<Result> {
   return runAction("files", async () => {
-    const { scope, access } = await caller(via);
-    await files.moveFile(scope, parseInput(fileIdSchema, id), parseInput(placeSchema, toId), access);
+    const { scope, access, drive } = await caller(via);
+    await drive.moveFile(scope, parseInput(fileIdSchema, id), parseInput(placeSchema, toId), access);
     touched();
   });
 }
 
 export async function deleteFile(via: unknown, id: unknown): Promise<Result> {
   return runAction("files", async () => {
-    const { scope, access } = await caller(via);
-    await files.deleteFile(scope, parseInput(fileIdSchema, id), access);
+    const { scope, access, drive } = await caller(via);
+    await drive.deleteFile(scope, parseInput(fileIdSchema, id), access);
     touched();
   });
 }
@@ -128,9 +128,9 @@ export async function deleteFile(via: unknown, id: unknown): Promise<Result> {
 /** Renames many items in one folder at once (all or nothing). */
 export async function renameMany(via: unknown, input: unknown): Promise<Result> {
   return runAction("files", async () => {
-    const { scope, access } = await caller(via);
+    const { scope, access, drive } = await caller(via);
     const { folderId, items } = parseInput(renameManySchema, input);
-    await files.renameMany(scope, folderId, items, access);
+    await drive.renameMany(scope, folderId, items, access);
     touched();
   });
 }
@@ -140,9 +140,9 @@ export async function renameMany(via: unknown, input: unknown): Promise<Result> 
 /** Links for a zip: chosen files or a folder with everything in it, as originals or optimised copies. */
 export async function downloadLinks(via: unknown, input: unknown): Promise<Result<{ path: string; url: string; bytes: number }[]>> {
   return runAction("files", async () => {
-    const { scope, access } = await caller(via);
+    const { scope, access, drive } = await caller(via);
     const { pick, version } = parseInput(downloadSchema, input);
-    return files.downloads(scope, pick, version, access);
+    return drive.downloads(scope, pick, version, access);
   });
 }
 
@@ -150,19 +150,19 @@ export async function downloadLinks(via: unknown, input: unknown): Promise<Resul
 
 export async function fileComments(via: unknown, fileId: unknown): Promise<Result<FileComment[]>> {
   return runAction("files", async () => {
-    const { scope, access } = await caller(via);
-    return files.comments(scope, parseInput(fileIdSchema, fileId), access);
+    const { scope, access, drive } = await caller(via);
+    return drive.comments(scope, parseInput(fileIdSchema, fileId), access);
   });
 }
 
 /** Comments on a file; someone with a share link gives their name. */
 export async function commentOnFile(via: unknown, fileId: unknown, input: unknown): Promise<Result<FileComment>> {
   return runAction("files", async () => {
-    const { scope, access, who } = await caller(via);
+    const { scope, access, who, drive } = await caller(via);
     const { body, pin, guestName } = parseInput(commentInputSchema, input);
     const author = who ?? (guestName ? { kind: "guest" as const, name: guestName } : null);
     if (!author) throw new FileError("Add your name, so the business knows who's commenting.");
-    const comment = await files.comment(scope, parseInput(fileIdSchema, fileId), { body, pin }, author, access);
+    const comment = await drive.comment(scope, parseInput(fileIdSchema, fileId), { body, pin }, author, access);
     touched();
     return comment;
   });
@@ -170,16 +170,16 @@ export async function commentOnFile(via: unknown, fileId: unknown, input: unknow
 
 export async function resolveComment(via: unknown, id: unknown, resolved: unknown): Promise<Result> {
   return runAction("files", async () => {
-    const { scope, access } = await caller(via);
-    await files.resolveComment(scope, parseInput(commentIdSchema, id), resolved === true, access);
+    const { scope, access, drive } = await caller(via);
+    await drive.resolveComment(scope, parseInput(commentIdSchema, id), resolved === true, access);
     touched();
   });
 }
 
 export async function deleteComment(via: unknown, id: unknown): Promise<Result> {
   return runAction("files", async () => {
-    const { scope, access } = await caller(via);
-    await files.deleteComment(scope, parseInput(commentIdSchema, id), access);
+    const { scope, access, drive } = await caller(via);
+    await drive.deleteComment(scope, parseInput(commentIdSchema, id), access);
     touched();
   });
 }
@@ -203,7 +203,7 @@ export async function pickFile(via: unknown, taskId: unknown, fileId: unknown, p
     const found = await caller(via);
     const task = await myTask(found, taskId);
     if (task.kind !== "choose") throw new FileError("This task isn't for choosing.");
-    return files.pick(found.scope, task, parseInput(fileIdSchema, fileId), picked === true, found.access);
+    return found.drive.pick(found.scope, task, parseInput(fileIdSchema, fileId), picked === true, found.access);
   });
 }
 
@@ -221,7 +221,7 @@ export async function captionFile(via: unknown, fileId: unknown, caption: unknow
       if (mine.status === "done") throw new FileError("The names are already sent. Ask the business to reopen it to change them.");
       task = mine;
     }
-    await files.setCaption(found.scope, parseInput(fileIdSchema, fileId), parseInput(captionSchema, caption), found.access, task);
+    await found.drive.setCaption(found.scope, parseInput(fileIdSchema, fileId), parseInput(captionSchema, caption), found.access, task);
     touched();
   });
 }
@@ -239,13 +239,13 @@ export async function finishTask(via: unknown, taskId: unknown): Promise<Result>
     if (task.status === "done") throw new FileError("This is already done.");
     let told = `${found.who?.name ?? "Someone"} finished "${task.title}"`;
     if (task.kind === "choose") {
-      const count = (await files.picks(found.scope, task.id)).length;
+      const count = (await found.drive.picks(found.scope, task.id)).length;
       const least = Math.max(1, task.pickMin ?? 1);
       if (count < least) throw new FileError(`Choose at least ${least} (you have ${count}).`);
       told = `${found.who?.name ?? "Your client"} chose ${count} for "${task.title}"`;
     }
     if (task.kind === "name" && task.folderId) {
-      const there = (await files.list(found.scope, task.folderId, found.access))?.files ?? [];
+      const there = (await found.drive.list(found.scope, task.folderId, found.access))?.files ?? [];
       told = `${found.who?.name ?? "Your client"} named ${there.filter((f) => f.caption).length} of ${there.length} photos in "${task.title}"`;
     }
     await tasks.setStatus(found.scope, task.id, "done");
@@ -253,7 +253,7 @@ export async function finishTask(via: unknown, taskId: unknown): Promise<Result>
     let opens = task.folderId ? `/studio/files?folder=${task.folderId}&task=${task.id}` : "/studio/tasks";
     if (task.kind === "choose" && task.folderId) {
       try {
-        const chosen = await files.gatherPicks(found.scope, { id: task.id, folderId: task.folderId }, `Chosen by ${found.who?.name ?? task.customerName ?? "the client"}`);
+        const chosen = await found.drive.gatherPicks(found.scope, { id: task.id, folderId: task.folderId }, `Chosen by ${found.who?.name ?? task.customerName ?? "the client"}`);
         opens = `/studio/files?folder=${chosen}&task=${task.id}`;
       } catch (err) {
         console.error("files: gathering the chosen photos failed:", err);

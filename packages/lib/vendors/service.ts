@@ -34,9 +34,9 @@ export class VendorService {
     return this.store.search(query.split(/\s+/).filter(Boolean).slice(0, 5), category);
   }
 
-  /** What's on the vendor's Business card: what studios paid them, less Aming's fee and withdrawals. */
-  async cardBalance(vendor: Vendor): Promise<number> {
-    return this.store.cardBalance(vendor.id);
+  /** What's in the vendor's wallet: what studios paid them for jobs, less Aming's fee. */
+  async walletBalance(vendor: Vendor): Promise<number> {
+    return this.store.walletBalance(vendor.id);
   }
 
   /** The account's vendor, with its profile as edited. */
@@ -45,11 +45,11 @@ export class VendorService {
   }
 
   /**
-   * Where the vendor's files live (their Drive): their own workspace, made on
-   * first use, in Kampala's currency, locale and time.
+   * The vendor's Drive for the files module: its scope is the vendor
+   * (vendor_folders, vendor_files), in Kampala's currency, locale and time.
    */
-  async driveScope(vendor: Vendor): Promise<TenantScope> {
-    return { tenantId: await this.store.workspace(vendor.id), currency: "UGX", locale: "en-UG", timeZone: "Africa/Kampala" };
+  driveScope(vendor: Vendor): TenantScope {
+    return { tenantId: vendor.id, currency: "UGX", locale: "en-UG", timeZone: "Africa/Kampala" };
   }
 
   /** A signed link the browser uploads one of its (already shrunk) pictures to. */
