@@ -3,7 +3,7 @@ import "server-only";
 // Whose files a request reaches, and with what rights, from where it comes
 // (`Via`): the studio's workspace (everything with the Files area or as the
 // owner; otherwise what's shared with the member), a vendor's own Drive
-// (everything in it), a vendor's job (its project's folder), a client's own page (what's
+// (everything in it), a vendor's job (the folder chosen for it), a client's own page (what's
 // shared with them), a share link (what it opens, while it lasts) or a
 // client's task link (its folder, to look at, and that task only). Worked out
 // from the session or the link, never from what the browser claims.
@@ -54,14 +54,15 @@ export async function filesCaller(via: Via): Promise<FilesCaller> {
     };
   }
   if (via.as === "job") {
-    // The project's folder, from accepting the job until it's paid: download the work, upload what's done.
+    // The job's folder (the one the studio chose in the project's), from accepting the job
+    // until it's paid: samples, the work to download, and what's done uploaded.
     const session = await getClientSession();
     const job = session ? await vendorJobs.vendorJob(session.client_id, via.id) : null;
     const studio = job && reachesFolder(job.status) ? await studios.get(job.tenantId) : null;
     if (!job || !studio) throw new FileError("This job's folder isn't open to you.");
     const scope = studioScope(studio);
-    const folderId = await files.projectFolder(scope, job.projectId);
-    if (!folderId) throw new FileError("This project has no folder.");
+    const folderId = job.folderId;
+    if (!folderId) throw new FileError("The folder for this job was deleted. Ask the studio to set one up.");
     return {
       drive: files,
       scope,

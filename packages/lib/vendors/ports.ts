@@ -35,18 +35,34 @@ export interface VendorFiles {
 export class VendorError extends AppError {}
 
 export interface VendorJobStore {
-  /** A new request. Throws VendorError when the vendor has an open job on that project already. */
-  create(tenantId: string, request: JobRequest, requestedByName: string): Promise<VendorJob>;
+  /** A new request, in its folder. Throws VendorError when the vendor has an open job on that project already. */
+  create(tenantId: string, request: JobRequest, folderId: string, requestedByName: string): Promise<VendorJob>;
   get(id: string): Promise<JobView | null>;
   forVendor(vendorId: string): Promise<JobView[]>;
   forProject(tenantId: string, projectId: string): Promise<JobView[]>;
-  /** Moves the job on only if it's still in one of `from`; null when it wasn't (someone moved it first). */
-  move(id: string, from: JobStatus[], to: JobStatus): Promise<VendorJob | null>;
-  /** Pays a delivered job from the studio's Business card (vendor_job_pay()). */
-  pay(tenantId: string, id: string, actor: { id: string; name: string }): Promise<void>;
+  /** Disputes, and delivered work waiting on the studio, oldest first: staff's queue and the overdue check. */
+  needingAttention(): Promise<JobView[]>;
+  /**
+   * Moves the job on only if it's still in one of `from` (no money moves);
+   * null when it wasn't (someone moved it first). A dispute says who and why.
+   */
+  move(id: string, from: JobStatus[], to: JobStatus, dispute?: { by: "studio" | "vendor"; reason: string }): Promise<VendorJob | null>;
+  /** The studio pays the price in to Aming and the work goes ahead (vendor_job_fund()). */
+  fund(tenantId: string, id: string, actor: { id: string; name: string }): Promise<void>;
+  /** The held money to the vendor's wallet, less Aming's fee (vendor_job_release()). */
+  release(id: string, actor: JobActor): Promise<void>;
+  /** The held money back on the studio's Business card (vendor_job_refund()). */
+  refund(id: string, actor: JobActor): Promise<void>;
+  /** Delivered work left unanswered: the warning went out. */
+  markWarned(id: string): Promise<void>;
 }
+
+/** Who moved the money: a studio's or vendor's account, a member of staff, or the system (the 2-day release). */
+export type JobActor = { type: "client" | "dashboard_user" | "system"; id: string | null; name: string };
 
 /** Tells someone in the app (a push notification). Best effort. */
 export interface JobNotifier {
   notify(clientId: string, message: { title: string; body: string; url: string }): Promise<void>;
+  /** Aming's boss: delivered work left unanswered, and disputes to settle. */
+  tellBoss(message: { title: string; body: string; url: string }): Promise<void>;
 }

@@ -1,5 +1,7 @@
+import { after } from "next/server";
+
 import { HomeGreeting, HomeHero, HomeSection } from "@repo/ui/home/HomeBits";
-import { VENDOR_FEE_PERCENT, vendorCategory, type JobView, type Vendor } from "@repo/lib/vendors/core";
+import { isOpenJob, VENDOR_FEE_PERCENT, vendorCategory, type JobView, type Vendor } from "@repo/lib/vendors/core";
 
 import { vendorJobs, vendors } from "@repo/lib/vendors/server";
 
@@ -19,6 +21,8 @@ export const metadata = { title: "Vendors" };
 
 export default async function VendorsPage() {
   const { session, vendor } = await requireVendor();
+  // Delivered work left unanswered gets settled when a vendor looks.
+  after(() => vendorJobs.sweepOverdue());
   const [photoUrl, jobs, balance] = await Promise.all([vendors.pictureUrl(vendor.photoKey), vendorJobs.forVendor(session.client_id), vendors.walletBalance(vendor)]);
   return <MyVendorHome owner={session.name} avatarUrl={photoUrl ?? session.avatarUrl} vendor={vendor} jobs={jobs} balance={balance} />;
 }
@@ -26,7 +30,7 @@ export default async function VendorsPage() {
 /** A vendor's home: what's waiting for them, empty until photographers book them. */
 function MyVendorHome({ owner, avatarUrl, vendor, jobs, balance }: { owner: string; avatarUrl: string | null; vendor: Vendor; jobs: JobView[]; balance: number }) {
   const requests = jobs.filter((j) => j.status === "requested");
-  const inHand = jobs.filter((j) => j.status === "accepted" || j.status === "delivered");
+  const inHand = jobs.filter((j) => isOpenJob(j.status) && j.status !== "requested");
   const label = vendorCategory(vendor.category)?.label ?? "Vendor";
   const empty = (text: string) => <p className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted">{text}</p>;
 

@@ -194,9 +194,9 @@ export type BusinessEntryKind =
   | "transfer_out"
   | "withdrawal"
   | "withdrawal_returned"
-  // A studio paying a vendor for a job, and the vendor's side of it (packages/lib/vendors → jobs).
+  // A studio paying a vendor's job in to Aming, and it coming back if refunded (packages/lib/vendors → jobs).
   | "vendor_payment"
-  | "vendor_earning";
+  | "vendor_refund";
 
 /** One line of a Business card's history. */
 export interface BusinessCardEntry {

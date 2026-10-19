@@ -9,6 +9,7 @@ import { FileService } from "@repo/lib/files/service";
 import { r2ObjectStore, r2Read, r2Write } from "@repo/lib/photos/adapters/r2/store";
 
 import { notifyActor } from "@repo/lib/push/send";
+import { createAdminClient } from "@repo/lib/supabase/admin";
 
 import { vendorFileRepository } from "./adapters/supabase/drive";
 import { supabaseJobStore } from "./adapters/supabase/jobs";
@@ -32,4 +33,9 @@ export const vendorDrive = new FileService(
 
 export const vendorJobs = new VendorJobService(supabaseJobStore, supabaseVendorStore, {
   notify: (clientId, message) => notifyActor({ type: "client", id: clientId }, message),
+  // Aming's boss (or bosses): staff who settle disputes and watch held money.
+  tellBoss: async (message) => {
+    const { data: bosses } = await createAdminClient().from("profiles").select("id").eq("role", "boss");
+    await Promise.all((bosses ?? []).map((b: { id: string }) => notifyActor({ type: "dashboard_user", id: b.id }, message)));
+  },
 });

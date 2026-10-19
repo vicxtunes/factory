@@ -23,15 +23,24 @@ bucket. Theirs alone: no shares, task picks or comments.
 ## Jobs: studios hiring vendors
 
 On a project, a studio's **Vendors** panel finds vendors (name, what they do) and sends a
-request: what's needed, by when, for how much (`core/jobs.ts`, `jobs.ts`).
+request: what's needed, by when, for how much, **the folder** they work in (one inside the
+project's, or a new one made for them: the only folder of the project they see), and maybe
+**samples first** (`core/jobs.ts`, `jobs.ts`).
 
-- **requested → accepted / declined** by the vendor; **accepted → delivered** by the vendor;
-  **requested / accepted → cancelled** by the studio; **delivered → paid** by the studio. Each
-  move only happens from the state it expects, so two people can't both move a job.
-- **Files:** from accepting until it's paid, the vendor reaches the project's folder as a
-  contributor (download, upload, add folders), on the job's page (`Via` `job`).
-- **Money:** the studio pays from its **Business card** (the Money area or the owner). In one
-  transaction (`vendor_job_pay()`) the studio's card gives the price, the vendor's own **wallet**
-  (`vendor_wallets`) gets it, and Aming's 10% comes off as a `fee` row. A job is paid once.
-- Each side is told in the app: the vendor of a request, a cancellation and a payment; the studio
-  owner of an answer and a delivery.
+- **requested → samples → samples_sent** (asked for samples) **or awaiting_funds** (not), by the
+  vendor accepting; **declined** otherwise. Reviewing the samples, the studio approves them and
+  pays in, or cancels: nothing is paid for samples.
+- **Paying in:** when the work goes ahead the studio's **Business card** pays the price to
+  Aming, which **holds** it (`vendor_job_fund()`): **in_progress**. The Money area or the owner.
+- **delivered → paid:** the studio approves; Aming releases the money to the vendor's
+  **wallet**, less its 10% (`vendor_job_release()`).
+- **Disputes:** over work in progress or delivered, the studio raises one (the vendor can give
+  up work in progress instead: the studio is refunded, `vendor_job_refund()`). The boss is told;
+  the boss or a supervisor settles it on **Vendor jobs** (`/dashboard/vendor-jobs`): release
+  or refund.
+- **No answer:** delivered work the studio doesn't approve or dispute is released on its own
+  after **2 days**; the boss and the studio are warned after **1**. Checked whenever the
+  project, the vendor's home or Vendor jobs opens (`sweepOverdue`), so no schedule is needed.
+- Each move only happens from the state it expects, so two people can't both move a job; each
+  money move is one transaction and happens once.
+- Each side is told in the app at every step.

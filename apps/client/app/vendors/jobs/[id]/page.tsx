@@ -8,7 +8,7 @@ import { Loading } from "@repo/ui/skeletons/Loading";
 import { filesCaller } from "@repo/lib/files/access";
 import { folderIdSchema } from "@repo/lib/files/core";
 import { FileService } from "@repo/lib/files/service";
-import { JOB_STATUS_LABELS, jobFee, jobIdSchema, reachesFolder, vendorTake } from "@repo/lib/vendors/core";
+import { autoReleaseAt, isHeld, JOB_STATUS_LABELS, jobFee, jobIdSchema, reachesFolder, vendorTake, type JobView } from "@repo/lib/vendors/core";
 import { vendorJobs } from "@repo/lib/vendors/server";
 
 import { VendorFrame } from "../../frame";
@@ -57,14 +57,27 @@ export default async function VendorJobPage({ params, searchParams }: { params: 
               <dd className="font-semibold tabular-nums">{money(vendorTake(job.price))}</dd>
             </div>
           </dl>
-          <p className="text-xs text-muted">Aming keeps {money(jobFee(job.price))} (10%). The studio pays when it approves the delivered work.</p>
+          {job.samplesWanted ? (
+            <div className="rounded-xl bg-background p-3 text-sm">
+              <p className="font-medium">Samples first</p>
+              <p className="text-muted">{job.samplesWanted}</p>
+            </div>
+          ) : null}
+          <p className="text-xs text-muted">{moneyLine(job)}</p>
+          {job.status === "disputed" && job.disputeReason ? (
+            <p className="rounded-xl bg-warning-50 p-3 text-sm text-warning-700 dark:bg-warning-500/15 dark:text-warning-400">
+              {job.disputedBy === "studio" ? "The studio" : "You"} raised a dispute: &ldquo;{job.disputeReason}&rdquo;. Aming is looking into it.
+            </p>
+          ) : null}
           <JobActions id={job.id} status={job.status} wide />
         </section>
 
         {reachesFolder(job.status) ? (
           <section className="space-y-3">
-            <h2 className="text-lg font-semibold">Project files</h2>
-            <p className="text-sm text-muted">Download what the studio shared, and upload your finished work here.</p>
+            <h2 className="text-lg font-semibold">Job folder</h2>
+            <p className="text-sm text-muted">
+              {job.status === "samples" ? "Upload your samples here, then send them." : "Download what the studio shared, and upload your work here."}
+            </p>
             <Loading skeleton={<RowsSkeleton />}>
               <JobFiles jobId={job.id} folderId={folderId} />
             </Loading>
@@ -82,4 +95,18 @@ async function JobFiles({ jobId, folderId }: { jobId: string; folderId: string |
   if (!found) notFound();
   if (folderId && FileService.missingPreviews(found)) after(() => drive.ensurePreviews(scope, folderId));
   return <FileBrowser listing={found} basePath={`/vendors/jobs/${jobId}`} scope={{ locale: scope.locale, timeZone: scope.timeZone }} via={via} topLabel="Project files" />;
+}
+
+/** Where the job's money is, in a line. */
+function moneyLine(job: JobView): string {
+  const fee = `Aming keeps ${money(jobFee(job.price))} (10%).`;
+  if (job.status === "paid") return `Paid: ${money(vendorTake(job.price))} went to your wallet.`;
+  if (job.status === "refunded") return "The studio's money was refunded.";
+  const release = autoReleaseAt(job);
+  if (release) {
+    const when = new Date(release).toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+    return `${money(job.price)} is held by Aming. It's released to you when the studio approves, or on its own ${when} if they don't answer. ${fee}`;
+  }
+  if (isHeld(job.status)) return `${money(job.price)} is held by Aming: it's yours once the work is delivered and approved. ${fee}`;
+  return `The studio pays ${money(job.price)} in to Aming before the work starts; it's held until the work is approved. ${fee}`;
 }
