@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { cookies } from "next/headers";
 import { Geist_Mono, Outfit } from "next/font/google";
 import { SerwistProvider } from "@serwist/turbopack/react";
 import { OfflineBanner } from "@repo/ui/pwa/OfflineBanner";
@@ -7,7 +8,7 @@ import { AppSplash } from "@repo/ui/pwa/AppSplash";
 import { NavigationProgress } from "@repo/ui/pwa/NavigationProgress";
 import { KeepFresh } from "@repo/ui/navigation/KeepFresh";
 import { BackHistory } from "@repo/ui/navigation/back";
-import { SIDEBAR_INIT_SCRIPT } from "@repo/ui/navigation/sidebar-init";
+import { SIDEBAR_COOKIE } from "@repo/ui/navigation/sidebar-init";
 import { CurrencySymbolProvider } from "@repo/lib/currency/CurrencySymbolProvider";
 import { DEFAULT_CURRENCY_SYMBOL } from "@repo/lib/currency/format";
 import { fetchBaseCurrencySymbol } from "@repo/lib/queries";
@@ -55,12 +56,9 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
     <html
       lang="en"
       className={`${outfit.variable} ${geistMono.variable} h-full antialiased`}
-      // The sidebar script below sets data-sidebar before React loads.
-      suppressHydrationWarning
+      // A collapsed sidebar, as this browser last left it (packages/ui/navigation/sidebar.tsx).
+      data-sidebar={(await cookies()).get(SIDEBAR_COOKIE)?.value === "1" ? "collapsed" : undefined}
     >
-      <head>
-        <script dangerouslySetInnerHTML={{ __html: SIDEBAR_INIT_SCRIPT }} />
-      </head>
       <body className="min-h-full flex flex-col">
         <SerwistProvider swUrl="/serwist/sw.js">
           <InstallCapture />
