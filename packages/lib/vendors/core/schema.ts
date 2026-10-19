@@ -5,7 +5,7 @@ import { z } from "zod";
 import { optionalText } from "@repo/lib/kernel/core";
 
 import { SOCIAL_NETWORKS, socialHandle, VENDOR_CATEGORIES } from "./categories";
-import type { JobRequest } from "./jobs";
+import type { JobFolder, JobRequest } from "./jobs";
 import type { VendorJoin, VendorProfile } from "./model";
 
 const kind = z.enum(["individual", "business"], "Choose who you are.");
@@ -63,23 +63,36 @@ export const vendorPictureSchema = z.enum(["photo", "cover"]);
 /** An upload's key, as the server handed it out. */
 export const pictureKeySchema = z.string().min(1).max(300);
 
-/** A studio's request to a vendor, on one of its projects. */
-export const jobRequestSchema = z.object({
-  projectId: z.uuid("Choose a project."),
-  vendorId: z.uuid("Choose a vendor."),
-  brief: z.string("Say what's needed.").trim().min(3, "Say what's needed.").max(1000, "Keep it under 1,000 characters."),
-  dueOn: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, "Choose a date.")
-    .nullish()
-    .or(z.literal(""))
-    .transform((d) => d || null),
-  price: z.coerce
-    .number("Enter the price.")
-    .int("A whole number of shillings.")
-    .min(1_000, "At least UGX 1,000.")
-    .max(100_000_000, "That's more than a job can be."),
-}) satisfies z.ZodType<JobRequest, unknown>;
+/** A studio's request to a vendor, on one of its projects: the job, and the folder the vendor works in. */
+export const jobRequestSchema = z
+  .object({
+    projectId: z.uuid("Choose a project."),
+    vendorId: z.uuid("Choose a vendor."),
+    brief: z.string("Say what's needed.").trim().min(3, "Say what's needed.").max(1000, "Keep it under 1,000 characters."),
+    samplesWanted: optionalText(500, "Keep it under 500 characters.").optional().transform((s) => s ?? null),
+    dueOn: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, "Choose a date.")
+      .nullish()
+      .or(z.literal(""))
+      .transform((d) => d || null),
+    price: z.coerce
+      .number("Enter the price.")
+      .int("A whole number of shillings.")
+      .min(1_000, "At least UGX 1,000.")
+      .max(100_000_000, "That's more than a job can be."),
+    folder: z.discriminatedUnion("kind", [
+      z.object({ kind: z.literal("existing"), folderId: z.uuid("Choose a folder.") }),
+      z.object({ kind: z.literal("new"), name: z.string().trim().min(1, "Name the folder.").max(120, "Keep the name under 120 characters.") }),
+    ]),
+  })
+  .transform(({ folder, ...request }): { request: JobRequest; folder: JobFolder } => ({ request, folder }));
+
+/** Why a job is disputed: what Aming's staff read before settling it. */
+export const disputeReasonSchema = z.string("Say what's wrong.").trim().min(5, "Say what's wrong.").max(1000, "Keep it under 1,000 characters.");
+
+/** How staff settle a dispute: the money to the vendor, or back to the studio. */
+export const settlementSchema = z.enum(["release", "refund"]);
 
 export const jobIdSchema = z.uuid("That job doesn't exist.");
 

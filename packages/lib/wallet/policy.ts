@@ -64,8 +64,8 @@ export const BUSINESS_ENTRY_LABELS: Record<BusinessEntryKind, string> = {
   transfer_out: "To Aming card",
   withdrawal: "Withdrawal",
   withdrawal_returned: "Withdrawal returned",
-  vendor_payment: "Paid a vendor",
-  vendor_earning: "Paid for a job",
+  vendor_payment: "Vendor job, held by Aming",
+  vendor_refund: "Vendor job refunded",
 };
 
 /** A whole, positive shilling amount within [min, max], or an error sentence. */
