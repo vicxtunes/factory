@@ -36,7 +36,7 @@ project's, or a new one made for them: the only folder of the project they see),
   **wallet**, less its 10% (`vendor_job_release()`).
 - **Disputes:** over work in progress or delivered, the studio raises one (the vendor can give
   up work in progress instead: the studio is refunded, `vendor_job_refund()`). The boss is told;
-  the boss or a supervisor settles it on **Vendor jobs** (`/dashboard/vendor-jobs`): release
+  the boss settles it on **Vendor jobs** (`/dashboard/vendor-jobs`): release
   or refund.
 - **No answer:** delivered work the studio doesn't approve or dispute is released on its own
   after **2 days**; the boss and the studio are warned after **1**. Checked whenever the
