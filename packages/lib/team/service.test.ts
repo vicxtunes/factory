@@ -22,14 +22,14 @@ function memoryStore() {
     list: async (s) => rows.filter((r) => r.tenantId === s.tenantId),
     get: async (s, id) => mine(s, id) ?? null,
     create: async (s, input) => {
-      rows.push({ ...input, id: `m${rows.length + 1}`, tenantId: s.tenantId, archivedAt: null, joined: false, clientId: null, access: [], invite: null });
+      rows.push({ ...input, id: `m${rows.length + 1}`, tenantId: s.tenantId, archivedAt: null, joined: false, accountId: null, clientId: null, access: [], invite: null });
       return `m${rows.length}`;
     },
     update: async (s, id, input) => set(s, id, input),
     setArchived: async (s, id, archived) => set(s, id, { archivedAt: archived ? "now" : null }),
     setAccess: async (s, id, access) => set(s, id, { access }),
     setInvite: async (s, id, invite) => set(s, id, { invite }),
-    removeAccount: async (s, id) => set(s, id, { clientId: null, joined: false, invite: null }),
+    removeAccount: async (s, id) => set(s, id, { clientId: null, accountId: null, joined: false, invite: null }),
     byInvite: async (token) => {
       const r = rows.find((x) => x.invite?.token === token);
       return r ? { tenantId: r.tenantId, member: r } : null;
@@ -38,7 +38,7 @@ function memoryStore() {
       const r = rows.find((x) => x.tenantId === tenantId && x.id === memberId && x.invite?.token === token && !x.archivedAt);
       if (!r) return false;
       if (rows.some((x) => x.tenantId === tenantId && x.clientId === clientId)) throw new TeamError("This account is already on this business's team.");
-      Object.assign(r, { clientId, joined: true, invite: null });
+      Object.assign(r, { clientId, accountId: clientId, joined: true, invite: null });
       return true;
     },
     membershipsOf: async (clientId) =>

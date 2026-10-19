@@ -14,7 +14,9 @@ import { parseInput, type Result } from "@repo/lib/kernel/core";
 import { runAction } from "@repo/lib/kernel/server/action";
 import { notifyActor } from "@repo/lib/push/send";
 import { taskIdSchema } from "@repo/lib/tasks/core";
+import { studios } from "@repo/lib/studios/server";
 import { tasks } from "@repo/lib/tasks/server";
+import { team } from "@repo/lib/team/server";
 
 import { filesCaller, type FilesCaller } from "./access";
 import {
@@ -298,7 +300,16 @@ async function sharer() {
 export async function shareFolder(folderId: unknown, target: unknown, settings: unknown): Promise<Result<string>> {
   return runAction("files", async () => {
     const scope = await sharer();
-    const id = await files.share(scope, parseInput(folderIdSchema, folderId), parseInput(shareTargetSchema, target), parseInput(shareSettingsSchema, settings));
+    const folder = parseInput(folderIdSchema, folderId);
+    const to = parseInput(shareTargetSchema, target);
+    const id = await files.share(scope, folder, to, parseInput(shareSettingsSchema, settings));
+    // A team member who has signed in is told (a client sees it on their page; a link is sent by hand).
+    if (to.kind === "member") {
+      const [member, studio] = await Promise.all([team.get(scope, to.memberId), studios.get(scope.tenantId)]);
+      if (member?.accountId) {
+        await notifyActor({ type: "client", id: member.accountId }, { title: studio?.name ?? "Your business", body: "A folder was shared with you.", url: `/studio/files?folder=${folder}` });
+      }
+    }
     touched();
     return id;
   });

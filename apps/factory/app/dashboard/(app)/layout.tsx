@@ -1,9 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { getDashboardSession } from "@repo/lib/auth/session";
-import { fetchNotifications } from "@repo/lib/queries";
-import { fetchResolvedReportNotices, mergeNotices } from "@repo/lib/support/notices";
-
+import { getStaffNotifications } from "../notification-actions";
 import { DashboardShell } from "../shell";
 
 export const metadata = { title: "Dashboard — Factory Order Tracker" };
@@ -16,12 +14,8 @@ export default async function DashboardLayout({
   const session = await getDashboardSession();
   if (!session) redirect("/dashboard/login");
 
-  // Every order event, plus this user's own resolved support reports.
-  const [events, notices] = await Promise.all([
-    fetchNotifications(10),
-    fetchResolvedReportNotices({ type: "dashboard_user", id: session.userId }),
-  ]);
-  const notifications = mergeNotices(events, notices, 10);
+  // Every order event, this user's own resolved support reports, and their inbox.
+  const notifications = await getStaffNotifications();
 
   return (
     <DashboardShell

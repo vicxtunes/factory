@@ -297,11 +297,17 @@ export interface NotificationRow {
   order_item_id: string | null;
   // "resolved" = one of the viewer's support reports was resolved. These
   // aren't stored in `notifications`; packages/lib/support/notices.ts derives them.
-  event_type: NotificationEvent | "resolved";
+  // "notice" = anything else sent to the viewer (wallet, jobs, bookings…),
+  // from their inbox (packages/lib/notifications/inbox.ts).
+  event_type: NotificationEvent | "resolved" | "notice";
   message: string;
   created_at: string;
   // Where tapping the entry goes, when it links anywhere.
   href?: string;
+  /** A notice's own heading ("Customer paid"), shown instead of the event type. */
+  title?: string;
+  /** A notice the viewer hasn't seen in the bell yet. */
+  unread?: boolean;
 }
 
 export type SupportReportStatus = "open" | "resolved";

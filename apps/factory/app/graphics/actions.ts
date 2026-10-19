@@ -17,6 +17,7 @@ import {
 import { buildAndInsertOrder, verifyActiveWorker } from "@repo/lib/orders/create";
 import { notifyOrderItem } from "@repo/lib/notifications/notify";
 import { fetchDesignerNotifications } from "@repo/lib/queries";
+import { fetchInbox, markInboxRead } from "@repo/lib/notifications/inbox";
 import { fetchResolvedReportNotices, mergeNotices } from "@repo/lib/support/notices";
 import type {
   ClientDuplicateHit,
@@ -72,11 +73,18 @@ export async function logoutDesigner(): Promise<void> {
 export async function getMyNotifications(): Promise<NotificationRow[]> {
   const session = await getDesignerSession();
   if (!session) return [];
-  const [rows, notices] = await Promise.all([
+  const [rows, notices, inbox] = await Promise.all([
     fetchDesignerNotifications(session.designer_id, 10),
     fetchResolvedReportNotices({ type: "designer", id: session.designer_id }),
+    fetchInbox({ type: "designer", id: session.designer_id }),
   ]);
-  return mergeNotices(rows, notices, 10);
+  return mergeNotices(rows, [...notices, ...inbox], 15);
+}
+
+/** They opened their bell: what's in it is seen. */
+export async function markMyNotificationsRead(): Promise<void> {
+  const session = await getDesignerSession();
+  if (session) await markInboxRead({ type: "designer", id: session.designer_id });
 }
 
 // Once every item on an order has moved to the factory, flip the order's

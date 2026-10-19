@@ -7,7 +7,7 @@ import { ChatLauncher } from "@repo/ui/chat/ChatLauncher";
 import { BackButton } from "@repo/ui/navigation/back";
 import { NotificationBell } from "@repo/ui/notifications/NotificationBell";
 
-import { getMyNotifications } from "./actions";
+import { getMyNotifications, markMyNotificationsRead } from "./actions";
 import { ClientUserMenu } from "./user-menu";
 
 // Same shape as app/dashboard/topbar.tsx.
@@ -53,7 +53,7 @@ export function ClientTopbar({
         {signedIn && name ? (
           <>
             <ChatLauncher />
-            <NotificationBell fetchNotifications={getMyNotifications} />
+            <NotificationBell fetchNotifications={getMyNotifications} markRead={markMyNotificationsRead} allHref="/notifications" />
             <ClientUserMenu name={name} avatarUrl={avatarUrl} />
           </>
         ) : (

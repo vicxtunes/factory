@@ -5,6 +5,8 @@ import webpush from "web-push";
 import { createAdminClient } from "@repo/lib/supabase/admin";
 import type { AuditActorType } from "@repo/lib/types";
 
+import { recordInbox } from "@repo/lib/notifications/inbox";
+
 import { ensureVapidConfigured } from "./vapid";
 
 export interface PushPayload {
@@ -13,15 +15,19 @@ export interface PushPayload {
   url?: string;
 }
 
-// Sends a push to every subscription belonging to one actor (dashboard
-// user / worker / designer, per the same actor-model support_reports and
-// order_audit_log use). Best-effort: a delivery failure never blocks the
-// caller's real mutation, so errors are swallowed and logged, matching
-// logOrderEvent()'s posture in packages/lib/audit/log.ts.
+// Tells one actor (dashboard user / worker / designer / client, per the same
+// actor-model support_reports and order_audit_log use): saves it in their
+// inbox, so their bell shows it, then pushes it to every device they've
+// subscribed. Best-effort: a failure never blocks the caller's real mutation,
+// so errors are swallowed and logged, matching logOrderEvent()'s posture in
+// packages/lib/audit/log.ts. `inbox: false` for events another feed already
+// shows (order items' `notifications`, resolved support reports).
 export async function notifyActor(
   actor: { type: AuditActorType; id: string },
   payload: PushPayload,
+  options: { inbox?: boolean } = {},
 ): Promise<void> {
+  if (options.inbox !== false) await recordInbox(actor, payload);
   try {
     ensureVapidConfigured();
     const admin = createAdminClient();

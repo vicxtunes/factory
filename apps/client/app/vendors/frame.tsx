@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { HomeBar, type HomeBarLink } from "@repo/ui/HomeBar";
 import {
+  AnnouncementIcon,
   CalendarIcon,
   ClientsIcon,
   DashboardIcon,
@@ -20,11 +21,11 @@ import { logoutClient } from "../actions";
 import { LogOut } from "./log-out";
 
 // The vendor side's frame: the menu on wider screens, the tab bar on phones.
-// Home, Jobs, Drive and Profile have pages; the rest of the menu shows what comes.
+// Home, Jobs, Drive, Profile and Notifications have pages; the rest of the menu shows what comes.
 
-type Page = "home" | "jobs" | "drive" | "profile";
+type Page = "home" | "jobs" | "drive" | "profile" | "notifications";
 
-/** Phones: on the bar; Log out in "More". */
+/** Phones: on the bar; Notifications and Log out in "More". */
 const TABS: HomeBarLink[] = [
   { href: "/vendors", label: "Home", icon: "dashboard", exact: true },
   { href: "/vendors/jobs", label: "Jobs", icon: "tasks" },
@@ -32,11 +33,14 @@ const TABS: HomeBarLink[] = [
   { href: "/vendors/profile", label: "Profile", icon: "clients" },
 ];
 
+const MORE: HomeBarLink[] = [{ href: "/vendors/notifications", label: "Notifications", icon: "announcements" }];
+
 const NAV: { label: string; Icon: typeof DashboardIcon; href?: string; page?: Page }[] = [
   { label: "Home", Icon: DashboardIcon, href: "/vendors", page: "home" },
   { label: "Jobs", Icon: TasksIcon, href: "/vendors/jobs", page: "jobs" },
   { label: "Drive", Icon: FilesIcon, href: "/vendors/drive", page: "drive" },
   { label: "Profile", Icon: ClientsIcon, href: "/vendors/profile", page: "profile" },
+  { label: "Notifications", Icon: AnnouncementIcon, href: "/vendors/notifications", page: "notifications" },
 
   { label: "Calendar", Icon: CalendarIcon },
   { label: "Invoices", Icon: InvoiceIcon },
@@ -81,7 +85,7 @@ export function VendorFrame({ vendor, page, children }: { vendor: Vendor; page: 
         </aside>
         <main className="mx-auto w-full max-w-3xl pb-[calc(6rem+env(safe-area-inset-bottom))] lg:pb-8">{children}</main>
       </div>
-      <HomeBar tabs={TABS} logout={logoutClient} afterLogout="/" hideFrom="lg" />
+      <HomeBar tabs={TABS} more={MORE} logout={logoutClient} afterLogout="/" hideFrom="lg" />
     </div>
   );
 }
