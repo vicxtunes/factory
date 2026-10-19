@@ -47,6 +47,15 @@ export default async function VendorProfilePage() {
           <p className="mt-0.5 text-sm text-muted">
             {label} · {vendor.kind === "business" ? "Business" : "Individual"}
           </p>
+          {vendor.location ? (
+            <p className="mt-2 flex items-center gap-1.5 text-sm text-muted">
+              <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden>
+                <path d="M12 21s7-6.1 7-11.5A7 7 0 0 0 5 9.5C5 14.9 12 21 12 21Zm0-9a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" />
+              </svg>
+              {vendor.location}
+            </p>
+          ) : null}
+          {vendor.bio ? <p className="mt-3 max-w-xl text-sm leading-relaxed whitespace-pre-line">{vendor.bio}</p> : null}
 
           <dl className="mt-6 grid max-w-sm grid-cols-3">
             {[
@@ -63,9 +72,9 @@ export default async function VendorProfilePage() {
           </dl>
 
           <div className="mt-6 flex gap-3">
-            <span aria-disabled className="flex h-11 flex-1 items-center justify-center rounded-xl border border-border text-sm font-medium text-muted" title="Coming next">
+            <Link href="/vendors/profile/edit" className="flex h-11 flex-1 items-center justify-center rounded-xl border border-border text-sm font-medium hover:bg-surface">
               Edit profile
-            </span>
+            </Link>
             <span aria-disabled className="grid size-11 place-items-center rounded-xl border border-border text-muted" title="Coming next">
               <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden>
                 <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />

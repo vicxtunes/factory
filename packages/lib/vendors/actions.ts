@@ -8,7 +8,7 @@ import { getClientSession } from "@repo/lib/auth/session";
 import { parseInput, type Result } from "@repo/lib/kernel/core";
 import { runAction } from "@repo/lib/kernel/server/action";
 
-import { vendorJoinSchema } from "./core";
+import { vendorJoinSchema, vendorProfileSchema } from "./core";
 import { VendorError } from "./ports";
 import { vendors } from "./server";
 
@@ -19,5 +19,15 @@ export async function joinAsVendor(input: unknown): Promise<Result> {
     if (!session) throw new VendorError("Sign in first.");
     await vendors.join({ clientId: session.client_id, name: session.name }, parseInput(vendorJoinSchema, input));
     revalidatePath("/vendors");
+  });
+}
+
+/** The signed-in vendor saves their profile (/vendors/profile/edit). */
+export async function saveVendorProfile(input: unknown): Promise<Result> {
+  return runAction("vendors", async () => {
+    const session = await getClientSession();
+    if (!session) throw new VendorError("Sign in first.");
+    await vendors.updateProfile(session.client_id, parseInput(vendorProfileSchema, input));
+    revalidatePath("/vendors", "layout");
   });
 }

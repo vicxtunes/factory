@@ -12,8 +12,13 @@ function memoryStore() {
   const store: VendorStore = {
     byClient: async (clientId) => [...rows.values()].find((v) => v.clientId === clientId) ?? null,
     create: async (clientId, name, join) => {
-      const vendor: Vendor = { id: `v${rows.size + 1}`, clientId, name, ...join, status: "active", createdAt: "2026-10-18T00:00:00Z" };
+      const vendor: Vendor = { id: `v${rows.size + 1}`, clientId, name, ...join, bio: null, location: null, status: "active", createdAt: "2026-10-18T00:00:00Z" };
       rows.set(vendor.id, vendor);
+      return vendor;
+    },
+    updateProfile: async (id, profile) => {
+      const vendor = { ...rows.get(id)!, ...profile };
+      rows.set(id, vendor);
       return vendor;
     },
   };
@@ -41,4 +46,14 @@ test("joining again gives the vendor the account has, unchanged", async () => {
   const again = await service.join(kato, { ...answers, businessName: "Other", skills: ["Album design"] });
   assert.deepEqual(again, first);
   assert.equal(rows.size, 1);
+});
+
+test("a vendor edits their own profile; an account that hasn't joined can't", async () => {
+  const { store } = memoryStore();
+  const service = new VendorService(store);
+  const joined = await service.join(kato, answers);
+  const profile = { name: "Kato Films", kind: "business" as const, category: "videographer", skills: ["Drone"], socials: {}, bio: "Films that feel like the day.", location: "Kampala" };
+  const saved = await service.updateProfile(kato.clientId, profile);
+  assert.deepEqual({ ...saved, id: joined.id }, { ...joined, ...profile });
+  await assert.rejects(service.updateProfile("c-nobody", profile), /Join as a vendor first/);
 });

@@ -17,11 +17,13 @@ interface Row {
   category: string;
   skills: string[];
   socials: Vendor["socials"];
+  bio: string | null;
+  location: string | null;
   status: Vendor["status"];
   created_at: string;
 }
 
-const COLUMNS = "id, client_id, name, kind, category, skills, socials, status, created_at";
+const COLUMNS = "id, client_id, name, kind, category, skills, socials, bio, location, status, created_at";
 
 const toVendor = (r: Row): Vendor => ({
   id: r.id,
@@ -31,6 +33,8 @@ const toVendor = (r: Row): Vendor => ({
   category: r.category,
   skills: r.skills,
   socials: r.socials,
+  bio: r.bio,
+  location: r.location,
   status: r.status,
   createdAt: r.created_at,
 });
@@ -62,5 +66,24 @@ export const supabaseVendorStore: VendorStore = {
       if (existing) return existing;
     }
     fail("save the vendor", error ?? { message: "no row returned" });
+  },
+
+  async updateProfile(id, profile) {
+    const { data, error } = await vendors()
+      // Named one by one: nothing else a caller passes (the account, the status) reaches the row.
+      .update({
+        name: profile.name,
+        kind: profile.kind,
+        category: profile.category,
+        skills: profile.skills,
+        socials: profile.socials,
+        bio: profile.bio,
+        location: profile.location,
+      })
+      .eq("id", id)
+      .select(COLUMNS)
+      .single<Row>();
+    if (error) fail("save the profile", error);
+    return toVendor(data);
   },
 };
