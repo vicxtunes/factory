@@ -187,7 +187,16 @@ export interface MobileMoneyCollection {
 
 // --- The Business card (a business's own: what its customers pay it) ---------
 
-export type BusinessEntryKind = "customer_payment" | "fee" | "transfer_in" | "transfer_out" | "withdrawal" | "withdrawal_returned";
+export type BusinessEntryKind =
+  | "customer_payment"
+  | "fee"
+  | "transfer_in"
+  | "transfer_out"
+  | "withdrawal"
+  | "withdrawal_returned"
+  // A studio paying a vendor for a job, and the vendor's side of it (packages/lib/vendors → jobs).
+  | "vendor_payment"
+  | "vendor_earning";
 
 /** One line of a Business card's history. */
 export interface BusinessCardEntry {

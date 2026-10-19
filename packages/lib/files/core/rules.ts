@@ -15,10 +15,12 @@ export const DEFAULT_CONTENT_TYPE = "application/octet-stream";
  * Where a file goes. Uploads land under incoming/ (an R2 rule deletes
  * anything left there after a day) and move to their place only once the
  * server has checked their real size and the allowance. Keys carry ids only,
- * never the name a person typed.
+ * never the name a person typed. `owners` is whose Drive it is: studios', or
+ * vendors' (packages/lib/vendors).
  */
-export function fileKeys(tenantId: string, fileId: string) {
-  return { incoming: `incoming/${tenantId}/file-${fileId}`, final: `studios/${tenantId}/files/${fileId}`, ...copyKeys(`studios/${tenantId}/files/${fileId}`) };
+export function fileKeys(ownerId: string, fileId: string, owners: "studios" | "vendors" = "studios") {
+  const final = `${owners}/${ownerId}/files/${fileId}`;
+  return { incoming: `incoming/${ownerId}/file-${fileId}`, final, ...copyKeys(final) };
 }
 
 /** Where a picture's small copies go, beside the file itself. */

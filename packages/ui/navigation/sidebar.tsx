@@ -2,11 +2,12 @@
 
 import { useSyncExternalStore } from "react";
 
-// The sidebars' collapse to icons, remembered in this browser. The state is
-// data-sidebar="collapsed" on <html> — packages/ui/theme.css does the rest
-// (width, hidden labels, hover names) — so the sidebars stay plain markup.
+import { SIDEBAR_COOKIE } from "./sidebar-init";
 
-const STORAGE_KEY = "sidebar-collapsed";
+// The sidebars' collapse to icons, remembered in this browser (a cookie the
+// root layouts read). The state is data-sidebar="collapsed" on <html> —
+// packages/ui/theme.css does the rest (width, hidden labels, hover names) —
+// so the sidebars stay plain markup.
 
 function subscribe(onChange: () => void): () => void {
   const observer = new MutationObserver(onChange);
@@ -23,11 +24,7 @@ export function useSidebarCollapsed(): boolean {
 export function setSidebarCollapsed(collapsed: boolean): void {
   if (collapsed) document.documentElement.dataset.sidebar = "collapsed";
   else delete document.documentElement.dataset.sidebar;
-  try {
-    localStorage.setItem(STORAGE_KEY, collapsed ? "1" : "0");
-  } catch {
-    // Storage blocked: it just won't be remembered.
-  }
+  document.cookie = `${SIDEBAR_COOKIE}=${collapsed ? "1" : "0"}; path=/; max-age=31536000; samesite=lax`;
 }
 
 function ChevronsIcon({ className }: { className?: string }) {

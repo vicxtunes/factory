@@ -25,8 +25,26 @@ export interface Vendor {
   skills: string[];
   /** Plain handles (a website without its scheme), by network. */
   socials: Partial<Record<SocialNetwork, string>>;
+  /** A few lines about them, in their words. */
+  bio: string | null;
+  /** Where they work from ("Kampala"). */
+  location: string | null;
+  /** Their profile photo and cover, in the photo bucket. */
+  photoKey: string | null;
+  coverKey: string | null;
   status: VendorStatus;
   createdAt: string;
+}
+
+/** What a vendor can change on their profile (vendorProfileSchema's output). */
+export interface VendorProfile {
+  name: string;
+  kind: VendorKind;
+  category: string;
+  skills: string[];
+  socials: Vendor["socials"];
+  bio: string | null;
+  location: string | null;
 }
 
 /** What a vendor gives when they join (vendorJoinSchema's output). */
