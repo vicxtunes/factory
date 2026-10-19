@@ -2,6 +2,8 @@
 // finding their own vendor side again. Storage is a port (./ports.ts).
 
 import { PICTURE_MAX_BYTES, type Vendor, type VendorJoin, type VendorPicture, type VendorProfile } from "./core";
+import type { TenantScope } from "@repo/lib/tenancy/types";
+
 import { VendorError, type VendorFiles, type VendorStore } from "./ports";
 
 export class VendorService {
@@ -30,6 +32,14 @@ export class VendorService {
   /** The account's vendor, with its profile as edited. */
   async updateProfile(clientId: string, profile: VendorProfile): Promise<Vendor> {
     return this.store.updateProfile((await this.own(clientId)).id, profile);
+  }
+
+  /**
+   * Where the vendor's files live (their Drive): their own workspace, made on
+   * first use, in Kampala's currency, locale and time.
+   */
+  async driveScope(vendor: Vendor): Promise<TenantScope> {
+    return { tenantId: await this.store.workspace(vendor.id), currency: "UGX", locale: "en-UG", timeZone: "Africa/Kampala" };
   }
 
   /** A signed link the browser uploads one of its (already shrunk) pictures to. */

@@ -12,6 +12,8 @@ export interface VendorStore {
   /** A new vendor for the account; the one it has, when it joined meanwhile. */
   create(clientId: string, name: string, join: Omit<VendorJoin, "businessName">): Promise<Vendor>;
   updateProfile(id: string, profile: VendorProfile): Promise<Vendor>;
+  /** The vendor's workspace for its files (a tenant with no owner), made on first use. */
+  workspace(id: string): Promise<string>;
   /** Sets one of the vendor's pictures; returns the key it replaced. */
   setPicture(id: string, which: VendorPicture, key: string): Promise<string | null>;
 }

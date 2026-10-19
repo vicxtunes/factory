@@ -2,16 +2,19 @@ import "server-only";
 
 // Whose files a request reaches, and with what rights, from where it comes
 // (`Via`): the studio's workspace (everything with the Files area or as the
-// owner; otherwise what's shared with the member), a client's own page (what's
+// owner; otherwise what's shared with the member), a vendor's own Drive
+// (everything in it), a client's own page (what's
 // shared with them), a share link (what it opens, while it lasts) or a
 // client's task link (its folder, to look at, and that task only). Worked out
 // from the session or the link, never from what the browser claims.
 
 import { localDate } from "@repo/lib/accounting/core/period";
+import { getClientSession } from "@repo/lib/auth/session";
 import { portalClient, studioAtSlug } from "@repo/lib/studio-portal/server";
 import { studioOfCaller } from "@repo/lib/studios/server";
 import { tasks } from "@repo/lib/tasks/server";
 import { canUse } from "@repo/lib/team/core";
+import { vendors } from "@repo/lib/vendors/server";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
 import { FULL_ACCESS, type Commenter, type FileAccess, type Via } from "./core";
@@ -31,6 +34,19 @@ export interface FilesCaller {
 
 /** The caller's files and rights, or a FileError when they have none here. */
 export async function filesCaller(via: Via): Promise<FilesCaller> {
+  if (via.as === "vendor") {
+    // A vendor's own Drive (packages/lib/vendors): everything in it is theirs.
+    const session = await getClientSession();
+    const vendor = session ? await vendors.mine(session.client_id) : null;
+    if (!session || !vendor) throw new FileError("Sign in as a vendor to see your Drive.");
+    return {
+      scope: await vendors.driveScope(vendor),
+      access: FULL_ACCESS,
+      who: { kind: "studio", name: vendor.name },
+      person: { kind: "owner" },
+      studio: { name: vendor.name, ownerClientId: vendor.clientId },
+    };
+  }
   if (via.as === "studio") {
     const { scope, access, session, studio } = await studioOfCaller("anyone");
     const who: Commenter = { kind: access.owner ? "studio" : "member", name: session.name };

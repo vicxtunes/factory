@@ -41,7 +41,10 @@ import {
 import { FileError } from "./ports";
 import { files } from "./server";
 
-const touched = () => revalidatePath("/studio/files");
+const touched = () => {
+  revalidatePath("/studio/files");
+  revalidatePath("/vendors/drive");
+};
 
 async function caller(via: unknown) {
   return filesCaller(parseInput(viaSchema, via));

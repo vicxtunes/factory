@@ -20,24 +20,24 @@ import { logoutClient } from "../actions";
 import { LogOut } from "./log-out";
 
 // The vendor side's frame: the menu on wider screens, the tab bar on phones.
-// Only Home and Profile have pages yet; the rest of the menu shows what comes.
+// Home, Drive and Profile have pages; the rest of the menu shows what comes.
 
-type Page = "home" | "profile";
+type Page = "home" | "drive" | "profile";
 
 /** Phones: on the bar; Log out in "More". */
 const TABS: HomeBarLink[] = [
   { href: "/vendors", label: "Home", icon: "dashboard", exact: true },
   { href: "/vendors#jobs", label: "Jobs", icon: "tasks" },
-  { href: "/vendors#rates", label: "Rates", icon: "products" },
+  { href: "/vendors/drive", label: "Drive", icon: "files" },
   { href: "/vendors/profile", label: "Profile", icon: "clients" },
 ];
 
 const NAV: { label: string; Icon: typeof DashboardIcon; href?: string; page?: Page }[] = [
   { label: "Home", Icon: DashboardIcon, href: "/vendors", page: "home" },
+  { label: "Drive", Icon: FilesIcon, href: "/vendors/drive", page: "drive" },
   { label: "Profile", Icon: ClientsIcon, href: "/vendors/profile", page: "profile" },
   { label: "Jobs", Icon: TasksIcon },
   { label: "Calendar", Icon: CalendarIcon },
-  { label: "Drive", Icon: FilesIcon },
   { label: "Invoices", Icon: InvoiceIcon },
   { label: "Wallet", Icon: PaymentIcon },
   { label: "Rates", Icon: ProductsIcon },

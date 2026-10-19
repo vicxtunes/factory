@@ -21,6 +21,7 @@ function memoryStore() {
       rows.set(id, vendor);
       return vendor;
     },
+    workspace: async (id) => `w-${id}`,
     setPicture: async (id, which, key) => {
       const vendor = rows.get(id)!;
       const field = which === "photo" ? "photoKey" : "coverKey";

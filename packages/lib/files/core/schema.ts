@@ -74,11 +74,12 @@ export const shareTargetSchema = z.discriminatedUnion("kind", [
 
 /**
  * Where a request about files comes from, and so whose rights it has: the
- * studio's workspace, a client's own page, or a share link. The server works
+ * studio's workspace, a vendor's own Drive, a client's own page, or a share link. The server works
  * out the rights from the session or the link, never from the browser.
  */
 export const viaSchema = z.discriminatedUnion("as", [
   z.object({ as: z.literal("studio") }),
+  z.object({ as: z.literal("vendor") }),
   z.object({ as: z.literal("client"), slug: z.string().min(1).max(100) }),
   z.object({ as: z.literal("link"), slug: z.string().min(1).max(100), token: shareTokenSchema }),
   // A client's task opened by its link, without signing in.

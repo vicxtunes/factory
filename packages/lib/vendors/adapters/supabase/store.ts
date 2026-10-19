@@ -91,6 +91,12 @@ export const supabaseVendorStore: VendorStore = {
     return toVendor(data);
   },
 
+  async workspace(id) {
+    const { data, error } = await createAdminClient().rpc("vendor_workspace", { p_vendor: id });
+    if (error) fail("open the Drive", error);
+    return data as string;
+  },
+
   async setPicture(id, which, key) {
     const column = which === "photo" ? "photo_key" : "cover_key";
     const { data: before, error: readError } = await vendors().select(column).eq("id", id).single<Record<string, string | null>>();
