@@ -32,9 +32,9 @@ export default async function VendorJobPage({ params, searchParams }: { params: 
   if (folderId === undefined) notFound();
 
   return (
-    <VendorFrame vendor={vendor} page="home">
+    <VendorFrame vendor={vendor} page="jobs">
       <div className="space-y-6 px-4 py-6 sm:px-6 lg:py-8">
-        <BackLink href="/vendors">Home</BackLink>
+        <BackLink href="/vendors/jobs">Jobs</BackLink>
         <header className="space-y-1">
           <p className="text-sm font-medium text-brand-600 dark:text-brand-400">{job.studio.name}</p>
           <h1 className="text-2xl font-semibold tracking-tight">{job.projectTitle}</h1>

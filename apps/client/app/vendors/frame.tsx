@@ -20,23 +20,24 @@ import { logoutClient } from "../actions";
 import { LogOut } from "./log-out";
 
 // The vendor side's frame: the menu on wider screens, the tab bar on phones.
-// Home, Drive and Profile have pages; the rest of the menu shows what comes.
+// Home, Jobs, Drive and Profile have pages; the rest of the menu shows what comes.
 
-type Page = "home" | "drive" | "profile";
+type Page = "home" | "jobs" | "drive" | "profile";
 
 /** Phones: on the bar; Log out in "More". */
 const TABS: HomeBarLink[] = [
   { href: "/vendors", label: "Home", icon: "dashboard", exact: true },
-  { href: "/vendors#jobs", label: "Jobs", icon: "tasks" },
+  { href: "/vendors/jobs", label: "Jobs", icon: "tasks" },
   { href: "/vendors/drive", label: "Drive", icon: "files" },
   { href: "/vendors/profile", label: "Profile", icon: "clients" },
 ];
 
 const NAV: { label: string; Icon: typeof DashboardIcon; href?: string; page?: Page }[] = [
   { label: "Home", Icon: DashboardIcon, href: "/vendors", page: "home" },
+  { label: "Jobs", Icon: TasksIcon, href: "/vendors/jobs", page: "jobs" },
   { label: "Drive", Icon: FilesIcon, href: "/vendors/drive", page: "drive" },
   { label: "Profile", Icon: ClientsIcon, href: "/vendors/profile", page: "profile" },
-  { label: "Jobs", Icon: TasksIcon },
+
   { label: "Calendar", Icon: CalendarIcon },
   { label: "Invoices", Icon: InvoiceIcon },
   { label: "Wallet", Icon: PaymentIcon },

@@ -1,13 +1,13 @@
-import Link from "next/link";
-
 import { HomeGreeting, HomeHero, HomeSection } from "@repo/ui/home/HomeBits";
-import { JOB_STATUS_LABELS, VENDOR_FEE_PERCENT, vendorCategory, vendorTake, type JobView, type Vendor } from "@repo/lib/vendors/core";
+import { VENDOR_FEE_PERCENT, vendorCategory, type JobView, type Vendor } from "@repo/lib/vendors/core";
 
 import { vendorJobs, vendors } from "@repo/lib/vendors/server";
 
 import { VendorFrame } from "./frame";
-import { JobActions } from "./job-actions";
+import { JobList } from "./job-list";
 import { requireVendor } from "./vendor";
+
+const money = (n: number) => `UGX ${n.toLocaleString("en-US")}`;
 
 export const metadata = { title: "Vendors" };
 
@@ -38,7 +38,7 @@ function MyVendorHome({ owner, avatarUrl, vendor, jobs, balance }: { owner: stri
           <HomeHero
             title={`${requests.length} job request${requests.length === 1 ? "" : "s"} waiting`}
             text="Studios want you on their projects: accept to see the brief's files and start."
-            cta={{ label: "See requests", href: "#jobs" }}
+            cta={{ label: "See requests", href: "/vendors/jobs" }}
           />
         ) : (
           <HomeHero title="You're on Aming" text="Studios find you by name and what you do. Keep your profile and work up to date." cta={{ label: "My profile", href: "/vendors/profile" }} />
@@ -60,38 +60,14 @@ function MyVendorHome({ owner, avatarUrl, vendor, jobs, balance }: { owner: stri
         </section>
 
         <div id="jobs" className="scroll-mt-4 space-y-8">
-          <HomeSection title="Job requests">
+          <HomeSection title="Job requests" href="/vendors/jobs">
             {requests.length ? <JobList jobs={requests} answer /> : empty("No requests yet. Studios on Aming will send them here.")}
           </HomeSection>
-          <HomeSection title="Jobs in hand">{inHand.length ? <JobList jobs={inHand} /> : empty("Nothing in hand.")}</HomeSection>
+          <HomeSection title="Jobs in hand" href="/vendors/jobs">
+            {inHand.length ? <JobList jobs={inHand} /> : empty("Nothing in hand.")}
+          </HomeSection>
         </div>
       </div>
     </VendorFrame>
-  );
-}
-
-const money = (n: number) => `UGX ${n.toLocaleString("en-US")}`;
-
-/** Jobs as rows that open their page; requests can be answered right here. */
-function JobList({ jobs, answer }: { jobs: JobView[]; answer?: boolean }) {
-  return (
-    <ul className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-surface">
-      {jobs.map((j) => (
-        <li key={j.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
-          <Link href={`/vendors/jobs/${j.id}`} className="min-w-0 flex-1 hover:underline">
-            <p className="text-xs font-medium text-brand-600 dark:text-brand-400">{j.studio.name}</p>
-            <p className="truncate font-semibold">{j.projectTitle}</p>
-            <p className="line-clamp-1 text-sm text-muted">{j.brief}</p>
-          </Link>
-          <div className="flex items-center gap-3 sm:flex-col sm:items-end">
-            <span className="flex-1 text-sm sm:flex-none">
-              <span className="font-semibold tabular-nums">{money(vendorTake(j.price))}</span>
-              <span className="text-muted"> · {j.status === "requested" ? (j.dueOn ? `due ${j.dueOn}` : "no due date") : JOB_STATUS_LABELS[j.status]}</span>
-            </span>
-            {answer ? <JobActions id={j.id} status={j.status} /> : null}
-          </div>
-        </li>
-      ))}
-    </ul>
   );
 }
