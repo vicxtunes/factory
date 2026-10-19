@@ -71,7 +71,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/dashboard/wallets", label: "Wallets", icon: "payment", visible: managers },
       { href: "/dashboard/transactions", label: "Transactions", icon: "payment", visible: managers },
       // Studios' payments to vendors that Aming holds: disputes to settle, work waiting on studios.
-      { href: "/dashboard/vendor-jobs", label: "Vendor jobs", icon: "agents", visible: accountsViewers },
+      { href: "/dashboard/vendor-jobs", label: "Vendor jobs", icon: "agents", visible: boss },
     ],
   },
   {

@@ -5,7 +5,6 @@
 import { revalidatePath } from "next/cache";
 
 import { getClientSession, getDashboardSession } from "@repo/lib/auth/session";
-import { canViewAccounts } from "@repo/lib/accounting/policy";
 import { files } from "@repo/lib/files/server";
 import { parseInput, type Result } from "@repo/lib/kernel/core";
 import { runAction } from "@repo/lib/kernel/server/action";
@@ -182,11 +181,11 @@ export async function disputeVendorJob(id: unknown, reason: unknown): Promise<Re
 
 // ── Jobs: Aming's staff ──
 
-/** Staff settle a disputed job: the money to the vendor, or back to the studio. The boss and supervisors. */
+/** Staff settle a disputed job: the money to the vendor, or back to the studio. The boss only. */
 export async function settleVendorJob(id: unknown, outcome: unknown): Promise<Result> {
   return runAction("vendors", async () => {
     const staff = await getDashboardSession();
-    if (!staff || !canViewAccounts(staff.role)) throw new VendorError("Only the boss or a supervisor can settle disputes.");
+    if (staff?.role !== "boss") throw new VendorError("Only the boss can settle disputes.");
     await vendorJobs.settle(parseInput(jobIdSchema, id), parseInput(settlementSchema, outcome), { id: staff.userId, name: staff.fullName ?? staff.email ?? "Aming staff" });
     revalidatePath("/dashboard/vendor-jobs");
   });

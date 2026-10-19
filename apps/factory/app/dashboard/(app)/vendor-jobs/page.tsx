@@ -3,7 +3,6 @@ import { after } from "next/server";
 
 import { SectionLabel } from "@repo/ui/SectionLabel";
 import { SettleDispute } from "@repo/ui/vendors/SettleDispute";
-import { canViewAccounts } from "@repo/lib/accounting/policy";
 import { getDashboardSession } from "@repo/lib/auth/session";
 import { autoReleaseAt, vendorTake, type JobView } from "@repo/lib/vendors/core";
 import { vendorJobs } from "@repo/lib/vendors/server";
@@ -14,13 +13,13 @@ export const metadata = { title: "Vendor jobs" };
 const money = (n: number) => `UGX ${n.toLocaleString("en-US")}`;
 
 // Studios' payments to vendors that Aming holds (packages/lib/vendors →
-// jobs): disputes for the boss or a supervisor to settle (release to the
+// jobs): disputes for the boss to settle (release to the
 // vendor, or refund the studio), and delivered work waiting on a studio,
 // released on its own two days after delivery. Opening it also settles
 // what's overdue.
 export default async function VendorJobsPage() {
   const session = await getDashboardSession();
-  if (!session || !canViewAccounts(session.role)) redirect("/dashboard");
+  if (session?.role !== "boss") redirect("/dashboard");
   after(() => vendorJobs.sweepOverdue());
   const jobs = await vendorJobs.needingAttention();
   const disputes = jobs.filter((j) => j.status === "disputed");
