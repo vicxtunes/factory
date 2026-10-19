@@ -26,9 +26,10 @@ const WITHDRAWALS_SHOWN = 10;
 /** Largest single move or withdrawal (UGX). A sanity cap on typos. */
 const MAX_MOVE = 100_000_000;
 
-const WITHDRAWAL_COLUMNS = "id, amount, phone, status, reference, reason, payout_fee, last_error, created_at";
+/** A withdrawal's columns, a Business card's or a vendor's wallet's (./vendor.ts): the two tables match. */
+export const WITHDRAWAL_COLUMNS = "id, amount, phone, status, reference, reason, payout_fee, last_error, created_at";
 
-interface WithdrawalRow {
+export interface WithdrawalRow {
   id: string;
   amount: number;
   phone: string;
@@ -40,7 +41,7 @@ interface WithdrawalRow {
   created_at: string;
 }
 
-const toWithdrawal = (r: WithdrawalRow): Withdrawal => ({
+export const toWithdrawal = (r: WithdrawalRow): Withdrawal => ({
   id: r.id,
   amount: Number(r.amount),
   phone: r.phone,
@@ -53,7 +54,7 @@ const toWithdrawal = (r: WithdrawalRow): Withdrawal => ({
 });
 
 /** The gateway is only asked about a payout once it has had this long. */
-const ASK_GATEWAY_AFTER_MS = 10_000;
+export const ASK_GATEWAY_AFTER_MS = 10_000;
 
 function actorArgs(actor: WalletActor) {
   return { p_actor_type: actor.type, p_actor_id: actor.id, p_actor_name: actor.name };
@@ -222,7 +223,7 @@ export async function listPendingWithdrawals(): Promise<PendingWithdrawal[]> {
     .returns<(WithdrawalRow & { tenant_id: string; requested_by_name: string })[]>();
   if (error) throwDbError(error);
   const businesses = await businessesOf((data ?? []).map((r) => r.tenant_id));
-  return (data ?? []).map((r) => ({ ...toWithdrawal(r), businessName: businesses.get(r.tenant_id)?.name ?? "A business", requestedByName: r.requested_by_name }));
+  return (data ?? []).map((r) => ({ ...toWithdrawal(r), from: "business" as const, businessName: businesses.get(r.tenant_id)?.name ?? "A business", requestedByName: r.requested_by_name }));
 }
 
 /** The withdrawal's owner is told how it went (best effort). */

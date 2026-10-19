@@ -233,8 +233,29 @@ export interface Withdrawal {
 
 /** A waiting withdrawal in the staff queue. */
 export interface PendingWithdrawal extends Withdrawal {
+  /** Whose money: a business's Business card, or a vendor's wallet (packages/lib/vendors). */
+  from: "business" | "vendor";
   businessName: string;
   requestedByName: string;
+}
+
+/** One line of a vendor's wallet: a job's payment, Aming's fee on it, a withdrawal or one coming back. */
+export interface VendorWalletEntry {
+  id: string;
+  kind: "job_payment" | "fee" | "withdrawal" | "withdrawal_returned";
+  /** Signed: positive added to the balance, negative took from it. */
+  amount: number;
+  balanceAfter: number;
+  note: string | null;
+  createdAt: string;
+}
+
+/** A vendor's wallet as they see it. */
+export interface VendorWalletView {
+  balance: number;
+  entries: VendorWalletEntry[];
+  /** The latest withdrawals, the newest first. */
+  withdrawals: Withdrawal[];
 }
 
 /** Money in and out of a Business card in one month ("2026-10"). */
