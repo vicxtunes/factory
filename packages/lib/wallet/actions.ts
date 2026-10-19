@@ -17,6 +17,7 @@ import { revalidatePath } from "next/cache";
 import { WalletError } from "./server/errors";
 import { requireBusinessOwner, requireClient, requireStaff, getViewer } from "./server/identity";
 import * as business from "./server/business";
+import * as vendorWallet from "./server/vendor";
 import * as mobileMoney from "./server/mobile-money";
 import { requireUnlocked } from "./server/pin";
 import * as service from "./server/service";
@@ -34,6 +35,7 @@ import type {
   WalletView,
 } from "./types";
 import { clientPath } from "@repo/lib/client-portal/paths";
+import { vendors } from "@repo/lib/vendors/server";
 
 async function run<T>(fn: () => Promise<T>): Promise<WalletResult<T>>;
 async function run(fn: () => Promise<void>): Promise<WalletResult>;
@@ -260,27 +262,47 @@ export async function refundOrderToWallet(
 }
 
 /** Withdrawals from Business cards waiting to be sent. */
+/** Businesses' and vendors' withdrawals waiting for staff or being sent, oldest first. */
 export async function listPendingWithdrawals(): Promise<WalletResult<PendingWithdrawal[]>> {
   return run(async () => {
     await requireStaff();
-    return business.listPendingWithdrawals();
+    const [businesses, vendors] = await Promise.all([business.listPendingWithdrawals(), vendorWallet.listPendingVendorWithdrawals()]);
+    return [...businesses, ...vendors].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   });
 }
 
-/** Approves a waiting withdrawal: HivePay sends it to the owner's phone. */
-export async function approveWithdrawal(id: string): Promise<WalletResult> {
+/** Approves a waiting withdrawal (`from` a Business card or a vendor's wallet): HivePay sends it to their phone. */
+export async function approveWithdrawal(id: string, from: PendingWithdrawal["from"] = "business"): Promise<WalletResult> {
   return run(async () => {
-    await business.approveWithdrawal(await requireStaff(), id);
+    const staff = await requireStaff();
+    if (from === "vendor") await vendorWallet.approveVendorWithdrawal(staff, id);
+    else await business.approveWithdrawal(staff, id);
     refreshMoneyPages();
-    revalidatePath("/studio/wallet");
+    revalidatePath(from === "vendor" ? "/vendors/wallet" : "/studio/wallet");
   });
 }
 
-/** Refuses a waiting withdrawal (the owner sees `reason`): the money goes back on their card. */
-export async function refuseWithdrawal(id: string, reason: string): Promise<WalletResult> {
+/** Refuses a waiting withdrawal (they see `reason`): the money goes back on their card or wallet. */
+export async function refuseWithdrawal(id: string, reason: string, from: PendingWithdrawal["from"] = "business"): Promise<WalletResult> {
   return run(async () => {
-    await business.refuseWithdrawal(await requireStaff(), id, reason);
+    const staff = await requireStaff();
+    if (from === "vendor") await vendorWallet.refuseVendorWithdrawal(staff, id, reason);
+    else await business.refuseWithdrawal(staff, id, reason);
     refreshMoneyPages();
-    revalidatePath("/studio/wallet");
+    revalidatePath(from === "vendor" ? "/vendors/wallet" : "/studio/wallet");
+  });
+}
+
+// --- A vendor's wallet ---------------------------------------------------------
+
+/** The signed-in vendor withdraws from their wallet to their phone (their wallet PIN unlocked): staff approve it. */
+export async function withdrawFromVendorWallet(amount: number, phone: string): Promise<WalletResult> {
+  return run(async () => {
+    const client = await requireClient();
+    const vendor = await vendors.mine(client.id);
+    if (!vendor) throw new WalletError("Join as a vendor first.");
+    await requireUnlocked(client.id);
+    await vendorWallet.requestVendorWithdrawal({ id: vendor.id, name: vendor.name, clientId: client.id }, amount, phone);
+    revalidatePath("/vendors", "layout");
   });
 }

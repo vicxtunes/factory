@@ -75,7 +75,7 @@ function Row({ withdrawal }: { withdrawal: PendingWithdrawal }) {
               className="min-h-9 text-xs"
               loading={pending}
               onClick={() => {
-                if (window.confirm(`Send ${money(withdrawal.amount)} to ${localPhone(withdrawal.phone)} by mobile money?`)) act(() => approveWithdrawal(withdrawal.id));
+                if (window.confirm(`Send ${money(withdrawal.amount)} to ${localPhone(withdrawal.phone)} by mobile money?`)) act(() => approveWithdrawal(withdrawal.id, withdrawal.from));
               }}
             >
               Approve & send
@@ -93,7 +93,7 @@ function Row({ withdrawal }: { withdrawal: PendingWithdrawal }) {
               <TextInput value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} autoFocus />
             </Field>
           </div>
-          <Button variant="danger" className="min-h-11 text-xs" loading={pending} onClick={() => act(() => refuseWithdrawal(withdrawal.id, reason))}>
+          <Button variant="danger" className="min-h-11 text-xs" loading={pending} onClick={() => act(() => refuseWithdrawal(withdrawal.id, reason, withdrawal.from))}>
             Refuse
           </Button>
           <button type="button" className="min-h-11 text-xs text-muted" disabled={pending} onClick={() => setRefusing(false)}>

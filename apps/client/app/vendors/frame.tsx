@@ -21,9 +21,9 @@ import { logoutClient } from "../actions";
 import { LogOut } from "./log-out";
 
 // The vendor side's frame: the menu on wider screens, the tab bar on phones.
-// Home, Jobs, Drive, Profile and Notifications have pages; the rest of the menu shows what comes.
+// Home, Jobs, Drive, Wallet, Profile and Notifications have pages; the rest of the menu shows what comes.
 
-type Page = "home" | "jobs" | "drive" | "profile" | "notifications";
+type Page = "home" | "jobs" | "drive" | "wallet" | "profile" | "notifications";
 
 /** Phones: on the bar; Notifications and Log out in "More". */
 const TABS: HomeBarLink[] = [
@@ -33,7 +33,10 @@ const TABS: HomeBarLink[] = [
   { href: "/vendors/profile", label: "Profile", icon: "clients" },
 ];
 
-const MORE: HomeBarLink[] = [{ href: "/vendors/notifications", label: "Notifications", icon: "announcements" }];
+const MORE: HomeBarLink[] = [
+  { href: "/vendors/wallet", label: "Wallet", icon: "payment" },
+  { href: "/vendors/notifications", label: "Notifications", icon: "announcements" },
+];
 
 const NAV: { label: string; Icon: typeof DashboardIcon; href?: string; page?: Page }[] = [
   { label: "Home", Icon: DashboardIcon, href: "/vendors", page: "home" },
@@ -44,7 +47,7 @@ const NAV: { label: string; Icon: typeof DashboardIcon; href?: string; page?: Pa
 
   { label: "Calendar", Icon: CalendarIcon },
   { label: "Invoices", Icon: InvoiceIcon },
-  { label: "Wallet", Icon: PaymentIcon },
+  { label: "Wallet", Icon: PaymentIcon, href: "/vendors/wallet", page: "wallet" },
   { label: "Rates", Icon: ProductsIcon },
   { label: "Settings", Icon: SettingsIcon },
 ];
