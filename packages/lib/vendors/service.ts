@@ -29,6 +29,16 @@ export class VendorService {
     return this.store.create(account.clientId, businessName ?? account.name, rest);
   }
 
+  /** Vendors a studio can hire: every word of `query` in their name, and maybe of one category. */
+  async search(query: string, category: string | null): Promise<Vendor[]> {
+    return this.store.search(query.split(/\s+/).filter(Boolean).slice(0, 5), category);
+  }
+
+  /** What's on the vendor's Business card: what studios paid them, less Aming's fee and withdrawals. */
+  async cardBalance(vendor: Vendor): Promise<number> {
+    return this.store.cardBalance(vendor.id);
+  }
+
   /** The account's vendor, with its profile as edited. */
   async updateProfile(clientId: string, profile: VendorProfile): Promise<Vendor> {
     return this.store.updateProfile((await this.own(clientId)).id, profile);

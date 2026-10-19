@@ -1,36 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import type { Vendor } from "./core";
 import type { VendorFiles, VendorStore } from "./ports";
+import { memoryStore } from "./testing";
 import { VendorService } from "./service";
 
-// The service against an in-memory VendorStore: no database needed.
-
-function memoryStore() {
-  const rows = new Map<string, Vendor>();
-  const store: VendorStore = {
-    byClient: async (clientId) => [...rows.values()].find((v) => v.clientId === clientId) ?? null,
-    create: async (clientId, name, join) => {
-      const vendor: Vendor = { id: `v${rows.size + 1}`, clientId, name, ...join, bio: null, location: null, photoKey: null, coverKey: null, status: "active", createdAt: "2026-10-18T00:00:00Z" };
-      rows.set(vendor.id, vendor);
-      return vendor;
-    },
-    updateProfile: async (id, profile) => {
-      const vendor = { ...rows.get(id)!, ...profile };
-      rows.set(id, vendor);
-      return vendor;
-    },
-    workspace: async (id) => `w-${id}`,
-    setPicture: async (id, which, key) => {
-      const vendor = rows.get(id)!;
-      const field = which === "photo" ? "photoKey" : "coverKey";
-      rows.set(id, { ...vendor, [field]: key });
-      return vendor[field];
-    },
-  };
-  return { store, rows };
-}
+// The service against an in-memory VendorStore (./testing.ts): no database needed.
 
 /** Picture files in memory: key → size. */
 function memoryFiles() {
@@ -109,4 +84,14 @@ test("a vendor's picture: uploaded to its own place, checked, moved in, and the 
   assert.ok(!objects.has(big.key));
   await assert.rejects(pictures.confirmPicture(kato.clientId, "cover", "vendors/someone-else/cover-x.jpg"), /isn't valid/);
   await assert.rejects(pictures.confirmPicture(kato.clientId, "photo", (await pictures.startPictureUpload(kato.clientId, "photo")).key), /didn't arrive/);
+});
+
+test("finding vendors to hire: every word in the name, and the category if one is chosen", async () => {
+  const { store } = memoryStore();
+  const vendorService = service(store);
+  await vendorService.join(kato, answers);
+  await vendorService.join({ clientId: "c-nambi", name: "Nambi Films" }, { ...answers, kind: "individual", businessName: null, category: "videographer" });
+  assert.deepEqual((await vendorService.search("  kato  edits ", null)).map((v) => v.name), ["Kato Edits"]);
+  assert.deepEqual((await vendorService.search("", "videographer")).map((v) => v.name), ["Nambi Films"]);
+  assert.equal((await vendorService.search("kato", "videographer")).length, 0);
 });

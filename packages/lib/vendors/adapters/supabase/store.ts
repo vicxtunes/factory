@@ -58,6 +58,35 @@ export const supabaseVendorStore: VendorStore = {
     return data ? toVendor(data) : null;
   },
 
+  async get(id) {
+    const { data, error } = await vendors().select(COLUMNS).eq("id", id).maybeSingle<Row>();
+    if (error) fail("load the vendor", error);
+    return data ? toVendor(data) : null;
+  },
+
+  async search(words, category) {
+    let query = vendors().select(COLUMNS).eq("status", "active");
+    // Each word somewhere in the name, whatever the capitals (% and _ taken literally).
+    for (const word of words) query = query.ilike("name", `%${word.replace(/[\\%_]/g, (c) => `\\${c}`)}%`);
+    if (category) query = query.eq("category", category);
+    const { data, error } = await query.order("created_at", { ascending: false }).limit(30).returns<Row[]>();
+    if (error) fail("find vendors", error);
+    return data.map(toVendor);
+  },
+
+  async cardBalance(id) {
+    const { data: vendor, error } = await vendors().select("workspace_id").eq("id", id).single<{ workspace_id: string | null }>();
+    if (error) fail("load the vendor", error);
+    if (!vendor.workspace_id) return 0;
+    const { data: card, error: cardError } = await createAdminClient()
+      .from("business_wallets")
+      .select("balance")
+      .eq("tenant_id", vendor.workspace_id)
+      .maybeSingle<{ balance: number | string }>();
+    if (cardError) fail("load the Business card", cardError);
+    return Number(card?.balance ?? 0);
+  },
+
   async create(clientId, name, join) {
     const { data, error } = await vendors()
       .insert({ client_id: clientId, name, kind: join.kind, category: join.category, skills: join.skills, socials: join.socials })

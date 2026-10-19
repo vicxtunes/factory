@@ -80,6 +80,8 @@ export const shareTargetSchema = z.discriminatedUnion("kind", [
 export const viaSchema = z.discriminatedUnion("as", [
   z.object({ as: z.literal("studio") }),
   z.object({ as: z.literal("vendor") }),
+  // A vendor working on a studio's project: its folder (packages/lib/vendors → jobs).
+  z.object({ as: z.literal("job"), id: z.uuid() }),
   z.object({ as: z.literal("client"), slug: z.string().min(1).max(100) }),
   z.object({ as: z.literal("link"), slug: z.string().min(1).max(100), token: shareTokenSchema }),
   // A client's task opened by its link, without signing in.

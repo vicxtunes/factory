@@ -17,6 +17,7 @@ import { PanelStackSkeleton, RowsSkeleton } from "@repo/ui/skeletons/blocks";
 import { Loading } from "@repo/ui/skeletons/Loading";
 import { LinkedOrdersList, OrderFromAming } from "@repo/ui/studio-orders/AmingOrders";
 import { AddTaskForm, TaskRows } from "@repo/ui/tasks/TaskRows";
+import { ProjectVendors } from "@repo/ui/vendors/ProjectVendors";
 import { localDate } from "@repo/lib/accounting/core/period";
 import { invoices } from "@repo/lib/billing/server";
 import { bookings } from "@repo/lib/bookings/server";
@@ -30,6 +31,7 @@ import { portal, studioUrl } from "@repo/lib/studio-portal/server";
 import { requireStudio } from "@repo/lib/studios/server";
 import { canUse } from "@repo/lib/team/core";
 import { tasks } from "@repo/lib/tasks/server";
+import { vendorJobs, vendors } from "@repo/lib/vendors/server";
 import { team } from "@repo/lib/team/server";
 import { formatAmount, formatDay } from "@repo/lib/tenancy/format";
 import type { TenantScope } from "@repo/lib/tenancy/types";
@@ -86,6 +88,12 @@ export default async function StudioProjectPage({ params }: { params: Promise<{ 
         <SectionLabel>Tasks</SectionLabel>
         <Loading skeleton={<RowsSkeleton rows={3} />}>
           <Tasks scope={scope} project={p} />
+        </Loading>
+      </section>
+      <section className="space-y-3">
+        <SectionLabel>Vendors</SectionLabel>
+        <Loading skeleton={<RowsSkeleton rows={2} />}>
+          <Vendors scope={scope} project={p} canPay={canUse(access, "money")} />
         </Loading>
       </section>
       {canUse(access, "files") ? (
@@ -187,6 +195,25 @@ async function Tasks({ scope, project: p }: { scope: TenantScope; project: Proje
 }
 
 // Its folder in Files (Projects → its title), made with the project.
+// Vendors hired on the project (packages/lib/vendors → jobs).
+async function Vendors({ scope, project: p, canPay }: { scope: TenantScope; project: Project; canPay: boolean }) {
+  const found = await vendorJobs.forProject(scope.tenantId, p.id);
+  const jobs = await Promise.all(
+    found.map(async (j) => ({
+      id: j.id,
+      vendorId: j.vendorId,
+      vendorName: j.vendor.name,
+      vendorCategory: j.vendor.category,
+      photoUrl: await vendors.pictureUrl(j.vendor.photoKey),
+      brief: j.brief,
+      dueOn: j.dueOn,
+      price: j.price,
+      status: j.status,
+    })),
+  );
+  return <ProjectVendors projectId={p.id} jobs={jobs} canPay={canPay} />;
+}
+
 async function ProjectFiles({ scope, project: p }: { scope: TenantScope; project: Project }) {
   const folderId = await files.projectFolder(scope, p.id);
   if (!folderId) return <p className="text-sm text-muted">This project has no folder.</p>;

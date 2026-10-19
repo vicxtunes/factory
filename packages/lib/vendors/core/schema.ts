@@ -5,6 +5,7 @@ import { z } from "zod";
 import { optionalText } from "@repo/lib/kernel/core";
 
 import { SOCIAL_NETWORKS, socialHandle, VENDOR_CATEGORIES } from "./categories";
+import type { JobRequest } from "./jobs";
 import type { VendorJoin, VendorProfile } from "./model";
 
 const kind = z.enum(["individual", "business"], "Choose who you are.");
@@ -61,3 +62,29 @@ export const vendorPictureSchema = z.enum(["photo", "cover"]);
 
 /** An upload's key, as the server handed it out. */
 export const pictureKeySchema = z.string().min(1).max(300);
+
+/** A studio's request to a vendor, on one of its projects. */
+export const jobRequestSchema = z.object({
+  projectId: z.uuid("Choose a project."),
+  vendorId: z.uuid("Choose a vendor."),
+  brief: z.string("Say what's needed.").trim().min(3, "Say what's needed.").max(1000, "Keep it under 1,000 characters."),
+  dueOn: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Choose a date.")
+    .nullish()
+    .or(z.literal(""))
+    .transform((d) => d || null),
+  price: z.coerce
+    .number("Enter the price.")
+    .int("A whole number of shillings.")
+    .min(1_000, "At least UGX 1,000.")
+    .max(100_000_000, "That's more than a job can be."),
+}) satisfies z.ZodType<JobRequest, unknown>;
+
+export const jobIdSchema = z.uuid("That job doesn't exist.");
+
+/** Finding vendors to hire: words in their name, and maybe what they do. */
+export const vendorSearchSchema = z.object({
+  query: z.string().trim().max(60).default(""),
+  category: z.string().max(40).nullish().transform((c) => c || null),
+});

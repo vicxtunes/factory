@@ -3,7 +3,7 @@ import "server-only";
 // Whose files a request reaches, and with what rights, from where it comes
 // (`Via`): the studio's workspace (everything with the Files area or as the
 // owner; otherwise what's shared with the member), a vendor's own Drive
-// (everything in it), a client's own page (what's
+// (everything in it), a vendor's job (its project's folder), a client's own page (what's
 // shared with them), a share link (what it opens, while it lasts) or a
 // client's task link (its folder, to look at, and that task only). Worked out
 // from the session or the link, never from what the browser claims.
@@ -11,10 +11,12 @@ import "server-only";
 import { localDate } from "@repo/lib/accounting/core/period";
 import { getClientSession } from "@repo/lib/auth/session";
 import { portalClient, studioAtSlug } from "@repo/lib/studio-portal/server";
-import { studioOfCaller } from "@repo/lib/studios/server";
+import { studioOfCaller, studios } from "@repo/lib/studios/server";
 import { tasks } from "@repo/lib/tasks/server";
 import { canUse } from "@repo/lib/team/core";
-import { vendors } from "@repo/lib/vendors/server";
+import { studioScope } from "@repo/lib/studios/core";
+import { reachesFolder } from "@repo/lib/vendors/core";
+import { vendorJobs, vendors } from "@repo/lib/vendors/server";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
 import { FULL_ACCESS, type Commenter, type FileAccess, type Via } from "./core";
@@ -45,6 +47,23 @@ export async function filesCaller(via: Via): Promise<FilesCaller> {
       who: { kind: "studio", name: vendor.name },
       person: { kind: "owner" },
       studio: { name: vendor.name, ownerClientId: vendor.clientId },
+    };
+  }
+  if (via.as === "job") {
+    // The project's folder, from accepting the job until it's paid: download the work, upload what's done.
+    const session = await getClientSession();
+    const job = session ? await vendorJobs.vendorJob(session.client_id, via.id) : null;
+    const studio = job && reachesFolder(job.status) ? await studios.get(job.tenantId) : null;
+    if (!job || !studio) throw new FileError("This job's folder isn't open to you.");
+    const scope = studioScope(studio);
+    const folderId = await files.projectFolder(scope, job.projectId);
+    if (!folderId) throw new FileError("This project has no folder.");
+    return {
+      scope,
+      access: { kind: "shared", grants: [{ folderId, role: "contributor", canDownload: true }] },
+      who: { kind: "member", name: job.vendor.name },
+      person: { kind: "guest" },
+      studio: { name: studio.name, ownerClientId: studio.ownerClientId },
     };
   }
   if (via.as === "studio") {

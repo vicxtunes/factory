@@ -43,7 +43,7 @@ import { files } from "./server";
 
 const touched = () => {
   revalidatePath("/studio/files");
-  revalidatePath("/vendors/drive");
+  revalidatePath("/vendors", "layout");
 };
 
 async function caller(via: unknown) {
