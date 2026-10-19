@@ -56,3 +56,8 @@ export const vendorProfileSchema = z.object({
   bio: optionalText(300, "Keep your bio under 300 characters."),
   location: optionalText(80, "Keep the place under 80 characters."),
 }) satisfies z.ZodType<VendorProfile, unknown>;
+
+export const vendorPictureSchema = z.enum(["photo", "cover"]);
+
+/** An upload's key, as the server handed it out. */
+export const pictureKeySchema = z.string().min(1).max(300);

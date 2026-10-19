@@ -1,6 +1,8 @@
 import { HomeGreeting, HomeHero, HomeSection } from "@repo/ui/home/HomeBits";
 import { VENDOR_FEE_PERCENT, vendorCategory, type Vendor } from "@repo/lib/vendors/core";
 
+import { vendors } from "@repo/lib/vendors/server";
+
 import { VendorFrame } from "./frame";
 import { requireVendor } from "./vendor";
 
@@ -13,7 +15,8 @@ export const metadata = { title: "Vendors" };
 
 export default async function VendorsPage() {
   const { session, vendor } = await requireVendor();
-  return <MyVendorHome owner={session.name} avatarUrl={session.avatarUrl} vendor={vendor} />;
+  const photoUrl = await vendors.pictureUrl(vendor.photoKey);
+  return <MyVendorHome owner={session.name} avatarUrl={photoUrl ?? session.avatarUrl} vendor={vendor} />;
 }
 
 /** A vendor's home: what's waiting for them, empty until photographers book them. */

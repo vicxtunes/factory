@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { Avatar } from "@repo/ui/Avatar";
 import { SOCIAL_NETWORKS, vendorCategory } from "@repo/lib/vendors/core";
+import { vendors } from "@repo/lib/vendors/server";
 
 import { VendorFrame } from "../frame";
 import { requireVendor } from "../vendor";
@@ -19,14 +20,23 @@ export default async function VendorProfilePage() {
     const handle = vendor.socials[n.id];
     return handle ? [{ id: n.id, label: n.label, text: n.id === "website" ? handle : `@${handle}`, href: `https://${n.prefix}${handle}` }] : [];
   });
+  const [photoUrl, coverUrl] = await Promise.all([vendors.pictureUrl(vendor.photoKey), vendors.pictureUrl(vendor.coverKey)]);
   const joined = new Date(vendor.createdAt).toLocaleDateString("en-GB", { month: "long", year: "numeric" });
 
   return (
     <VendorFrame vendor={vendor} page="profile">
       <div className="lg:px-6 lg:pt-6">
         <div className="relative h-40 overflow-hidden bg-gray-950 sm:h-48 lg:rounded-3xl">
-          <div className="absolute -right-16 -bottom-24 h-64 w-[34rem] rotate-[-14deg] rounded-[100%] bg-gradient-to-r from-transparent via-brand-500/80 to-brand-300/60 blur-2xl" />
-          <div className="absolute -top-20 -left-24 h-56 w-[30rem] rotate-[10deg] rounded-[100%] bg-gradient-to-r from-gray-700/70 to-transparent blur-2xl" />
+          {coverUrl ? (
+            // A short-lived signed link to the private bucket: a plain img.
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={coverUrl} alt="" className="size-full object-cover" />
+          ) : (
+            <>
+              <div className="absolute -right-16 -bottom-24 h-64 w-[34rem] rotate-[-14deg] rounded-[100%] bg-gradient-to-r from-transparent via-brand-500/80 to-brand-300/60 blur-2xl" />
+              <div className="absolute -top-20 -left-24 h-56 w-[30rem] rotate-[10deg] rounded-[100%] bg-gradient-to-r from-gray-700/70 to-transparent blur-2xl" />
+            </>
+          )}
           <Link
             href="/vendors"
             aria-label="Back"
@@ -40,7 +50,7 @@ export default async function VendorProfilePage() {
 
         <div className="px-4 sm:px-6 lg:px-2">
           <div className="relative z-10 -mt-14 inline-block rounded-full ring-4 ring-background">
-            <Avatar name={vendor.name} src={session.avatarUrl ?? undefined} size="lg" className="!size-28 !text-3xl" />
+            <Avatar name={vendor.name} src={photoUrl ?? session.avatarUrl ?? undefined} size="lg" className="!size-28 !text-3xl" />
           </div>
 
           <h1 className="mt-3 text-2xl font-semibold tracking-tight">{vendor.name}</h1>

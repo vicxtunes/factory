@@ -12,7 +12,7 @@ import { SOCIAL_NETWORKS, VENDOR_CATEGORIES, VENDOR_SKILLS, type Vendor } from "
 const BIO_MAX = 300;
 
 /** A vendor's profile, all on one page: who they are, what they do and offer, about them, where their work is. */
-export function EditProfileForm({ vendor }: { vendor: Vendor }) {
+export function EditProfileForm({ vendor, pictures }: { vendor: Vendor; pictures: ReactNode }) {
   const router = useRouter();
   const [name, setName] = useState(vendor.name);
   const [kind, setKind] = useState(vendor.kind);
@@ -49,7 +49,8 @@ export function EditProfileForm({ vendor }: { vendor: Vendor }) {
         </Link>
       </div>
 
-      <div className="mt-8 space-y-10">
+      <div className="mt-6 space-y-10">
+        {pictures}
         <Section title="You">
           <Field label={kind === "business" ? "Business name" : "Name"}>
             <TextInput value={name} onChange={(e) => setName(e.target.value)} maxLength={100} required />

@@ -29,6 +29,9 @@ export interface Vendor {
   bio: string | null;
   /** Where they work from ("Kampala"). */
   location: string | null;
+  /** Their profile photo and cover, in the photo bucket. */
+  photoKey: string | null;
+  coverKey: string | null;
   status: VendorStatus;
   createdAt: string;
 }

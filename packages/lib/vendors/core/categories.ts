@@ -36,6 +36,13 @@ export const VENDOR_CATEGORIES: VendorCategory[] = [
 
 export const vendorCategory = (id: string | null | undefined): VendorCategory | null => VENDOR_CATEGORIES.find((c) => c.id === id) ?? null;
 
+/** A vendor's two pictures: the round profile photo and the wide cover behind it. */
+export type VendorPicture = "photo" | "cover";
+
+/** The longest side each is shrunk to in the browser before it's uploaded, and the most it may weigh. */
+export const PICTURE_EDGE: Record<VendorPicture, number> = { photo: 512, cover: 1600 };
+export const PICTURE_MAX_BYTES = 1_500_000;
+
 /** Aming's fee, in percent of what a vendor's clients pay through Aming. */
 export const VENDOR_FEE_PERCENT = 10;
 

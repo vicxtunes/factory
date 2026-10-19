@@ -8,7 +8,7 @@ import { getClientSession } from "@repo/lib/auth/session";
 import { parseInput, type Result } from "@repo/lib/kernel/core";
 import { runAction } from "@repo/lib/kernel/server/action";
 
-import { vendorJoinSchema, vendorProfileSchema } from "./core";
+import { pictureKeySchema, vendorJoinSchema, vendorPictureSchema, vendorProfileSchema } from "./core";
 import { VendorError } from "./ports";
 import { vendors } from "./server";
 
@@ -28,6 +28,25 @@ export async function saveVendorProfile(input: unknown): Promise<Result> {
     const session = await getClientSession();
     if (!session) throw new VendorError("Sign in first.");
     await vendors.updateProfile(session.client_id, parseInput(vendorProfileSchema, input));
+    revalidatePath("/vendors", "layout");
+  });
+}
+
+/** A signed link to upload the signed-in vendor's profile photo or cover to (already shrunk in the browser). */
+export async function startVendorPictureUpload(which: unknown): Promise<Result<{ key: string; url: string }>> {
+  return runAction("vendors", async () => {
+    const session = await getClientSession();
+    if (!session) throw new VendorError("Sign in first.");
+    return vendors.startPictureUpload(session.client_id, parseInput(vendorPictureSchema, which));
+  });
+}
+
+/** Makes the uploaded picture the signed-in vendor's profile photo or cover. */
+export async function confirmVendorPicture(which: unknown, key: unknown): Promise<Result> {
+  return runAction("vendors", async () => {
+    const session = await getClientSession();
+    if (!session) throw new VendorError("Sign in first.");
+    await vendors.confirmPicture(session.client_id, parseInput(vendorPictureSchema, which), parseInput(pictureKeySchema, key));
     revalidatePath("/vendors", "layout");
   });
 }

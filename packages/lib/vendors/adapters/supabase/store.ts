@@ -19,11 +19,13 @@ interface Row {
   socials: Vendor["socials"];
   bio: string | null;
   location: string | null;
+  photo_key: string | null;
+  cover_key: string | null;
   status: Vendor["status"];
   created_at: string;
 }
 
-const COLUMNS = "id, client_id, name, kind, category, skills, socials, bio, location, status, created_at";
+const COLUMNS = "id, client_id, name, kind, category, skills, socials, bio, location, photo_key, cover_key, status, created_at";
 
 const toVendor = (r: Row): Vendor => ({
   id: r.id,
@@ -35,6 +37,8 @@ const toVendor = (r: Row): Vendor => ({
   socials: r.socials,
   bio: r.bio,
   location: r.location,
+  photoKey: r.photo_key,
+  coverKey: r.cover_key,
   status: r.status,
   createdAt: r.created_at,
 });
@@ -85,5 +89,14 @@ export const supabaseVendorStore: VendorStore = {
       .single<Row>();
     if (error) fail("save the profile", error);
     return toVendor(data);
+  },
+
+  async setPicture(id, which, key) {
+    const column = which === "photo" ? "photo_key" : "cover_key";
+    const { data: before, error: readError } = await vendors().select(column).eq("id", id).single<Record<string, string | null>>();
+    if (readError) fail("load the picture", readError);
+    const { error } = await vendors().update({ [column]: key }).eq("id", id);
+    if (error) fail("save the picture", error);
+    return before[column] ?? null;
   },
 };
