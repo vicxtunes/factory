@@ -8,14 +8,16 @@ import { requireVendor } from "../vendor";
 export const metadata = { title: "Jobs" };
 
 // Every job studios have sent the vendor, by where it is: requests to answer,
-// work in progress, delivered and waiting to be paid, then paid, then the
-// ones that ended (declined or cancelled). Each opens its page (./[id]).
+// samples, waiting for the studio to pay in, work in progress, delivered
+// (or disputed), paid, and the ones that ended. Each opens its page (./[id]).
 const GROUPS: { title: string; statuses: JobStatus[]; answer?: boolean; empty?: string }[] = [
   { title: "Requests", statuses: ["requested"], answer: true, empty: "No requests waiting. Studios on Aming will send them here." },
-  { title: "In progress", statuses: ["accepted"], empty: "Nothing in progress." },
-  { title: "Waiting for payment", statuses: ["delivered"] },
+  { title: "Samples", statuses: ["samples", "samples_sent"] },
+  { title: "Waiting for the studio to pay in", statuses: ["awaiting_funds"] },
+  { title: "In progress", statuses: ["in_progress"], empty: "Nothing in progress." },
+  { title: "Delivered", statuses: ["delivered", "disputed"] },
   { title: "Paid", statuses: ["paid"] },
-  { title: "Declined or cancelled", statuses: ["declined", "cancelled"] },
+  { title: "Ended", statuses: ["declined", "cancelled", "refunded"] },
 ];
 
 export default async function VendorJobsPage() {

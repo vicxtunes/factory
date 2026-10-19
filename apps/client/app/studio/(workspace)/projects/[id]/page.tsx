@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { BackLink } from "@repo/ui/navigation/back";
 import { notFound } from "next/navigation";
+import { after } from "next/server";
 
 import { InvoiceStatusBadge } from "@repo/ui/billing/StatusBadges";
 import { timeSpan } from "@repo/ui/bookings/BookingBits";
@@ -195,23 +196,32 @@ async function Tasks({ scope, project: p }: { scope: TenantScope; project: Proje
 }
 
 // Its folder in Files (Projects → its title), made with the project.
-// Vendors hired on the project (packages/lib/vendors → jobs).
+// Vendors hired on the project (packages/lib/vendors → jobs), and the project's
+// folders one can be given. Delivered work left unanswered is settled here too.
 async function Vendors({ scope, project: p, canPay }: { scope: TenantScope; project: Project; canPay: boolean }) {
-  const found = await vendorJobs.forProject(scope.tenantId, p.id);
-  const jobs = await Promise.all(
-    found.map(async (j) => ({
-      id: j.id,
-      vendorId: j.vendorId,
-      vendorName: j.vendor.name,
-      vendorCategory: j.vendor.category,
-      photoUrl: await vendors.pictureUrl(j.vendor.photoKey),
-      brief: j.brief,
-      dueOn: j.dueOn,
-      price: j.price,
-      status: j.status,
-    })),
-  );
-  return <ProjectVendors projectId={p.id} jobs={jobs} canPay={canPay} />;
+  after(() => vendorJobs.sweepOverdue());
+  const [found, projectFolder] = await Promise.all([vendorJobs.forProject(scope.tenantId, p.id), files.projectFolder(scope, p.id)]);
+  const [jobs, folders] = await Promise.all([
+    Promise.all(
+      found.map(async (j) => ({
+        id: j.id,
+        vendorId: j.vendorId,
+        vendorName: j.vendor.name,
+        vendorCategory: j.vendor.category,
+        photoUrl: await vendors.pictureUrl(j.vendor.photoKey),
+        brief: j.brief,
+        samplesWanted: j.samplesWanted,
+        dueOn: j.dueOn,
+        price: j.price,
+        status: j.status,
+        folderId: j.folderId,
+        deliveredAt: j.deliveredAt,
+        disputeReason: j.disputeReason,
+      })),
+    ),
+    projectFolder ? files.foldersWithin(scope, projectFolder) : [],
+  ]);
+  return <ProjectVendors projectId={p.id} jobs={jobs} folders={folders} canPay={canPay} />;
 }
 
 async function ProjectFiles({ scope, project: p }: { scope: TenantScope; project: Project }) {

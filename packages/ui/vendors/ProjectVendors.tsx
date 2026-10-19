@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 
@@ -7,8 +8,16 @@ import { Avatar } from "@repo/ui/Avatar";
 import { BottomSheet } from "@repo/ui/BottomSheet";
 import { Button } from "@repo/ui/Button";
 import { Field, TextInput } from "@repo/ui/Field";
-import { cancelVendorJob, findVendors, payVendorJob, requestVendor, type VendorCard } from "@repo/lib/vendors/actions";
-import { JOB_STATUS_LABELS, VENDOR_CATEGORIES, isOpenJob, jobFee, vendorCategory, type JobStatus } from "@repo/lib/vendors/core";
+import {
+  approveVendorJob,
+  cancelVendorJob,
+  disputeVendorJob,
+  findVendors,
+  fundVendorJob,
+  requestVendor,
+  type VendorCard,
+} from "@repo/lib/vendors/actions";
+import { autoReleaseAt, isOpenJob, JOB_STATUS_LABELS, VENDOR_CATEGORIES, vendorCategory, vendorTake, type JobStatus } from "@repo/lib/vendors/core";
 
 /** One vendor job on the project, as the studio sees it. */
 export interface ProjectJob {
@@ -18,114 +27,190 @@ export interface ProjectJob {
   vendorCategory: string;
   photoUrl: string | null;
   brief: string;
+  samplesWanted: string | null;
   dueOn: string | null;
   price: number;
   status: JobStatus;
+  /** The folder the vendor works in; null: it was deleted. */
+  folderId: string | null;
+  deliveredAt: string | null;
+  disputeReason: string | null;
+}
+
+/** A folder in the project's, for the vendor to work in ("Wedding / Raw"). */
+export interface ProjectFolder {
+  id: string;
+  label: string;
 }
 
 const money = (n: number) => `UGX ${n.toLocaleString("en-US")}`;
 
 const STATUS_LOOK: Record<JobStatus, string> = {
   requested: "bg-warning-50 text-warning-700 dark:bg-warning-500/15 dark:text-warning-400",
-  accepted: "bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-300",
+  samples: "bg-warning-50 text-warning-700 dark:bg-warning-500/15 dark:text-warning-400",
+  samples_sent: "bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-300",
+  awaiting_funds: "bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-300",
+  in_progress: "bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-300",
   delivered: "bg-success-50 text-success-700 dark:bg-success-500/15 dark:text-success-500",
+  disputed: "bg-error-50 text-error-700 dark:bg-error-500/15 dark:text-error-500",
   paid: "bg-gray-100 text-gray-700 dark:bg-white/10 dark:text-gray-300",
+  refunded: "bg-gray-100 text-gray-700 dark:bg-white/10 dark:text-gray-300",
   declined: "bg-gray-100 text-gray-500 dark:bg-white/10 dark:text-gray-400",
   cancelled: "bg-gray-100 text-gray-500 dark:bg-white/10 dark:text-gray-400",
 };
 
+type Sheet = { kind: "fund" | "approve" | "dispute"; job: ProjectJob } | null;
+
 /**
- * The vendors working on a project: each job with where it is, cancelling an
- * open one, approving and paying a delivered one (`canPay`: the money area),
- * and adding a vendor (search, then what's needed, by when, for how much).
+ * The vendors working on a project. Each job shows where it is and what the
+ * studio can do now: cancel before money is held, review samples and pay in
+ * to Aming to go ahead, approve delivered work (Aming releases the money to
+ * the vendor) or raise a dispute. Paying (`canPay`) is the Money area's.
+ * Adding a vendor: find them, the folder they work in, samples or not, and
+ * what's needed, by when, for how much.
  */
-export function ProjectVendors({ projectId, jobs, canPay }: { projectId: string; jobs: ProjectJob[]; canPay: boolean }) {
+export function ProjectVendors({ projectId, jobs, folders, canPay }: { projectId: string; jobs: ProjectJob[]; folders: ProjectFolder[]; canPay: boolean }) {
   const router = useRouter();
   const [adding, setAdding] = useState(false);
-  const [paying, setPaying] = useState<ProjectJob | null>(null);
+  const [sheet, setSheet] = useState<Sheet>(null);
+  const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
-  function act(work: () => Promise<{ ok: boolean; error?: string }>, after?: () => void) {
+  function act(work: () => Promise<{ ok: boolean; error?: string }>) {
     setError(null);
     start(async () => {
       const res = await work();
       if (!res.ok) return setError(res.error ?? "Something went wrong.");
-      after?.();
+      setSheet(null);
+      setReason("");
       router.refresh();
     });
   }
+
+  const quiet = "text-xs font-medium text-muted hover:text-foreground";
 
   return (
     <div className="space-y-3">
       {jobs.length ? (
         <ul className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-surface">
-          {jobs.map((j) => (
-            <li key={j.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
-              <div className="flex min-w-0 flex-1 items-start gap-3">
-                <Avatar name={j.vendorName} src={j.photoUrl ?? undefined} size="lg" />
-                <div className="min-w-0">
-                  <p className="truncate font-semibold">
-                    {j.vendorName} <span className="font-normal text-muted">· {vendorCategory(j.vendorCategory)?.label ?? "Vendor"}</span>
-                  </p>
-                  <p className="line-clamp-2 text-sm text-muted">{j.brief}</p>
-                  <p className="mt-1 text-xs text-muted">
-                    {money(j.price)}
-                    {j.dueOn ? ` · due ${new Date(`${j.dueOn}T00:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}` : ""}
-                  </p>
+          {jobs.map((j) => {
+            const release = autoReleaseAt(j);
+            return (
+              <li key={j.id} className="space-y-3 p-4">
+                <div className="flex items-start gap-3">
+                  <Avatar name={j.vendorName} src={j.photoUrl ?? undefined} size="lg" />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="truncate font-semibold">
+                        {j.vendorName} <span className="font-normal text-muted">· {vendorCategory(j.vendorCategory)?.label ?? "Vendor"}</span>
+                      </p>
+                      <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_LOOK[j.status]}`}>{JOB_STATUS_LABELS[j.status]}</span>
+                    </div>
+                    <p className="line-clamp-2 text-sm text-muted">{j.brief}</p>
+                    <p className="mt-1 text-xs text-muted">
+                      {money(j.price)}
+                      {j.dueOn ? ` · due ${new Date(`${j.dueOn}T00:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}` : ""}
+                      {j.status === "in_progress" || j.status === "delivered" || j.status === "disputed" ? " · held by Aming" : ""}
+                    </p>
+                    {release ? (
+                      <p className="mt-1 text-xs text-muted">
+                        Released to them {new Date(release).toLocaleString("en-GB", { weekday: "short", hour: "2-digit", minute: "2-digit" })} if you don&apos;t answer.
+                      </p>
+                    ) : null}
+                    {j.status === "disputed" && j.disputeReason ? <p className="mt-1 text-xs text-error-600 dark:text-error-400">Dispute: &ldquo;{j.disputeReason}&rdquo; Aming is looking into it.</p> : null}
+                  </div>
                 </div>
-              </div>
-              <div className="flex items-center gap-2 sm:flex-col sm:items-end">
-                <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_LOOK[j.status]}`}>{JOB_STATUS_LABELS[j.status]}</span>
-                {j.status === "delivered" && canPay ? (
-                  <Button className="ml-auto sm:ml-0" disabled={pending} onClick={() => setPaying(j)}>
-                    Approve and pay
-                  </Button>
-                ) : null}
-                {(j.status === "requested" || j.status === "accepted") && (
-                  <button type="button" disabled={pending} onClick={() => act(() => cancelVendorJob(j.id))} className="ml-auto text-xs font-medium text-muted hover:text-error-600 sm:ml-0">
-                    Cancel
-                  </button>
-                )}
-              </div>
-            </li>
-          ))}
+                <div className="flex flex-wrap items-center gap-2 sm:pl-14">
+                  {j.status === "samples_sent" && canPay ? <Button onClick={() => setSheet({ kind: "fund", job: j })}>Approve samples and pay in</Button> : null}
+                  {j.status === "awaiting_funds" && canPay ? <Button onClick={() => setSheet({ kind: "fund", job: j })}>Pay in to start</Button> : null}
+                  {j.status === "delivered" && canPay ? <Button onClick={() => setSheet({ kind: "approve", job: j })}>Approve and release</Button> : null}
+                  {j.folderId && isOpenJob(j.status) ? (
+                    <Link href={`/studio/files?folder=${j.folderId}`} className={quiet}>
+                      {j.status === "samples_sent" ? "See the samples" : "Open their folder"}
+                    </Link>
+                  ) : null}
+                  {["requested", "samples", "samples_sent", "awaiting_funds"].includes(j.status) ? (
+                    <button type="button" disabled={pending} onClick={() => act(() => cancelVendorJob(j.id))} className={`${quiet} hover:text-error-600`}>
+                      {j.status === "samples_sent" ? "Not good: cancel" : "Cancel"}
+                    </button>
+                  ) : null}
+                  {j.status === "in_progress" || j.status === "delivered" ? (
+                    <button type="button" onClick={() => setSheet({ kind: "dispute", job: j })} className={`${quiet} hover:text-error-600`}>
+                      Raise a dispute
+                    </button>
+                  ) : null}
+                </div>
+              </li>
+            );
+          })}
         </ul>
       ) : (
         <p className="rounded-2xl border border-dashed border-border p-5 text-center text-sm text-muted">
           No vendors yet. Hire a photo editor, videographer or other vendor to work on this project.
         </p>
       )}
-      {error ? <p className="text-sm text-error-600 dark:text-error-400">{error}</p> : null}
+      {error && !sheet ? <p className="text-sm text-error-600 dark:text-error-400">{error}</p> : null}
       <Button variant="secondary" onClick={() => setAdding(true)}>
         Add a vendor
       </Button>
 
-      {adding ? <AddVendor projectId={projectId} openJobs={jobs.filter((j) => isOpenJob(j.status)).map((j) => j.vendorId)} onClose={() => setAdding(false)} /> : null}
+      {adding ? <AddVendor projectId={projectId} folders={folders} openJobs={jobs.filter((j) => isOpenJob(j.status)).map((j) => j.vendorId)} onClose={() => setAdding(false)} /> : null}
 
-      {paying ? (
-        <BottomSheet open onClose={() => setPaying(null)} title="Approve and pay">
+      {sheet ? (
+        <BottomSheet
+          open
+          onClose={() => setSheet(null)}
+          title={sheet.kind === "fund" ? (sheet.job.status === "samples_sent" ? "Approve samples and pay in" : "Pay in to start") : sheet.kind === "approve" ? "Approve and release" : "Raise a dispute"}
+        >
           <div className="space-y-4 text-sm">
-            <p>
-              {paying.vendorName} delivered the work. Check it in the project&apos;s folder, then pay from your Business card.
-            </p>
-            <dl className="divide-y divide-border rounded-xl border border-border">
-              <div className="flex justify-between px-4 py-2.5">
-                <dt className="text-muted">You pay</dt>
-                <dd className="font-semibold tabular-nums">{money(paying.price)}</dd>
-              </div>
-              <div className="flex justify-between px-4 py-2.5">
-                <dt className="text-muted">{paying.vendorName} receives</dt>
-                <dd className="tabular-nums">{money(paying.price - jobFee(paying.price))}</dd>
-              </div>
-            </dl>
+            {sheet.kind === "dispute" ? (
+              <>
+                <p className="text-muted">Aming holds the money until it&apos;s settled: staff look at the work and release it to {sheet.job.vendorName} or refund you.</p>
+                <textarea
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  rows={4}
+                  maxLength={1000}
+                  placeholder="What's wrong with the work?"
+                  className="w-full rounded-lg border border-border bg-surface px-3 py-2 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                  autoFocus
+                />
+              </>
+            ) : (
+              <>
+                <p className="text-muted">
+                  {sheet.kind === "fund"
+                    ? `Aming holds the money while ${sheet.job.vendorName} works: it's released to them when you approve the delivered work, or refunded if things go wrong.`
+                    : `Aming releases the money it holds to ${sheet.job.vendorName}.`}
+                </p>
+                <dl className="divide-y divide-border rounded-xl border border-border">
+                  <div className="flex justify-between px-4 py-2.5">
+                    <dt className="text-muted">{sheet.kind === "fund" ? "From your Business card" : "Held by Aming"}</dt>
+                    <dd className="font-semibold tabular-nums">{money(sheet.job.price)}</dd>
+                  </div>
+                  <div className="flex justify-between px-4 py-2.5">
+                    <dt className="text-muted">{sheet.job.vendorName} receives</dt>
+                    <dd className="tabular-nums">{money(vendorTake(sheet.job.price))}</dd>
+                  </div>
+                </dl>
+              </>
+            )}
             {error ? <p className="text-error-600 dark:text-error-400">{error}</p> : null}
             <div className="flex justify-end gap-2">
-              <Button variant="secondary" onClick={() => setPaying(null)} disabled={pending}>
+              <Button variant="secondary" onClick={() => setSheet(null)} disabled={pending}>
                 Not yet
               </Button>
-              <Button loading={pending} onClick={() => act(() => payVendorJob(paying.id), () => setPaying(null))}>
-                Pay {money(paying.price)}
+              <Button
+                loading={pending}
+                disabled={sheet.kind === "dispute" && reason.trim().length < 5}
+                onClick={() =>
+                  act(() =>
+                    sheet.kind === "fund" ? fundVendorJob(sheet.job.id) : sheet.kind === "approve" ? approveVendorJob(sheet.job.id) : disputeVendorJob(sheet.job.id, reason),
+                  )
+                }
+              >
+                {sheet.kind === "fund" ? `Pay in ${money(sheet.job.price)}` : sheet.kind === "approve" ? "Release the money" : "Raise the dispute"}
               </Button>
             </div>
           </div>
@@ -135,8 +220,8 @@ export function ProjectVendors({ projectId, jobs, canPay }: { projectId: string;
   );
 }
 
-/** Find a vendor, then say what's needed, by when and for how much. */
-function AddVendor({ projectId, openJobs, onClose }: { projectId: string; openJobs: string[]; onClose: () => void }) {
+/** Find a vendor, then where they work, samples or not, and what's needed, by when and for how much. */
+function AddVendor({ projectId, folders, openJobs, onClose }: { projectId: string; folders: ProjectFolder[]; openJobs: string[]; onClose: () => void }) {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("");
@@ -145,6 +230,11 @@ function AddVendor({ projectId, openJobs, onClose }: { projectId: string; openJo
   const [brief, setBrief] = useState("");
   const [dueOn, setDueOn] = useState("");
   const [price, setPrice] = useState("");
+  // Where they work: "new" (a folder made for them) or an existing folder's id.
+  const [folder, setFolder] = useState("new");
+  const [folderName, setFolderName] = useState("");
+  const [samples, setSamples] = useState(false);
+  const [samplesWanted, setSamplesWanted] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
@@ -158,6 +248,8 @@ function AddVendor({ projectId, openJobs, onClose }: { projectId: string; openJo
     return () => clearTimeout(timer);
   }, [query, category]);
 
+  const textArea = "w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500";
+
   return (
     <BottomSheet open onClose={onClose} title={chosen ? `Hire ${chosen.name}` : "Add a vendor"}>
       {chosen ? (
@@ -167,7 +259,15 @@ function AddVendor({ projectId, openJobs, onClose }: { projectId: string; openJo
             e.preventDefault();
             setError(null);
             start(async () => {
-              const res = await requestVendor({ projectId, vendorId: chosen.id, brief, dueOn, price: price.replace(/[^\d]/g, "") });
+              const res = await requestVendor({
+                projectId,
+                vendorId: chosen.id,
+                brief,
+                samplesWanted: samples ? samplesWanted : "",
+                dueOn,
+                price: price.replace(/[^\d]/g, ""),
+                folder: folder === "new" ? { kind: "new", name: folderName.trim() || `For ${chosen.name}` } : { kind: "existing", folderId: folder },
+              });
               if (!res.ok) return setError(res.error);
               onClose();
               router.refresh();
@@ -182,7 +282,7 @@ function AddVendor({ projectId, openJobs, onClose }: { projectId: string; openJo
               rows={3}
               maxLength={1000}
               placeholder="e.g. Colour and skin retouch on 300 wedding photos, our usual warm look."
-              className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+              className={textArea}
               required
               autoFocus
             />
@@ -195,13 +295,34 @@ function AddVendor({ projectId, openJobs, onClose }: { projectId: string; openJo
               <TextInput inputMode="numeric" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="300,000" required />
             </Field>
           </div>
-          <p className="text-xs text-muted">They see the job and the project&apos;s folder once they accept. You pay from your Business card when the work is delivered.</p>
+          <Field label="Their folder" hint="The only folder of this project they'll see.">
+            <select value={folder} onChange={(e) => setFolder(e.target.value)} className="h-11 w-full rounded-lg border border-border bg-surface px-3 text-sm">
+              <option value="new">A new folder for them</option>
+              {folders.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.label}
+                </option>
+              ))}
+            </select>
+          </Field>
+          {folder === "new" ? <TextInput value={folderName} onChange={(e) => setFolderName(e.target.value)} placeholder={`For ${chosen.name}`} maxLength={120} aria-label="New folder's name" /> : null}
+          <label className="flex items-start gap-3">
+            <input type="checkbox" checked={samples} onChange={(e) => setSamples(e.target.checked)} className="mt-0.5 size-4 accent-brand-500" />
+            <span>
+              <span className="block text-sm font-medium">Ask for samples first</span>
+              <span className="block text-xs text-muted">See a few before going ahead. Nothing is paid until you approve them.</span>
+            </span>
+          </label>
+          {samples ? (
+            <textarea value={samplesWanted} onChange={(e) => setSamplesWanted(e.target.value)} rows={2} maxLength={500} placeholder="e.g. Edit these 5 photos in our style." className={textArea} required />
+          ) : null}
+          <p className="text-xs text-muted">When the work goes ahead you pay in to Aming from your Business card. Aming holds it until you approve the work.</p>
           {error ? <p className="text-sm text-error-600 dark:text-error-400">{error}</p> : null}
           <div className="flex justify-between gap-2">
             <Button type="button" variant="secondary" onClick={() => setChosen(null)} disabled={pending}>
               Back
             </Button>
-            <Button type="submit" loading={pending} disabled={brief.trim().length < 3 || !price}>
+            <Button type="submit" loading={pending} disabled={brief.trim().length < 3 || !price || (samples && samplesWanted.trim().length < 3)}>
               Send request
             </Button>
           </div>
