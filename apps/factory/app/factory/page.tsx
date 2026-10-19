@@ -15,7 +15,7 @@ import { getWorkerSession } from "@repo/lib/auth/session";
 import { fetchBoardItems } from "@repo/lib/queries";
 import type { WorkerPublic } from "@repo/lib/types";
 
-import { getMyNotifications, logoutWorker } from "./actions";
+import { getMyNotifications, markMyNotificationsRead, logoutWorker } from "./actions";
 import { Board } from "./board";
 import { WorkerLogin } from "./login";
 import { LogoutButton } from "./logout-button";
@@ -57,6 +57,7 @@ export default async function FactoryPage() {
             <ChatLauncher className="relative flex h-9 w-9 items-center justify-center rounded-lg text-white/70 hover:text-white hover:bg-white/10" />
             <NotificationBell
               fetchNotifications={getMyNotifications}
+              markRead={markMyNotificationsRead}
               triggerClassName="relative flex h-9 w-9 items-center justify-center rounded-lg text-white/70 hover:text-white hover:bg-white/10"
             />
             <InlineProfileTrigger name={session.name} avatarUrl={session.avatarUrl} />

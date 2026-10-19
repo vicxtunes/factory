@@ -20,6 +20,8 @@ export interface TeamMember extends TeamMemberInput {
   archivedAt: string | null;
   /** Whether an Aming account has joined as them (so they can sign in). */
   joined: boolean;
+  /** That account, to tell them things (packages/lib/push); null until they join. */
+  accountId: string | null;
   /** The parts of the studio they may use; none: only their own tasks. */
   access: Area[];
   /** Their invite link's secret and when it stops working, while there's one. */

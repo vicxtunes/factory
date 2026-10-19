@@ -9,6 +9,7 @@ import { verifyPin } from "@repo/lib/auth/pin";
 import { logOrderEvent, resolveActor } from "@repo/lib/audit/log";
 import { pushOnlyOrderItem, notifyOrderItem } from "@repo/lib/notifications/notify";
 import { fetchWorkerNotifications } from "@repo/lib/queries";
+import { fetchInbox, markInboxRead } from "@repo/lib/notifications/inbox";
 import { fetchResolvedReportNotices, mergeNotices } from "@repo/lib/support/notices";
 import { BOARD_COLUMNS, STATUS_LABELS, type NotificationRow, type ProductionStatus } from "@repo/lib/types";
 import { clientPath } from "@repo/lib/client-portal/paths";
@@ -60,11 +61,18 @@ export async function logoutWorker(): Promise<void> {
 export async function getMyNotifications(): Promise<NotificationRow[]> {
   const session = await getWorkerSession();
   if (!session) return [];
-  const [rows, notices] = await Promise.all([
+  const [rows, notices, inbox] = await Promise.all([
     fetchWorkerNotifications(session.worker_id, 10),
     fetchResolvedReportNotices({ type: "worker", id: session.worker_id }),
+    fetchInbox({ type: "worker", id: session.worker_id }),
   ]);
-  return mergeNotices(rows, notices, 10);
+  return mergeNotices(rows, [...notices, ...inbox], 15);
+}
+
+/** They opened their bell: what's in it is seen. */
+export async function markMyNotificationsRead(): Promise<void> {
+  const session = await getWorkerSession();
+  if (session) await markInboxRead({ type: "worker", id: session.worker_id });
 }
 
 // Only the worker a supervisor assigned to an item may move it through the

@@ -13,7 +13,9 @@ import { parseInput, type Result } from "@repo/lib/kernel/core";
 import { runAction } from "@repo/lib/kernel/server/action";
 import { getClientSession } from "@repo/lib/auth/session";
 import { clientUrl } from "@repo/lib/client-portal/paths";
-import { STUDIO_CHOICE_COOKIE, deleteStudioRecord, studioOfCaller } from "@repo/lib/studios/server";
+import { notifyActor } from "@repo/lib/push/send";
+import { STUDIO_CHOICE_COOKIE, deleteStudioRecord, studioOfCaller, studios } from "@repo/lib/studios/server";
+import type { TenantScope } from "@repo/lib/tenancy/types";
 
 import { accessSchema, inviteTokenSchema, teamMemberIdSchema, teamMemberInputSchema } from "./core";
 import { TeamError } from "./ports";
@@ -44,11 +46,13 @@ export async function setTeamMemberArchived(id: unknown, archived: unknown): Pro
   });
 }
 
-/** What they may use in the studio. It applies from their next page. */
+/** What they may use in the studio. It applies from their next page; they're told. */
 export async function setTeamAccess(id: unknown, access: unknown): Promise<Result> {
   return runAction("team", async () => {
-    const { scope } = await studioOfCaller();
-    await team.setAccess(scope, parseInput(teamMemberIdSchema, id), parseInput(accessSchema, access));
+    const { scope, studio } = await studioOfCaller();
+    const memberId = parseInput(teamMemberIdSchema, id);
+    await team.setAccess(scope, memberId, parseInput(accessSchema, access));
+    await tellMember(scope, memberId, { title: studio.name, body: "What you can use in the business changed.", url: "/studio" });
     revalidatePath("/studio", "layout");
   });
 }
@@ -63,11 +67,15 @@ export async function inviteTeamMember(id: unknown): Promise<Result<string>> {
   });
 }
 
-/** Their sign-in stops working at once (and any invite link). They stay on the team for tasks. */
+/** Their sign-in stops working at once (and any invite link); they're told. They stay on the team for tasks. */
 export async function removeTeamAccess(id: unknown): Promise<Result> {
   return runAction("team", async () => {
-    const { scope } = await studioOfCaller();
-    await team.removeAccess(scope, parseInput(teamMemberIdSchema, id));
+    const { scope, studio } = await studioOfCaller();
+    const memberId = parseInput(teamMemberIdSchema, id);
+    // Their account, read before it's unlinked.
+    const member = await team.get(scope, memberId);
+    await team.removeAccess(scope, memberId);
+    if (member?.accountId) await notifyActor({ type: "client", id: member.accountId }, { title: studio.name, body: "You no longer have access to this business.", url: "/" });
     revalidatePath("/studio", "layout");
   });
 }
@@ -78,6 +86,8 @@ export async function joinTeam(token: unknown): Promise<Result> {
     const session = await getClientSession();
     if (!session) throw new TeamError("Sign in to your Aming account first.");
     const { tenantId } = await team.join(parseInput(inviteTokenSchema, token), session.client_id);
+    const owner = (await studios.get(tenantId))?.ownerClientId;
+    if (owner) await notifyActor({ type: "client", id: owner }, { title: "Someone joined your team", body: `${session.name} can now sign in to your business.`, url: "/studio/team" });
     (await cookies()).set(STUDIO_CHOICE_COOKIE, tenantId, {
       httpOnly: true,
       sameSite: "lax",
@@ -96,4 +106,10 @@ export async function deleteTeamMember(id: unknown): Promise<Result> {
     await deleteStudioRecord(scope, "team_member", parseInput(teamMemberIdSchema, id));
     revalidatePath("/studio", "layout");
   });
+}
+
+/** Tells a team member who has joined (has an account) something about the business. */
+async function tellMember(scope: TenantScope, memberId: string, message: { title: string; body: string; url: string }): Promise<void> {
+  const member = await team.get(scope, memberId);
+  if (member?.accountId) await notifyActor({ type: "client", id: member.accountId }, message);
 }

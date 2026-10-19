@@ -6,6 +6,8 @@ import Link from "next/link";
 import { createClient } from "@repo/lib/supabase/browser";
 import type { NotificationRow } from "@repo/lib/types";
 
+import { entryHeading, entryTone, hasNews } from "./news";
+
 // Generic recipient-scoped bell — used by the client portal, /factory, /graphics
 // (apps/factory/app/dashboard keeps its own NotificationMenu, which is deliberately
 // unscoped: staff see every order's events, not just ones addressed to
@@ -40,15 +42,42 @@ function BellIcon({ className }: { className?: string }) {
 
 export function NotificationBell({
   fetchNotifications,
+  markRead,
+  allHref,
   triggerClassName,
 }: {
   fetchNotifications: () => Promise<NotificationRow[]>;
+  /** Marks the viewer's notices seen (their inbox), when they open the bell. */
+  markRead?: () => Promise<void>;
+  /** The full notifications page, linked at the foot of the list. */
+  allHref?: string;
   triggerClassName?: string;
 }) {
   const [rows, setRows] = useState<NotificationRow[]>([]);
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const supabaseRef = useRef(createClient());
+
+  // Opening shows what's there and marks the notices seen (the entries keep their dot until next time).
+  function openBell() {
+    setOpen(true);
+    if (markRead && rows.some((r) => r.unread)) void markRead();
+  }
+
+  // Notices (wallet, jobs…) don't come through Realtime: the bell looks again
+  // when the app comes back to the front, and every minute while it's open.
+  useEffect(() => {
+    const refresh = () => {
+      if (document.visibilityState === "visible") fetchNotifications().then(setRows);
+    };
+    document.addEventListener("visibilitychange", refresh);
+    const timer = setInterval(refresh, 60_000);
+    return () => {
+      document.removeEventListener("visibilitychange", refresh);
+      clearInterval(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     fetchNotifications().then(setRows);
@@ -93,7 +122,7 @@ export function NotificationBell({
     // narrow viewports.
     <div ref={ref}>
       <button
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => (open ? setOpen(false) : openBell())}
         aria-label="Notifications"
         className={
           triggerClassName ??
@@ -101,9 +130,7 @@ export function NotificationBell({
         }
       >
         <BellIcon className="h-5 w-5" />
-        {rows.length > 0 ? (
-          <span className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-error-500" />
-        ) : null}
+        {hasNews(rows) ? <span className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-error-500" /> : null}
       </button>
 
       {open ? (
@@ -116,12 +143,9 @@ export function NotificationBell({
               const body = (
                 <>
                   <div className="flex items-center justify-between gap-2">
-                    <span
-                      className={`text-[0.7rem] font-semibold uppercase tracking-wide ${
-                        n.event_type === "delayed" ? "text-error-600" : "text-success-600"
-                      }`}
-                    >
-                      {n.event_type}
+                    <span className={`flex items-center gap-1.5 text-[0.7rem] font-semibold uppercase tracking-wide ${entryTone(n)}`}>
+                      {n.unread ? <span aria-label="New" className="h-1.5 w-1.5 rounded-full bg-error-500" /> : null}
+                      {entryHeading(n)}
                     </span>
                     <span className="text-xs text-muted">{relativeTime(n.created_at)}</span>
                   </div>
@@ -148,6 +172,11 @@ export function NotificationBell({
               <li className="px-4 py-6 text-center text-sm text-muted">No events yet.</li>
             ) : null}
           </ul>
+          {allHref ? (
+            <Link href={allHref} onClick={() => setOpen(false)} className="border-t border-border px-4 py-3 text-center text-sm font-medium text-brand-600 hover:bg-gray-50 dark:text-brand-400 dark:hover:bg-white/[0.03]">
+              See all notifications
+            </Link>
+          ) : null}
         </div>
       ) : null}
     </div>
