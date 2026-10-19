@@ -23,7 +23,7 @@ import { SignInOverlay } from "./sign-in-overlay";
 export default async function ClientSidePage({
   searchParams,
 }: {
-  searchParams: Promise<{ signin?: string; client?: string }>;
+  searchParams: Promise<{ signin?: string }>;
 }) {
   const session = await getClientSession();
 
@@ -38,8 +38,8 @@ export default async function ClientSidePage({
     return <SignInOverlay behind={front} />;
   }
 
-  // A vendor's account opens on its vendor side; its client side is one link away (?client=1).
-  if (!(await searchParams).client && (await vendors.mine(session.client_id))) redirect("/vendors");
+  // A vendor's account opens on its vendor side.
+  if (await vendors.mine(session.client_id)) redirect("/vendors");
 
   return (
     <ClientShell signedIn name={session.name} avatarUrl={session.avatarUrl}>

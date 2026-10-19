@@ -73,6 +73,8 @@ export class FileService {
     /** An unguessable secret for a share link. */
     private readonly newToken: () => string,
     private readonly previewer: Previewer,
+    /** Whose Drives these are, for where their files are kept (core/rules.ts → fileKeys). */
+    private readonly owners: "studios" | "vendors" = "studios",
   ) {}
 
   async usage(scope: TenantScope): Promise<Usage> {
@@ -192,7 +194,7 @@ export class FileService {
     return Promise.all(
       files.map(async (f) => {
         const fileId = this.newId();
-        const url = await this.objects.putUrl(fileKeys(scope.tenantId, fileId).incoming, f.contentType, UPLOAD_SECONDS);
+        const url = await this.objects.putUrl(fileKeys(scope.tenantId, fileId, this.owners).incoming, f.contentType, UPLOAD_SECONDS);
         return { fileId, url, contentType: f.contentType };
       }),
     );
@@ -209,7 +211,7 @@ export class FileService {
     access: FileAccess = FULL_ACCESS,
   ): Promise<void> {
     await this.mayAdd(scope, access, input.folderId);
-    const keys = fileKeys(scope.tenantId, input.fileId);
+    const keys = fileKeys(scope.tenantId, input.fileId, this.owners);
     const bytes = await this.objects.size(keys.incoming);
     if (bytes === null) throw new FileError("That upload didn't finish. Try the file again.");
     if (bytes === 0 || bytes > MAX_FILE_BYTES) {
