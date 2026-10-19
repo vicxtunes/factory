@@ -60,14 +60,14 @@ export async function studioCustomerPaid(ownerClientId: string, amount: number, 
   );
 }
 
-/** Staff who manage wallets (receptionist, supervisor, boss) are told a business owner asked for a withdrawal to approve. */
-export async function withdrawalToApprove(businessName: string, amount: number): Promise<void> {
+/** Staff who manage wallets (receptionist, supervisor, boss) are told a business owner (or a vendor, `from` their wallet) asked for a withdrawal to approve. */
+export async function withdrawalToApprove(businessName: string, amount: number, from = "its Business card"): Promise<void> {
   const { data: managers } = await createAdminClient().from("profiles").select("id").in("role", ["receptionist", "supervisor", "boss"]);
   await Promise.all(
     (managers ?? []).map((m: { id: string }) =>
       notifyActor(
         { type: "dashboard_user", id: m.id },
-        { title: "Withdrawal to approve", body: `${businessName} asked to withdraw ${formatMoney(amount)} from its Business card.`, url: "/dashboard/wallets" },
+        { title: "Withdrawal to approve", body: `${businessName} asked to withdraw ${formatMoney(amount)} from ${from}.`, url: "/dashboard/wallets" },
       ),
     ),
   );
@@ -80,5 +80,15 @@ export async function withdrawalAnswered(ownerClientId: string, amount: number, 
     reason === null
       ? { title: "Withdrawal sent", body: `${formatMoney(amount)} was sent to ${phone}.`, url: "/studio/wallet" }
       : { title: "Withdrawal not sent", body: `${formatMoney(amount)} is back on your Business card: ${reason}`, url: "/studio/wallet" },
+  );
+}
+
+/** Staff answered a vendor's withdrawal from their wallet. `reason` null: it was sent. */
+export async function vendorWithdrawalAnswered(vendorClientId: string, amount: number, phone: string, reason: string | null): Promise<void> {
+  await notifyActor(
+    { type: "client", id: vendorClientId },
+    reason === null
+      ? { title: "Withdrawal sent", body: `${formatMoney(amount)} was sent to ${phone}.`, url: "/vendors/wallet" }
+      : { title: "Withdrawal not sent", body: `${formatMoney(amount)} is back in your wallet: ${reason}`, url: "/vendors/wallet" },
   );
 }
