@@ -1,12 +1,12 @@
 import { after } from "next/server";
 
-import { HomeGreeting, HomeHero, HomeSection } from "@repo/ui/home/HomeBits";
+import { HomeGreeting, HomeSection } from "@repo/ui/home/HomeBits";
 import { HireCard } from "@repo/ui/vendors/HireCard";
 import { cardLine, isOpenJob, VENDOR_FEE_PERCENT, vendorCategory, type JobView, type Vendor } from "@repo/lib/vendors/core";
 
 import { vendorJobs, vendors } from "@repo/lib/vendors/server";
 
-import { Availability } from "./availability";
+import { CardActions } from "./card-actions";
 import { VendorFrame } from "./frame";
 import { JobList } from "./job-list";
 import { requireVendor } from "./vendor";
@@ -17,7 +17,8 @@ export const metadata = { title: "Vendors" };
 
 // The vendor's side: someone offering their services to photographers, not
 // a business going through a studio's set-up. A vendor (joined at ./join)
-// sees their home: what's in their wallet, studios' job requests to
+// sees their home: their card (as studios see it; editing it in a sheet),
+// what's in their wallet, studios' job requests to
 // answer, and the jobs in hand (each its own page, ./jobs/[id]). Their Drive
 // is ./drive, their profile ./profile. Anyone else is sent to join.
 
@@ -40,15 +41,17 @@ function MyVendorHome({ owner, avatarUrl, vendor, jobs, balance }: { owner: stri
     <VendorFrame vendor={vendor} page="home">
       <div className="space-y-8 px-4 py-6 sm:px-6 lg:py-8">
         <HomeGreeting name={owner} avatarUrl={avatarUrl} subtitle={`${vendor.name} · ${label}`} />
-        {requests.length ? (
-          <HomeHero
-            title={`${requests.length} job request${requests.length === 1 ? "" : "s"} waiting`}
-            text="Studios want you on their projects: accept to see the brief's files and start."
-            cta={{ label: "See requests", href: "/vendors/jobs" }}
+        <div className="max-w-md">
+          <HireCard
+            role={label}
+            place={vendor.location}
+            name={vendor.name}
+            photoUrl={avatarUrl}
+            available={vendor.available}
+            line={cardLine(vendor.statusLine, vendor.offers)}
+            actions={<CardActions available={vendor.available} statusLine={vendor.statusLine} />}
           />
-        ) : (
-          <HomeHero title="You're on Aming" text="Studios find you by name and what you do. Keep your profile and work up to date." cta={{ label: "My profile", href: "/vendors/profile" }} />
-        )}
+        </div>
 
         <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {[
@@ -64,23 +67,6 @@ function MyVendorHome({ owner, avatarUrl, vendor, jobs, balance }: { owner: stri
             </div>
           ))}
         </section>
-
-        <HomeSection title="Your card, as studios see it">
-          <div className="grid gap-5 sm:grid-cols-2 sm:items-start">
-            <HireCard
-              role={label}
-              place={vendor.location}
-              name={vendor.name}
-              photoUrl={avatarUrl}
-              available={vendor.available}
-              line={cardLine(vendor.statusLine, vendor.offers)}
-              hire="#"
-              work="#"
-              preview
-            />
-            <Availability available={vendor.available} statusLine={vendor.statusLine} />
-          </div>
-        </HomeSection>
 
         <div id="jobs" className="scroll-mt-4 space-y-8">
           <HomeSection title="Job requests" href="/vendors/jobs">
