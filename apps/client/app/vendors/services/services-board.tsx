@@ -44,16 +44,16 @@ export function ServicesBoard({ offers, suggestions, startAdding }: { offers: Of
       </div>
 
       {offers.length ? (
-        // As many tiles a row as fit at 15rem or more each (one on a phone, three
-        // or four on a desktop); each name sized to its own tile's width.
-        <ul className="grid grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] gap-4">
+        // As many tiles a row as fit at 14rem or more each (one on a phone, four
+        // on a desktop); each name sized to its own tile's width.
+        <ul className="grid grid-cols-[repeat(auto-fill,minmax(14rem,1fr))] gap-4">
           {offers.map((o) => (
             <li key={o.id}>
               {/* A tile: its first sample filling it behind a soft veil, the name over it. */}
               <button
                 type="button"
                 onClick={() => setOpen(o.id)}
-                className="group @container relative grid aspect-[2/1] w-full place-items-center overflow-hidden rounded-[28px] bg-gradient-to-br from-gray-700 to-gray-900 text-center text-white shadow-theme-md transition active:scale-[0.99] sm:aspect-[4/3]"
+                className="group @container relative grid aspect-[5/2] w-full place-items-center overflow-hidden rounded-3xl bg-gradient-to-br from-gray-700 to-gray-900 text-center text-white shadow-theme-md transition active:scale-[0.99] sm:aspect-video"
               >
                 {o.sampleUrls[0] ? (
                   // A short-lived signed link to the private bucket: a plain img.
@@ -61,9 +61,9 @@ export function ServicesBoard({ offers, suggestions, startAdding }: { offers: Of
                   <img src={o.sampleUrls[0]} alt="" className="absolute inset-0 size-full scale-105 object-cover blur-[2px] transition duration-500 group-hover:scale-110" />
                 ) : null}
                 <span className="absolute inset-0 bg-black/45 transition group-hover:bg-black/35" />
-                <span className="relative space-y-1.5 px-6">
-                  <span className="line-clamp-2 block text-[clamp(1.25rem,9cqi,2.25rem)] leading-tight font-medium tracking-tight drop-shadow-sm">{o.name}</span>
-                  <span className="block text-[clamp(0.75rem,4.5cqi,0.875rem)] text-white/80 tabular-nums">
+                <span className="relative space-y-1 px-4">
+                  <span className="line-clamp-2 block text-[clamp(1rem,7cqi,1.5rem)] leading-tight font-medium tracking-tight drop-shadow-sm">{o.name}</span>
+                  <span className="block text-[clamp(0.6875rem,4cqi,0.8125rem)] text-white/80 tabular-nums">
                     {offerPrice(o)} · {o.samples.length ? `${o.samples.length} sample${o.samples.length === 1 ? "" : "s"}` : "No samples yet"}
                   </span>
                 </span>
@@ -75,10 +75,10 @@ export function ServicesBoard({ offers, suggestions, startAdding }: { offers: Of
             <button
               type="button"
               onClick={() => setOpen("new")}
-              className="grid aspect-[4/3] w-full place-items-center rounded-[28px] border-2 border-dashed border-border text-muted transition hover:border-brand-500/50 hover:bg-surface hover:text-foreground"
+              className="grid aspect-video w-full place-items-center rounded-3xl border-2 border-dashed border-border text-muted transition hover:border-brand-500/50 hover:bg-surface hover:text-foreground"
             >
               <span className="flex flex-col items-center gap-2 text-sm font-medium">
-                <svg viewBox="0 0 24 24" className="size-7" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden>
+                <svg viewBox="0 0 24 24" className="size-6" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden>
                   <path d="M12 5v14M5 12h14" />
                 </svg>
                 Add a service
