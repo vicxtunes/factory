@@ -158,6 +158,18 @@ export const supabaseJobStore: VendorJobStore = {
     if (error) fail("refund the money", error);
   },
 
+  async setFolder(tenantId, id, folderId) {
+    const { data, error } = await jobs()
+      .update({ folder_id: folderId })
+      .eq("id", id)
+      .eq("tenant_id", tenantId)
+      .in("status", ["requested", "samples", "samples_sent", "awaiting_funds", "in_progress", "delivered", "disputed"])
+      .select("id")
+      .maybeSingle();
+    if (error) fail("set the job's folder", error);
+    return data !== null;
+  },
+
   async markWarned(id) {
     const { error } = await jobs().update({ overdue_alerted_at: new Date().toISOString() }).eq("id", id).is("overdue_alerted_at", null);
     if (error) fail("note the warning", error);

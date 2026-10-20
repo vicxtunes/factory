@@ -7,7 +7,7 @@
 // unanswered is released on its own after two days, the boss and the studio
 // warned a day before. Each side is told in the app.
 
-import { autoReleaseAt, overdueStep, vendorTake, type JobRequest, type JobStatus, type JobView } from "./core";
+import { autoReleaseAt, isOpenJob, overdueStep, vendorTake, type JobRequest, type JobStatus, type JobView } from "./core";
 import { VendorError, type JobActor, type JobNotifier, type VendorJobStore, type VendorStore } from "./ports";
 
 const money = (n: number) => `UGX ${n.toLocaleString("en-US")}`;
@@ -63,6 +63,18 @@ export class VendorJobService {
     if (job.status !== "delivered") throw new VendorError("Only delivered work can be approved.");
     await this.jobs.release(id, { type: "client", ...actor });
     await this.tellVendor(job, `${job.studio.name} approved your work`, `${money(vendorTake(job.price))} is in your wallet.`);
+  }
+
+  /**
+   * Gives an open job the folder the vendor works in, when it has none (made
+   * before jobs had folders, or its folder was deleted) or the studio moves
+   * it. `folderIn` finds or makes the folder inside the job's project.
+   */
+  async setFolder(tenantId: string, id: string, folderIn: (projectId: string) => Promise<string>): Promise<void> {
+    const job = await this.studioJob(tenantId, id);
+    if (!isOpenJob(job.status)) throw new VendorError("This job is over: it has no folder to give.");
+    if (!(await this.jobs.setFolder(tenantId, id, await folderIn(job.projectId)))) throw new VendorError("This job has moved on: reload to see where it is.");
+    await this.tellVendor(job, `${job.studio.name} set your folder`, `For ${job.projectTitle}: your files go there.`);
   }
 
   /** The studio raises a dispute over work in progress or delivered: Aming's staff settle it. */
