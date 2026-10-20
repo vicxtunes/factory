@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { Avatar } from "@repo/ui/Avatar";
 import { BackLink } from "@repo/ui/navigation/back";
 import { SectionLabel } from "@repo/ui/SectionLabel";
+import { SocialIcon } from "@repo/ui/vendors/SocialIcon";
 import { projects } from "@repo/lib/projects/server";
 import { requireStudio } from "@repo/lib/studios/server";
 import { formatDay } from "@repo/lib/tenancy/format";
@@ -60,13 +61,22 @@ export default async function StudioVendorPage({ params }: { params: Promise<{ i
             </div>
           ) : null}
           {socials.length ? (
-            <p className="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-sm">
+            <div className="mt-4 flex flex-wrap gap-2">
               {socials.map((s) => (
-                <a key={s.id} href={s.href} target="_blank" rel="noreferrer" className="text-brand-600 hover:underline dark:text-brand-400">
-                  {s.label}: {s.text}
+                <a
+                  key={s.id}
+                  href={s.href}
+                  target="_blank"
+                  rel="noreferrer"
+                  title={s.label}
+                  className="inline-flex max-w-full items-center gap-2 rounded-full border border-border bg-background px-3 py-1.5 text-sm hover:border-brand-500/40"
+                >
+                  <SocialIcon network={s.id} className="size-4 shrink-0" />
+                  <span className="truncate">{s.text}</span>
+                  <span className="sr-only">on {s.label}</span>
                 </a>
               ))}
-            </p>
+            </div>
           ) : null}
         </div>
       </div>

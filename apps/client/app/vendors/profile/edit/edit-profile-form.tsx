@@ -7,6 +7,7 @@ import { useState, useTransition, type ReactNode } from "react";
 import { Button } from "@repo/ui/Button";
 import { Field, TextInput } from "@repo/ui/Field";
 import { saveVendorProfile } from "@repo/lib/vendors/actions";
+import { SocialIcon } from "@repo/ui/vendors/SocialIcon";
 import { SOCIAL_NETWORKS, VENDOR_CATEGORIES, VENDOR_SKILLS, type Vendor } from "@repo/lib/vendors/core";
 
 const BIO_MAX = 300;
@@ -133,7 +134,10 @@ export function EditProfileForm({ vendor, pictures }: { vendor: Vendor; pictures
           <div className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-surface">
             {SOCIAL_NETWORKS.map((n) => (
               <label key={n.id} className="flex items-center gap-3 px-4 py-1.5">
-                <span className="w-20 shrink-0 text-sm font-medium">{n.label}</span>
+                <span className="flex w-28 shrink-0 items-center gap-2 text-sm font-medium">
+                  <SocialIcon network={n.id} className="size-4 shrink-0 text-muted" />
+                  {n.label}
+                </span>
                 <input
                   value={socials[n.id] ?? ""}
                   onChange={(e) => setSocials({ ...socials, [n.id]: e.target.value })}

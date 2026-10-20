@@ -2,7 +2,8 @@
 
 import { useState, type ReactNode } from "react";
 
-import type { VendorKind } from "@repo/lib/vendors/core";
+import { SocialIcon } from "@repo/ui/vendors/SocialIcon";
+import type { SocialNetwork, VendorKind } from "@repo/lib/vendors/core";
 
 const TABS = ["Work", "Services", "About"] as const;
 
@@ -14,7 +15,7 @@ export function ProfileTabs({
   joined,
 }: {
   skills: string[];
-  socials: { id: string; label: string; text: string; href: string }[];
+  socials: { id: SocialNetwork; label: string; text: string; href: string }[];
   kind: VendorKind;
   joined: string;
 }) {
@@ -69,7 +70,12 @@ export function ProfileTabs({
             {socials.map((s) => (
               <Row
                 key={s.id}
-                name={s.label}
+                name={
+                  <span className="flex items-center gap-2">
+                    <SocialIcon network={s.id} className="size-4" />
+                    {s.label}
+                  </span>
+                }
                 value={
                   <a href={s.href} target="_blank" rel="noreferrer" className="text-brand-600 hover:underline dark:text-brand-400">
                     {s.text}
@@ -84,7 +90,7 @@ export function ProfileTabs({
   );
 }
 
-function Row({ name, value }: { name: string; value: ReactNode }) {
+function Row({ name, value }: { name: ReactNode; value: ReactNode }) {
   return (
     <div className="flex items-center justify-between gap-4 px-4 py-3">
       <dt className="text-muted">{name}</dt>
