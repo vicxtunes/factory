@@ -18,6 +18,7 @@ import { portalClient, studioAtSlug } from "@repo/lib/studio-portal/server";
 
 import { ProductPageView } from "../product-page-view";
 import { ClientShell } from "../shell";
+import { requireShowroomVisitor } from "../showroom-view";
 import { StudioShell } from "./studio-shell";
 
 // The client portal's top-level addresses, client.<domain>/{slug}: shared
@@ -26,7 +27,8 @@ import { StudioShell } from "./studio-shell";
 // in supabase/migrations/20261003190000_studio_portal.sql), and static pages
 // next to this one (orders, history, …) always win over this dynamic segment.
 //
-// - A product: its own page, so it can be shared on its own. Public.
+// - A product: its own page, so it can be shared on its own. Like the showroom,
+//   for studios' accounts only (signed-out visitors sign in first).
 // - A studio (My Business): its public page, where its clients also sign in
 //   (packages/lib/studio-portal). An old slug redirects to the current one.
 
@@ -62,7 +64,10 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
 export default async function SlugPage({ params }: Params) {
   const slug = await slugOf(params);
   const found = await loadProduct(slug);
-  if (found) return <ProductPage found={found} />;
+  if (found) {
+    await requireShowroomVisitor();
+    return <ProductPage found={found} />;
+  }
 
   const at = await studioAtSlug(slug);
   if (!at) notFound();
