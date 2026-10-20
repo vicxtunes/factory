@@ -228,7 +228,7 @@ async function Vendors({ scope, project: p, canPay, hire }: { scope: TenantScope
     projectFolder ? files.foldersWithin(scope, projectFolder) : [],
   ]);
   const hireCard = hiring
-    ? { id: hiring.id, name: hiring.name, category: hiring.category, location: hiring.location, skills: hiring.skills, rates: hiring.rates, photoUrl: await vendors.pictureUrl(hiring.photoKey) }
+    ? { id: hiring.id, name: hiring.name, category: hiring.category, location: hiring.location, skills: hiring.skills, offers: hiring.offers, photoUrl: await vendors.pictureUrl(hiring.photoKey) }
     : null;
   return <ProjectVendors projectId={p.id} jobs={jobs} folders={folders} canPay={canPay} hire={hireCard} />;
 }

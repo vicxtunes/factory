@@ -18,7 +18,7 @@ import {
   setVendorJobFolder,
   type VendorCard,
 } from "@repo/lib/vendors/actions";
-import { autoReleaseAt, isOpenJob, JOB_STATUS_LABELS, ratePrice, rateTotal, rateUnit, VENDOR_CATEGORIES, vendorCategory, vendorTake, type JobStatus } from "@repo/lib/vendors/core";
+import { autoReleaseAt, isOpenJob, JOB_STATUS_LABELS, offerPrice, offerTotal, rateUnit, VENDOR_CATEGORIES, vendorCategory, vendorTake, type JobStatus, type RateUnit } from "@repo/lib/vendors/core";
 
 /** One vendor job on the project, as the studio sees it. */
 export interface ProjectJob {
@@ -284,7 +284,7 @@ function AddVendor({
   const [brief, setBrief] = useState("");
   const [dueOn, setDueOn] = useState("");
   const [price, setPrice] = useState("");
-  // One of their rates ("" for a price agreed here), and how many of its unit.
+  // One of their priced services ("" for a price agreed here), and how many of its unit.
   const [rate, setRate] = useState("");
   const [quantity, setQuantity] = useState("1");
   // Where they work: "new" (a folder made for them) or an existing folder's id.
@@ -344,37 +344,37 @@ function AddVendor({
               autoFocus
             />
           </Field>
-          {chosen.rates.length ? (
+          {pricedOffers(chosen).length ? (
             <div className="space-y-2">
-              <Field label="At their rate">
+              <Field label="At their price">
                 <select
                   value={rate}
                   onChange={(e) => {
                     setRate(e.target.value);
-                    const picked = chosen.rates[Number(e.target.value)];
+                    const picked = pricedOffers(chosen)[Number(e.target.value)];
                     if (!picked || e.target.value === "") return;
-                    setPrice(rateTotal(picked, Number(quantity) || 1).toLocaleString("en-US"));
-                    if (!brief.trim()) setBrief(picked.service);
+                    setPrice(offerTotal(picked, Number(quantity) || 1).toLocaleString("en-US"));
+                    if (!brief.trim()) setBrief(picked.name);
                   }}
                   className="h-11 w-full rounded-lg border border-border bg-surface px-3 text-sm"
                 >
                   <option value="">No, agree a price</option>
-                  {chosen.rates.map((r, i) => (
+                  {pricedOffers(chosen).map((o, i) => (
                     <option key={i} value={i}>
-                      {r.service}: {ratePrice(r)}
+                      {o.name}: {offerPrice(o)}
                     </option>
                   ))}
                 </select>
               </Field>
-              {rate !== "" && chosen.rates[Number(rate)]!.unit !== "project" ? (
-                <Field label={`How many ${rateUnit(chosen.rates[Number(rate)]!.unit).many}`}>
+              {rate !== "" && pricedOffers(chosen)[Number(rate)]!.unit !== "project" ? (
+                <Field label={`How many ${rateUnit(pricedOffers(chosen)[Number(rate)]!.unit).many}`}>
                   <TextInput
                     inputMode="numeric"
                     value={quantity}
                     onChange={(e) => {
                       const n = e.target.value.replace(/[^\d]/g, "");
                       setQuantity(n);
-                      setPrice(rateTotal(chosen.rates[Number(rate)]!, Number(n) || 1).toLocaleString("en-US"));
+                      setPrice(offerTotal(pricedOffers(chosen)[Number(rate)]!, Number(n) || 1).toLocaleString("en-US"));
                     }}
                   />
                 </Field>
@@ -505,6 +505,11 @@ function GiveFolder({ job, folders, onClose }: { job: ProjectJob; folders: Proje
       </form>
     </BottomSheet>
   );
+}
+
+/** The vendor's services with a price, to hire at one. */
+function pricedOffers(vendor: VendorCard): { name: string; price: number; unit: RateUnit }[] {
+  return vendor.offers.flatMap((o) => (o.price !== null && o.unit !== null ? [{ name: o.name, price: o.price, unit: o.unit }] : []));
 }
 
 function VendorRow({ vendor, note }: { vendor: VendorCard; note?: string }) {

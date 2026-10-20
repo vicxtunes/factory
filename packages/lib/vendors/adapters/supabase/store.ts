@@ -1,12 +1,14 @@
 import "server-only";
 
 // This app's VendorStore: the `vendors` table
-// (supabase/migrations/20261108100000_vendors_apart.sql). Service-role
+// (supabase/migrations/20261108100000_vendors_apart.sql), with their services
+// and samples (20261115100000_vendor_services.sql). Service-role
 // client, so this file is the only place vendor rows are read or written.
 
 import { createAdminClient } from "@repo/lib/supabase/admin";
 
 import type { Vendor } from "../../core/model";
+import type { OfferInput, RateUnit, VendorOffer } from "../../core/services";
 import type { VendorStore } from "../../ports";
 
 interface Row {
@@ -19,14 +21,39 @@ interface Row {
   socials: Vendor["socials"];
   bio: string | null;
   location: string | null;
-  rates: Vendor["rates"];
+  offers: OfferRow[];
   photo_key: string | null;
   cover_key: string | null;
   status: Vendor["status"];
   created_at: string;
 }
 
-const COLUMNS = "id, client_id, name, kind, category, skills, socials, bio, location, rates, photo_key, cover_key, status, created_at";
+interface OfferRow {
+  id: string;
+  name: string;
+  description: string | null;
+  price: number | string | null;
+  unit: RateUnit | null;
+  created_at: string;
+  samples: { id: string; key: string; created_at: string }[];
+}
+
+const OFFER_COLUMNS = "id, name, description, price, unit, created_at, samples:vendor_service_samples (id, key, created_at)";
+const COLUMNS = `id, client_id, name, kind, category, skills, socials, bio, location, photo_key, cover_key, status, created_at, offers:vendor_services (${OFFER_COLUMNS})`;
+
+const oldestFirst = (a: { created_at: string }, b: { created_at: string }) => a.created_at.localeCompare(b.created_at);
+
+const toOffer = (r: OfferRow): VendorOffer => ({
+  id: r.id,
+  name: r.name,
+  description: r.description,
+  // bigint may arrive as a string.
+  price: r.price === null ? null : Number(r.price),
+  unit: r.unit,
+  samples: [...r.samples].sort(oldestFirst).map((s) => ({ id: s.id, key: s.key })),
+});
+
+const offerColumns = (o: OfferInput) => ({ name: o.name, description: o.description, price: o.price, unit: o.unit });
 
 const toVendor = (r: Row): Vendor => ({
   id: r.id,
@@ -38,7 +65,7 @@ const toVendor = (r: Row): Vendor => ({
   socials: r.socials,
   bio: r.bio,
   location: r.location,
-  rates: r.rates,
+  offers: [...r.offers].sort(oldestFirst).map(toOffer),
   photoKey: r.photo_key,
   coverKey: r.cover_key,
   status: r.status,
@@ -52,6 +79,8 @@ function fail(what: string, error: { message: string }): never {
 }
 
 const vendors = () => createAdminClient().from("vendors");
+const services = () => createAdminClient().from("vendor_services");
+const samples = () => createAdminClient().from("vendor_service_samples");
 
 export const supabaseVendorStore: VendorStore = {
   async byClient(clientId) {
@@ -107,7 +136,6 @@ export const supabaseVendorStore: VendorStore = {
         socials: profile.socials,
         bio: profile.bio,
         location: profile.location,
-        rates: profile.rates,
       })
       .eq("id", id)
       .select(COLUMNS)
@@ -123,5 +151,34 @@ export const supabaseVendorStore: VendorStore = {
     const { error } = await vendors().update({ [column]: key }).eq("id", id);
     if (error) fail("save the picture", error);
     return before[column] ?? null;
+  },
+
+  async createOffer(vendorId, offer) {
+    const { data, error } = await services().insert({ vendor_id: vendorId, ...offerColumns(offer) }).select(OFFER_COLUMNS).single<OfferRow>();
+    if (error) fail("save the service", error);
+    return toOffer(data);
+  },
+
+  async updateOffer(vendorId, id, offer) {
+    const { data, error } = await services().update(offerColumns(offer)).eq("vendor_id", vendorId).eq("id", id).select("id");
+    if (error) fail("save the service", error);
+    return data.length > 0;
+  },
+
+  async deleteOffer(vendorId, id) {
+    const { data, error } = await services().delete().eq("vendor_id", vendorId).eq("id", id).select("samples:vendor_service_samples (key)").returns<{ samples: { key: string }[] }[]>();
+    if (error) fail("delete the service", error);
+    return data[0] ? data[0].samples.map((s) => s.key) : null;
+  },
+
+  async addSample(vendorId, offerId, key) {
+    const { error } = await samples().insert({ vendor_id: vendorId, service_id: offerId, key });
+    if (error) fail("save the sample", error);
+  },
+
+  async removeSample(vendorId, id) {
+    const { data, error } = await samples().delete().eq("vendor_id", vendorId).eq("id", id).select("key").returns<{ key: string }[]>();
+    if (error) fail("delete the sample", error);
+    return data[0]?.key ?? null;
   },
 };

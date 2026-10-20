@@ -11,8 +11,8 @@ import { ProfileTabs } from "./profile-tabs";
 export const metadata = { title: "Profile" };
 
 // A vendor's profile, as photographers will see it: a cover, their picture,
-// name and what they do, a few numbers, then their work, services and
-// details in tabs. Its numbers and work fill in as jobs and samples arrive.
+// name and what they do, a few numbers, then their work (their services'
+// samples), services and details in tabs.
 export default async function VendorProfilePage() {
   const { session, vendor } = await requireVendor();
   const label = vendorCategory(vendor.category)?.label ?? "Vendor";
@@ -20,7 +20,7 @@ export default async function VendorProfilePage() {
     const handle = vendor.socials[n.id];
     return handle ? [{ id: n.id, label: n.label, text: n.id === "website" ? handle : `@${handle}`, href: `https://${n.prefix}${handle}` }] : [];
   });
-  const [photoUrl, coverUrl] = await Promise.all([vendors.pictureUrl(vendor.photoKey), vendors.pictureUrl(vendor.coverKey)]);
+  const [photoUrl, coverUrl, offers] = await Promise.all([vendors.pictureUrl(vendor.photoKey), vendors.pictureUrl(vendor.coverKey), vendors.showOffers(vendor)]);
   const joined = new Date(vendor.createdAt).toLocaleDateString("en-GB", { month: "long", year: "numeric" });
 
   return (
@@ -93,7 +93,7 @@ export default async function VendorProfilePage() {
             </span>
           </div>
 
-          <ProfileTabs skills={vendor.skills} rates={vendor.rates} socials={socials} kind={vendor.kind} joined={joined} />
+          <ProfileTabs skills={vendor.skills} offers={offers} socials={socials} kind={vendor.kind} joined={joined} />
         </div>
       </div>
     </VendorFrame>

@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { Avatar } from "@repo/ui/Avatar";
 import { BackLink } from "@repo/ui/navigation/back";
 import { SectionLabel } from "@repo/ui/SectionLabel";
-import { RateList } from "@repo/ui/vendors/RateList";
+import { OfferList } from "@repo/ui/vendors/OfferList";
 import { SocialIcon } from "@repo/ui/vendors/SocialIcon";
 import { projects } from "@repo/lib/projects/server";
 import { requireStudio } from "@repo/lib/studios/server";
@@ -15,13 +15,13 @@ import { vendors } from "@repo/lib/vendors/server";
 export const metadata = { title: "Vendor · My Business" };
 
 // A vendor as studios see them: their cover and picture, what they do, their
-// services, rates and where they show their work, then the studio's projects in
+// services with their prices and samples, where they show their work, then the studio's projects in
 // hand to hire them on (the request is made on the project, in its folder).
 export default async function StudioVendorPage({ params }: { params: Promise<{ id: string }> }) {
   const { scope } = await requireStudio("projects");
   const vendor = await vendors.hireable((await params).id);
   if (!vendor) notFound();
-  const [photoUrl, coverUrl, inHand] = await Promise.all([vendors.pictureUrl(vendor.photoKey), vendors.pictureUrl(vendor.coverKey), projects.active(scope)]);
+  const [photoUrl, coverUrl, inHand, offers] = await Promise.all([vendors.pictureUrl(vendor.photoKey), vendors.pictureUrl(vendor.coverKey), projects.active(scope), vendors.showOffers(vendor)]);
   const socials = SOCIAL_NETWORKS.flatMap((n) => {
     const handle = vendor.socials[n.id];
     return handle ? [{ id: n.id, label: n.label, text: n.id === "website" ? handle : `@${handle}`, href: `https://${n.prefix}${handle}` }] : [];
@@ -82,10 +82,10 @@ export default async function StudioVendorPage({ params }: { params: Promise<{ i
         </div>
       </div>
 
-      {vendor.rates.length ? (
+      {offers.length ? (
         <section className="space-y-3">
-          <SectionLabel>Rates</SectionLabel>
-          <RateList rates={vendor.rates} />
+          <SectionLabel>Services</SectionLabel>
+          <OfferList offers={offers} />
         </section>
       ) : null}
 

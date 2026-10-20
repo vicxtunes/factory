@@ -6,6 +6,7 @@ import { AppError } from "@repo/lib/kernel/core";
 import type { VendorPicture } from "./core/categories";
 import type { JobRequest, JobStatus, JobView, VendorJob } from "./core/jobs";
 import type { Vendor, VendorJoin, VendorProfile } from "./core/model";
+import type { OfferInput, VendorOffer } from "./core/services";
 
 export interface VendorStore {
   /** The vendor behind an Aming account, if it has joined. */
@@ -20,6 +21,14 @@ export interface VendorStore {
   walletBalance(id: string): Promise<number>;
   /** Sets one of the vendor's pictures; returns the key it replaced. */
   setPicture(id: string, which: VendorPicture, key: string): Promise<string | null>;
+  createOffer(vendorId: string, offer: OfferInput): Promise<VendorOffer>;
+  /** False when the vendor has no such service. */
+  updateOffer(vendorId: string, id: string, offer: OfferInput): Promise<boolean>;
+  /** Deletes the service with its samples; their keys, or null when the vendor has no such service. */
+  deleteOffer(vendorId: string, id: string): Promise<string[] | null>;
+  addSample(vendorId: string, offerId: string, key: string): Promise<void>;
+  /** The deleted sample's key; null when the vendor has no such sample. */
+  removeSample(vendorId: string, id: string): Promise<string | null>;
 }
 
 /** The picture files (R2): a signed upload link, then checked and moved into place. */

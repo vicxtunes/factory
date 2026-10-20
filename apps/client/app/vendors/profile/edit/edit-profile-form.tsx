@@ -8,13 +8,9 @@ import { Button } from "@repo/ui/Button";
 import { Field, TextInput } from "@repo/ui/Field";
 import { saveVendorProfile } from "@repo/lib/vendors/actions";
 import { SocialIcon } from "@repo/ui/vendors/SocialIcon";
-import { RATE_UNITS, SOCIAL_NETWORKS, VENDOR_CATEGORIES, VENDOR_SKILLS, type RateUnit, type Vendor } from "@repo/lib/vendors/core";
+import { SOCIAL_NETWORKS, VENDOR_CATEGORIES, VENDOR_SKILLS, type Vendor } from "@repo/lib/vendors/core";
 
 const BIO_MAX = 300;
-const RATES_MAX = 20;
-
-/** A rate as typed: the price is text until it's saved. */
-type RateDraft = { service: string; price: string; unit: RateUnit };
 
 /** A vendor's profile, all on one page: who they are, what they do and offer, about them, where their work is. */
 export function EditProfileForm({ vendor, pictures }: { vendor: Vendor; pictures: ReactNode }) {
@@ -27,7 +23,6 @@ export function EditProfileForm({ vendor, pictures }: { vendor: Vendor; pictures
   const [bio, setBio] = useState(vendor.bio ?? "");
   const [location, setLocation] = useState(vendor.location ?? "");
   const [socials, setSocials] = useState<Record<string, string>>(vendor.socials);
-  const [rates, setRates] = useState<RateDraft[]>(vendor.rates.map((r) => ({ ...r, price: r.price.toLocaleString("en-US") })));
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
@@ -41,8 +36,7 @@ export function EditProfileForm({ vendor, pictures }: { vendor: Vendor; pictures
         e.preventDefault();
         setError(null);
         start(async () => {
-          const priced = rates.filter((r) => r.service.trim() || r.price.trim()).map((r) => ({ ...r, price: r.price.replace(/[^\d]/g, "") }));
-          const res = await saveVendorProfile({ name, kind, category, skills, socials, bio, location, rates: priced });
+          const res = await saveVendorProfile({ name, kind, category, skills, socials, bio, location });
           if (!res.ok) return setError(res.error);
           router.push("/vendors/profile");
           router.refresh();
@@ -134,54 +128,6 @@ export function EditProfileForm({ vendor, pictures }: { vendor: Vendor; pictures
             maxLength={40}
             aria-label="Add your own"
           />
-        </Section>
-
-        <Section title="Rates">
-          <p className="-mt-2 text-sm text-muted">What you charge for each service. Studios see these and can hire you at one.</p>
-          {rates.length ? (
-            <ul className="space-y-3">
-              {rates.map((r, i) => {
-                const change = (patch: Partial<RateDraft>) => setRates(rates.map((x, j) => (j === i ? { ...x, ...patch } : x)));
-                return (
-                  <li key={i} className="space-y-2 rounded-2xl border border-border bg-surface p-3">
-                    <div className="flex items-center gap-2">
-                      <TextInput value={r.service} onChange={(e) => change({ service: e.target.value })} placeholder="Service, e.g. Colour & retouch" maxLength={60} list="rate-services" aria-label="Service" />
-                      <button
-                        type="button"
-                        onClick={() => setRates(rates.filter((_, j) => j !== i))}
-                        aria-label={`Remove ${r.service || "this rate"}`}
-                        className="grid size-11 shrink-0 place-items-center rounded-lg text-muted hover:bg-background hover:text-error-600"
-                      >
-                        <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden>
-                          <path d="M6 6l12 12M18 6 6 18" />
-                        </svg>
-                      </button>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <TextInput inputMode="numeric" value={r.price} onChange={(e) => change({ price: e.target.value })} placeholder="UGX 5,000" aria-label="Price (UGX)" />
-                      <select value={r.unit} onChange={(e) => change({ unit: e.target.value as RateUnit })} className="h-11 w-full rounded-lg border border-border bg-surface px-3 text-sm" aria-label="Per">
-                        {RATE_UNITS.map((u) => (
-                          <option key={u.id} value={u.id}>
-                            {u.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          ) : null}
-          <datalist id="rate-services">
-            {skills.map((s) => (
-              <option key={s} value={s} />
-            ))}
-          </datalist>
-          {rates.length < RATES_MAX ? (
-            <Button type="button" variant="secondary" onClick={() => setRates([...rates, { service: rates.length ? "" : (skills[0] ?? ""), price: "", unit: "project" }])}>
-              Add a rate
-            </Button>
-          ) : null}
         </Section>
 
         <Section title="Where's your work">

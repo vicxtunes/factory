@@ -1,27 +1,30 @@
 "use client";
 
+import Link from "next/link";
 import { useState, type ReactNode } from "react";
 
-import { RateList } from "@repo/ui/vendors/RateList";
+import { OfferList, type OfferView } from "@repo/ui/vendors/OfferList";
 import { SocialIcon } from "@repo/ui/vendors/SocialIcon";
-import type { SocialNetwork, VendorKind, VendorRate } from "@repo/lib/vendors/core";
+import type { SocialNetwork, VendorKind } from "@repo/lib/vendors/core";
 
 const TABS = ["Work", "Services", "About"] as const;
 
 /** The profile's tabs: their work (samples), what they offer and charge, and about them. */
 export function ProfileTabs({
   skills,
-  rates,
+  offers,
   socials,
   kind,
   joined,
 }: {
   skills: string[];
-  rates: VendorRate[];
+  offers: OfferView[];
   socials: { id: SocialNetwork; label: string; text: string; href: string }[];
   kind: VendorKind;
   joined: string;
 }) {
+  // Every sample, service by service: their work.
+  const work = offers.flatMap((o) => o.sampleUrls.flatMap((url) => (url ? [{ url, service: o.name }] : [])));
   const [tab, setTab] = useState<(typeof TABS)[number]>("Work");
   return (
     <div className="mt-8">
@@ -44,17 +47,45 @@ export function ProfileTabs({
 
       <div className="py-6">
         {tab === "Work" ? (
-          <div className="grid grid-cols-2 gap-3">
-            {[0, 1, 2, 3].map((i) => (
-              <div key={i} className="aspect-[4/3] rounded-2xl border border-dashed border-border bg-surface" />
-            ))}
-            <p className="col-span-2 text-center text-sm text-muted">Samples of your work show here. Adding them comes next.</p>
-          </div>
+          work.length ? (
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {work.map((w, i) => (
+                <div key={i} className="aspect-[4/3] overflow-hidden rounded-2xl bg-surface">
+                  {/* A short-lived signed link to the private bucket: a plain img. */}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={w.url} alt={w.service} title={w.service} className="size-full object-cover" />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              {[0, 1, 2, 3].map((i) => (
+                <div key={i} className="aspect-[4/3] rounded-2xl border border-dashed border-border bg-surface" />
+              ))}
+              <p className="col-span-2 text-center text-sm text-muted">
+                Samples of your work show here. Add them to your services in{" "}
+                <Link href="/vendors/services" className="font-medium text-brand-600 hover:underline dark:text-brand-400">
+                  Services
+                </Link>
+                .
+              </p>
+            </div>
+          )
         ) : null}
 
         {tab === "Services" ? (
           <div className="space-y-5">
-            {rates.length ? <RateList rates={rates} /> : <p className="text-sm text-muted">No rates yet. Add what you charge in Edit profile.</p>}
+            {offers.length ? (
+              <OfferList offers={offers} />
+            ) : (
+              <p className="text-sm text-muted">
+                No services yet.{" "}
+                <Link href="/vendors/services/new" className="font-medium text-brand-600 hover:underline dark:text-brand-400">
+                  Add one
+                </Link>{" "}
+                with its price and samples.
+              </p>
+            )}
             {skills.length ? (
               <div className="flex flex-wrap gap-2">
                 {skills.map((s) => (

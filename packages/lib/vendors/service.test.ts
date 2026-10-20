@@ -53,7 +53,7 @@ test("a vendor edits their own profile; an account that hasn't joined can't", as
   const { store } = memoryStore();
   const vendorService = service(store);
   const joined = await vendorService.join(kato, answers);
-  const profile = { name: "Kato Films", kind: "business" as const, category: "videographer", skills: ["Drone"], socials: {}, bio: "Films that feel like the day.", location: "Kampala", rates: [{ service: "Highlight reel", price: 800_000, unit: "event" as const }] };
+  const profile = { name: "Kato Films", kind: "business" as const, category: "videographer", skills: ["Drone"], socials: {}, bio: "Films that feel like the day.", location: "Kampala" };
   const saved = await vendorService.updateProfile(kato.clientId, profile);
   assert.deepEqual({ ...saved, id: joined.id }, { ...joined, ...profile });
   await assert.rejects(vendorService.updateProfile("c-nobody", profile), /Join as a vendor first/);
@@ -94,4 +94,43 @@ test("finding vendors to hire: every word in the name, and the category if one i
   assert.deepEqual((await vendorService.search("  kato  edits ", null)).map((v) => v.name), ["Kato Edits"]);
   assert.deepEqual((await vendorService.search("", "videographer")).map((v) => v.name), ["Nambi Films"]);
   assert.equal((await vendorService.search("kato", "videographer")).length, 0);
+});
+
+test("a vendor's services: added, edited and deleted with their samples; samples checked, kept to 12, and only their own", async () => {
+  const { store } = memoryStore();
+  const removed: string[] = [];
+  const moved: string[] = [];
+  const files = {
+    putUrl: async (key: string) => `https://upload/${key}`,
+    getUrl: async (key: string) => `https://view/${key}`,
+    size: async (key: string) => (key.includes("huge") ? 9_000_000 : 200_000),
+    move: async (_from: string, to: string) => void moved.push(to),
+    remove: async (keys: string[]) => void removed.push(...keys),
+  };
+  let n = 0;
+  const vendorService = new VendorService(store, files, () => `id${++n}`);
+  const joined = await vendorService.join(kato, answers);
+  const offer = await vendorService.addOffer(kato.clientId, { name: "Retouch", description: null, price: 5000, unit: "photo" });
+
+  const { key } = await vendorService.startSampleUpload(kato.clientId, offer.id);
+  assert.match(key, new RegExp(`^incoming/vendors/${joined.id}/sample-`));
+  await vendorService.confirmSample(kato.clientId, offer.id, key);
+  const [sample] = (await vendorService.mine(kato.clientId))!.offers[0]!.samples;
+  assert.match(sample!.key, new RegExp(`^vendors/${joined.id}/samples/`));
+  await assert.rejects(vendorService.confirmSample(kato.clientId, offer.id, "incoming/vendors/someone-else/sample-x.jpg"), /isn't valid/);
+  await assert.rejects(vendorService.confirmSample(kato.clientId, offer.id, `incoming/vendors/${joined.id}/sample-huge.jpg`), /too large/);
+  await assert.rejects(vendorService.startSampleUpload(kato.clientId, "o-not-theirs"), /doesn't exist/);
+
+  for (let i = 1; i < 12; i++) await vendorService.confirmSample(kato.clientId, offer.id, `incoming/vendors/${joined.id}/sample-${i}.jpg`);
+  await assert.rejects(vendorService.startSampleUpload(kato.clientId, offer.id), /up to 12/);
+
+  await vendorService.editOffer(kato.clientId, offer.id, { name: "Colour & retouch", description: "Our warm look.", price: null, unit: null });
+  assert.equal((await vendorService.mine(kato.clientId))!.offers[0]!.name, "Colour & retouch");
+  await vendorService.removeSample(kato.clientId, sample!.id);
+  assert.ok(removed.includes(sample!.key), "the picture goes with it");
+
+  await vendorService.removeOffer(kato.clientId, offer.id);
+  assert.deepEqual((await vendorService.mine(kato.clientId))!.offers, []);
+  assert.equal(removed.filter((k) => k.startsWith(`vendors/${joined.id}/samples/`)).length, 12, "every sample's picture deleted");
+  await assert.rejects(vendorService.editOffer("c-nobody", offer.id, { name: "X", description: null, price: null, unit: null }), /Join as a vendor first/);
 });

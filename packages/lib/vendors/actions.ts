@@ -18,6 +18,8 @@ import {
   jobFolderSchema,
   jobIdSchema,
   jobRequestSchema,
+  offerIdSchema,
+  offerSchema,
   pictureKeySchema,
   settlementSchema,
   vendorJoinSchema,
@@ -26,7 +28,7 @@ import {
   vendorSearchSchema,
   type JobFolder,
   type Vendor,
-  type VendorRate,
+  type VendorOffer,
 } from "./core";
 import { VendorError } from "./ports";
 import { vendorJobs, vendors } from "./server";
@@ -70,6 +72,55 @@ export async function confirmVendorPicture(which: unknown, key: unknown): Promis
   });
 }
 
+// ── Services, and samples of their work ──
+
+/** The signed-in vendor adds a service (no id) or edits one of theirs; returns its id. */
+export async function saveVendorOffer(id: unknown, input: unknown): Promise<Result<{ id: string }>> {
+  return runAction("vendors", async () => {
+    const clientId = await vendorCaller();
+    const offer = parseInput(offerSchema, input);
+    let saved: string;
+    if (id === null) saved = (await vendors.addOffer(clientId, offer)).id;
+    else await vendors.editOffer(clientId, (saved = parseInput(offerIdSchema, id)), offer);
+    revalidatePath("/vendors", "layout");
+    return { id: saved };
+  });
+}
+
+/** The signed-in vendor deletes one of their services, with its samples. */
+export async function deleteVendorOffer(id: unknown): Promise<Result> {
+  return runAction("vendors", async () => {
+    await vendors.removeOffer(await vendorCaller(), parseInput(offerIdSchema, id));
+    revalidatePath("/vendors", "layout");
+  });
+}
+
+/** A signed link to upload a sample of one of the signed-in vendor's services to (already shrunk in the browser). */
+export async function startVendorSampleUpload(offerId: unknown): Promise<Result<{ key: string; url: string }>> {
+  return runAction("vendors", async () => vendors.startSampleUpload(await vendorCaller(), parseInput(offerIdSchema, offerId)));
+}
+
+/** Adds the uploaded picture to the service's samples. */
+export async function confirmVendorSample(offerId: unknown, key: unknown): Promise<Result> {
+  return runAction("vendors", async () => {
+    await vendors.confirmSample(await vendorCaller(), parseInput(offerIdSchema, offerId), parseInput(pictureKeySchema, key));
+    revalidatePath("/vendors", "layout");
+  });
+}
+
+export async function deleteVendorSample(id: unknown): Promise<Result> {
+  return runAction("vendors", async () => {
+    await vendors.removeSample(await vendorCaller(), parseInput(z.uuid("That sample is gone already."), id));
+    revalidatePath("/vendors", "layout");
+  });
+}
+
+async function vendorCaller(): Promise<string> {
+  const session = await getClientSession();
+  if (!session) throw new VendorError("Sign in first.");
+  return session.client_id;
+}
+
 // ── Jobs: the vendor ──
 
 /** The signed-in vendor accepts or declines a job request. */
@@ -110,7 +161,8 @@ export interface VendorCard {
   category: string;
   location: string | null;
   skills: string[];
-  rates: VendorRate[];
+  /** Their priced services, to hire at one. */
+  offers: Pick<VendorOffer, "name" | "price" | "unit">[];
   photoUrl: string | null;
 }
 
@@ -120,7 +172,7 @@ export async function findVendors(input: unknown): Promise<Result<VendorCard[]>>
     await studioOfCaller("projects");
     const { query, category } = parseInput(vendorSearchSchema, input);
     const found = await vendors.search(query, category);
-    return Promise.all(found.map(async (v: Vendor) => ({ id: v.id, name: v.name, category: v.category, location: v.location, skills: v.skills, rates: v.rates, photoUrl: await vendors.pictureUrl(v.photoKey) })));
+    return Promise.all(found.map(async (v: Vendor) => ({ id: v.id, name: v.name, category: v.category, location: v.location, skills: v.skills, offers: v.offers, photoUrl: await vendors.pictureUrl(v.photoKey) })));
   });
 }
 
