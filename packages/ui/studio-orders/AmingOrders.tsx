@@ -86,9 +86,9 @@ export function LinkedOrdersList({
               </ul>
             ) : null}
             {projectId ? (
-              <button type="button" disabled={pending} onClick={() => unlink(o.orderId)} className="text-xs text-error-600 hover:underline dark:text-error-400">
+              <Button size="sm" variant="danger" type="button" disabled={pending} onClick={() => unlink(o.orderId)}>
                 Unlink
-              </button>
+              </Button>
             ) : null}
           </li>
         ))}

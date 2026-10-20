@@ -609,9 +609,9 @@ function GeneratePanel({
             <Button className="min-h-9 text-xs" loading={previewing} disabled={previewing} onClick={showPreview}>
               Preview invoice
             </Button>
-            <button type="button" className="text-xs text-muted" onClick={() => setOpen(false)}>
+            <Button size="sm" variant="secondary" type="button" onClick={() => setOpen(false)}>
               Cancel
-            </button>
+            </Button>
           </div>
         </div>
       ) : open ? (
@@ -724,9 +724,9 @@ function PaymentForm({
         <Button type="submit" className="min-h-9 text-xs" loading={pending}>
           Record
         </Button>
-        <button type="button" className="text-xs text-muted" onClick={onCancel}>
+        <Button size="sm" variant="secondary" type="button" onClick={onCancel}>
           Cancel
-        </button>
+        </Button>
       </div>
     </form>
   );

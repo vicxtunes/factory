@@ -681,9 +681,9 @@ function ClientPicker({
             </p>
           ) : null}
         </div>
-        <button type="button" className="text-xs text-brand-600" onClick={() => onChange("")}>
+        <Button size="sm" variant="secondary" type="button" onClick={() => onChange("")}>
           Change
-        </button>
+        </Button>
       </div>
     );
   }

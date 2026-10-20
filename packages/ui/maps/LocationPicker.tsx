@@ -144,9 +144,9 @@ export function LocationPicker({ value, onChange }: { value: MapPoint | null; on
             <a href={googleDirectionsUrl(value)} target="_blank" rel="noreferrer noopener" className="text-xs font-medium text-brand-600 underline">
               Check it in Google Maps
             </a>
-            <button type="button" className="text-xs text-muted underline" onClick={() => onChange(null)}>
+            <Button size="sm" variant="secondary" type="button" onClick={() => onChange(null)}>
               Remove pin
-            </button>
+            </Button>
           </>
         ) : null}
       </div>

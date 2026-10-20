@@ -122,9 +122,9 @@ export function MobileMoneyPay({
         <p className="text-sm font-medium">Approve {money(collection.amount)} on your phone</p>
         <p className="text-xs text-muted">{gaveUp ? "Still waiting. It shows here once approved." : "Enter your PIN in the prompt."}</p>
         {gaveUp ? (
-          <button type="button" onClick={() => setCollection(null)} className="text-xs text-muted underline-offset-2 hover:underline">
+          <Button size="sm" variant="secondary" type="button" onClick={() => setCollection(null)}>
             Try again
-          </button>
+          </Button>
         ) : null}
       </div>
     );

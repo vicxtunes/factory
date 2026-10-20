@@ -11,6 +11,7 @@ import { confirmVendorSample, deleteVendorSample, startVendorSampleUpload } from
 import { SAMPLE_EDGE, SAMPLES_PER_SERVICE } from "@repo/lib/vendors/core";
 
 import { shrinkPicture } from "../shrink-picture";
+import { Button } from "@repo/ui/Button";
 
 /**
  * A service's samples, with the app's standard upload (design room →
@@ -105,7 +106,9 @@ export function SampleGrid({ offerId, samples }: { offerId: string; samples: { i
                   )}
                 </button>
                 <div className="p-2 text-xs">
-                  <button
+                  <Button
+                    size="sm"
+                    variant="danger"
                     type="button"
                     disabled={removing || busy}
                     onClick={() =>
@@ -116,10 +119,9 @@ export function SampleGrid({ offerId, samples }: { offerId: string; samples: { i
                         router.refresh();
                       })
                     }
-                    className="text-error-600 hover:underline disabled:opacity-50 dark:text-error-400"
                   >
                     Delete
-                  </button>
+                  </Button>
                 </div>
               </li>
             );

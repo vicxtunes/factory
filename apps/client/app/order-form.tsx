@@ -320,13 +320,14 @@ export function OrderForm({
                     <span className="rounded-full bg-warning-100 px-3 py-1 text-xs font-semibold text-warning-700">
                       Express requested
                     </span>
-                    <button
+                    <Button
+                      size="sm"
+                      variant="secondary"
                       type="button"
                       onClick={() => setOrderType("normal")}
-                      className="text-xs text-muted hover:underline"
                     >
                       Switch back to normal
-                    </button>
+                    </Button>
                   </div>
                 )}
               </div>

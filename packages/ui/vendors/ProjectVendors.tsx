@@ -6,7 +6,7 @@ import { useEffect, useState, useTransition } from "react";
 
 import { Avatar } from "@repo/ui/Avatar";
 import { FormSheet } from "@repo/ui/FormSheet";
-import { Button } from "@repo/ui/Button";
+import { Button, buttonClass } from "@repo/ui/Button";
 import { Field, TextInput } from "@repo/ui/Field";
 import {
   approveVendorJob,
@@ -108,7 +108,6 @@ export function ProjectVendors({
     });
   }
 
-  const quiet = "text-xs font-medium text-muted hover:text-foreground";
 
   return (
     <div className="space-y-3">
@@ -156,19 +155,19 @@ export function ProjectVendors({
                     </Button>
                   ) : null}
                   {j.folderId && isOpenJob(j.status) ? (
-                    <Link href={`/studio/files?folder=${j.folderId}`} className={quiet}>
+                    <Link href={`/studio/files?folder=${j.folderId}`} className={buttonClass("secondary", "sm")}>
                       {j.status === "samples_sent" ? "See the samples" : "Open their folder"}
                     </Link>
                   ) : null}
                   {["requested", "samples", "samples_sent", "awaiting_funds"].includes(j.status) ? (
-                    <button type="button" disabled={pending} onClick={() => act(() => cancelVendorJob(j.id))} className={`${quiet} hover:text-error-600`}>
+                    <Button size="sm" variant="danger" type="button" disabled={pending} onClick={() => act(() => cancelVendorJob(j.id))}>
                       {j.status === "samples_sent" ? "Not good: cancel" : "Cancel"}
-                    </button>
+                    </Button>
                   ) : null}
                   {j.status === "in_progress" || j.status === "delivered" ? (
-                    <button type="button" onClick={() => setSheet({ kind: "dispute", job: j })} className={`${quiet} hover:text-error-600`}>
+                    <Button size="sm" variant="danger" type="button" onClick={() => setSheet({ kind: "dispute", job: j })}>
                       Raise a dispute
-                    </button>
+                    </Button>
                   ) : null}
                 </div>
               </li>

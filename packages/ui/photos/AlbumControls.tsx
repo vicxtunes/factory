@@ -88,17 +88,18 @@ export function AlbumSettings({ album, publicUrl, basePath }: { album: AlbumView
           </a>
         </p>
       ) : null}
-      <button
+      <Button
+        size="sm"
+        variant="danger"
         type="button"
         disabled={pending}
         onClick={() =>
           window.confirm(`Delete "${album.title}" and its ${album.photoCount} photos? This frees their space and can't be undone.`) &&
           run(() => deleteAlbum(album.id), () => router.push(basePath))
         }
-        className="text-xs text-error-600 hover:underline dark:text-error-400"
       >
         Delete album
-      </button>
+      </Button>
       {errorLine(error)}
     </section>
   );
@@ -121,29 +122,31 @@ export function ManagePhotos({ albumId, coverPhotoId, photos }: { albumId: strin
                 {coverPhotoId === p.id ? (
                   <span className="font-medium text-success-600 dark:text-success-400">Cover</span>
                 ) : (
-                  <button type="button" disabled={pending} onClick={() => run(() => setAlbumCover(albumId, p.id))} className="text-brand-600 hover:underline">
+                  <Button size="sm" variant="secondary" type="button" disabled={pending} onClick={() => run(() => setAlbumCover(albumId, p.id))}>
                     Make cover
-                  </button>
+                  </Button>
                 )}
-                <button
+                <Button
+                  size="sm"
+                  variant="secondary"
                   type="button"
                   disabled={pending}
                   onClick={() => {
                     const caption = window.prompt("Caption", p.caption ?? "");
                     if (caption !== null) run(() => setPhotoCaption(p.id, caption));
                   }}
-                  className="text-brand-600 hover:underline"
                 >
                   Caption
-                </button>
-                <button
+                </Button>
+                <Button
+                  size="sm"
+                  variant="danger"
                   type="button"
                   disabled={pending}
                   onClick={() => window.confirm("Delete this photo?") && run(() => deletePhoto(p.id))}
-                  className="text-error-600 hover:underline dark:text-error-400"
                 >
                   Delete
-                </button>
+                </Button>
               </div>
             </div>
           </li>

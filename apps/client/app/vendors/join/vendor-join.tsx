@@ -293,9 +293,9 @@ export function VendorJoin({ signedInAs }: { signedInAs: string | null }) {
                 aria-label="6-digit code"
                 autoFocus
               />
-              <button type="button" onClick={sendCode} disabled={pending} className="text-sm font-medium text-brand-600 hover:underline dark:text-brand-400">
+              <Button size="sm" variant="secondary" type="button" onClick={sendCode} disabled={pending}>
                 Resend code
-              </button>
+              </Button>
             </Question>
           ) : null}
 

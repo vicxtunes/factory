@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Button } from "@repo/ui/Button";
 
 function toISO(d: Date): string {
   const y = d.getFullYear();
@@ -120,13 +121,14 @@ export function DateRangeCalendar({
       {from ? (
         <div className="mt-2 flex items-center justify-between text-[0.65rem] text-muted">
           <span className="tnum">{to ? `${from} → ${to}` : `${from} → …`}</span>
-          <button
+          <Button
+            size="sm"
+            variant="secondary"
             type="button"
             onClick={() => onChange("", "")}
-            className="text-brand-600 hover:underline"
           >
             Clear
-          </button>
+          </Button>
         </div>
       ) : null}
     </div>

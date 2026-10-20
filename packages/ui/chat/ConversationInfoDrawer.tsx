@@ -82,9 +82,9 @@ export function ConversationInfoDrawer({
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold">Members ({detail.members.length})</h3>
             {can.canManageMembers && !adding ? (
-              <button type="button" onClick={() => setAdding(true)} className="text-sm font-medium text-brand-600">
+              <Button size="sm" variant="secondary" type="button" onClick={() => setAdding(true)}>
                 Add people
-              </button>
+              </Button>
             ) : null}
           </div>
 
@@ -147,14 +147,15 @@ export function ConversationInfoDrawer({
                     </span>
                   </span>
                   {can.canRemoveMembers && key !== meKey ? (
-                    <button
+                    <Button
+                      size="sm"
+                      variant="danger"
                       type="button"
                       disabled={busy}
                       onClick={() => run(() => removeConversationMember(detail.id, { type: m.type, id: m.id }))}
-                      className="text-xs text-muted hover:text-[var(--rush)]"
                     >
                       Remove
-                    </button>
+                    </Button>
                   ) : null}
                 </li>
               );

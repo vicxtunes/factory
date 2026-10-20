@@ -230,7 +230,7 @@ export const COMPONENTS: RoomComponent[] = [
     category: "Actions",
     status: "live",
     source: "packages/ui/Button.tsx",
-    summary: "Primary actions in brand orange; intake (gold) is reserved for the order-submit action.",
+    summary: "Every action is a button, never plain text. Primary in brand orange; intake (gold) only for submitting an order; danger for removing or cancelling. size=\"sm\" for actions inside a row or card; buttonClass() makes a link that acts as one look the same.",
     examples: [
       { title: "Variants", file: "button/variants.tsx", Demo: ButtonVariants },
       { title: "Loading & disabled", file: "button/states.tsx", Demo: ButtonStates },
