@@ -5,12 +5,9 @@ import { formatDay } from "@repo/lib/tenancy/format";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
 const TONES: Record<ProjectStatus, string> = {
-  booked: "bg-gray-100 text-gray-600 dark:bg-white/5 dark:text-gray-400",
+  upcoming: "bg-gray-100 text-gray-600 dark:bg-white/5 dark:text-gray-400",
   in_progress: "bg-brand-50 text-brand-600 dark:bg-brand-500/15 dark:text-brand-400",
-  editing: "bg-brand-50 text-brand-600 dark:bg-brand-500/15 dark:text-brand-400",
-  review: "bg-warning-50 text-warning-600 dark:bg-warning-500/15 dark:text-warning-500",
-  delivered: "bg-success-50 text-success-600 dark:bg-success-500/15 dark:text-success-500",
-  completed: "bg-gray-100 text-gray-600 dark:bg-white/5 dark:text-gray-400",
+  done: "bg-success-50 text-success-600 dark:bg-success-500/15 dark:text-success-500",
 };
 
 export function ProjectStatusBadge({ status }: { status: ProjectStatus }) {
@@ -81,7 +78,8 @@ export function ProjectHistory({ events, scope }: { events: ProjectEvent[]; scop
   const when = new Intl.DateTimeFormat(scope.locale, { timeZone: scope.timeZone, day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
   return (
     <ol className="space-y-2 border-l border-border pl-4 text-sm">
-      {events.map((e) => (
+      {/* A move inside one stage (from before there were three: Editing → Review) says nothing now. */}
+      {events.filter((e) => e.kind === "created" || e.from !== e.to).map((e) => (
         <li key={e.id}>
           <p>
             {e.kind === "created" ? "Project started" : `${PROJECT_STATUS_LABELS[e.from!]} → ${PROJECT_STATUS_LABELS[e.to!]}`}

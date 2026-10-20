@@ -28,19 +28,21 @@ export type JobStatus =
   | "paid"
   | "refunded";
 
-export const JOB_STATUS_LABELS: Record<JobStatus, string> = {
-  requested: "Waiting for the vendor",
-  declined: "Declined",
-  samples: "Making samples",
-  samples_sent: "Samples to review",
-  awaiting_funds: "Waiting for payment into Aming",
-  cancelled: "Cancelled",
-  in_progress: "In progress",
-  delivered: "Delivered",
-  disputed: "In dispute",
-  paid: "Paid",
-  refunded: "Refunded",
-};
+/**
+ * What studios and vendors see of a job: four stages over its statuses (the
+ * money's steps stay underneath; each job's own line and buttons say what's
+ * next).
+ */
+export type JobStage = "requested" | "working" | "delivered" | "closed";
+
+export const JOB_STAGE_LABELS: Record<JobStage, string> = { requested: "Requested", working: "Working", delivered: "Delivered", closed: "Closed" };
+
+export function jobStage(status: JobStatus): JobStage {
+  if (status === "in_progress" || status === "disputed") return "working";
+  if (status === "delivered") return "delivered";
+  if (status === "paid" || status === "refunded" || status === "declined" || status === "cancelled") return "closed";
+  return "requested";
+}
 
 export interface VendorJob {
   id: string;

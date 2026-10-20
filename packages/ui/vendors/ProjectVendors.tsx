@@ -18,7 +18,7 @@ import {
   setVendorJobFolder,
   type VendorCard,
 } from "@repo/lib/vendors/actions";
-import { autoReleaseAt, isOpenJob, JOB_STATUS_LABELS, offerPrice, offerTotal, rateUnit, VENDOR_CATEGORIES, vendorCategory, vendorTake, type JobStatus, type RateUnit } from "@repo/lib/vendors/core";
+import { autoReleaseAt, isOpenJob, JOB_STAGE_LABELS, jobStage, offerPrice, offerTotal, rateUnit, VENDOR_CATEGORIES, vendorCategory, vendorTake, type JobStage, type JobStatus, type RateUnit } from "@repo/lib/vendors/core";
 
 /** One vendor job on the project, as the studio sees it. */
 export interface ProjectJob {
@@ -46,18 +46,11 @@ export interface ProjectFolder {
 
 const money = (n: number) => `UGX ${n.toLocaleString("en-US")}`;
 
-const STATUS_LOOK: Record<JobStatus, string> = {
+const STAGE_LOOK: Record<JobStage, string> = {
   requested: "bg-warning-50 text-warning-700 dark:bg-warning-500/15 dark:text-warning-400",
-  samples: "bg-warning-50 text-warning-700 dark:bg-warning-500/15 dark:text-warning-400",
-  samples_sent: "bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-300",
-  awaiting_funds: "bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-300",
-  in_progress: "bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-300",
+  working: "bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-300",
   delivered: "bg-success-50 text-success-700 dark:bg-success-500/15 dark:text-success-500",
-  disputed: "bg-error-50 text-error-700 dark:bg-error-500/15 dark:text-error-500",
-  paid: "bg-gray-100 text-gray-700 dark:bg-white/10 dark:text-gray-300",
-  refunded: "bg-gray-100 text-gray-700 dark:bg-white/10 dark:text-gray-300",
-  declined: "bg-gray-100 text-gray-500 dark:bg-white/10 dark:text-gray-400",
-  cancelled: "bg-gray-100 text-gray-500 dark:bg-white/10 dark:text-gray-400",
+  closed: "bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-400",
 };
 
 type Sheet = { kind: "fund" | "approve" | "dispute"; job: ProjectJob } | null;
@@ -124,7 +117,7 @@ export function ProjectVendors({
                       <p className="truncate font-semibold">
                         {j.vendorName} <span className="font-normal text-muted">· {vendorCategory(j.vendorCategory)?.label ?? "Vendor"}</span>
                       </p>
-                      <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_LOOK[j.status]}`}>{JOB_STATUS_LABELS[j.status]}</span>
+                      <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${STAGE_LOOK[jobStage(j.status)]}`}>{JOB_STAGE_LABELS[jobStage(j.status)]}</span>
                     </div>
                     <p className="line-clamp-2 text-sm text-muted">{j.brief}</p>
                     <p className="mt-1 text-xs text-muted">

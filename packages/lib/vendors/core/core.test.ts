@@ -3,7 +3,7 @@ import { test } from "node:test";
 
 import { parseInput } from "@repo/lib/kernel/core";
 
-import { autoReleaseAt, cardLine, jobFee, jobRequestSchema, overdueStep, offerPrice, offerPriceParts, offerSchema, offerTotal, socialHandle, vendorJoinSchema, vendorTake } from "./index";
+import { autoReleaseAt, cardLine, jobFee, jobStage, jobRequestSchema, overdueStep, offerPrice, offerPriceParts, offerSchema, offerTotal, socialHandle, vendorJoinSchema, vendorTake } from "./index";
 
 test("a social handle however it's typed", () => {
   assert.equal(socialHandle("instagram", "@kato.films"), "kato.films");
@@ -96,4 +96,11 @@ test("a service card: its price told big, and what it includes listed", () => {
   assert.deepEqual(offerSchema.parse({ ...base, included: [" Colour & skin ", "Colour & skin", "Delivered in 5 days"] }).included, ["Colour & skin", "Delivered in 5 days"]);
   assert.deepEqual(offerSchema.parse(base).included, [], "nothing listed");
   assert.equal(offerSchema.safeParse({ ...base, included: Array.from({ length: 9 }, (_, i) => `Thing ${i}`) }).success, false, "up to 8");
+});
+
+test("a job's stage, as people see it: requested, working, delivered or closed", () => {
+  assert.deepEqual(
+    (["requested", "samples", "samples_sent", "awaiting_funds", "in_progress", "disputed", "delivered", "paid", "refunded", "declined", "cancelled"] as const).map(jobStage),
+    ["requested", "requested", "requested", "requested", "working", "working", "delivered", "closed", "closed", "closed", "closed"],
+  );
 });

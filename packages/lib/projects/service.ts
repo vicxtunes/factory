@@ -71,7 +71,7 @@ export class ProjectService {
     return this.store.create(scope, { ...input, bookingId: null }, actor.name);
   }
 
-  /** Changes the details, whatever its status. A booked project's client stays the booking's. */
+  /** Changes the details, whatever its status. A project from a booking keeps the booking's client. */
   async update(scope: TenantScope, id: string, input: ProjectInput): Promise<void> {
     const current = await this.store.get(scope, id);
     if (!current) throw new ProjectError(GONE);
@@ -89,8 +89,8 @@ export class ProjectService {
     if (!current) throw new ProjectError(GONE);
     if (!canMoveProject(current.status, to)) {
       throw new ProjectError(
-        current.status === "completed"
-          ? "This project is completed."
+        current.status === "done"
+          ? "This project is done."
           : `A project can move forward, or back one step, but not from ${PROJECT_STATUS_LABELS[current.status]} to ${PROJECT_STATUS_LABELS[to]}.`,
       );
     }
