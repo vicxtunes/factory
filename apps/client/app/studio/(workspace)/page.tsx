@@ -94,13 +94,13 @@ async function Usage({ scope }: { scope: TenantScope }) {
   return <UsageBar usage={await photos.usage(scope)} />;
 }
 
-/** The shortcuts this person can use; Vendors is on its way. */
+/** The shortcuts this person can use. */
 function quickActions(can: (area: Parameters<typeof canUse>[1]) => boolean): QuickAction[] {
   return [
     ...(can("bookings") ? [{ label: "New booking", icon: "calendar", href: "/studio/bookings/new" } as const] : []),
     ...(can("money") ? [{ label: "New invoice", icon: "invoice", href: "/studio/invoices/new" } as const] : []),
     ...(can("clients") ? [{ label: "Add client", icon: "client", href: "/studio/clients/new" } as const] : []),
-    { label: "Vendors", icon: "store", badge: "Soon" },
+    ...(can("projects") ? [{ label: "Vendors", icon: "store", href: "/studio/vendors" } as const] : []),
   ];
 }
 

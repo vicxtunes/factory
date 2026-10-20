@@ -1,7 +1,7 @@
 // Vendors: someone joining to offer their services to photographers, and
 // finding their own vendor side again. Storage is a port (./ports.ts).
 
-import { PICTURE_MAX_BYTES, type Vendor, type VendorJoin, type VendorPicture, type VendorProfile } from "./core";
+import { PICTURE_MAX_BYTES, vendorIdSchema, type Vendor, type VendorJoin, type VendorPicture, type VendorProfile } from "./core";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
 import { VendorError, type VendorFiles, type VendorStore } from "./ports";
@@ -32,6 +32,13 @@ export class VendorService {
   /** Vendors a studio can hire: every word of `query` in their name, and maybe of one category. */
   async search(query: string, category: string | null): Promise<Vendor[]> {
     return this.store.search(query.split(/\s+/).filter(Boolean).slice(0, 5), category);
+  }
+
+  /** A vendor a studio can see and hire; null when there's none or they aren't taking work. */
+  async hireable(id: string): Promise<Vendor | null> {
+    if (!vendorIdSchema.safeParse(id).success) return null;
+    const vendor = await this.store.get(id);
+    return vendor?.status === "active" ? vendor : null;
   }
 
   /** What's in the vendor's wallet: what studios paid them for jobs, less Aming's fee. */

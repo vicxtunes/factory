@@ -39,13 +39,15 @@ import type { TenantScope } from "@repo/lib/tenancy/types";
 
 export const metadata = { title: "Project · My Business" };
 
-export default async function StudioProjectPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function StudioProjectPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ hire?: string }> }) {
   const { scope, studio, access } = await requireStudio("projects");
   // Looked up inside the caller's studio only: another studio's id is "not found".
   const id = projectIdSchema.safeParse((await params).id);
   const view = id.success ? await projects.get(scope, id.data) : null;
   if (!view) notFound();
   const p = view.project;
+  // From a vendor's page ("Hire on a project"): the hire form opens with them chosen.
+  const hire = (await searchParams).hire ?? null;
 
   return (
     <>
@@ -91,10 +93,10 @@ export default async function StudioProjectPage({ params }: { params: Promise<{ 
           <Tasks scope={scope} project={p} />
         </Loading>
       </section>
-      <section className="space-y-3">
+      <section id="vendors" className="scroll-mt-20 space-y-3">
         <SectionLabel>Vendors</SectionLabel>
         <Loading skeleton={<RowsSkeleton rows={2} />}>
-          <Vendors scope={scope} project={p} canPay={canUse(access, "money")} />
+          <Vendors scope={scope} project={p} canPay={canUse(access, "money")} hire={hire} />
         </Loading>
       </section>
       {canUse(access, "files") ? (
@@ -198,9 +200,13 @@ async function Tasks({ scope, project: p }: { scope: TenantScope; project: Proje
 // Its folder in Files (Projects → its title), made with the project.
 // Vendors hired on the project (packages/lib/vendors → jobs), and the project's
 // folders one can be given. Delivered work left unanswered is settled here too.
-async function Vendors({ scope, project: p, canPay }: { scope: TenantScope; project: Project; canPay: boolean }) {
+async function Vendors({ scope, project: p, canPay, hire }: { scope: TenantScope; project: Project; canPay: boolean; hire: string | null }) {
   after(() => vendorJobs.sweepOverdue());
-  const [found, projectFolder] = await Promise.all([vendorJobs.forProject(scope.tenantId, p.id), files.projectFolder(scope, p.id)]);
+  const [found, projectFolder, hiring] = await Promise.all([
+    vendorJobs.forProject(scope.tenantId, p.id),
+    files.projectFolder(scope, p.id),
+    hire ? vendors.hireable(hire) : null,
+  ]);
   const [jobs, folders] = await Promise.all([
     Promise.all(
       found.map(async (j) => ({
@@ -221,7 +227,10 @@ async function Vendors({ scope, project: p, canPay }: { scope: TenantScope; proj
     ),
     projectFolder ? files.foldersWithin(scope, projectFolder) : [],
   ]);
-  return <ProjectVendors projectId={p.id} jobs={jobs} folders={folders} canPay={canPay} />;
+  const hireCard = hiring
+    ? { id: hiring.id, name: hiring.name, category: hiring.category, location: hiring.location, skills: hiring.skills, photoUrl: await vendors.pictureUrl(hiring.photoKey) }
+    : null;
+  return <ProjectVendors projectId={p.id} jobs={jobs} folders={folders} canPay={canPay} hire={hireCard} />;
 }
 
 async function ProjectFiles({ scope, project: p }: { scope: TenantScope; project: Project }) {

@@ -96,6 +96,8 @@ export const settlementSchema = z.enum(["release", "refund"]);
 
 export const jobIdSchema = z.uuid("That job doesn't exist.");
 
+export const vendorIdSchema = z.uuid("That vendor doesn't exist.");
+
 /** Finding vendors to hire: words in their name, and maybe what they do. */
 export const vendorSearchSchema = z.object({
   query: z.string().trim().max(60).default(""),

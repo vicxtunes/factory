@@ -67,11 +67,25 @@ type Sheet = { kind: "fund" | "approve" | "dispute"; job: ProjectJob } | null;
  * to Aming to go ahead, approve delivered work (Aming releases the money to
  * the vendor) or raise a dispute. Paying (`canPay`) is the Money area's.
  * Adding a vendor: find them, the folder they work in, samples or not, and
- * what's needed, by when, for how much.
+ * what's needed, by when, for how much. Coming from a vendor's page
+ * (`hire`), the form opens with them chosen.
  */
-export function ProjectVendors({ projectId, jobs, folders, canPay }: { projectId: string; jobs: ProjectJob[]; folders: ProjectFolder[]; canPay: boolean }) {
+export function ProjectVendors({
+  projectId,
+  jobs,
+  folders,
+  canPay,
+  hire,
+}: {
+  projectId: string;
+  jobs: ProjectJob[];
+  folders: ProjectFolder[];
+  canPay: boolean;
+  hire: VendorCard | null;
+}) {
   const router = useRouter();
-  const [adding, setAdding] = useState(false);
+  const openJobs = jobs.filter((j) => isOpenJob(j.status)).map((j) => j.vendorId);
+  const [adding, setAdding] = useState(hire !== null);
   const [sheet, setSheet] = useState<Sheet>(null);
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -155,7 +169,20 @@ export function ProjectVendors({ projectId, jobs, folders, canPay }: { projectId
         Add a vendor
       </Button>
 
-      {adding ? <AddVendor projectId={projectId} folders={folders} openJobs={jobs.filter((j) => isOpenJob(j.status)).map((j) => j.vendorId)} onClose={() => setAdding(false)} /> : null}
+      {adding ? (
+        <AddVendor
+          projectId={projectId}
+          folders={folders}
+          openJobs={openJobs}
+          // Already working on the project: the list shows them as such.
+          initial={hire && !openJobs.includes(hire.id) ? hire : null}
+          onClose={() => {
+            setAdding(false);
+            // Not opened again on the next refresh.
+            if (hire) router.replace(`/studio/projects/${projectId}`, { scroll: false });
+          }}
+        />
+      ) : null}
 
       {sheet ? (
         <BottomSheet
@@ -221,12 +248,24 @@ export function ProjectVendors({ projectId, jobs, folders, canPay }: { projectId
 }
 
 /** Find a vendor, then where they work, samples or not, and what's needed, by when and for how much. */
-function AddVendor({ projectId, folders, openJobs, onClose }: { projectId: string; folders: ProjectFolder[]; openJobs: string[]; onClose: () => void }) {
+function AddVendor({
+  projectId,
+  folders,
+  openJobs,
+  initial,
+  onClose,
+}: {
+  projectId: string;
+  folders: ProjectFolder[];
+  openJobs: string[];
+  initial: VendorCard | null;
+  onClose: () => void;
+}) {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("");
   const [found, setFound] = useState<VendorCard[] | null>(null);
-  const [chosen, setChosen] = useState<VendorCard | null>(null);
+  const [chosen, setChosen] = useState<VendorCard | null>(initial);
   const [brief, setBrief] = useState("");
   const [dueOn, setDueOn] = useState("");
   const [price, setPrice] = useState("");
