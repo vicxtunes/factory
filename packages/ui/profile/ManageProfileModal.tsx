@@ -174,14 +174,15 @@ export function ManageProfileModal({
             onChange={(e) => onFileChosen(e.target.files?.[0])}
           />
           <div className="flex items-center gap-3 text-xs">
-            <button
+            <Button
+              size="sm"
+              variant="secondary"
               type="button"
               onClick={pickPhoto}
               disabled={pending}
-              className="font-medium text-brand-600 hover:underline disabled:opacity-50"
             >
               {currentAvatar ? "Change photo" : "Add photo"}
-            </button>
+            </Button>
             {currentAvatar ? (
               <button
                 type="button"

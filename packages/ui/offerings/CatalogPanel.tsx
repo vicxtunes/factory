@@ -673,9 +673,9 @@ function AmingPicker({ products, onAdd, pending }: { products: AmingCatalog["cat
     <div className="space-y-3 rounded-2xl border border-border bg-surface p-4 shadow-theme-xs">
       <div className="flex items-center justify-between gap-2">
         <p className="text-sm font-semibold">Choose Aming&apos;s products to sell</p>
-        <button type="button" onClick={() => setChosen(new Set(all ? [] : products.map((p) => p.id)))} className="text-sm text-brand-600 hover:underline">
+        <Button size="sm" variant="secondary" type="button" onClick={() => setChosen(new Set(all ? [] : products.map((p) => p.id)))}>
           {all ? "Clear all" : "Select all"}
-        </button>
+        </Button>
       </div>
       <p className="text-xs text-muted">
         Added with Aming&apos;s name, photos, video and sizes, priced “on request” until you set your prices. Your prices and description are yours to

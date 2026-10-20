@@ -5,20 +5,18 @@ import { parseInput } from "@repo/lib/kernel/core";
 
 import { canMoveProject, isActive, nextStep, previousStep, projectInputSchema } from "./index";
 
-test("forward any number of steps, back one, completed is final", () => {
-  assert.equal(canMoveProject("booked", "in_progress"), true);
-  assert.equal(canMoveProject("in_progress", "review"), true, "a quick job can skip editing");
-  assert.equal(canMoveProject("booked", "completed"), true);
-  assert.equal(canMoveProject("review", "editing"), true, "sent back for changes");
-  assert.equal(canMoveProject("review", "in_progress"), false, "only one step back");
-  assert.equal(canMoveProject("editing", "editing"), false);
-  assert.equal(canMoveProject("completed", "delivered"), false);
+test("three stages: forward any number, back one, done is final", () => {
+  assert.equal(canMoveProject("upcoming", "in_progress"), true);
+  assert.equal(canMoveProject("upcoming", "done"), true, "a quick job can go straight to done");
+  assert.equal(canMoveProject("in_progress", "upcoming"), true, "started too early");
+  assert.equal(canMoveProject("in_progress", "in_progress"), false);
+  assert.equal(canMoveProject("done", "in_progress"), false);
 });
 
-test("next and previous steps", () => {
-  assert.deepEqual([nextStep("booked"), nextStep("delivered"), nextStep("completed")], ["in_progress", "completed", null]);
-  assert.deepEqual([previousStep("booked"), previousStep("review"), previousStep("completed")], [null, "editing", null]);
-  assert.deepEqual([isActive("delivered"), isActive("completed")], [true, false]);
+test("next and previous stages", () => {
+  assert.deepEqual([nextStep("upcoming"), nextStep("in_progress"), nextStep("done")], ["in_progress", "done", null]);
+  assert.deepEqual([previousStep("upcoming"), previousStep("in_progress"), previousStep("done")], [null, "upcoming", null]);
+  assert.deepEqual([isActive("in_progress"), isActive("done")], [true, false]);
 });
 
 test("project input", () => {

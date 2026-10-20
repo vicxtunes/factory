@@ -7,6 +7,7 @@ import { optionalText } from "@repo/lib/kernel/core";
 import { SOCIAL_NETWORKS, socialHandle, VENDOR_CATEGORIES } from "./categories";
 import type { JobFolder, JobRequest } from "./jobs";
 import type { VendorJoin, VendorProfile } from "./model";
+import { INCLUDED_PER_SERVICE, RATE_UNITS, type OfferInput, type RateUnit } from "./services";
 
 const kind = z.enum(["individual", "business"], "Choose who you are.");
 const category = z.string("Choose what you do.").refine((id) => VENDOR_CATEGORIES.some((c) => c.id === id), "Choose what you do.");
@@ -47,7 +48,7 @@ export const vendorJoinSchema = z
     }),
   );
 
-/** A vendor's profile as they edit it (/vendors/profile/edit). */
+/** A vendor's profile as they edit it (Edit profile on /vendors/profile). */
 export const vendorProfileSchema = z.object({
   name: z.string("Enter your name.").trim().min(2, "Enter your name.").max(100, "Keep the name under 100 characters."),
   kind,
@@ -56,7 +57,34 @@ export const vendorProfileSchema = z.object({
   socials,
   bio: optionalText(300, "Keep your bio under 300 characters."),
   location: optionalText(80, "Keep the place under 80 characters."),
+  available: z.boolean().default(true),
+  statusLine: optionalText(60, "Keep your card's line under 60 characters.").default(null),
 }) satisfies z.ZodType<VendorProfile, unknown>;
+
+/**
+ * A service as the vendor writes it (/vendors/services): a name, a few lines,
+ * and a price per unit, or none (on request).
+ */
+export const offerSchema = z
+  .object({
+    name: z.string("Name the service.").trim().min(1, "Name the service.").max(60, "Keep the name under 60 characters."),
+    description: optionalText(500, "Keep the description under 500 characters."),
+    price: z
+      .string()
+      .trim()
+      .transform((v) => v.replace(/[^\d]/g, ""))
+      .transform((v) => (v ? Number(v) : null))
+      .pipe(z.number().int().min(500, "A price is at least UGX 500.").max(100_000_000, "That's more than a price can be.").nullable()),
+    unit: z.enum(RATE_UNITS.map((u) => u.id) as [RateUnit, ...RateUnit[]], "Choose what the price is for."),
+    included: z
+      .array(z.string().trim().min(1).max(60, "Keep each thing included under 60 characters."))
+      .max(INCLUDED_PER_SERVICE, `List up to ${INCLUDED_PER_SERVICE} things included.`)
+      .default([])
+      .transform((list) => [...new Set(list)]),
+  })
+  .transform((o): OfferInput => ({ name: o.name, description: o.description, price: o.price, unit: o.price === null ? null : o.unit, included: o.included }));
+
+export const offerIdSchema = z.uuid("That service doesn't exist.");
 
 export const vendorPictureSchema = z.enum(["photo", "cover"]);
 
@@ -98,6 +126,8 @@ export const disputeReasonSchema = z.string("Say what's wrong.").trim().min(5, "
 export const settlementSchema = z.enum(["release", "refund"]);
 
 export const jobIdSchema = z.uuid("That job doesn't exist.");
+
+export const vendorIdSchema = z.uuid("That vendor doesn't exist.");
 
 /** Finding vendors to hire: words in their name, and maybe what they do. */
 export const vendorSearchSchema = z.object({

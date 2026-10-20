@@ -4,6 +4,7 @@ import { daysBetween, stepAnchor, viewRange, type Booking, type CalendarView } f
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
 import { BookingsList, timeSpan } from "./BookingBits";
+import { buttonClass } from "@repo/ui/Button";
 
 const VIEWS: { key: CalendarView; label: string }[] = [
   { key: "month", label: "Month" },
@@ -137,7 +138,7 @@ export function BookingsCalendar({
                   <Link href={href("day", d)} className={`text-sm font-semibold hover:underline ${d === today ? "text-brand-600" : ""}`}>
                     {new Intl.DateTimeFormat(scope.locale, { timeZone: "UTC", weekday: "long", day: "numeric", month: "short" }).format(new Date(`${d}T12:00:00Z`))}
                   </Link>
-                  <Link href={`${basePath}/new?date=${d}`} className="text-xs font-medium text-brand-600 hover:underline">
+                  <Link href={`${basePath}?new&date=${d}`} scroll={false} className={buttonClass("secondary", "sm")}>
                     + Book
                   </Link>
                 </div>

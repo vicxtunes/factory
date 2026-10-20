@@ -10,7 +10,7 @@ export interface ClientNavItem {
   href: string;
   label: string;
   icon: HomeBarIcon;
-  /** Hidden from signed-out visitors (who only get the public showroom). */
+  /** Hidden from signed-out visitors. */
   requiresSignIn: boolean;
   /** Match only this exact path (for the portal root). */
   exact?: boolean;
@@ -31,7 +31,7 @@ export const CLIENT_NAV: ClientNavSection[] = [
       { href: "/", label: "Dashboard", icon: "dashboard", requiresSignIn: true, exact: true },
       // Used all the time, so it stands alone rather than in a section — same as the staff dashboard.
       { href: "/chat", label: "Chat", icon: "chat", requiresSignIn: true },
-      { href: "/showroom", label: "Showroom", icon: "showroom", requiresSignIn: false },
+      { href: "/showroom", label: "Showroom", icon: "showroom", requiresSignIn: true },
     ],
   },
   {

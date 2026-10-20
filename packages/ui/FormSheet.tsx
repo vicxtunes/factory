@@ -14,15 +14,28 @@ function subscribe(onChange: () => void) {
 }
 
 /**
- * A short form (add funds, transfer, withdraw) over the page, not further
- * down it: a sheet from the bottom on a phone, a panel from the side on a
- * desktop.
+ * A form that creates or updates something (add funds, a service, a hire),
+ * over the page rather than on a page of its own: a panel from the right on a
+ * desktop, a sheet from the bottom on a phone.
  */
-export function FormSheet({ open, onClose, title, children }: { open: boolean; onClose: () => void; title?: ReactNode; children: ReactNode }) {
+export function FormSheet({
+  open,
+  onClose,
+  title,
+  size,
+  children,
+}: {
+  open: boolean;
+  onClose: () => void;
+  title?: ReactNode;
+  /** The desktop panel's width: "lg" for a long form (a whole profile). */
+  size?: "md" | "lg";
+  children: ReactNode;
+}) {
   // Phones first: the server renders the sheet, and a desktop swaps to the panel once it's running.
   const desktop = useSyncExternalStore(subscribe, () => window.matchMedia(DESKTOP).matches, () => false);
   return desktop ? (
-    <Drawer open={open} onClose={onClose} title={title}>
+    <Drawer open={open} onClose={onClose} title={title} size={size}>
       {children}
     </Drawer>
   ) : (

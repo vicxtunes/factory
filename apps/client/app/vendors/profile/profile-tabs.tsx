@@ -1,24 +1,30 @@
 "use client";
 
+import Link from "next/link";
 import { useState, type ReactNode } from "react";
 
-import type { VendorKind } from "@repo/lib/vendors/core";
+import { ServiceTiles, type OfferView } from "@repo/ui/vendors/ServiceTiles";
+import { SocialIcon } from "@repo/ui/vendors/SocialIcon";
+import type { SocialNetwork, VendorKind } from "@repo/lib/vendors/core";
+import { buttonClass } from "@repo/ui/Button";
 
-const TABS = ["Work", "Services", "About"] as const;
+const TABS = ["Services", "About"] as const;
 
-/** The profile's tabs: their work (samples), what they offer, and about them. */
+/** The profile's tabs: their services (each opening its details and samples: their work), and about them. */
 export function ProfileTabs({
   skills,
+  offers,
   socials,
   kind,
   joined,
 }: {
   skills: string[];
-  socials: { id: string; label: string; text: string; href: string }[];
+  offers: OfferView[];
+  socials: { id: SocialNetwork; label: string; text: string; href: string }[];
   kind: VendorKind;
   joined: string;
 }) {
-  const [tab, setTab] = useState<(typeof TABS)[number]>("Work");
+  const [tab, setTab] = useState<(typeof TABS)[number]>("Services");
   return (
     <div className="mt-8">
       <div role="tablist" className="flex gap-8 border-b border-border">
@@ -39,27 +45,28 @@ export function ProfileTabs({
       </div>
 
       <div className="py-6">
-        {tab === "Work" ? (
-          <div className="grid grid-cols-2 gap-3">
-            {[0, 1, 2, 3].map((i) => (
-              <div key={i} className="aspect-[4/3] rounded-2xl border border-dashed border-border bg-surface" />
-            ))}
-            <p className="col-span-2 text-center text-sm text-muted">Samples of your work show here. Adding them comes next.</p>
-          </div>
-        ) : null}
-
         {tab === "Services" ? (
-          skills.length ? (
-            <div className="flex flex-wrap gap-2">
-              {skills.map((s) => (
-                <span key={s} className="rounded-full border border-border bg-surface px-3.5 py-1.5 text-sm">
-                  {s}
-                </span>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-muted">No services yet.</p>
-          )
+          <div className="space-y-5">
+            {offers.length ? (
+              <ServiceTiles offers={offers} />
+            ) : (
+              <div className="space-y-3 rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted">
+                <p>No services yet. Add what you offer, its price and samples of your work.</p>
+                <Link href="/vendors/services?add" className={buttonClass("primary", "sm")}>
+                  Add a service
+                </Link>
+              </div>
+            )}
+            {skills.length ? (
+              <div className="flex flex-wrap gap-2">
+                {skills.map((s) => (
+                  <span key={s} className="rounded-full border border-border bg-surface px-3.5 py-1.5 text-sm">
+                    {s}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+          </div>
         ) : null}
 
         {tab === "About" ? (
@@ -69,7 +76,12 @@ export function ProfileTabs({
             {socials.map((s) => (
               <Row
                 key={s.id}
-                name={s.label}
+                name={
+                  <span className="flex items-center gap-2">
+                    <SocialIcon network={s.id} className="size-4" />
+                    {s.label}
+                  </span>
+                }
                 value={
                   <a href={s.href} target="_blank" rel="noreferrer" className="text-brand-600 hover:underline dark:text-brand-400">
                     {s.text}
@@ -84,7 +96,7 @@ export function ProfileTabs({
   );
 }
 
-function Row({ name, value }: { name: string; value: ReactNode }) {
+function Row({ name, value }: { name: ReactNode; value: ReactNode }) {
   return (
     <div className="flex items-center justify-between gap-4 px-4 py-3">
       <dt className="text-muted">{name}</dt>

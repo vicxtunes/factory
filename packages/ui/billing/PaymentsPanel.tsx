@@ -120,9 +120,9 @@ export function PaymentsPanel({
                   <a href={receiptUrls[p.id]} target="_blank" rel="noreferrer" className="font-medium text-brand-600 hover:underline">
                     Receipt
                   </a>
-                  <button type="button" onClick={() => cancel(p.id)} className="text-error-600 hover:underline dark:text-error-400">
+                  <Button size="sm" variant="danger" type="button" onClick={() => cancel(p.id)}>
                     Void
-                  </button>
+                  </Button>
                 </div>
               )}
             </li>

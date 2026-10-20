@@ -33,9 +33,9 @@ function fakes() {
     idForBooking: async (s, b) => rows.find((r) => r.tenantId === s.tenantId && r.bookingId === b)?.id ?? null,
     create: async (s, input, actorName) => {
       if (input.bookingId && rows.some((r) => r.bookingId === input.bookingId)) throw new ProjectError("This booking already has a project.");
-      const row = { ...input, id: `p${rows.length + 1}`, tenantId: s.tenantId, customerName: "", status: "booked" as const, createdAt: `2026-10-0${rows.length + 1}`, updatedAt: "" };
+      const row = { ...input, id: `p${rows.length + 1}`, tenantId: s.tenantId, customerName: "", status: "upcoming" as const, createdAt: `2026-10-0${rows.length + 1}`, updatedAt: "" };
       rows.push(row);
-      log(row.id, "created", null, "booked", actorName);
+      log(row.id, "created", null, "upcoming", actorName);
       return row.id;
     },
     update: async (s, id, input) => {
@@ -66,20 +66,20 @@ test("start from a confirmed booking: copied, once, with its history", async () 
   const id = await service.startFromBooking(studioA, "confirmed", owner);
   assert.equal(await service.startFromBooking(studioA, "confirmed", owner), id, "a second tap opens the same project");
   const view = await service.get(studioA, id);
-  assert.deepEqual([view?.project.title, view?.project.eventDate, view?.project.bookingId, view?.project.status], ["Grace & John wedding", "2026-12-12", "confirmed", "booked"]);
-  assert.deepEqual(view?.events.map((e) => [e.kind, e.to, e.actorName]), [["created", "booked", "Amina"]]);
+  assert.deepEqual([view?.project.title, view?.project.eventDate, view?.project.bookingId, view?.project.status], ["Grace & John wedding", "2026-12-12", "confirmed", "upcoming"]);
+  assert.deepEqual(view?.events.map((e) => [e.kind, e.to, e.actorName]), [["created", "upcoming", "Amina"]]);
 });
 
 test("moves along the pipeline are logged; back one step for revisions", async () => {
   const { service } = fakes();
   const id = await service.create(studioA, direct, owner);
-  for (const to of ["in_progress", "editing", "review", "editing", "review", "delivered"] as const) await service.setStatus(studioA, id, to, owner);
+  for (const to of ["in_progress", "upcoming", "in_progress"] as const) await service.setStatus(studioA, id, to, owner);
   await assert.rejects(service.setStatus(studioA, id, "in_progress", owner), /back one step/);
-  await service.setStatus(studioA, id, "completed", owner);
-  await assert.rejects(service.setStatus(studioA, id, "delivered", owner), /completed/);
-  await service.update(studioA, id, direct); // a completed project can still be corrected
+  await service.setStatus(studioA, id, "done", owner);
+  await assert.rejects(service.setStatus(studioA, id, "in_progress", owner), /done/);
+  await service.update(studioA, id, direct); // a done project can still be corrected
   const history = (await service.get(studioA, id))?.events.map((e) => (e.kind === "created" ? "created" : `${e.from}→${e.to}`));
-  assert.deepEqual(history, ["created", "booked→in_progress", "in_progress→editing", "editing→review", "review→editing", "editing→review", "review→delivered", "delivered→completed"]);
+  assert.deepEqual(history, ["created", "upcoming→in_progress", "in_progress→upcoming", "upcoming→in_progress", "in_progress→done"]);
 });
 
 test("direct projects need an active client; a booked project's client stays", async () => {
@@ -96,8 +96,8 @@ test("active projects, by stage", async () => {
   const a = await service.create(studioA, { ...direct, title: "A" }, owner);
   await service.create(studioA, { ...direct, title: "B" }, owner);
   const c = await service.create(studioA, { ...direct, title: "C" }, owner);
-  await service.setStatus(studioA, a, "editing", owner);
-  await service.setStatus(studioA, c, "completed", owner);
+  await service.setStatus(studioA, a, "in_progress", owner);
+  await service.setStatus(studioA, c, "done", owner);
   assert.deepEqual((await service.active(studioA)).map((p) => p.title), ["B", "A"]);
 });
 
@@ -109,5 +109,5 @@ test("one studio can't read, change or move another's project, even with its id"
   await assert.rejects(service.update(studioB, id, direct), ProjectError);
   await assert.rejects(service.setStatus(studioB, id, "in_progress", owner), ProjectError);
   await assert.rejects(service.startFromBooking(studioB, "confirmed", owner), /no longer exists/);
-  assert.equal(rows[0].status, "booked");
+  assert.equal(rows[0].status, "upcoming");
 });

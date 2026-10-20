@@ -3,7 +3,7 @@ import { test } from "node:test";
 
 import { parseInput } from "@repo/lib/kernel/core";
 
-import { autoReleaseAt, jobFee, jobRequestSchema, overdueStep, socialHandle, vendorJoinSchema, vendorTake } from "./index";
+import { autoReleaseAt, cardLine, jobFee, jobStage, jobRequestSchema, overdueStep, offerPrice, offerPriceParts, offerSchema, offerTotal, socialHandle, vendorJoinSchema, vendorTake } from "./index";
 
 test("a social handle however it's typed", () => {
   assert.equal(socialHandle("instagram", "@kato.films"), "kato.films");
@@ -61,4 +61,46 @@ test("delivered work left unanswered: warned after a day, released after two, no
   assert.equal(overdueStep(job, at(60)), "release", "released even if the warning never went");
   assert.equal(overdueStep({ ...job, status: "disputed" }, at(100)), null, "a dispute waits for staff");
   assert.equal(autoReleaseAt(job), "2026-11-03T10:00:00.000Z");
+});
+
+test("a service: named, a few lines or none, and a whole-shilling price per something or on request", () => {
+  const ok = offerSchema.parse({ name: " Retouch ", description: "", price: "5,000", unit: "photo" });
+  assert.deepEqual(ok, { name: "Retouch", description: null, price: 5000, unit: "photo", included: [] });
+  assert.deepEqual(offerSchema.parse({ name: "Album design", description: "", price: "", unit: "photo" }), { name: "Album design", description: null, price: null, unit: null, included: [] }, "no price: on request");
+  assert.equal(offerSchema.safeParse({ name: "Retouch", description: "", price: "100", unit: "photo" }).success, false, "under UGX 500");
+  assert.equal(offerSchema.safeParse({ name: "Retouch", description: "", price: "5000", unit: "minute" }).success, false, "not a unit");
+
+  const priced = { price: 5000, unit: "photo" } as const;
+  assert.equal(offerPrice(priced), "UGX 5,000 per photo");
+  assert.equal(offerPrice({ price: null, unit: null }), "Price on request");
+  assert.equal(offerTotal(priced, 300), 1_500_000);
+  assert.equal(offerTotal({ ...priced, unit: "project" }, 300), 5000, "a project's price counts once");
+});
+
+test("the hire card's line: theirs, else their lowest price, else new on Aming", () => {
+  const offers = [
+    { price: 500_000, unit: "project" as const },
+    { price: null, unit: null },
+    { price: 50_000, unit: "item" as const },
+  ];
+  assert.equal(cardLine("Taking December weddings", offers), "Taking December weddings");
+  assert.equal(cardLine(null, offers), "From UGX 50,000 per item");
+  assert.equal(cardLine(null, [{ price: null, unit: null }]), "New on Aming");
+});
+
+test("a service card: its price told big, and what it includes listed", () => {
+  assert.deepEqual(offerPriceParts({ price: 3_900_000, unit: "project" }), { amount: "3.9M", per: "/project" });
+  assert.deepEqual(offerPriceParts({ price: 50_000, unit: "item" }), { amount: "50K", per: "/item" });
+  assert.equal(offerPriceParts({ price: null, unit: null }), null);
+  const base = { name: "Retouch", description: "", price: "5000", unit: "photo" };
+  assert.deepEqual(offerSchema.parse({ ...base, included: [" Colour & skin ", "Colour & skin", "Delivered in 5 days"] }).included, ["Colour & skin", "Delivered in 5 days"]);
+  assert.deepEqual(offerSchema.parse(base).included, [], "nothing listed");
+  assert.equal(offerSchema.safeParse({ ...base, included: Array.from({ length: 9 }, (_, i) => `Thing ${i}`) }).success, false, "up to 8");
+});
+
+test("a job's stage, as people see it: requested, working, delivered or closed", () => {
+  assert.deepEqual(
+    (["requested", "samples", "samples_sent", "awaiting_funds", "in_progress", "disputed", "delivered", "paid", "refunded", "declined", "cancelled"] as const).map(jobStage),
+    ["requested", "requested", "requested", "requested", "working", "working", "delivered", "closed", "closed", "closed", "closed"],
+  );
 });

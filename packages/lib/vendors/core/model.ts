@@ -1,6 +1,7 @@
 // The vendors module's records. Pure; safe on client and server.
 
 import type { SocialNetwork } from "./categories";
+import type { VendorOffer } from "./services";
 
 /** A freelancer on their own, or a company or team. */
 export type VendorKind = "individual" | "business";
@@ -29,6 +30,12 @@ export interface Vendor {
   bio: string | null;
   /** Where they work from ("Kampala"). */
   location: string | null;
+  /** Their services, with prices and samples, the oldest first. */
+  offers: VendorOffer[];
+  /** Taking work now (their hire card says "Available for work"), or busy. */
+  available: boolean;
+  /** A short line of their own on their hire card ("Taking December weddings"). */
+  statusLine: string | null;
   /** Their profile photo and cover, in the photo bucket. */
   photoKey: string | null;
   coverKey: string | null;
@@ -45,6 +52,8 @@ export interface VendorProfile {
   socials: Vendor["socials"];
   bio: string | null;
   location: string | null;
+  available: boolean;
+  statusLine: string | null;
 }
 
 /** What a vendor gives when they join (vendorJoinSchema's output). */

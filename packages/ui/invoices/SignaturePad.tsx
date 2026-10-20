@@ -104,9 +104,9 @@ export function SignaturePad({ busy, onDone, onCancel }: { busy: boolean; onDone
         <Button type="button" variant="secondary" className="min-h-9 text-xs" disabled={empty || busy} onClick={clear}>
           Clear
         </Button>
-        <button type="button" className="text-xs text-muted" disabled={busy} onClick={onCancel}>
+        <Button size="sm" variant="secondary" type="button" disabled={busy} onClick={onCancel}>
           Cancel
-        </button>
+        </Button>
       </div>
     </div>
   );

@@ -8,6 +8,7 @@ import { FormSheet } from "@repo/ui/FormSheet";
 import { setWalletPin, unlockWallet, walletPinState } from "@repo/lib/wallet/pin-actions";
 import { PIN_NEEDED } from "@repo/lib/wallet/policy";
 import type { WalletResult } from "@repo/lib/wallet/types";
+import { Button } from "@repo/ui/Button";
 
 // The wallet PIN on screen (packages/lib/wallet/pin-actions.ts): four dots
 // and a keypad. Enter it to unlock the wallet for a few minutes; the first
@@ -116,17 +117,18 @@ export function PinEntry({ hasPin, onUnlocked }: { hasPin: boolean; onUnlocked: 
         )}
       </div>
       {step.kind === "enter" ? (
-        <button
+        <Button
+          size="sm"
+          variant="secondary"
           type="button"
           onClick={() => {
             setStep({ kind: "forgot", first: null });
             setDigits("");
             setError(null);
           }}
-          className="text-xs text-muted underline-offset-2 hover:text-foreground hover:underline"
         >
           Forgot PIN?
-        </button>
+        </Button>
       ) : null}
     </div>
   );

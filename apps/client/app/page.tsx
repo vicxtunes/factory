@@ -8,7 +8,6 @@ import { getClientSession } from "@repo/lib/auth/session";
 import { getMyOwing } from "@repo/lib/invoices/actions";
 import { isOptionCategory } from "@repo/lib/catalog-options";
 import { fetchClientItems, fetchMarketingSlides, fetchProductCatalog } from "@repo/lib/queries";
-import { STUDIOS_ENABLED } from "@repo/lib/studios/feature";
 import { vendors } from "@repo/lib/vendors/server";
 import { getMyWalletSummary } from "@repo/lib/wallet/actions";
 
@@ -16,7 +15,6 @@ import { ClientDashboard } from "./dashboard";
 import { Landing } from "./landing";
 import { rememberedClient } from "./remembered-device";
 import { ClientShell } from "./shell";
-import { ShowroomView } from "./showroom-view";
 import { SignInOverlay } from "./sign-in-overlay";
 
 
@@ -28,14 +26,13 @@ export default async function ClientSidePage({
   const session = await getClientSession();
 
   if (!session) {
-    // Signed-out visitors land on Aming Space's landing page (the public
-    // showroom while studios are off); the sign-in form only shows when asked
+    // Signed-out visitors land on Aming Space's landing page (the showroom is
+    // for signed-in studios); the sign-in form only shows when asked
     // for (?signin=1, e.g. from the topbar's Log in link) — or straight away
     // on a browser that remembers its account: the lock screen.
     const params = await searchParams;
-    const front = STUDIOS_ENABLED ? <Landing /> : <ShowroomView />;
-    if (!params.signin && !(await rememberedClient())) return front;
-    return <SignInOverlay behind={front} />;
+    if (!params.signin && !(await rememberedClient())) return <Landing />;
+    return <SignInOverlay behind={<Landing />} />;
   }
 
   // A vendor's account opens on its vendor side.

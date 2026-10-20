@@ -38,6 +38,7 @@ import { ClientItemDetail } from "./item-detail";
 import { ClientOrderCard } from "./order-card";
 import { ClientQuoteReview } from "./quote-review";
 import { cancelMyOrder } from "./actions";
+import { Button } from "@repo/ui/Button";
 
 // Same search/filter/table/export toolset as app/dashboard/order-board.tsx
 // (packages/lib/orders/filters.ts, OrderItemsTable, ExportButtons, Popover), scoped
@@ -299,13 +300,14 @@ export function ClientOrdersBoard({
               </span>
             </button>
           ))}
-          <button
+          <Button
+            size="sm"
+            variant="secondary"
             type="button"
             onClick={resetFilters}
-            className="text-xs text-brand-600 underline-offset-2 hover:underline"
           >
             Clear all
-          </button>
+          </Button>
         </div>
       ) : null}
 

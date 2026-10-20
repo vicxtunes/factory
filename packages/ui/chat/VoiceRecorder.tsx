@@ -6,6 +6,7 @@ import { CHAT_LIMITS } from "@repo/lib/chat/policy";
 
 import { formatDuration } from "./format";
 import { MicIcon, SendIcon, TrashIcon } from "./icons";
+import { Button } from "@repo/ui/Button";
 
 // Formats in preference order. Chrome/Firefox/Android record WebM/Opus;
 // Safari (incl. iOS) only records MP4/AAC. Every major browser can play the
@@ -164,9 +165,9 @@ export function VoiceRecorder({
       {state.phase === "error" ? (
         <span role="alert" className="absolute bottom-full right-0 mb-2 w-60 rounded-lg bg-gray-900 px-3 py-2 text-xs text-white shadow-theme-lg">
           {state.message}
-          <button type="button" onClick={() => setState({ phase: "idle" })} className="ml-2 underline">
+          <Button size="sm" variant="secondary" type="button" onClick={() => setState({ phase: "idle" })} className="ml-2">
             OK
-          </button>
+          </Button>
         </span>
       ) : null}
     </span>

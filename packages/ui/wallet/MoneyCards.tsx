@@ -7,6 +7,7 @@
 import { useState, type ReactNode } from "react";
 
 import { useMoney } from "./shared";
+import { Button } from "@repo/ui/Button";
 
 /** A tile on a Wallet page, laid out as a banking dashboard (design/ in the repo root). */
 export const TILE = "rounded-3xl border border-border bg-surface p-5 shadow-theme-xs sm:p-6";
@@ -70,9 +71,9 @@ export function Transactions({ title, rows, empty, bare = false }: { title?: str
       <div className="flex items-center justify-between gap-3">
         {title ? <h3 className="text-base font-semibold">{title}</h3> : null}
         {rows.length > LATEST ? (
-          <button type="button" onClick={() => setAll(!all)} className="ml-auto text-sm text-muted hover:underline">
+          <Button size="sm" variant="secondary" type="button" onClick={() => setAll(!all)}>
             {all ? "Show fewer" : "See all"}
-          </button>
+          </Button>
         ) : null}
       </div>
       {shown.length === 0 ? (

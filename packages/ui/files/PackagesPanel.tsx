@@ -71,9 +71,9 @@ export function PackagesPanel({ serviceId, packages }: { serviceId: string; pack
               ) : null}
               {packages.editable ? (
                 <div className="flex gap-3 pt-1 text-xs">
-                  <button type="button" className="text-brand-600 hover:underline" onClick={() => setEditing(p)}>
+                  <Button size="sm" variant="secondary" type="button" onClick={() => setEditing(p)}>
                     Edit
-                  </button>
+                  </Button>
                   <button type="button" className="text-muted hover:text-error-600" disabled={pending} onClick={() => remove(p)}>
                     Delete
                   </button>

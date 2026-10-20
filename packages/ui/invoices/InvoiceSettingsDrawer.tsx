@@ -120,9 +120,9 @@ function ImageSetting({
           </Button>
           {extra}
           {url ? (
-            <button type="button" className="text-xs text-error-600" disabled={busy} onClick={onRemove}>
+            <Button size="sm" variant="danger" type="button" disabled={busy} onClick={onRemove}>
               Remove
-            </button>
+            </Button>
           ) : null}
         </div>
       </div>

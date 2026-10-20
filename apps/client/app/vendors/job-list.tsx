@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { JOB_STATUS_LABELS, vendorTake, type JobView } from "@repo/lib/vendors/core";
+import { JOB_STAGE_LABELS, jobStage, vendorTake, type JobView } from "@repo/lib/vendors/core";
 
 import { JobActions } from "./job-actions";
 
@@ -20,7 +20,7 @@ export function JobList({ jobs, answer }: { jobs: JobView[]; answer?: boolean })
           <div className="flex items-center gap-3 sm:flex-col sm:items-end">
             <span className="flex-1 text-sm sm:flex-none">
               <span className="font-semibold tabular-nums">{money(vendorTake(j.price))}</span>
-              <span className="text-muted"> · {j.status === "requested" ? (j.dueOn ? `due ${j.dueOn}` : "no due date") : JOB_STATUS_LABELS[j.status]}</span>
+              <span className="text-muted"> · {j.status === "requested" ? (j.dueOn ? `due ${j.dueOn}` : "no due date") : JOB_STAGE_LABELS[jobStage(j.status)]}</span>
             </span>
             {answer ? <JobActions id={j.id} status={j.status} /> : null}
           </div>

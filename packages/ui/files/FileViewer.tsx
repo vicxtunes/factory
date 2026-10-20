@@ -343,13 +343,14 @@ export function FileViewer({
                   {canResolve || canDelete ? (
                     <div className="flex gap-3 text-xs">
                       {canResolve ? (
-                        <button
+                        <Button
+                          size="sm"
+                          variant="secondary"
                           type="button"
-                          className="text-brand-600 hover:underline"
                           onClick={() => act(() => resolveComment(via, c.id, !c.resolvedAt), () => setComments((all) => all!.map((x) => (x.id === c.id ? { ...x, resolvedAt: x.resolvedAt ? null : new Date().toISOString() } : x))))}
                         >
                           {c.resolvedAt ? "Open again" : "Resolve"}
-                        </button>
+                        </Button>
                       ) : null}
                       {canDelete ? (
                         <button

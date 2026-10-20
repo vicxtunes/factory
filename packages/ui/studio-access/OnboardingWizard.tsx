@@ -339,9 +339,9 @@ function SubmitStep({ view, back, onGoTo }: Omit<StepProps, "onDone"> & { onGoTo
             <dd className="min-w-0 flex-1 truncate font-medium">
               {r.value ?? <span className={`font-normal ${r.required ? "text-error-600 dark:text-error-400" : "text-muted"}`}>{r.required ? "Missing" : "Not added"}</span>}
             </dd>
-            <button type="button" onClick={() => onGoTo(r.step)} className="shrink-0 text-xs font-medium text-brand-600 hover:underline">
+            <Button size="sm" variant="secondary" type="button" onClick={() => onGoTo(r.step)} className="shrink-0">
               {r.value ? "Edit" : "Add"}
-            </button>
+            </Button>
           </div>
         ))}
       </dl>

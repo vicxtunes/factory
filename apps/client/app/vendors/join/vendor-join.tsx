@@ -8,6 +8,7 @@ import { Field, TextInput } from "@repo/ui/Field";
 import { PasswordInput } from "@repo/ui/PasswordInput";
 import { PhoneInput } from "@repo/ui/PhoneInput";
 import { joinAsVendor } from "@repo/lib/vendors/actions";
+import { SocialIcon } from "@repo/ui/vendors/SocialIcon";
 import { SOCIAL_NETWORKS, VENDOR_CATEGORIES, VENDOR_SKILLS, vendorCategory, type SocialNetwork, type VendorKind } from "@repo/lib/vendors/core";
 
 import { checkVendorContact, finishVendorSignUp, startVendorSignUp } from "../../auth-actions";
@@ -253,7 +254,10 @@ export function VendorJoin({ signedInAs }: { signedInAs: string | null }) {
               <div className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-surface">
                 {SOCIAL_NETWORKS.map((n) => (
                   <label key={n.id} className="flex items-center gap-3 px-4 py-1.5">
-                    <span className="w-20 shrink-0 text-sm font-medium">{n.label}</span>
+                    <span className="flex w-28 shrink-0 items-center gap-2 text-sm font-medium">
+                  <SocialIcon network={n.id} className="size-4 shrink-0 text-muted" />
+                  {n.label}
+                </span>
                     <input
                       value={socials[n.id] ?? ""}
                       onChange={(e) => setSocials({ ...socials, [n.id]: e.target.value })}
@@ -289,9 +293,9 @@ export function VendorJoin({ signedInAs }: { signedInAs: string | null }) {
                 aria-label="6-digit code"
                 autoFocus
               />
-              <button type="button" onClick={sendCode} disabled={pending} className="text-sm font-medium text-brand-600 hover:underline dark:text-brand-400">
+              <Button size="sm" variant="secondary" type="button" onClick={sendCode} disabled={pending}>
                 Resend code
-              </button>
+              </Button>
             </Question>
           ) : null}
 

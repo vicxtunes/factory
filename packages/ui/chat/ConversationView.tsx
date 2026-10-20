@@ -16,6 +16,7 @@ import { ConversationAvatar, IssueStatusBadge } from "./ConversationList";
 import { dayKey, formatDayLabel } from "./format";
 import { BackIcon, InfoIcon } from "./icons";
 import { MessageBubble, SystemMessage } from "./MessageBubble";
+import { Button } from "@repo/ui/Button";
 
 /** Consecutive messages from one sender within this window share one avatar. */
 const GROUPING_WINDOW_MS = 5 * 60 * 1000;
@@ -260,9 +261,9 @@ export function ConversationView({
       <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
         <p className="text-sm text-muted">{error}</p>
         {onBack ? (
-          <button type="button" onClick={onBack} className="text-sm font-medium text-brand-600">
+          <Button size="sm" variant="secondary" type="button" onClick={onBack}>
             Back to chats
-          </button>
+          </Button>
         ) : null}
       </div>
     );
@@ -339,9 +340,9 @@ export function ConversationView({
       <div ref={scrollRef} onScroll={onScroll} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pb-3">
         {cursor ? (
           <div className="py-3 text-center">
-            <button type="button" onClick={loadOlder} disabled={loadingOlder} className="text-xs font-medium text-brand-600">
+            <Button size="sm" variant="secondary" type="button" onClick={loadOlder} disabled={loadingOlder}>
               {loadingOlder ? "Loading…" : "Load earlier messages"}
-            </button>
+            </Button>
           </div>
         ) : messages.length ? (
           <p className="py-4 text-center text-[11px] text-muted">This is the start of the conversation.</p>

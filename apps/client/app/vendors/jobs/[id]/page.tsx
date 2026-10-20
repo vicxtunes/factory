@@ -8,7 +8,7 @@ import { Loading } from "@repo/ui/skeletons/Loading";
 import { filesCaller } from "@repo/lib/files/access";
 import { folderIdSchema } from "@repo/lib/files/core";
 import { FileService } from "@repo/lib/files/service";
-import { autoReleaseAt, isHeld, JOB_STATUS_LABELS, jobFee, jobIdSchema, reachesFolder, vendorTake, type JobView } from "@repo/lib/vendors/core";
+import { autoReleaseAt, isHeld, JOB_STAGE_LABELS, jobFee, jobStage, jobIdSchema, reachesFolder, vendorTake, type JobView } from "@repo/lib/vendors/core";
 import { vendorJobs } from "@repo/lib/vendors/server";
 
 import { VendorFrame } from "../../frame";
@@ -38,7 +38,7 @@ export default async function VendorJobPage({ params, searchParams }: { params: 
         <header className="space-y-1">
           <p className="text-sm font-medium text-brand-600 dark:text-brand-400">{job.studio.name}</p>
           <h1 className="text-2xl font-semibold tracking-tight">{job.projectTitle}</h1>
-          <p className="text-sm text-muted">{JOB_STATUS_LABELS[job.status]}</p>
+          <p className="text-sm text-muted">{JOB_STAGE_LABELS[jobStage(job.status)]}</p>
         </header>
 
         <section className="space-y-4 rounded-2xl border border-border bg-surface p-5 shadow-theme-xs">

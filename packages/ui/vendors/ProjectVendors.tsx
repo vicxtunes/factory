@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 
 import { Avatar } from "@repo/ui/Avatar";
-import { BottomSheet } from "@repo/ui/BottomSheet";
-import { Button } from "@repo/ui/Button";
+import { FormSheet } from "@repo/ui/FormSheet";
+import { Button, buttonClass } from "@repo/ui/Button";
 import { Field, TextInput } from "@repo/ui/Field";
 import {
   approveVendorJob,
@@ -18,7 +18,7 @@ import {
   setVendorJobFolder,
   type VendorCard,
 } from "@repo/lib/vendors/actions";
-import { autoReleaseAt, isOpenJob, JOB_STATUS_LABELS, VENDOR_CATEGORIES, vendorCategory, vendorTake, type JobStatus } from "@repo/lib/vendors/core";
+import { autoReleaseAt, isOpenJob, JOB_STAGE_LABELS, jobStage, offerPrice, offerTotal, rateUnit, VENDOR_CATEGORIES, vendorCategory, vendorTake, type JobStage, type JobStatus, type RateUnit } from "@repo/lib/vendors/core";
 
 /** One vendor job on the project, as the studio sees it. */
 export interface ProjectJob {
@@ -46,18 +46,11 @@ export interface ProjectFolder {
 
 const money = (n: number) => `UGX ${n.toLocaleString("en-US")}`;
 
-const STATUS_LOOK: Record<JobStatus, string> = {
+const STAGE_LOOK: Record<JobStage, string> = {
   requested: "bg-warning-50 text-warning-700 dark:bg-warning-500/15 dark:text-warning-400",
-  samples: "bg-warning-50 text-warning-700 dark:bg-warning-500/15 dark:text-warning-400",
-  samples_sent: "bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-300",
-  awaiting_funds: "bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-300",
-  in_progress: "bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-300",
+  working: "bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-300",
   delivered: "bg-success-50 text-success-700 dark:bg-success-500/15 dark:text-success-500",
-  disputed: "bg-error-50 text-error-700 dark:bg-error-500/15 dark:text-error-500",
-  paid: "bg-gray-100 text-gray-700 dark:bg-white/10 dark:text-gray-300",
-  refunded: "bg-gray-100 text-gray-700 dark:bg-white/10 dark:text-gray-300",
-  declined: "bg-gray-100 text-gray-500 dark:bg-white/10 dark:text-gray-400",
-  cancelled: "bg-gray-100 text-gray-500 dark:bg-white/10 dark:text-gray-400",
+  closed: "bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-400",
 };
 
 type Sheet = { kind: "fund" | "approve" | "dispute"; job: ProjectJob } | null;
@@ -68,11 +61,28 @@ type Sheet = { kind: "fund" | "approve" | "dispute"; job: ProjectJob } | null;
  * to Aming to go ahead, approve delivered work (Aming releases the money to
  * the vendor) or raise a dispute. Paying (`canPay`) is the Money area's.
  * Adding a vendor: find them, the folder they work in, samples or not, and
- * what's needed, by when, for how much.
+ * what's needed, by when, for how much. Coming from a vendor's page
+ * (`hire`), the form opens with them chosen, at one of their services
+ * (`hireService`) when one was picked.
  */
-export function ProjectVendors({ projectId, jobs, folders, canPay }: { projectId: string; jobs: ProjectJob[]; folders: ProjectFolder[]; canPay: boolean }) {
+export function ProjectVendors({
+  projectId,
+  jobs,
+  folders,
+  canPay,
+  hire,
+  hireService,
+}: {
+  projectId: string;
+  jobs: ProjectJob[];
+  folders: ProjectFolder[];
+  canPay: boolean;
+  hire: VendorCard | null;
+  hireService: string | null;
+}) {
   const router = useRouter();
-  const [adding, setAdding] = useState(false);
+  const openJobs = jobs.filter((j) => isOpenJob(j.status)).map((j) => j.vendorId);
+  const [adding, setAdding] = useState(hire !== null);
   // A job with no folder (made before jobs had them, or its folder was deleted): the studio gives it one.
   const [givingFolder, setGivingFolder] = useState<ProjectJob | null>(null);
   const [sheet, setSheet] = useState<Sheet>(null);
@@ -91,7 +101,6 @@ export function ProjectVendors({ projectId, jobs, folders, canPay }: { projectId
     });
   }
 
-  const quiet = "text-xs font-medium text-muted hover:text-foreground";
 
   return (
     <div className="space-y-3">
@@ -108,7 +117,7 @@ export function ProjectVendors({ projectId, jobs, folders, canPay }: { projectId
                       <p className="truncate font-semibold">
                         {j.vendorName} <span className="font-normal text-muted">· {vendorCategory(j.vendorCategory)?.label ?? "Vendor"}</span>
                       </p>
-                      <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_LOOK[j.status]}`}>{JOB_STATUS_LABELS[j.status]}</span>
+                      <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${STAGE_LOOK[jobStage(j.status)]}`}>{JOB_STAGE_LABELS[jobStage(j.status)]}</span>
                     </div>
                     <p className="line-clamp-2 text-sm text-muted">{j.brief}</p>
                     <p className="mt-1 text-xs text-muted">
@@ -139,19 +148,19 @@ export function ProjectVendors({ projectId, jobs, folders, canPay }: { projectId
                     </Button>
                   ) : null}
                   {j.folderId && isOpenJob(j.status) ? (
-                    <Link href={`/studio/files?folder=${j.folderId}`} className={quiet}>
+                    <Link href={`/studio/files?folder=${j.folderId}`} className={buttonClass("secondary", "sm")}>
                       {j.status === "samples_sent" ? "See the samples" : "Open their folder"}
                     </Link>
                   ) : null}
                   {["requested", "samples", "samples_sent", "awaiting_funds"].includes(j.status) ? (
-                    <button type="button" disabled={pending} onClick={() => act(() => cancelVendorJob(j.id))} className={`${quiet} hover:text-error-600`}>
+                    <Button size="sm" variant="danger" type="button" disabled={pending} onClick={() => act(() => cancelVendorJob(j.id))}>
                       {j.status === "samples_sent" ? "Not good: cancel" : "Cancel"}
-                    </button>
+                    </Button>
                   ) : null}
                   {j.status === "in_progress" || j.status === "delivered" ? (
-                    <button type="button" onClick={() => setSheet({ kind: "dispute", job: j })} className={`${quiet} hover:text-error-600`}>
+                    <Button size="sm" variant="danger" type="button" onClick={() => setSheet({ kind: "dispute", job: j })}>
                       Raise a dispute
-                    </button>
+                    </Button>
                   ) : null}
                 </div>
               </li>
@@ -168,12 +177,26 @@ export function ProjectVendors({ projectId, jobs, folders, canPay }: { projectId
         Add a vendor
       </Button>
 
-      {adding ? <AddVendor projectId={projectId} folders={folders} openJobs={jobs.filter((j) => isOpenJob(j.status)).map((j) => j.vendorId)} onClose={() => setAdding(false)} /> : null}
+      {adding ? (
+        <AddVendor
+          projectId={projectId}
+          folders={folders}
+          openJobs={openJobs}
+          // Already working on the project: the list shows them as such.
+          initial={hire && !openJobs.includes(hire.id) ? hire : null}
+          initialService={hireService}
+          onClose={() => {
+            setAdding(false);
+            // Not opened again on the next refresh.
+            if (hire) router.replace(`/studio/projects/${projectId}?tab=vendors`, { scroll: false });
+          }}
+        />
+      ) : null}
 
       {givingFolder ? <GiveFolder job={givingFolder} folders={folders} onClose={() => setGivingFolder(null)} /> : null}
 
       {sheet ? (
-        <BottomSheet
+        <FormSheet
           open
           onClose={() => setSheet(null)}
           title={sheet.kind === "fund" ? (sheet.job.status === "samples_sent" ? "Approve samples and pay in" : "Pay in to start") : sheet.kind === "approve" ? "Approve and release" : "Raise a dispute"}
@@ -229,22 +252,42 @@ export function ProjectVendors({ projectId, jobs, folders, canPay }: { projectId
               </Button>
             </div>
           </div>
-        </BottomSheet>
+        </FormSheet>
       ) : null}
     </div>
   );
 }
 
 /** Find a vendor, then where they work, samples or not, and what's needed, by when and for how much. */
-function AddVendor({ projectId, folders, openJobs, onClose }: { projectId: string; folders: ProjectFolder[]; openJobs: string[]; onClose: () => void }) {
+function AddVendor({
+  projectId,
+  folders,
+  openJobs,
+  initial,
+  initialService,
+  onClose,
+}: {
+  projectId: string;
+  folders: ProjectFolder[];
+  openJobs: string[];
+  initial: VendorCard | null;
+  initialService: string | null;
+  onClose: () => void;
+}) {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("");
   const [found, setFound] = useState<VendorCard[] | null>(null);
-  const [chosen, setChosen] = useState<VendorCard | null>(null);
-  const [brief, setBrief] = useState("");
+  const [chosen, setChosen] = useState<VendorCard | null>(initial);
+  // Hiring at a service picked on their page: that service, its price for one, and its name as the brief's start.
+  const picked = initial ? pricedOffers(initial).findIndex((o) => o.id === initialService) : -1;
+  const atService = picked >= 0 ? pricedOffers(initial!)[picked]! : null;
+  const [brief, setBrief] = useState(atService?.name ?? "");
   const [dueOn, setDueOn] = useState("");
-  const [price, setPrice] = useState("");
+  const [price, setPrice] = useState(atService ? offerTotal(atService, 1).toLocaleString("en-US") : "");
+  // One of their priced services ("" for a price agreed here), and how many of its unit.
+  const [rate, setRate] = useState(picked >= 0 ? String(picked) : "");
+  const [quantity, setQuantity] = useState("1");
   // Where they work: "new" (a folder made for them) or an existing folder's id.
   const [folder, setFolder] = useState("new");
   const [folderName, setFolderName] = useState("");
@@ -266,7 +309,7 @@ function AddVendor({ projectId, folders, openJobs, onClose }: { projectId: strin
   const textArea = "w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500";
 
   return (
-    <BottomSheet open onClose={onClose} title={chosen ? `Hire ${chosen.name}` : "Add a vendor"}>
+    <FormSheet open onClose={onClose} title={chosen ? `Hire ${chosen.name}` : "Add a vendor"}>
       {chosen ? (
         <form
           className="space-y-4"
@@ -302,6 +345,43 @@ function AddVendor({ projectId, folders, openJobs, onClose }: { projectId: strin
               autoFocus
             />
           </Field>
+          {pricedOffers(chosen).length ? (
+            <div className="space-y-2">
+              <Field label="At their price">
+                <select
+                  value={rate}
+                  onChange={(e) => {
+                    setRate(e.target.value);
+                    const picked = pricedOffers(chosen)[Number(e.target.value)];
+                    if (!picked || e.target.value === "") return;
+                    setPrice(offerTotal(picked, Number(quantity) || 1).toLocaleString("en-US"));
+                    if (!brief.trim()) setBrief(picked.name);
+                  }}
+                  className="h-11 w-full rounded-lg border border-border bg-surface px-3 text-sm"
+                >
+                  <option value="">No, agree a price</option>
+                  {pricedOffers(chosen).map((o, i) => (
+                    <option key={i} value={i}>
+                      {o.name}: {offerPrice(o)}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              {rate !== "" && pricedOffers(chosen)[Number(rate)]!.unit !== "project" ? (
+                <Field label={`How many ${rateUnit(pricedOffers(chosen)[Number(rate)]!.unit).many}`}>
+                  <TextInput
+                    inputMode="numeric"
+                    value={quantity}
+                    onChange={(e) => {
+                      const n = e.target.value.replace(/[^\d]/g, "");
+                      setQuantity(n);
+                      setPrice(offerTotal(pricedOffers(chosen)[Number(rate)]!, Number(n) || 1).toLocaleString("en-US"));
+                    }}
+                  />
+                </Field>
+              ) : null}
+            </div>
+          ) : null}
           <div className="grid grid-cols-2 gap-3">
             <Field label="Due">
               <TextInput type="date" value={dueOn} onChange={(e) => setDueOn(e.target.value)} />
@@ -376,7 +456,7 @@ function AddVendor({ projectId, folders, openJobs, onClose }: { projectId: strin
           )}
         </div>
       )}
-    </BottomSheet>
+    </FormSheet>
   );
 }
 
@@ -389,7 +469,7 @@ function GiveFolder({ job, folders, onClose }: { job: ProjectJob; folders: Proje
   const [pending, start] = useTransition();
 
   return (
-    <BottomSheet open onClose={onClose} title={`A folder for ${job.vendorName}`}>
+    <FormSheet open onClose={onClose} title={`A folder for ${job.vendorName}`}>
       <form
         className="space-y-4"
         onSubmit={(e) => {
@@ -424,8 +504,13 @@ function GiveFolder({ job, folders, onClose }: { job: ProjectJob; folders: Proje
           </Button>
         </div>
       </form>
-    </BottomSheet>
+    </FormSheet>
   );
+}
+
+/** The vendor's services with a price, to hire at one. */
+function pricedOffers(vendor: VendorCard): { id: string; name: string; price: number; unit: RateUnit }[] {
+  return vendor.offers.flatMap((o) => (o.price !== null && o.unit !== null ? [{ id: o.id, name: o.name, price: o.price, unit: o.unit }] : []));
 }
 
 function VendorRow({ vendor, note }: { vendor: VendorCard; note?: string }) {

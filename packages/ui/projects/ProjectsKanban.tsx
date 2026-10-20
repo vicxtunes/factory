@@ -38,7 +38,7 @@ export function ProjectsKanban({ projects, scope, basePath }: { projects: Projec
     const from = statusOf(project);
     if (from === to) return;
     if (!canMoveProject(from, to)) {
-      return setError(from === "completed" ? "A completed project stays completed." : "A project moves forward, or back one stage.");
+      return setError(from === "done" ? "A done project stays done." : "A project moves forward, or back one stage.");
     }
     setError(null);
     setMoved((m) => ({ ...m, [id]: to }));

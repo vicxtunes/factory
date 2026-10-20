@@ -7,15 +7,15 @@ import { getClientSession } from "@repo/lib/auth/session";
 
 export const metadata = { title: "Page not found" };
 
-// Signed-in clients go back to their orders, everyone else to the showroom
-// (the portal's front door, served at /).
+// Signed-in clients go back to their orders, everyone else to the landing
+// page (the portal's front door, served at /).
 async function homeFor(): Promise<{ href: string; label: string }> {
   try {
     if (await getClientSession()) return { href: "/", label: "Back to your orders" };
   } catch {
     // Session lookup must never break the 404 page itself.
   }
-  return { href: "/", label: "Back to the showroom" };
+  return { href: "/", label: "Back to Aming Space" };
 }
 
 export default async function NotFound() {

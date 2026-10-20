@@ -114,9 +114,9 @@ export function TaskRows({
                   {editable === true && t.customerId && t.folderId && t.kind !== "todo" ? (
                     <>
                       {" · "}
-                      <button type="button" disabled={pending} onClick={() => copyLink(t.id)} className="text-brand-600 hover:underline">
+                      <Button size="sm" variant="secondary" type="button" disabled={pending} onClick={() => copyLink(t.id)}>
                         {copied === t.id ? "Link copied: send it to them" : "Copy link for the client"}
-                      </button>
+                      </Button>
                     </>
                   ) : null}
                   {t.folderId && filesPath ? (
@@ -153,19 +153,20 @@ export function TaskRows({
               {editable && !done ? (
                 <div className="flex shrink-0 gap-2 text-xs">
                   {t.status === "pending" ? (
-                    <button type="button" disabled={pending} onClick={() => run(() => setTaskStatus(t.id, "in_progress"))} className="text-brand-600 hover:underline">
+                    <Button size="sm" variant="secondary" type="button" disabled={pending} onClick={() => run(() => setTaskStatus(t.id, "in_progress"))}>
                       Start
-                    </button>
+                    </Button>
                   ) : null}
                   {editable === true ? (
-                    <button
+                    <Button
+                      size="sm"
+                      variant="danger"
                       type="button"
                       disabled={pending}
                       onClick={() => window.confirm("Remove this task?") && run(() => removeTask(t.id))}
-                      className="text-error-600 hover:underline dark:text-error-400"
                     >
                       Remove
-                    </button>
+                    </Button>
                   ) : null}
                 </div>
               ) : null}
