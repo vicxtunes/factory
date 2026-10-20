@@ -53,7 +53,8 @@ const NAV: { label: string; Icon: typeof DashboardIcon; href?: string; page?: Pa
   { label: "Settings", Icon: SettingsIcon },
 ];
 
-export function VendorFrame({ vendor, page, children }: { vendor: Vendor; page: Page; children: ReactNode }) {
+/** `wide`: a page of tiles (Services) gets the room for more of them a row. */
+export function VendorFrame({ vendor, page, wide = false, children }: { vendor: Vendor; page: Page; wide?: boolean; children: ReactNode }) {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <div className="flex">
@@ -87,7 +88,7 @@ export function VendorFrame({ vendor, page, children }: { vendor: Vendor; page: 
             <LogOut />
           </div>
         </aside>
-        <main className="mx-auto w-full max-w-3xl pb-[calc(6rem+env(safe-area-inset-bottom))] lg:pb-8">{children}</main>
+        <main className={`mx-auto w-full ${wide ? "max-w-6xl" : "max-w-3xl"} pb-[calc(6rem+env(safe-area-inset-bottom))] lg:pb-8`}>{children}</main>
       </div>
       <HomeBar tabs={TABS} more={MORE} logout={logoutClient} afterLogout="/" hideFrom="lg" />
     </div>

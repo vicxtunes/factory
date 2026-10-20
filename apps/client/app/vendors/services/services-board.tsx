@@ -44,15 +44,16 @@ export function ServicesBoard({ offers, suggestions, startAdding }: { offers: Of
       </div>
 
       {offers.length ? (
-        // One wide tile a row on a phone; a grid of two, squarer, from a tablet up.
-        <ul className="grid gap-4 sm:grid-cols-2">
+        // As many tiles a row as fit at 15rem or more each (one on a phone, three
+        // or four on a desktop); each name sized to its own tile's width.
+        <ul className="grid grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] gap-4">
           {offers.map((o) => (
             <li key={o.id}>
               {/* A tile: its first sample filling it behind a soft veil, the name over it. */}
               <button
                 type="button"
                 onClick={() => setOpen(o.id)}
-                className="group relative grid aspect-[2/1] w-full place-items-center overflow-hidden rounded-[28px] bg-gradient-to-br from-gray-700 to-gray-900 text-center text-white shadow-theme-md transition active:scale-[0.99] sm:aspect-[4/3]"
+                className="group @container relative grid aspect-[2/1] w-full place-items-center overflow-hidden rounded-[28px] bg-gradient-to-br from-gray-700 to-gray-900 text-center text-white shadow-theme-md transition active:scale-[0.99] sm:aspect-[4/3]"
               >
                 {o.sampleUrls[0] ? (
                   // A short-lived signed link to the private bucket: a plain img.
@@ -61,8 +62,8 @@ export function ServicesBoard({ offers, suggestions, startAdding }: { offers: Of
                 ) : null}
                 <span className="absolute inset-0 bg-black/45 transition group-hover:bg-black/35" />
                 <span className="relative space-y-1.5 px-6">
-                  <span className="line-clamp-2 block text-3xl font-medium tracking-tight drop-shadow-sm sm:text-2xl lg:text-3xl">{o.name}</span>
-                  <span className="block text-sm text-white/80 tabular-nums">
+                  <span className="line-clamp-2 block text-[clamp(1.25rem,9cqi,2.25rem)] leading-tight font-medium tracking-tight drop-shadow-sm">{o.name}</span>
+                  <span className="block text-[clamp(0.75rem,4.5cqi,0.875rem)] text-white/80 tabular-nums">
                     {offerPrice(o)} · {o.samples.length ? `${o.samples.length} sample${o.samples.length === 1 ? "" : "s"}` : "No samples yet"}
                   </span>
                 </span>

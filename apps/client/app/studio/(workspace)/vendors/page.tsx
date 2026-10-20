@@ -75,7 +75,8 @@ async function VendorList({ query, category }: { query: string; category: string
   const photos = await Promise.all(found.map((v) => vendors.pictureUrl(v.photoKey)));
   // "Hire me" goes to their projects in hand on the vendor's page, "See my work" to the page itself.
   return (
-    <ul className="grid gap-5 sm:grid-cols-2">
+    // As many cards a row as fit at 18rem or more each: one on a phone, two on a tablet, three on a desktop.
+    <ul className="grid grid-cols-[repeat(auto-fill,minmax(18rem,1fr))] gap-5">
       {found.map((v, i) => (
         <li key={v.id}>
           <HireCard
