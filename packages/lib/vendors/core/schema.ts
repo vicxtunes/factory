@@ -63,6 +63,12 @@ export const vendorPictureSchema = z.enum(["photo", "cover"]);
 /** An upload's key, as the server handed it out. */
 export const pictureKeySchema = z.string().min(1).max(300);
 
+/** The folder a vendor works in: one of the project's, or a new one made inside it. */
+export const jobFolderSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("existing"), folderId: z.uuid("Choose a folder.") }),
+  z.object({ kind: z.literal("new"), name: z.string().trim().min(1, "Name the folder.").max(120, "Keep the name under 120 characters.") }),
+]);
+
 /** A studio's request to a vendor, on one of its projects: the job, and the folder the vendor works in. */
 export const jobRequestSchema = z
   .object({
@@ -81,10 +87,7 @@ export const jobRequestSchema = z
       .int("A whole number of shillings.")
       .min(1_000, "At least UGX 1,000.")
       .max(100_000_000, "That's more than a job can be."),
-    folder: z.discriminatedUnion("kind", [
-      z.object({ kind: z.literal("existing"), folderId: z.uuid("Choose a folder.") }),
-      z.object({ kind: z.literal("new"), name: z.string().trim().min(1, "Name the folder.").max(120, "Keep the name under 120 characters.") }),
-    ]),
+    folder: jobFolderSchema,
   })
   .transform(({ folder, ...request }): { request: JobRequest; folder: JobFolder } => ({ request, folder }));
 

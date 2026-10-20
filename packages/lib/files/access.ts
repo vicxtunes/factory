@@ -62,7 +62,7 @@ export async function filesCaller(via: Via): Promise<FilesCaller> {
     if (!job || !studio) throw new FileError("This job's folder isn't open to you.");
     const scope = studioScope(studio);
     const folderId = job.folderId;
-    if (!folderId) throw new FileError("The folder for this job was deleted. Ask the studio to set one up.");
+    if (!folderId) throw new FileError("This job has no folder yet. Ask the studio to give it one.");
     return {
       drive: files,
       scope,
