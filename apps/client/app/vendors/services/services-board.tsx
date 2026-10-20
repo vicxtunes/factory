@@ -44,14 +44,15 @@ export function ServicesBoard({ offers, suggestions, startAdding }: { offers: Of
       </div>
 
       {offers.length ? (
-        <ul className="space-y-3">
+        // One wide tile a row on a phone; a grid of two, squarer, from a tablet up.
+        <ul className="grid gap-4 sm:grid-cols-2">
           {offers.map((o) => (
             <li key={o.id}>
               {/* A tile: its first sample filling it behind a soft veil, the name over it. */}
               <button
                 type="button"
                 onClick={() => setOpen(o.id)}
-                className="group relative grid aspect-[2/1] w-full place-items-center overflow-hidden rounded-[28px] bg-gradient-to-br from-gray-700 to-gray-900 text-center text-white shadow-theme-md transition active:scale-[0.99] sm:aspect-[5/2]"
+                className="group relative grid aspect-[2/1] w-full place-items-center overflow-hidden rounded-[28px] bg-gradient-to-br from-gray-700 to-gray-900 text-center text-white shadow-theme-md transition active:scale-[0.99] sm:aspect-[4/3]"
               >
                 {o.sampleUrls[0] ? (
                   // A short-lived signed link to the private bucket: a plain img.
@@ -60,7 +61,7 @@ export function ServicesBoard({ offers, suggestions, startAdding }: { offers: Of
                 ) : null}
                 <span className="absolute inset-0 bg-black/45 transition group-hover:bg-black/35" />
                 <span className="relative space-y-1.5 px-6">
-                  <span className="block text-3xl font-medium tracking-tight drop-shadow-sm sm:text-4xl">{o.name}</span>
+                  <span className="line-clamp-2 block text-3xl font-medium tracking-tight drop-shadow-sm sm:text-2xl lg:text-3xl">{o.name}</span>
                   <span className="block text-sm text-white/80 tabular-nums">
                     {offerPrice(o)} · {o.samples.length ? `${o.samples.length} sample${o.samples.length === 1 ? "" : "s"}` : "No samples yet"}
                   </span>
@@ -68,6 +69,21 @@ export function ServicesBoard({ offers, suggestions, startAdding }: { offers: Of
               </button>
             </li>
           ))}
+          {/* In the grid, adding one more sits where the eye expects it: the next tile. */}
+          <li className="hidden sm:block">
+            <button
+              type="button"
+              onClick={() => setOpen("new")}
+              className="grid aspect-[4/3] w-full place-items-center rounded-[28px] border-2 border-dashed border-border text-muted transition hover:border-brand-500/50 hover:bg-surface hover:text-foreground"
+            >
+              <span className="flex flex-col items-center gap-2 text-sm font-medium">
+                <svg viewBox="0 0 24 24" className="size-7" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden>
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
+                Add a service
+              </span>
+            </button>
+          </li>
         </ul>
       ) : (
         <div className="rounded-3xl border border-dashed border-border p-8 text-center">
