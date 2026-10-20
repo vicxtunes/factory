@@ -5,38 +5,70 @@ import { useState } from "react";
 import { FormSheet } from "@repo/ui/FormSheet";
 import { Lightbox } from "@repo/ui/Lightbox";
 import { PhotoGrid } from "@repo/ui/PhotoGrid";
-import { offerPrice } from "@repo/lib/vendors/core";
+import { describeOffer, offerPrice, offerPriceParts } from "@repo/lib/vendors/core";
 
 import type { OfferView } from "./OfferList";
 
 const samplesLabel = (n: number) => (n ? `${n} sample${n === 1 ? "" : "s"}` : "No samples yet");
 
-/** One service as a tile: its first sample filling it behind a soft veil, the name, price and samples over it. */
-export function ServiceTile({ offer, onOpen }: { offer: OfferView; onOpen: () => void }) {
+/**
+ * One service as a card: a panel with its name and price told big (its first
+ * sample faint behind), the first line of what it is, one dark button, and
+ * the rest of the description as what's included, ending with its samples.
+ */
+export function ServiceTile({ offer, action, onOpen }: { offer: OfferView; action: string; onOpen: () => void }) {
   const cover = offer.sampleUrls.find(Boolean);
+  const price = offerPriceParts(offer);
+  const { lead, points } = describeOffer(offer.description);
+  const included = [...points.slice(0, 4), samplesLabel(offer.sampleUrls.length)];
+
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className="group @container relative grid aspect-[5/2] w-full place-items-center overflow-hidden rounded-3xl bg-gradient-to-br from-gray-700 to-gray-900 text-center text-white shadow-theme-md transition active:scale-[0.99] sm:aspect-video"
-    >
-      {cover ? (
-        // A short-lived signed link to the private bucket: a plain img.
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={cover} alt="" className="absolute inset-0 size-full scale-105 object-cover blur-[2px] transition duration-500 group-hover:scale-110" />
-      ) : null}
-      <span className="absolute inset-0 bg-black/45 transition group-hover:bg-black/35" />
-      <span className="relative space-y-1 px-4">
-        <span className="line-clamp-2 block text-[clamp(1rem,7cqi,1.5rem)] leading-tight font-medium tracking-tight drop-shadow-sm">{offer.name}</span>
-        <span className="block text-[clamp(0.6875rem,4cqi,0.8125rem)] text-white/80 tabular-nums">{offerPrice(offer)}</span>
-        <span className="block text-[clamp(0.625rem,3.5cqi,0.75rem)] text-white/65">{samplesLabel(offer.sampleUrls.length)}</span>
-      </span>
-    </button>
+    <article className="flex h-full flex-col rounded-[28px] bg-surface shadow-theme-md ring-1 ring-gray-200/70 dark:ring-white/10">
+      <div className="space-y-4 rounded-[28px] bg-surface p-3 pb-4 shadow-theme-md ring-1 ring-gray-200/70 dark:ring-white/10">
+        <div className="relative flex min-h-36 flex-col justify-between overflow-hidden rounded-[22px] bg-gradient-to-br from-gray-100 to-brand-50 p-4 dark:from-white/5 dark:to-brand-500/10">
+          {cover ? (
+            // A short-lived signed link to the private bucket: a plain img, faint behind the price.
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={cover} alt="" className="absolute inset-0 size-full object-cover opacity-20 dark:opacity-25" />
+          ) : null}
+          <span className="relative max-w-full self-start truncate rounded-full bg-surface px-3.5 py-1.5 text-xs font-medium shadow-theme-xs">{offer.name}</span>
+          <p className="relative mt-6 flex items-baseline gap-1 tracking-tight">
+            {price ? (
+              <>
+                <span className="text-sm font-medium text-muted">UGX</span>
+                <span className="text-4xl font-semibold tabular-nums">{price.amount}</span>
+                <span className="text-base font-medium">{price.per}</span>
+              </>
+            ) : (
+              <span className="text-3xl font-semibold">On request</span>
+            )}
+          </p>
+        </div>
+        {lead ? <p className="line-clamp-2 px-2 text-sm font-medium">{lead}</p> : null}
+        <button
+          type="button"
+          onClick={onOpen}
+          className="flex h-12 w-full items-center justify-center rounded-full bg-gray-900 text-sm font-medium text-white shadow-theme-md transition hover:bg-gray-800 active:scale-[0.99] dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100"
+        >
+          {action}
+        </button>
+      </div>
+      <ul className="space-y-2.5 px-5 pt-5 pb-6 text-sm">
+        {included.map((point, i) => (
+          <li key={i} className="flex items-start gap-3">
+            <svg viewBox="0 0 24 24" className="mt-0.5 size-4 shrink-0 text-muted" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="m5 12 5 5 9-10" />
+            </svg>
+            <span className={i === included.length - 1 ? "text-muted" : ""}>{point}</span>
+          </li>
+        ))}
+      </ul>
+    </article>
   );
 }
 
-/** As many tiles a row as fit at 14rem or more each: one on a phone, three or four on a desktop. */
-export const SERVICE_GRID = "grid grid-cols-[repeat(auto-fill,minmax(14rem,1fr))] gap-4";
+/** As many cards a row as fit at 16rem or more each: one on a phone, three or four on a desktop. */
+export const SERVICE_GRID = "grid grid-cols-[repeat(auto-fill,minmax(16rem,1fr))] gap-5";
 
 /**
  * A vendor's services to look through: the tiles, each opening its details
@@ -53,7 +85,7 @@ export function ServiceTiles({ offers }: { offers: OfferView[] }) {
       <ul className={SERVICE_GRID}>
         {offers.map((o) => (
           <li key={o.id}>
-            <ServiceTile offer={o} onOpen={() => setOpen(o.id)} />
+            <ServiceTile offer={o} action="See the work" onOpen={() => setOpen(o.id)} />
           </li>
         ))}
       </ul>

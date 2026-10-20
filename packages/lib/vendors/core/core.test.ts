@@ -3,7 +3,7 @@ import { test } from "node:test";
 
 import { parseInput } from "@repo/lib/kernel/core";
 
-import { autoReleaseAt, cardLine, jobFee, jobRequestSchema, overdueStep, offerPrice, offerSchema, offerTotal, socialHandle, vendorJoinSchema, vendorTake } from "./index";
+import { autoReleaseAt, cardLine, describeOffer, jobFee, jobRequestSchema, overdueStep, offerPrice, offerPriceParts, offerSchema, offerTotal, socialHandle, vendorJoinSchema, vendorTake } from "./index";
 
 test("a social handle however it's typed", () => {
   assert.equal(socialHandle("instagram", "@kato.films"), "kato.films");
@@ -86,4 +86,15 @@ test("the hire card's line: theirs, else their lowest price, else new on Aming",
   assert.equal(cardLine("Taking December weddings", offers), "Taking December weddings");
   assert.equal(cardLine(null, offers), "From UGX 50,000 per item");
   assert.equal(cardLine(null, [{ price: null, unit: null }]), "New on Aming");
+});
+
+test("a service card: its price told big, its first line above what's included", () => {
+  assert.deepEqual(offerPriceParts({ price: 3_900_000, unit: "project" }), { amount: "3.9M", per: "/project" });
+  assert.deepEqual(offerPriceParts({ price: 50_000, unit: "item" }), { amount: "50K", per: "/item" });
+  assert.equal(offerPriceParts({ price: null, unit: null }), null);
+  assert.deepEqual(describeOffer("Wedding edits in our warm look\n- Colour & skin retouch\n\n• Delivered in 5 days"), {
+    lead: "Wedding edits in our warm look",
+    points: ["Colour & skin retouch", "Delivered in 5 days"],
+  });
+  assert.deepEqual(describeOffer(null), { lead: null, points: [] });
 });

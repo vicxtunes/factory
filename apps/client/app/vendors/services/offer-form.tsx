@@ -50,8 +50,8 @@ export function OfferForm({ offer, suggestions, onSaved }: { offer: VendorOffer 
         <textarea
           value={description}
           onChange={(e) => setDescription(e.target.value.slice(0, DESCRIPTION_MAX))}
-          rows={3}
-          placeholder="What's included, how long it takes, what you need from the studio."
+          rows={5}
+          placeholder={"A short line about it, then one thing included per line:\nColour & skin retouch\nDelivered in 5 days\nTwo rounds of changes"}
           className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
         />
         <span className="mt-1 block text-right text-xs text-muted tabular-nums">

@@ -47,6 +47,19 @@ export const rateUnit = (id: RateUnit) => RATE_UNITS.find((u) => u.id === id)!;
 export const offerPrice = (offer: Pick<VendorOffer, "price" | "unit">) =>
   offer.price === null || offer.unit === null ? "Price on request" : `UGX ${offer.price.toLocaleString("en-US")} ${rateUnit(offer.unit).label}`;
 
+/** A price told big on a card: "3.9M" and "/project" (UGX said beside it); null on request. */
+export function offerPriceParts(offer: Pick<VendorOffer, "price" | "unit">): { amount: string; per: string } | null {
+  if (offer.price === null || offer.unit === null) return null;
+  const amount = new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 }).format(offer.price);
+  return { amount, per: `/${offer.unit}` };
+}
+
+/** A description as a card shows it: its first line under the price, the rest as a list of what's included. */
+export function describeOffer(description: string | null): { lead: string | null; points: string[] } {
+  const lines = (description ?? "").split("\n").map((l) => l.replace(/^[\s•\-–*✓]+/, "").trim()).filter(Boolean);
+  return { lead: lines[0] ?? null, points: lines.slice(1) };
+}
+
 /** The line under a vendor's hire card: their own, else their lowest price ("From UGX 50,000 per item"). */
 export function cardLine(statusLine: string | null, offers: Pick<VendorOffer, "price" | "unit">[]): string {
   if (statusLine) return statusLine;
