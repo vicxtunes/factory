@@ -3,7 +3,7 @@ import { test } from "node:test";
 
 import { parseInput } from "@repo/lib/kernel/core";
 
-import { autoReleaseAt, jobFee, jobRequestSchema, overdueStep, offerPrice, offerSchema, offerTotal, socialHandle, vendorJoinSchema, vendorTake } from "./index";
+import { autoReleaseAt, cardLine, jobFee, jobRequestSchema, overdueStep, offerPrice, offerSchema, offerTotal, socialHandle, vendorJoinSchema, vendorTake } from "./index";
 
 test("a social handle however it's typed", () => {
   assert.equal(socialHandle("instagram", "@kato.films"), "kato.films");
@@ -75,4 +75,15 @@ test("a service: named, a few lines or none, and a whole-shilling price per some
   assert.equal(offerPrice({ price: null, unit: null }), "Price on request");
   assert.equal(offerTotal(priced, 300), 1_500_000);
   assert.equal(offerTotal({ ...priced, unit: "project" }, 300), 5000, "a project's price counts once");
+});
+
+test("the hire card's line: theirs, else their lowest price, else new on Aming", () => {
+  const offers = [
+    { price: 500_000, unit: "project" as const },
+    { price: null, unit: null },
+    { price: 50_000, unit: "item" as const },
+  ];
+  assert.equal(cardLine("Taking December weddings", offers), "Taking December weddings");
+  assert.equal(cardLine(null, offers), "From UGX 50,000 per item");
+  assert.equal(cardLine(null, [{ price: null, unit: null }]), "New on Aming");
 });

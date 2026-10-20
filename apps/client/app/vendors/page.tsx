@@ -1,10 +1,12 @@
 import { after } from "next/server";
 
 import { HomeGreeting, HomeHero, HomeSection } from "@repo/ui/home/HomeBits";
-import { isOpenJob, VENDOR_FEE_PERCENT, vendorCategory, type JobView, type Vendor } from "@repo/lib/vendors/core";
+import { HireCard } from "@repo/ui/vendors/HireCard";
+import { cardLine, isOpenJob, VENDOR_FEE_PERCENT, vendorCategory, type JobView, type Vendor } from "@repo/lib/vendors/core";
 
 import { vendorJobs, vendors } from "@repo/lib/vendors/server";
 
+import { Availability } from "./availability";
 import { VendorFrame } from "./frame";
 import { JobList } from "./job-list";
 import { requireVendor } from "./vendor";
@@ -62,6 +64,23 @@ function MyVendorHome({ owner, avatarUrl, vendor, jobs, balance }: { owner: stri
             </div>
           ))}
         </section>
+
+        <HomeSection title="Your card, as studios see it">
+          <div className="grid gap-5 sm:grid-cols-2 sm:items-start">
+            <HireCard
+              role={label}
+              place={vendor.location}
+              name={vendor.name}
+              photoUrl={avatarUrl}
+              available={vendor.available}
+              line={cardLine(vendor.statusLine, vendor.offers)}
+              hire="#"
+              work="#"
+              preview
+            />
+            <Availability available={vendor.available} statusLine={vendor.statusLine} />
+          </div>
+        </HomeSection>
 
         <div id="jobs" className="scroll-mt-4 space-y-8">
           <HomeSection title="Job requests" href="/vendors/jobs">

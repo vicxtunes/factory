@@ -22,6 +22,8 @@ interface Row {
   bio: string | null;
   location: string | null;
   offers: OfferRow[];
+  available: boolean;
+  status_line: string | null;
   photo_key: string | null;
   cover_key: string | null;
   status: Vendor["status"];
@@ -39,7 +41,7 @@ interface OfferRow {
 }
 
 const OFFER_COLUMNS = "id, name, description, price, unit, created_at, samples:vendor_service_samples (id, key, created_at)";
-const COLUMNS = `id, client_id, name, kind, category, skills, socials, bio, location, photo_key, cover_key, status, created_at, offers:vendor_services (${OFFER_COLUMNS})`;
+const COLUMNS = `id, client_id, name, kind, category, skills, socials, bio, location, available, status_line, photo_key, cover_key, status, created_at, offers:vendor_services (${OFFER_COLUMNS})`;
 
 const oldestFirst = (a: { created_at: string }, b: { created_at: string }) => a.created_at.localeCompare(b.created_at);
 
@@ -66,6 +68,8 @@ const toVendor = (r: Row): Vendor => ({
   bio: r.bio,
   location: r.location,
   offers: [...r.offers].sort(oldestFirst).map(toOffer),
+  available: r.available,
+  statusLine: r.status_line,
   photoKey: r.photo_key,
   coverKey: r.cover_key,
   status: r.status,
@@ -180,5 +184,10 @@ export const supabaseVendorStore: VendorStore = {
     const { data, error } = await samples().delete().eq("vendor_id", vendorId).eq("id", id).select("key").returns<{ key: string }[]>();
     if (error) fail("delete the sample", error);
     return data[0]?.key ?? null;
+  },
+
+  async setAvailability(id, available, statusLine) {
+    const { error } = await vendors().update({ available, status_line: statusLine }).eq("id", id);
+    if (error) fail("save the availability", error);
   },
 };

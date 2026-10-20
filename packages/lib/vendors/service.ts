@@ -140,6 +140,11 @@ export class VendorService {
     if (offer.samples.length >= SAMPLES_PER_SERVICE) throw new VendorError(`A service shows up to ${SAMPLES_PER_SERVICE} samples. Remove one to add another.`);
   }
 
+  /** Taking work or busy, and the line under it on their hire card. */
+  async setAvailability(clientId: string, available: boolean, statusLine: string | null): Promise<void> {
+    await this.store.setAvailability((await this.own(clientId)).id, available, statusLine);
+  }
+
   /** The vendor's services, with links to show their samples. */
   async showOffers(vendor: Vendor): Promise<(VendorOffer & { sampleUrls: (string | null)[] })[]> {
     return Promise.all(vendor.offers.map(async (o) => ({ ...o, sampleUrls: await Promise.all(o.samples.map((s) => this.pictureUrl(s.key))) })));

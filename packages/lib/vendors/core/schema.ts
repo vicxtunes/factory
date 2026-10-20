@@ -79,6 +79,12 @@ export const offerSchema = z
 
 export const offerIdSchema = z.uuid("That service doesn't exist.");
 
+/** On their hire card: taking work or busy, and a short line of their own. */
+export const availabilitySchema = z.object({
+  available: z.boolean(),
+  statusLine: optionalText(60, "Keep it under 60 characters."),
+});
+
 export const vendorPictureSchema = z.enum(["photo", "cover"]);
 
 /** An upload's key, as the server handed it out. */

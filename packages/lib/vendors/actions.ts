@@ -14,6 +14,7 @@ import type { TenantScope } from "@repo/lib/tenancy/types";
 import { z } from "zod";
 
 import {
+  availabilitySchema,
   disputeReasonSchema,
   jobFolderSchema,
   jobIdSchema,
@@ -111,6 +112,15 @@ export async function confirmVendorSample(offerId: unknown, key: unknown): Promi
 export async function deleteVendorSample(id: unknown): Promise<Result> {
   return runAction("vendors", async () => {
     await vendors.removeSample(await vendorCaller(), parseInput(z.uuid("That sample is gone already."), id));
+    revalidatePath("/vendors", "layout");
+  });
+}
+
+/** The signed-in vendor says whether they're taking work, with a short line under it on their hire card. */
+export async function setVendorAvailability(input: unknown): Promise<Result> {
+  return runAction("vendors", async () => {
+    const { available, statusLine } = parseInput(availabilitySchema, input);
+    await vendors.setAvailability(await vendorCaller(), available, statusLine);
     revalidatePath("/vendors", "layout");
   });
 }

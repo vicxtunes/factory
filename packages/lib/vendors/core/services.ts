@@ -47,5 +47,12 @@ export const rateUnit = (id: RateUnit) => RATE_UNITS.find((u) => u.id === id)!;
 export const offerPrice = (offer: Pick<VendorOffer, "price" | "unit">) =>
   offer.price === null || offer.unit === null ? "Price on request" : `UGX ${offer.price.toLocaleString("en-US")} ${rateUnit(offer.unit).label}`;
 
+/** The line under a vendor's hire card: their own, else their lowest price ("From UGX 50,000 per item"). */
+export function cardLine(statusLine: string | null, offers: Pick<VendorOffer, "price" | "unit">[]): string {
+  if (statusLine) return statusLine;
+  const lowest = offers.filter((o) => o.price !== null).sort((a, b) => a.price! - b.price!)[0];
+  return lowest ? `From ${offerPrice(lowest)}` : "New on Aming";
+}
+
 /** A job of `quantity` at a priced service: what it costs ("project" counts once). */
 export const offerTotal = (offer: { price: number; unit: RateUnit }, quantity: number) => offer.price * (offer.unit === "project" ? 1 : quantity);

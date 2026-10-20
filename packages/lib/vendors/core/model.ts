@@ -32,6 +32,10 @@ export interface Vendor {
   location: string | null;
   /** Their services, with prices and samples, the oldest first. */
   offers: VendorOffer[];
+  /** Taking work now (their hire card says "Available for work"), or busy. */
+  available: boolean;
+  /** A short line of their own on their hire card ("Taking December weddings"). */
+  statusLine: string | null;
   /** Their profile photo and cover, in the photo bucket. */
   photoKey: string | null;
   coverKey: string | null;
