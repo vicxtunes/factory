@@ -15,6 +15,7 @@ import {
   findVendors,
   fundVendorJob,
   requestVendor,
+  setVendorJobFolder,
   type VendorCard,
 } from "@repo/lib/vendors/actions";
 import { autoReleaseAt, isOpenJob, JOB_STATUS_LABELS, VENDOR_CATEGORIES, vendorCategory, vendorTake, type JobStatus } from "@repo/lib/vendors/core";
@@ -72,6 +73,8 @@ type Sheet = { kind: "fund" | "approve" | "dispute"; job: ProjectJob } | null;
 export function ProjectVendors({ projectId, jobs, folders, canPay }: { projectId: string; jobs: ProjectJob[]; folders: ProjectFolder[]; canPay: boolean }) {
   const router = useRouter();
   const [adding, setAdding] = useState(false);
+  // A job with no folder (made before jobs had them, or its folder was deleted): the studio gives it one.
+  const [givingFolder, setGivingFolder] = useState<ProjectJob | null>(null);
   const [sheet, setSheet] = useState<Sheet>(null);
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -118,6 +121,11 @@ export function ProjectVendors({ projectId, jobs, folders, canPay }: { projectId
                         Released to them {new Date(release).toLocaleString("en-GB", { weekday: "short", hour: "2-digit", minute: "2-digit" })} if you don&apos;t answer.
                       </p>
                     ) : null}
+                    {!j.folderId && isOpenJob(j.status) ? (
+                      <p className="mt-2 rounded-lg bg-warning-50 px-3 py-2 text-xs text-warning-700 dark:bg-warning-500/15 dark:text-warning-400">
+                        No folder: {j.vendorName} can&apos;t reach any files for this job. Give them one.
+                      </p>
+                    ) : null}
                     {j.status === "disputed" && j.disputeReason ? <p className="mt-1 text-xs text-error-600 dark:text-error-400">Dispute: &ldquo;{j.disputeReason}&rdquo; Aming is looking into it.</p> : null}
                   </div>
                 </div>
@@ -125,6 +133,11 @@ export function ProjectVendors({ projectId, jobs, folders, canPay }: { projectId
                   {j.status === "samples_sent" && canPay ? <Button onClick={() => setSheet({ kind: "fund", job: j })}>Approve samples and pay in</Button> : null}
                   {j.status === "awaiting_funds" && canPay ? <Button onClick={() => setSheet({ kind: "fund", job: j })}>Pay in to start</Button> : null}
                   {j.status === "delivered" && canPay ? <Button onClick={() => setSheet({ kind: "approve", job: j })}>Approve and release</Button> : null}
+                  {!j.folderId && isOpenJob(j.status) ? (
+                    <Button variant="secondary" onClick={() => setGivingFolder(j)}>
+                      Give a folder
+                    </Button>
+                  ) : null}
                   {j.folderId && isOpenJob(j.status) ? (
                     <Link href={`/studio/files?folder=${j.folderId}`} className={quiet}>
                       {j.status === "samples_sent" ? "See the samples" : "Open their folder"}
@@ -156,6 +169,8 @@ export function ProjectVendors({ projectId, jobs, folders, canPay }: { projectId
       </Button>
 
       {adding ? <AddVendor projectId={projectId} folders={folders} openJobs={jobs.filter((j) => isOpenJob(j.status)).map((j) => j.vendorId)} onClose={() => setAdding(false)} /> : null}
+
+      {givingFolder ? <GiveFolder job={givingFolder} folders={folders} onClose={() => setGivingFolder(null)} /> : null}
 
       {sheet ? (
         <BottomSheet
@@ -361,6 +376,54 @@ function AddVendor({ projectId, folders, openJobs, onClose }: { projectId: strin
           )}
         </div>
       )}
+    </BottomSheet>
+  );
+}
+
+/** Gives a job the folder its vendor works in: one of the project's, or a new one. */
+function GiveFolder({ job, folders, onClose }: { job: ProjectJob; folders: ProjectFolder[]; onClose: () => void }) {
+  const router = useRouter();
+  const [folder, setFolder] = useState("new");
+  const [folderName, setFolderName] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+
+  return (
+    <BottomSheet open onClose={onClose} title={`A folder for ${job.vendorName}`}>
+      <form
+        className="space-y-4"
+        onSubmit={(e) => {
+          e.preventDefault();
+          setError(null);
+          start(async () => {
+            const res = await setVendorJobFolder(job.id, folder === "new" ? { kind: "new", name: folderName.trim() || `For ${job.vendorName}` } : { kind: "existing", folderId: folder });
+            if (!res.ok) return setError(res.error);
+            onClose();
+            router.refresh();
+          });
+        }}
+      >
+        <Field label="Their folder" hint="The only folder of this project they'll see.">
+          <select value={folder} onChange={(e) => setFolder(e.target.value)} className="h-11 w-full rounded-lg border border-border bg-surface px-3 text-sm">
+            <option value="new">A new folder for them</option>
+            {folders.map((f) => (
+              <option key={f.id} value={f.id}>
+                {f.label}
+              </option>
+            ))}
+          </select>
+        </Field>
+        {folder === "new" ? <TextInput value={folderName} onChange={(e) => setFolderName(e.target.value)} placeholder={`For ${job.vendorName}`} maxLength={120} aria-label="New folder's name" /> : null}
+        {error ? <p className="text-sm text-error-600 dark:text-error-400">{error}</p> : null}
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="secondary" onClick={onClose} disabled={pending}>
+            Not now
+          </Button>
+          <Button type="submit" loading={pending}>
+            Give the folder
+          </Button>
+        </div>
+      </form>
     </BottomSheet>
   );
 }

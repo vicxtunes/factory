@@ -10,10 +10,12 @@ import { parseInput, type Result } from "@repo/lib/kernel/core";
 import { runAction } from "@repo/lib/kernel/server/action";
 
 import { studioOfCaller } from "@repo/lib/studios/server";
+import type { TenantScope } from "@repo/lib/tenancy/types";
 import { z } from "zod";
 
 import {
   disputeReasonSchema,
+  jobFolderSchema,
   jobIdSchema,
   jobRequestSchema,
   pictureKeySchema,
@@ -22,6 +24,7 @@ import {
   vendorPictureSchema,
   vendorProfileSchema,
   vendorSearchSchema,
+  type JobFolder,
   type Vendor,
 } from "./core";
 import { VendorError } from "./ports";
@@ -128,19 +131,30 @@ export async function requestVendor(input: unknown): Promise<Result> {
   return runAction("vendors", async () => {
     const { studio, scope, session } = await studioOfCaller("projects");
     const { request, folder } = parseInput(jobRequestSchema, input);
-    const projectFolder = await files.projectFolder(scope, request.projectId);
-    if (!projectFolder) throw new VendorError("That project has no folder.");
-    let folderId: string;
-    if (folder.kind === "new") {
-      folderId = await files.createFolder(scope, { parentId: projectFolder, name: folder.name });
-    } else {
-      const within = await files.foldersWithin(scope, projectFolder);
-      if (!within.some((f) => f.id === folder.folderId)) throw new VendorError("Choose a folder inside this project's.");
-      folderId = folder.folderId;
-    }
+    const folderId = await folderInProject(scope, request.projectId, folder);
     await vendorJobs.request({ tenantId: scope.tenantId, name: studio.name, actorName: session.name }, request, folderId);
     revalidatePath(`/studio/projects/${request.projectId}`);
   });
+}
+
+/** The caller's studio gives an open job the folder its vendor works in (one made before jobs had folders, or whose folder was deleted). */
+export async function setVendorJobFolder(id: unknown, folder: unknown): Promise<Result> {
+  return runAction("vendors", async () => {
+    const { scope } = await studioOfCaller("projects");
+    const chosen = parseInput(jobFolderSchema, folder);
+    await vendorJobs.setFolder(scope.tenantId, parseInput(jobIdSchema, id), (projectId) => folderInProject(scope, projectId, chosen));
+    revalidatePath("/studio/projects", "layout");
+  });
+}
+
+/** The folder chosen inside the project's: an existing one of it, or a new one made now. */
+async function folderInProject(scope: TenantScope, projectId: string, folder: JobFolder): Promise<string> {
+  const projectFolder = await files.projectFolder(scope, projectId);
+  if (!projectFolder) throw new VendorError("That project has no folder.");
+  if (folder.kind === "new") return files.createFolder(scope, { parentId: projectFolder, name: folder.name });
+  const within = await files.foldersWithin(scope, projectFolder);
+  if (!within.some((f) => f.id === folder.folderId)) throw new VendorError("Choose a folder inside this project's.");
+  return folder.folderId;
 }
 
 /** The caller's studio calls off a job before any money is held. */

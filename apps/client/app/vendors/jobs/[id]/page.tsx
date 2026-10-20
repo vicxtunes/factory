@@ -78,9 +78,16 @@ export default async function VendorJobPage({ params, searchParams }: { params: 
             <p className="text-sm text-muted">
               {job.status === "samples" ? "Upload your samples here, then send them." : "Download what the studio shared, and upload your work here."}
             </p>
-            <Loading skeleton={<RowsSkeleton />}>
-              <JobFiles jobId={job.id} folderId={folderId} />
-            </Loading>
+            {job.folderId ? (
+              <Loading skeleton={<RowsSkeleton />}>
+                <JobFiles jobId={job.id} folderId={folderId} />
+              </Loading>
+            ) : (
+              // Made before jobs had folders, or its folder was deleted: the studio gives it one on the project.
+              <p className="rounded-2xl border border-dashed border-border p-5 text-center text-sm text-muted">
+                {job.studio.name} hasn&apos;t given this job a folder yet. You&apos;ll be told when they do.
+              </p>
+            )}
           </section>
         ) : null}
       </div>

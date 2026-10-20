@@ -70,6 +70,12 @@ function memoryJobs(vendorsById: (id: string) => Promise<{ name: string; categor
       set(id, { status: "refunded" });
       money.push(`refund ${id} by ${actor.type}`);
     },
+    setFolder: async (tenantId, id, folderId) => {
+      const job = rows.get(id);
+      if (!job || job.tenantId !== tenantId || !["requested", "samples", "samples_sent", "awaiting_funds", "in_progress", "delivered", "disputed"].includes(job.status)) return false;
+      set(id, { folderId });
+      return true;
+    },
     markWarned: async (id) => void set(id, { overdueAlertedAt: "2026-11-03T10:00:00Z" }),
   };
   return { store, rows, money };
@@ -199,4 +205,19 @@ test("only the job's own vendor answers it, and only its own studio cancels or p
   await assert.rejects(service.request(studio, { ...request, vendorId: "v-nobody" }, "f"), /isn't taking work/);
   await service.request(studio, request, "f-kato");
   await assert.rejects(service.request(studio, request, "f-kato"), /already has a job open/);
+});
+
+test("a job without a folder (made before jobs had them) is given one while it's open, and the vendor is told", async () => {
+  const { service, rows, told, studio, request } = await setUp();
+  await service.request(studio, request, "f-kato");
+  const [id] = [...rows.keys()];
+  rows.set(id!, { ...rows.get(id!)!, folderId: null });
+
+  await assert.rejects(service.setFolder("t-other", id!, async () => "f-new"), /doesn't exist/, "another studio's job");
+  await service.setFolder("t-lens", id!, async (projectId) => `f-in-${projectId}`);
+  assert.equal(rows.get(id!)!.folderId, "f-in-p-wedding");
+  assert.equal(told.at(-1)!.title, "Lens & Light set your folder");
+
+  await service.cancel("t-lens", id!);
+  await assert.rejects(service.setFolder("t-lens", id!, async () => "f-new"), /over/, "a job that's over keeps what it had");
 });
