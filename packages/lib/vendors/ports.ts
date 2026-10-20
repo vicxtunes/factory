@@ -53,6 +53,8 @@ export interface VendorJobStore {
   release(id: string, actor: JobActor): Promise<void>;
   /** The held money back on the studio's Business card (vendor_job_refund()). */
   refund(id: string, actor: JobActor): Promise<void>;
+  /** The folder the vendor works in, for an open job of the studio's; false when it isn't open (or not the studio's). */
+  setFolder(tenantId: string, id: string, folderId: string): Promise<boolean>;
   /** Delivered work left unanswered: the warning went out. */
   markWarned(id: string): Promise<void>;
 }
