@@ -102,7 +102,7 @@ export default async function StudioVendorPage({ params }: { params: Promise<{ i
           <ul className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-surface">
             {inHand.map((p) => (
               <li key={p.id}>
-                <Link href={`/studio/projects/${p.id}?hire=${vendor.id}#vendors`} className="flex items-center justify-between gap-3 p-4 hover:bg-background">
+                <Link href={`/studio/projects/${p.id}?hire=${vendor.id}`} className="flex items-center justify-between gap-3 p-4 hover:bg-background">
                   <span className="min-w-0">
                     <span className="block truncate font-medium">{p.title}</span>
                     <span className="block truncate text-xs text-muted">

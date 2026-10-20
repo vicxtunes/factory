@@ -156,7 +156,7 @@ export function ServiceTiles({ offers, hire }: { offers: OfferView[]; hire?: Hir
                     {hire.projects.map((p) => (
                       <li key={p.id}>
                         <Link
-                          href={`/studio/projects/${p.id}?hire=${hire.vendorId}&service=${offer.id}#vendors`}
+                          href={`/studio/projects/${p.id}?hire=${hire.vendorId}&service=${offer.id}`}
                           className="flex items-center justify-between gap-3 p-3.5 hover:bg-background"
                         >
                           <span className="min-w-0">

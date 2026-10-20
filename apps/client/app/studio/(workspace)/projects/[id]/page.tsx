@@ -38,12 +38,16 @@ import { formatAmount, formatDay } from "@repo/lib/tenancy/format";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 import { buttonClass } from "@repo/ui/Button";
 import { SheetButton } from "@repo/ui/SheetButton";
+import type { TabItem } from "@repo/ui/Tabs";
+import { UrlTabs } from "@repo/ui/UrlTabs";
 
 import { EditProjectSheet } from "../sheets";
 
 export const metadata = { title: "Project · My Business" };
 
-export default async function StudioProjectPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ hire?: string; service?: string; edit?: string }> }) {
+type ProjectTab = "overview" | "tasks" | "vendors" | "files" | "orders" | "history";
+
+export default async function StudioProjectPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ hire?: string; service?: string; edit?: string; tab?: string }> }) {
   const { scope, studio, access } = await requireStudio("projects");
   // Looked up inside the caller's studio only: another studio's id is "not found".
   const id = projectIdSchema.safeParse((await params).id);
@@ -51,7 +55,18 @@ export default async function StudioProjectPage({ params, searchParams }: { para
   if (!view) notFound();
   const p = view.project;
   // From a vendor's page ("Hire on a project", or "Hire this service"): the hire form opens with them, and that service, chosen.
-  const { hire = null, service = null, edit } = await searchParams;
+  const { hire = null, service = null, edit, tab: asked } = await searchParams;
+  // Its parts as tabs, only the open one loaded; Aming orders are the owner's alone (placed under their own account).
+  const tabs: TabItem<ProjectTab>[] = [
+    { key: "overview", label: "Overview" },
+    { key: "tasks", label: "Tasks" },
+    { key: "vendors", label: "Vendors" },
+    { key: "files", label: "Files & photos" },
+    ...(access.owner ? [{ key: "orders" as const, label: "Aming orders" }] : []),
+    { key: "history", label: "History" },
+  ];
+  // Coming to hire a vendor: their tab.
+  const tab = hire ? "vendors" : (tabs.find((t) => t.key === asked)?.key ?? "overview");
 
   return (
     <>
@@ -84,55 +99,55 @@ export default async function StudioProjectPage({ params, searchParams }: { para
         />
       </div>
 
-      <Suspense fallback={<Skeleton className="h-24 w-full rounded-2xl" />}>
-        <BookingAndMoney scope={scope} project={p} money={canUse(access, "money")} />
-      </Suspense>
+      <UrlTabs tabs={tabs} value={tab} label="Project" />
 
-      <section className="space-y-3">
-        <SectionLabel>Tasks</SectionLabel>
+      {tab === "overview" ? (
+        <>
+          <Suspense fallback={<Skeleton className="h-24 w-full rounded-2xl" />}>
+            <BookingAndMoney scope={scope} project={p} money={canUse(access, "money")} />
+          </Suspense>
+          {p.notes ? (
+            <section>
+              <SectionLabel>Notes</SectionLabel>
+              <p className="whitespace-pre-line rounded-2xl border border-border bg-surface p-4 text-sm shadow-theme-xs">{p.notes}</p>
+            </section>
+          ) : null}
+        </>
+      ) : null}
+      {tab === "tasks" ? (
         <Loading skeleton={<RowsSkeleton rows={3} />}>
           <Tasks scope={scope} project={p} />
         </Loading>
-      </section>
-      <section id="vendors" className="scroll-mt-20 space-y-3">
-        <SectionLabel>Vendors</SectionLabel>
+      ) : null}
+      {tab === "vendors" ? (
         <Loading skeleton={<RowsSkeleton rows={2} />}>
           <Vendors scope={scope} project={p} canPay={canUse(access, "money")} hire={hire} service={service} />
         </Loading>
-      </section>
-      {canUse(access, "files") ? (
-        <section className="space-y-3">
-          <SectionLabel>Files</SectionLabel>
-          <Suspense fallback={<Skeleton className="h-20 w-full rounded-2xl" />}>
-            <ProjectFiles scope={scope} project={p} />
-          </Suspense>
-        </section>
       ) : null}
-      <section className="space-y-3">
-        <SectionLabel>Client photos</SectionLabel>
-        <Loading skeleton={<PanelStackSkeleton count={1} />}>
-          <Photos scope={scope} project={p} />
+      {tab === "files" ? (
+        <>
+          {canUse(access, "files") ? (
+            <section className="space-y-3">
+              <SectionLabel>Files</SectionLabel>
+              <Suspense fallback={<Skeleton className="h-20 w-full rounded-2xl" />}>
+                <ProjectFiles scope={scope} project={p} />
+              </Suspense>
+            </section>
+          ) : null}
+          <section className="space-y-3">
+            <SectionLabel>Client photos</SectionLabel>
+            <Loading skeleton={<PanelStackSkeleton count={1} />}>
+              <Photos scope={scope} project={p} />
+            </Loading>
+          </section>
+        </>
+      ) : null}
+      {tab === "orders" ? (
+        <Loading skeleton={<RowsSkeleton rows={2} />}>
+          <AmingOrders scope={scope} project={p} ownerClientId={studio.ownerClientId} />
         </Loading>
-      </section>
-      {/* Placed under the owner's own Aming account: theirs alone. */}
-      {access.owner ? (
-        <section className="space-y-3">
-          <SectionLabel>Aming orders</SectionLabel>
-          <Loading skeleton={<RowsSkeleton rows={2} />}>
-            <AmingOrders scope={scope} project={p} ownerClientId={studio.ownerClientId} />
-          </Loading>
-        </section>
       ) : null}
-      {p.notes ? (
-        <section>
-          <SectionLabel>Notes</SectionLabel>
-          <p className="whitespace-pre-line rounded-2xl border border-border bg-surface p-4 text-sm shadow-theme-xs">{p.notes}</p>
-        </section>
-      ) : null}
-      <section>
-        <SectionLabel>History</SectionLabel>
-        <ProjectHistory events={view.events} scope={scope} />
-      </section>
+      {tab === "history" ? <ProjectHistory events={view.events} scope={scope} /> : null}
       {edit !== undefined ? <EditProjectSheet scope={scope} project={p} /> : null}
     </>
   );

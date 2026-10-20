@@ -195,7 +195,7 @@ export function ProjectVendors({
           onClose={() => {
             setAdding(false);
             // Not opened again on the next refresh.
-            if (hire) router.replace(`/studio/projects/${projectId}`, { scroll: false });
+            if (hire) router.replace(`/studio/projects/${projectId}?tab=vendors`, { scroll: false });
           }}
         />
       ) : null}

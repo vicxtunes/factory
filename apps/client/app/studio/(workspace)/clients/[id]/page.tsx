@@ -10,7 +10,6 @@ import { QuotationsList } from "@repo/ui/billing/QuotationsList";
 import { CustomerArchiveButton, CustomerForm } from "@repo/ui/customers/CustomerForm";
 import { DeleteButton } from "@repo/ui/DeleteButton";
 import { deleteCustomer } from "@repo/lib/customers/actions";
-import { SectionLabel } from "@repo/ui/SectionLabel";
 import { Skeleton } from "@repo/ui/Skeleton";
 import { RowsSkeleton } from "@repo/ui/skeletons/blocks";
 import { Loading } from "@repo/ui/skeletons/Loading";
@@ -25,92 +24,118 @@ import { requireStudio } from "@repo/lib/studios/server";
 import { formatAmount, formatDay } from "@repo/lib/tenancy/format";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 import { buttonClass } from "@repo/ui/Button";
+import type { TabItem } from "@repo/ui/Tabs";
+import { UrlSheet } from "@repo/ui/UrlSheet";
+import { UrlTabs } from "@repo/ui/UrlTabs";
 
 export const metadata = { title: "Client · My Business" };
 
-export default async function StudioClientPage({ params }: { params: Promise<{ id: string }> }) {
+type ClientTab = "overview" | "projects" | "bookings" | "quotations" | "invoices";
+
+// A client: their name and what they owe, Edit in the sheet (?edit), then
+// their parts as tabs, only the open one loaded.
+export default async function StudioClientPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string; edit?: string }> }) {
   const { scope } = await requireStudio("clients");
   // Looked up inside the caller's studio only: another studio's id is "not found".
   const id = customerIdSchema.safeParse((await params).id);
   const customer = id.success ? await customers.get(scope, id.data) : null;
   if (!customer) notFound();
+  const { tab: asked, edit } = await searchParams;
   // Read once, for what they owe and the list.
   const billed = invoices.list(scope, customer.id);
+  const tabs: TabItem<ClientTab>[] = [
+    { key: "overview", label: "Overview" },
+    { key: "projects", label: "Projects" },
+    { key: "bookings", label: "Bookings" },
+    { key: "quotations", label: "Quotations" },
+    { key: "invoices", label: "Invoices" },
+  ];
+  const tab = tabs.find((t) => t.key === asked)?.key ?? "overview";
+  const creates = !customer.archivedAt;
 
   return (
     <>
-      <div>
-        <BackLink href="/studio/clients" className="text-xs font-medium text-brand-600 hover:underline">
-          ← Clients
-        </BackLink>
-        <h2 className="mt-1 text-xl font-semibold">
-          {customer.name}
-          {customer.archivedAt ? <span className="ml-2 align-middle text-xs font-normal text-muted">(archived)</span> : null}
-        </h2>
-        <Suspense fallback={null}>
-          <Owed scope={scope} billed={billed} />
-        </Suspense>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <BackLink href="/studio/clients" className="text-xs font-medium text-brand-600 hover:underline">
+            ← Clients
+          </BackLink>
+          <h2 className="mt-1 text-xl font-semibold">
+            {customer.name}
+            {customer.archivedAt ? <span className="ml-2 align-middle text-xs font-normal text-muted">(archived)</span> : null}
+          </h2>
+          <p className="text-sm text-muted">{[customer.phone, customer.email].filter(Boolean).join(" · ")}</p>
+          <Suspense fallback={null}>
+            <Owed scope={scope} billed={billed} />
+          </Suspense>
+        </div>
+        <Link href={`/studio/clients/${customer.id}?edit`} scroll={false} className={buttonClass("secondary")}>
+          Edit
+        </Link>
       </div>
-      <CustomerForm key={customer.id} customer={customer} basePath="/studio/clients" />
-      <Loading skeleton={<Skeleton className="h-24 w-full rounded-2xl" />}>
-        <Access scope={scope} customer={customer} />
-      </Loading>
-      <section>
-        <SectionLabel>Projects</SectionLabel>
+
+      <UrlTabs tabs={tabs} value={tab} label="Client" />
+
+      {tab === "overview" ? (
+        <>
+          <Loading skeleton={<Skeleton className="h-24 w-full rounded-2xl" />}>
+            <Access scope={scope} customer={customer} />
+          </Loading>
+          <div className="flex flex-wrap items-start gap-3">
+            <CustomerArchiveButton customer={customer} />
+            <DeleteButton
+              label="Delete client"
+              className="min-h-11"
+              confirm={`Delete ${customer.name} with all their bookings, projects, quotations, invoices and orders?`}
+              action={deleteCustomer.bind(null, customer.id)}
+              after="/studio/clients"
+            />
+          </div>
+        </>
+      ) : null}
+      {tab === "projects" ? (
         <Loading skeleton={<RowsSkeleton rows={2} />}>
           <Projects scope={scope} customer={customer} />
         </Loading>
-      </section>
-      <section>
-        <div className="mb-2 flex items-center justify-between gap-2">
-          <SectionLabel>Bookings</SectionLabel>
-          {customer.archivedAt ? null : (
-            <Link href={`/studio/bookings?new&client=${customer.id}`} className={buttonClass("secondary", "sm")}>
-              New booking
-            </Link>
-          )}
-        </div>
-        <Loading skeleton={<RowsSkeleton rows={2} />}>
+      ) : null}
+      {tab === "bookings" ? (
+        <TabList action={creates ? { label: "New booking", href: `/studio/bookings?new&client=${customer.id}` } : null}>
           <Bookings scope={scope} customer={customer} />
-        </Loading>
-      </section>
-      <section>
-        <div className="mb-2 flex items-center justify-between gap-2">
-          <SectionLabel>Quotations</SectionLabel>
-          {customer.archivedAt ? null : (
-            <Link href={`/studio/quotations/new?client=${customer.id}`} className={buttonClass("secondary", "sm")}>
-              New quotation
-            </Link>
-          )}
-        </div>
-        <Loading skeleton={<RowsSkeleton rows={2} />}>
+        </TabList>
+      ) : null}
+      {tab === "quotations" ? (
+        <TabList action={creates ? { label: "New quotation", href: `/studio/quotations/new?client=${customer.id}` } : null}>
           <Quotations scope={scope} customer={customer} />
-        </Loading>
-      </section>
-      <section>
-        <div className="mb-2 flex items-center justify-between gap-2">
-          <SectionLabel>Invoices</SectionLabel>
-          {customer.archivedAt ? null : (
-            <Link href={`/studio/invoices/new?client=${customer.id}`} className={buttonClass("secondary", "sm")}>
-              New invoice
-            </Link>
-          )}
-        </div>
-        <Loading skeleton={<RowsSkeleton rows={2} />}>
+        </TabList>
+      ) : null}
+      {tab === "invoices" ? (
+        <TabList action={creates ? { label: "New invoice", href: `/studio/invoices/new?client=${customer.id}` } : null}>
           <Invoices scope={scope} billed={billed} />
-        </Loading>
-      </section>
-      <div className="flex flex-wrap items-start gap-3">
-        <CustomerArchiveButton customer={customer} />
-        <DeleteButton
-          label="Delete client"
-          className="min-h-11"
-          confirm={`Delete ${customer.name} with all their bookings, projects, quotations, invoices and orders?`}
-          action={deleteCustomer.bind(null, customer.id)}
-          after="/studio/clients"
-        />
-      </div>
+        </TabList>
+      ) : null}
+
+      {edit !== undefined ? (
+        <UrlSheet title="Edit client" closeHref={`/studio/clients/${customer.id}`}>
+          <CustomerForm key={customer.id} customer={customer} basePath="/studio/clients" />
+        </UrlSheet>
+      ) : null}
     </>
+  );
+}
+
+/** A tab's list with its "New …" button above it. */
+function TabList({ action, children }: { action: { label: string; href: string } | null; children: React.ReactNode }) {
+  return (
+    <div className="space-y-3">
+      {action ? (
+        <div className="flex justify-end">
+          <Link href={action.href} className={buttonClass("secondary", "sm")}>
+            {action.label}
+          </Link>
+        </div>
+      ) : null}
+      <Loading skeleton={<RowsSkeleton rows={2} />}>{children}</Loading>
+    </div>
   );
 }
 
