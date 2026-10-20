@@ -63,8 +63,9 @@ export function ServicesBoard({ offers, suggestions, startAdding }: { offers: Of
                 <span className="absolute inset-0 bg-black/45 transition group-hover:bg-black/35" />
                 <span className="relative space-y-1 px-4">
                   <span className="line-clamp-2 block text-[clamp(1rem,7cqi,1.5rem)] leading-tight font-medium tracking-tight drop-shadow-sm">{o.name}</span>
-                  <span className="block text-[clamp(0.6875rem,4cqi,0.8125rem)] text-white/80 tabular-nums">
-                    {offerPrice(o)} · {o.samples.length ? `${o.samples.length} sample${o.samples.length === 1 ? "" : "s"}` : "No samples yet"}
+                  <span className="block text-[clamp(0.6875rem,4cqi,0.8125rem)] text-white/80 tabular-nums">{offerPrice(o)}</span>
+                  <span className="block text-[clamp(0.625rem,3.5cqi,0.75rem)] text-white/65">
+                    {o.samples.length ? `${o.samples.length} sample${o.samples.length === 1 ? "" : "s"}` : "No samples yet"}
                   </span>
                 </span>
               </button>
