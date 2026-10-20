@@ -5,8 +5,9 @@ import { useState, useTransition } from "react";
 
 import { Button } from "@repo/ui/Button";
 import { FormSheet } from "@repo/ui/FormSheet";
+import { SERVICE_GRID, ServiceTile } from "@repo/ui/vendors/ServiceTiles";
 import { deleteVendorOffer } from "@repo/lib/vendors/actions";
-import { offerPrice, type VendorOffer } from "@repo/lib/vendors/core";
+import type { VendorOffer } from "@repo/lib/vendors/core";
 
 import { OfferForm } from "./offer-form";
 import { SampleGrid } from "./sample-grid";
@@ -44,31 +45,10 @@ export function ServicesBoard({ offers, suggestions, startAdding }: { offers: Of
       </div>
 
       {offers.length ? (
-        // As many tiles a row as fit at 14rem or more each (one on a phone, four
-        // on a desktop); each name sized to its own tile's width.
-        <ul className="grid grid-cols-[repeat(auto-fill,minmax(14rem,1fr))] gap-4">
+        <ul className={SERVICE_GRID}>
           {offers.map((o) => (
             <li key={o.id}>
-              {/* A tile: its first sample filling it behind a soft veil, the name over it. */}
-              <button
-                type="button"
-                onClick={() => setOpen(o.id)}
-                className="group @container relative grid aspect-[5/2] w-full place-items-center overflow-hidden rounded-3xl bg-gradient-to-br from-gray-700 to-gray-900 text-center text-white shadow-theme-md transition active:scale-[0.99] sm:aspect-video"
-              >
-                {o.sampleUrls[0] ? (
-                  // A short-lived signed link to the private bucket: a plain img.
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={o.sampleUrls[0]} alt="" className="absolute inset-0 size-full scale-105 object-cover blur-[2px] transition duration-500 group-hover:scale-110" />
-                ) : null}
-                <span className="absolute inset-0 bg-black/45 transition group-hover:bg-black/35" />
-                <span className="relative space-y-1 px-4">
-                  <span className="line-clamp-2 block text-[clamp(1rem,7cqi,1.5rem)] leading-tight font-medium tracking-tight drop-shadow-sm">{o.name}</span>
-                  <span className="block text-[clamp(0.6875rem,4cqi,0.8125rem)] text-white/80 tabular-nums">{offerPrice(o)}</span>
-                  <span className="block text-[clamp(0.625rem,3.5cqi,0.75rem)] text-white/65">
-                    {o.samples.length ? `${o.samples.length} sample${o.samples.length === 1 ? "" : "s"}` : "No samples yet"}
-                  </span>
-                </span>
-              </button>
+              <ServiceTile offer={o} onOpen={() => setOpen(o.id)} />
             </li>
           ))}
           {/* In the grid, adding one more sits where the eye expects it: the next tile. */}

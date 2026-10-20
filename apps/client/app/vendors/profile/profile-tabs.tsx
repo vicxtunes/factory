@@ -3,13 +3,14 @@
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
 
-import { OfferList, type OfferView } from "@repo/ui/vendors/OfferList";
+import type { OfferView } from "@repo/ui/vendors/OfferList";
+import { ServiceTiles } from "@repo/ui/vendors/ServiceTiles";
 import { SocialIcon } from "@repo/ui/vendors/SocialIcon";
 import type { SocialNetwork, VendorKind } from "@repo/lib/vendors/core";
 
-const TABS = ["Work", "Services", "About"] as const;
+const TABS = ["Services", "About"] as const;
 
-/** The profile's tabs: their work (samples), what they offer and charge, and about them. */
+/** The profile's tabs: their services (each opening its details and samples: their work), and about them. */
 export function ProfileTabs({
   skills,
   offers,
@@ -23,9 +24,7 @@ export function ProfileTabs({
   kind: VendorKind;
   joined: string;
 }) {
-  // Every sample, service by service: their work.
-  const work = offers.flatMap((o) => o.sampleUrls.flatMap((url) => (url ? [{ url, service: o.name }] : [])));
-  const [tab, setTab] = useState<(typeof TABS)[number]>("Work");
+  const [tab, setTab] = useState<(typeof TABS)[number]>("Services");
   return (
     <div className="mt-8">
       <div role="tablist" className="flex gap-8 border-b border-border">
@@ -46,37 +45,10 @@ export function ProfileTabs({
       </div>
 
       <div className="py-6">
-        {tab === "Work" ? (
-          work.length ? (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-              {work.map((w, i) => (
-                <div key={i} className="aspect-[4/3] overflow-hidden rounded-2xl bg-surface">
-                  {/* A short-lived signed link to the private bucket: a plain img. */}
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={w.url} alt={w.service} title={w.service} className="size-full object-cover" />
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 gap-3">
-              {[0, 1, 2, 3].map((i) => (
-                <div key={i} className="aspect-[4/3] rounded-2xl border border-dashed border-border bg-surface" />
-              ))}
-              <p className="col-span-2 text-center text-sm text-muted">
-                Samples of your work show here. Add them to your services in{" "}
-                <Link href="/vendors/services" className="font-medium text-brand-600 hover:underline dark:text-brand-400">
-                  Services
-                </Link>
-                .
-              </p>
-            </div>
-          )
-        ) : null}
-
         {tab === "Services" ? (
           <div className="space-y-5">
             {offers.length ? (
-              <OfferList offers={offers} />
+              <ServiceTiles offers={offers} />
             ) : (
               <p className="text-sm text-muted">
                 No services yet.{" "}
