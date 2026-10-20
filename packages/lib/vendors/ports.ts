@@ -29,7 +29,6 @@ export interface VendorStore {
   addSample(vendorId: string, offerId: string, key: string): Promise<void>;
   /** The deleted sample's key; null when the vendor has no such sample. */
   removeSample(vendorId: string, id: string): Promise<string | null>;
-  setAvailability(id: string, available: boolean, statusLine: string | null): Promise<void>;
 }
 
 /** The picture files (R2): a signed upload link, then checked and moved into place. */

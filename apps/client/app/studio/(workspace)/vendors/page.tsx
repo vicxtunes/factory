@@ -2,8 +2,9 @@ import Link from "next/link";
 
 import { RowsSkeleton } from "@repo/ui/skeletons/blocks";
 import { Loading } from "@repo/ui/skeletons/Loading";
+import { HIRE_CARD_BUTTON, HireCard } from "@repo/ui/vendors/HireCard";
 import { requireStudio } from "@repo/lib/studios/server";
-import { VENDOR_CATEGORIES, vendorCategory, vendorSearchSchema } from "@repo/lib/vendors/core";
+import { cardLine, VENDOR_CATEGORIES, vendorCategory, vendorSearchSchema } from "@repo/lib/vendors/core";
 import { vendors } from "@repo/lib/vendors/server";
 
 export const metadata = { title: "Vendors · My Business" };
@@ -12,7 +13,8 @@ export const metadata = { title: "Vendors · My Business" };
 const CHIPS = VENDOR_CATEGORIES.slice(0, 5);
 
 // Vendors on Aming the studio can hire on its projects: search by name, pick
-// what they do, and open one to see their profile and hire them.
+// what they do; each a card (packages/ui/vendors/HireCard.tsx) to see their
+// work or hire them.
 export default async function StudioVendorsPage({ searchParams }: { searchParams: Promise<{ q?: string; category?: string }> }) {
   await requireStudio("projects");
   const parsed = vendorSearchSchema.safeParse({ query: (await searchParams).q, category: (await searchParams).category });
@@ -71,39 +73,35 @@ async function VendorList({ query, category }: { query: string; category: string
     );
   }
   const photos = await Promise.all(found.map((v) => vendors.pictureUrl(v.photoKey)));
+  // "Hire me" goes to their projects in hand on the vendor's page, "See my work" to the page itself.
   return (
-    <ul className="space-y-3">
+    <ul className="grid gap-5 sm:grid-cols-2">
       {found.map((v, i) => (
         <li key={v.id}>
-          <Link href={`/studio/vendors/${v.id}`} className="flex items-center gap-4 rounded-3xl border border-border bg-surface p-3 shadow-theme-xs transition hover:border-brand-500/40 hover:shadow-md">
-            <span className="grid size-20 shrink-0 place-items-center overflow-hidden rounded-2xl bg-background text-2xl font-semibold text-brand-600 dark:text-brand-400">
-              {photos[i] ? (
-                // A short-lived signed link to the private bucket: a plain img.
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={photos[i]} alt="" className="size-full object-cover" />
-              ) : (
-                v.name.charAt(0).toUpperCase()
-              )}
-            </span>
-            <span className="min-w-0 flex-1 space-y-1">
-              <span className="inline-block rounded-full bg-background px-2.5 py-0.5 text-[11px] font-medium tracking-wide text-muted uppercase">
-                {vendorCategory(v.category)?.label ?? "Vendor"}
-              </span>
-              <span className="block truncate text-base font-semibold">{v.name}</span>
-              <span className="flex items-center gap-1 truncate text-sm text-muted">
-                {v.location ? (
-                  <>
-                    <svg viewBox="0 0 24 24" className="size-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden>
-                      <path d="M12 21s7-6.1 7-11.5A7 7 0 0 0 5 9.5C5 14.9 12 21 12 21Zm0-9a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" />
-                    </svg>
-                    <span className="truncate">{v.location}</span>
-                  </>
-                ) : (
-                  <span className="truncate">{v.skills.slice(0, 3).join(", ")}</span>
-                )}
-              </span>
-            </span>
-          </Link>
+          <HireCard
+            role={vendorCategory(v.category)?.label ?? "Vendor"}
+            place={v.location}
+            name={v.name}
+            photoUrl={photos[i] ?? null}
+            available={v.available}
+            line={cardLine(v.statusLine, v.offers)}
+            actions={
+              <>
+                <Link href={`/studio/vendors/${v.id}#hire`} className={HIRE_CARD_BUTTON}>
+                  <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden>
+                    <path d="M12 8v8M8 12h8M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                  </svg>
+                  Hire me
+                </Link>
+                <Link href={`/studio/vendors/${v.id}`} className={HIRE_CARD_BUTTON}>
+                  <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    <path d="M4 5h16v14H4zM4 15l4-4 4 4 3-3 5 5M15 9.5h.01" />
+                  </svg>
+                  See my work
+                </Link>
+              </>
+            }
+          />
         </li>
       ))}
     </ul>

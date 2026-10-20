@@ -140,6 +140,8 @@ export const supabaseVendorStore: VendorStore = {
         socials: profile.socials,
         bio: profile.bio,
         location: profile.location,
+        available: profile.available,
+        status_line: profile.statusLine,
       })
       .eq("id", id)
       .select(COLUMNS)
@@ -186,8 +188,4 @@ export const supabaseVendorStore: VendorStore = {
     return data[0]?.key ?? null;
   },
 
-  async setAvailability(id, available, statusLine) {
-    const { error } = await vendors().update({ available, status_line: statusLine }).eq("id", id);
-    if (error) fail("save the availability", error);
-  },
 };

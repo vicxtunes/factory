@@ -89,7 +89,7 @@ export default async function StudioVendorPage({ params }: { params: Promise<{ i
         </section>
       ) : null}
 
-      <section className="space-y-3">
+      <section id="hire" className="scroll-mt-20 space-y-3">
         <SectionLabel>Hire on a project</SectionLabel>
         {inHand.length ? (
           <ul className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-surface">

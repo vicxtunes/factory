@@ -21,6 +21,8 @@ export function EditProfileForm({ vendor, pictures, onSaved }: { vendor: Vendor;
   const [ownSkill, setOwnSkill] = useState("");
   const [bio, setBio] = useState(vendor.bio ?? "");
   const [location, setLocation] = useState(vendor.location ?? "");
+  const [available, setAvailable] = useState(vendor.available);
+  const [statusLine, setStatusLine] = useState(vendor.statusLine ?? "");
   const [socials, setSocials] = useState<Record<string, string>>(vendor.socials);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -34,7 +36,7 @@ export function EditProfileForm({ vendor, pictures, onSaved }: { vendor: Vendor;
         e.preventDefault();
         setError(null);
         start(async () => {
-          const res = await saveVendorProfile({ name, kind, category, skills, socials, bio, location });
+          const res = await saveVendorProfile({ name, kind, category, skills, socials, bio, location, available, statusLine });
           if (!res.ok) return setError(res.error);
           router.refresh();
           onSaved();
@@ -74,6 +76,27 @@ export function EditProfileForm({ vendor, pictures, onSaved }: { vendor: Vendor;
             <span className="mt-1 block text-right text-xs text-muted tabular-nums">
               {bio.length}/{BIO_MAX}
             </span>
+          </Field>
+        </Section>
+
+        <Section title="Your card">
+          <p className="-mt-2 text-sm text-muted">How studios see you in Vendors.</p>
+          <div className="grid grid-cols-2 gap-2 rounded-xl bg-gray-100 p-1 dark:bg-white/5">
+            {[true, false].map((on) => (
+              <button
+                key={String(on)}
+                type="button"
+                aria-pressed={available === on}
+                onClick={() => setAvailable(on)}
+                className={`flex h-10 items-center justify-center gap-2 rounded-lg text-sm font-medium transition-colors ${available === on ? "bg-surface shadow-theme-xs" : "text-muted hover:text-foreground"}`}
+              >
+                <span className={`size-2 rounded-full ${on ? "bg-success-500" : "bg-gray-400"}`} />
+                {on ? "Available for work" : "Busy for now"}
+              </button>
+            ))}
+          </div>
+          <Field label="Your line" hint="Under your card. Leave it empty to show your lowest price.">
+            <TextInput value={statusLine} onChange={(e) => setStatusLine(e.target.value)} maxLength={60} placeholder="e.g. Taking December weddings" />
           </Field>
         </Section>
 

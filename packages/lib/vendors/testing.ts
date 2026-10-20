@@ -59,7 +59,6 @@ export function memoryStore() {
       rows.set(vendorId, { ...vendor, offers: vendor.offers.map((o) => ({ ...o, samples: o.samples.filter((x) => x.id !== id) })) });
       return sample.key;
     },
-    setAvailability: async (id, available, statusLine) => void rows.set(id, { ...rows.get(id)!, available, statusLine }),
   };
   return { store, rows };
 }

@@ -57,6 +57,8 @@ export const vendorProfileSchema = z.object({
   socials,
   bio: optionalText(300, "Keep your bio under 300 characters."),
   location: optionalText(80, "Keep the place under 80 characters."),
+  available: z.boolean().default(true),
+  statusLine: optionalText(60, "Keep your card's line under 60 characters.").default(null),
 }) satisfies z.ZodType<VendorProfile, unknown>;
 
 /**
@@ -78,12 +80,6 @@ export const offerSchema = z
   .transform((o): OfferInput => ({ name: o.name, description: o.description, price: o.price, unit: o.price === null ? null : o.unit }));
 
 export const offerIdSchema = z.uuid("That service doesn't exist.");
-
-/** On their hire card: taking work or busy, and a short line of their own. */
-export const availabilitySchema = z.object({
-  available: z.boolean(),
-  statusLine: optionalText(60, "Keep it under 60 characters."),
-});
 
 export const vendorPictureSchema = z.enum(["photo", "cover"]);
 

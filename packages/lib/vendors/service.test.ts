@@ -53,7 +53,7 @@ test("a vendor edits their own profile; an account that hasn't joined can't", as
   const { store } = memoryStore();
   const vendorService = service(store);
   const joined = await vendorService.join(kato, answers);
-  const profile = { name: "Kato Films", kind: "business" as const, category: "videographer", skills: ["Drone"], socials: {}, bio: "Films that feel like the day.", location: "Kampala" };
+  const profile = { name: "Kato Films", kind: "business" as const, category: "videographer", skills: ["Drone"], socials: {}, bio: "Films that feel like the day.", location: "Kampala", available: false, statusLine: "Booked till March" };
   const saved = await vendorService.updateProfile(kato.clientId, profile);
   assert.deepEqual({ ...saved, id: joined.id }, { ...joined, ...profile });
   await assert.rejects(vendorService.updateProfile("c-nobody", profile), /Join as a vendor first/);

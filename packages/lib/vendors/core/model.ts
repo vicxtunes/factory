@@ -52,6 +52,8 @@ export interface VendorProfile {
   socials: Vendor["socials"];
   bio: string | null;
   location: string | null;
+  available: boolean;
+  statusLine: string | null;
 }
 
 /** What a vendor gives when they join (vendorJoinSchema's output). */
