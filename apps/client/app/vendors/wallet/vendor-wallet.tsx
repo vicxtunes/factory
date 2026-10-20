@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
-import { BottomSheet } from "@repo/ui/BottomSheet";
+import { FormSheet } from "@repo/ui/FormSheet";
 import { Button } from "@repo/ui/Button";
 import { Field, TextInput } from "@repo/ui/Field";
 import { PhoneInput } from "@repo/ui/PhoneInput";
@@ -118,7 +118,7 @@ function WithdrawSheet({ balance, phone, onClose }: { balance: number; phone: st
   const value = Number(amount.replace(/[^\d]/g, ""));
 
   return (
-    <BottomSheet open onClose={onClose} title="Withdraw to mobile money">
+    <FormSheet open onClose={onClose} title="Withdraw to mobile money">
       {done ? (
         <div className="space-y-4 text-sm">
           <p>
@@ -160,6 +160,6 @@ function WithdrawSheet({ balance, phone, onClose }: { balance: number; phone: st
           </div>
         </form>
       )}
-    </BottomSheet>
+    </FormSheet>
   );
 }

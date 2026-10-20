@@ -80,7 +80,7 @@ export function ProfileTabs({
             ) : (
               <p className="text-sm text-muted">
                 No services yet.{" "}
-                <Link href="/vendors/services/new" className="font-medium text-brand-600 hover:underline dark:text-brand-400">
+                <Link href="/vendors/services?add" className="font-medium text-brand-600 hover:underline dark:text-brand-400">
                   Add one
                 </Link>{" "}
                 with its price and samples.

@@ -10,8 +10,8 @@ import { RATE_UNITS, type RateUnit, type VendorOffer } from "@repo/lib/vendors/c
 
 const DESCRIPTION_MAX = 500;
 
-/** A service as the vendor writes it: its name, a few lines, and its price (or on request). New ones go on to their samples. */
-export function OfferForm({ offer, suggestions }: { offer: VendorOffer | null; suggestions: string[] }) {
+/** A service as the vendor writes it: its name, a few lines, and its price (or on request). */
+export function OfferForm({ offer, suggestions, onSaved }: { offer: VendorOffer | null; suggestions: string[]; onSaved: (id: string) => void }) {
   const router = useRouter();
   const [name, setName] = useState(offer?.name ?? "");
   const [description, setDescription] = useState(offer?.description ?? "");
@@ -32,10 +32,9 @@ export function OfferForm({ offer, suggestions }: { offer: VendorOffer | null; s
         start(async () => {
           const res = await saveVendorOffer(offer?.id ?? null, { name, description, price: onRequest ? "" : price, unit });
           if (!res.ok) return setError(res.error);
-          if (offer) {
-            setSaved(true);
-            router.refresh();
-          } else router.replace(`/vendors/services/${res.data.id}`);
+          if (offer) setSaved(true);
+          router.refresh();
+          onSaved(res.data.id);
         });
       }}
     >
@@ -91,8 +90,8 @@ export function OfferForm({ offer, suggestions }: { offer: VendorOffer | null; s
       </div>
       {error ? <p className="text-sm text-error-600 dark:text-error-400">{error}</p> : null}
       {saved && !pending ? <p className="text-sm text-success-600 dark:text-success-500">Saved.</p> : null}
-      <Button type="submit" className="min-h-12 w-full sm:w-auto sm:px-8" loading={pending} disabled={!name.trim()}>
-        {offer ? "Save" : "Add and add samples"}
+      <Button type="submit" className="min-h-12 w-full" loading={pending} disabled={!name.trim()}>
+        {offer ? "Save changes" : "Add, then add samples"}
       </Button>
     </form>
   );

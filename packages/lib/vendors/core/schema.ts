@@ -48,7 +48,7 @@ export const vendorJoinSchema = z
     }),
   );
 
-/** A vendor's profile as they edit it (/vendors/profile/edit). */
+/** A vendor's profile as they edit it (Edit profile on /vendors/profile). */
 export const vendorProfileSchema = z.object({
   name: z.string("Enter your name.").trim().min(2, "Enter your name.").max(100, "Keep the name under 100 characters."),
   kind,

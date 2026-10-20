@@ -43,7 +43,7 @@ export async function joinAsVendor(input: unknown): Promise<Result> {
   });
 }
 
-/** The signed-in vendor saves their profile (/vendors/profile/edit). */
+/** The signed-in vendor saves their profile (Edit profile on /vendors/profile). */
 export async function saveVendorProfile(input: unknown): Promise<Result> {
   return runAction("vendors", async () => {
     const session = await getClientSession();

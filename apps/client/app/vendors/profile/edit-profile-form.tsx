@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition, type ReactNode } from "react";
 
@@ -12,8 +11,8 @@ import { SOCIAL_NETWORKS, VENDOR_CATEGORIES, VENDOR_SKILLS, type Vendor } from "
 
 const BIO_MAX = 300;
 
-/** A vendor's profile, all on one page: who they are, what they do and offer, about them, where their work is. */
-export function EditProfileForm({ vendor, pictures }: { vendor: Vendor; pictures: ReactNode }) {
+/** A vendor's profile, all in one form: who they are, what they do and offer, about them, where their work is. */
+export function EditProfileForm({ vendor, pictures, onSaved }: { vendor: Vendor; pictures: ReactNode; onSaved: () => void }) {
   const router = useRouter();
   const [name, setName] = useState(vendor.name);
   const [kind, setKind] = useState(vendor.kind);
@@ -31,26 +30,18 @@ export function EditProfileForm({ vendor, pictures }: { vendor: Vendor; pictures
 
   return (
     <form
-      className="px-4 py-6 sm:px-6 lg:py-8"
       onSubmit={(e) => {
         e.preventDefault();
         setError(null);
         start(async () => {
           const res = await saveVendorProfile({ name, kind, category, skills, socials, bio, location });
           if (!res.ok) return setError(res.error);
-          router.push("/vendors/profile");
           router.refresh();
+          onSaved();
         });
       }}
     >
-      <div className="flex items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold tracking-tight">Edit profile</h1>
-        <Link href="/vendors/profile" className="text-sm font-medium text-muted hover:text-foreground">
-          Cancel
-        </Link>
-      </div>
-
-      <div className="mt-6 space-y-10">
+      <div className="space-y-10">
         {pictures}
         <Section title="You">
           <Field label={kind === "business" ? "Business name" : "Name"}>
@@ -152,8 +143,8 @@ export function EditProfileForm({ vendor, pictures }: { vendor: Vendor; pictures
       </div>
 
       {error ? <p className="mt-6 text-sm text-error-600 dark:text-error-400">{error}</p> : null}
-      <div className="sticky bottom-[calc(4.5rem+env(safe-area-inset-bottom))] -mx-4 mt-8 border-t border-border bg-background px-4 py-3 sm:static sm:mx-0 sm:border-0 sm:p-0 lg:bottom-0">
-        <Button type="submit" className="min-h-12 w-full sm:w-auto sm:px-8" loading={pending} disabled={!name.trim() || skills.length === 0}>
+      <div className="mt-8">
+        <Button type="submit" className="min-h-12 w-full" loading={pending} disabled={!name.trim() || skills.length === 0}>
           Save
         </Button>
       </div>

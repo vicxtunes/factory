@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 
 import { Avatar } from "@repo/ui/Avatar";
-import { BottomSheet } from "@repo/ui/BottomSheet";
+import { FormSheet } from "@repo/ui/FormSheet";
 import { Button } from "@repo/ui/Button";
 import { Field, TextInput } from "@repo/ui/Field";
 import {
@@ -200,7 +200,7 @@ export function ProjectVendors({
       {givingFolder ? <GiveFolder job={givingFolder} folders={folders} onClose={() => setGivingFolder(null)} /> : null}
 
       {sheet ? (
-        <BottomSheet
+        <FormSheet
           open
           onClose={() => setSheet(null)}
           title={sheet.kind === "fund" ? (sheet.job.status === "samples_sent" ? "Approve samples and pay in" : "Pay in to start") : sheet.kind === "approve" ? "Approve and release" : "Raise a dispute"}
@@ -256,7 +256,7 @@ export function ProjectVendors({
               </Button>
             </div>
           </div>
-        </BottomSheet>
+        </FormSheet>
       ) : null}
     </div>
   );
@@ -308,7 +308,7 @@ function AddVendor({
   const textArea = "w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500";
 
   return (
-    <BottomSheet open onClose={onClose} title={chosen ? `Hire ${chosen.name}` : "Add a vendor"}>
+    <FormSheet open onClose={onClose} title={chosen ? `Hire ${chosen.name}` : "Add a vendor"}>
       {chosen ? (
         <form
           className="space-y-4"
@@ -455,7 +455,7 @@ function AddVendor({
           )}
         </div>
       )}
-    </BottomSheet>
+    </FormSheet>
   );
 }
 
@@ -468,7 +468,7 @@ function GiveFolder({ job, folders, onClose }: { job: ProjectJob; folders: Proje
   const [pending, start] = useTransition();
 
   return (
-    <BottomSheet open onClose={onClose} title={`A folder for ${job.vendorName}`}>
+    <FormSheet open onClose={onClose} title={`A folder for ${job.vendorName}`}>
       <form
         className="space-y-4"
         onSubmit={(e) => {
@@ -503,7 +503,7 @@ function GiveFolder({ job, folders, onClose }: { job: ProjectJob; folders: Proje
           </Button>
         </div>
       </form>
-    </BottomSheet>
+    </FormSheet>
   );
 }
 

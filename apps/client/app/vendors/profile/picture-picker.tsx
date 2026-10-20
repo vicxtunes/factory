@@ -6,7 +6,7 @@ import { useRef, useState } from "react";
 import { confirmVendorPicture, startVendorPictureUpload } from "@repo/lib/vendors/actions";
 import { PICTURE_EDGE, type VendorPicture } from "@repo/lib/vendors/core";
 
-import { shrinkPicture } from "../../shrink-picture";
+import { shrinkPicture } from "../shrink-picture";
 
 /** The cover with the profile photo over its edge, as on the profile; each has its own "change" button. */
 export function PicturePicker({ photoUrl, coverUrl, initials }: { photoUrl: string | null; coverUrl: string | null; initials: string }) {

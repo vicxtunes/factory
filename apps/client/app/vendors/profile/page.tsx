@@ -1,11 +1,14 @@
 import Link from "next/link";
 
 import { Avatar } from "@repo/ui/Avatar";
+import { studioInitials } from "@repo/lib/studios/core";
 import { SOCIAL_NETWORKS, vendorCategory } from "@repo/lib/vendors/core";
 import { vendors } from "@repo/lib/vendors/server";
 
 import { VendorFrame } from "../frame";
 import { requireVendor } from "../vendor";
+import { EditProfile } from "./edit-profile";
+import { PicturePicker } from "./picture-picker";
 import { ProfileTabs } from "./profile-tabs";
 
 export const metadata = { title: "Profile" };
@@ -82,9 +85,7 @@ export default async function VendorProfilePage() {
           </dl>
 
           <div className="mt-6 flex gap-3">
-            <Link href="/vendors/profile/edit" className="flex h-11 flex-1 items-center justify-center rounded-xl border border-border text-sm font-medium hover:bg-surface">
-              Edit profile
-            </Link>
+            <EditProfile vendor={vendor} pictures={<PicturePicker photoUrl={photoUrl} coverUrl={coverUrl} initials={studioInitials(vendor.name)} />} />
             <span aria-disabled className="grid size-11 place-items-center rounded-xl border border-border text-muted" title="Coming next">
               <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden>
                 <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />
