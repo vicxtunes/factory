@@ -28,12 +28,17 @@ export interface VendorOffer {
   /** UGX per unit; both null: the price is agreed on request. */
   price: number | null;
   unit: RateUnit | null;
+  /** What it includes, a line each ("Delivered in 5 days"): the ticks on its card. */
+  included: string[];
   /** The oldest first. */
   samples: ServiceSample[];
 }
 
 /** A service as the vendor writes it (offerSchema's output). */
-export type OfferInput = Pick<VendorOffer, "name" | "description" | "price" | "unit">;
+export type OfferInput = Pick<VendorOffer, "name" | "description" | "price" | "unit" | "included">;
+
+/** What a service includes, at most. */
+export const INCLUDED_PER_SERVICE = 8;
 
 /** A service's samples, at most. */
 export const SAMPLES_PER_SERVICE = 12;
@@ -52,12 +57,6 @@ export function offerPriceParts(offer: Pick<VendorOffer, "price" | "unit">): { a
   if (offer.price === null || offer.unit === null) return null;
   const amount = new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 }).format(offer.price);
   return { amount, per: `/${offer.unit}` };
-}
-
-/** A description as a card shows it: its first line under the price, the rest as a list of what's included. */
-export function describeOffer(description: string | null): { lead: string | null; points: string[] } {
-  const lines = (description ?? "").split("\n").map((l) => l.replace(/^[\s•\-–*✓]+/, "").trim()).filter(Boolean);
-  return { lead: lines[0] ?? null, points: lines.slice(1) };
 }
 
 /** The line under a vendor's hire card: their own, else their lowest price ("From UGX 50,000 per item"). */

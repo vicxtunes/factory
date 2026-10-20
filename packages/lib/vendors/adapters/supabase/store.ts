@@ -36,11 +36,12 @@ interface OfferRow {
   description: string | null;
   price: number | string | null;
   unit: RateUnit | null;
+  included: string[];
   created_at: string;
   samples: { id: string; key: string; created_at: string }[];
 }
 
-const OFFER_COLUMNS = "id, name, description, price, unit, created_at, samples:vendor_service_samples (id, key, created_at)";
+const OFFER_COLUMNS = "id, name, description, price, unit, included, created_at, samples:vendor_service_samples (id, key, created_at)";
 const COLUMNS = `id, client_id, name, kind, category, skills, socials, bio, location, available, status_line, photo_key, cover_key, status, created_at, offers:vendor_services (${OFFER_COLUMNS})`;
 
 const oldestFirst = (a: { created_at: string }, b: { created_at: string }) => a.created_at.localeCompare(b.created_at);
@@ -52,10 +53,11 @@ const toOffer = (r: OfferRow): VendorOffer => ({
   // bigint may arrive as a string.
   price: r.price === null ? null : Number(r.price),
   unit: r.unit,
+  included: r.included,
   samples: [...r.samples].sort(oldestFirst).map((s) => ({ id: s.id, key: s.key })),
 });
 
-const offerColumns = (o: OfferInput) => ({ name: o.name, description: o.description, price: o.price, unit: o.unit });
+const offerColumns = (o: OfferInput) => ({ name: o.name, description: o.description, price: o.price, unit: o.unit, included: o.included });
 
 const toVendor = (r: Row): Vendor => ({
   id: r.id,

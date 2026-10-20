@@ -3,8 +3,7 @@
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
 
-import type { OfferView } from "@repo/ui/vendors/OfferList";
-import { ServiceTiles } from "@repo/ui/vendors/ServiceTiles";
+import { ServiceTiles, type OfferView } from "@repo/ui/vendors/ServiceTiles";
 import { SocialIcon } from "@repo/ui/vendors/SocialIcon";
 import type { SocialNetwork, VendorKind } from "@repo/lib/vendors/core";
 

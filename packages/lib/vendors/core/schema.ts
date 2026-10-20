@@ -7,7 +7,7 @@ import { optionalText } from "@repo/lib/kernel/core";
 import { SOCIAL_NETWORKS, socialHandle, VENDOR_CATEGORIES } from "./categories";
 import type { JobFolder, JobRequest } from "./jobs";
 import type { VendorJoin, VendorProfile } from "./model";
-import { RATE_UNITS, type OfferInput, type RateUnit } from "./services";
+import { INCLUDED_PER_SERVICE, RATE_UNITS, type OfferInput, type RateUnit } from "./services";
 
 const kind = z.enum(["individual", "business"], "Choose who you are.");
 const category = z.string("Choose what you do.").refine((id) => VENDOR_CATEGORIES.some((c) => c.id === id), "Choose what you do.");
@@ -76,8 +76,13 @@ export const offerSchema = z
       .transform((v) => (v ? Number(v) : null))
       .pipe(z.number().int().min(500, "A price is at least UGX 500.").max(100_000_000, "That's more than a price can be.").nullable()),
     unit: z.enum(RATE_UNITS.map((u) => u.id) as [RateUnit, ...RateUnit[]], "Choose what the price is for."),
+    included: z
+      .array(z.string().trim().min(1).max(60, "Keep each thing included under 60 characters."))
+      .max(INCLUDED_PER_SERVICE, `List up to ${INCLUDED_PER_SERVICE} things included.`)
+      .default([])
+      .transform((list) => [...new Set(list)]),
   })
-  .transform((o): OfferInput => ({ name: o.name, description: o.description, price: o.price, unit: o.price === null ? null : o.unit }));
+  .transform((o): OfferInput => ({ name: o.name, description: o.description, price: o.price, unit: o.price === null ? null : o.unit, included: o.included }));
 
 export const offerIdSchema = z.uuid("That service doesn't exist.");
 

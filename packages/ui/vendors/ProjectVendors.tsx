@@ -69,7 +69,8 @@ type Sheet = { kind: "fund" | "approve" | "dispute"; job: ProjectJob } | null;
  * the vendor) or raise a dispute. Paying (`canPay`) is the Money area's.
  * Adding a vendor: find them, the folder they work in, samples or not, and
  * what's needed, by when, for how much. Coming from a vendor's page
- * (`hire`), the form opens with them chosen.
+ * (`hire`), the form opens with them chosen, at one of their services
+ * (`hireService`) when one was picked.
  */
 export function ProjectVendors({
   projectId,
@@ -77,12 +78,14 @@ export function ProjectVendors({
   folders,
   canPay,
   hire,
+  hireService,
 }: {
   projectId: string;
   jobs: ProjectJob[];
   folders: ProjectFolder[];
   canPay: boolean;
   hire: VendorCard | null;
+  hireService: string | null;
 }) {
   const router = useRouter();
   const openJobs = jobs.filter((j) => isOpenJob(j.status)).map((j) => j.vendorId);
@@ -189,6 +192,7 @@ export function ProjectVendors({
           openJobs={openJobs}
           // Already working on the project: the list shows them as such.
           initial={hire && !openJobs.includes(hire.id) ? hire : null}
+          initialService={hireService}
           onClose={() => {
             setAdding(false);
             // Not opened again on the next refresh.
@@ -268,12 +272,14 @@ function AddVendor({
   folders,
   openJobs,
   initial,
+  initialService,
   onClose,
 }: {
   projectId: string;
   folders: ProjectFolder[];
   openJobs: string[];
   initial: VendorCard | null;
+  initialService: string | null;
   onClose: () => void;
 }) {
   const router = useRouter();
@@ -281,11 +287,14 @@ function AddVendor({
   const [category, setCategory] = useState("");
   const [found, setFound] = useState<VendorCard[] | null>(null);
   const [chosen, setChosen] = useState<VendorCard | null>(initial);
-  const [brief, setBrief] = useState("");
+  // Hiring at a service picked on their page: that service, its price for one, and its name as the brief's start.
+  const picked = initial ? pricedOffers(initial).findIndex((o) => o.id === initialService) : -1;
+  const atService = picked >= 0 ? pricedOffers(initial!)[picked]! : null;
+  const [brief, setBrief] = useState(atService?.name ?? "");
   const [dueOn, setDueOn] = useState("");
-  const [price, setPrice] = useState("");
+  const [price, setPrice] = useState(atService ? offerTotal(atService, 1).toLocaleString("en-US") : "");
   // One of their priced services ("" for a price agreed here), and how many of its unit.
-  const [rate, setRate] = useState("");
+  const [rate, setRate] = useState(picked >= 0 ? String(picked) : "");
   const [quantity, setQuantity] = useState("1");
   // Where they work: "new" (a folder made for them) or an existing folder's id.
   const [folder, setFolder] = useState("new");
@@ -508,8 +517,8 @@ function GiveFolder({ job, folders, onClose }: { job: ProjectJob; folders: Proje
 }
 
 /** The vendor's services with a price, to hire at one. */
-function pricedOffers(vendor: VendorCard): { name: string; price: number; unit: RateUnit }[] {
-  return vendor.offers.flatMap((o) => (o.price !== null && o.unit !== null ? [{ name: o.name, price: o.price, unit: o.unit }] : []));
+function pricedOffers(vendor: VendorCard): { id: string; name: string; price: number; unit: RateUnit }[] {
+  return vendor.offers.flatMap((o) => (o.price !== null && o.unit !== null ? [{ id: o.id, name: o.name, price: o.price, unit: o.unit }] : []));
 }
 
 function VendorRow({ vendor, note }: { vendor: VendorCard; note?: string }) {

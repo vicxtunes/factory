@@ -56,7 +56,7 @@ export function ServicesBoard({ offers, suggestions, startAdding }: { offers: Of
             <button
               type="button"
               onClick={() => setOpen("new")}
-              className="grid h-full min-h-72 w-full place-items-center rounded-[28px] border-2 border-dashed border-border text-muted transition hover:border-brand-500/50 hover:bg-surface hover:text-foreground"
+              className="grid h-full min-h-56 w-full place-items-center rounded-3xl border-2 border-dashed border-border text-muted transition hover:border-brand-500/50 hover:bg-surface hover:text-foreground"
             >
               <span className="flex flex-col items-center gap-2 text-sm font-medium">
                 <svg viewBox="0 0 24 24" className="size-6" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden>

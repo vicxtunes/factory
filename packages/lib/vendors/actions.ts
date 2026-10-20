@@ -162,7 +162,7 @@ export interface VendorCard {
   location: string | null;
   skills: string[];
   /** Their priced services, to hire at one. */
-  offers: Pick<VendorOffer, "name" | "price" | "unit">[];
+  offers: Pick<VendorOffer, "id" | "name" | "price" | "unit">[];
   photoUrl: string | null;
 }
 
@@ -172,7 +172,7 @@ export async function findVendors(input: unknown): Promise<Result<VendorCard[]>>
     await studioOfCaller("projects");
     const { query, category } = parseInput(vendorSearchSchema, input);
     const found = await vendors.search(query, category);
-    return Promise.all(found.map(async (v: Vendor) => ({ id: v.id, name: v.name, category: v.category, location: v.location, skills: v.skills, offers: v.offers, photoUrl: await vendors.pictureUrl(v.photoKey) })));
+    return Promise.all(found.map(async (v: Vendor) => ({ id: v.id, name: v.name, category: v.category, location: v.location, skills: v.skills, offers: v.offers.map(({ id, name, price, unit }) => ({ id, name, price, unit })), photoUrl: await vendors.pictureUrl(v.photoKey) })));
   });
 }
 

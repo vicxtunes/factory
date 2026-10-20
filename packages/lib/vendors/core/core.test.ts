@@ -3,7 +3,7 @@ import { test } from "node:test";
 
 import { parseInput } from "@repo/lib/kernel/core";
 
-import { autoReleaseAt, cardLine, describeOffer, jobFee, jobRequestSchema, overdueStep, offerPrice, offerPriceParts, offerSchema, offerTotal, socialHandle, vendorJoinSchema, vendorTake } from "./index";
+import { autoReleaseAt, cardLine, jobFee, jobRequestSchema, overdueStep, offerPrice, offerPriceParts, offerSchema, offerTotal, socialHandle, vendorJoinSchema, vendorTake } from "./index";
 
 test("a social handle however it's typed", () => {
   assert.equal(socialHandle("instagram", "@kato.films"), "kato.films");
@@ -65,8 +65,8 @@ test("delivered work left unanswered: warned after a day, released after two, no
 
 test("a service: named, a few lines or none, and a whole-shilling price per something or on request", () => {
   const ok = offerSchema.parse({ name: " Retouch ", description: "", price: "5,000", unit: "photo" });
-  assert.deepEqual(ok, { name: "Retouch", description: null, price: 5000, unit: "photo" });
-  assert.deepEqual(offerSchema.parse({ name: "Album design", description: "", price: "", unit: "photo" }), { name: "Album design", description: null, price: null, unit: null }, "no price: on request");
+  assert.deepEqual(ok, { name: "Retouch", description: null, price: 5000, unit: "photo", included: [] });
+  assert.deepEqual(offerSchema.parse({ name: "Album design", description: "", price: "", unit: "photo" }), { name: "Album design", description: null, price: null, unit: null, included: [] }, "no price: on request");
   assert.equal(offerSchema.safeParse({ name: "Retouch", description: "", price: "100", unit: "photo" }).success, false, "under UGX 500");
   assert.equal(offerSchema.safeParse({ name: "Retouch", description: "", price: "5000", unit: "minute" }).success, false, "not a unit");
 
@@ -88,13 +88,12 @@ test("the hire card's line: theirs, else their lowest price, else new on Aming",
   assert.equal(cardLine(null, [{ price: null, unit: null }]), "New on Aming");
 });
 
-test("a service card: its price told big, its first line above what's included", () => {
+test("a service card: its price told big, and what it includes listed", () => {
   assert.deepEqual(offerPriceParts({ price: 3_900_000, unit: "project" }), { amount: "3.9M", per: "/project" });
   assert.deepEqual(offerPriceParts({ price: 50_000, unit: "item" }), { amount: "50K", per: "/item" });
   assert.equal(offerPriceParts({ price: null, unit: null }), null);
-  assert.deepEqual(describeOffer("Wedding edits in our warm look\n- Colour & skin retouch\n\n• Delivered in 5 days"), {
-    lead: "Wedding edits in our warm look",
-    points: ["Colour & skin retouch", "Delivered in 5 days"],
-  });
-  assert.deepEqual(describeOffer(null), { lead: null, points: [] });
+  const base = { name: "Retouch", description: "", price: "5000", unit: "photo" };
+  assert.deepEqual(offerSchema.parse({ ...base, included: [" Colour & skin ", "Colour & skin", "Delivered in 5 days"] }).included, ["Colour & skin", "Delivered in 5 days"]);
+  assert.deepEqual(offerSchema.parse(base).included, [], "nothing listed");
+  assert.equal(offerSchema.safeParse({ ...base, included: Array.from({ length: 9 }, (_, i) => `Thing ${i}`) }).success, false, "up to 8");
 });

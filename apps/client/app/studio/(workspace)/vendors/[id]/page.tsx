@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { Avatar } from "@repo/ui/Avatar";
 import { BackLink } from "@repo/ui/navigation/back";
 import { SectionLabel } from "@repo/ui/SectionLabel";
-import { OfferList } from "@repo/ui/vendors/OfferList";
+import { ServiceTiles } from "@repo/ui/vendors/ServiceTiles";
 import { SocialIcon } from "@repo/ui/vendors/SocialIcon";
 import { projects } from "@repo/lib/projects/server";
 import { requireStudio } from "@repo/lib/studios/server";
@@ -85,7 +85,13 @@ export default async function StudioVendorPage({ params }: { params: Promise<{ i
       {offers.length ? (
         <section className="space-y-3">
           <SectionLabel>Services</SectionLabel>
-          <OfferList offers={offers} />
+          <ServiceTiles
+            offers={offers}
+            hire={{
+              vendorId: vendor.id,
+              projects: inHand.map((p) => ({ id: p.id, title: p.title, meta: [p.customerName, p.eventDate ? formatDay(scope, p.eventDate) : null].filter(Boolean).join(" · ") })),
+            }}
+          />
         </section>
       ) : null}
 

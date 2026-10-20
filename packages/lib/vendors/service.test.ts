@@ -110,7 +110,7 @@ test("a vendor's services: added, edited and deleted with their samples; samples
   let n = 0;
   const vendorService = new VendorService(store, files, () => `id${++n}`);
   const joined = await vendorService.join(kato, answers);
-  const offer = await vendorService.addOffer(kato.clientId, { name: "Retouch", description: null, price: 5000, unit: "photo" });
+  const offer = await vendorService.addOffer(kato.clientId, { name: "Retouch", description: null, price: 5000, unit: "photo", included: [] });
 
   const { key } = await vendorService.startSampleUpload(kato.clientId, offer.id);
   assert.match(key, new RegExp(`^incoming/vendors/${joined.id}/sample-`));
@@ -124,7 +124,7 @@ test("a vendor's services: added, edited and deleted with their samples; samples
   for (let i = 1; i < 12; i++) await vendorService.confirmSample(kato.clientId, offer.id, `incoming/vendors/${joined.id}/sample-${i}.jpg`);
   await assert.rejects(vendorService.startSampleUpload(kato.clientId, offer.id), /up to 12/);
 
-  await vendorService.editOffer(kato.clientId, offer.id, { name: "Colour & retouch", description: "Our warm look.", price: null, unit: null });
+  await vendorService.editOffer(kato.clientId, offer.id, { name: "Colour & retouch", description: "Our warm look.", price: null, unit: null, included: ["Skin retouch"] });
   assert.equal((await vendorService.mine(kato.clientId))!.offers[0]!.name, "Colour & retouch");
   await vendorService.removeSample(kato.clientId, sample!.id);
   assert.ok(removed.includes(sample!.key), "the picture goes with it");
@@ -132,5 +132,5 @@ test("a vendor's services: added, edited and deleted with their samples; samples
   await vendorService.removeOffer(kato.clientId, offer.id);
   assert.deepEqual((await vendorService.mine(kato.clientId))!.offers, []);
   assert.equal(removed.filter((k) => k.startsWith(`vendors/${joined.id}/samples/`)).length, 12, "every sample's picture deleted");
-  await assert.rejects(vendorService.editOffer("c-nobody", offer.id, { name: "X", description: null, price: null, unit: null }), /Join as a vendor first/);
+  await assert.rejects(vendorService.editOffer("c-nobody", offer.id, { name: "X", description: null, price: null, unit: null, included: [] }), /Join as a vendor first/);
 });
