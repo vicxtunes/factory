@@ -38,7 +38,8 @@ export function ServiceTile({ offer, action, onOpen }: { offer: OfferView; actio
   const more = offer.included.length - TICKS;
 
   return (
-    <article className="flex h-full flex-col rounded-3xl bg-surface shadow-theme-sm ring-1 ring-gray-200/70 dark:ring-white/10">
+    // The whole card opens it (the button says what opening does).
+    <article onClick={onOpen} className="flex h-full cursor-pointer flex-col rounded-3xl bg-surface shadow-theme-sm ring-1 ring-gray-200/70 transition hover:shadow-theme-md dark:ring-white/10">
       <div className="space-y-3 rounded-3xl bg-surface p-2.5 pb-3 shadow-theme-sm ring-1 ring-gray-200/70 dark:ring-white/10">
         <div className="relative flex min-h-24 flex-col justify-between overflow-hidden rounded-2xl bg-gradient-to-br from-gray-100 to-brand-50 p-3 dark:from-white/5 dark:to-brand-500/10">
           {cover ? (
@@ -62,7 +63,10 @@ export function ServiceTile({ offer, action, onOpen }: { offer: OfferView; actio
         {offer.description ? <p className="line-clamp-2 px-1.5 text-xs font-medium">{offer.description}</p> : null}
         <button
           type="button"
-          onClick={onOpen}
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpen();
+          }}
           className="flex h-10 w-full items-center justify-center rounded-full bg-gray-900 text-sm font-medium text-white shadow-theme-sm transition hover:bg-gray-800 active:scale-[0.99] dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100"
         >
           {action}
@@ -92,9 +96,9 @@ export interface HireOn {
 }
 
 /**
- * A vendor's services to look through: the cards, each opening its details
- * (price, what it is and includes, its samples to view full screen). With
- * `hire`, a studio picks the project to hire the vendor on at that service:
+ * A vendor's services to look through: the cards, each opening the work
+ * (its samples, to view full screen), then its price and what it includes.
+ * With `hire`, a studio then picks the project to hire the vendor on for it:
  * its hire form opens with both chosen.
  */
 export function ServiceTiles({ offers, hire }: { offers: OfferView[]; hire?: HireOn }) {
@@ -109,13 +113,22 @@ export function ServiceTiles({ offers, hire }: { offers: OfferView[]; hire?: Hir
       <ul className={SERVICE_GRID}>
         {offers.map((o) => (
           <li key={o.id}>
-            <ServiceTile offer={o} action={hire ? "Hire this service" : "See the work"} onOpen={() => setOpen(o.id)} />
+            <ServiceTile offer={o} action="See the work" onOpen={() => setOpen(o.id)} />
           </li>
         ))}
       </ul>
       <FormSheet open={offer !== null} onClose={() => setOpen(null)} title={offer?.name} size="lg">
         {offer ? (
+          // The work first (samples to view full screen), then what it costs and includes, then hiring for it.
           <div className="space-y-6">
+            <section className="space-y-2">
+              <h3 className={heading}>The work · {samplesLabel(photos.length)}</h3>
+              {photos.length ? (
+                <PhotoGrid photos={photos} onOpen={setViewing} />
+              ) : (
+                <p className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted">No samples of this service yet.</p>
+              )}
+            </section>
             <div className="space-y-2">
               <p className="text-lg font-semibold tabular-nums">{offerPrice(offer)}</p>
               {offer.description ? <p className="text-sm whitespace-pre-line text-muted">{offer.description}</p> : null}
@@ -134,8 +147,9 @@ export function ServiceTiles({ offers, hire }: { offers: OfferView[]; hire?: Hir
               </section>
             ) : null}
             {hire ? (
-              <section className="space-y-2">
-                <h3 className={heading}>Hire on which project?</h3>
+              <section className="space-y-2 border-t border-border pt-6">
+                <h3 className="text-base font-semibold">Hire them for this</h3>
+                <p className="text-sm text-muted">Choose the project. Its hire form opens with this service and its price.</p>
                 {hire.projects.length ? (
                   <ul className="divide-y divide-border overflow-hidden rounded-2xl border border-border">
                     {hire.projects.map((p) => (
@@ -164,14 +178,6 @@ export function ServiceTiles({ offers, hire }: { offers: OfferView[]; hire?: Hir
                 )}
               </section>
             ) : null}
-            <section className="space-y-2">
-              <h3 className={heading}>{samplesLabel(photos.length)}</h3>
-              {photos.length ? (
-                <PhotoGrid photos={photos} onOpen={setViewing} />
-              ) : (
-                <p className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted">No samples of this service yet.</p>
-              )}
-            </section>
           </div>
         ) : null}
       </FormSheet>
