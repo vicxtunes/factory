@@ -47,25 +47,22 @@ export function ServicesBoard({ offers, suggestions, startAdding }: { offers: Of
         <ul className="space-y-3">
           {offers.map((o) => (
             <li key={o.id}>
+              {/* A tile: its first sample filling it behind a soft veil, the name over it. */}
               <button
                 type="button"
                 onClick={() => setOpen(o.id)}
-                className="flex w-full items-center gap-4 rounded-3xl border border-border bg-surface p-3 text-left shadow-theme-xs transition hover:border-brand-500/40 hover:shadow-md"
+                className="group relative grid aspect-[2/1] w-full place-items-center overflow-hidden rounded-[28px] bg-gradient-to-br from-gray-700 to-gray-900 text-center text-white shadow-theme-md transition active:scale-[0.99] sm:aspect-[5/2]"
               >
-                <span className="grid size-20 shrink-0 place-items-center overflow-hidden rounded-2xl bg-background text-xs text-muted">
-                  {o.sampleUrls[0] ? (
-                    // A short-lived signed link to the private bucket: a plain img.
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={o.sampleUrls[0]} alt="" className="size-full object-cover" />
-                  ) : (
-                    "No samples"
-                  )}
-                </span>
-                <span className="min-w-0 flex-1 space-y-0.5">
-                  <span className="block truncate font-semibold">{o.name}</span>
-                  <span className="block text-sm text-muted tabular-nums">{offerPrice(o)}</span>
-                  <span className="block text-xs text-muted">
-                    {o.samples.length} sample{o.samples.length === 1 ? "" : "s"}
+                {o.sampleUrls[0] ? (
+                  // A short-lived signed link to the private bucket: a plain img.
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={o.sampleUrls[0]} alt="" className="absolute inset-0 size-full scale-105 object-cover blur-[2px] transition duration-500 group-hover:scale-110" />
+                ) : null}
+                <span className="absolute inset-0 bg-black/45 transition group-hover:bg-black/35" />
+                <span className="relative space-y-1.5 px-6">
+                  <span className="block text-3xl font-medium tracking-tight drop-shadow-sm sm:text-4xl">{o.name}</span>
+                  <span className="block text-sm text-white/80 tabular-nums">
+                    {offerPrice(o)} · {o.samples.length ? `${o.samples.length} sample${o.samples.length === 1 ? "" : "s"}` : "No samples yet"}
                   </span>
                 </span>
               </button>
