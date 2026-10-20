@@ -7,6 +7,7 @@ import { FormSheet } from "@repo/ui/FormSheet";
 import { Lightbox } from "@repo/ui/Lightbox";
 import { PhotoGrid } from "@repo/ui/PhotoGrid";
 import { offerPrice, offerPriceParts, type VendorOffer } from "@repo/lib/vendors/core";
+import { buttonClass } from "@repo/ui/Button";
 
 /** A service as shown: its samples' links (signed, short-lived; null when unavailable). */
 export type OfferView = Pick<VendorOffer, "id" | "name" | "description" | "price" | "unit" | "included"> & { sampleUrls: (string | null)[] };
@@ -168,13 +169,12 @@ export function ServiceTiles({ offers, hire }: { offers: OfferView[]; hire?: Hir
                     ))}
                   </ul>
                 ) : (
-                  <p className="rounded-2xl border border-dashed border-border p-5 text-center text-sm text-muted">
-                    No projects in hand.{" "}
-                    <Link href="/studio/projects/new" className="font-medium text-brand-600 hover:underline">
+                  <div className="space-y-3 rounded-2xl border border-dashed border-border p-5 text-center text-sm text-muted">
+                    <p>No projects in hand to hire on.</p>
+                    <Link href="/studio/projects?new" className={buttonClass("primary", "sm")}>
                       Start a project
-                    </Link>{" "}
-                    to hire on it.
-                  </p>
+                    </Link>
+                  </div>
                 )}
               </section>
             ) : null}

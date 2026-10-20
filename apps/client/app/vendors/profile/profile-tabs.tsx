@@ -6,6 +6,7 @@ import { useState, type ReactNode } from "react";
 import { ServiceTiles, type OfferView } from "@repo/ui/vendors/ServiceTiles";
 import { SocialIcon } from "@repo/ui/vendors/SocialIcon";
 import type { SocialNetwork, VendorKind } from "@repo/lib/vendors/core";
+import { buttonClass } from "@repo/ui/Button";
 
 const TABS = ["Services", "About"] as const;
 
@@ -49,13 +50,12 @@ export function ProfileTabs({
             {offers.length ? (
               <ServiceTiles offers={offers} />
             ) : (
-              <p className="text-sm text-muted">
-                No services yet.{" "}
-                <Link href="/vendors/services?add" className="font-medium text-brand-600 hover:underline dark:text-brand-400">
-                  Add one
-                </Link>{" "}
-                with its price and samples.
-              </p>
+              <div className="space-y-3 rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted">
+                <p>No services yet. Add what you offer, its price and samples of your work.</p>
+                <Link href="/vendors/services?add" className={buttonClass("primary", "sm")}>
+                  Add a service
+                </Link>
+              </div>
             )}
             {skills.length ? (
               <div className="flex flex-wrap gap-2">

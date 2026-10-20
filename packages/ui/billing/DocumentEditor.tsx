@@ -237,7 +237,7 @@ export function DocumentEditor({
             <p className="text-sm sm:col-span-2">
               <span className="text-muted">Shoot:</span> {formatDay(scope, linked.shoot.date)}, {timeSpan(linked.shoot)}{" "}
               <span className="text-muted">(from its booking)</span> ·{" "}
-              <a href={`/studio/bookings/${linked.id}/edit`} className="font-medium text-brand-600 hover:underline">
+              <a href={`/studio/bookings/${linked.id}?edit`} className="font-medium text-brand-600 hover:underline">
                 Change it on the booking
               </a>
             </p>

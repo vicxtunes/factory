@@ -36,10 +36,14 @@ import { vendorJobs, vendors } from "@repo/lib/vendors/server";
 import { team } from "@repo/lib/team/server";
 import { formatAmount, formatDay } from "@repo/lib/tenancy/format";
 import type { TenantScope } from "@repo/lib/tenancy/types";
+import { buttonClass } from "@repo/ui/Button";
+import { SheetButton } from "@repo/ui/SheetButton";
+
+import { EditProjectSheet } from "../sheets";
 
 export const metadata = { title: "Project · My Business" };
 
-export default async function StudioProjectPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ hire?: string; service?: string }> }) {
+export default async function StudioProjectPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ hire?: string; service?: string; edit?: string }> }) {
   const { scope, studio, access } = await requireStudio("projects");
   // Looked up inside the caller's studio only: another studio's id is "not found".
   const id = projectIdSchema.safeParse((await params).id);
@@ -47,7 +51,7 @@ export default async function StudioProjectPage({ params, searchParams }: { para
   if (!view) notFound();
   const p = view.project;
   // From a vendor's page ("Hire on a project", or "Hire this service"): the hire form opens with them, and that service, chosen.
-  const { hire = null, service = null } = await searchParams;
+  const { hire = null, service = null, edit } = await searchParams;
 
   return (
     <>
@@ -55,10 +59,7 @@ export default async function StudioProjectPage({ params, searchParams }: { para
         <BackLink href="/studio/projects" className="text-xs font-medium text-brand-600 hover:underline">
           ← Projects
         </BackLink>
-          <Link
-            href={`/studio/projects/${p.id}/edit`}
-            className="inline-flex min-h-11 items-center rounded-[var(--radius)] border border-gray-300 bg-white px-4 text-sm text-gray-700 shadow-theme-xs hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300"
-          >
+          <Link href={`/studio/projects/${p.id}?edit`} scroll={false} className={buttonClass("secondary")}>
             Edit
           </Link>
       </div>
@@ -132,6 +133,7 @@ export default async function StudioProjectPage({ params, searchParams }: { para
         <SectionLabel>History</SectionLabel>
         <ProjectHistory events={view.events} scope={scope} />
       </section>
+      {edit !== undefined ? <EditProjectSheet scope={scope} project={p} /> : null}
     </>
   );
 }
@@ -169,7 +171,7 @@ async function BookingAndMoney({ scope, project: p, money }: { scope: TenantScop
             </p>
           ) : booking && (booking.status === "tentative" || booking.status === "confirmed") ? (
             // Made from its booking: client, when and package filled in; saving links it (and confirms the booking).
-            <Link href={`/studio/invoices/new?booking=${booking.id}`} className="font-medium text-brand-600 hover:underline">
+            <Link href={`/studio/invoices/new?booking=${booking.id}`} className={buttonClass("secondary", "sm")}>
               Create invoice
             </Link>
           ) : (
@@ -192,7 +194,9 @@ async function Tasks({ scope, project: p }: { scope: TenantScope; project: Proje
   return (
     <>
       <TaskRows tasks={work} today={localDate(new Date(), scope.timeZone)} scope={scope} editable empty="No tasks yet." />
-      <AddTaskForm projectId={p.id} team={members.map((m) => ({ id: m.id, name: m.name }))} client={{ id: p.customerId, name: p.customerName }} folders={folders} />
+      <SheetButton label="Add a task" title="Add a task">
+        <AddTaskForm projectId={p.id} team={members.map((m) => ({ id: m.id, name: m.name }))} client={{ id: p.customerId, name: p.customerName }} folders={folders} />
+      </SheetButton>
     </>
   );
 }
@@ -276,7 +280,9 @@ async function AmingOrders({ scope, project: p, ownerClientId }: { scope: Tenant
   return (
     <>
       <LinkedOrdersList orders={amingOrders} scope={scope} projectId={p.id} empty="Nothing ordered from Aming for this project yet." />
-      <OrderFromAming projectId={p.id} choices={choices} scope={scope} />
+      <SheetButton label="Order from Aming" title="Order from Aming">
+        <OrderFromAming projectId={p.id} choices={choices} scope={scope} />
+      </SheetButton>
     </>
   );
 }

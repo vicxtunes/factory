@@ -14,6 +14,7 @@ import { documentIssuer, invoices, quotations, quotationUrl } from "@repo/lib/bi
 import { bookings } from "@repo/lib/bookings/server";
 import { requireStudio } from "@repo/lib/studios/server";
 import type { TenantScope } from "@repo/lib/tenancy/types";
+import { buttonClass } from "@repo/ui/Button";
 
 export const metadata = { title: "Quotation · My Business" };
 
@@ -84,7 +85,7 @@ async function Accepted({ scope, quotationId }: { scope: TenantScope; quotationI
           View its booking
         </Link>
       ) : (
-        <Link href={`/studio/bookings/new?quotation=${quotationId}`} className="text-sm font-medium text-brand-600 hover:underline">
+        <Link href={`/studio/bookings?new&quotation=${quotationId}`} className={buttonClass("secondary", "sm")}>
           Book it
         </Link>
       )}

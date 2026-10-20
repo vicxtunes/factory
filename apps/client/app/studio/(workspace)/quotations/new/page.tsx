@@ -10,6 +10,7 @@ import { requireStudio } from "@repo/lib/studios/server";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
 import { fromBooking } from "../../../_workspace/from-booking";
+import { buttonClass } from "@repo/ui/Button";
 
 export const metadata = { title: "New quotation · My Business" };
 
@@ -33,12 +34,12 @@ async function Form({ scope, client, booking }: { scope: TenantScope; client?: s
   // From a booking ("Create quotation" on it): its client, when and package, already filled in.
   const [clients, onSale, from] = await Promise.all([customers.list(scope), offerings.onSale(scope), fromBooking(scope, booking, "quotation")]);
   return clients.length === 0 ? (
-    <p className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted">
-      Add a client first:{" "}
-      <Link href="/studio/clients/new" className="font-medium text-brand-600 underline">
+    <div className="space-y-3 rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted">
+      <p>Add a client first.</p>
+      <Link href="/studio/clients?new" className={buttonClass("primary", "sm")}>
         New client
       </Link>
-    </p>
+    </div>
   ) : (
     <DocumentEditor
       kind="quotation"

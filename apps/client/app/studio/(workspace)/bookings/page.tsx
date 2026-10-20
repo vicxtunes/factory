@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 
 import { BookingsList } from "@repo/ui/bookings/BookingBits";
+import { buttonClass } from "@repo/ui/Button";
 import { BookingsCalendar } from "@repo/ui/bookings/BookingsCalendar";
 import { SectionLabel } from "@repo/ui/SectionLabel";
 import { Skeleton } from "@repo/ui/Skeleton";
@@ -13,9 +14,11 @@ import { bookings } from "@repo/lib/bookings/server";
 import { requireStudio } from "@repo/lib/studios/server";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
+import { NewBookingSheet } from "./sheets";
+
 export const metadata = { title: "Bookings · My Business" };
 
-export default async function StudioBookingsPage({ searchParams }: { searchParams: Promise<{ view?: string; date?: string }> }) {
+export default async function StudioBookingsPage({ searchParams }: { searchParams: Promise<{ view?: string; date?: string; new?: string; quotation?: string; client?: string }> }) {
   const { scope } = await requireStudio("bookings");
   const params = await searchParams;
   const today = localDate(new Date(), scope.timeZone);
@@ -25,10 +28,7 @@ export default async function StudioBookingsPage({ searchParams }: { searchParam
   return (
     <>
       <div className="flex justify-end">
-        <Link
-          href={`/studio/bookings/new?date=${anchor}`}
-          className="inline-flex min-h-11 items-center rounded-[var(--radius)] bg-brand-500 px-4 text-sm text-white shadow-theme-xs hover:bg-brand-600"
-        >
+        <Link href={`/studio/bookings?view=${view}&date=${anchor}&new`} scroll={false} className={buttonClass()}>
           New booking
         </Link>
       </div>
@@ -39,6 +39,9 @@ export default async function StudioBookingsPage({ searchParams }: { searchParam
       <Loading skeleton={<Skeleton className="h-[32rem] w-full rounded-2xl" />}>
         <Calendar scope={scope} view={view} anchor={anchor} today={today} />
       </Loading>
+      {params.new !== undefined ? (
+        <NewBookingSheet scope={scope} closeHref={`/studio/bookings?view=${view}&date=${anchor}`} date={params.date} quotation={params.quotation} client={params.client} />
+      ) : null}
     </>
   );
 }

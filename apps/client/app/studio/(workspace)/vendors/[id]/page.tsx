@@ -11,6 +11,7 @@ import { requireStudio } from "@repo/lib/studios/server";
 import { formatDay } from "@repo/lib/tenancy/format";
 import { SOCIAL_NETWORKS, vendorCategory } from "@repo/lib/vendors/core";
 import { vendors } from "@repo/lib/vendors/server";
+import { buttonClass } from "@repo/ui/Button";
 
 export const metadata = { title: "Vendor · My Business" };
 
@@ -115,9 +116,12 @@ export default async function StudioVendorPage({ params }: { params: Promise<{ i
             ))}
           </ul>
         ) : (
-          <p className="rounded-2xl border border-dashed border-border p-5 text-center text-sm text-muted">
-            No projects in hand. <Link href="/studio/projects/new" className="font-medium text-brand-600 hover:underline">Start a project</Link> to hire {vendor.name} on it.
-          </p>
+          <div className="space-y-3 rounded-2xl border border-dashed border-border p-5 text-center text-sm text-muted">
+            <p>No projects in hand to hire {vendor.name} on.</p>
+            <Link href="/studio/projects?new" className={buttonClass("primary", "sm")}>
+              Start a project
+            </Link>
+          </div>
         )}
       </section>
     </>

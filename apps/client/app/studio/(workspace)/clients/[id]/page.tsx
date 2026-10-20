@@ -24,6 +24,7 @@ import { customers } from "@repo/lib/customers/server";
 import { requireStudio } from "@repo/lib/studios/server";
 import { formatAmount, formatDay } from "@repo/lib/tenancy/format";
 import type { TenantScope } from "@repo/lib/tenancy/types";
+import { buttonClass } from "@repo/ui/Button";
 
 export const metadata = { title: "Client · My Business" };
 
@@ -64,7 +65,7 @@ export default async function StudioClientPage({ params }: { params: Promise<{ i
         <div className="mb-2 flex items-center justify-between gap-2">
           <SectionLabel>Bookings</SectionLabel>
           {customer.archivedAt ? null : (
-            <Link href={`/studio/bookings/new?client=${customer.id}`} className="text-sm font-medium text-brand-600 hover:underline">
+            <Link href={`/studio/bookings?new&client=${customer.id}`} className={buttonClass("secondary", "sm")}>
               New booking
             </Link>
           )}
@@ -77,7 +78,7 @@ export default async function StudioClientPage({ params }: { params: Promise<{ i
         <div className="mb-2 flex items-center justify-between gap-2">
           <SectionLabel>Quotations</SectionLabel>
           {customer.archivedAt ? null : (
-            <Link href={`/studio/quotations/new?client=${customer.id}`} className="text-sm font-medium text-brand-600 hover:underline">
+            <Link href={`/studio/quotations/new?client=${customer.id}`} className={buttonClass("secondary", "sm")}>
               New quotation
             </Link>
           )}
@@ -90,7 +91,7 @@ export default async function StudioClientPage({ params }: { params: Promise<{ i
         <div className="mb-2 flex items-center justify-between gap-2">
           <SectionLabel>Invoices</SectionLabel>
           {customer.archivedAt ? null : (
-            <Link href={`/studio/invoices/new?client=${customer.id}`} className="text-sm font-medium text-brand-600 hover:underline">
+            <Link href={`/studio/invoices/new?client=${customer.id}`} className={buttonClass("secondary", "sm")}>
               New invoice
             </Link>
           )}
