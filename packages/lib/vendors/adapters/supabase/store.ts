@@ -19,13 +19,14 @@ interface Row {
   socials: Vendor["socials"];
   bio: string | null;
   location: string | null;
+  rates: Vendor["rates"];
   photo_key: string | null;
   cover_key: string | null;
   status: Vendor["status"];
   created_at: string;
 }
 
-const COLUMNS = "id, client_id, name, kind, category, skills, socials, bio, location, photo_key, cover_key, status, created_at";
+const COLUMNS = "id, client_id, name, kind, category, skills, socials, bio, location, rates, photo_key, cover_key, status, created_at";
 
 const toVendor = (r: Row): Vendor => ({
   id: r.id,
@@ -37,6 +38,7 @@ const toVendor = (r: Row): Vendor => ({
   socials: r.socials,
   bio: r.bio,
   location: r.location,
+  rates: r.rates,
   photoKey: r.photo_key,
   coverKey: r.cover_key,
   status: r.status,
@@ -105,6 +107,7 @@ export const supabaseVendorStore: VendorStore = {
         socials: profile.socials,
         bio: profile.bio,
         location: profile.location,
+        rates: profile.rates,
       })
       .eq("id", id)
       .select(COLUMNS)

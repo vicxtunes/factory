@@ -26,6 +26,7 @@ import {
   vendorSearchSchema,
   type JobFolder,
   type Vendor,
+  type VendorRate,
 } from "./core";
 import { VendorError } from "./ports";
 import { vendorJobs, vendors } from "./server";
@@ -109,6 +110,7 @@ export interface VendorCard {
   category: string;
   location: string | null;
   skills: string[];
+  rates: VendorRate[];
   photoUrl: string | null;
 }
 
@@ -118,7 +120,7 @@ export async function findVendors(input: unknown): Promise<Result<VendorCard[]>>
     await studioOfCaller("projects");
     const { query, category } = parseInput(vendorSearchSchema, input);
     const found = await vendors.search(query, category);
-    return Promise.all(found.map(async (v: Vendor) => ({ id: v.id, name: v.name, category: v.category, location: v.location, skills: v.skills, photoUrl: await vendors.pictureUrl(v.photoKey) })));
+    return Promise.all(found.map(async (v: Vendor) => ({ id: v.id, name: v.name, category: v.category, location: v.location, skills: v.skills, rates: v.rates, photoUrl: await vendors.pictureUrl(v.photoKey) })));
   });
 }
 

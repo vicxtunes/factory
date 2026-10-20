@@ -93,7 +93,7 @@ export default async function VendorProfilePage() {
             </span>
           </div>
 
-          <ProfileTabs skills={vendor.skills} socials={socials} kind={vendor.kind} joined={joined} />
+          <ProfileTabs skills={vendor.skills} rates={vendor.rates} socials={socials} kind={vendor.kind} joined={joined} />
         </div>
       </div>
     </VendorFrame>

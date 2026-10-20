@@ -3,7 +3,7 @@ import { test } from "node:test";
 
 import { parseInput } from "@repo/lib/kernel/core";
 
-import { autoReleaseAt, jobFee, jobRequestSchema, overdueStep, socialHandle, vendorJoinSchema, vendorTake } from "./index";
+import { autoReleaseAt, jobFee, jobRequestSchema, overdueStep, ratePrice, rateTotal, socialHandle, vendorJoinSchema, vendorProfileSchema, vendorTake } from "./index";
 
 test("a social handle however it's typed", () => {
   assert.equal(socialHandle("instagram", "@kato.films"), "kato.films");
@@ -61,4 +61,18 @@ test("delivered work left unanswered: warned after a day, released after two, no
   assert.equal(overdueStep(job, at(60)), "release", "released even if the warning never went");
   assert.equal(overdueStep({ ...job, status: "disputed" }, at(100)), null, "a dispute waits for staff");
   assert.equal(autoReleaseAt(job), "2026-11-03T10:00:00.000Z");
+});
+
+test("rates: a service at a whole-shilling price per something, and what a job at one costs", () => {
+  const profile = { name: "Kato", kind: "individual", category: "photo_editor", skills: ["Retouching"], bio: "", location: "" };
+  const ok = vendorProfileSchema.parse({ ...profile, rates: [{ service: " Retouch ", price: "5000", unit: "photo" }] });
+  assert.deepEqual(ok.rates, [{ service: "Retouch", price: 5000, unit: "photo" }]);
+  assert.deepEqual(vendorProfileSchema.parse(profile).rates, [], "none listed");
+  assert.equal(vendorProfileSchema.safeParse({ ...profile, rates: [{ service: "Retouch", price: 100, unit: "photo" }] }).success, false, "under UGX 500");
+  assert.equal(vendorProfileSchema.safeParse({ ...profile, rates: [{ service: "Retouch", price: 5000, unit: "minute" }] }).success, false, "not a unit");
+
+  const rate = { service: "Retouch", price: 5000, unit: "photo" } as const;
+  assert.equal(ratePrice(rate), "UGX 5,000 per photo");
+  assert.equal(rateTotal(rate, 300), 1_500_000);
+  assert.equal(rateTotal({ ...rate, unit: "project" }, 300), 5000, "a project's price counts once");
 });

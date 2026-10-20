@@ -13,7 +13,7 @@ export function memoryStore() {
       [...rows.values()].filter((v) => v.status === "active" && words.every((w) => v.name.toLowerCase().includes(w.toLowerCase())) && (!category || v.category === category)),
     walletBalance: async () => 0,
     create: async (clientId, name, join) => {
-      const vendor: Vendor = { id: `v${rows.size + 1}`, clientId, name, ...join, bio: null, location: null, photoKey: null, coverKey: null, status: "active", createdAt: "2026-10-18T00:00:00Z" };
+      const vendor: Vendor = { id: `v${rows.size + 1}`, clientId, name, ...join, bio: null, location: null, rates: [], photoKey: null, coverKey: null, status: "active", createdAt: "2026-10-18T00:00:00Z" };
       rows.set(vendor.id, vendor);
       return vendor;
     },

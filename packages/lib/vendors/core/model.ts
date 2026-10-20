@@ -1,6 +1,7 @@
 // The vendors module's records. Pure; safe on client and server.
 
 import type { SocialNetwork } from "./categories";
+import type { VendorRate } from "./rates";
 
 /** A freelancer on their own, or a company or team. */
 export type VendorKind = "individual" | "business";
@@ -29,6 +30,8 @@ export interface Vendor {
   bio: string | null;
   /** Where they work from ("Kampala"). */
   location: string | null;
+  /** What they charge for their services, as they list them. */
+  rates: VendorRate[];
   /** Their profile photo and cover, in the photo bucket. */
   photoKey: string | null;
   coverKey: string | null;
@@ -45,6 +48,7 @@ export interface VendorProfile {
   socials: Vendor["socials"];
   bio: string | null;
   location: string | null;
+  rates: VendorRate[];
 }
 
 /** What a vendor gives when they join (vendorJoinSchema's output). */

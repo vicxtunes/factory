@@ -2,19 +2,22 @@
 
 import { useState, type ReactNode } from "react";
 
+import { RateList } from "@repo/ui/vendors/RateList";
 import { SocialIcon } from "@repo/ui/vendors/SocialIcon";
-import type { SocialNetwork, VendorKind } from "@repo/lib/vendors/core";
+import type { SocialNetwork, VendorKind, VendorRate } from "@repo/lib/vendors/core";
 
 const TABS = ["Work", "Services", "About"] as const;
 
-/** The profile's tabs: their work (samples), what they offer, and about them. */
+/** The profile's tabs: their work (samples), what they offer and charge, and about them. */
 export function ProfileTabs({
   skills,
+  rates,
   socials,
   kind,
   joined,
 }: {
   skills: string[];
+  rates: VendorRate[];
   socials: { id: SocialNetwork; label: string; text: string; href: string }[];
   kind: VendorKind;
   joined: string;
@@ -50,17 +53,18 @@ export function ProfileTabs({
         ) : null}
 
         {tab === "Services" ? (
-          skills.length ? (
-            <div className="flex flex-wrap gap-2">
-              {skills.map((s) => (
-                <span key={s} className="rounded-full border border-border bg-surface px-3.5 py-1.5 text-sm">
-                  {s}
-                </span>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-muted">No services yet.</p>
-          )
+          <div className="space-y-5">
+            {rates.length ? <RateList rates={rates} /> : <p className="text-sm text-muted">No rates yet. Add what you charge in Edit profile.</p>}
+            {skills.length ? (
+              <div className="flex flex-wrap gap-2">
+                {skills.map((s) => (
+                  <span key={s} className="rounded-full border border-border bg-surface px-3.5 py-1.5 text-sm">
+                    {s}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+          </div>
         ) : null}
 
         {tab === "About" ? (

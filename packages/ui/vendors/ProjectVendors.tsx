@@ -18,7 +18,7 @@ import {
   setVendorJobFolder,
   type VendorCard,
 } from "@repo/lib/vendors/actions";
-import { autoReleaseAt, isOpenJob, JOB_STATUS_LABELS, VENDOR_CATEGORIES, vendorCategory, vendorTake, type JobStatus } from "@repo/lib/vendors/core";
+import { autoReleaseAt, isOpenJob, JOB_STATUS_LABELS, ratePrice, rateTotal, rateUnit, VENDOR_CATEGORIES, vendorCategory, vendorTake, type JobStatus } from "@repo/lib/vendors/core";
 
 /** One vendor job on the project, as the studio sees it. */
 export interface ProjectJob {
@@ -284,6 +284,9 @@ function AddVendor({
   const [brief, setBrief] = useState("");
   const [dueOn, setDueOn] = useState("");
   const [price, setPrice] = useState("");
+  // One of their rates ("" for a price agreed here), and how many of its unit.
+  const [rate, setRate] = useState("");
+  const [quantity, setQuantity] = useState("1");
   // Where they work: "new" (a folder made for them) or an existing folder's id.
   const [folder, setFolder] = useState("new");
   const [folderName, setFolderName] = useState("");
@@ -341,6 +344,43 @@ function AddVendor({
               autoFocus
             />
           </Field>
+          {chosen.rates.length ? (
+            <div className="space-y-2">
+              <Field label="At their rate">
+                <select
+                  value={rate}
+                  onChange={(e) => {
+                    setRate(e.target.value);
+                    const picked = chosen.rates[Number(e.target.value)];
+                    if (!picked || e.target.value === "") return;
+                    setPrice(rateTotal(picked, Number(quantity) || 1).toLocaleString("en-US"));
+                    if (!brief.trim()) setBrief(picked.service);
+                  }}
+                  className="h-11 w-full rounded-lg border border-border bg-surface px-3 text-sm"
+                >
+                  <option value="">No, agree a price</option>
+                  {chosen.rates.map((r, i) => (
+                    <option key={i} value={i}>
+                      {r.service}: {ratePrice(r)}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              {rate !== "" && chosen.rates[Number(rate)]!.unit !== "project" ? (
+                <Field label={`How many ${rateUnit(chosen.rates[Number(rate)]!.unit).many}`}>
+                  <TextInput
+                    inputMode="numeric"
+                    value={quantity}
+                    onChange={(e) => {
+                      const n = e.target.value.replace(/[^\d]/g, "");
+                      setQuantity(n);
+                      setPrice(rateTotal(chosen.rates[Number(rate)]!, Number(n) || 1).toLocaleString("en-US"));
+                    }}
+                  />
+                </Field>
+              ) : null}
+            </div>
+          ) : null}
           <div className="grid grid-cols-2 gap-3">
             <Field label="Due">
               <TextInput type="date" value={dueOn} onChange={(e) => setDueOn(e.target.value)} />

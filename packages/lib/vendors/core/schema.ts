@@ -7,6 +7,7 @@ import { optionalText } from "@repo/lib/kernel/core";
 import { SOCIAL_NETWORKS, socialHandle, VENDOR_CATEGORIES } from "./categories";
 import type { JobFolder, JobRequest } from "./jobs";
 import type { VendorJoin, VendorProfile } from "./model";
+import { RATE_UNITS, type RateUnit } from "./rates";
 
 const kind = z.enum(["individual", "business"], "Choose who you are.");
 const category = z.string("Choose what you do.").refine((id) => VENDOR_CATEGORIES.some((c) => c.id === id), "Choose what you do.");
@@ -47,6 +48,21 @@ export const vendorJoinSchema = z
     }),
   );
 
+const rates = z
+  .array(
+    z.object({
+      service: z.string("Name the service.").trim().min(1, "Name each service you price.").max(60, "Keep each service under 60 characters."),
+      price: z.coerce
+        .number("Enter a price.")
+        .int("Prices are in whole shillings.")
+        .min(500, "A rate is at least UGX 500.")
+        .max(100_000_000, "That's more than a rate can be."),
+      unit: z.enum(RATE_UNITS.map((u) => u.id) as [RateUnit, ...RateUnit[]], "Choose what the price is for."),
+    }),
+  )
+  .max(20, "List up to 20 rates.")
+  .default([]);
+
 /** A vendor's profile as they edit it (/vendors/profile/edit). */
 export const vendorProfileSchema = z.object({
   name: z.string("Enter your name.").trim().min(2, "Enter your name.").max(100, "Keep the name under 100 characters."),
@@ -56,6 +72,7 @@ export const vendorProfileSchema = z.object({
   socials,
   bio: optionalText(300, "Keep your bio under 300 characters."),
   location: optionalText(80, "Keep the place under 80 characters."),
+  rates,
 }) satisfies z.ZodType<VendorProfile, unknown>;
 
 export const vendorPictureSchema = z.enum(["photo", "cover"]);

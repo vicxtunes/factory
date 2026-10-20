@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { Avatar } from "@repo/ui/Avatar";
 import { BackLink } from "@repo/ui/navigation/back";
 import { SectionLabel } from "@repo/ui/SectionLabel";
+import { RateList } from "@repo/ui/vendors/RateList";
 import { SocialIcon } from "@repo/ui/vendors/SocialIcon";
 import { projects } from "@repo/lib/projects/server";
 import { requireStudio } from "@repo/lib/studios/server";
@@ -14,7 +15,7 @@ import { vendors } from "@repo/lib/vendors/server";
 export const metadata = { title: "Vendor · My Business" };
 
 // A vendor as studios see them: their cover and picture, what they do, their
-// services and where they show their work, then the studio's projects in
+// services, rates and where they show their work, then the studio's projects in
 // hand to hire them on (the request is made on the project, in its folder).
 export default async function StudioVendorPage({ params }: { params: Promise<{ id: string }> }) {
   const { scope } = await requireStudio("projects");
@@ -80,6 +81,13 @@ export default async function StudioVendorPage({ params }: { params: Promise<{ i
           ) : null}
         </div>
       </div>
+
+      {vendor.rates.length ? (
+        <section className="space-y-3">
+          <SectionLabel>Rates</SectionLabel>
+          <RateList rates={vendor.rates} />
+        </section>
+      ) : null}
 
       <section className="space-y-3">
         <SectionLabel>Hire on a project</SectionLabel>
