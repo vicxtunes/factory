@@ -130,6 +130,12 @@ import UrgencyBadgeAll from "./examples/urgency-badge/all";
 import WorkloadViewLaptop from "./examples/workload-view/laptop";
 import WorkloadViewOverCapacity from "./examples/workload-view/over-capacity";
 import WorkloadViewTeam from "./examples/workload-view/team";
+import FormSheetBasic from "./examples/form-sheet/basic";
+import TabsPageSections from "./examples/tabs/page-sections";
+import WalletCardVendor from "./examples/wallet-card/vendor";
+import HireCardAvailable from "./examples/hire-card/available";
+import ServiceCardsVendor from "./examples/service-cards/vendor";
+import SocialIconAll from "./examples/social-icon/all";
 
 // Everything the Design Room shows. To add a component: build it in
 // packages/ui/, write its examples under ./examples/<slug>/ (one default
@@ -278,8 +284,11 @@ export const COMPONENTS: RoomComponent[] = [
     category: "Navigation",
     status: "live",
     source: "packages/ui/Tabs.tsx",
-    summary: "Underlined category tabs with optional count badges; amber tone for counts that need attention.",
-    examples: [{ title: "With counts", file: "tabs/counts.tsx", Demo: TabsCounts }],
+    summary: "Underlined category tabs with optional count badges; amber tone for counts that need attention. A long page is tabs, only the open one rendered: UrlTabs (packages/ui/UrlTabs.tsx) keeps the tab in the address (?tab=…).",
+    examples: [
+      { title: "With counts", file: "tabs/counts.tsx", Demo: TabsCounts },
+      { title: "A page in sections", file: "tabs/page-sections.tsx", Demo: TabsPageSections },
+    ],
   },
   {
     slug: "drawer",
@@ -289,6 +298,15 @@ export const COMPONENTS: RoomComponent[] = [
     source: "packages/ui/Drawer.tsx",
     summary: "Right-hand sheet for detail panels and forms, with a pinned footer.",
     examples: [{ title: "With footer", file: "drawer/basic.tsx", Demo: DrawerBasic }],
+  },
+  {
+    slug: "form-sheet",
+    name: "Form sheet",
+    category: "Overlays",
+    status: "live",
+    source: "packages/ui/FormSheet.tsx, packages/ui/SheetButton.tsx, packages/ui/UrlSheet.tsx",
+    summary: "Every create or edit form opens over the page, never on a page of its own: the panel from the right on a desktop, a bottom sheet on a phone. SheetButton opens one from a button; UrlSheet from the address (a list's ?new, a record's ?edit).",
+    examples: [{ title: "From a button", file: "form-sheet/basic.tsx", Demo: FormSheetBasic }],
   },
   {
     slug: "popover",
@@ -835,5 +853,41 @@ export const COMPONENTS: RoomComponent[] = [
     source: "packages/ui/chat/MessageBubble.tsx (AttachmentView) + packages/ui/chat/VoicePlayer.tsx",
     summary: "Files sent in chat: photos open in a new tab, files download, voice notes play inline. Shows \"(unavailable)\" when the link couldn't be made.",
     examples: [{ title: "In a thread", file: "chat-attachments/thread.tsx", Demo: ChatAttachmentsThread }],
+  },
+  {
+    slug: "wallet-card",
+    name: "Wallet",
+    category: "Data display",
+    status: "live",
+    source: "packages/ui/wallet (BankCard, MoneyCards: Action, TILE, TileHead, Transactions; CardSheets: WithdrawSheet, Withdrawals)",
+    summary: "Every wallet (a studio's Business card, a vendor's wallet, the Aming card) is made of the same pieces: the card, its actions, the transactions tile, the withdrawals, and the Withdraw sheet.",
+    examples: [{ title: "A vendor's wallet", file: "wallet-card/vendor.tsx", Demo: WalletCardVendor }],
+  },
+  {
+    slug: "hire-card",
+    name: "Vendor hire card",
+    category: "Data display",
+    status: "live",
+    source: "packages/ui/vendors/HireCard.tsx",
+    summary: "A vendor in Vendors: what they do and where, available or busy, Hire me and See my work, and their line on the brand-coloured strip; light or dark. As many a row as fit at 18rem.",
+    examples: [{ title: "Available and busy", file: "hire-card/available.tsx", Demo: HireCardAvailable }],
+  },
+  {
+    slug: "service-cards",
+    name: "Service cards",
+    category: "Data display",
+    status: "live",
+    source: "packages/ui/vendors/ServiceTiles.tsx (ServiceTiles, ServiceTile, SERVICE_GRID)",
+    summary: "A vendor's services like pricing cards: the name and price told big, what's included, the samples. Opening one shows the work first, then (for a studio) hiring at it on a project.",
+    examples: [{ title: "A studio's view", file: "service-cards/vendor.tsx", Demo: ServiceCardsVendor }],
+  },
+  {
+    slug: "social-icon",
+    name: "Social icons",
+    category: "Data display",
+    status: "live",
+    source: "packages/ui/vendors/SocialIcon.tsx",
+    summary: "A social handle always shows with its network's icon: Instagram, TikTok, Facebook, YouTube, X or a website.",
+    examples: [{ title: "Every network", file: "social-icon/all.tsx", Demo: SocialIconAll }],
   },
 ];
