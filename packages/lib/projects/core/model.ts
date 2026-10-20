@@ -1,21 +1,18 @@
 // The projects module's records. Pure; safe on client and server.
 //
 // A project is the work a business does for a customer, usually started
-// from a confirmed booking, moving through a pipeline to delivery. Every
-// change is kept in its activity history.
+// from a confirmed booking: upcoming, then in progress (shooting, editing,
+// delivering), then done. Every change is kept in its activity history.
 
-export type ProjectStatus = "booked" | "in_progress" | "editing" | "review" | "delivered" | "completed";
+export type ProjectStatus = "upcoming" | "in_progress" | "done";
 
-/** The pipeline, in order. */
-export const PROJECT_PIPELINE: ProjectStatus[] = ["booked", "in_progress", "editing", "review", "delivered", "completed"];
+/** The stages, in order. */
+export const PROJECT_PIPELINE: ProjectStatus[] = ["upcoming", "in_progress", "done"];
 
 export const PROJECT_STATUS_LABELS: Record<ProjectStatus, string> = {
-  booked: "Booked",
+  upcoming: "Upcoming",
   in_progress: "In progress",
-  editing: "Editing",
-  review: "Review",
-  delivered: "Delivered",
-  completed: "Completed",
+  done: "Done",
 };
 
 /** What the business fills in. */

@@ -56,7 +56,7 @@ export function Drawer({
         aria-hidden="true"
         onClick={onClose}
         className={`fixed inset-0 z-40 bg-gray-400/50 backdrop-blur-[2px] transition-opacity duration-200 dark:bg-gray-950/60 ${
-          open ? "opacity-100" : "pointer-events-none opacity-0"
+          open ? "opacity-100 motion-safe:animate-[backdrop-in_200ms_ease-out]" : "pointer-events-none opacity-0"
         }`}
       />
       <aside
@@ -64,7 +64,7 @@ export function Drawer({
         aria-modal="true"
         className={`fixed inset-y-0 right-0 z-50 flex w-full flex-col border-l border-border bg-surface shadow-theme-xl transition-transform duration-200 ${
           size === "lg" ? "max-w-2xl" : "max-w-md"
-        } ${open ? "translate-x-0" : "translate-x-full"}`}
+        } ${open ? "translate-x-0 motion-safe:animate-[drawer-in_220ms_ease-out]" : "translate-x-full"}`}
       >
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <h2 className="text-sm font-semibold">{title}</h2>

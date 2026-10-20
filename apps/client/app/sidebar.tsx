@@ -27,8 +27,8 @@ import { useOwes } from "./use-owes";
 import { clientNavFor, isCurrentClientPage, type ClientNavItem } from "./nav";
 
 // Same shape as app/dashboard/sidebar.tsx — fixed logo header + icon nav
-// list with active-state utilities from app/globals.css. Gated items
-// (everything but Showroom) only render when signed in.
+// list with active-state utilities from app/globals.css. Gated items only
+// render when signed in.
 
 // Sidebar icons for the nav's icon names (./nav.ts uses the home bar's names).
 const ICONS: Partial<Record<ClientNavItem["icon"], typeof OrdersIcon>> = {

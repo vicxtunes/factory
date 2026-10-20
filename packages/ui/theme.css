@@ -267,6 +267,20 @@ body {
   }
 }
 
+/* A panel (packages/ui/Drawer.tsx) opened as it appears slides in from the right. */
+@keyframes drawer-in {
+  from {
+    transform: translateX(100%);
+  }
+}
+
+/* Its backdrop fades in with it. */
+@keyframes backdrop-in {
+  from {
+    opacity: 0;
+  }
+}
+
 @keyframes skeleton-shimmer {
   0% { background-position: -400px 0; }
   100% { background-position: 400px 0; }

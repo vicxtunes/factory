@@ -1,7 +1,8 @@
 "use client";
 
 // What a business's owner does with their Business card: move money onto
-// their Aming card (one way: never back), and take money out to their phone.
+// their Aming card (one way: never back), and take money out to their phone;
+// a vendor takes money out of their wallet the same way.
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
@@ -9,7 +10,7 @@ import { useState, useTransition } from "react";
 import { FormSheet } from "@repo/ui/FormSheet";
 import { Button } from "@repo/ui/Button";
 import { Field, TextInput } from "@repo/ui/Field";
-import { moveMoneyToAmingCard, withdrawFromBusinessCard } from "@repo/lib/wallet/actions";
+import { moveMoneyToAmingCard, withdrawFromBusinessCard, withdrawFromVendorWallet } from "@repo/lib/wallet/actions";
 import { MAX_WITHDRAWAL, MIN_WITHDRAWAL, localPhone } from "@repo/lib/wallet/policy";
 import type { Withdrawal } from "@repo/lib/wallet/types";
 
@@ -55,8 +56,21 @@ export function TransferSheet({ open, onClose, balance }: { open: boolean; onClo
   );
 }
 
-/** Asks for money from the Business card on a mobile money number. Aming sends it. */
-export function WithdrawSheet({ open, onClose, balance, phone: mine }: { open: boolean; onClose: () => void; balance: number; phone: string | null }) {
+/** Asks for money from the Business card (or a vendor's wallet, `from`) on a mobile money number. Aming sends it. */
+export function WithdrawSheet({
+  open,
+  onClose,
+  balance,
+  phone: mine,
+  from = "business",
+}: {
+  open: boolean;
+  onClose: () => void;
+  balance: number;
+  phone: string | null;
+  from?: "business" | "vendor";
+}) {
+  const where = from === "vendor" ? "your wallet" : "your Business card";
   const router = useRouter();
   const money = useMoney();
   const [amount, setAmount] = useState("");
@@ -74,11 +88,11 @@ export function WithdrawSheet({ open, onClose, balance, phone: mine }: { open: b
   }
 
   return (
-    <FormSheet open={open} onClose={close} title="Withdraw from your Business card">
+    <FormSheet open={open} onClose={close} title={`Withdraw from ${where}`}>
       {asked ? (
         <div className="space-y-4">
           <p className="text-sm">
-            You asked for {money(asked)} to {phone}. It&apos;s off your card now, and we&apos;ll tell you when it&apos;s sent.
+            You asked for {money(asked)} to {phone}. It&apos;s off {where} now, and we&apos;ll tell you when it&apos;s sent.
           </p>
           <Button type="button" className="w-full" onClick={close}>
             Done
@@ -91,7 +105,7 @@ export function WithdrawSheet({ open, onClose, balance, phone: mine }: { open: b
             e.preventDefault();
             setError(null);
             start(async () => {
-              const res = await withdrawFromBusinessCard(value, phone);
+              const res = await (from === "vendor" ? withdrawFromVendorWallet : withdrawFromBusinessCard)(value, phone);
               if (!res.ok) return setError(res.error);
               setAsked(value);
               setAmount("");
@@ -101,15 +115,15 @@ export function WithdrawSheet({ open, onClose, balance, phone: mine }: { open: b
         >
           <p className="text-sm text-muted">
             Sent to your MTN or Airtel number through our mobile money provider, after a check by Aming: between 5 minutes and 24 hours after you ask. The
-            provider&apos;s fee comes off what you receive. Only you, the owner, can withdraw.
+            provider&apos;s fee comes off what you receive.{from === "business" ? " Only you, the owner, can withdraw." : null}
           </p>
-          <Field label="Amount" hint={`${money(balance)} on your Business card. From ${money(MIN_WITHDRAWAL)} to ${money(MAX_WITHDRAWAL)} at a time.`}>
+          <Field label="Amount" hint={`${money(balance)} on ${where}. From ${money(MIN_WITHDRAWAL)} to ${money(MAX_WITHDRAWAL)} at a time.`}>
             <TextInput inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="e.g. 100000" required />
           </Field>
           <Field label="Mobile money number">
             <TextInput type="tel" inputMode="tel" autoComplete="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="07XX XXX XXX" required />
           </Field>
-          {tooMuch ? <p className="text-sm text-error-600 dark:text-error-400">You can withdraw up to {money(balance)}: what&apos;s on your Business card.</p> : null}
+          {tooMuch ? <p className="text-sm text-error-600 dark:text-error-400">You can withdraw up to {money(balance)}: what&apos;s on {where}.</p> : null}
           {error ? <p className="text-sm text-error-600 dark:text-error-400">{error}</p> : null}
           <Button type="submit" className="w-full" loading={pending} disabled={pending || !(value > 0) || tooMuch}>
             Withdraw{value > 0 ? ` ${money(value)}` : ""}
@@ -127,7 +141,7 @@ const STATUS: Record<Withdrawal["status"], { label: string; tone: string }> = {
   rejected: { label: "Not sent", tone: "bg-gray-100 text-gray-600 dark:bg-white/5 dark:text-gray-400" },
 };
 
-/** The owner's withdrawals: what's being sent, what was, and why one wasn't. */
+/** The owner's (or vendor's) withdrawals: what's being sent, what was, and why one wasn't. */
 export function Withdrawals({ withdrawals }: { withdrawals: Withdrawal[] }) {
   const money = useMoney();
   if (withdrawals.length === 0) return null;

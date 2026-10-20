@@ -1,18 +1,18 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition, type ReactNode } from "react";
 
 import { Button } from "@repo/ui/Button";
 import { Field, TextInput } from "@repo/ui/Field";
 import { saveVendorProfile } from "@repo/lib/vendors/actions";
+import { SocialIcon } from "@repo/ui/vendors/SocialIcon";
 import { SOCIAL_NETWORKS, VENDOR_CATEGORIES, VENDOR_SKILLS, type Vendor } from "@repo/lib/vendors/core";
 
 const BIO_MAX = 300;
 
-/** A vendor's profile, all on one page: who they are, what they do and offer, about them, where their work is. */
-export function EditProfileForm({ vendor, pictures }: { vendor: Vendor; pictures: ReactNode }) {
+/** A vendor's profile, all in one form: who they are, what they do and offer, about them, where their work is. */
+export function EditProfileForm({ vendor, pictures, onSaved }: { vendor: Vendor; pictures: ReactNode; onSaved: () => void }) {
   const router = useRouter();
   const [name, setName] = useState(vendor.name);
   const [kind, setKind] = useState(vendor.kind);
@@ -21,6 +21,8 @@ export function EditProfileForm({ vendor, pictures }: { vendor: Vendor; pictures
   const [ownSkill, setOwnSkill] = useState("");
   const [bio, setBio] = useState(vendor.bio ?? "");
   const [location, setLocation] = useState(vendor.location ?? "");
+  const [available, setAvailable] = useState(vendor.available);
+  const [statusLine, setStatusLine] = useState(vendor.statusLine ?? "");
   const [socials, setSocials] = useState<Record<string, string>>(vendor.socials);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -30,26 +32,18 @@ export function EditProfileForm({ vendor, pictures }: { vendor: Vendor; pictures
 
   return (
     <form
-      className="px-4 py-6 sm:px-6 lg:py-8"
       onSubmit={(e) => {
         e.preventDefault();
         setError(null);
         start(async () => {
-          const res = await saveVendorProfile({ name, kind, category, skills, socials, bio, location });
+          const res = await saveVendorProfile({ name, kind, category, skills, socials, bio, location, available, statusLine });
           if (!res.ok) return setError(res.error);
-          router.push("/vendors/profile");
           router.refresh();
+          onSaved();
         });
       }}
     >
-      <div className="flex items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold tracking-tight">Edit profile</h1>
-        <Link href="/vendors/profile" className="text-sm font-medium text-muted hover:text-foreground">
-          Cancel
-        </Link>
-      </div>
-
-      <div className="mt-6 space-y-10">
+      <div className="space-y-10">
         {pictures}
         <Section title="You">
           <Field label={kind === "business" ? "Business name" : "Name"}>
@@ -82,6 +76,27 @@ export function EditProfileForm({ vendor, pictures }: { vendor: Vendor; pictures
             <span className="mt-1 block text-right text-xs text-muted tabular-nums">
               {bio.length}/{BIO_MAX}
             </span>
+          </Field>
+        </Section>
+
+        <Section title="Your card">
+          <p className="-mt-2 text-sm text-muted">How studios see you in Vendors.</p>
+          <div className="grid grid-cols-2 gap-2 rounded-xl bg-gray-100 p-1 dark:bg-white/5">
+            {[true, false].map((on) => (
+              <button
+                key={String(on)}
+                type="button"
+                aria-pressed={available === on}
+                onClick={() => setAvailable(on)}
+                className={`flex h-10 items-center justify-center gap-2 rounded-lg text-sm font-medium transition-colors ${available === on ? "bg-surface shadow-theme-xs" : "text-muted hover:text-foreground"}`}
+              >
+                <span className={`size-2 rounded-full ${on ? "bg-success-500" : "bg-gray-400"}`} />
+                {on ? "Available for work" : "Busy for now"}
+              </button>
+            ))}
+          </div>
+          <Field label="Your line" hint="Under your card. Leave it empty to show your lowest price.">
+            <TextInput value={statusLine} onChange={(e) => setStatusLine(e.target.value)} maxLength={60} placeholder="e.g. Taking December weddings" />
           </Field>
         </Section>
 
@@ -133,7 +148,10 @@ export function EditProfileForm({ vendor, pictures }: { vendor: Vendor; pictures
           <div className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-surface">
             {SOCIAL_NETWORKS.map((n) => (
               <label key={n.id} className="flex items-center gap-3 px-4 py-1.5">
-                <span className="w-20 shrink-0 text-sm font-medium">{n.label}</span>
+                <span className="flex w-28 shrink-0 items-center gap-2 text-sm font-medium">
+                  <SocialIcon network={n.id} className="size-4 shrink-0 text-muted" />
+                  {n.label}
+                </span>
                 <input
                   value={socials[n.id] ?? ""}
                   onChange={(e) => setSocials({ ...socials, [n.id]: e.target.value })}
@@ -148,8 +166,8 @@ export function EditProfileForm({ vendor, pictures }: { vendor: Vendor; pictures
       </div>
 
       {error ? <p className="mt-6 text-sm text-error-600 dark:text-error-400">{error}</p> : null}
-      <div className="sticky bottom-[calc(4.5rem+env(safe-area-inset-bottom))] -mx-4 mt-8 border-t border-border bg-background px-4 py-3 sm:static sm:mx-0 sm:border-0 sm:p-0 lg:bottom-0">
-        <Button type="submit" className="min-h-12 w-full sm:w-auto sm:px-8" loading={pending} disabled={!name.trim() || skills.length === 0}>
+      <div className="mt-8">
+        <Button type="submit" className="min-h-12 w-full" loading={pending} disabled={!name.trim() || skills.length === 0}>
           Save
         </Button>
       </div>

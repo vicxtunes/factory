@@ -1,7 +1,7 @@
 // Vendors: someone joining to offer their services to photographers, and
 // finding their own vendor side again. Storage is a port (./ports.ts).
 
-import { PICTURE_MAX_BYTES, type Vendor, type VendorJoin, type VendorPicture, type VendorProfile } from "./core";
+import { PICTURE_MAX_BYTES, SAMPLES_PER_SERVICE, vendorIdSchema, type OfferInput, type Vendor, type VendorJoin, type VendorOffer, type VendorPicture, type VendorProfile } from "./core";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
 import { VendorError, type VendorFiles, type VendorStore } from "./ports";
@@ -32,6 +32,13 @@ export class VendorService {
   /** Vendors a studio can hire: every word of `query` in their name, and maybe of one category. */
   async search(query: string, category: string | null): Promise<Vendor[]> {
     return this.store.search(query.split(/\s+/).filter(Boolean).slice(0, 5), category);
+  }
+
+  /** A vendor a studio can see and hire; null when there's none or they aren't taking work. */
+  async hireable(id: string): Promise<Vendor | null> {
+    if (!vendorIdSchema.safeParse(id).success) return null;
+    const vendor = await this.store.get(id);
+    return vendor?.status === "active" ? vendor : null;
   }
 
   /** What's in the vendor's wallet: what studios paid them for jobs, less Aming's fee. */
@@ -73,6 +80,69 @@ export class VendorService {
     await this.files.move(key, final);
     const old = await this.store.setPicture(vendor.id, which, final);
     if (old) await this.files.remove([old]);
+  }
+
+  // ── Services, and samples of their work ──
+
+  async addOffer(clientId: string, offer: OfferInput): Promise<VendorOffer> {
+    return this.store.createOffer((await this.own(clientId)).id, offer);
+  }
+
+  async editOffer(clientId: string, id: string, offer: OfferInput): Promise<void> {
+    if (!(await this.store.updateOffer((await this.own(clientId)).id, id, offer))) throw new VendorError("That service doesn't exist.");
+  }
+
+  /** Deletes the service, and its samples' pictures with it. */
+  async removeOffer(clientId: string, id: string): Promise<void> {
+    const keys = await this.store.deleteOffer((await this.own(clientId)).id, id);
+    if (keys === null) throw new VendorError("That service doesn't exist.");
+    if (keys.length) await this.files.remove(keys);
+  }
+
+  /** A signed link the browser uploads a (shrunk) sample of the service to. */
+  async startSampleUpload(clientId: string, offerId: string): Promise<{ key: string; url: string }> {
+    const vendor = await this.own(clientId);
+    this.roomForSample(vendor, offerId);
+    const key = `incoming/vendors/${vendor.id}/sample-${this.newId()}.jpg`;
+    return { key, url: await this.files.putUrl(key, "image/jpeg", 600) };
+  }
+
+  /** Checks the uploaded sample and adds it to the service. */
+  async confirmSample(clientId: string, offerId: string, key: string): Promise<void> {
+    const vendor = await this.own(clientId);
+    if (!key.startsWith(`incoming/vendors/${vendor.id}/sample-`)) throw new VendorError("That upload isn't valid.");
+    try {
+      this.roomForSample(vendor, offerId);
+    } catch (err) {
+      await this.files.remove([key]);
+      throw err;
+    }
+    const size = await this.files.size(key);
+    if (size === null) throw new VendorError("The picture didn't arrive. Try uploading it again.");
+    if (size === 0 || size > PICTURE_MAX_BYTES) {
+      await this.files.remove([key]);
+      throw new VendorError("That picture is too large. Try a smaller one.");
+    }
+    const final = `vendors/${vendor.id}/samples/${this.newId()}.jpg`;
+    await this.files.move(key, final);
+    await this.store.addSample(vendor.id, offerId, final);
+  }
+
+  async removeSample(clientId: string, id: string): Promise<void> {
+    const key = await this.store.removeSample((await this.own(clientId)).id, id);
+    if (key === null) throw new VendorError("That sample is gone already.");
+    await this.files.remove([key]);
+  }
+
+  private roomForSample(vendor: Vendor, offerId: string): void {
+    const offer = vendor.offers.find((o) => o.id === offerId);
+    if (!offer) throw new VendorError("That service doesn't exist.");
+    if (offer.samples.length >= SAMPLES_PER_SERVICE) throw new VendorError(`A service shows up to ${SAMPLES_PER_SERVICE} samples. Remove one to add another.`);
+  }
+
+  /** The vendor's services, with links to show their samples. */
+  async showOffers(vendor: Vendor): Promise<(VendorOffer & { sampleUrls: (string | null)[] })[]> {
+    return Promise.all(vendor.offers.map(async (o) => ({ ...o, sampleUrls: await Promise.all(o.samples.map((s) => this.pictureUrl(s.key))) })));
   }
 
   /** A short-lived link to show a picture (the bucket is private). Null when there's none or storage is unreachable. */

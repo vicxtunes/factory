@@ -8,10 +8,18 @@ set-up, review or workspace. They have their own side of Aming at `/vendors`.
 - **Joining** (`/vendors/join`, one question a screen): individual or business, what they do,
   what they offer, contact, social handles, a password, then the emailed code. The account is
   made, then the vendor (`joinAsVendor`). One vendor per account.
-- **Their side** (`/vendors`): their name, what they do, their services and handles. Jobs from
-  photographers, rates and payments come next. Aming's fee on what their clients pay through
-  Aming is `VENDOR_FEE_PERCENT` (10%).
+- **Their side** (`/vendors`): their profile, jobs, Drive, wallet and services. Aming's fee on
+  what studios pay them through Aming is `VENDOR_FEE_PERCENT` (10%).
 - Stored in `vendors` (supabase/migrations/20261108100000_vendors_apart.sql), server only.
+
+## Their services
+
+`/vendors/services`: each service a vendor offers, with a few lines, a price per photo, video,
+hour, day, event, item or project (or on request), and up to `SAMPLES_PER_SERVICE` (12) samples
+of their work, shrunk in the browser and uploaded straight to the bucket (`vendors/<id>/samples/`)
+like their pictures (`core/services.ts`; `vendor_services`, `vendor_service_samples`). The
+samples fill their profile's Work tab; studios see the services on the vendor's page and can hire
+at a priced one (the hire form fills the price, times how many).
 
 ## Their Drive
 

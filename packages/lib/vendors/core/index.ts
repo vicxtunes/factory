@@ -5,3 +5,4 @@ export * from "./categories";
 export * from "./jobs";
 export * from "./model";
 export * from "./schema";
+export * from "./services";

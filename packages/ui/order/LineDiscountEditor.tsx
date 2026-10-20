@@ -67,9 +67,9 @@ export function LineDiscountEditor({
             Remove
           </Button>
         ) : null}
-        <button type="button" className="text-xs text-muted" disabled={pending} onClick={onDone}>
+        <Button size="sm" variant="secondary" type="button" disabled={pending} onClick={onDone}>
           Cancel
-        </button>
+        </Button>
       </div>
       {error ? <p className="text-xs text-error-600">{error}</p> : null}
     </div>

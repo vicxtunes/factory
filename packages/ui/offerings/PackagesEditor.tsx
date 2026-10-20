@@ -97,9 +97,9 @@ function PackageForm({
         <Button type="submit" loading={pending}>
           {pkg ? "Save" : `Add ${words.tier}`}
         </Button>
-        <button type="button" onClick={onDone} className="text-sm text-muted hover:underline">
+        <Button size="sm" variant="secondary" type="button" onClick={onDone}>
           Cancel
-        </button>
+        </Button>
       </div>
     </form>
   );
@@ -127,7 +127,9 @@ function ArchiveToggle({ pkg }: { pkg: Offering }) {
       >
         {archived ? "Reactivate" : "Deactivate"}
       </button>
-      <button
+      <Button
+        size="sm"
+        variant="danger"
         type="button"
         disabled={pending}
         onClick={() => {
@@ -139,10 +141,10 @@ function ArchiveToggle({ pkg }: { pkg: Offering }) {
             router.refresh();
           });
         }}
-        className="ml-3 text-error-600 hover:underline dark:text-error-400"
+        className="ml-3"
       >
         Delete
-      </button>
+      </Button>
       {error ? <span className="text-error-600 dark:text-error-400">{error}</span> : null}
     </>
   );
@@ -223,9 +225,9 @@ function PackageCard({ pkg, scope, onEdit }: { pkg: Offering; scope: Scope; onEd
       ) : null}
       <div className="flex flex-wrap gap-x-4 gap-y-1 pt-1 text-xs">
         {onEdit ? (
-          <button type="button" onClick={onEdit} className="text-brand-600 hover:underline">
+          <Button size="sm" variant="secondary" type="button" onClick={onEdit}>
             Edit
-          </button>
+          </Button>
         ) : null}
         <ArchiveToggle pkg={pkg} />
       </div>

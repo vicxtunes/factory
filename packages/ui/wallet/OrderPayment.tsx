@@ -189,9 +189,9 @@ export function StaffOrderPayment({ orderId }: { orderId: string }) {
             <Button variant="primary" className="min-h-9 text-xs" loading={pending} onClick={refund}>
               Refund
             </Button>
-            <button type="button" className="text-xs text-muted" onClick={() => setRefunding(false)}>
+            <Button size="sm" variant="secondary" type="button" onClick={() => setRefunding(false)}>
               Cancel
-            </button>
+            </Button>
           </div>
         </div>
       ) : null}

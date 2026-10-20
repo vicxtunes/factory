@@ -43,6 +43,8 @@ export function CustomerForm({ customer, basePath }: { customer?: Customer; base
       if (!customer) return router.push(`${basePath}/${outcome.saved.id}`);
       setForm(formOf(outcome.saved));
       setSaved(true);
+      // Back to the client's own address: an edit opened over it (?edit) closes.
+      router.replace(`${basePath}/${customer.id}`, { scroll: false });
       router.refresh();
     });
   }

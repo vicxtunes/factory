@@ -9,6 +9,7 @@ import { parseAmount } from "@repo/ui/wallet/shared";
 import { parsePhone } from "@repo/lib/kernel/core/phone";
 import { networkOfPhone, type MobileNetwork } from "@repo/lib/wallet/policy";
 import type { MobileMoneyCollection, WalletResult } from "@repo/lib/wallet/types";
+import { Button } from "@repo/ui/Button";
 
 /**
  * Paying a studio by mobile money: in full or a deposit, by MTN or Airtel.
@@ -76,9 +77,9 @@ export function PayNow({
       />
       <MobileMoneyPay key={network} amount={amount} network={network} knownPhone={known} start={(p) => start(amount, p)} check={check} onDone={() => onPaid(amount)} />
       {onSkip ? (
-        <button type="button" onClick={onSkip} className="w-full text-center text-xs text-muted underline-offset-2 hover:underline">
+        <Button size="sm" variant="secondary" type="button" onClick={onSkip} className="w-full">
           Skip, pay later
-        </button>
+        </Button>
       ) : null}
     </div>
   );

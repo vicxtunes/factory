@@ -237,7 +237,7 @@ export function DocumentEditor({
             <p className="text-sm sm:col-span-2">
               <span className="text-muted">Shoot:</span> {formatDay(scope, linked.shoot.date)}, {timeSpan(linked.shoot)}{" "}
               <span className="text-muted">(from its booking)</span> ·{" "}
-              <a href={`/studio/bookings/${linked.id}/edit`} className="font-medium text-brand-600 hover:underline">
+              <a href={`/studio/bookings/${linked.id}?edit`} className="font-medium text-brand-600 hover:underline">
                 Change it on the booking
               </a>
             </p>
@@ -267,9 +267,9 @@ export function DocumentEditor({
               <div key={l.key} className="space-y-3 rounded-2xl border border-border bg-surface p-4 shadow-theme-xs">
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted">Item {i + 1}</p>
-                  <button type="button" onClick={() => remove(l.key)} className="text-xs text-error-600 hover:underline dark:text-error-400">
+                  <Button size="sm" variant="danger" type="button" onClick={() => remove(l.key)}>
                     Remove
-                  </button>
+                  </Button>
                 </div>
                 <Field label="Description">
                   <TextInput value={l.description} onChange={(e) => update(l.key, { description: e.target.value })} required maxLength={200} />

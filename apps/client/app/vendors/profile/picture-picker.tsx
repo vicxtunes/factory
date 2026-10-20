@@ -6,30 +6,7 @@ import { useRef, useState } from "react";
 import { confirmVendorPicture, startVendorPictureUpload } from "@repo/lib/vendors/actions";
 import { PICTURE_EDGE, type VendorPicture } from "@repo/lib/vendors/core";
 
-/**
- * The picture as a JPEG for upload: a profile photo cropped to a centred
- * square, a cover kept wide, each no longer than PICTURE_EDGE.
- */
-async function prepare(file: File, which: VendorPicture): Promise<Blob> {
-  const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
-  try {
-    const side = Math.min(bitmap.width, bitmap.height);
-    const [sx, sy, sw, sh] = which === "photo" ? [(bitmap.width - side) / 2, (bitmap.height - side) / 2, side, side] : [0, 0, bitmap.width, bitmap.height];
-    const ratio = Math.min(1, PICTURE_EDGE[which] / Math.max(sw, sh));
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.round(sw * ratio);
-    canvas.height = Math.round(sh * ratio);
-    const ctx = canvas.getContext("2d");
-    if (!ctx) throw new Error("This browser can't prepare the picture.");
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.imageSmoothingQuality = "high";
-    ctx.drawImage(bitmap, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
-    return await new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Couldn't prepare the picture."))), "image/jpeg", 0.88));
-  } finally {
-    bitmap.close();
-  }
-}
+import { shrinkPicture } from "../shrink-picture";
 
 /** The cover with the profile photo over its edge, as on the profile; each has its own "change" button. */
 export function PicturePicker({ photoUrl, coverUrl, initials }: { photoUrl: string | null; coverUrl: string | null; initials: string }) {
@@ -42,8 +19,7 @@ export function PicturePicker({ photoUrl, coverUrl, initials }: { photoUrl: stri
     setError(null);
     setBusy(which);
     try {
-      if (!file.type.startsWith("image/")) throw new Error("Choose a picture (JPG or PNG).");
-      const blob = await prepare(file, which);
+      const blob = await shrinkPicture(file, PICTURE_EDGE[which], which === "photo");
       const ticket = await startVendorPictureUpload(which);
       if (!ticket.ok) throw new Error(ticket.error);
       const put = await fetch(ticket.data.url, { method: "PUT", headers: { "content-type": "image/jpeg" }, body: blob });

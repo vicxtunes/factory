@@ -38,11 +38,11 @@ export function ProjectStatusButtons({ projectId, status }: { projectId: string;
     <div className="space-y-1">
       <div className="flex flex-wrap gap-2">
         <Button type="button" onClick={() => move(next)} disabled={pending}>
-          {next === "completed" ? "Mark completed" : `Move to ${PROJECT_STATUS_LABELS[next]}`}
+          {next === "done" ? "Mark done" : "Start work"}
         </Button>
-        {next !== "completed" ? (
-          <Button type="button" variant="secondary" onClick={() => move("completed")} disabled={pending}>
-            Mark completed
+        {next !== "done" ? (
+          <Button type="button" variant="secondary" onClick={() => move("done")} disabled={pending}>
+            Mark done
           </Button>
         ) : null}
         {back ? (

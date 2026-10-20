@@ -22,10 +22,13 @@ import { portal } from "@repo/lib/studio-portal/server";
 import { requireStudio } from "@repo/lib/studios/server";
 import { formatAmount, formatDay } from "@repo/lib/tenancy/format";
 import type { TenantScope } from "@repo/lib/tenancy/types";
+import { buttonClass } from "@repo/ui/Button";
+
+import { EditBookingSheet } from "../sheets";
 
 export const metadata = { title: "Booking · My Business" };
 
-export default async function StudioBookingPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function StudioBookingPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ edit?: string }> }) {
   const { scope } = await requireStudio("bookings");
   // Looked up inside the caller's studio only: another studio's id is "not found".
   const id = bookingIdSchema.safeParse((await params).id);
@@ -56,10 +59,7 @@ export default async function StudioBookingPage({ params }: { params: Promise<{ 
         <BackLink href={`/studio/bookings?view=day&date=${b.date}`} className="text-xs font-medium text-brand-600 hover:underline">
           ← Bookings
         </BackLink>
-          <Link
-            href={`/studio/bookings/${b.id}/edit`}
-            className="inline-flex min-h-11 items-center rounded-[var(--radius)] border border-gray-300 bg-white px-4 text-sm text-gray-700 shadow-theme-xs hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300"
-          >
+          <Link href={`/studio/bookings/${b.id}?edit`} scroll={false} className={buttonClass("secondary")}>
             Edit
           </Link>
       </div>
@@ -113,6 +113,7 @@ export default async function StudioBookingPage({ params }: { params: Promise<{ 
         action={deleteBooking.bind(null, b.id)}
         after="/studio/bookings"
       />
+      {(await searchParams).edit !== undefined ? <EditBookingSheet scope={scope} booking={b} /> : null}
     </>
   );
 }
@@ -155,7 +156,7 @@ async function Behind({ scope, booking: b }: { scope: TenantScope; booking: Book
                   {quotation.status === "open" ? <span className="text-xs text-muted">Waiting for the client to accept</span> : null}
                 </span>
               ) : (
-                <Link href={`/studio/quotations/new?booking=${b.id}`} className={linkStyle}>
+                <Link href={`/studio/quotations/new?booking=${b.id}`} className={buttonClass("secondary", "sm")}>
                   Create quotation
                 </Link>
               )}
@@ -177,7 +178,7 @@ async function Behind({ scope, booking: b }: { scope: TenantScope; booking: Book
               ) : quotation?.status === "accepted" ? (
                 <CreateInvoiceButton quotationId={quotation.id} basePath="/studio/invoices" />
               ) : (
-                <Link href={`/studio/invoices/new?booking=${b.id}`} className={linkStyle}>
+                <Link href={`/studio/invoices/new?booking=${b.id}`} className={buttonClass("secondary", "sm")}>
                   Create invoice{b.status === "tentative" ? " (confirms it)" : ""}
                 </Link>
               )}

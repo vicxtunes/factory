@@ -117,13 +117,14 @@ export function ClientUnpaidInvoices({ invoices, walletBalance }: { invoices: Un
         title="Unpaid invoices"
         aside={
           invoices.length > 1 ? (
-            <button
+            <Button
+              size="sm"
+              variant="secondary"
               type="button"
-              className="text-xs font-medium text-brand-600 underline-offset-2 hover:underline"
               onClick={() => setUnticked(chosen.length === invoices.length ? new Set(invoices.map((i) => i.id)) : new Set())}
             >
               {chosen.length === invoices.length ? "Clear all" : "Select all"}
-            </button>
+            </Button>
           ) : null
         }
       >

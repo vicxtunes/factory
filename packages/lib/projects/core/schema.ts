@@ -19,4 +19,4 @@ export const projectInputSchema = z.object({
   ),
 }) satisfies z.ZodType<ProjectInput, unknown>;
 
-export const projectStatusSchema = z.enum(["booked", "in_progress", "editing", "review", "delivered", "completed"], "Choose a stage.");
+export const projectStatusSchema = z.enum(["upcoming", "in_progress", "done"], "Choose a stage.");
