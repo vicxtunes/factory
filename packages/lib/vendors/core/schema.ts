@@ -74,7 +74,7 @@ export const offerSchema = z
       .trim()
       .transform((v) => v.replace(/[^\d]/g, ""))
       .transform((v) => (v ? Number(v) : null))
-      .pipe(z.number().int().min(500, "A price is at least UGX 500.").max(100_000_000, "That's more than a price can be.").nullable()),
+      .pipe(z.number().int().min(100, "A price is at least UGX 100.").max(100_000_000, "That's more than a price can be.").nullable()),
     unit: z.enum(RATE_UNITS.map((u) => u.id) as [RateUnit, ...RateUnit[]], "Choose what the price is for."),
     included: z
       .array(z.string().trim().min(1).max(60, "Keep each thing included under 60 characters."))
@@ -113,7 +113,7 @@ export const jobRequestSchema = z
     price: z.coerce
       .number("Enter the price.")
       .int("A whole number of shillings.")
-      .min(1_000, "At least UGX 1,000.")
+      .min(100, "At least UGX 100.")
       .max(100_000_000, "That's more than a job can be."),
     folder: jobFolderSchema,
   })
@@ -126,6 +126,17 @@ export const disputeReasonSchema = z.string("Say what's wrong.").trim().min(5, "
 export const settlementSchema = z.enum(["release", "refund"]);
 
 export const jobIdSchema = z.uuid("That job doesn't exist.");
+
+/**
+ * A vendor's answer to a request: decline, or accept and commit to deliver by
+ * a day (the studio's due date, or one they set when there's none).
+ */
+export const jobAnswerSchema = z.discriminatedUnion("accept", [
+  z.object({ accept: z.literal(false) }),
+  z.object({ accept: z.literal(true), deliverBy: z.iso.date("Choose the day you'll deliver by.") }),
+]);
+
+export type JobAnswer = z.infer<typeof jobAnswerSchema>;
 
 export const vendorIdSchema = z.uuid("That vendor doesn't exist.");
 

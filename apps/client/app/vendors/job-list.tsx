@@ -22,7 +22,7 @@ export function JobList({ jobs, answer }: { jobs: JobView[]; answer?: boolean })
               <span className="font-semibold tabular-nums">{money(vendorTake(j.price))}</span>
               <span className="text-muted"> · {j.status === "requested" ? (j.dueOn ? `due ${j.dueOn}` : "no due date") : JOB_STAGE_LABELS[jobStage(j.status)]}</span>
             </span>
-            {answer ? <JobActions id={j.id} status={j.status} /> : null}
+            {answer ? <JobActions id={j.id} status={j.status} dueOn={j.dueOn} /> : null}
           </div>
         </li>
       ))}

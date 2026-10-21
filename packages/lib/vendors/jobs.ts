@@ -7,10 +7,13 @@
 // unanswered is released on its own after two days, the boss and the studio
 // warned a day before. Each side is told in the app.
 
-import { autoReleaseAt, isOpenJob, overdueStep, vendorTake, type JobRequest, type JobStatus, type JobView } from "./core";
+import { autoReleaseAt, isOpenJob, overdueStep, vendorTake, type JobAnswer, type JobRequest, type JobStatus, type JobView } from "./core";
 import { VendorError, type JobActor, type JobNotifier, type VendorJobStore, type VendorStore } from "./ports";
 
 const money = (n: number) => `UGX ${n.toLocaleString("en-US")}`;
+
+/** "Fri 7 Nov". */
+const dayName = (day: string) => new Date(`${day}T12:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
 
 const STAFF_QUEUE = "/dashboard/vendor-jobs";
 
@@ -97,15 +100,28 @@ export class VendorJobService {
     return vendor && job?.vendorId === vendor.id ? job : null;
   }
 
-  /** The vendor takes the job on (to samples, or to the studio paying in), or turns it down. */
-  async respond(clientId: string, id: string, accept: boolean): Promise<void> {
+  /**
+   * The vendor takes the job on (to samples, or to the studio paying in),
+   * committing to deliver by its due day (or a day they set when it has
+   * none), or turns it down.
+   */
+  async respond(clientId: string, id: string, answer: JobAnswer, today: string): Promise<void> {
     const job = await this.ownJob(clientId, id);
-    const to: JobStatus = !accept ? "declined" : job.samplesWanted ? "samples" : "awaiting_funds";
-    await this.moveOrSay(id, ["requested"], to, "This request has been answered or called off.");
+    if (!answer.accept) {
+      await this.moveOrSay(id, ["requested"], "declined", "This request has been answered or called off.");
+      await this.tellStudio(job, `${job.vendor.name} declined a job`, job.brief.slice(0, 80));
+      return;
+    }
+    if (job.dueOn && answer.deliverBy !== job.dueOn) throw new VendorError(`This job is due ${dayName(job.dueOn)}: accept to deliver by then, or decline.`);
+    if (!job.dueOn) {
+      if (answer.deliverBy < today) throw new VendorError("Choose a day from today on.");
+      if (job.status === "requested") await this.jobs.setDueOn(id, answer.deliverBy);
+    }
+    await this.moveOrSay(id, ["requested"], job.samplesWanted ? "samples" : "awaiting_funds", "This request has been answered or called off.");
     await this.tellStudio(
       job,
-      `${job.vendor.name} ${accept ? "accepted" : "declined"} a job`,
-      accept ? (job.samplesWanted ? "They're making the samples you asked for." : "Pay it in to Aming to start the work.") : job.brief.slice(0, 80),
+      `${job.vendor.name} accepted: delivery by ${dayName(answer.deliverBy)}`,
+      job.samplesWanted ? "They're making the samples you asked for." : "Pay it in to Aming to start the work.",
     );
   }
 

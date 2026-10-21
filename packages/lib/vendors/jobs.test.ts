@@ -12,6 +12,9 @@ import { memoryStore } from "./testing";
 // database's (vendor_job_fund/release/refund); here they're recorded.
 
 const HELD: JobStatus[] = ["in_progress", "delivered", "disputed"];
+const TODAY = "2026-11-01";
+// The requests here have no due day: accepting sets one.
+const ACCEPT = { accept: true as const, deliverBy: "2026-11-07" };
 
 function memoryJobs(vendorsById: (id: string) => Promise<{ name: string; category: string; clientId: string } | null>) {
   const rows = new Map<string, VendorJob>();
@@ -76,6 +79,7 @@ function memoryJobs(vendorsById: (id: string) => Promise<{ name: string; categor
       set(id, { folderId });
       return true;
     },
+    setDueOn: async (id, dueOn) => void set(id, { dueOn }),
     markWarned: async (id) => void set(id, { overdueAlertedAt: "2026-11-03T10:00:00Z" }),
   };
   return { store, rows, money };
@@ -104,7 +108,7 @@ test("no samples: accepted, paid in to Aming, delivered, approved and released t
   assert.equal(rows.get(id!)!.folderId, "f-kato");
   assert.deepEqual(told.at(-1), { to: "c-kato", title: "Job request from Lens & Light" });
 
-  await service.respond("c-kato", id!, true);
+  await service.respond("c-kato", id!, ACCEPT, TODAY);
   assert.equal(rows.get(id!)!.status, "awaiting_funds", "nothing held yet");
   await assert.rejects(service.deliver("c-kato", id!), /in progress/, "no work before the money is in");
 
@@ -122,7 +126,7 @@ test("samples first: nothing is held until the studio approves them, and it may 
   const { service, rows, money, studio, request, owner } = await setUp();
   await service.request(studio, { ...request, samplesWanted: "Five in our style" }, "f-kato");
   const [id] = [...rows.keys()];
-  await service.respond("c-kato", id!, true);
+  await service.respond("c-kato", id!, ACCEPT, TODAY);
   assert.equal(rows.get(id!)!.status, "samples");
   await assert.rejects(service.fund("t-lens", id!, owner), /moved on/, "can't pay in before the samples are sent");
   await service.sendSamples("c-kato", id!);
@@ -133,7 +137,7 @@ test("samples first: nothing is held until the studio approves them, and it may 
 
   await service.request(studio, { ...request, samplesWanted: "Five in our style" }, "f-kato");
   const second = [...rows.keys()][1]!;
-  await service.respond("c-kato", second, true);
+  await service.respond("c-kato", second, ACCEPT, TODAY);
   await service.sendSamples("c-kato", second);
   await service.fund("t-lens", second, owner);
   assert.equal(rows.get(second)!.status, "in_progress", "approved samples: the work goes ahead");
@@ -143,7 +147,7 @@ test("a dispute goes to the boss, and staff release or refund the held money", a
   const { service, rows, money, told, studio, request, owner } = await setUp();
   await service.request(studio, request, "f-kato");
   const [id] = [...rows.keys()];
-  await service.respond("c-kato", id!, true);
+  await service.respond("c-kato", id!, ACCEPT, TODAY);
   await service.fund("t-lens", id!, owner);
   await service.deliver("c-kato", id!);
   await service.studioDispute("t-lens", id!, "The colours are off on half of them");
@@ -161,7 +165,7 @@ test("the vendor can give up work in progress: the studio is refunded", async ()
   const { service, rows, money, studio, request, owner } = await setUp();
   await service.request(studio, request, "f-kato");
   const [id] = [...rows.keys()];
-  await service.respond("c-kato", id!, true);
+  await service.respond("c-kato", id!, ACCEPT, TODAY);
   await service.fund("t-lens", id!, owner);
   await service.withdraw("c-kato", id!);
   assert.equal(rows.get(id!)!.status, "refunded");
@@ -172,7 +176,7 @@ test("unanswered delivered work: the boss and the studio are warned after a day,
   const { service, rows, money, told, studio, request, owner } = await setUp();
   await service.request(studio, request, "f-kato");
   const [id] = [...rows.keys()];
-  await service.respond("c-kato", id!, true);
+  await service.respond("c-kato", id!, ACCEPT, TODAY);
   await service.fund("t-lens", id!, owner);
   await service.deliver("c-kato", id!);
   const delivered = new Date(rows.get(id!)!.deliveredAt!).getTime();
@@ -195,13 +199,13 @@ test("only the job's own vendor answers it, and only its own studio cancels or p
   const { service, rows, studio, request, owner } = await setUp();
   await service.request(studio, request, "f-kato");
   const [id] = [...rows.keys()];
-  await assert.rejects(service.respond("c-someone-else", id!, true), /doesn't exist/);
+  await assert.rejects(service.respond("c-someone-else", id!, ACCEPT, TODAY), /doesn't exist/);
   await assert.rejects(service.cancel("t-other-studio", id!), /doesn't exist/);
   await assert.rejects(service.fund("t-other-studio", id!, owner), /doesn't exist/);
   assert.equal(await service.vendorJob("c-someone-else", id!), null);
 
-  await service.respond("c-kato", id!, false);
-  await assert.rejects(service.respond("c-kato", id!, true), /answered or called off/, "a declined request stays declined");
+  await service.respond("c-kato", id!, { accept: false }, TODAY);
+  await assert.rejects(service.respond("c-kato", id!, ACCEPT, TODAY), /answered or called off/, "a declined request stays declined");
   await assert.rejects(service.request(studio, { ...request, vendorId: "v-nobody" }, "f"), /isn't taking work/);
   await service.request(studio, request, "f-kato");
   await assert.rejects(service.request(studio, request, "f-kato"), /already has a job open/);
@@ -220,4 +224,20 @@ test("a job without a folder (made before jobs had them) is given one while it's
 
   await service.cancel("t-lens", id!);
   await assert.rejects(service.setFolder("t-lens", id!, async () => "f-new"), /over/, "a job that's over keeps what it had");
+});
+
+test("accepting commits to deliver by the due day, or a day the vendor sets when there's none; the studio is told", async () => {
+  const { service, rows, told, studio, request } = await setUp();
+  await service.request(studio, { ...request, dueOn: "2026-11-05" }, "f-kato");
+  const [due] = [...rows.keys()];
+  await assert.rejects(service.respond("c-kato", due!, { accept: true, deliverBy: "2026-11-09" }, TODAY), /due Thu 5 Nov/, "not a later day than the studio's");
+  await service.respond("c-kato", due!, { accept: true, deliverBy: "2026-11-05" }, TODAY);
+  assert.equal(rows.get(due!)!.status, "awaiting_funds");
+  assert.equal(told.at(-1)!.title, "Kato accepted: delivery by Thu 5 Nov");
+
+  await service.request(studio, { ...request, projectId: "p-other" }, "f-kato");
+  const open = [...rows.keys()][1]!;
+  await assert.rejects(service.respond("c-kato", open, { accept: true, deliverBy: "2026-10-30" }, TODAY), /from today/, "not a day gone");
+  await service.respond("c-kato", open, ACCEPT, TODAY);
+  assert.equal(rows.get(open)!.dueOn, "2026-11-07", "the vendor's day becomes the due day");
 });

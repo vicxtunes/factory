@@ -69,7 +69,7 @@ export default async function VendorJobPage({ params, searchParams }: { params: 
               {job.disputedBy === "studio" ? "The studio" : "You"} raised a dispute: &ldquo;{job.disputeReason}&rdquo;. Aming is looking into it.
             </p>
           ) : null}
-          <JobActions id={job.id} status={job.status} wide />
+          <JobActions id={job.id} status={job.status} dueOn={job.dueOn} wide />
         </section>
 
         {reachesFolder(job.status) ? (

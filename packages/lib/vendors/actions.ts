@@ -16,6 +16,7 @@ import { z } from "zod";
 import {
   disputeReasonSchema,
   jobFolderSchema,
+  jobAnswerSchema,
   jobIdSchema,
   jobRequestSchema,
   offerIdSchema,
@@ -123,9 +124,11 @@ async function vendorCaller(): Promise<string> {
 
 // ── Jobs: the vendor ──
 
-/** The signed-in vendor accepts or declines a job request. */
-export async function respondToJob(id: unknown, accept: unknown): Promise<Result> {
-  return vendorJob(id, (clientId, jobId) => vendorJobs.respond(clientId, jobId, parseInput(z.boolean(), accept)));
+/** The signed-in vendor declines a job request, or accepts it committing to deliver by a day. */
+export async function respondToJob(id: unknown, answer: unknown): Promise<Result> {
+  // Today in Kampala, where the vendors are: a day before it can't be promised.
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "Africa/Kampala" });
+  return vendorJob(id, (clientId, jobId) => vendorJobs.respond(clientId, jobId, parseInput(jobAnswerSchema, answer), today));
 }
 
 /** The signed-in vendor's samples are in the job's folder. */

@@ -170,6 +170,11 @@ export const supabaseJobStore: VendorJobStore = {
     return data !== null;
   },
 
+  async setDueOn(id, dueOn) {
+    const { error } = await jobs().update({ due_on: dueOn }).eq("id", id).eq("status", "requested");
+    if (error) fail("set the due date", error);
+  },
+
   async markWarned(id) {
     const { error } = await jobs().update({ overdue_alerted_at: new Date().toISOString() }).eq("id", id).is("overdue_alerted_at", null);
     if (error) fail("note the warning", error);

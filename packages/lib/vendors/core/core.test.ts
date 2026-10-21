@@ -45,7 +45,7 @@ test("a job request: a price in whole shillings, a date or none, samples or not,
   const sampled = parseInput(jobRequestSchema, { ...base, price: 250_000, dueOn: "2026-11-01", samplesWanted: "Five in our style", folder: { kind: "existing", folderId: base.projectId } });
   assert.equal(sampled.request.dueOn, "2026-11-01");
   assert.equal(sampled.request.samplesWanted, "Five in our style");
-  assert.throws(() => parseInput(jobRequestSchema, { ...base, price: 500, folder: { kind: "new", name: "x" } }), /At least UGX 1,000/);
+  assert.throws(() => parseInput(jobRequestSchema, { ...base, price: 99, folder: { kind: "new", name: "x" } }), /At least UGX 100/);
   assert.throws(() => parseInput(jobRequestSchema, { ...base, price: 1500.5, folder: { kind: "new", name: "x" } }), /whole number/);
   assert.throws(() => parseInput(jobRequestSchema, { ...base, price: 5000 }), /./, "a folder is required");
 });
@@ -67,7 +67,8 @@ test("a service: named, a few lines or none, and a whole-shilling price per some
   const ok = offerSchema.parse({ name: " Retouch ", description: "", price: "5,000", unit: "photo" });
   assert.deepEqual(ok, { name: "Retouch", description: null, price: 5000, unit: "photo", included: [] });
   assert.deepEqual(offerSchema.parse({ name: "Album design", description: "", price: "", unit: "photo" }), { name: "Album design", description: null, price: null, unit: null, included: [] }, "no price: on request");
-  assert.equal(offerSchema.safeParse({ name: "Retouch", description: "", price: "100", unit: "photo" }).success, false, "under UGX 500");
+  assert.equal(offerSchema.safeParse({ name: "Retouch", description: "", price: "99", unit: "photo" }).success, false, "under UGX 100");
+  assert.equal(offerSchema.parse({ name: "Retouch", description: "", price: "100", unit: "photo" }).price, 100, "UGX 100 is enough");
   assert.equal(offerSchema.safeParse({ name: "Retouch", description: "", price: "5000", unit: "minute" }).success, false, "not a unit");
 
   const priced = { price: 5000, unit: "photo" } as const;
