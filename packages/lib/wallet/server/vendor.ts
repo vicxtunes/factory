@@ -57,7 +57,9 @@ export async function requestVendorWithdrawal(vendor: { id: string; name: string
     if (error.message.includes("WALLET:insufficient_funds")) throw new WalletError("There isn't that much in your wallet.");
     throwDbError(error);
   }
-  await notifier.withdrawalToApprove(vendor.name, amount, "their vendor wallet").catch((err) => console.error("withdrawal push failed:", err));
+  await Promise.all([notifier.withdrawalToApprove(vendor.name, amount, "their vendor wallet"), notifier.withdrawalRequested(vendor.clientId, amount, phone.store, "vendor")]).catch((err) =>
+    console.error("withdrawal push failed:", err),
+  );
 }
 
 /** Vendors' withdrawals waiting for staff or being sent, oldest first: part of staff's queue (./business.ts). */
@@ -150,5 +152,5 @@ async function tellVendor(withdrawalId: string, reason: string | null): Promise<
     .eq("id", withdrawalId)
     .maybeSingle<{ amount: number; phone: string; wallet: { vendor: { client_id: string } | null } | null }>();
   const clientId = data?.wallet?.vendor?.client_id;
-  if (data && clientId) await notifier.vendorWithdrawalAnswered(clientId, Number(data.amount), data.phone, reason);
+  if (data && clientId) await notifier.withdrawalAnswered(clientId, Number(data.amount), data.phone, reason, "vendor");
 }

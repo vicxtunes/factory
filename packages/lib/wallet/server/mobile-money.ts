@@ -26,6 +26,7 @@ import * as notifier from "./notifier";
 import * as hivepay from "./providers/hivepay";
 import { fromHivepayReference, fromPayoutReference, toHivepayReference } from "./providers/hivepay-reference";
 import * as repo from "./repository";
+import { clientPath } from "@repo/lib/client-portal/paths";
 
 const PROVIDER = "hivepay";
 const ACTOR_NAME = "HivePay";
@@ -263,6 +264,11 @@ async function reconcile(row: repo.CollectionRow): Promise<repo.CollectionRow> {
   }
   if (res.status === "failed") {
     await repo.failCollection(row.id, "The payment didn't go through.");
+    // The client's own payment (a top-up or an Aming order): they hear it didn't go. A business's
+    // customer pays without an Aming account, and sees it on the payment screen.
+    if (!row.product_request_id && !row.booking_id && !row.billing_document_id) {
+      await notifier.paymentFailed(row.client_id, row.amount, clientPath("/payment")).catch((err) => console.error("payment failed push failed:", err));
+    }
   } else if (res.status === "success") {
     if (!(res.amount >= row.amount)) {
       // Never credit more than HivePay collected: leave it for staff. (Prompts
