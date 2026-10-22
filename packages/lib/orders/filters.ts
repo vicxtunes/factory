@@ -70,10 +70,16 @@ function endOfMonthISO(iso: string): string {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).toISOString().slice(0, 10);
 }
 
-// "Created" is the order's own day, the one it was created and submitted on:
-// adding or replacing a line on it later doesn't move it.
+/** When the order was submitted: when its designer sent it to the factory, else when it was created. */
+export function submittedAt(order: Pick<OrderItemWithOrder["order"], "created_at" | "submitted_at">): string {
+  return order.submitted_at ?? order.created_at;
+}
+
+// "Created" is the order's own day, the one it was submitted on: adding or
+// replacing a line on it later doesn't move it, nor do the days a designer
+// spent on it before submitting.
 function itemDate(i: OrderItemWithOrder, field: DateField): string | null {
-  return field === "created" ? kampalaDay(i.order.created_at) : i.order.delivery_date;
+  return field === "created" ? kampalaDay(submittedAt(i.order)) : i.order.delivery_date;
 }
 
 export interface DatePresetOption {
@@ -91,8 +97,8 @@ export function datePresetOptions(field: DateField): DatePresetOption[] {
   if (field === "created") {
     return [
       { value: "", label: "Any date" },
-      { value: "today", label: "Created today" },
-      { value: "yesterday", label: "Created yesterday" },
+      { value: "today", label: "Submitted today" },
+      { value: "yesterday", label: "Submitted yesterday" },
       { value: "week", label: "This week" },
       { value: "month", label: "This month" },
       { value: "custom", label: "Custom range…" },

@@ -26,12 +26,13 @@ import {
 
 import { useCurrencySymbol } from "@repo/lib/currency/CurrencySymbolProvider";
 import { formatMoney } from "@repo/lib/currency/format";
+import { submittedAt } from "@repo/lib/orders/filters";
 import { catalogUnitPrice, orderAmount } from "@repo/lib/orders/pricing";
 import { lineDiscountOf } from "@repo/lib/discounts/core/rules";
 import { StaffOrderPayment } from "@repo/ui/wallet/OrderPayment";
 import { StaffInvoicePanel } from "@repo/ui/invoices/StaffInvoicePanel";
 
-import { assignItem, cancelOrder, overrideStatus, setLineDiscount, setOrderAmount, updateOrderItem } from "./actions";
+import { assignItem, cancelOrder, overrideStatus, renameClientOnOrder, setLineDiscount, setOrderAmount, updateOrderItem } from "./actions";
 
 type WorkerLite = Omit<Worker, "pin_hash">;
 
@@ -261,6 +262,7 @@ export function OrderDetail({
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [moneyVersion, setMoneyVersion] = useState(0);
+  const [clientName, setClientName] = useState("");
   const [deliveryDate, setDeliveryDate] = useState("");
   const [deadlineAt, setDeadlineAt] = useState("");
   const [edit, setEdit] = useState<ItemEditState | null>(null);
@@ -287,6 +289,7 @@ export function OrderDetail({
 
   function startEditing() {
     setError(null);
+    setClientName(item.order.client_name);
     setDeliveryDate(item.order.delivery_date ?? "");
     setDeadlineAt(item.order.deadline_at ? toLocalInputValue(item.order.deadline_at) : "");
     setEdit(itemToEditState(item));
@@ -305,6 +308,13 @@ export function OrderDetail({
       return;
     }
     start(async () => {
+      if (clientName.trim() !== item.order.client_name) {
+        const renamed = await renameClientOnOrder(item.order_id, clientName);
+        if (!renamed.ok) {
+          setError(renamed.error);
+          return;
+        }
+      }
       const res = await updateOrderItem({
         itemId: item.id,
         category_id: edit.category_id,
@@ -392,6 +402,9 @@ export function OrderDetail({
 
       {editing && edit ? (
         <div className="space-y-3 rounded-[var(--radius)] border border-border bg-background p-3">
+          <Field label="Client name" hint={item.order.client_id ? "Renames the client on all their orders." : undefined}>
+            <TextInput value={clientName} onChange={(e) => setClientName(e.target.value)} maxLength={120} required />
+          </Field>
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Category">
               <Select
@@ -535,9 +548,9 @@ export function OrderDetail({
             <dd className="tnum text-foreground">{formatDate(item.order.delivery_date)}</dd>
           </div>
           <div className="col-span-2">
-            <dt className="uppercase tracking-wide">Created</dt>
+            <dt className="uppercase tracking-wide">Submitted</dt>
             <dd className="flex items-center gap-1.5 tnum text-foreground">
-              {formatCreatedAt(item.order.created_at)}
+              {formatCreatedAt(submittedAt(item.order))}
               {onPickCreatedDate ? (
                 <>
                   <button
@@ -554,8 +567,8 @@ export function OrderDetail({
                         input.click();
                       }
                     }}
-                    aria-label="Pick a date to see all orders created then"
-                    title="Pick a date to see all orders created then"
+                    aria-label="Pick a date to see all orders submitted then"
+                    title="Pick a date to see all orders submitted then"
                     className="text-muted hover:text-brand-600"
                   >
                     <CalendarIcon className="h-4 w-4" />

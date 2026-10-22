@@ -27,6 +27,7 @@ import {
 } from "@repo/lib/clients/dedupe";
 import { buildAndInsertOrder, verifyActiveWorker } from "@repo/lib/orders/create";
 import { applyCancellation, cleanReason, loadCancellableOrder } from "@repo/lib/orders/cancel";
+import { renameOrderClient } from "@repo/lib/orders/client-name";
 import type {
   ClientDuplicateHit,
   CreateOrderResult,
@@ -714,6 +715,8 @@ export async function updateClient(input: {
     }
     return { ok: false, error: error.message };
   }
+  // Each order keeps its own copy of the client's name.
+  await admin.from("orders").update({ client_name: name }).eq("client_id", input.id);
   // The client signs in with a code sent to this email (apps/client/app/actions.ts).
   // A changed email signs out whoever held the old one at once; the next
   // sign-in links the new address.
@@ -721,7 +724,17 @@ export async function updateClient(input: {
     await admin.from("client_identities").delete().eq("client_id", input.id);
   }
   revalidatePath("/dashboard/clients");
+  revalidatePath("/dashboard");
   return { ok: true };
+}
+
+// The client's name on an order, fixed from the order (renames the client on
+// file too: see renameOrderClient).
+export async function renameClientOnOrder(orderId: string, name: string): Promise<Result> {
+  await requireManager();
+  const res = await renameOrderClient(createAdminClient(), orderId, name);
+  if (res.ok) revalidatePath("/dashboard");
+  return res;
 }
 
 // Permanent, boss only — replaces the old deactivate/reactivate toggle.

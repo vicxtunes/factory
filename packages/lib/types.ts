@@ -91,6 +91,9 @@ export interface Order {
   quoted_price: number | null;
   client_decision_note: string | null;
   released_at: string | null;
+  // When a designer submitted it to the factory; null for an order that never
+  // went through one (or hasn't left them). Dates the order on the boards.
+  submitted_at: string | null;
   // Order cancellation — see supabase/migrations/20260924100000_order_cancellation.sql.
   // Null while the order is live; a cancelled order drops off every work board.
   cancelled_at: string | null;
@@ -437,6 +440,7 @@ export interface OrderItemWithOrder extends OrderItem {
     | "quoted_price"
     | "client_decision_note"
     | "released_at"
+    | "submitted_at"
     | "cancelled_at"
     | "cancel_reason"
     | "cancelled_by_name"

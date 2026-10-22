@@ -14,6 +14,7 @@ import {
   resolveOrCreateClient,
   type ClientMatchReason,
 } from "@repo/lib/clients/dedupe";
+import { renameOrderClient } from "@repo/lib/orders/client-name";
 import { buildAndInsertOrder, verifyActiveWorker } from "@repo/lib/orders/create";
 import { notifyOrderItem } from "@repo/lib/notifications/notify";
 import { fetchDesignerNotifications } from "@repo/lib/queries";
@@ -107,6 +108,11 @@ async function syncOrderStageIfDone(
   }
 }
 
+// The order's date is when it reached the factory: the first item sent on.
+async function markSubmitted(admin: ReturnType<typeof createAdminClient>, orderId: string): Promise<void> {
+  await admin.from("orders").update({ submitted_at: new Date().toISOString() }).eq("id", orderId).is("submitted_at", null);
+}
+
 // Sends one finished item on to the factory while the rest of the order
 // stays with the designer — lets them release pieces as they finish
 // instead of holding the whole order back for the slowest item.
@@ -145,6 +151,7 @@ export async function advanceItemToFactory(itemId: string): Promise<ActionResult
     .eq("id", itemId);
   if (error) return { ok: false, error: error.message };
 
+  await markSubmitted(admin, item.order_id);
   await syncOrderStageIfDone(admin, item.order_id);
 
   await logOrderEvent({
@@ -201,6 +208,7 @@ export async function completeDesignerWork(orderId: string): Promise<ActionResul
 
   const { error } = await admin.from("orders").update({ stage: "factory" }).eq("id", orderId);
   if (error) return { ok: false, error: error.message };
+  await markSubmitted(admin, orderId);
 
   if (releasedItems && releasedItems.length > 0) {
     await logOrderEvent({
@@ -237,6 +245,7 @@ export interface DesignerItemEditInput {
 
 export interface DesignerOrderEditInput {
   orderId: string;
+  client_name: string;
   delivery_date: string;
   deadline_at: string; // required only when the order is express
   items: DesignerItemEditInput[];
@@ -280,6 +289,9 @@ export async function updateDesignerOrder(input: DesignerOrderEditInput): Promis
       error: "An item has already been delivered and can no longer be edited here.",
     };
   }
+
+  const renamed = await renameOrderClient(admin, input.orderId, input.client_name);
+  if (!renamed.ok) return renamed;
 
   // Look up catalog rows server-side rather than trusting client-supplied
   // names — same pattern as createOrder.

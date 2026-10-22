@@ -394,7 +394,7 @@ export function OrderBoard({
                       filters.dateField === f ? "bg-brand-500 text-white" : "border border-border"
                     }`}
                   >
-                    {f === "due" ? "Due date" : "Created date"}
+                    {f === "due" ? "Due date" : "Date submitted"}
                   </button>
                 ))}
               </div>
