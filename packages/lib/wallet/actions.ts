@@ -36,6 +36,7 @@ import type {
 } from "./types";
 import { clientPath } from "@repo/lib/client-portal/paths";
 import { vendors } from "@repo/lib/vendors/server";
+import { studioOfCaller } from "@repo/lib/studios/server";
 
 async function run<T>(fn: () => Promise<T>): Promise<WalletResult<T>>;
 async function run(fn: () => Promise<void>): Promise<WalletResult>;
@@ -126,6 +127,14 @@ export async function payOrderWithMobileMoney(orderId: string, phone: string, am
 /** One prompt for everything due on several invoices. */
 export async function payOrdersWithMobileMoney(orderIds: string[], phone: string): Promise<WalletResult<MobileMoneyCollection>> {
   return run(async () => mobileMoney.startOrdersPayment(await requireClient(), { orderIds, phone }));
+}
+
+/** A studio pays a vendor job in by mobile money (its Business card may be empty). The owner and the Money area. */
+export async function payVendorJobWithMobileMoney(jobId: string, phone: string): Promise<WalletResult<MobileMoneyCollection>> {
+  return run(async () => {
+    const { scope } = await studioOfCaller("money");
+    return mobileMoney.startVendorJobPayment(await requireClient(), { tenantId: scope.tenantId, jobId, phone });
+  });
 }
 
 /** The payment screen asking how its prompt is going. Refreshes the money pages once it's through. */

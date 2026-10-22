@@ -74,7 +74,7 @@ export const offerSchema = z
       .trim()
       .transform((v) => v.replace(/[^\d]/g, ""))
       .transform((v) => (v ? Number(v) : null))
-      .pipe(z.number().int().min(500, "A price is at least UGX 500.").max(100_000_000, "That's more than a price can be.").nullable()),
+      .pipe(z.number().int().min(100, "A price is at least UGX 100.").max(100_000_000, "That's more than a price can be.").nullable()),
     unit: z.enum(RATE_UNITS.map((u) => u.id) as [RateUnit, ...RateUnit[]], "Choose what the price is for."),
     included: z
       .array(z.string().trim().min(1).max(60, "Keep each thing included under 60 characters."))
@@ -97,10 +97,19 @@ export const jobFolderSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("new"), name: z.string().trim().min(1, "Name the folder.").max(120, "Keep the name under 120 characters.") }),
 ]);
 
-/** A studio's request to a vendor, on one of its projects: the job, and the folder the vendor works in. */
+/** A project to put a job on, or none ("" or null). */
+const optionalProject = z
+  .uuid("Choose a project.")
+  .nullish()
+  .or(z.literal(""))
+  .transform((p) => p || null);
+
+const day = (message: string) => z.string(message).regex(/^\d{4}-\d{2}-\d{2}$/, message);
+
+/** A studio's request to a vendor for a service, on one of its projects or not: the job, and the folder the vendor works in. */
 export const jobRequestSchema = z
   .object({
-    projectId: z.uuid("Choose a project."),
+    projectId: optionalProject,
     vendorId: z.uuid("Choose a vendor."),
     brief: z.string("Say what's needed.").trim().min(3, "Say what's needed.").max(1000, "Keep it under 1,000 characters."),
     samplesWanted: optionalText(500, "Keep it under 500 characters.").optional().transform((s) => s ?? null),
@@ -113,11 +122,29 @@ export const jobRequestSchema = z
     price: z.coerce
       .number("Enter the price.")
       .int("A whole number of shillings.")
-      .min(1_000, "At least UGX 1,000.")
+      .min(100, "At least UGX 100.")
       .max(100_000_000, "That's more than a job can be."),
     folder: jobFolderSchema,
   })
-  .transform(({ folder, ...request }): { request: JobRequest; folder: JobFolder } => ({ request, folder }));
+  .transform(({ folder, ...request }): { request: JobRequest; folder: JobFolder } => ({ request: { ...request, rental: null }, folder }));
+
+/**
+ * A studio hiring equipment: which of the vendor's items, how many, and from
+ * which day to which. The price comes from the vendor's rate, not from here.
+ */
+export const rentalRequestSchema = z
+  .object({
+    projectId: optionalProject,
+    vendorId: z.uuid("Choose a vendor."),
+    offerId: z.uuid("Choose what to hire."),
+    quantity: z.coerce.number("How many?").int("How many?").min(1, "At least one.").max(1000, "That's more than can be hired at once."),
+    startsOn: day("Choose the first day."),
+    endsOn: day("Choose the last day."),
+    note: optionalText(1000, "Keep it under 1,000 characters."),
+  })
+  .refine((r) => r.endsOn >= r.startsOn, { path: ["endsOn"], message: "The last day can't be before the first." });
+
+export type RentalRequest = z.infer<typeof rentalRequestSchema>;
 
 /** Why a job is disputed: what Aming's staff read before settling it. */
 export const disputeReasonSchema = z.string("Say what's wrong.").trim().min(5, "Say what's wrong.").max(1000, "Keep it under 1,000 characters.");
@@ -126,6 +153,17 @@ export const disputeReasonSchema = z.string("Say what's wrong.").trim().min(5, "
 export const settlementSchema = z.enum(["release", "refund"]);
 
 export const jobIdSchema = z.uuid("That job doesn't exist.");
+
+/**
+ * A vendor's answer to a request: decline, or accept and commit to deliver by
+ * a day (the studio's due date, or one they set when there's none).
+ */
+export const jobAnswerSchema = z.discriminatedUnion("accept", [
+  z.object({ accept: z.literal(false) }),
+  z.object({ accept: z.literal(true), deliverBy: z.iso.date("Choose the day you'll deliver by.") }),
+]);
+
+export type JobAnswer = z.infer<typeof jobAnswerSchema>;
 
 export const vendorIdSchema = z.uuid("That vendor doesn't exist.");
 

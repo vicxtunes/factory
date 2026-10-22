@@ -77,7 +77,7 @@ function JobSummary({ job }: { job: JobView }) {
         <p className="font-semibold">
           {job.studio.name} → {job.vendor.name}
         </p>
-        <p className="text-sm text-muted">{job.projectTitle}</p>
+        <p className="text-sm text-muted">{job.rental ? `Hire: ${job.rental.quantity} × ${job.rental.item}` : (job.projectTitle ?? "No project")}</p>
         <p className="mt-1 line-clamp-2 text-sm">{job.brief}</p>
       </div>
       <div className="text-right text-sm">

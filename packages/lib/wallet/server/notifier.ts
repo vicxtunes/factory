@@ -8,6 +8,7 @@ import { formatMoney } from "@repo/lib/currency/format";
 import { notifyActor } from "@repo/lib/push/send";
 import { createAdminClient } from "@repo/lib/supabase/admin";
 import { clientPath } from "@repo/lib/client-portal/paths";
+import { localPhone } from "@repo/lib/wallet/policy";
 
 const CLIENT_URL = clientPath("/payment");
 
@@ -73,22 +74,37 @@ export async function withdrawalToApprove(businessName: string, amount: number, 
   );
 }
 
-/** Staff answered a withdrawal from the Business card. `reason` null: it was sent. */
-export async function withdrawalAnswered(ownerClientId: string, amount: number, phone: string, reason: string | null): Promise<void> {
+/** Where a withdrawal comes from: a business's Business card, or a vendor's wallet. */
+type Wallet = "business" | "vendor";
+const walletUrl = (from: Wallet) => (from === "vendor" ? "/vendors/wallet" : "/studio/wallet");
+const walletName = (from: Wallet) => (from === "vendor" ? "your wallet" : "your Business card");
+
+/** The owner (or vendor) asked to withdraw: it's off their card and waits for Aming to send it. */
+export async function withdrawalRequested(clientId: string, amount: number, phone: string, from: Wallet): Promise<void> {
   await notifyActor(
-    { type: "client", id: ownerClientId },
-    reason === null
-      ? { title: "Withdrawal sent", body: `${formatMoney(amount)} was sent to ${phone}.`, url: "/studio/wallet" }
-      : { title: "Withdrawal not sent", body: `${formatMoney(amount)} is back on your Business card: ${reason}`, url: "/studio/wallet" },
+    { type: "client", id: clientId },
+    {
+      title: "Cash withdrawal requested",
+      body: `${formatMoney(amount)} is off ${walletName(from)} and on its way to ${localPhone(phone)}. We'll tell you when it's sent.`,
+      url: walletUrl(from),
+    },
   );
 }
 
-/** Staff answered a vendor's withdrawal from their wallet. `reason` null: it was sent. */
-export async function vendorWithdrawalAnswered(vendorClientId: string, amount: number, phone: string, reason: string | null): Promise<void> {
+/** A withdrawal was delivered, or (`reason`) refused or failed and put back. */
+export async function withdrawalAnswered(clientId: string, amount: number, phone: string, reason: string | null, from: Wallet = "business"): Promise<void> {
   await notifyActor(
-    { type: "client", id: vendorClientId },
+    { type: "client", id: clientId },
     reason === null
-      ? { title: "Withdrawal sent", body: `${formatMoney(amount)} was sent to ${phone}.`, url: "/vendors/wallet" }
-      : { title: "Withdrawal not sent", body: `${formatMoney(amount)} is back in your wallet: ${reason}`, url: "/vendors/wallet" },
+      ? { title: "Money sent successfully", body: `${formatMoney(amount)} was sent to ${localPhone(phone)} by mobile money.`, url: walletUrl(from) }
+      : { title: "Withdrawal not sent", body: `${formatMoney(amount)} is back on ${walletName(from)}: ${reason}`, url: walletUrl(from) },
+  );
+}
+
+/** A mobile money payment the client started didn't go through: nothing was taken. */
+export async function paymentFailed(clientId: string, amount: number, url: string): Promise<void> {
+  await notifyActor(
+    { type: "client", id: clientId },
+    { title: "Payment didn't go through", body: `Your mobile money payment of ${formatMoney(amount)} wasn't completed, and no money was taken. You can try again.`, url },
   );
 }
