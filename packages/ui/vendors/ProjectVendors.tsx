@@ -14,13 +14,32 @@ import {
   disputeVendorJob,
   findVendors,
   fundVendorJob,
+  requestRental,
   requestVendor,
   setVendorJobFolder,
   type VendorCard,
 } from "@repo/lib/vendors/actions";
-import { autoReleaseAt, isOpenJob, JOB_STAGE_LABELS, jobStage, offerPrice, offerTotal, rateUnit, VENDOR_CATEGORIES, vendorCategory, vendorTake, type JobStage, type JobStatus, type RateUnit } from "@repo/lib/vendors/core";
+import {
+  autoReleaseAt,
+  isOpenJob,
+  JOB_STAGE_LABELS,
+  jobStage,
+  offerPrice,
+  offerTotal,
+  rateUnit,
+  RENTAL_UNITS,
+  rentalPrice,
+  VENDOR_CATEGORIES,
+  vendorCategory,
+  vendorTake,
+  type JobStage,
+  type JobStatus,
+  type RateUnit,
+  type Rental,
+} from "@repo/lib/vendors/core";
+import { checkMobileMoneyPayment, payVendorJobWithMobileMoney } from "@repo/lib/wallet/actions";
 
-/** One vendor job on the project, as the studio sees it. */
+/** One vendor job of the studio's, as it sees it. */
 export interface ProjectJob {
   id: string;
   vendorId: string;
@@ -32,19 +51,28 @@ export interface ProjectJob {
   dueOn: string | null;
   price: number;
   status: JobStatus;
-  /** The folder the vendor works in; null: it was deleted. */
+  /** The folder the vendor works in; null: a rental, or it was deleted. */
   folderId: string | null;
   deliveredAt: string | null;
   disputeReason: string | null;
+  /** Equipment hired: what, how many, which days; null for a service. */
+  rental: Rental | null;
+  handedOverAt: string | null;
+  /** The project it's for, on the studio's Jobs page; null: none. */
+  projectTitle: string | null;
 }
 
-/** A folder in the project's, for the vendor to work in ("Wedding / Raw"). */
+/** A folder the vendor can be given ("Wedding / Raw"): in the project's, or in Drive → Jobs. */
 export interface ProjectFolder {
   id: string;
   label: string;
 }
 
 const money = (n: number) => `UGX ${n.toLocaleString("en-US")}`;
+const shortDay = (day: string) => new Date(`${day}T12:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
+
+/** A vendor that hires out equipment: their jobs are rentals. */
+const hiresEquipment = (vendor: { category: string }) => vendor.category === "equipment_hire";
 
 const STAGE_LOOK: Record<JobStage, string> = {
   requested: "bg-warning-50 text-warning-700 dark:bg-warning-500/15 dark:text-warning-400",
@@ -56,14 +84,18 @@ const STAGE_LOOK: Record<JobStage, string> = {
 type Sheet = { kind: "fund" | "approve" | "dispute"; job: ProjectJob } | null;
 
 /**
- * The vendors working on a project. Each job shows where it is and what the
- * studio can do now: cancel before money is held, review samples and pay in
- * to Aming to go ahead, approve delivered work (Aming releases the money to
- * the vendor) or raise a dispute. Paying (`canPay`) is the Money area's.
- * Adding a vendor: find them, the folder they work in, samples or not, and
- * what's needed, by when, for how much. Coming from a vendor's page
- * (`hire`), the form opens with them chosen, at one of their services
- * (`hireService`) when one was picked.
+ * A studio's vendor jobs: a project's (`projectId`), or all of them on the
+ * Jobs page (null), where hiring puts a job on no project, in a folder of its
+ * own in Drive → Jobs. Each job shows where it is and what the studio can do
+ * now: cancel before money is held, review samples and pay in to Aming (from
+ * the Business card, or by mobile money), approve delivered work or returned
+ * equipment (Aming releases the money to the vendor), or raise a dispute.
+ * Paying (`canPay`) is the Money area's. Hiring: find a vendor, then for a
+ * service the folder they work in, samples or not, and what's needed, by
+ * when, for how much; for equipment, the item, how many and the days. Coming
+ * from a vendor's page (`hire`), the form opens with them chosen, at one of
+ * their services (`hireService`) when one was picked; closing it goes to
+ * `returnTo`.
  */
 export function ProjectVendors({
   projectId,
@@ -72,16 +104,19 @@ export function ProjectVendors({
   canPay,
   hire,
   hireService,
+  returnTo,
 }: {
-  projectId: string;
+  projectId: string | null;
   jobs: ProjectJob[];
   folders: ProjectFolder[];
   canPay: boolean;
   hire: VendorCard | null;
   hireService: string | null;
+  returnTo: string;
 }) {
   const router = useRouter();
-  const openJobs = jobs.filter((j) => isOpenJob(j.status)).map((j) => j.vendorId);
+  // On a project, a vendor has one open job at a time.
+  const openJobs = projectId ? jobs.filter((j) => isOpenJob(j.status)).map((j) => j.vendorId) : [];
   const [adding, setAdding] = useState(hire !== null);
   // A job with no folder (made before jobs had them, or its folder was deleted): the studio gives it one.
   const [givingFolder, setGivingFolder] = useState<ProjectJob | null>(null);
@@ -101,13 +136,13 @@ export function ProjectVendors({
     });
   }
 
-
   return (
     <div className="space-y-3">
       {jobs.length ? (
         <ul className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-surface">
           {jobs.map((j) => {
             const release = autoReleaseAt(j);
+            const needsFolder = !j.rental && !j.folderId && isOpenJob(j.status);
             return (
               <li key={j.id} className="space-y-3 p-4">
                 <div className="flex items-start gap-3">
@@ -119,18 +154,22 @@ export function ProjectVendors({
                       </p>
                       <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${STAGE_LOOK[jobStage(j.status)]}`}>{JOB_STAGE_LABELS[jobStage(j.status)]}</span>
                     </div>
-                    <p className="line-clamp-2 text-sm text-muted">{j.brief}</p>
+                    {projectId === null ? <p className="text-xs font-medium text-brand-600 dark:text-brand-400">{j.projectTitle ?? "No project"}</p> : null}
+                    <p className="line-clamp-2 text-sm text-muted">
+                      {j.rental ? `${j.rental.quantity} × ${j.rental.item}, ${shortDay(j.rental.startsOn)} to ${shortDay(j.rental.endsOn)}` : j.brief}
+                    </p>
                     <p className="mt-1 text-xs text-muted">
                       {money(j.price)}
-                      {j.dueOn ? ` · due ${new Date(`${j.dueOn}T00:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}` : ""}
+                      {!j.rental && j.dueOn ? ` · due ${shortDay(j.dueOn)}` : ""}
                       {j.status === "in_progress" || j.status === "delivered" || j.status === "disputed" ? " · held by Aming" : ""}
+                      {j.rental && j.status === "in_progress" ? (j.handedOverAt ? " · with you" : " · waiting to be handed over") : ""}
                     </p>
                     {release ? (
                       <p className="mt-1 text-xs text-muted">
                         Released to them {new Date(release).toLocaleString("en-GB", { weekday: "short", hour: "2-digit", minute: "2-digit" })} if you don&apos;t answer.
                       </p>
                     ) : null}
-                    {!j.folderId && isOpenJob(j.status) ? (
+                    {needsFolder ? (
                       <p className="mt-2 rounded-lg bg-warning-50 px-3 py-2 text-xs text-warning-700 dark:bg-warning-500/15 dark:text-warning-400">
                         No folder: {j.vendorName} can&apos;t reach any files for this job. Give them one.
                       </p>
@@ -140,14 +179,14 @@ export function ProjectVendors({
                 </div>
                 <div className="flex flex-wrap items-center gap-2 sm:pl-14">
                   {j.status === "samples_sent" && canPay ? <Button onClick={() => setSheet({ kind: "fund", job: j })}>Approve samples and pay in</Button> : null}
-                  {j.status === "awaiting_funds" && canPay ? <Button onClick={() => setSheet({ kind: "fund", job: j })}>Pay in to start</Button> : null}
-                  {j.status === "delivered" && canPay ? <Button onClick={() => setSheet({ kind: "approve", job: j })}>Approve and release</Button> : null}
-                  {!j.folderId && isOpenJob(j.status) ? (
+                  {j.status === "awaiting_funds" && canPay ? <Button onClick={() => setSheet({ kind: "fund", job: j })}>{j.rental ? "Pay in to book it" : "Pay in to start"}</Button> : null}
+                  {j.status === "delivered" && canPay ? <Button onClick={() => setSheet({ kind: "approve", job: j })}>{j.rental ? "Approve the return" : "Approve and release"}</Button> : null}
+                  {needsFolder ? (
                     <Button variant="secondary" onClick={() => setGivingFolder(j)}>
                       Give a folder
                     </Button>
                   ) : null}
-                  {j.folderId && isOpenJob(j.status) ? (
+                  {!j.rental && j.folderId && isOpenJob(j.status) ? (
                     <Link href={`/studio/files?folder=${j.folderId}`} className={buttonClass("secondary", "sm")}>
                       {j.status === "samples_sent" ? "See the samples" : "Open their folder"}
                     </Link>
@@ -169,12 +208,14 @@ export function ProjectVendors({
         </ul>
       ) : (
         <p className="rounded-2xl border border-dashed border-border p-5 text-center text-sm text-muted">
-          No vendors yet. Hire a photo editor, videographer or other vendor to work on this project.
+          {projectId
+            ? "No vendors yet. Hire a photo editor, videographer or other vendor to work on this project."
+            : "No vendor jobs yet. Hire a vendor for work that isn't on a project, or hire equipment, from here or from Vendors."}
         </p>
       )}
       {error && !sheet ? <p className="text-sm text-error-600 dark:text-error-400">{error}</p> : null}
       <Button variant="secondary" onClick={() => setAdding(true)}>
-        Add a vendor
+        {projectId ? "Add a vendor" : "Hire a vendor"}
       </Button>
 
       {adding ? (
@@ -188,29 +229,29 @@ export function ProjectVendors({
           onClose={() => {
             setAdding(false);
             // Not opened again on the next refresh.
-            if (hire) router.replace(`/studio/projects/${projectId}?tab=vendors`, { scroll: false });
+            if (hire) router.replace(returnTo, { scroll: false });
           }}
         />
       ) : null}
 
-      {givingFolder ? <GiveFolder job={givingFolder} folders={folders} onClose={() => setGivingFolder(null)} /> : null}
+      {givingFolder ? <GiveFolder job={givingFolder} folders={folders} onProject={projectId !== null} onClose={() => setGivingFolder(null)} /> : null}
 
-      {sheet ? (
-        <FormSheet
-          open
-          onClose={() => setSheet(null)}
-          title={sheet.kind === "fund" ? (sheet.job.status === "samples_sent" ? "Approve samples and pay in" : "Pay in to start") : sheet.kind === "approve" ? "Approve and release" : "Raise a dispute"}
-        >
+      {sheet?.kind === "fund" ? <PayIn job={sheet.job} onClose={() => setSheet(null)} /> : null}
+
+      {sheet && sheet.kind !== "fund" ? (
+        <FormSheet open onClose={() => setSheet(null)} title={sheet.kind === "approve" ? (sheet.job.rental ? "Approve the return" : "Approve and release") : "Raise a dispute"}>
           <div className="space-y-4 text-sm">
             {sheet.kind === "dispute" ? (
               <>
-                <p className="text-muted">Aming holds the money until it&apos;s settled: staff look at the work and release it to {sheet.job.vendorName} or refund you.</p>
+                <p className="text-muted">
+                  Aming holds the money until it&apos;s settled: staff look into it and release it to {sheet.job.vendorName} or refund you.
+                </p>
                 <textarea
                   value={reason}
                   onChange={(e) => setReason(e.target.value)}
                   rows={4}
                   maxLength={1000}
-                  placeholder="What's wrong with the work?"
+                  placeholder={sheet.job.rental ? "What's wrong (not handed over, not working, late…)?" : "What's wrong with the work?"}
                   className="w-full rounded-lg border border-border bg-surface px-3 py-2 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
                   autoFocus
                 />
@@ -218,13 +259,11 @@ export function ProjectVendors({
             ) : (
               <>
                 <p className="text-muted">
-                  {sheet.kind === "fund"
-                    ? `Aming holds the money while ${sheet.job.vendorName} works: it's released to them when you approve the delivered work, or refunded if things go wrong.`
-                    : `Aming releases the money it holds to ${sheet.job.vendorName}.`}
+                  {sheet.job.rental ? `The equipment is back with ${sheet.job.vendorName}: Aming releases what it holds to them.` : `Aming releases the money it holds to ${sheet.job.vendorName}.`}
                 </p>
                 <dl className="divide-y divide-border rounded-xl border border-border">
                   <div className="flex justify-between px-4 py-2.5">
-                    <dt className="text-muted">{sheet.kind === "fund" ? "From your Business card" : "Held by Aming"}</dt>
+                    <dt className="text-muted">Held by Aming</dt>
                     <dd className="font-semibold tabular-nums">{money(sheet.job.price)}</dd>
                   </div>
                   <div className="flex justify-between px-4 py-2.5">
@@ -242,13 +281,9 @@ export function ProjectVendors({
               <Button
                 loading={pending}
                 disabled={sheet.kind === "dispute" && reason.trim().length < 5}
-                onClick={() =>
-                  act(() =>
-                    sheet.kind === "fund" ? fundVendorJob(sheet.job.id) : sheet.kind === "approve" ? approveVendorJob(sheet.job.id) : disputeVendorJob(sheet.job.id, reason),
-                  )
-                }
+                onClick={() => act(() => (sheet.kind === "approve" ? approveVendorJob(sheet.job.id) : disputeVendorJob(sheet.job.id, reason)))}
               >
-                {sheet.kind === "fund" ? `Pay in ${money(sheet.job.price)}` : sheet.kind === "approve" ? "Release the money" : "Raise the dispute"}
+                {sheet.kind === "approve" ? "Release the money" : "Raise the dispute"}
               </Button>
             </div>
           </div>
@@ -258,7 +293,127 @@ export function ProjectVendors({
   );
 }
 
-/** Find a vendor, then where they work, samples or not, and what's needed, by when and for how much. */
+/** Mobile money takes 500 to 5,000,000 a prompt. */
+const MOBILE_MONEY_MIN = 500;
+const MOBILE_MONEY_MAX = 5_000_000;
+
+/**
+ * Paying a job in to Aming: from the Business card, or by mobile money (a
+ * prompt on the phone, then waiting for it to go through). Either way the
+ * studio pays the price; Aming holds it for the job.
+ */
+function PayIn({ job, onClose }: { job: ProjectJob; onClose: () => void }) {
+  const router = useRouter();
+  const [how, setHow] = useState<"card" | "mobile">("card");
+  const [phone, setPhone] = useState("");
+  const [waiting, setWaiting] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+  const mobileOk = job.price >= MOBILE_MONEY_MIN && job.price <= MOBILE_MONEY_MAX;
+
+  // While the prompt is on the phone: ask every few seconds how it's going.
+  useEffect(() => {
+    if (!waiting) return;
+    const timer = setInterval(async () => {
+      const res = await checkMobileMoneyPayment(waiting);
+      if (!res.ok) return;
+      if (res.data.status === "succeeded") {
+        clearInterval(timer);
+        onClose();
+        router.refresh();
+      } else if (res.data.status === "failed") {
+        clearInterval(timer);
+        setWaiting(null);
+        setError(res.data.failureReason ?? "The payment didn't go through. Nothing was taken: you can try again.");
+      }
+    }, 4000);
+    return () => clearInterval(timer);
+  }, [waiting, onClose, router]);
+
+  return (
+    <FormSheet open onClose={onClose} title={job.status === "samples_sent" ? "Approve samples and pay in" : "Pay in"}>
+      <div className="space-y-4 text-sm">
+        <p className="text-muted">
+          Aming holds the money{job.rental ? " for the hire" : ` while ${job.vendorName} works`}: it&apos;s released to them when you approve, or refunded to your Business card if things go
+          wrong.
+        </p>
+        <dl className="divide-y divide-border rounded-xl border border-border">
+          <div className="flex justify-between px-4 py-2.5">
+            <dt className="text-muted">You pay</dt>
+            <dd className="font-semibold tabular-nums">{money(job.price)}</dd>
+          </div>
+          <div className="flex justify-between px-4 py-2.5">
+            <dt className="text-muted">{job.vendorName} receives</dt>
+            <dd className="tabular-nums">{money(vendorTake(job.price))}</dd>
+          </div>
+        </dl>
+
+        {waiting ? (
+          <div className="space-y-2 rounded-xl bg-brand-50 p-4 text-brand-700 dark:bg-brand-500/15 dark:text-brand-300">
+            <p className="font-semibold">Check your phone</p>
+            <p>Approve the mobile money prompt for {money(job.price)} with your PIN. This updates by itself once it goes through.</p>
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 gap-2 rounded-xl bg-gray-100 p-1 dark:bg-white/5">
+              {(["card", "mobile"] as const).map((h) => (
+                <button
+                  key={h}
+                  type="button"
+                  aria-pressed={how === h}
+                  disabled={h === "mobile" && !mobileOk}
+                  onClick={() => setHow(h)}
+                  className={`h-10 rounded-lg text-sm font-medium transition-colors disabled:opacity-40 ${how === h ? "bg-surface shadow-theme-xs" : "text-muted hover:text-foreground"}`}
+                >
+                  {h === "card" ? "Business card" : "Mobile money"}
+                </button>
+              ))}
+            </div>
+            {how === "mobile" ? (
+              <Field label="MTN or Airtel number" hint="A prompt comes to this phone: approve it with your PIN.">
+                <TextInput type="tel" inputMode="tel" autoComplete="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="07XX XXX XXX" required />
+              </Field>
+            ) : (
+              <p className="text-xs text-muted">Taken from your Business card now. Not enough on it? Choose mobile money.</p>
+            )}
+            {!mobileOk ? <p className="text-xs text-muted">Mobile money takes {money(MOBILE_MONEY_MIN)} to {money(MOBILE_MONEY_MAX)} at a time: pay this one from your Business card.</p> : null}
+          </>
+        )}
+        {error ? <p className="text-error-600 dark:text-error-400">{error}</p> : null}
+        <div className="flex justify-end gap-2">
+          <Button variant="secondary" onClick={onClose} disabled={pending}>
+            {waiting ? "Close" : "Not yet"}
+          </Button>
+          {waiting ? null : (
+            <Button
+              loading={pending}
+              disabled={how === "mobile" && !phone.trim()}
+              onClick={() => {
+                setError(null);
+                start(async () => {
+                  if (how === "card") {
+                    const res = await fundVendorJob(job.id);
+                    if (!res.ok) return setError(res.error);
+                    onClose();
+                    router.refresh();
+                    return;
+                  }
+                  const res = await payVendorJobWithMobileMoney(job.id, phone);
+                  if (!res.ok) return setError(res.error);
+                  setWaiting(res.data.id);
+                });
+              }}
+            >
+              {how === "card" ? `Pay in ${money(job.price)}` : `Send the prompt`}
+            </Button>
+          )}
+        </div>
+      </div>
+    </FormSheet>
+  );
+}
+
+/** Find a vendor, then what's hired from them: a service (where they work, samples or not, what, by when, how much) or equipment (the item, how many, the days). */
 function AddVendor({
   projectId,
   folders,
@@ -267,34 +422,18 @@ function AddVendor({
   initialService,
   onClose,
 }: {
-  projectId: string;
+  projectId: string | null;
   folders: ProjectFolder[];
   openJobs: string[];
   initial: VendorCard | null;
   initialService: string | null;
   onClose: () => void;
 }) {
-  const router = useRouter();
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("");
   const [found, setFound] = useState<VendorCard[] | null>(null);
   const [chosen, setChosen] = useState<VendorCard | null>(initial);
-  // Hiring at a service picked on their page: that service, its price for one, and its name as the brief's start.
-  const picked = initial ? pricedOffers(initial).findIndex((o) => o.id === initialService) : -1;
-  const atService = picked >= 0 ? pricedOffers(initial!)[picked]! : null;
-  const [brief, setBrief] = useState(atService?.name ?? "");
-  const [dueOn, setDueOn] = useState("");
-  const [price, setPrice] = useState(atService ? offerTotal(atService, 1).toLocaleString("en-US") : "");
-  // One of their priced services ("" for a price agreed here), and how many of its unit.
-  const [rate, setRate] = useState(picked >= 0 ? String(picked) : "");
-  const [quantity, setQuantity] = useState("1");
-  // Where they work: "new" (a folder made for them) or an existing folder's id.
-  const [folder, setFolder] = useState("new");
-  const [folderName, setFolderName] = useState("");
-  const [samples, setSamples] = useState(false);
-  const [samplesWanted, setSamplesWanted] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [pending, start] = useTransition();
 
   // Searches as they type, a moment after they stop.
   useEffect(() => {
@@ -306,122 +445,21 @@ function AddVendor({
     return () => clearTimeout(timer);
   }, [query, category]);
 
-  const textArea = "w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500";
-
   return (
-    <FormSheet open onClose={onClose} title={chosen ? `Hire ${chosen.name}` : "Add a vendor"}>
+    <FormSheet open onClose={onClose} title={chosen ? `Hire ${chosen.name}` : "Hire a vendor"}>
       {chosen ? (
-        <form
-          className="space-y-4"
-          onSubmit={(e) => {
-            e.preventDefault();
-            setError(null);
-            start(async () => {
-              const res = await requestVendor({
-                projectId,
-                vendorId: chosen.id,
-                brief,
-                samplesWanted: samples ? samplesWanted : "",
-                dueOn,
-                price: price.replace(/[^\d]/g, ""),
-                folder: folder === "new" ? { kind: "new", name: folderName.trim() || `For ${chosen.name}` } : { kind: "existing", folderId: folder },
-              });
-              if (!res.ok) return setError(res.error);
-              onClose();
-              router.refresh();
-            });
-          }}
-        >
-          <VendorRow vendor={chosen} />
-          <Field label="What's needed">
-            <textarea
-              value={brief}
-              onChange={(e) => setBrief(e.target.value)}
-              rows={3}
-              maxLength={1000}
-              placeholder="e.g. Colour and skin retouch on 300 wedding photos, our usual warm look."
-              className={textArea}
-              required
-              autoFocus
-            />
-          </Field>
-          {pricedOffers(chosen).length ? (
-            <div className="space-y-2">
-              <Field label="At their price">
-                <select
-                  value={rate}
-                  onChange={(e) => {
-                    setRate(e.target.value);
-                    const picked = pricedOffers(chosen)[Number(e.target.value)];
-                    if (!picked || e.target.value === "") return;
-                    setPrice(offerTotal(picked, Number(quantity) || 1).toLocaleString("en-US"));
-                    if (!brief.trim()) setBrief(picked.name);
-                  }}
-                  className="h-11 w-full rounded-lg border border-border bg-surface px-3 text-sm"
-                >
-                  <option value="">No, agree a price</option>
-                  {pricedOffers(chosen).map((o, i) => (
-                    <option key={i} value={i}>
-                      {o.name}: {offerPrice(o)}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              {rate !== "" && pricedOffers(chosen)[Number(rate)]!.unit !== "project" ? (
-                <Field label={`How many ${rateUnit(pricedOffers(chosen)[Number(rate)]!.unit).many}`}>
-                  <TextInput
-                    inputMode="numeric"
-                    value={quantity}
-                    onChange={(e) => {
-                      const n = e.target.value.replace(/[^\d]/g, "");
-                      setQuantity(n);
-                      setPrice(offerTotal(pricedOffers(chosen)[Number(rate)]!, Number(n) || 1).toLocaleString("en-US"));
-                    }}
-                  />
-                </Field>
-              ) : null}
-            </div>
-          ) : null}
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Due">
-              <TextInput type="date" value={dueOn} onChange={(e) => setDueOn(e.target.value)} />
-            </Field>
-            <Field label="Price (UGX)">
-              <TextInput inputMode="numeric" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="300,000" required />
-            </Field>
-          </div>
-          <Field label="Their folder" hint="The only folder of this project they'll see.">
-            <select value={folder} onChange={(e) => setFolder(e.target.value)} className="h-11 w-full rounded-lg border border-border bg-surface px-3 text-sm">
-              <option value="new">A new folder for them</option>
-              {folders.map((f) => (
-                <option key={f.id} value={f.id}>
-                  {f.label}
-                </option>
-              ))}
-            </select>
-          </Field>
-          {folder === "new" ? <TextInput value={folderName} onChange={(e) => setFolderName(e.target.value)} placeholder={`For ${chosen.name}`} maxLength={120} aria-label="New folder's name" /> : null}
-          <label className="flex items-start gap-3">
-            <input type="checkbox" checked={samples} onChange={(e) => setSamples(e.target.checked)} className="mt-0.5 size-4 accent-brand-500" />
-            <span>
-              <span className="block text-sm font-medium">Ask for samples first</span>
-              <span className="block text-xs text-muted">See a few before going ahead. Nothing is paid until you approve them.</span>
-            </span>
-          </label>
-          {samples ? (
-            <textarea value={samplesWanted} onChange={(e) => setSamplesWanted(e.target.value)} rows={2} maxLength={500} placeholder="e.g. Edit these 5 photos in our style." className={textArea} required />
-          ) : null}
-          <p className="text-xs text-muted">When the work goes ahead you pay in to Aming from your Business card. Aming holds it until you approve the work.</p>
-          {error ? <p className="text-sm text-error-600 dark:text-error-400">{error}</p> : null}
-          <div className="flex justify-between gap-2">
-            <Button type="button" variant="secondary" onClick={() => setChosen(null)} disabled={pending}>
-              Back
-            </Button>
-            <Button type="submit" loading={pending} disabled={brief.trim().length < 3 || !price || (samples && samplesWanted.trim().length < 3)}>
-              Send request
-            </Button>
-          </div>
-        </form>
+        hiresEquipment(chosen) ? (
+          <RentalForm projectId={projectId} vendor={chosen} initialItem={chosen === initial ? initialService : null} onBack={() => setChosen(null)} onDone={onClose} />
+        ) : (
+          <ServiceForm
+            projectId={projectId}
+            folders={folders}
+            vendor={chosen}
+            initialService={chosen === initial ? initialService : null}
+            onBack={() => setChosen(null)}
+            onDone={onClose}
+          />
+        )
       ) : (
         <div className="space-y-3">
           <div className="flex gap-2">
@@ -460,8 +498,257 @@ function AddVendor({
   );
 }
 
-/** Gives a job the folder its vendor works in: one of the project's, or a new one. */
-function GiveFolder({ job, folders, onClose }: { job: ProjectJob; folders: ProjectFolder[]; onClose: () => void }) {
+const textArea = "w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500";
+
+/** A service: what's needed, at their price or one agreed, by when, the folder they work in, and samples or not. */
+function ServiceForm({
+  projectId,
+  folders,
+  vendor,
+  initialService,
+  onBack,
+  onDone,
+}: {
+  projectId: string | null;
+  folders: ProjectFolder[];
+  vendor: VendorCard;
+  initialService: string | null;
+  onBack: () => void;
+  onDone: () => void;
+}) {
+  const router = useRouter();
+  // Hiring at a service picked on their page: that service, its price for one, and its name as the brief's start.
+  const picked = pricedOffers(vendor).findIndex((o) => o.id === initialService);
+  const atService = picked >= 0 ? pricedOffers(vendor)[picked]! : null;
+  const [brief, setBrief] = useState(atService?.name ?? "");
+  const [dueOn, setDueOn] = useState("");
+  const [price, setPrice] = useState(atService ? offerTotal(atService, 1).toLocaleString("en-US") : "");
+  // One of their priced services ("" for a price agreed here), and how many of its unit.
+  const [rate, setRate] = useState(picked >= 0 ? String(picked) : "");
+  const [quantity, setQuantity] = useState("1");
+  // Where they work: "new" (a folder made for them) or an existing folder's id.
+  const [folder, setFolder] = useState("new");
+  const [folderName, setFolderName] = useState("");
+  const [samples, setSamples] = useState(false);
+  const [samplesWanted, setSamplesWanted] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+
+  return (
+    <form
+      className="space-y-4"
+      onSubmit={(e) => {
+        e.preventDefault();
+        setError(null);
+        start(async () => {
+          const res = await requestVendor({
+            projectId,
+            vendorId: vendor.id,
+            brief,
+            samplesWanted: samples ? samplesWanted : "",
+            dueOn,
+            price: price.replace(/[^\d]/g, ""),
+            folder: folder === "new" ? { kind: "new", name: folderName.trim() || `For ${vendor.name}` } : { kind: "existing", folderId: folder },
+          });
+          if (!res.ok) return setError(res.error);
+          onDone();
+          router.refresh();
+        });
+      }}
+    >
+      <VendorRow vendor={vendor} />
+      <Field label="What's needed">
+        <textarea
+          value={brief}
+          onChange={(e) => setBrief(e.target.value)}
+          rows={3}
+          maxLength={1000}
+          placeholder="e.g. Colour and skin retouch on 300 wedding photos, our usual warm look."
+          className={textArea}
+          required
+          autoFocus
+        />
+      </Field>
+      {pricedOffers(vendor).length ? (
+        <div className="space-y-2">
+          <Field label="At their price">
+            <select
+              value={rate}
+              onChange={(e) => {
+                setRate(e.target.value);
+                const offer = pricedOffers(vendor)[Number(e.target.value)];
+                if (!offer || e.target.value === "") return;
+                setPrice(offerTotal(offer, Number(quantity) || 1).toLocaleString("en-US"));
+                if (!brief.trim()) setBrief(offer.name);
+              }}
+              className="h-11 w-full rounded-lg border border-border bg-surface px-3 text-sm"
+            >
+              <option value="">No, agree a price</option>
+              {pricedOffers(vendor).map((o, i) => (
+                <option key={i} value={i}>
+                  {o.name}: {offerPrice(o)}
+                </option>
+              ))}
+            </select>
+          </Field>
+          {rate !== "" && pricedOffers(vendor)[Number(rate)]!.unit !== "project" ? (
+            <Field label={`How many ${rateUnit(pricedOffers(vendor)[Number(rate)]!.unit).many}`}>
+              <TextInput
+                inputMode="numeric"
+                value={quantity}
+                onChange={(e) => {
+                  const n = e.target.value.replace(/[^\d]/g, "");
+                  setQuantity(n);
+                  setPrice(offerTotal(pricedOffers(vendor)[Number(rate)]!, Number(n) || 1).toLocaleString("en-US"));
+                }}
+              />
+            </Field>
+          ) : null}
+        </div>
+      ) : null}
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Due">
+          <TextInput type="date" value={dueOn} onChange={(e) => setDueOn(e.target.value)} />
+        </Field>
+        <Field label="Price (UGX)">
+          <TextInput inputMode="numeric" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="300,000" required />
+        </Field>
+      </div>
+      <Field label="Their folder" hint={projectId ? "The only folder of this project they'll see." : "In Drive → Jobs: the only folder of yours they'll see."}>
+        <select value={folder} onChange={(e) => setFolder(e.target.value)} className="h-11 w-full rounded-lg border border-border bg-surface px-3 text-sm">
+          <option value="new">A new folder for them</option>
+          {folders.map((f) => (
+            <option key={f.id} value={f.id}>
+              {f.label}
+            </option>
+          ))}
+        </select>
+      </Field>
+      {folder === "new" ? <TextInput value={folderName} onChange={(e) => setFolderName(e.target.value)} placeholder={`For ${vendor.name}`} maxLength={120} aria-label="New folder's name" /> : null}
+      <label className="flex items-start gap-3">
+        <input type="checkbox" checked={samples} onChange={(e) => setSamples(e.target.checked)} className="mt-0.5 size-4 accent-brand-500" />
+        <span>
+          <span className="block text-sm font-medium">Ask for samples first</span>
+          <span className="block text-xs text-muted">See a few before going ahead. Nothing is paid until you approve them.</span>
+        </span>
+      </label>
+      {samples ? (
+        <textarea value={samplesWanted} onChange={(e) => setSamplesWanted(e.target.value)} rows={2} maxLength={500} placeholder="e.g. Edit these 5 photos in our style." className={textArea} required />
+      ) : null}
+      <p className="text-xs text-muted">When the work goes ahead you pay in to Aming, from your Business card or by mobile money. Aming holds it until you approve the work.</p>
+      {error ? <p className="text-sm text-error-600 dark:text-error-400">{error}</p> : null}
+      <div className="flex justify-between gap-2">
+        <Button type="button" variant="secondary" onClick={onBack} disabled={pending}>
+          Back
+        </Button>
+        <Button type="submit" loading={pending} disabled={brief.trim().length < 3 || !price || (samples && samplesWanted.trim().length < 3)}>
+          Send request
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+/** Equipment: which item (priced per day, week or month), how many, and the days; the price follows. */
+function RentalForm({
+  projectId,
+  vendor,
+  initialItem,
+  onBack,
+  onDone,
+}: {
+  projectId: string | null;
+  vendor: VendorCard;
+  initialItem: string | null;
+  onBack: () => void;
+  onDone: () => void;
+}) {
+  const router = useRouter();
+  const items = pricedOffers(vendor).filter((o) => (RENTAL_UNITS as readonly string[]).includes(o.unit) || o.unit === "item");
+  const [itemId, setItemId] = useState(items.find((o) => o.id === initialItem)?.id ?? items[0]?.id ?? "");
+  const [quantity, setQuantity] = useState("1");
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "Africa/Kampala" });
+  const [startsOn, setStartsOn] = useState("");
+  const [endsOn, setEndsOn] = useState("");
+  const [note, setNote] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+  const item = items.find((o) => o.id === itemId);
+  const count = Number(quantity) || 0;
+  const total = item && count > 0 && startsOn && endsOn && endsOn >= startsOn ? rentalPrice(item, count, startsOn, endsOn) : null;
+
+  if (!items.length) {
+    return (
+      <div className="space-y-4">
+        <VendorRow vendor={vendor} />
+        <p className="rounded-2xl border border-dashed border-border p-5 text-center text-sm text-muted">{vendor.name} hasn&apos;t priced any equipment yet.</p>
+        <Button type="button" variant="secondary" onClick={onBack}>
+          Back
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <form
+      className="space-y-4"
+      onSubmit={(e) => {
+        e.preventDefault();
+        setError(null);
+        start(async () => {
+          const res = await requestRental({ projectId, vendorId: vendor.id, offerId: itemId, quantity, startsOn, endsOn, note });
+          if (!res.ok) return setError(res.error);
+          onDone();
+          router.refresh();
+        });
+      }}
+    >
+      <VendorRow vendor={vendor} />
+      <Field label="What to hire">
+        <select value={itemId} onChange={(e) => setItemId(e.target.value)} className="h-11 w-full rounded-lg border border-border bg-surface px-3 text-sm">
+          {items.map((o) => (
+            <option key={o.id} value={o.id}>
+              {o.name}: {offerPrice(o)}
+            </option>
+          ))}
+        </select>
+      </Field>
+      <Field label="How many">
+        <TextInput inputMode="numeric" value={quantity} onChange={(e) => setQuantity(e.target.value.replace(/[^\d]/g, ""))} required />
+      </Field>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="From">
+          <TextInput type="date" min={today} value={startsOn} onChange={(e) => setStartsOn(e.target.value)} required />
+        </Field>
+        <Field label="To (returned by)">
+          <TextInput type="date" min={startsOn || today} value={endsOn} onChange={(e) => setEndsOn(e.target.value)} required />
+        </Field>
+      </div>
+      <Field label="Anything to add" hint="Optional: where to collect it, what it's for…">
+        <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} maxLength={1000} className={textArea} />
+      </Field>
+      <dl className="divide-y divide-border rounded-xl border border-border text-sm">
+        <div className="flex justify-between px-4 py-2.5">
+          <dt className="text-muted">Price</dt>
+          <dd className="font-semibold tabular-nums">{total === null ? "Choose the days" : money(total)}</dd>
+        </div>
+      </dl>
+      <p className="text-xs text-muted">Once {vendor.name} accepts, you pay in to Aming (Business card or mobile money). It&apos;s released to them after the equipment is back and you approve.</p>
+      {error ? <p className="text-sm text-error-600 dark:text-error-400">{error}</p> : null}
+      <div className="flex justify-between gap-2">
+        <Button type="button" variant="secondary" onClick={onBack} disabled={pending}>
+          Back
+        </Button>
+        <Button type="submit" loading={pending} disabled={total === null}>
+          Send hire request
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+/** Gives a job the folder its vendor works in: one of the project's (or of Drive → Jobs), or a new one. */
+function GiveFolder({ job, folders, onProject, onClose }: { job: ProjectJob; folders: ProjectFolder[]; onProject: boolean; onClose: () => void }) {
   const router = useRouter();
   const [folder, setFolder] = useState("new");
   const [folderName, setFolderName] = useState("");
@@ -483,7 +770,7 @@ function GiveFolder({ job, folders, onClose }: { job: ProjectJob; folders: Proje
           });
         }}
       >
-        <Field label="Their folder" hint="The only folder of this project they'll see.">
+        <Field label="Their folder" hint={onProject ? "The only folder of this project they'll see." : "In Drive → Jobs: the only folder of yours they'll see."}>
           <select value={folder} onChange={(e) => setFolder(e.target.value)} className="h-11 w-full rounded-lg border border-border bg-surface px-3 text-sm">
             <option value="new">A new folder for them</option>
             {folders.map((f) => (

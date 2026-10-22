@@ -7,7 +7,6 @@ import { FormSheet } from "@repo/ui/FormSheet";
 import { Lightbox } from "@repo/ui/Lightbox";
 import { PhotoGrid } from "@repo/ui/PhotoGrid";
 import { offerPrice, offerPriceParts, type VendorOffer } from "@repo/lib/vendors/core";
-import { buttonClass } from "@repo/ui/Button";
 
 /** A service as shown: its samples' links (signed, short-lived; null when unavailable). */
 export type OfferView = Pick<VendorOffer, "id" | "name" | "description" | "price" | "unit" | "included"> & { sampleUrls: (string | null)[] };
@@ -150,32 +149,23 @@ export function ServiceTiles({ offers, hire }: { offers: OfferView[]; hire?: Hir
             {hire ? (
               <section className="space-y-2 border-t border-border pt-6">
                 <h3 className="text-base font-semibold">Hire them for this</h3>
-                <p className="text-sm text-muted">Choose the project. Its hire form opens with this service and its price.</p>
-                {hire.projects.length ? (
-                  <ul className="divide-y divide-border overflow-hidden rounded-2xl border border-border">
-                    {hire.projects.map((p) => (
-                      <li key={p.id}>
-                        <Link
-                          href={`/studio/projects/${p.id}?hire=${hire.vendorId}&service=${offer.id}`}
-                          className="flex items-center justify-between gap-3 p-3.5 hover:bg-background"
-                        >
-                          <span className="min-w-0">
-                            <span className="block truncate text-sm font-medium">{p.title}</span>
-                            <span className="block truncate text-xs text-muted">{p.meta}</span>
-                          </span>
-                          <span className="shrink-0 text-sm font-medium text-brand-600 dark:text-brand-400">Hire</span>
-                        </Link>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <div className="space-y-3 rounded-2xl border border-dashed border-border p-5 text-center text-sm text-muted">
-                    <p>No projects in hand to hire on.</p>
-                    <Link href="/studio/projects?new" className={buttonClass("primary", "sm")}>
-                      Start a project
-                    </Link>
-                  </div>
-                )}
+                <p className="text-sm text-muted">On one of your projects, or on none. The hire form opens with this service and its price.</p>
+                <ul className="divide-y divide-border overflow-hidden rounded-2xl border border-border">
+                  {[{ id: null, title: "No project", meta: "Its own folder in Drive → Jobs" }, ...hire.projects].map((p) => (
+                    <li key={p.id ?? "none"}>
+                      <Link
+                        href={p.id ? `/studio/projects/${p.id}?hire=${hire.vendorId}&service=${offer.id}` : `/studio/jobs?hire=${hire.vendorId}&service=${offer.id}`}
+                        className="flex items-center justify-between gap-3 p-3.5 hover:bg-background"
+                      >
+                        <span className="min-w-0">
+                          <span className="block truncate text-sm font-medium">{p.title}</span>
+                          <span className="block truncate text-xs text-muted">{p.meta}</span>
+                        </span>
+                        <span className="shrink-0 text-sm font-medium text-brand-600 dark:text-brand-400">Hire</span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
               </section>
             ) : null}
           </div>

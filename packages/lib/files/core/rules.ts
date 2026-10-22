@@ -66,12 +66,13 @@ export function uniqueName(name: string, taken: Iterable<string>): string {
 }
 
 /**
- * The Projects folder and each project's folder (kept by the database), and
- * the Business folders (views of the business's services and products): they
- * open (and some take files), but are never renamed, moved or deleted here.
+ * The Projects and Jobs folders and each project's folder (kept by the
+ * database), and the Business folders (views of the business's services and
+ * products): they open (and some take files), but are never renamed, moved or
+ * deleted here.
  */
 export function isLocked(folder: Folder): boolean {
-  return folder.holdsProjects || folder.projectId !== null || folder.business !== undefined;
+  return folder.holdsProjects || !!folder.holdsJobs || folder.projectId !== null || folder.business !== undefined;
 }
 
 /** Whether a file can be shown in the browser (a picture, video or PDF), not only downloaded. */

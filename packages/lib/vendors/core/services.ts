@@ -7,6 +7,8 @@ export const RATE_UNITS = [
   { id: "video", label: "per video", many: "videos" },
   { id: "hour", label: "per hour", many: "hours" },
   { id: "day", label: "per day", many: "days" },
+  { id: "week", label: "per week", many: "weeks" },
+  { id: "month", label: "per month", many: "months" },
   { id: "event", label: "per event", many: "events" },
   { id: "item", label: "per item", many: "items" },
   { id: "project", label: "per project", many: "projects" },

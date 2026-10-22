@@ -15,6 +15,8 @@ export interface Folder {
   projectId: string | null;
   /** The folder at the top that holds every project's folder. */
   holdsProjects: boolean;
+  /** The folder at the top that holds the folders of vendor jobs that aren't on a project. */
+  holdsJobs?: boolean;
   /** One of the Business folders: a view of the business's services and products and their media, not a stored folder. */
   business?: BusinessFolder;
 }

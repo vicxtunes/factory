@@ -1,4 +1,6 @@
-// A studio hiring a vendor on a project: the job, its life and its money. Pure.
+// A studio hiring a vendor (on a project, or not): the job, its life and its
+// money. Pure. A rental (equipment hire) runs the same way: accepted, paid in,
+// then handed over and returned (its "delivered") instead of worked on.
 //
 //   requested ─▶ samples ─▶ samples_sent ─▶ (studio approves, pays in) in_progress
 //      │   └─────▶ awaiting_funds ─────────▶ (studio pays in) ─┘
@@ -44,13 +46,29 @@ export function jobStage(status: JobStatus): JobStage {
   return "requested";
 }
 
+/** A service done for the studio, or equipment hired out to it. */
+export type JobKind = "service" | "rental";
+
+/** What a rental is for: an item, how many, and from which day to which ("yyyy-mm-dd", both included). */
+export interface Rental {
+  item: string;
+  quantity: number;
+  startsOn: string;
+  endsOn: string;
+}
+
 export interface VendorJob {
   id: string;
-  /** The studio, and its project. */
+  /** The studio, and its project when it's for one. */
   tenantId: string;
-  projectId: string;
+  projectId: string | null;
   vendorId: string;
-  /** The folder the vendor works in (inside the project's); null: it was deleted. */
+  kind: JobKind;
+  /** A rental's item, quantity and days; null for a service. */
+  rental: Rental | null;
+  /** A rental: when the vendor handed it over. */
+  handedOverAt: string | null;
+  /** The folder the vendor works in (in the project's, or in Drive → Jobs); null: a rental, or it was deleted. */
   folderId: string | null;
   brief: string;
   /** What the studio wants to see first; null: no samples. */
@@ -77,21 +95,46 @@ export interface VendorJob {
 export interface JobView extends VendorJob {
   vendor: { name: string; category: string; clientId: string; photoKey: string | null };
   studio: { name: string; ownerClientId: string | null };
-  projectTitle: string;
+  /** Null when it isn't for a project. */
+  projectTitle: string | null;
 }
 
-/** What a studio sends (jobRequestSchema's output), its folder already chosen or made. */
+/** What a job is for, in a few words: its project, else the item hired, else its brief. */
+export const jobLabel = (job: Pick<JobView, "projectTitle" | "rental" | "brief">) =>
+  job.projectTitle ?? (job.rental ? `${job.rental.quantity} × ${job.rental.item}` : job.brief.slice(0, 40));
+
+/** What a studio sends (jobRequestSchema's output, or a rental priced from the vendor's rate), its folder already chosen or made. */
 export interface JobRequest {
-  projectId: string;
+  projectId: string | null;
   vendorId: string;
   brief: string;
   samplesWanted: string | null;
   dueOn: string | null;
   price: number;
+  rental: Rental | null;
 }
 
-/** Where the vendor will work: a folder in the project's, or a new one there. */
+/** Where the vendor will work: a folder in the project's, or a new one there (or, without a project, in Drive → Jobs). */
 export type JobFolder = { kind: "existing"; folderId: string } | { kind: "new"; name: string };
+
+/** The days a rental runs, the first and last included. */
+export function rentalDays(startsOn: string, endsOn: string): number {
+  return Math.round((Date.parse(`${endsOn}T00:00:00Z`) - Date.parse(`${startsOn}T00:00:00Z`)) / 86_400_000) + 1;
+}
+
+/**
+ * What a rental costs at the vendor's rate: per day, per week or per month
+ * (a part week or month counts whole), times how many; any other rate is per
+ * item, for the whole hire.
+ */
+export function rentalPrice(rate: { price: number; unit: string }, quantity: number, startsOn: string, endsOn: string): number {
+  const days = rentalDays(startsOn, endsOn);
+  const periods = rate.unit === "day" ? days : rate.unit === "week" ? Math.ceil(days / 7) : rate.unit === "month" ? Math.ceil(days / 30) : 1;
+  return rate.price * periods * quantity;
+}
+
+/** Equipment hire is priced by time. */
+export const RENTAL_UNITS = ["day", "week", "month"] as const;
 
 /** Aming's fee on a job's price, rounded to the nearest shilling (as vendor_job_release() takes it). */
 export const jobFee = (price: number) => Math.floor((price * VENDOR_FEE_PERCENT + 50) / 100);

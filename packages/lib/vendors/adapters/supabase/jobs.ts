@@ -12,8 +12,14 @@ import { VendorError, type VendorJobStore } from "../../ports";
 interface Row {
   id: string;
   tenant_id: string;
-  project_id: string;
+  project_id: string | null;
   vendor_id: string;
+  kind: VendorJob["kind"];
+  item: string | null;
+  quantity: number | null;
+  starts_on: string | null;
+  ends_on: string | null;
+  handed_over_at: string | null;
   folder_id: string | null;
   brief: string;
   samples_wanted: string | null;
@@ -37,7 +43,7 @@ type ViewRow = Row & {
 };
 
 const COLUMNS =
-  "id, tenant_id, project_id, vendor_id, folder_id, brief, samples_wanted, due_on, price, status, fee, requested_by_name, created_at, delivered_at, funded_at, disputed_by, dispute_reason, overdue_alerted_at";
+  "id, tenant_id, project_id, vendor_id, kind, item, quantity, starts_on, ends_on, handed_over_at, folder_id, brief, samples_wanted, due_on, price, status, fee, requested_by_name, created_at, delivered_at, funded_at, disputed_by, dispute_reason, overdue_alerted_at";
 // Linked twice to tenants' side (the studio, and its project): name the ones meant.
 const VIEW = `${COLUMNS}, vendor:vendors!vendor_jobs_vendor_id_fkey (name, category, client_id, photo_key), studio:tenants!vendor_jobs_tenant_id_fkey (name, owner_client_id), project:projects!vendor_jobs_tenant_id_project_id_fkey (title)`;
 
@@ -46,6 +52,9 @@ const toJob = (r: Row): VendorJob => ({
   tenantId: r.tenant_id,
   projectId: r.project_id,
   vendorId: r.vendor_id,
+  kind: r.kind,
+  rental: r.kind === "rental" && r.item && r.quantity && r.starts_on && r.ends_on ? { item: r.item, quantity: r.quantity, startsOn: r.starts_on, endsOn: r.ends_on } : null,
+  handedOverAt: r.handed_over_at,
   folderId: r.folder_id,
   brief: r.brief,
   samplesWanted: r.samples_wanted,
@@ -67,7 +76,7 @@ const toView = (r: ViewRow): JobView => ({
   ...toJob(r),
   vendor: { name: r.vendor.name, category: r.vendor.category, clientId: r.vendor.client_id, photoKey: r.vendor.photo_key },
   studio: { name: r.studio.name, ownerClientId: r.studio.owner_client_id },
-  projectTitle: r.project?.title ?? "A project",
+  projectTitle: r.project?.title ?? null,
 });
 
 function fail(what: string, error: { code?: string; message: string }): never {
@@ -86,6 +95,11 @@ export const supabaseJobStore: VendorJobStore = {
         tenant_id: tenantId,
         project_id: request.projectId,
         vendor_id: request.vendorId,
+        kind: request.rental ? "rental" : "service",
+        item: request.rental?.item ?? null,
+        quantity: request.rental?.quantity ?? null,
+        starts_on: request.rental?.startsOn ?? null,
+        ends_on: request.rental?.endsOn ?? null,
         folder_id: folderId,
         brief: request.brief,
         samples_wanted: request.samplesWanted,
@@ -111,6 +125,12 @@ export const supabaseJobStore: VendorJobStore = {
   async forVendor(vendorId) {
     const { data, error } = await jobs().select(VIEW).eq("vendor_id", vendorId).order("created_at", { ascending: false }).limit(100).returns<ViewRow[]>();
     if (error) fail("list the jobs", error);
+    return data.map(toView);
+  },
+
+  async forStudio(tenantId) {
+    const { data, error } = await jobs().select(VIEW).eq("tenant_id", tenantId).order("created_at", { ascending: false }).limit(200).returns<ViewRow[]>();
+    if (error) fail("list the studio's vendor jobs", error);
     return data.map(toView);
   },
 
@@ -168,6 +188,23 @@ export const supabaseJobStore: VendorJobStore = {
       .maybeSingle();
     if (error) fail("set the job's folder", error);
     return data !== null;
+  },
+
+  async handOver(id) {
+    const { data, error } = await jobs()
+      .update({ handed_over_at: new Date().toISOString() })
+      .eq("id", id)
+      .eq("kind", "rental")
+      .eq("status", "in_progress")
+      .is("handed_over_at", null)
+      .select("id");
+    if (error) fail("note the hand-over", error);
+    return data.length > 0;
+  },
+
+  async setDueOn(id, dueOn) {
+    const { error } = await jobs().update({ due_on: dueOn }).eq("id", id).eq("status", "requested");
+    if (error) fail("set the due date", error);
   },
 
   async markWarned(id) {

@@ -11,7 +11,6 @@ import { requireStudio } from "@repo/lib/studios/server";
 import { formatDay } from "@repo/lib/tenancy/format";
 import { SOCIAL_NETWORKS, vendorCategory } from "@repo/lib/vendors/core";
 import { vendors } from "@repo/lib/vendors/server";
-import { buttonClass } from "@repo/ui/Button";
 
 export const metadata = { title: "Vendor · My Business" };
 
@@ -97,32 +96,20 @@ export default async function StudioVendorPage({ params }: { params: Promise<{ i
       ) : null}
 
       <section id="hire" className="scroll-mt-20 space-y-3">
-        <SectionLabel>Hire on a project</SectionLabel>
-        {inHand.length ? (
-          <ul className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-surface">
-            {inHand.map((p) => (
-              <li key={p.id}>
-                <Link href={`/studio/projects/${p.id}?hire=${vendor.id}`} className="flex items-center justify-between gap-3 p-4 hover:bg-background">
-                  <span className="min-w-0">
-                    <span className="block truncate font-medium">{p.title}</span>
-                    <span className="block truncate text-xs text-muted">
-                      {p.customerName}
-                      {p.eventDate ? ` · ${formatDay(scope, p.eventDate)}` : ""}
-                    </span>
-                  </span>
-                  <span className="shrink-0 text-sm font-medium text-brand-600 dark:text-brand-400">Hire</span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <div className="space-y-3 rounded-2xl border border-dashed border-border p-5 text-center text-sm text-muted">
-            <p>No projects in hand to hire {vendor.name} on.</p>
-            <Link href="/studio/projects?new" className={buttonClass("primary", "sm")}>
-              Start a project
-            </Link>
-          </div>
-        )}
+        <SectionLabel>Hire them</SectionLabel>
+        <ul className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-surface">
+          {[{ id: null, title: "No project", meta: "Its own folder in Drive → Jobs" }, ...inHand.map((p) => ({ id: p.id, title: p.title, meta: [p.customerName, p.eventDate ? formatDay(scope, p.eventDate) : null].filter(Boolean).join(" · ") }))].map((p) => (
+            <li key={p.id ?? "none"}>
+              <Link href={p.id ? `/studio/projects/${p.id}?hire=${vendor.id}` : `/studio/jobs?hire=${vendor.id}`} className="flex items-center justify-between gap-3 p-4 hover:bg-background">
+                <span className="min-w-0">
+                  <span className="block truncate font-medium">{p.title}</span>
+                  <span className="block truncate text-xs text-muted">{p.meta}</span>
+                </span>
+                <span className="shrink-0 text-sm font-medium text-brand-600 dark:text-brand-400">Hire</span>
+              </Link>
+            </li>
+          ))}
+        </ul>
       </section>
     </>
   );

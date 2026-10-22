@@ -442,6 +442,8 @@ export interface CollectionRow {
   product_request_id: string | null;
   booking_id: string | null;
   billing_document_id: string | null;
+  /** A vendor job a studio paid in (packages/lib/vendors): the money is held for it. */
+  vendor_job_id: string | null;
   /** When a studio customer's payment was put on its invoice (packages/lib/studio-payments). */
   applied_at: string | null;
   amount: number;
@@ -452,7 +454,7 @@ export interface CollectionRow {
   created_at: string;
 }
 
-const COLLECTION_COLUMNS = "id, provider, provider_ref, client_id, order_id, order_ids, product_request_id, booking_id, billing_document_id, applied_at, amount, phone, network, status, failure_reason, created_at";
+const COLLECTION_COLUMNS = "id, provider, provider_ref, client_id, order_id, order_ids, product_request_id, booking_id, billing_document_id, vendor_job_id, applied_at, amount, phone, network, status, failure_reason, created_at";
 
 function normaliseCollection(row: CollectionRow): CollectionRow {
   return { ...row, amount: num(row.amount) };
@@ -466,6 +468,7 @@ export async function insertCollection(input: {
   productRequestId: string | null;
   bookingId: string | null;
   documentId: string | null;
+  vendorJobId?: string | null;
   amount: number;
   phone: string;
   createdByName: string;
@@ -480,6 +483,7 @@ export async function insertCollection(input: {
       product_request_id: input.productRequestId,
       booking_id: input.bookingId,
       billing_document_id: input.documentId,
+      vendor_job_id: input.vendorJobId ?? null,
       amount: input.amount,
       phone: input.phone,
       created_by_name: input.createdByName,
@@ -503,7 +507,7 @@ export async function getCollection(id: string): Promise<CollectionRow | null> {
 /** The client's newest prompt for the same payment (an order, several orders, a studio request, or a top-up) still waiting since `since`, if any. */
 export async function pendingCollection(
   clientId: string,
-  target: { orderId: string | null; orderIds: string[] | null; productRequestId: string | null; bookingId: string | null; documentId: string | null },
+  target: { orderId: string | null; orderIds: string[] | null; productRequestId: string | null; bookingId: string | null; documentId: string | null; vendorJobId?: string | null },
   since: Date,
 ): Promise<CollectionRow | null> {
   let query = createAdminClient()
@@ -519,6 +523,7 @@ export async function pendingCollection(
   query = target.productRequestId ? query.eq("product_request_id", target.productRequestId) : query.is("product_request_id", null);
   query = target.bookingId ? query.eq("booking_id", target.bookingId) : query.is("booking_id", null);
   query = target.documentId ? query.eq("billing_document_id", target.documentId) : query.is("billing_document_id", null);
+  query = target.vendorJobId ? query.eq("vendor_job_id", target.vendorJobId) : query.is("vendor_job_id", null);
   const { data, error } = await query.order("created_at", { ascending: false }).limit(1).maybeSingle<CollectionRow>();
   if (error) throwDbError(error);
   return data ? normaliseCollection(data) : null;

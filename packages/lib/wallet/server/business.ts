@@ -195,9 +195,12 @@ export async function requestWithdrawal(tenantId: string, amount: number, phoneT
     if (error.message.includes("WALLET:insufficient_funds")) throw new WalletError("There isn't that much on your Business card.");
     throwDbError(error);
   }
-  // Staff approve it; tell them it's waiting (best effort: the request stands either way).
+  // Staff approve it; tell them it's waiting, and the owner it's on its way (best effort: the request stands either way).
   const name = (await businessesOf([tenantId])).get(tenantId)?.name ?? "A business";
-  await notifier.withdrawalToApprove(name, amount).catch((err) => console.error("withdrawal push failed:", err));
+  await Promise.all([
+    notifier.withdrawalToApprove(name, amount),
+    actor.type === "client" && actor.id ? notifier.withdrawalRequested(actor.id, amount, phone.store, "business") : null,
+  ]).catch((err) => console.error("withdrawal push failed:", err));
 }
 
 /** The businesses behind some withdrawals: name and owner, by id. (A withdrawal points at its card, not its business, so they're read apart.) */

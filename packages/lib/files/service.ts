@@ -53,6 +53,7 @@ const NO_SHARE = "That share no longer exists.";
 const NO_COMMENT = "That comment no longer exists.";
 const LOCKED_PROJECT = "This is a project's folder: it's named after the project and stays in Projects. Rename the project to rename it.";
 const LOCKED_PROJECTS = "The Projects folder holds every project's folder, so it stays as it is.";
+const LOCKED_JOBS = "The Jobs folder holds the folders of vendor jobs, so it stays as it is.";
 const CANT_ADD = "You can't add files or folders here: it's shared with you to look at.";
 const CANT_CHANGE = "You can't rename, move or delete things here: ask the business for edit access.";
 
@@ -62,7 +63,7 @@ const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompar
 const optimisedName = (name: string) => `${name.lastIndexOf(".") > 0 ? name.slice(0, name.lastIndexOf(".")) : name}.jpg`;
 
 function refuseLocked(folder: Folder) {
-  if (isLocked(folder)) throw new FileError(folder.holdsProjects ? LOCKED_PROJECTS : LOCKED_PROJECT);
+  if (isLocked(folder)) throw new FileError(folder.holdsProjects ? LOCKED_PROJECTS : folder.holdsJobs ? LOCKED_JOBS : LOCKED_PROJECT);
 }
 
 export class FileService {
@@ -134,6 +135,12 @@ export class FileService {
   /** The folder a project's files go in (made with the project). Null when it has none. */
   async projectFolder(scope: TenantScope, projectId: string): Promise<string | null> {
     return (await this.repo.folders(scope)).find((f) => f.projectId === projectId)?.id ?? null;
+  }
+
+  /** The studio's Jobs folder (made the first time): vendor jobs that aren't on a project each get a folder in it. */
+  async jobsFolder(scope: TenantScope): Promise<string> {
+    if (!this.repo.jobsFolder) throw new FileError("Only a business's Drive has a Jobs folder.");
+    return this.repo.jobsFolder(scope);
   }
 
   /** A folder and every folder in it, each labelled by its way down from it ("Wedding / Raw"), for choosing one. */
