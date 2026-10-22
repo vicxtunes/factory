@@ -7,10 +7,16 @@
 // unanswered is released on its own after two days, the boss and the studio
 // warned a day before. Each side is told in the app.
 
-import { autoReleaseAt, isOpenJob, overdueStep, vendorTake, type JobAnswer, type JobRequest, type JobStatus, type JobView } from "./core";
+import { autoReleaseAt, isOpenJob, jobLabel, overdueStep, rentalPrice, vendorTake, type JobAnswer, type JobRequest, type JobStatus, type JobView, type RentalRequest } from "./core";
 import { VendorError, type JobActor, type JobNotifier, type VendorJobStore, type VendorStore } from "./ports";
 
 const money = (n: number) => `UGX ${n.toLocaleString("en-US")}`;
+
+/** What's held for a job, and until when, as the vendor hears it paid in. */
+const heldLine = (job: JobView) =>
+  job.rental
+    ? `${money(job.price)} is held by Aming. Hand it over ${dayName(job.rental.startsOn)}; it's released to you once it's back and approved.`
+    : `${money(job.price)} is held by Aming until you deliver and it's approved.`;
 
 /** "Fri 7 Nov". */
 const dayName = (day: string) => new Date(`${day}T12:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
@@ -26,20 +32,54 @@ export class VendorJobService {
 
   // ── The studio ──
 
-  /** Asks a vendor to do work on one of the studio's projects, in a folder of it. */
-  async request(studio: { tenantId: string; name: string; actorName: string }, request: JobRequest, folderId: string): Promise<void> {
+  /** Asks a vendor to do work for the studio (on one of its projects or not), in a folder of the studio's. */
+  async request(studio: { tenantId: string; name: string; actorName: string }, request: JobRequest, folderId: string | null): Promise<void> {
     const vendor = await this.vendors.get(request.vendorId);
     if (!vendor || vendor.status !== "active") throw new VendorError("That vendor isn't taking work on Aming.");
     const job = await this.jobs.create(studio.tenantId, request, folderId, studio.actorName);
     await this.notifier.notify(vendor.clientId, {
-      title: `Job request from ${studio.name}`,
-      body: `${request.brief.slice(0, 80)} · ${money(vendorTake(request.price))} for you${request.samplesWanted ? " · samples first" : ""}`,
+      title: request.rental ? `Hire request from ${studio.name}` : `Job request from ${studio.name}`,
+      body: request.rental
+        ? `${request.rental.quantity} × ${request.rental.item}, ${dayName(request.rental.startsOn)} to ${dayName(request.rental.endsOn)} · ${money(vendorTake(request.price))} for you`
+        : `${request.brief.slice(0, 80)} · ${money(vendorTake(request.price))} for you${request.samplesWanted ? " · samples first" : ""}`,
       url: `/vendors/jobs/${job.id}`,
     });
   }
 
+  /**
+   * Hires equipment from a vendor: one of their items priced per day, week or
+   * month, how many, and from which day to which. The price is the vendor's
+   * rate for that time; the return day is the deadline. No folder: nothing
+   * is delivered in one.
+   */
+  async requestRental(studio: { tenantId: string; name: string; actorName: string }, input: RentalRequest): Promise<void> {
+    const vendor = await this.vendors.get(input.vendorId);
+    if (!vendor || vendor.status !== "active") throw new VendorError("That vendor isn't taking work on Aming.");
+    const offer = vendor.offers.find((o) => o.id === input.offerId);
+    if (!offer || offer.price === null || offer.unit === null) throw new VendorError("Choose one of the vendor's priced items.");
+    const rental = { item: offer.name, quantity: input.quantity, startsOn: input.startsOn, endsOn: input.endsOn };
+    const price = rentalPrice({ price: offer.price, unit: offer.unit }, input.quantity, input.startsOn, input.endsOn);
+    if (price > 100_000_000) throw new VendorError("That's more than one hire can be: hire fewer, or for less time.");
+    await this.request(
+      studio,
+      { projectId: input.projectId, vendorId: vendor.id, brief: input.note ?? `${rental.quantity} × ${rental.item}`, samplesWanted: null, dueOn: input.endsOn, price, rental },
+      null,
+    );
+  }
+
   async forProject(tenantId: string, projectId: string): Promise<JobView[]> {
     return this.jobs.forProject(tenantId, projectId);
+  }
+
+  /** Every vendor job of the studio's, on a project or not, the newest first. */
+  async forStudio(tenantId: string): Promise<JobView[]> {
+    return this.jobs.forStudio(tenantId);
+  }
+
+  /** A job was paid in by mobile money (wallet/server/mobile-money.ts): the vendor hears it can go ahead. */
+  async paidIn(id: string): Promise<void> {
+    const job = await this.jobs.get(id);
+    if (job?.status === "in_progress") await this.tellVendor(job, `${job.studio.name} paid in: ${job.rental ? "get it ready" : "start the work"}`, heldLine(job));
   }
 
   /** The studio calls off a job before any money is held (after that, it disputes). */
@@ -55,8 +95,8 @@ export class VendorJobService {
     await this.jobs.fund(tenantId, id, actor);
     await this.tellVendor(
       job,
-      job.status === "samples_sent" ? `${job.studio.name} approved your samples` : `${job.studio.name} paid in: start the work`,
-      `${money(job.price)} is held by Aming until you deliver and it's approved.`,
+      job.status === "samples_sent" ? `${job.studio.name} approved your samples` : `${job.studio.name} paid in: ${job.rental ? "get it ready" : "start the work"}`,
+      heldLine(job),
     );
   }
 
@@ -73,11 +113,11 @@ export class VendorJobService {
    * before jobs had folders, or its folder was deleted) or the studio moves
    * it. `folderIn` finds or makes the folder inside the job's project.
    */
-  async setFolder(tenantId: string, id: string, folderIn: (projectId: string) => Promise<string>): Promise<void> {
+  async setFolder(tenantId: string, id: string, folderIn: (projectId: string | null) => Promise<string>): Promise<void> {
     const job = await this.studioJob(tenantId, id);
     if (!isOpenJob(job.status)) throw new VendorError("This job is over: it has no folder to give.");
     if (!(await this.jobs.setFolder(tenantId, id, await folderIn(job.projectId)))) throw new VendorError("This job has moved on: reload to see where it is.");
-    await this.tellVendor(job, `${job.studio.name} set your folder`, `For ${job.projectTitle}: your files go there.`);
+    await this.tellVendor(job, `${job.studio.name} set your folder`, `For ${jobLabel(job)}: your files go there.`);
   }
 
   /** The studio raises a dispute over work in progress or delivered: Aming's staff settle it. */
@@ -132,17 +172,33 @@ export class VendorJobService {
     await this.tellStudio(job, `${job.vendor.name} sent samples`, "Review them: approve and pay in to go ahead, or cancel.");
   }
 
-  /** The vendor says the work is done, in the job's folder. */
-  async deliver(clientId: string, id: string): Promise<void> {
+  /** A rental paid in: the vendor handed the equipment over to the studio. */
+  async handOver(clientId: string, id: string): Promise<void> {
     const job = await this.ownJob(clientId, id);
-    await this.moveOrSay(id, ["in_progress"], "delivered", "Only work in progress can be delivered.");
-    await this.tellStudio(job, `${job.vendor.name} delivered`, "Approve it, or raise a dispute within 2 days; after that it's released to them.");
+    if (!job.rental) throw new VendorError("Only hired equipment is handed over.");
+    if (!(await this.jobs.handOver(id))) throw new VendorError("It's handed over once it's paid in, and only once.");
+    await this.tellStudio(job, `${job.vendor.name} handed over ${job.rental.quantity} × ${job.rental.item}`, `Return it by ${dayName(job.rental.endsOn)}.`);
   }
 
-  /** The vendor can't do the work after all: the held money goes back to the studio. */
+  /** The vendor says the work is done, in the job's folder; or, for a rental, that the equipment came back. */
+  async deliver(clientId: string, id: string): Promise<void> {
+    const job = await this.ownJob(clientId, id);
+    if (job.rental && !job.handedOverAt) throw new VendorError("Hand it over first.");
+    await this.moveOrSay(id, ["in_progress"], "delivered", job.rental ? "Only equipment that's out can come back." : "Only work in progress can be delivered.");
+    await this.tellStudio(
+      job,
+      job.rental ? `${job.vendor.name}: ${job.rental.item} returned` : `${job.vendor.name} delivered`,
+      job.rental
+        ? "Approve to release their pay, or raise a dispute within 2 days if something's wrong; after that it's released to them."
+        : "Approve it, or raise a dispute within 2 days; after that it's released to them.",
+    );
+  }
+
+  /** The vendor can't do the work (or hire the equipment) after all: the held money goes back to the studio. */
   async withdraw(clientId: string, id: string): Promise<void> {
     const job = await this.ownJob(clientId, id);
     if (job.status !== "in_progress") throw new VendorError("Only work in progress can be given up.");
+    if (job.handedOverAt) throw new VendorError("It's handed over already: mark it returned, or raise a dispute.");
     await this.jobs.refund(id, { type: "client", id: clientId, name: job.vendor.name });
     await this.tellStudio(job, `${job.vendor.name} withdrew from a job`, `${money(job.price)} is back on your Business card.`);
   }
@@ -181,8 +237,8 @@ export class VendorJobService {
       } else if (step === "release") {
         await this.jobs.release(job.id, { type: "system", id: null, name: "Aming (no answer in 2 days)" });
         await Promise.all([
-          this.tellVendor(job, "You were paid", `${money(vendorTake(job.price))} for ${job.projectTitle} is in your wallet (released after 2 days).`),
-          this.tellStudio(job, "Vendor work released", `${job.vendor.name} was paid for ${job.projectTitle}: no answer in 2 days.`),
+          this.tellVendor(job, "You were paid", `${money(vendorTake(job.price))} for ${jobLabel(job)} is in your wallet (released after 2 days).`),
+          this.tellStudio(job, "Vendor work released", `${job.vendor.name} was paid for ${jobLabel(job)}: no answer in 2 days.`),
         ]);
       }
     }
@@ -190,7 +246,7 @@ export class VendorJobService {
 
   private async dispute(job: JobView, by: "studio" | "vendor", reason: string): Promise<void> {
     await this.moveOrSay(job.id, ["in_progress", "delivered"], "disputed", "Only work in progress or delivered can be disputed.", { by, reason });
-    const body = `${job.studio.name} and ${job.vendor.name}, ${job.projectTitle} (${money(job.price)} held): "${reason.slice(0, 120)}"`;
+    const body = `${job.studio.name} and ${job.vendor.name}, ${jobLabel(job)} (${money(job.price)} held): "${reason.slice(0, 120)}"`;
     await Promise.all([
       this.notifier.tellBoss({ title: "A vendor job is disputed", body, url: STAFF_QUEUE }),
       by === "studio" ? this.tellVendor(job, `${job.studio.name} raised a dispute`, `Aming will look into it: "${reason.slice(0, 120)}"`) : this.tellStudio(job, `${job.vendor.name} raised a dispute`, reason.slice(0, 120)),
@@ -218,6 +274,6 @@ export class VendorJobService {
   }
 
   private async tellStudio(job: JobView, title: string, body: string): Promise<void> {
-    if (job.studio.ownerClientId) await this.notifier.notify(job.studio.ownerClientId, { title, body, url: `/studio/projects/${job.projectId}` });
+    if (job.studio.ownerClientId) await this.notifier.notify(job.studio.ownerClientId, { title, body, url: job.projectId ? `/studio/projects/${job.projectId}?tab=vendors` : "/studio/jobs" });
   }
 }

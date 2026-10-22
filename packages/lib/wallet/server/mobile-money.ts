@@ -54,7 +54,17 @@ interface Payee {
 
 async function prompt(
   payee: Payee,
-  input: { amount: number; phone: string; orderId: string | null; orderIds?: string[] | null; productRequestId?: string | null; bookingId?: string | null; documentId?: string | null; description: string },
+  input: {
+    amount: number;
+    phone: string;
+    orderId: string | null;
+    orderIds?: string[] | null;
+    productRequestId?: string | null;
+    bookingId?: string | null;
+    documentId?: string | null;
+    vendorJobId?: string | null;
+    description: string;
+  },
 ): Promise<MobileMoneyCollection> {
   if (!hivepay.isConfigured()) throw new WalletError("Mobile money payments aren't available yet. Please pay another way.");
   const amountError = checkMobileMoneyAmount(input.amount);
@@ -67,7 +77,14 @@ async function prompt(
   // too soon) would put two charges on the client's phone.
   const waiting = await repo.pendingCollection(
     payee.clientId,
-    { orderId: input.orderId, orderIds: input.orderIds ?? null, productRequestId: input.productRequestId ?? null, bookingId: input.bookingId ?? null, documentId: input.documentId ?? null },
+    {
+      orderId: input.orderId,
+      orderIds: input.orderIds ?? null,
+      productRequestId: input.productRequestId ?? null,
+      bookingId: input.bookingId ?? null,
+      documentId: input.documentId ?? null,
+      vendorJobId: input.vendorJobId ?? null,
+    },
     new Date(Date.now() - ONE_PROMPT_AT_A_TIME_MS),
   );
   if (waiting) return toView(waiting);
@@ -80,6 +97,7 @@ async function prompt(
     productRequestId: input.productRequestId ?? null,
     bookingId: input.bookingId ?? null,
     documentId: input.documentId ?? null,
+    vendorJobId: input.vendorJobId ?? null,
     amount: input.amount,
     phone: phone.store,
     createdByName: payee.payerName,
@@ -107,6 +125,28 @@ async function prompt(
 export async function startTopUp(viewer: ClientViewer, input: { amount: number; phone: string }): Promise<MobileMoneyCollection> {
   if (!(input.amount >= MIN_DEPOSIT)) throw new WalletError(`Top up at least ${MIN_DEPOSIT.toLocaleString("en-UG")}.`);
   return prompt({ clientId: viewer.id, payerName: viewer.name }, { amount: input.amount, phone: input.phone, orderId: null, description: "Aming wallet top-up" });
+}
+
+/**
+ * A studio pays a vendor job in to Aming by mobile money (no need for money on
+ * its Business card): the owner's phone is prompted for the job's price, and
+ * once it's through the job goes ahead (provider_collection_settle). The
+ * mobile money charge comes out of Aming's 10%, not the price.
+ */
+export async function startVendorJobPayment(viewer: ClientViewer, input: { tenantId: string; jobId: string; phone: string }): Promise<MobileMoneyCollection> {
+  const { data: job, error } = await createAdminClient()
+    .from("vendor_jobs")
+    .select("price, status, vendor:vendors!vendor_jobs_vendor_id_fkey (name)")
+    .eq("id", input.jobId)
+    .eq("tenant_id", input.tenantId)
+    .maybeSingle<{ price: number | string; status: string; vendor: { name: string } }>();
+  if (error) throw new WalletError("That job couldn't be loaded. Please try again.");
+  if (!job) throw new WalletError("That job doesn't exist.");
+  if (job.status !== "awaiting_funds" && job.status !== "samples_sent") throw new WalletError("This job isn't waiting to be paid in.");
+  return prompt(
+    { clientId: viewer.id, payerName: viewer.name },
+    { amount: Number(job.price), phone: input.phone, orderId: null, vendorJobId: input.jobId, description: `Vendor job: ${job.vendor.name}` },
+  );
 }
 
 /** Checks the order can be paid now and prompts `phone` for `amount` (what's still due when left out; never more). */
@@ -267,7 +307,7 @@ async function reconcile(row: repo.CollectionRow): Promise<repo.CollectionRow> {
     // The client's own payment (a top-up or an Aming order): they hear it didn't go. A business's
     // customer pays without an Aming account, and sees it on the payment screen.
     if (!row.product_request_id && !row.booking_id && !row.billing_document_id) {
-      await notifier.paymentFailed(row.client_id, row.amount, clientPath("/payment")).catch((err) => console.error("payment failed push failed:", err));
+      await notifier.paymentFailed(row.client_id, row.amount, row.vendor_job_id ? "/studio/jobs" : clientPath("/payment")).catch((err) => console.error("payment failed push failed:", err));
     }
   } else if (res.status === "success") {
     if (!(res.amount >= row.amount)) {
@@ -283,6 +323,8 @@ async function reconcile(row: repo.CollectionRow): Promise<repo.CollectionRow> {
 }
 
 async function announce(row: repo.CollectionRow): Promise<void> {
+  // A vendor job paid in: the vendor hears they can go ahead (loaded here: vendors uses the wallet too).
+  if (row.vendor_job_id) return (await import("@repo/lib/vendors/server")).vendorJobs.paidIn(row.vendor_job_id);
   // A business's customer: the owner hears it's on their Business card.
   if (row.product_request_id) return notifier.studioCustomerPaid(row.client_id, row.amount, "an order");
   if (row.booking_id) return notifier.studioCustomerPaid(row.client_id, row.amount, "a booking");

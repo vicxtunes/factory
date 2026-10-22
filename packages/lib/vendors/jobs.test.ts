@@ -34,6 +34,8 @@ function memoryJobs(vendorsById: (id: string) => Promise<{ name: string; categor
         tenantId,
         ...request,
         folderId,
+        kind: request.rental ? "rental" : "service",
+        handedOverAt: null,
         status: "requested",
         fee: null,
         requestedByName,
@@ -49,6 +51,13 @@ function memoryJobs(vendorsById: (id: string) => Promise<{ name: string; categor
     },
     get: async (id) => (rows.has(id) ? view(rows.get(id)!) : null),
     forVendor: async (vendorId) => Promise.all([...rows.values()].filter((j) => j.vendorId === vendorId).map(view)),
+    forStudio: async (tenantId) => Promise.all([...rows.values()].filter((j) => j.tenantId === tenantId).map(view)),
+    handOver: async (id) => {
+      const job = rows.get(id);
+      if (!job || job.kind !== "rental" || job.status !== "in_progress" || job.handedOverAt) return false;
+      set(id, { handedOverAt: "2026-11-07T08:00:00Z" });
+      return true;
+    },
     forProject: async (tenantId, projectId) => Promise.all([...rows.values()].filter((j) => j.tenantId === tenantId && j.projectId === projectId).map(view)),
     needingAttention: async () => Promise.all([...rows.values()].filter((j) => j.status === "delivered" || j.status === "disputed").map(view)),
     move: async (id, from, to, dispute) => {
@@ -96,7 +105,7 @@ async function setUp() {
     tellBoss: async (m) => void told.push({ to: "boss", title: m.title }),
   });
   const studio = { tenantId: "t-lens", name: "Lens & Light", actorName: "Amina" };
-  const request = { projectId: "p-wedding", vendorId: kato.id, brief: "Edit 300 photos", samplesWanted: null, dueOn: null, price: 300_000 };
+  const request = { projectId: "p-wedding" as string | null, vendorId: kato.id, brief: "Edit 300 photos", samplesWanted: null, dueOn: null as string | null, price: 300_000, rental: null };
   const owner = { id: "c-owner", name: "Amina" };
   return { service, kato, rows, money, told, studio, request, owner };
 }
@@ -240,4 +249,34 @@ test("accepting commits to deliver by the due day, or a day the vendor sets when
   await assert.rejects(service.respond("c-kato", open, { accept: true, deliverBy: "2026-10-30" }, TODAY), /from today/, "not a day gone");
   await service.respond("c-kato", open, ACCEPT, TODAY);
   assert.equal(rows.get(open)!.dueOn, "2026-11-07", "the vendor's day becomes the due day");
+});
+
+test("a job needn't be on a project; the vendor works in the folder it's given", async () => {
+  const { service, rows, told, studio, request } = await setUp();
+  await service.request(studio, { ...request, projectId: null }, "f-jobs-kato");
+  const [id] = [...rows.keys()];
+  assert.equal(rows.get(id!)!.projectId, null);
+  assert.equal(rows.get(id!)!.folderId, "f-jobs-kato");
+  assert.equal((await service.forStudio("t-lens")).length, 1, "on the studio's Jobs page");
+  await service.respond("c-kato", id!, ACCEPT, TODAY);
+  assert.equal(told.at(-1)!.title, "Kato accepted: delivery by Sat 7 Nov");
+});
+
+test("equipment hire: priced from the vendor's rate for the days, handed over, returned, approved and released", async () => {
+  const { service, rows, told, money, studio, request } = await setUp();
+  const gear = { item: "Drone", quantity: 2, startsOn: "2026-11-07", endsOn: "2026-11-09" };
+  await service.request(studio, { ...request, projectId: null, brief: "2 × Drone", dueOn: gear.endsOn, price: 300_000, rental: gear }, null);
+  const [id] = [...rows.keys()];
+  assert.equal(rows.get(id!)!.kind, "rental");
+  assert.equal(told.at(-1)!.title, "Hire request from Lens & Light");
+  await service.respond("c-kato", id!, { accept: true, deliverBy: gear.endsOn }, TODAY);
+  await assert.rejects(service.handOver("c-kato", id!), /once it's paid in/, "not before the money is in");
+  await service.fund("t-lens", id!, { id: "c-owner", name: "Amina" });
+  await assert.rejects(service.deliver("c-kato", id!), /Hand it over first/);
+  await service.handOver("c-kato", id!);
+  await assert.rejects(service.withdraw("c-kato", id!), /handed over already/, "out with the studio: no giving it up");
+  await service.deliver("c-kato", id!);
+  assert.equal(told.at(-1)!.title, "Kato: Drone returned");
+  await service.approve("t-lens", id!, { id: "c-owner", name: "Amina" });
+  assert.deepEqual(money, [`fund ${id}`, `release ${id} by client`]);
 });

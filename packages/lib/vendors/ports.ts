@@ -45,10 +45,14 @@ export class VendorError extends AppError {}
 
 export interface VendorJobStore {
   /** A new request, in its folder. Throws VendorError when the vendor has an open job on that project already. */
-  create(tenantId: string, request: JobRequest, folderId: string, requestedByName: string): Promise<VendorJob>;
+  create(tenantId: string, request: JobRequest, folderId: string | null, requestedByName: string): Promise<VendorJob>;
   get(id: string): Promise<JobView | null>;
   forVendor(vendorId: string): Promise<JobView[]>;
   forProject(tenantId: string, projectId: string): Promise<JobView[]>;
+  /** Every job of the studio's, on a project or not, the newest first. */
+  forStudio(tenantId: string): Promise<JobView[]>;
+  /** A rental paid in: the vendor handed it over. False when it isn't one waiting to be. */
+  handOver(id: string): Promise<boolean>;
   /** Disputes, and delivered work waiting on the studio, oldest first: staff's queue and the overdue check. */
   needingAttention(): Promise<JobView[]>;
   /**

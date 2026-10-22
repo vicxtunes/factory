@@ -38,6 +38,8 @@ export interface FileRepository {
 
   /** Every folder the studio has. */
   folders(scope: TenantScope): Promise<Folder[]>;
+  /** The studio's Jobs folder, made the first time it's asked for. Only a studio's Drive has one. */
+  jobsFolder?(scope: TenantScope): Promise<string>;
   /** Throws FileError when the name is taken there or the parent is gone. */
   createFolder(scope: TenantScope, folder: { parentId: string | null; name: string }): Promise<string>;
   /** Renames and/or moves a folder. False when it isn't this tenant's; throws FileError when the name is taken there. */

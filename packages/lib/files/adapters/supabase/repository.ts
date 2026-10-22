@@ -21,6 +21,7 @@ interface FolderRow {
   name: string;
   project_id: string | null;
   holds_projects: boolean;
+  holds_jobs: boolean;
 }
 
 interface FileRow {
@@ -90,10 +91,10 @@ const toComment = (r: CommentRow): FileComment => ({
   resolvedAt: r.resolved_at,
 });
 
-const FOLDER = "id, parent_id, name, project_id, holds_projects";
+const FOLDER = "id, parent_id, name, project_id, holds_projects, holds_jobs";
 const FILE = "id, folder_id, name, key, bytes, content_type, caption, preview_bytes, created_at";
 
-const toFolder = (r: FolderRow): Folder => ({ id: r.id, parentId: r.parent_id, name: r.name, projectId: r.project_id, holdsProjects: r.holds_projects });
+const toFolder = (r: FolderRow): Folder => ({ id: r.id, parentId: r.parent_id, name: r.name, projectId: r.project_id, holdsProjects: r.holds_projects, holdsJobs: r.holds_jobs });
 
 const toFile = (r: FileRow): StoredFile => ({
   id: r.id,
@@ -150,15 +151,22 @@ export const supabaseFileRepository: FileRepository = {
     return data.id;
   },
 
+  async jobsFolder(scope) {
+    const { data, error } = await db().rpc("files_jobs_folder", { p_tenant: scope.tenantId });
+    if (error) fail("open the Jobs folder", error);
+    return data as string;
+  },
+
   async updateFolder(scope, id, folder) {
     const { data, error } = await db()
       .from("file_folders")
       .update({ parent_id: folder.parentId, name: folder.name })
       .eq("tenant_id", scope.tenantId)
       .eq("id", id)
-      // The Projects folder and project folders are the database's to name and place.
+      // The Projects and Jobs folders and project folders are the database's to name and place.
       .is("project_id", null)
       .eq("holds_projects", false)
+      .eq("holds_jobs", false)
       .select("id");
     if (error) fail("change the folder", error);
     return data.length > 0;

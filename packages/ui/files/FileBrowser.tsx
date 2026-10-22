@@ -111,7 +111,7 @@ function kindOf(file: Pick<FileView, "name" | "contentType">) {
 
 function typeName(entry: Entry): string {
   if (entry.kind === "file") return `${kindOf(entry.file).label} file`;
-  return entry.folder.holdsProjects ? "Every project" : entry.folder.projectId ? "Project folder" : "File folder";
+  return entry.folder.holdsProjects ? "Every project" : entry.folder.holdsJobs ? "Vendor jobs" : entry.folder.projectId ? "Project folder" : "File folder";
 }
 
 function KindBadge({ file, large }: { file: FileView; large: boolean }) {
@@ -180,7 +180,7 @@ function tileOf(file: FileView): string | null {
  */
 function PhoneTile({ entry: e, selected, shared }: { entry: Entry; selected: boolean; shared: boolean }) {
   if (e.kind === "folder") {
-    const tag = e.folder.business ? null : e.folder.holdsProjects ? "Every project" : e.folder.projectId ? "Project" : shared ? "Shared" : null;
+    const tag = e.folder.business ? null : e.folder.holdsProjects ? "Every project" : e.folder.holdsJobs ? "Vendor jobs" : e.folder.projectId ? "Project" : shared ? "Shared" : null;
     return (
       <span className="flex w-full items-center gap-3 pr-10 text-left">
         <FolderArt className="h-9 w-11 shrink-0" />

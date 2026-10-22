@@ -19,6 +19,7 @@ import {
   jobAnswerSchema,
   jobIdSchema,
   jobRequestSchema,
+  rentalRequestSchema,
   offerIdSchema,
   offerSchema,
   pictureKeySchema,
@@ -136,7 +137,12 @@ export async function sendSamples(id: unknown): Promise<Result> {
   return vendorJob(id, (clientId, jobId) => vendorJobs.sendSamples(clientId, jobId));
 }
 
-/** The signed-in vendor says the work is done, in the job's folder. */
+/** The signed-in vendor handed hired equipment over to the studio. */
+export async function handOverJob(id: unknown): Promise<Result> {
+  return vendorJob(id, (clientId, jobId) => vendorJobs.handOver(clientId, jobId));
+}
+
+/** The signed-in vendor says the work is done, in the job's folder (or, hired equipment, that it came back). */
 export async function deliverJob(id: unknown): Promise<Result> {
   return vendorJob(id, (clientId, jobId) => vendorJobs.deliver(clientId, jobId));
 }
@@ -180,17 +186,26 @@ export async function findVendors(input: unknown): Promise<Result<VendorCard[]>>
 }
 
 /**
- * The caller's studio asks a vendor to do work on one of its projects, in a
- * folder of the project's (an existing one, or one made for them now): the
- * only folder the vendor will see.
+ * The caller's studio asks a vendor to do work, on one of its projects (in a
+ * folder of the project's) or on none (in a folder of its own in Drive →
+ * Jobs): an existing folder or one made for them now, the only one they see.
  */
 export async function requestVendor(input: unknown): Promise<Result> {
   return runAction("vendors", async () => {
     const { studio, scope, session } = await studioOfCaller("projects");
     const { request, folder } = parseInput(jobRequestSchema, input);
-    const folderId = await folderInProject(scope, request.projectId, folder);
+    const folderId = await folderFor(scope, request.projectId, folder);
     await vendorJobs.request({ tenantId: scope.tenantId, name: studio.name, actorName: session.name }, request, folderId);
-    revalidatePath(`/studio/projects/${request.projectId}`);
+    revalidatePath("/studio", "layout");
+  });
+}
+
+/** The caller's studio hires equipment from a vendor: an item, how many, and the days; priced at the vendor's rate. */
+export async function requestRental(input: unknown): Promise<Result> {
+  return runAction("vendors", async () => {
+    const { studio, scope, session } = await studioOfCaller("projects");
+    await vendorJobs.requestRental({ tenantId: scope.tenantId, name: studio.name, actorName: session.name }, parseInput(rentalRequestSchema, input));
+    revalidatePath("/studio", "layout");
   });
 }
 
@@ -199,18 +214,21 @@ export async function setVendorJobFolder(id: unknown, folder: unknown): Promise<
   return runAction("vendors", async () => {
     const { scope } = await studioOfCaller("projects");
     const chosen = parseInput(jobFolderSchema, folder);
-    await vendorJobs.setFolder(scope.tenantId, parseInput(jobIdSchema, id), (projectId) => folderInProject(scope, projectId, chosen));
-    revalidatePath("/studio/projects", "layout");
+    await vendorJobs.setFolder(scope.tenantId, parseInput(jobIdSchema, id), (projectId) => folderFor(scope, projectId, chosen));
+    revalidatePath("/studio", "layout");
   });
 }
 
-/** The folder chosen inside the project's: an existing one of it, or a new one made now. */
-async function folderInProject(scope: TenantScope, projectId: string, folder: JobFolder): Promise<string> {
-  const projectFolder = await files.projectFolder(scope, projectId);
-  if (!projectFolder) throw new VendorError("That project has no folder.");
-  if (folder.kind === "new") return files.createFolder(scope, { parentId: projectFolder, name: folder.name });
-  const within = await files.foldersWithin(scope, projectFolder);
-  if (!within.some((f) => f.id === folder.folderId)) throw new VendorError("Choose a folder inside this project's.");
+/**
+ * The folder chosen for a job: inside the project's, or (no project) inside
+ * Drive → Jobs; an existing one there, or a new one made now.
+ */
+async function folderFor(scope: TenantScope, projectId: string | null, folder: JobFolder): Promise<string> {
+  const parent = projectId ? await files.projectFolder(scope, projectId) : await files.jobsFolder(scope);
+  if (!parent) throw new VendorError("That project has no folder.");
+  if (folder.kind === "new") return files.createFolder(scope, { parentId: parent, name: folder.name });
+  const within = await files.foldersWithin(scope, parent);
+  if (!within.some((f) => f.id === folder.folderId)) throw new VendorError(projectId ? "Choose a folder inside this project's." : "Choose a folder inside Jobs.");
   return folder.folderId;
 }
 
@@ -219,7 +237,7 @@ export async function cancelVendorJob(id: unknown): Promise<Result> {
   return runAction("vendors", async () => {
     const { scope } = await studioOfCaller("projects");
     await vendorJobs.cancel(scope.tenantId, parseInput(jobIdSchema, id));
-    revalidatePath("/studio/projects", "layout");
+    revalidatePath("/studio", "layout");
   });
 }
 
@@ -246,7 +264,7 @@ export async function disputeVendorJob(id: unknown, reason: unknown): Promise<Re
   return runAction("vendors", async () => {
     const { scope } = await studioOfCaller("projects");
     await vendorJobs.studioDispute(scope.tenantId, parseInput(jobIdSchema, id), parseInput(disputeReasonSchema, reason));
-    revalidatePath("/studio/projects", "layout");
+    revalidatePath("/studio", "layout");
   });
 }
 

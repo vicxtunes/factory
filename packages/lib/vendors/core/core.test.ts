@@ -3,7 +3,7 @@ import { test } from "node:test";
 
 import { parseInput } from "@repo/lib/kernel/core";
 
-import { autoReleaseAt, cardLine, jobFee, jobStage, jobRequestSchema, overdueStep, offerPrice, offerPriceParts, offerSchema, offerTotal, socialHandle, vendorJoinSchema, vendorTake } from "./index";
+import { autoReleaseAt, cardLine, jobFee, jobStage, rentalDays, rentalPrice, rentalRequestSchema, jobRequestSchema, overdueStep, offerPrice, offerPriceParts, offerSchema, offerTotal, socialHandle, vendorJoinSchema, vendorTake } from "./index";
 
 test("a social handle however it's typed", () => {
   assert.equal(socialHandle("instagram", "@kato.films"), "kato.films");
@@ -41,7 +41,8 @@ test("a job's money: Aming's 10%, rounded to the shilling, and what the vendor g
 test("a job request: a price in whole shillings, a date or none, samples or not, and its folder", () => {
   const base = { projectId: "6085d5c5-6f95-434b-a988-d398a81cd8fb", vendorId: "c5371493-e9d1-420a-8204-6fb27b98be82", brief: "Edit 300 photos" };
   const made = parseInput(jobRequestSchema, { ...base, price: "250000", dueOn: "", folder: { kind: "new", name: " For Kato " } });
-  assert.deepEqual(made, { request: { ...base, price: 250_000, dueOn: null, samplesWanted: null }, folder: { kind: "new", name: "For Kato" } });
+  assert.deepEqual(made, { request: { ...base, projectId: base.projectId, price: 250_000, dueOn: null, samplesWanted: null, rental: null }, folder: { kind: "new", name: "For Kato" } });
+  assert.equal(parseInput(jobRequestSchema, { ...base, projectId: "", price: 5000, folder: { kind: "new", name: "x" } }).request.projectId, null, "no project");
   const sampled = parseInput(jobRequestSchema, { ...base, price: 250_000, dueOn: "2026-11-01", samplesWanted: "Five in our style", folder: { kind: "existing", folderId: base.projectId } });
   assert.equal(sampled.request.dueOn, "2026-11-01");
   assert.equal(sampled.request.samplesWanted, "Five in our style");
@@ -104,4 +105,14 @@ test("a job's stage, as people see it: requested, working, delivered or closed",
     (["requested", "samples", "samples_sent", "awaiting_funds", "in_progress", "disputed", "delivered", "paid", "refunded", "declined", "cancelled"] as const).map(jobStage),
     ["requested", "requested", "requested", "requested", "working", "working", "delivered", "closed", "closed", "closed", "closed"],
   );
+});
+
+test("a rental's price: the vendor's rate per day, week or month for the days (part weeks and months count whole), times how many", () => {
+  assert.equal(rentalDays("2026-11-07", "2026-11-09"), 3);
+  assert.equal(rentalPrice({ price: 50_000, unit: "day" }, 2, "2026-11-07", "2026-11-09"), 300_000);
+  assert.equal(rentalPrice({ price: 200_000, unit: "week" }, 1, "2026-11-01", "2026-11-10"), 400_000, "ten days: two weeks");
+  assert.equal(rentalPrice({ price: 600_000, unit: "month" }, 1, "2026-11-01", "2026-11-30"), 600_000);
+  assert.equal(rentalPrice({ price: 80_000, unit: "item" }, 3, "2026-11-01", "2026-11-05"), 240_000, "per item: the whole hire");
+  const ok = rentalRequestSchema.safeParse({ vendorId: "c5371493-e9d1-420a-8204-6fb27b98be82", offerId: "6085d5c5-6f95-434b-a988-d398a81cd8fb", quantity: "2", startsOn: "2026-11-09", endsOn: "2026-11-07", note: "" });
+  assert.equal(ok.success, false, "the last day before the first");
 });
