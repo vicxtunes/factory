@@ -537,7 +537,7 @@ export function OrderDetail({
           <div className="col-span-2">
             <dt className="uppercase tracking-wide">Created</dt>
             <dd className="flex items-center gap-1.5 tnum text-foreground">
-              {formatCreatedAt(item.created_at)}
+              {formatCreatedAt(item.order.created_at)}
               {onPickCreatedDate ? (
                 <>
                   <button

@@ -33,20 +33,31 @@ export function emptyFilters(): OrderFilterState {
   };
 }
 
+// Days are Kampala's, whatever the browser's clock or the server's (UTC):
+// an order placed at 1am on the 22nd is the 22nd's, not the 21st's. Date
+// arithmetic is done on plain "yyyy-mm-dd" days in UTC, so a day never
+// shifts by the viewer's time zone.
+const KAMPALA = "Africa/Kampala";
+
+/** The Kampala day ("yyyy-mm-dd") a moment falls on. */
+export function kampalaDay(at: Date | string): string {
+  return new Date(at).toLocaleDateString("en-CA", { timeZone: KAMPALA });
+}
+
 function todayISO(): string {
-  return new Date().toISOString().slice(0, 10);
+  return kampalaDay(new Date());
 }
 
 function addDaysISO(iso: string, days: number): string {
-  const d = new Date(iso + "T00:00:00");
-  d.setDate(d.getDate() + days);
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
   return d.toISOString().slice(0, 10);
 }
 
 // Monday-start week, so "This Week" matches a normal work week rather than
 // splitting it across the Sunday boundary.
 function startOfWeekISO(iso: string): string {
-  const day = new Date(iso + "T00:00:00").getDay(); // 0 Sun .. 6 Sat
+  const day = new Date(`${iso}T00:00:00Z`).getUTCDay(); // 0 Sun .. 6 Sat
   return addDaysISO(iso, day === 0 ? -6 : 1 - day);
 }
 
@@ -55,13 +66,14 @@ function startOfMonthISO(iso: string): string {
 }
 
 function endOfMonthISO(iso: string): string {
-  const d = new Date(iso + "T00:00:00");
-  const last = new Date(d.getFullYear(), d.getMonth() + 1, 0);
-  return last.toISOString().slice(0, 10);
+  const d = new Date(`${iso}T00:00:00Z`);
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).toISOString().slice(0, 10);
 }
 
+// "Created" is the order's own day, the one it was created and submitted on:
+// adding or replacing a line on it later doesn't move it.
 function itemDate(i: OrderItemWithOrder, field: DateField): string | null {
-  return field === "created" ? i.created_at.slice(0, 10) : i.order.delivery_date;
+  return field === "created" ? kampalaDay(i.order.created_at) : i.order.delivery_date;
 }
 
 export interface DatePresetOption {

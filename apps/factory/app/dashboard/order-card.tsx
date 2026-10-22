@@ -43,7 +43,7 @@ export function OrderCard({
         </div>
 
         <p className="mt-2 font-medium">{item.product}</p>
-        <p className="mt-0.5 tnum text-xs text-muted">Created {formatCreatedAt(item.created_at)}</p>
+        <p className="mt-0.5 tnum text-xs text-muted">Created {formatCreatedAt(item.order.created_at)}</p>
 
         <div className="mt-2 flex items-center justify-between gap-2 text-xs text-muted">
           {item.order.cancelled_at ? (
