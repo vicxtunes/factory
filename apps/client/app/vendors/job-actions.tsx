@@ -6,7 +6,7 @@ import { useState, useTransition } from "react";
 import { Button } from "@repo/ui/Button";
 import { Field, TextInput } from "@repo/ui/Field";
 import { FormSheet } from "@repo/ui/FormSheet";
-import { deliverJob, respondToJob, sendSamples, withdrawFromJob } from "@repo/lib/vendors/actions";
+import { deliverJob, handOverJob, respondToJob, sendSamples, withdrawFromJob } from "@repo/lib/vendors/actions";
 import type { JobStatus } from "@repo/lib/vendors/core";
 
 /** "Friday 7 November". */
@@ -17,7 +17,22 @@ const longDay = (day: string) => new Date(`${day}T12:00:00Z`).toLocaleDateString
  * to deliver by its due day, or a day they set when it has none), send the
  * samples, deliver the work, or give it up (the studio's money goes back).
  */
-export function JobActions({ id, status, dueOn, wide }: { id: string; status: JobStatus; dueOn: string | null; wide?: boolean }) {
+export function JobActions({
+  id,
+  status,
+  dueOn,
+  rental = false,
+  handedOver = false,
+  wide,
+}: {
+  id: string;
+  status: JobStatus;
+  dueOn: string | null;
+  /** Equipment hired: handed over, then back (instead of delivered work). */
+  rental?: boolean;
+  handedOver?: boolean;
+  wide?: boolean;
+}) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [confirmWithdraw, setConfirmWithdraw] = useState(false);
@@ -64,6 +79,30 @@ export function JobActions({ id, status, dueOn, wide }: { id: string; status: Jo
         Samples are in the folder: send them
       </Button>
     );
+  } else if (status === "in_progress" && rental) {
+    buttons = handedOver ? (
+      <Button className={size} loading={pending} onClick={() => act(() => deliverJob(id))}>
+        It&apos;s back: mark returned
+      </Button>
+    ) : confirmWithdraw ? (
+      <>
+        <Button variant="secondary" className={size} disabled={pending} onClick={() => setConfirmWithdraw(false)}>
+          Keep the hire
+        </Button>
+        <Button className={size} loading={pending} onClick={() => act(() => withdrawFromJob(id))}>
+          Give it up: refund the studio
+        </Button>
+      </>
+    ) : (
+      <>
+        <Button variant="secondary" className={size} disabled={pending} onClick={() => setConfirmWithdraw(true)}>
+          I can&apos;t supply it
+        </Button>
+        <Button className={size} loading={pending} onClick={() => act(() => handOverJob(id))}>
+          Handed over
+        </Button>
+      </>
+    );
   } else if (status === "in_progress") {
     buttons = confirmWithdraw ? (
       <>
@@ -102,12 +141,20 @@ export function JobActions({ id, status, dueOn, wide }: { id: string; status: Jo
         >
           {dueOn ? (
             <>
-              <p className="text-sm text-muted">The studio needs this delivered by:</p>
+              <p className="text-sm text-muted">{rental ? "The studio needs it until, and it comes back by:" : "The studio needs this delivered by:"}</p>
               <p className="text-lg font-semibold">{longDay(dueOn)}</p>
               <label className="flex items-start gap-3 rounded-xl border border-border p-3">
                 <input type="checkbox" checked={promised} onChange={(e) => setPromised(e.target.checked)} className="mt-0.5 size-4 accent-brand-500" />
                 <span className="text-sm">
-                  I&apos;ll deliver the work by <strong>{longDay(dueOn)}</strong>.
+                  {rental ? (
+                    <>
+                      I&apos;ll have it ready for the studio, and take it back on <strong>{longDay(dueOn)}</strong>.
+                    </>
+                  ) : (
+                    <>
+                      I&apos;ll deliver the work by <strong>{longDay(dueOn)}</strong>.
+                    </>
+                  )}
                 </span>
               </label>
             </>

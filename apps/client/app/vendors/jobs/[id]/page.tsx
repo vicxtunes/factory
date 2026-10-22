@@ -18,6 +18,7 @@ import { requireVendor } from "../../vendor";
 export const metadata = { title: "Job" };
 
 const money = (n: number) => `UGX ${n.toLocaleString("en-US")}`;
+const longDay = (day: string) => new Date(`${day}T12:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 
 // One job from a studio: what's needed, by when, for how much, and what the
 // vendor can do now (accept or decline; mark it delivered). Once accepted,
@@ -37,17 +38,26 @@ export default async function VendorJobPage({ params, searchParams }: { params: 
         <BackLink href="/vendors/jobs">Jobs</BackLink>
         <header className="space-y-1">
           <p className="text-sm font-medium text-brand-600 dark:text-brand-400">{job.studio.name}</p>
-          <h1 className="text-2xl font-semibold tracking-tight">{job.projectTitle}</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">{job.rental ? `${job.rental.quantity} × ${job.rental.item}` : (job.projectTitle ?? "A job")}</h1>
           <p className="text-sm text-muted">{JOB_STAGE_LABELS[jobStage(job.status)]}</p>
         </header>
 
         <section className="space-y-4 rounded-2xl border border-border bg-surface p-5 shadow-theme-xs">
           <p className="whitespace-pre-line">{job.brief}</p>
           <dl className="grid grid-cols-3 gap-3 text-sm">
-            <div>
-              <dt className="text-muted">Due</dt>
-              <dd className="font-medium">{job.dueOn ? new Date(`${job.dueOn}T00:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "No date"}</dd>
-            </div>
+            {job.rental ? (
+              <div>
+                <dt className="text-muted">Days</dt>
+                <dd className="font-medium">
+                  {longDay(job.rental.startsOn)} to {longDay(job.rental.endsOn)}
+                </dd>
+              </div>
+            ) : (
+              <div>
+                <dt className="text-muted">Due</dt>
+                <dd className="font-medium">{job.dueOn ? longDay(job.dueOn) : "No date"}</dd>
+              </div>
+            )}
             <div>
               <dt className="text-muted">Price</dt>
               <dd className="font-medium tabular-nums">{money(job.price)}</dd>
@@ -69,10 +79,15 @@ export default async function VendorJobPage({ params, searchParams }: { params: 
               {job.disputedBy === "studio" ? "The studio" : "You"} raised a dispute: &ldquo;{job.disputeReason}&rdquo;. Aming is looking into it.
             </p>
           ) : null}
-          <JobActions id={job.id} status={job.status} dueOn={job.dueOn} wide />
+          {job.rental && job.status === "in_progress" ? (
+            <p className="rounded-xl bg-background p-3 text-sm">
+              {job.handedOverAt ? `With the studio until ${longDay(job.rental.endsOn)}: mark it back once it's returned.` : `Hand it over on ${longDay(job.rental.startsOn)}, then say so here.`}
+            </p>
+          ) : null}
+          <JobActions id={job.id} status={job.status} dueOn={job.dueOn} rental={job.rental !== null} handedOver={job.handedOverAt !== null} wide />
         </section>
 
-        {reachesFolder(job.status) ? (
+        {!job.rental && reachesFolder(job.status) ? (
           <section className="space-y-3">
             <h2 className="text-lg font-semibold">Job folder</h2>
             <p className="text-sm text-muted">

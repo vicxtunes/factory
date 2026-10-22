@@ -46,6 +46,8 @@ export const STUDIO_NAV: StudioNavSection[] = [
       { href: "/studio/tasks", label: "Tasks", icon: "tasks", need: "anyone" },
       // Vendors to hire on projects (hired from a project, in its folder).
       { href: "/studio/vendors", label: "Vendors", icon: "designers", need: "projects" },
+      // Everyone hired, on a project or not, and equipment hired.
+      { href: "/studio/jobs", label: "Vendor jobs", icon: "tasks", need: "projects" },
       { href: "/studio/team", label: "Team", icon: "agents" },
     ],
   },

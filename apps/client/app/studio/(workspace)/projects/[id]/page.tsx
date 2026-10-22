@@ -32,7 +32,7 @@ import { portal, studioUrl } from "@repo/lib/studio-portal/server";
 import { requireStudio } from "@repo/lib/studios/server";
 import { canUse } from "@repo/lib/team/core";
 import { tasks } from "@repo/lib/tasks/server";
-import { vendorJobs, vendors } from "@repo/lib/vendors/server";
+import { vendorJobs } from "@repo/lib/vendors/server";
 import { team } from "@repo/lib/team/server";
 import { formatAmount, formatDay } from "@repo/lib/tenancy/format";
 import type { TenantScope } from "@repo/lib/tenancy/types";
@@ -41,6 +41,7 @@ import { SheetButton } from "@repo/ui/SheetButton";
 import type { TabItem } from "@repo/ui/Tabs";
 import { UrlTabs } from "@repo/ui/UrlTabs";
 
+import { hireCard, jobRows } from "../../../_workspace/vendor-jobs";
 import { EditProjectSheet } from "../sheets";
 
 export const metadata = { title: "Project · My Business" };
@@ -221,35 +222,11 @@ async function Tasks({ scope, project: p }: { scope: TenantScope; project: Proje
 // folders one can be given. Delivered work left unanswered is settled here too.
 async function Vendors({ scope, project: p, canPay, hire, service }: { scope: TenantScope; project: Project; canPay: boolean; hire: string | null; service: string | null }) {
   after(() => vendorJobs.sweepOverdue());
-  const [found, projectFolder, hiring] = await Promise.all([
-    vendorJobs.forProject(scope.tenantId, p.id),
-    files.projectFolder(scope, p.id),
-    hire ? vendors.hireable(hire) : null,
-  ]);
-  const [jobs, folders] = await Promise.all([
-    Promise.all(
-      found.map(async (j) => ({
-        id: j.id,
-        vendorId: j.vendorId,
-        vendorName: j.vendor.name,
-        vendorCategory: j.vendor.category,
-        photoUrl: await vendors.pictureUrl(j.vendor.photoKey),
-        brief: j.brief,
-        samplesWanted: j.samplesWanted,
-        dueOn: j.dueOn,
-        price: j.price,
-        status: j.status,
-        folderId: j.folderId,
-        deliveredAt: j.deliveredAt,
-        disputeReason: j.disputeReason,
-      })),
-    ),
-    projectFolder ? files.foldersWithin(scope, projectFolder) : [],
-  ]);
-  const hireCard = hiring
-    ? { id: hiring.id, name: hiring.name, category: hiring.category, location: hiring.location, skills: hiring.skills, offers: hiring.offers.map(({ id, name, price, unit }) => ({ id, name, price, unit })), photoUrl: await vendors.pictureUrl(hiring.photoKey) }
-    : null;
-  return <ProjectVendors projectId={p.id} jobs={jobs} folders={folders} canPay={canPay} hire={hireCard} hireService={service} />;
+  const [found, projectFolder, hiring] = await Promise.all([vendorJobs.forProject(scope.tenantId, p.id), files.projectFolder(scope, p.id), hireCard(hire)]);
+  const [jobs, folders] = await Promise.all([jobRows(found), projectFolder ? files.foldersWithin(scope, projectFolder) : []]);
+  return (
+    <ProjectVendors projectId={p.id} jobs={jobs} folders={folders} canPay={canPay} hire={hiring} hireService={service} returnTo={`/studio/projects/${p.id}?tab=vendors`} />
+  );
 }
 
 async function ProjectFiles({ scope, project: p }: { scope: TenantScope; project: Project }) {

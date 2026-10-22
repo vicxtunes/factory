@@ -14,15 +14,15 @@ export function JobList({ jobs, answer }: { jobs: JobView[]; answer?: boolean })
         <li key={j.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
           <Link href={`/vendors/jobs/${j.id}`} className="min-w-0 flex-1 hover:underline">
             <p className="text-xs font-medium text-brand-600 dark:text-brand-400">{j.studio.name}</p>
-            <p className="truncate font-semibold">{j.projectTitle}</p>
-            <p className="line-clamp-1 text-sm text-muted">{j.brief}</p>
+            <p className="truncate font-semibold">{j.rental ? `${j.rental.quantity} × ${j.rental.item}` : (j.projectTitle ?? "A job")}</p>
+            <p className="line-clamp-1 text-sm text-muted">{j.rental ? `${j.rental.startsOn} to ${j.rental.endsOn}` : j.brief}</p>
           </Link>
           <div className="flex items-center gap-3 sm:flex-col sm:items-end">
             <span className="flex-1 text-sm sm:flex-none">
               <span className="font-semibold tabular-nums">{money(vendorTake(j.price))}</span>
               <span className="text-muted"> · {j.status === "requested" ? (j.dueOn ? `due ${j.dueOn}` : "no due date") : JOB_STAGE_LABELS[jobStage(j.status)]}</span>
             </span>
-            {answer ? <JobActions id={j.id} status={j.status} dueOn={j.dueOn} /> : null}
+            {answer ? <JobActions id={j.id} status={j.status} dueOn={j.dueOn} rental={j.rental !== null} handedOver={j.handedOverAt !== null} /> : null}
           </div>
         </li>
       ))}
