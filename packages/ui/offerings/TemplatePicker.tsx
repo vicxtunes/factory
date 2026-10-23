@@ -19,7 +19,6 @@ export function TemplatePicker({
   scope,
   onAdd,
   pending,
-  action = "Add",
 }: {
   templates: ServiceTemplate[];
   /** The studio's services on sale, by name. */
@@ -27,8 +26,6 @@ export function TemplatePicker({
   scope: Pick<TenantScope, "currency" | "locale">;
   onAdd: (ids: string[]) => void;
   pending: boolean;
-  /** The button's verb, e.g. "Add". */
-  action?: string;
 }) {
   const owned = new Set(have.map((n) => n.toLowerCase()));
   const isOwned = (t: ServiceTemplate) => owned.has(t.name.toLowerCase());
@@ -77,7 +74,7 @@ export function TemplatePicker({
       </ul>
       <p className="text-xs text-muted">Each one becomes your own service: change its names, prices and what&apos;s included any time in Packages &amp; Services.</p>
       <Button variant="primary" className="w-full" loading={pending} disabled={pending || chosen.size === 0} onClick={() => onAdd([...chosen])}>
-        {action} {chosen.size || ""} {chosen.size === 1 ? "service" : "services"}
+        Add {chosen.size || ""} {chosen.size === 1 ? "service" : "services"}
       </Button>
     </div>
   );

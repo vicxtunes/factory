@@ -84,12 +84,14 @@ const ErrorText = ({ error }: { error: string | null }) =>
 export function OnboardingWizard({ view }: { view: SetupView }) {
   const [step, setStep] = useState<Step>(() => firstStep(view));
   const done = doneSteps(view);
-  const index = STEPS.findIndex((s) => s.id === step);
-  const go = (to: number) => setStep(to < 0 ? "welcome" : STEPS[to]!.id);
+  // No Services step until Aming has templates to pick from.
+  const shown = STEPS.filter((s) => s.id !== "services" || view.services.templates.length > 0 || done.services);
+  const index = shown.findIndex((s) => s.id === step);
+  const go = (to: number) => setStep(to < 0 ? "welcome" : shown[to]!.id);
   const next = () => go(index + 1);
   const back = { onClick: () => go(index - 1) };
 
-  const steps: SetupStep[] = STEPS.map((s) => ({
+  const steps: SetupStep[] = shown.map((s) => ({
     id: s.id,
     label: s.label,
     hint: s.hint,
@@ -109,7 +111,7 @@ export function OnboardingWizard({ view }: { view: SetupView }) {
     );
   }
 
-  const meta = STEPS[index]!;
+  const meta = shown[index]!;
   const notice =
     view.status === "changes_requested" && view.reviewNote ? (
       <div className="mb-6 rounded-xl border border-orange-200 bg-orange-50 p-4 text-sm dark:border-orange-500/30 dark:bg-orange-500/10">
@@ -244,7 +246,6 @@ function ServicesStep({ view, back, onDone }: StepProps) {
         have={have}
         scope={scope}
         pending={pending}
-        action="Add"
         onAdd={(ids) =>
           start(async () => {
             setError(null);
@@ -369,7 +370,9 @@ function SubmitStep({ view, back, onGoTo }: Omit<StepProps, "onDone"> & { onGoTo
     { step: "details", label: "Owner", value: done.details ? `${view.details.ownerFirstName} ${view.details.ownerLastName}` : null, required: true },
     { step: "logo", label: "Logo", value: view.logoUrl ? "Uploaded" : null, required: false },
     { step: "address", label: "Web address", value: view.slug ? `${host}/${view.slug}` : null, required: true },
-    { step: "services", label: "Services", value: view.services.have.length ? `${view.services.have.length} added` : null, required: false },
+    ...(view.services.templates.length || view.services.have.length
+      ? [{ step: "services" as const, label: "Services", value: view.services.have.length ? `${view.services.have.length} added` : null, required: false }]
+      : []),
     { step: "email", label: "Email", value: view.emailVerified ? view.ownerEmail : null, required: true },
   ];
   const ready = rows.every((r) => !r.required || r.value);
