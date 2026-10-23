@@ -12,6 +12,7 @@ function message(id: string, senderName: string, body: string, attachments: Chat
     id,
     conversationId: "design-room",
     kind: "attachment",
+    card: null,
     sender: null,
     senderName,
     body,

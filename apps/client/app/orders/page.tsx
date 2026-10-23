@@ -10,9 +10,10 @@ import { OrdersBoardSection } from "../orders-board-section";
 export const metadata = { title: "My Orders" };
 export const dynamic = "force-dynamic";
 
-export default async function ClientOrdersPage() {
+export default async function ClientOrdersPage({ searchParams }: { searchParams: Promise<{ order?: string }> }) {
   const session = await getClientSession();
   if (!session) redirect("/?signin=1");
+  const { order } = await searchParams;
 
   return (
     <ClientShell signedIn name={session.name} avatarUrl={session.avatarUrl}>
@@ -21,7 +22,7 @@ export default async function ClientOrdersPage() {
           <Button variant="primary">+ New order</Button>
         </Link>
       </div>
-      <OrdersBoardSection clientId={session.client_id} bucket="active" />
+      <OrdersBoardSection clientId={session.client_id} bucket="active" openOrderId={order} />
     </ClientShell>
   );
 }

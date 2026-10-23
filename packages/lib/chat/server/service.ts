@@ -24,6 +24,8 @@ import type {
   ConversationDetail,
   ConversationSummary,
   MessagePage,
+  OrderCardKind,
+  OrderCardState,
   ParticipantRef,
   UploadedAttachment,
 } from "../types";
@@ -336,32 +338,98 @@ export async function openClientOrderThread(viewer: ChatViewer, orderId: string)
   if (!order || !directory.canUseClientOrderThread(viewer, order)) throw new ChatError("Order not found.");
   if (!order.clientId) throw new ChatError("This order isn't linked to a client account, so there's no one to chat with.");
 
-  const existing = await repo.findClientOrderConversation(orderId);
-  if (existing) {
-    await repo.addParticipants(existing.id, [viewer]);
-    return existing.id;
-  }
+  const conversation = await ensureClientOrderConversation(order, order.clientId, viewer);
+  await repo.addParticipants(conversation.id, [viewer]);
+  return conversation.id;
+}
+
+/**
+ * Finds or makes the order's client thread. A new one starts with the client
+ * and the designer in it; staff see it anyway (team thread) and follow it once
+ * they read or reply.
+ */
+async function ensureClientOrderConversation(
+  order: directory.OrderChatContext,
+  clientId: string,
+  creator: { type: string; id: string },
+): Promise<repo.ConversationRow> {
+  const existing = await repo.findClientOrderConversation(order.orderId);
+  if (existing) return existing;
 
   const { conversation, created } = await repo.createConversation(
     {
       kind: "client_order",
-      order_id: orderId,
-      client_id: order.clientId,
-      created_by_type: viewer.type,
-      created_by_id: viewer.id,
+      order_id: order.orderId,
+      client_id: clientId,
+      created_by_type: creator.type,
+      created_by_id: creator.id,
     },
-    () => repo.findClientOrderConversation(orderId),
+    () => repo.findClientOrderConversation(order.orderId),
   );
-
-  const initial: ParticipantRef[] = [viewer];
   if (created) {
-    // The client and the designer are in it from the start; staff see it
-    // anyway (team thread) and follow it once they read or reply.
-    initial.push({ type: "client", id: order.clientId });
+    const initial: ParticipantRef[] = [{ type: "client", id: clientId }];
     if (order.designerId) initial.push({ type: "designer", id: order.designerId });
+    await repo.addParticipants(conversation.id, initial);
   }
-  await repo.addParticipants(conversation.id, dedupeRefs(initial));
+  return conversation;
+}
+
+const ORDER_CARD_TEXT: Record<OrderCardKind, (orderNo: string) => string> = {
+  received: (no) => `Order ${no} has been received`,
+  ready: (no) => `Order ${no} is ready for pickup`,
+};
+
+/**
+ * Aming posts the card for this moment into the order's client thread,
+ * making the thread if it isn't there yet. Once per order and moment, so
+ * calling it again is harmless. Doesn't push: the caller's own notification
+ * already tells the client, and opens this thread (the returned id).
+ * Null when the order has no client account to talk to, or (ready) isn't all ready yet.
+ */
+export async function postOrderCard(orderId: string, card: OrderCardKind): Promise<string | null> {
+  const order = await directory.getOrderContext(orderId);
+  if (!order?.clientId) return null;
+  if (card === "ready") {
+    // "Ready for pickup" means the whole order: not while an item is still being made.
+    const p = await directory.getOrderProgress(orderId);
+    if (!p.readyCount || p.readyCount + p.collectedCount < p.itemCount) return null;
+  }
+
+  const conversation = await ensureClientOrderConversation(order, order.clientId, { type: "system", id: "aming" });
+  if (!(await repo.findOrderCard(conversation.id, card))) {
+    try {
+      await repo.insertMessage({
+        conversation_id: conversation.id,
+        kind: "order_card",
+        card,
+        sender_name: "Aming",
+        body: ORDER_CARD_TEXT[card](order.orderNo),
+      });
+    } catch (err) {
+      // Posted at the same moment by another request: the unique index kept one.
+      if (!(await repo.findOrderCard(conversation.id, card))) throw err;
+    }
+    ringConversation(conversation, "message");
+  }
   return conversation.id;
+}
+
+/** What an order card in this thread shows the viewer right now. */
+export async function getOrderCardState(viewer: ChatViewer, conversationId: string): Promise<OrderCardState> {
+  const { conversation } = await loadAccess(viewer, conversationId);
+  if (conversation.kind !== "client_order" || !conversation.order_id) throw new ChatError("Order not found.");
+  const order = await directory.getOrderContext(conversation.order_id);
+  if (!order) throw new ChatError("Order not found.");
+
+  const progress = await directory.getOrderProgress(order.orderId);
+  const viewerIsClient = viewer.type === "client";
+  return {
+    orderId: order.orderId,
+    orderNo: order.orderNo,
+    viewerIsClient,
+    orderHref: directory.orderHref(viewer, order.orderId),
+    ...progress,
+  };
 }
 
 export async function createGroup(viewer: ChatViewer, input: { title: string; members: ParticipantRef[] }): Promise<string> {

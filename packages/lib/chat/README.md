@@ -30,6 +30,7 @@ packages/lib/chat/
                       apps/factory/app/api/chat GET handlers and apps/factory/app/chat. Browser reads go there, not to
                       Server Actions, which the browser runs one at a time (a send would block them).
   issues.ts           Server-only API for packages/lib/support's issue threads (see "Issue threads").
+  orders.ts           Server-only API for order code: Aming's order cards (see "Order cards").
   server/
     service.ts        Use cases: load, check policy, write, schedule side effects.
     repository.ts     All queries against the chat_* tables. No rules.
@@ -62,7 +63,7 @@ packages/ui/chat ──▶ packages/lib/chat/actions ──▶ server/service �
 ```
 
 - The rest of the app uses chat **only** through `actions.ts`, `types.ts`, `routes.ts`,
-  `reads.ts` and `issues.ts` (server code only) and the components in `packages/ui/chat/`. Nothing outside
+  `reads.ts`, `issues.ts` and `orders.ts` (server code only) and the components in `packages/ui/chat/`. Nothing outside
   `packages/lib/chat` imports from `packages/lib/chat/server`.
 - One UI exception: the conversation header calls `packages/lib/support`'s `setSupportReportStatus` for
   the Mark resolved button, because support owns report status.
@@ -203,6 +204,15 @@ await chat.sendMessage(staffViewer, { conversationId: id, body: "Your order has 
 - **Message search**: type two or more characters in the inbox search box. Chat names are
   filtered locally, and message text is searched on the server (`searchMessages`). Picking a
   result opens its conversation. `%` and `_` are searched literally.
+- **Order cards**: Aming posts a card into the order's client thread when the order is received
+  (staff take it in, or confirm a client's order) and when the whole order is ready for pickup,
+  making the thread if needed (`orders.ts` → `postOrderCard`, once per order and moment). The
+  client's own notification for that moment opens the thread. A card stores only its moment
+  (`chat_messages.card`); what it shows is read live (`getOrderCardState`, plus the order's
+  payment), so it turns to "Paid" or "Collected" by itself. The client pays (the order's Pay
+  sheet), attaches a receipt (sent as a message in the thread) or opens the invoice from the
+  "received" card, and confirms collection on the "ready" one (`packages/lib/orders/collect.ts`).
+  These two moments aren't also mirrored as plain lines into the client thread.
 - **Order status updates**: every order lifecycle event (completed, delayed, assigned, ready,
   cancelled) is already written to `notifications`. A trigger copies each one into that order's
   thread as a system message, but only if the thread exists. No order code knows about chat.

@@ -5,6 +5,9 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { logOrderEvent, resolveActor } from "@repo/lib/audit/log";
 import { validateLineDiscount, type LineDiscount, type LineDiscountChange } from "@repo/lib/discounts/core";
 import { notifyOrderItem } from "@repo/lib/notifications/notify";
+import { postOrderCard } from "@repo/lib/chat/orders";
+import { clientPath } from "@repo/lib/client-portal/paths";
+import { chatHref } from "@repo/lib/chat/routes";
 import type { OrderType } from "@repo/lib/types";
 
 import type { OrderItemInput, OrderRoute } from "./types";
@@ -271,6 +274,23 @@ export async function buildAndInsertOrder(
       pushTitle: "New order assigned",
       url: "/factory",
     });
+  }
+
+  // An order staff take in is received at once: its chat with the client gets
+  // Aming's "received" card (pay, attach a receipt, invoice), and the client's
+  // notification opens it.
+  if (p.releaseImmediately && firstItemId) {
+    const conversationId = await postOrderCard(order.id, "received");
+    if (conversationId) {
+      await notifyOrderItem({
+        orderItemId: firstItemId,
+        eventType: "quote_ready",
+        message: `Order ${order.order_no} has been received. Open it to see how to pay.`,
+        recipient: { type: "client", id: p.client.id },
+        pushTitle: "Order received",
+        url: clientPath(chatHref(conversationId)),
+      });
+    }
   }
 
   return {

@@ -108,12 +108,34 @@ export interface ChatAttachment {
   url: string | null;
 }
 
-export type MessageKind = "text" | "attachment" | "system";
+export type MessageKind = "text" | "attachment" | "system" | "order_card";
+
+/**
+ * An order card's moment, posted by Aming into the order's client thread.
+ * What the card shows (paid, collected, …) is read live: see OrderCardState.
+ */
+export type OrderCardKind = "received" | "ready";
+
+/** What an order card shows right now, read fresh each time it's drawn. */
+export interface OrderCardState {
+  orderId: string;
+  orderNo: string;
+  /** The viewer is the order's client (pays, confirms collection) rather than staff/designer. */
+  viewerIsClient: boolean;
+  /** Where "Open order" goes for this viewer. */
+  orderHref: string;
+  /** Items ready for pickup now, and items already collected. */
+  readyCount: number;
+  collectedCount: number;
+  itemCount: number;
+}
 
 export interface ChatMessage {
   id: string;
   conversationId: string;
   kind: MessageKind;
+  /** Set when kind is "order_card". */
+  card: OrderCardKind | null;
   sender: ParticipantRef | null;
   senderName: string | null;
   body: string;

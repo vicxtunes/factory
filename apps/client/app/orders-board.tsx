@@ -53,17 +53,20 @@ export function ClientOrdersBoard({
   clientId,
   workers,
   bucket,
+  openItemId,
 }: {
   initialItems: OrderItemWithOrder[];
   clientId: string;
   workers: WorkerPublic[];
   bucket: "active" | "history";
+  /** Opens on this item's details. */
+  openItemId: string | null;
 }) {
   const [items, setItems] = useState(initialItems);
   const [filters, setFilters] = useState<OrderFilterState>(emptyFilters);
   const [view, setView] = useState<"cards" | "table">("cards");
   const [tableRows, setTableRows] = useState<number>(TABLE_PAGE_SIZES[0]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(openItemId);
   const supabaseRef = useRef(createClient());
 
   const patch = useCallback((p: Partial<OrderFilterState>) => {

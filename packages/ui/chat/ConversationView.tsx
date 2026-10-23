@@ -16,6 +16,7 @@ import { ConversationAvatar, IssueStatusBadge } from "./ConversationList";
 import { dayKey, formatDayLabel } from "./format";
 import { BackIcon, InfoIcon } from "./icons";
 import { MessageBubble, SystemMessage } from "./MessageBubble";
+import { OrderCard } from "./OrderCard";
 import { Button } from "@repo/ui/Button";
 
 /** Consecutive messages from one sender within this window share one avatar. */
@@ -376,6 +377,8 @@ export function ConversationView({
               ) : null}
               {m.kind === "system" ? (
                 <SystemMessage message={m} />
+              ) : m.kind === "order_card" ? (
+                <OrderCard message={m} version={refreshKey + messages.length} onPosted={refresh} />
               ) : (
                 <MessageBubble
                   message={m}
@@ -407,6 +410,7 @@ export function ConversationView({
                   id: p.tempId,
                   conversationId,
                   kind: "text",
+                  card: null,
                   sender: detail.me,
                   senderName: myName,
                   body: p.body,
