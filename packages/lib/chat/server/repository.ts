@@ -351,15 +351,17 @@ export async function getMessage(id: string): Promise<MessageRow | null> {
   return data;
 }
 
-/** The thread's card for this moment, if it was already posted. */
-export async function findOrderCard(conversationId: string, card: OrderCardKind): Promise<MessageRow | null> {
+/** The thread's latest card for this moment, if one was posted. */
+export async function latestOrderCard(conversationId: string, card: OrderCardKind): Promise<MessageRow | null> {
   const { data, error } = await db()
     .from("chat_messages")
     .select("*")
     .eq("conversation_id", conversationId)
     .eq("card", card)
+    .order("created_at", { ascending: false })
+    .limit(1)
     .maybeSingle<MessageRow>();
-  if (error) fail("findOrderCard", error);
+  if (error) fail("latestOrderCard", error);
   return data;
 }
 

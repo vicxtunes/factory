@@ -1,6 +1,7 @@
 "use server";
 
 import { logOrderEvent, resolveActor } from "@repo/lib/audit/log";
+import { announceOrderCollected } from "@repo/lib/chat/orders";
 import { createAdminClient } from "@repo/lib/supabase/admin";
 
 type Result = { ok: true } | { ok: false; error: string };
@@ -31,5 +32,6 @@ export async function confirmOrderCollected(orderId: string): Promise<Result> {
   if (!collected?.length) return { ok: false, error: "Nothing on this order is waiting for pickup." };
 
   await logOrderEvent({ orderId, actor, action: "order_collected", detail: { count: collected.length } });
+  await announceOrderCollected(orderId, actor.name, collected.length);
   return { ok: true };
 }

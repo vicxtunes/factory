@@ -111,10 +111,11 @@ export interface ChatAttachment {
 export type MessageKind = "text" | "attachment" | "system" | "order_card";
 
 /**
- * An order card's moment, posted by Aming into the order's client thread.
- * What the card shows (paid, collected, …) is read live: see OrderCardState.
+ * An order card's moment, posted by Aming into the order's client thread:
+ * received (pay / receipt / invoice), ready (confirm received), collected,
+ * payment. What received and ready show is read live: see OrderCardState.
  */
-export type OrderCardKind = "received" | "ready";
+export type OrderCardKind = "received" | "ready" | "collected" | "payment";
 
 /** What an order card shows right now, read fresh each time it's drawn. */
 export interface OrderCardState {

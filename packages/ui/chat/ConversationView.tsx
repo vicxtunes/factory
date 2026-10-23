@@ -16,7 +16,7 @@ import { ConversationAvatar, IssueStatusBadge } from "./ConversationList";
 import { dayKey, formatDayLabel } from "./format";
 import { BackIcon, InfoIcon } from "./icons";
 import { MessageBubble, SystemMessage } from "./MessageBubble";
-import { OrderCard } from "./OrderCard";
+import { OrderCard, useOrderCards } from "./OrderCard";
 import { Button } from "@repo/ui/Button";
 
 /** Consecutive messages from one sender within this window share one avatar. */
@@ -255,6 +255,17 @@ export function ConversationView({
     [detail],
   );
 
+  // Order cards (client order threads): the order is read once for all of
+  // them, again whenever the thread changes; only the newest card of each
+  // kind offers its buttons.
+  const hasCards = messages.some((m) => m.kind === "order_card");
+  const orderCards = useOrderCards(conversationId, hasCards, refreshKey + messages.length);
+  const latestCardIds = useMemo(() => {
+    const latest = new Map<string, string>();
+    for (const m of messages) if (m.card) latest.set(m.card, m.id);
+    return new Set(latest.values());
+  }, [messages]);
+
   // --- Render -------------------------------------------------------------
 
   if (error) {
@@ -378,7 +389,7 @@ export function ConversationView({
               {m.kind === "system" ? (
                 <SystemMessage message={m} />
               ) : m.kind === "order_card" ? (
-                <OrderCard message={m} version={refreshKey + messages.length} onPosted={refresh} />
+                <OrderCard message={m} latest={latestCardIds.has(m.id)} order={orderCards} onPosted={refresh} />
               ) : (
                 <MessageBubble
                   message={m}

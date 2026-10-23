@@ -24,7 +24,6 @@ import type {
   ConversationDetail,
   ConversationSummary,
   MessagePage,
-  OrderCardKind,
   OrderCardState,
   ParticipantRef,
   UploadedAttachment,
@@ -374,44 +373,65 @@ async function ensureClientOrderConversation(
   return conversation;
 }
 
-const ORDER_CARD_TEXT: Record<OrderCardKind, (orderNo: string) => string> = {
-  received: (no) => `Order ${no} has been received`,
-  ready: (no) => `Order ${no} is ready for pickup`,
-};
-
 /**
  * Aming posts the card for this moment into the order's client thread,
- * making the thread if it isn't there yet. Once per order and moment, so
- * calling it again is harmless. Doesn't push: the caller's own notification
- * already tells the client, and opens this thread (the returned id).
- * Null when the order has no client account to talk to, or (ready) isn't all ready yet.
+ * making the thread if it isn't there yet. Calling it again is harmless:
+ * "received" is posted once; "ready" once per batch (again only after the
+ * client collected what was ready, or when nothing else is waiting).
+ * Doesn't push: the caller's own notification already tells the client, and
+ * opens this thread (the returned id). Null when there's no card to post or
+ * the order has no client account to talk to.
  */
-export async function postOrderCard(orderId: string, card: OrderCardKind): Promise<string | null> {
+export async function postOrderCard(orderId: string, card: "received" | "ready"): Promise<string | null> {
   const order = await directory.getOrderContext(orderId);
   if (!order?.clientId) return null;
+
+  let body = `Order ${order.orderNo} has been received`;
   if (card === "ready") {
-    // "Ready for pickup" means the whole order: not while an item is still being made.
     const p = await directory.getOrderProgress(orderId);
-    if (!p.readyCount || p.readyCount + p.collectedCount < p.itemCount) return null;
+    if (!p.readyCount) return null;
+    body =
+      p.readyCount + p.collectedCount < p.itemCount
+        ? `Part of order ${order.orderNo} is ready for pickup`
+        : `Order ${order.orderNo} is ready for pickup`;
   }
 
   const conversation = await ensureClientOrderConversation(order, order.clientId, { type: "system", id: "aming" });
-  if (!(await repo.findOrderCard(conversation.id, card))) {
-    try {
-      await repo.insertMessage({
-        conversation_id: conversation.id,
-        kind: "order_card",
-        card,
-        sender_name: "Aming",
-        body: ORDER_CARD_TEXT[card](order.orderNo),
-      });
-    } catch (err) {
-      // Posted at the same moment by another request: the unique index kept one.
-      if (!(await repo.findOrderCard(conversation.id, card))) throw err;
-    }
-    ringConversation(conversation, "message");
+  if (await alreadyPosted(conversation.id, card)) return conversation.id;
+  try {
+    await repo.insertMessage({ conversation_id: conversation.id, kind: "order_card", card, sender_name: "Aming", body });
+  } catch (err) {
+    // "received" posted at the same moment by another request: the unique index kept one.
+    if (card !== "received" || !(await repo.latestOrderCard(conversation.id, card))) throw err;
   }
+  ringConversation(conversation, "message");
   return conversation.id;
+}
+
+async function alreadyPosted(conversationId: string, card: "received" | "ready"): Promise<boolean> {
+  const latest = await repo.latestOrderCard(conversationId, card);
+  if (!latest || card === "received") return !!latest;
+  // The latest ready card still covers what's waiting, unless the client has
+  // collected since (a new batch), or this is the only item waiting now.
+  const collected = await repo.latestOrderCard(conversationId, "collected");
+  if (collected && collected.created_at > latest.created_at) return false;
+  const conversation = await repo.getConversation(conversationId);
+  const p = conversation?.order_id ? await directory.getOrderProgress(conversation.order_id) : null;
+  return !!p && p.readyCount > 1;
+}
+
+/** "Collected" on the order's client thread, after the client confirmed it. */
+export async function announceOrderCollected(orderId: string, clientName: string, count: number): Promise<void> {
+  const conversation = await repo.findClientOrderConversation(orderId);
+  if (!conversation) return;
+  await repo.insertMessage({
+    conversation_id: conversation.id,
+    kind: "order_card",
+    card: "collected",
+    sender_name: "Aming",
+    body: `${clientName} confirmed they received ${count === 1 ? "1 item" : `${count} items`}`,
+  });
+  ringConversation(conversation, "message");
 }
 
 /** What an order card in this thread shows the viewer right now. */
