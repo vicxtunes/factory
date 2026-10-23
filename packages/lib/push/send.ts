@@ -51,7 +51,8 @@ export async function notifyActor(
           );
         } catch (err) {
           const statusCode = (err as { statusCode?: number }).statusCode;
-          if (statusCode === 404 || statusCode === 410) staleIds.push(sub.id);
+          // 403: made with an older key; the device makes a new one next time the app opens (usePushSubscription).
+          if (statusCode === 404 || statusCode === 410 || statusCode === 403) staleIds.push(sub.id);
           else console.error("push send failed:", err);
         }
       }),
