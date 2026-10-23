@@ -11,6 +11,7 @@ const TYPE_LABELS: Record<string, string> = {
   dashboard_user: "Dashboard",
   worker: "Factory",
   designer: "Graphics",
+  client: "Client",
 };
 
 const EMPTY_FORM: NotificationInput = { title: "", body: "", url: "" };

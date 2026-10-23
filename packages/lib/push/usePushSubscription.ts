@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 
-import { hasPushSubscription, subscribeToPush, unsubscribeFromPush } from "@repo/lib/push/actions";
+import { subscribeToPush, unsubscribeFromPush } from "@repo/lib/push/actions";
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
@@ -64,9 +64,9 @@ export function usePushSubscription() {
 
   useEffect(() => {
     if (!supported) return;
-    refreshSubscription()
-      .then((ok) => (ok ? true : hasPushSubscription()))
-      .then(setSubscribed);
+    // This device, not the person: a row saved from another phone, or one the
+    // push service now refuses, doesn't count as on.
+    refreshSubscription().then(setSubscribed);
   }, [supported]);
 
   function subscribe(onDone?: (ok: boolean) => void) {
