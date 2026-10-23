@@ -51,6 +51,22 @@ packages ("8x12", "12x18"), each size with its price. A product's address is `/<
   pick from services' packages and products' sizes (`onSale(scope)`); bookings from services' only
   (`onSale(scope, "service")`).
 
+## Templates
+
+Ready-made services Aming keeps so a new studio isn't typing its catalog from scratch: e.g.
+"Wedding Photography" in "Weddings", with Gold, Silver and Bronze, each with a description, a
+suggested price and what's included (`core/templates.ts`, the `service_templates` table, its
+packages kept with it as JSON).
+
+- **The boss keeps them** (`/dashboard/service-templates`): add, change, stop offering, offer again.
+- **A studio adds them**: in set-up's optional **Services** step, or **Start from a template** on
+  Packages & Services. Each becomes the studio's **own** service (`addFromTemplate`): in its services
+  category of the template's category name (made if it has none), with the template's packages.
+  From then on it's edited like any other; changing a template never changes a studio.
+- **Prices** are suggested in UGX (`TEMPLATE_CURRENCY`); a studio in another currency gets 0
+  ("Price on request") to set its own.
+- A template is added once: one whose name a service on sale already has shows "Added" and is skipped.
+
 ## Screens
 
 | Screen | Who | What |
@@ -60,6 +76,7 @@ packages ("8x12", "12x18"), each size with its price. A product's address is `/<
 | `/studio/offerings/new` | Studio owner | Add a service and its packages in one form |
 | `/studio/offerings/<service id>` | Studio owner | The same form: the service and its packages saved together (a package removed there is archived); archived packages to put back; its photos and preview video |
 | `/dashboard/studios/<id>` (factory app) | Boss | The studio's services and packages, read-only |
+| `/dashboard/service-templates` (factory app) | Boss | Service templates: cards, a form in a sheet, ones no longer offered |
 | `/<studio>` (client app, public) | Anyone | The studio's services as showroom cards (cover photo), linking to their pages |
 | `/<studio>/p/<product>` (client app, public) | Anyone | A product's page: its photos (Aming's, less those left out), its sizes, "Order now" |
 | `/<studio>/s/<service>` (client app, public) | Anyone | The showroom's item page (`@repo/ui/showroom/Showcase`): photos, preview video, the packages to choose from (a 0 price reads "Price on request"), "Book on WhatsApp" naming the chosen one |

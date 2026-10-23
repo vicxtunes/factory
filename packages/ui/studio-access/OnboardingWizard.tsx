@@ -6,7 +6,10 @@ import { useEffect, useState, useTransition } from "react";
 import { Button } from "@repo/ui/Button";
 import { Field, TextInput } from "@repo/ui/Field";
 import { PhoneInput } from "@repo/ui/PhoneInput";
+import type { ServiceTemplate } from "@repo/lib/offerings/core";
+import { addFromTemplates } from "@repo/lib/offerings/template-actions";
 import { CODE_DIGITS, type OnboardingStep } from "@repo/lib/studio-access/core";
+import type { TenantScope } from "@repo/lib/tenancy/types";
 import {
   saveStudioDetails,
   sendStudioEmailCode,
@@ -15,6 +18,7 @@ import {
 } from "@repo/lib/studio-access/actions";
 import { setStudioSlug } from "@repo/lib/studio-portal/actions";
 
+import { TemplatePicker } from "../offerings/TemplatePicker";
 import { LogoUploader } from "./LogoUploader";
 import { SetupActions, SetupSplit, SetupWelcome, type SetupStep } from "./SetupLayouts";
 
@@ -34,6 +38,8 @@ export interface SetupView {
   origin: string;
   ownerEmail: string | null;
   emailVerified: boolean;
+  /** Aming's service templates on offer, and the studio's services (by name) and currency, to price them. */
+  services: { templates: ServiceTemplate[]; have: string[]; scope: Pick<TenantScope, "currency" | "locale"> };
 }
 
 type Step = "welcome" | OnboardingStep;
@@ -42,6 +48,7 @@ const STEPS: { id: OnboardingStep; label: string; hint: string; optional?: boole
   { id: "details", label: "Business details", hint: "Name, owner and phone", title: "Your business", description: "Your clients and Aming see these. We filled them in from your Aming account: change anything that isn't right." },
   { id: "logo", label: "Logo", hint: "Shown on your page and documents", optional: true, title: "Your logo", description: "It appears on your public page, quotations, invoices and workspace. You can add it later from Business profile." },
   { id: "address", label: "Web address", hint: "Your public page", title: "Your web address", description: "Your public page, and where your clients sign in. You can change it later; old links keep working." },
+  { id: "services", label: "Services", hint: "Start from Aming's templates", optional: true, title: "What you offer", description: "Pick the services you offer and get them ready-made with packages, prices and what's included. Change anything later in Packages & Services." },
   { id: "email", label: "Email", hint: "For codes and Aming's messages", title: "Verify your email", description: `We'll send a ${CODE_DIGITS}-digit code to check it's yours. Aming uses it to reach you about your business.` },
   { id: "submit", label: "Submit", hint: "Aming reviews your business", title: "Submit for review", description: "Aming checks every new business before it opens. You'll get an email and a notification." },
 ];
@@ -51,6 +58,7 @@ function doneSteps(v: SetupView): Record<Exclude<OnboardingStep, "submit">, bool
     details: v.detailsSaved,
     logo: !!v.logoUrl,
     address: !!v.slug,
+    services: v.services.have.length > 0,
     email: v.emailVerified,
   };
 }
@@ -58,8 +66,8 @@ function doneSteps(v: SetupView): Record<Exclude<OnboardingStep, "submit">, bool
 function firstStep(v: SetupView): Step {
   const done = doneSteps(v);
   if (v.status === "onboarding" && !Object.values(done).some(Boolean)) return "welcome";
-  // The logo is optional: resume at the first required step that's missing.
-  return (Object.keys(done) as (keyof typeof done)[]).find((s) => s !== "logo" && !done[s]) ?? "submit";
+  // The logo and services are optional: resume at the first required step that's missing.
+  return (Object.keys(done) as (keyof typeof done)[]).find((s) => s !== "logo" && s !== "services" && !done[s]) ?? "submit";
 }
 
 /** 540 → "9:00". */
@@ -125,6 +133,7 @@ export function OnboardingWizard({ view }: { view: SetupView }) {
         </>
       ) : null}
       {step === "address" ? <AddressStep view={view} back={back} onDone={next} /> : null}
+      {step === "services" ? <ServicesStep view={view} back={back} onDone={next} /> : null}
       {step === "email" ? <EmailStep view={view} back={back} onDone={next} /> : null}
       {step === "submit" ? <SubmitStep view={view} back={back} onGoTo={setStep} /> : null}
     </SetupSplit>
@@ -219,6 +228,40 @@ function AddressStep({ view, back, onDone }: StepProps) {
         </Button>
       </SetupActions>
     </form>
+  );
+}
+
+function ServicesStep({ view, back, onDone }: StepProps) {
+  const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+  const { templates, have, scope } = view.services;
+
+  return (
+    <>
+      <TemplatePicker
+        templates={templates}
+        have={have}
+        scope={scope}
+        pending={pending}
+        action="Add"
+        onAdd={(ids) =>
+          start(async () => {
+            setError(null);
+            const res = await addFromTemplates(ids);
+            if (!res.ok) return setError(res.error);
+            router.refresh();
+            onDone();
+          })
+        }
+      />
+      <ErrorText error={error} />
+      <SetupActions back={back}>
+        <Button variant={have.length ? "primary" : "secondary"} onClick={onDone}>
+          {have.length ? "Continue" : "Skip for now"}
+        </Button>
+      </SetupActions>
+    </>
   );
 }
 
@@ -326,6 +369,7 @@ function SubmitStep({ view, back, onGoTo }: Omit<StepProps, "onDone"> & { onGoTo
     { step: "details", label: "Owner", value: done.details ? `${view.details.ownerFirstName} ${view.details.ownerLastName}` : null, required: true },
     { step: "logo", label: "Logo", value: view.logoUrl ? "Uploaded" : null, required: false },
     { step: "address", label: "Web address", value: view.slug ? `${host}/${view.slug}` : null, required: true },
+    { step: "services", label: "Services", value: view.services.have.length ? `${view.services.have.length} added` : null, required: false },
     { step: "email", label: "Email", value: view.emailVerified ? view.ownerEmail : null, required: true },
   ];
   const ready = rows.every((r) => !r.required || r.value);

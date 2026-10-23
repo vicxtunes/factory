@@ -2,7 +2,7 @@
 import { CatalogPanel, type ServiceMedia } from "@repo/ui/offerings/CatalogPanel";
 import { RowsSkeleton } from "@repo/ui/skeletons/blocks";
 import { Loading } from "@repo/ui/skeletons/Loading";
-import { offerings } from "@repo/lib/offerings/server";
+import { offerings, templatesOnOffer } from "@repo/lib/offerings/server";
 import { PhotoError } from "@repo/lib/photos/ports";
 import { photos } from "@repo/lib/photos/server";
 import { portal } from "@repo/lib/studio-portal/server";
@@ -26,11 +26,12 @@ export default async function StudioOfferingsPage() {
 }
 
 async function Catalog({ scope }: { scope: TenantScope }) {
-  const [categories, settings, usage, slug] = await Promise.all([
+  const [categories, settings, usage, slug, templates] = await Promise.all([
     offerings.manage(scope, "service"),
     offerings.settings(scope),
     photos.usage(scope),
     portal.currentSlug(scope.tenantId),
+    templatesOnOffer(),
   ]);
   // Every service's photos and video, for its card. Until photo storage is set up, none.
   const media: Record<string, ServiceMedia> = Object.fromEntries(
@@ -58,6 +59,7 @@ async function Catalog({ scope }: { scope: TenantScope }) {
       media={media}
       usage={usage}
       publicPath={slug ? `/${slug}` : null}
+      templates={templates}
     />
   );
 }
