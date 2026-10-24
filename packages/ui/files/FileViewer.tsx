@@ -15,6 +15,7 @@ import { formatBytes } from "@repo/lib/photos/core";
 import { formatDay } from "@repo/lib/tenancy/format";
 import { Watermark } from "@repo/ui/files/proof";
 import type { TenantScope } from "@repo/lib/tenancy/types";
+import { lockPageScroll } from "@repo/ui/scrollLock";
 
 const GUEST_KEY = "files-guest-name";
 
@@ -165,11 +166,10 @@ export function FileViewer({
       if (e.key === "Escape") onClose();
     }
     document.addEventListener("keydown", onKey);
-    const before = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const unlock = lockPageScroll();
     return () => {
       document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = before;
+      unlock();
     };
   }, [onClose]);
 

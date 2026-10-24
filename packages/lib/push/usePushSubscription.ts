@@ -30,24 +30,42 @@ const sameKey = (a: ArrayBuffer | null, b: Uint8Array) => !!a && a.byteLength ==
 // moved servers) is refused by the push service, so it's replaced with one
 // made with today's key, and one the server lost is saved again. Nobody has
 // to turn notifications off and on.
+//
+// Only an "on" is remembered for the page load: an "off" is checked again on
+// the next screen, and turning notifications on or off here updates it, so
+// the notification screen doesn't come back on another page after they were
+// turned on.
 let refreshing: Promise<boolean> | null = null;
 function refreshSubscription(): Promise<boolean> {
-  refreshing ??= (async () => {
+  if (refreshing) return refreshing;
+  const check: Promise<boolean> = (async () => {
     if (Notification.permission !== "granted") return false;
     const registration = await navigator.serviceWorker.ready;
     const current = await registration.pushManager.getSubscription();
     if (current && sameKey(current.options.applicationServerKey, serverKey())) {
       const json = current.toJSON();
       if (!json.keys?.p256dh || !json.keys?.auth) return false;
-      return (await subscribeToPush({ endpoint: current.endpoint, keys: { p256dh: json.keys.p256dh, auth: json.keys.auth } })).ok;
+      // This phone has a working subscription: if saving it again fails (no
+      // network, or the app was updated since this page loaded), it's still
+      // on; it's saved again next time.
+      return subscribeToPush({ endpoint: current.endpoint, keys: { p256dh: json.keys.p256dh, auth: json.keys.auth } }).then(
+        (res) => res.ok,
+        () => true,
+      );
     }
     if (current) {
       await unsubscribeFromPush(current.endpoint);
       await current.unsubscribe();
     }
     return (await saveNewSubscription(registration)).ok;
-  })().catch(() => false);
-  return refreshing;
+  })()
+    .catch(() => false)
+    .then((on) => {
+      if (!on && refreshing === check) refreshing = null;
+      return on;
+    });
+  refreshing = check;
+  return check;
 }
 
 // Shared by packages/ui/push/PushOptIn.tsx (header button, every surface)
@@ -85,6 +103,7 @@ export function usePushSubscription() {
           onDone?.(false);
           return;
         }
+        refreshing = Promise.resolve(true);
         setSubscribed(true);
         onDone?.(true);
       } catch {
@@ -103,6 +122,7 @@ export function usePushSubscription() {
         await unsubscribeFromPush(sub.endpoint);
         await sub.unsubscribe();
       }
+      refreshing = null;
       setSubscribed(false);
     });
   }
