@@ -3,6 +3,7 @@
 import { useEffect, type ReactNode } from "react";
 
 import { useCloseOnBack } from "./navigation/back";
+import { lockPageScroll } from "./scrollLock";
 
 /**
  * A sheet for one short task (pay, book, confirm): it rises from the bottom
@@ -19,11 +20,10 @@ export function BottomSheet({ open, onClose, title, children }: { open: boolean;
       if (e.key === "Escape") onClose();
     }
     document.addEventListener("keydown", onKey);
-    const before = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const unlock = lockPageScroll();
     return () => {
       document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = before;
+      unlock();
     };
   }, [open, onClose]);
 

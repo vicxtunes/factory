@@ -3,6 +3,7 @@
 import { useEffect, type ReactNode } from "react";
 
 import { useCloseOnBack } from "./navigation/back";
+import { lockPageScroll } from "./scrollLock";
 
 export function Drawer({
   open,
@@ -42,12 +43,7 @@ export function Drawer({
   // While open, the page behind stays put: scrolling the drawer never scrolls the board.
   useEffect(() => {
     if (!open) return;
-    const root = document.body;
-    const before = root.style.overflow;
-    root.style.overflow = "hidden";
-    return () => {
-      root.style.overflow = before;
-    };
+    return lockPageScroll();
   }, [open]);
 
   return (

@@ -7,8 +7,10 @@ import "server-only";
 //
 // Success is only ever taken from HivePay itself: the signed webhook, then a
 // status lookup over the authenticated API before settling. The payment
-// screen also asks (checkCollection), so a payment completes even when the
-// webhook is late or missing. Settling is idempotent, so both may happen.
+// screen also asks (checkCollection), and so does the client app every few
+// minutes (reconcileWaiting), so a payment completes even when the webhook is
+// late or missing and the screen was closed. Settling is idempotent, so any
+// of them may happen.
 // A collection is marked failed only when HivePay says so — never on our own
 // timeout, since the client may still approve the prompt.
 
@@ -343,13 +345,37 @@ export async function checkCollection(viewer: ClientViewer, id: string): Promise
 }
 
 /**
+ * Asks HivePay about prompts still waiting from the last day — the ones whose
+ * webhook never came and whose payment screen was closed. Run every few
+ * minutes by the client app (instrumentation.ts). Returns the ids that are now
+ * succeeded, for the caller to put on studio invoices like the webhook does.
+ */
+export async function reconcileWaiting(): Promise<string[]> {
+  const now = Date.now();
+  const rows = await repo.pendingCollectionsBetween(new Date(now - 24 * 60 * 60_000), new Date(now - 2 * 60_000));
+  const succeeded: string[] = [];
+  for (const row of rows) {
+    try {
+      if ((await reconcile(row)).status === "succeeded") succeeded.push(row.id);
+    } catch (error) {
+      console.error("hivepay reconcile failed:", row.id, error);
+    }
+  }
+  return succeeded;
+}
+
+/**
  * HivePay's webhook. A good signature only tells us to look: the outcome is
  * taken from HivePay's status API (reconcile), so a leaked webhook secret
  * still can't credit anyone. Returns the HTTP status to answer with.
  */
 export async function handleWebhook(rawBody: string, signature: string | null): Promise<{ status: number; collectionId: string | null }> {
   const answer = (status: number, collectionId: string | null = null) => ({ status, collectionId });
-  if (!hivepay.verifyWebhook(rawBody, signature)) return answer(400);
+  if (!hivepay.verifyWebhook(rawBody, signature)) {
+    // Said out loud: a wrong HIVEPAY_WEBHOOK_SECRET otherwise only shows as payments left pending.
+    console.error("hivepay webhook rejected: bad signature", signature ? "(signature didn't match)" : "(no signature)");
+    return answer(400);
+  }
   let reference: string | null = null;
   try {
     const body = JSON.parse(rawBody) as { reference?: unknown; data?: { reference?: unknown } };

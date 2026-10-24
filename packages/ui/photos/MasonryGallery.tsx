@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { PhotoView } from "@repo/lib/photos/core";
 
 import { useCloseOnBack } from "../navigation/back";
+import { lockPageScroll } from "../scrollLock";
 
 /**
  * Photos in a Pinterest-style masonry grid (small copies, lazy-loaded), and
@@ -26,10 +27,10 @@ export function MasonryGallery({ photos, downloads = false }: { photos: PhotoVie
       if (e.key === "ArrowLeft") step(-1);
     };
     document.addEventListener("keydown", onKey);
-    document.body.style.overflow = "hidden";
+    const unlock = lockPageScroll();
     return () => {
       document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = "";
+      unlock();
     };
   }, [open, step]);
 

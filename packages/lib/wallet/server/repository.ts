@@ -529,6 +529,21 @@ export async function pendingCollection(
   return data ? normaliseCollection(data) : null;
 }
 
+/** Prompts that went out between `since` and `before` and are still waiting, oldest first. */
+export async function pendingCollectionsBetween(since: Date, before: Date): Promise<CollectionRow[]> {
+  const { data, error } = await createAdminClient()
+    .from("provider_collections")
+    .select(COLLECTION_COLUMNS)
+    .eq("status", "pending")
+    .not("provider_ref", "is", null)
+    .gte("created_at", since.toISOString())
+    .lt("created_at", before.toISOString())
+    .order("created_at")
+    .returns<CollectionRow[]>();
+  if (error) throwDbError(error);
+  return (data ?? []).map(normaliseCollection);
+}
+
 /** The prompt went out: keep the provider's id for it. */
 export async function markCollectionSent(id: string, providerRef: string, network: string | null): Promise<void> {
   const { error } = await createAdminClient()
