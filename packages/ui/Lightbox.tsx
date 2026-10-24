@@ -10,6 +10,7 @@ import "swiper/css/virtual";
 import "swiper/css/zoom";
 
 import type { GalleryPhoto, PhotoSelection } from "./PhotoGrid";
+import { lockPageScroll } from "./scrollLock";
 
 // Full-screen photo viewer: the photo fitted to the screen, prev / next
 // (buttons, ← / → keys, or a swipe), "3 / 12", the caption, and a strip of
@@ -48,11 +49,10 @@ export function Lightbox({
   useEffect(() => {
     if (!open) return;
     const opener = document.activeElement as HTMLElement | null;
-    const overflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const unlock = lockPageScroll();
     closeRef.current?.focus();
     return () => {
-      document.body.style.overflow = overflow;
+      unlock();
       opener?.focus();
     };
   }, [open]);

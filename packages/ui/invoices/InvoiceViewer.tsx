@@ -8,6 +8,7 @@ import { useCloseOnBack } from "@repo/ui/navigation/back";
 import type { InvoiceView } from "@repo/lib/invoices/types";
 
 import { InvoicePdf } from "./InvoicePdf";
+import { lockPageScroll } from "@repo/ui/scrollLock";
 
 // Full-screen view of an invoice for staff: the invoice itself, large and
 // sharp, as the client gets it (its PDF, page by page) on a dark backdrop,
@@ -38,11 +39,10 @@ export function InvoiceViewer({
   // While open: lock page scroll, focus ✕, and give focus back on close.
   useEffect(() => {
     const opener = document.activeElement as HTMLElement | null;
-    const overflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const unlock = lockPageScroll();
     closeRef.current?.focus();
     return () => {
-      document.body.style.overflow = overflow;
+      unlock();
       opener?.focus();
     };
   }, []);
