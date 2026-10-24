@@ -5,8 +5,17 @@ import { fetchActiveWorkersPublic, fetchClientItems } from "@repo/lib/queries";
 import { ClientOrdersBoard } from "./orders-board";
 
 // The orders board of My Orders and History: its filters and order cards show
-// as a skeleton while the client's orders load.
-export function OrdersBoardSection({ clientId, bucket }: { clientId: string; bucket: "active" | "history" }) {
+// as a skeleton while the client's orders load. `openOrderId` opens that
+// order's details at once (links from its chat: ?order=).
+export function OrdersBoardSection({
+  clientId,
+  bucket,
+  openOrderId,
+}: {
+  clientId: string;
+  bucket: "active" | "history";
+  openOrderId?: string;
+}) {
   return (
     <Loading
       skeleton={
@@ -16,12 +25,13 @@ export function OrdersBoardSection({ clientId, bucket }: { clientId: string; buc
         </>
       }
     >
-      <Board clientId={clientId} bucket={bucket} />
+      <Board clientId={clientId} bucket={bucket} openOrderId={openOrderId} />
     </Loading>
   );
 }
 
-async function Board({ clientId, bucket }: { clientId: string; bucket: "active" | "history" }) {
+async function Board({ clientId, bucket, openOrderId }: { clientId: string; bucket: "active" | "history"; openOrderId?: string }) {
   const [items, workers] = await Promise.all([fetchClientItems(clientId), fetchActiveWorkersPublic()]);
-  return <ClientOrdersBoard initialItems={items} clientId={clientId} workers={workers} bucket={bucket} />;
+  const openItemId = openOrderId ? (items.find((i) => i.order_id === openOrderId)?.id ?? null) : null;
+  return <ClientOrdersBoard initialItems={items} clientId={clientId} workers={workers} bucket={bucket} openItemId={openItemId} />;
 }

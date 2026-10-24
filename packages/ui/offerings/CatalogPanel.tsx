@@ -10,6 +10,7 @@ import { DeleteButton } from "@repo/ui/DeleteButton";
 import { Drawer } from "@repo/ui/Drawer";
 import { ExportButtons } from "@repo/ui/ExportButtons";
 import { Field, Select, TextArea, TextInput } from "@repo/ui/Field";
+import { FormSheet } from "@repo/ui/FormSheet";
 import { ServiceMediaPanel } from "@repo/ui/photos/ServiceMediaPanel";
 import type { ExportColumn } from "@repo/lib/export/tableExport";
 import {
@@ -28,12 +29,14 @@ import {
   setServiceActive,
   setServiceDescription,
 } from "@repo/lib/offerings/actions";
-import type { AmingMediaItem, CategoryWithServices, OfferingKind, ServiceWithPackages, ShowroomSettings } from "@repo/lib/offerings/core";
+import type { AmingMediaItem, CategoryWithServices, OfferingKind, ServiceTemplate, ServiceWithPackages, ShowroomSettings } from "@repo/lib/offerings/core";
+import { addFromTemplates } from "@repo/lib/offerings/template-actions";
 import { canOptimizeImage } from "@repo/lib/storage/client";
 import type { AlbumView, PhotoView, Usage } from "@repo/lib/photos/core";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
 import { PackagesEditor } from "./PackagesEditor";
+import { TemplatePicker } from "./TemplatePicker";
 
 type Scope = Pick<TenantScope, "currency" | "locale">;
 type Run = (fn: () => Promise<{ ok: boolean; error?: string; data?: unknown }>) => void;
@@ -179,6 +182,7 @@ export function CatalogPanel({
   usage,
   publicPath,
   aming,
+  templates,
 }: {
   kind: OfferingKind;
   categories: CategoryWithServices[];
@@ -189,6 +193,8 @@ export function CatalogPanel({
   publicPath: string | null;
   /** Products only. */
   aming?: AmingCatalog;
+  /** Services only: Aming's templates on offer. */
+  templates?: ServiceTemplate[];
 }) {
   const words = WORDS[kind];
   const router = useRouter();
@@ -198,6 +204,7 @@ export function CatalogPanel({
   const [openCategoryId, setOpenCategoryId] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
+  const [templatesOpen, setTemplatesOpen] = useState(false);
   // Products: which of Aming's categories to add, or OWN for one of the studio's own.
   const [amingCategoryId, setAmingCategoryId] = useState("");
 
@@ -239,11 +246,41 @@ export function CatalogPanel({
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <ExportButtons columns={exportColumns(words)} rows={exportRows} filename={words.exportName} />
-        <Button variant="primary" onClick={() => setFormOpen(true)}>
-          + Add category
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          {templates?.length ? (
+            <Button variant="secondary" onClick={() => setTemplatesOpen(true)}>
+              Start from a template
+            </Button>
+          ) : null}
+          <Button variant="primary" onClick={() => setFormOpen(true)}>
+            + Add category
+          </Button>
+        </div>
       </div>
       {error && !openCategory ? <p className="text-sm text-error-600 dark:text-error-400">{error}</p> : null}
+
+      {templates?.length ? (
+        <FormSheet open={templatesOpen} onClose={() => setTemplatesOpen(false)} title="Start from a template" size="lg">
+          <div className="space-y-3">
+            <p className="text-sm text-muted">Ready-made services from Aming, with their packages. Tick the ones you offer.</p>
+            <TemplatePicker
+              key={templatesOpen ? "open" : "closed"}
+              templates={templates}
+              have={categories.flatMap((c) => c.services.filter((s) => !s.archivedAt).map((s) => s.name))}
+              scope={scope}
+              pending={pending}
+              onAdd={(ids) =>
+                run(async () => {
+                  const res = await addFromTemplates(ids);
+                  if (res.ok) setTemplatesOpen(false);
+                  return res;
+                })
+              }
+            />
+            {error ? <p className="text-sm text-error-600 dark:text-error-400">{error}</p> : null}
+          </div>
+        </FormSheet>
+      ) : null}
 
       <Drawer open={formOpen} onClose={() => setFormOpen(false)} title="Add category">
         <form

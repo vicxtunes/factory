@@ -206,6 +206,32 @@ export async function getOrderContext(orderId: string): Promise<OrderChatContext
   return { orderId: data.id, orderNo: data.order_no, clientId: data.client_id, designerId: data.assigned_designer_id };
 }
 
+/** How many of the order's items are ready for pickup and already collected. */
+export async function getOrderProgress(orderId: string): Promise<{ readyCount: number; collectedCount: number; itemCount: number }> {
+  const { data } = await createAdminClient().from("order_items").select("production_status").eq("order_id", orderId);
+  const statuses = (data ?? []).map((r) => r.production_status as string);
+  return {
+    readyCount: statuses.filter((s) => s === "ready_for_pickup").length,
+    collectedCount: statuses.filter((s) => s === "completed").length,
+    itemCount: statuses.length,
+  };
+}
+
+/** Where this person sees the order's details: their own surface's orders page. */
+export function orderHref(person: ParticipantRef, orderId: string): string {
+  const order = encodeURIComponent(orderId);
+  switch (person.type) {
+    case "client":
+      return `/orders?order=${order}`;
+    case "dashboard_user":
+      return `/dashboard/orders?order=${order}`;
+    case "designer":
+      return "/graphics";
+    case "worker":
+      return "/factory";
+  }
+}
+
 /** Order numbers for many orders at once (inbox titles). */
 export async function getOrderNumbers(orderIds: string[]): Promise<Map<string, string>> {
   if (!orderIds.length) return new Map();

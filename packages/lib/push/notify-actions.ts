@@ -56,6 +56,7 @@ export async function getSubscribedActors(): Promise<SubscribedActor[]> {
   const dashboardIds = [...uniqueKeys.values()].filter((a) => a.type === "dashboard_user").map((a) => a.id);
   const workerIds = [...uniqueKeys.values()].filter((a) => a.type === "worker").map((a) => a.id);
   const designerIds = [...uniqueKeys.values()].filter((a) => a.type === "designer").map((a) => a.id);
+  const clientIds = [...uniqueKeys.values()].filter((a) => a.type === "client").map((a) => a.id);
 
   const nameById = new Map<string, string>();
 
@@ -75,6 +76,10 @@ export async function getSubscribedActors(): Promise<SubscribedActor[]> {
   if (designerIds.length) {
     const { data } = await admin.from("designers").select("id, name").in("id", designerIds);
     for (const d of data ?? []) nameById.set(d.id, d.name);
+  }
+  if (clientIds.length) {
+    const { data } = await admin.from("clients").select("id, name").in("id", clientIds);
+    for (const c of data ?? []) nameById.set(c.id, c.name);
   }
 
   return [...uniqueKeys.values()].map((a) => ({ ...a, name: nameById.get(a.id) ?? a.id }));

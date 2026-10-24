@@ -7,6 +7,8 @@ import { fetchProductCatalog } from "@repo/lib/queries";
 import type { Product, ProductCategory } from "@repo/lib/types";
 
 import { supabaseOfferingStore } from "./adapters/supabase/store";
+import { serviceTemplates } from "./adapters/supabase/templates";
+import type { ServiceTemplate } from "./core";
 import { OfferingService } from "./service";
 
 export const offerings = new OfferingService(supabaseOfferingStore);
@@ -23,4 +25,9 @@ export async function amingProducts(): Promise<Map<string, Product>> {
 /** Aming's product categories on sale with products on sale in them: what a studio adds its products categories from. */
 export async function amingCategories(): Promise<ProductCategory[]> {
   return (await fetchProductCatalog(true)).filter((c) => c.products.length > 0);
+}
+
+/** Aming's service templates on offer to studios. */
+export async function templatesOnOffer(): Promise<ServiceTemplate[]> {
+  return (await serviceTemplates()).filter((t) => !t.archivedAt);
 }

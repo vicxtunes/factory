@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useRef, type PointerEvent } from "react";
+import { useEffect, useRef } from "react";
+import type { Swiper as Slider } from "swiper";
+import { Virtual, Zoom } from "swiper/modules";
+import { Swiper, SwiperSlide } from "swiper/react";
+
+import "swiper/css";
+import "swiper/css/virtual";
+import "swiper/css/zoom";
 
 import type { GalleryPhoto, PhotoSelection } from "./PhotoGrid";
 
@@ -10,7 +17,11 @@ import type { GalleryPhoto, PhotoSelection } from "./PhotoGrid";
 // whatever opened it; Tab stays inside while it's open. With `selection`
 // it also shows a Pick toggle, so photos can be picked while viewing them.
 // The caller owns which photo is open (`index`, null = closed).
-// Draft — lives in the Design Room until a page adopts it.
+//
+// Swiper (as the Drive's viewer): the photo follows the finger and snaps to
+// the next with momentum, mouse drag too; pinch or double-tap zooms in. Only
+// the photos around this one are in the page (virtual), so a big album stays
+// smooth.
 
 export function Lightbox({
   photos,
@@ -29,7 +40,7 @@ export function Lightbox({
   const rootRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const stripRef = useRef<HTMLDivElement>(null);
-  const swipeStart = useRef<number | null>(null);
+  const slider = useRef<Slider | null>(null);
   const open = index !== null;
   const count = photos.length;
 
@@ -46,9 +57,10 @@ export function Lightbox({
     };
   }, [open]);
 
-  // Keep the current thumbnail in view in the strip.
+  // The slider follows the open photo when it's changed from outside it (a thumbnail, a key); keep that thumbnail in view.
   useEffect(() => {
     if (index === null) return;
+    if (slider.current && slider.current.activeIndex !== index) slider.current.slideTo(index);
     stripRef.current?.querySelector<HTMLElement>(`[data-thumb="${index}"]`)?.scrollIntoView({ block: "nearest", inline: "center" });
   }, [index]);
 
@@ -86,13 +98,6 @@ export function Lightbox({
   const pick = selection ? selection.selected.indexOf(photo.key) + 1 : 0;
   const full = !!selection?.max && selection.selected.length >= selection.max;
 
-  function onPointerUp(e: PointerEvent) {
-    if (swipeStart.current === null || index === null) return;
-    const dx = e.clientX - swipeStart.current;
-    swipeStart.current = null;
-    if (Math.abs(dx) > 50) onIndexChange(dx < 0 ? (index + 1) % count : (index - 1 + count) % count);
-  }
-
   const navButton = "flex size-11 shrink-0 items-center justify-center rounded-full bg-white/10 text-xl text-white hover:bg-white/20";
 
   return (
@@ -122,20 +127,38 @@ export function Lightbox({
         </div>
       </div>
 
-      <div
-        className="relative flex min-h-0 flex-1 touch-pan-y select-none items-center justify-center gap-2 px-2"
-        onPointerDown={(e) => (swipeStart.current = e.clientX)}
-        onPointerUp={onPointerUp}
-        onPointerCancel={() => (swipeStart.current = null)}
-      >
-        <button type="button" onClick={() => onIndexChange((index - 1 + count) % count)} aria-label="Previous photo" className={navButton}>
-          ‹
-        </button>
-        {/* eslint-disable-next-line @next/next/no-img-element -- arbitrary photo hosts, can't be allowlisted for next/image */}
-        <img key={photo.key} src={photo.src} alt={photo.alt} draggable={false} className="max-h-full min-w-0 max-w-full flex-1 object-contain" />
-        <button type="button" onClick={() => onIndexChange((index + 1) % count)} aria-label="Next photo" className={navButton}>
-          ›
-        </button>
+      <div className="relative min-h-0 flex-1">
+        <Swiper
+          className="!absolute inset-0"
+          modules={[Virtual, Zoom]}
+          virtual={{ addSlidesBefore: 1, addSlidesAfter: 1 }}
+          zoom={{ maxRatio: 3 }}
+          initialSlide={index}
+          spaceBetween={24}
+          rewind
+          grabCursor
+          onSwiper={(s) => (slider.current = s)}
+          onSlideChange={(s) => onIndexChange(s.activeIndex)}
+        >
+          {photos.map((p, i) => (
+            <SwiperSlide key={p.key} virtualIndex={i} className="!flex items-center justify-center px-2 sm:px-16">
+              <div className="swiper-zoom-container">
+                {/* eslint-disable-next-line @next/next/no-img-element -- arbitrary photo hosts, can't be allowlisted for next/image */}
+                <img src={p.src} alt={p.alt} draggable={false} className="max-h-full max-w-full object-contain" />
+              </div>
+            </SwiperSlide>
+          ))}
+        </Swiper>
+        {count > 1 ? (
+          <>
+            <button type="button" onClick={() => slider.current?.slidePrev()} aria-label="Previous photo" className={`${navButton} absolute top-1/2 left-2 z-10 hidden -translate-y-1/2 sm:flex`}>
+              ‹
+            </button>
+            <button type="button" onClick={() => slider.current?.slideNext()} aria-label="Next photo" className={`${navButton} absolute top-1/2 right-2 z-10 hidden -translate-y-1/2 sm:flex`}>
+              ›
+            </button>
+          </>
+        ) : null}
       </div>
 
       <div ref={stripRef} className="flex gap-1.5 overflow-x-auto px-4 py-3" style={{ scrollbarWidth: "none" }}>

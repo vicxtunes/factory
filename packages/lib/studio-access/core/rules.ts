@@ -23,7 +23,7 @@ export function codeWait(pending: { expiresAt: string } | null, now: Date): numb
 export const isSettingUp = (status: StudioStatus) => status === "onboarding" || status === "changes_requested";
 
 /** Which steps are done. The logo is optional, so it's done once seen (see OnboardingWizard). */
-export function stepsDone(a: StudioAccess): Record<Exclude<OnboardingStep, "logo" | "submit">, boolean> {
+export function stepsDone(a: StudioAccess): Record<Exclude<OnboardingStep, "logo" | "services" | "submit">, boolean> {
   return {
     details: !!(a.ownerFirstName && a.ownerLastName && a.phone && a.name.trim()),
     address: !!a.slug,

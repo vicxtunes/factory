@@ -364,3 +364,33 @@ test("leaving Aming's photos out: only for a product from Aming, in this studio 
   await assert.rejects(service.setHiddenMedia(studioA, own.id, ["cover"]), /from Aming/);
   await assert.rejects(service.setHiddenMedia(studioB, picked.id, []), OfferingError);
 });
+
+const wedding = {
+  id: "t1",
+  categoryName: "Weddings",
+  name: "Wedding Photography",
+  description: "The whole day.",
+  packages: [tier("Gold", 3_000_000), tier("Silver", 2_000_000)],
+  archivedAt: null,
+};
+
+test("a template becomes the studio's own service, in its category of that name, with the suggested prices", async () => {
+  const offerings = new OfferingService(memoryStore().store);
+  const weddings = saved(await offerings.createCategory(studioA, "service", "weddings"));
+  const service = saved(await offerings.addFromTemplate(studioA, wedding));
+  const [category] = await offerings.manage(studioA, "service");
+  assert.equal(category!.id, weddings.id, "the category it already had, ignoring case");
+  assert.deepEqual(category!.services[0]!.packages.map((p) => [p.name, p.price]), [["Gold", 3_000_000], ["Silver", 2_000_000]]);
+  assert.equal(service.description, "The whole day.");
+  // Its own copy: the studio changes it like any other.
+  saved(await offerings.updatePackage(studioA, category!.services[0]!.packages[0]!.id, tier("Gold plus", 3_500_000)));
+  assert.ok("duplicateOf" in (await offerings.addFromTemplate(studioA, wedding)), "added once");
+});
+
+test("a template makes its category when the studio has none, and prices on request in another currency", async () => {
+  const offerings = new OfferingService(memoryStore().store);
+  saved(await offerings.addFromTemplate({ ...studioB, currency: "KES" }, wedding));
+  const [category] = await offerings.manage(studioB, "service");
+  assert.equal(category!.name, "Weddings");
+  assert.deepEqual(category!.services[0]!.packages.map((p) => p.price), [0, 0]);
+});

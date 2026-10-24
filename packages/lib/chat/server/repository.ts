@@ -8,7 +8,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { createAdminClient } from "@repo/lib/supabase/admin";
 
-import type { AttachmentKind, ConversationKind, MessageKind, ParticipantRef, ParticipantType } from "../types";
+import type { AttachmentKind, ConversationKind, MessageKind, OrderCardKind, ParticipantRef, ParticipantType } from "../types";
 
 // ---------------------------------------------------------------------------
 // Row shapes (snake_case, exactly as stored)
@@ -49,6 +49,7 @@ export interface MessageRow {
   sender_id: string | null;
   sender_name: string | null;
   kind: MessageKind;
+  card: OrderCardKind | null;
   body: string;
   reply_to_id: string | null;
   created_at: string;
@@ -337,7 +338,7 @@ export const setRole = (conversationId: string, p: ParticipantRef, role: "owner"
 
 export async function insertMessage(
   row: Pick<MessageRow, "conversation_id" | "kind" | "body"> &
-    Partial<Pick<MessageRow, "sender_type" | "sender_id" | "sender_name" | "reply_to_id">>,
+    Partial<Pick<MessageRow, "sender_type" | "sender_id" | "sender_name" | "reply_to_id" | "card">>,
 ): Promise<MessageRow> {
   const { data, error } = await db().from("chat_messages").insert(row).select("*").single<MessageRow>();
   if (error || !data) fail("insertMessage", error ?? { message: "no row returned" });
@@ -347,6 +348,20 @@ export async function insertMessage(
 export async function getMessage(id: string): Promise<MessageRow | null> {
   const { data, error } = await db().from("chat_messages").select("*").eq("id", id).maybeSingle<MessageRow>();
   if (error) fail("getMessage", error);
+  return data;
+}
+
+/** The thread's latest card for this moment, if one was posted. */
+export async function latestOrderCard(conversationId: string, card: OrderCardKind): Promise<MessageRow | null> {
+  const { data, error } = await db()
+    .from("chat_messages")
+    .select("*")
+    .eq("conversation_id", conversationId)
+    .eq("card", card)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle<MessageRow>();
+  if (error) fail("latestOrderCard", error);
   return data;
 }
 

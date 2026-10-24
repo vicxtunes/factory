@@ -7,6 +7,7 @@ import { clientUrl } from "@repo/lib/client-portal/paths";
 import { studioAccess } from "@repo/lib/studio-access/server";
 import { stepsDone } from "@repo/lib/studio-access/core";
 import { slugFromName } from "@repo/lib/studio-portal/core";
+import { offerings, templatesOnOffer } from "@repo/lib/offerings/server";
 import { requireOwnStudio } from "@repo/lib/studios/server";
 
 export const metadata = { title: "My Business" };
@@ -14,7 +15,7 @@ export const metadata = { title: "My Business" };
 // Where My Studio goes until the studio works: set-up (first time, or after
 // Aming sent it back), waiting for review, or suspended.
 export default async function StudioWelcomePage() {
-  const { studio } = await requireOwnStudio();
+  const { studio, scope } = await requireOwnStudio();
   const a = await studioAccess.access(studio.id);
   if (a.status === "active") redirect("/studio");
 
@@ -40,6 +41,7 @@ export default async function StudioWelcomePage() {
 
   // Set-up starts from the owner's Aming name and phone, to confirm or change for the studio.
   const [first, ...rest] = a.client.name.trim().split(/\s+/);
+  const [templates, services] = await Promise.all([templatesOnOffer(), offerings.services(scope)]);
   return (
     <OnboardingWizard
       view={{
@@ -58,6 +60,7 @@ export default async function StudioWelcomePage() {
         origin: clientUrl("/").replace(/\/$/, ""),
         ownerEmail: a.ownerEmail,
         emailVerified: !!a.ownerEmailVerifiedAt,
+        services: { templates, have: services.filter((s) => s.kind === "service").map((s) => s.name), scope: { currency: scope.currency, locale: scope.locale } },
       }}
     />
   );

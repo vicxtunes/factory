@@ -210,6 +210,7 @@ export async function hydrateMessages(rows: repo.MessageRow[]): Promise<ChatMess
       id: r.id,
       conversationId: r.conversation_id,
       kind: r.kind,
+      card: r.card,
       sender: r.sender_type && r.sender_id ? { type: r.sender_type, id: r.sender_id } : null,
       senderName: r.sender_name,
       body: r.deleted_at ? "" : r.body,

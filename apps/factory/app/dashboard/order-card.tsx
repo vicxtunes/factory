@@ -4,6 +4,7 @@ import { NoteBadge } from "@repo/ui/order/NoteBadge";
 import { StatusGlowBadge } from "@repo/ui/StatusGlowBadge";
 import { UrgencyBadge } from "@repo/ui/UrgencyBadge";
 import { statusCardClasses } from "@repo/ui/statusColors";
+import { submittedAt } from "@repo/lib/orders/filters";
 import type { OrderItemWithOrder } from "@repo/lib/types";
 
 function formatCreatedAt(iso: string): string {
@@ -43,7 +44,7 @@ export function OrderCard({
         </div>
 
         <p className="mt-2 font-medium">{item.product}</p>
-        <p className="mt-0.5 tnum text-xs text-muted">Created {formatCreatedAt(item.created_at)}</p>
+        <p className="mt-0.5 tnum text-xs text-muted">Submitted {formatCreatedAt(submittedAt(item.order))}</p>
 
         <div className="mt-2 flex items-center justify-between gap-2 text-xs text-muted">
           {item.order.cancelled_at ? (

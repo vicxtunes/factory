@@ -4,6 +4,8 @@ import SetupSplitDesktop from "./examples/studio-setup/split-desktop";
 import SetupSplitPhone from "./examples/studio-setup/split-phone";
 import SetupSplitWelcomePhone from "./examples/studio-setup/split-welcome-phone";
 import ChatAttachmentsThread from "./examples/chat-attachments/thread";
+import OrderCardClient from "./examples/order-card/client";
+import OrderCardStaff from "./examples/order-card/staff";
 import MasonryGalleryClient from "./examples/masonry-gallery/client";
 import MasonryGalleryDownloads from "./examples/masonry-gallery/downloads";
 import ProjectGalleryDelivery from "./examples/project-gallery/delivery";
@@ -853,6 +855,19 @@ export const COMPONENTS: RoomComponent[] = [
     source: "packages/ui/chat/MessageBubble.tsx (AttachmentView) + packages/ui/chat/VoicePlayer.tsx",
     summary: "Files sent in chat: photos open in a new tab, files download, voice notes play inline. Shows \"(unavailable)\" when the link couldn't be made.",
     examples: [{ title: "In a thread", file: "chat-attachments/thread.tsx", Demo: ChatAttachmentsThread }],
+  },
+  {
+    slug: "order-card",
+    name: "Order cards",
+    category: "Data display",
+    status: "live",
+    source: "packages/ui/chat/OrderCard.tsx (OrderCardView)",
+    summary:
+      "Aming's cards in an order's chat with its client: received (what's paid, Pay / Attach receipt / invoice), payment received, ready for pickup (Confirm received) and collected. They read the order live, so they turn to Paid and Collected by themselves.",
+    examples: [
+      { title: "Client", file: "order-card/client.tsx", Demo: OrderCardClient },
+      { title: "Staff", file: "order-card/staff.tsx", Demo: OrderCardStaff },
+    ],
   },
   {
     slug: "wallet-card",

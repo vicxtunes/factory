@@ -39,7 +39,7 @@ export function PayLater({ orderNo }: { orderNo: string }) {
  * pay, by MTN / Airtel in full or in part (their number on file offered
  * first), the bank details as the other way, and a confirmation at the end.
  */
-export function OrderPayButton({ orderId, orderNo }: { orderId: string; orderNo: string }) {
+export function OrderPayButton({ orderId, orderNo, onDone }: { orderId: string; orderNo: string; /** After a payment, once the sheet is closed. */ onDone?: () => void }) {
   const router = useRouter();
   const money = useMoney();
   const [open, setOpen] = useState(false);
@@ -69,6 +69,7 @@ export function OrderPayButton({ orderId, orderNo }: { orderId: string; orderNo:
       setPaid(null);
       setState(null);
       router.refresh();
+      onDone?.();
     }
   }
 

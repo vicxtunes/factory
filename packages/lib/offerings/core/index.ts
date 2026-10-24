@@ -5,3 +5,4 @@ export * from "./aming";
 export * from "./model";
 export * from "./rules";
 export * from "./schema";
+export * from "./templates";

@@ -14,8 +14,9 @@ import { canViewOrderAudit, isManagerRole, type Worker } from "@repo/lib/types";
 
 import { OrderBoard } from "../../order-board";
 
-export default async function OrdersPage() {
+export default async function OrdersPage({ searchParams }: { searchParams: Promise<{ order?: string }> }) {
   const session = await getDashboardSession();
+  const { order } = await searchParams;
   const canManage = session ? isManagerRole(session.role) : false;
   const canViewAudit = session ? canViewOrderAudit(session.role) : false;
   const canCancel = session?.role === "boss";
@@ -43,12 +44,22 @@ export default async function OrdersPage() {
         </div>
       }
     >
-      <Board canManage={canManage} canViewAudit={canViewAudit} canCancel={canCancel} />
+      <Board canManage={canManage} canViewAudit={canViewAudit} canCancel={canCancel} openOrderId={order} />
     </Loading>
   );
 }
 
-async function Board({ canManage, canViewAudit, canCancel }: { canManage: boolean; canViewAudit: boolean; canCancel: boolean }) {
+async function Board({
+  canManage,
+  canViewAudit,
+  canCancel,
+  openOrderId,
+}: {
+  canManage: boolean;
+  canViewAudit: boolean;
+  canCancel: boolean;
+  openOrderId?: string;
+}) {
   const admin = createAdminClient();
   const [items, workersRes, categories, catalog, clients, agents, designers] = await Promise.all([
     fetchOfficeItems(),
@@ -78,6 +89,7 @@ async function Board({ canManage, canViewAudit, canCancel }: { canManage: boolea
       clients={clients}
       agents={agents}
       designers={designers}
+      openItemId={openOrderId ? (items.find((i) => i.order_id === openOrderId)?.id ?? null) : null}
     />
   );
 }

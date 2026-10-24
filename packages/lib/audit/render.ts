@@ -30,6 +30,7 @@ const ACTION_TEMPLATES: Record<string, (d: Record<string, unknown>) => string> =
   note_added: (d) => (d.itemLabel ? `added a note on ${str(d.itemLabel)}` : "added a note on the order"),
   note_edited: () => "edited their note",
   note_removed: () => "removed their note",
+  order_collected: (d) => `confirmed they received the order (${str(d.count)} item${d.count === 1 ? "" : "s"})`,
   order_cancelled: (d) => `cancelled this order — "${str(d.reason)}"`,
   wallet_payment: (d) => `paid ${money(d.amount)} from the client's wallet`,
   wallet_refund: (d) => `refunded ${money(d.amount)} to the client's wallet${d.reason ? ` — "${str(d.reason)}"` : ""}`,
