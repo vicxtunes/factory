@@ -104,6 +104,8 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/dashboard/clients", label: "Clients", icon: "clients", visible: managers },
       // Clients' own photography studios (packages/lib/studios). The boss oversees them all.
       { href: "/dashboard/studios", label: "Businesses", icon: "studio", visible: studiosOverseers },
+      // Ready-made services with packages that businesses start from (packages/lib/offerings, "Templates").
+      { href: "/dashboard/service-templates", label: "Service templates", icon: "products", visible: studiosOverseers },
       { href: "/dashboard/agents", label: "Agents", icon: "agents", visible: managers },
       { href: "/dashboard/workers", label: "Workers", icon: "workers", visible: managers },
       { href: "/dashboard/designers", label: "Designers", icon: "designers", visible: managers },

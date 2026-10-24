@@ -46,20 +46,3 @@ export async function unsubscribeFromPush(endpoint: string): Promise<Result> {
   if (error) return { ok: false, error: error.message };
   return { ok: true };
 }
-
-// Lets the opt-in UI show current state on mount without a dedicated
-// "am I subscribed" table lookup key — just checks whether this actor has
-// any row at all (endpoint identity lives in the browser's own
-// PushManager.getSubscription(), which the client checks separately).
-export async function hasPushSubscription(): Promise<boolean> {
-  const actor = await resolveActor();
-  if (!actor) return false;
-
-  const admin = createAdminClient();
-  const { count } = await admin
-    .from("push_subscriptions")
-    .select("id", { count: "exact", head: true })
-    .eq("subscriber_type", actor.type)
-    .eq("subscriber_id", actor.id);
-  return (count ?? 0) > 0;
-}

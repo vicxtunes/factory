@@ -11,12 +11,13 @@ const TYPE_LABELS: Record<string, string> = {
   dashboard_user: "Dashboard",
   worker: "Factory",
   designer: "Graphics",
+  client: "Client",
 };
 
 const EMPTY_FORM: NotificationInput = { title: "", body: "", url: "" };
 
-// Owner-only (this page is already gated to SUPPORT_OWNER_EMAIL, see
-// app/dashboard/(app)/support/page.tsx) tool for sending ad-hoc push
+// Owner-only (shown only to SUPPORT_OWNER_EMAIL on the Announcements page,
+// app/dashboard/(app)/announcements/page.tsx, and its actions check it too) tool for sending ad-hoc push
 // notifications — fully custom title/message/link, either broadcast to
 // everyone currently subscribed or targeted at one person, without needing
 // a real event (new report, etc.) to trigger it.

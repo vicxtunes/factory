@@ -13,6 +13,8 @@ import { fetchInbox, markInboxRead } from "@repo/lib/notifications/inbox";
 import { fetchResolvedReportNotices, mergeNotices } from "@repo/lib/support/notices";
 import { BOARD_COLUMNS, STATUS_LABELS, type NotificationRow, type ProductionStatus } from "@repo/lib/types";
 import { clientPath } from "@repo/lib/client-portal/paths";
+import { postOrderCard } from "@repo/lib/chat/orders";
+import { chatHref } from "@repo/lib/chat/routes";
 
 function itemLabel(item: { product: string; product_type: string | null }): string {
   return item.product_type ? `${item.product} (${item.product_type})` : item.product;
@@ -143,13 +145,15 @@ export async function advanceStatus(itemId: string): Promise<ActionResult> {
 
   // "Ready" has no DB trigger of its own — write a real system notification.
   if (item.order.client_id && nextStatus === "ready_for_pickup") {
+    // Once the whole order is ready, its chat gets the "confirm received" card and this opens it.
+    const conversationId = await postOrderCard(item.order_id, "ready");
     await notifyOrderItem({
       orderItemId: itemId,
       eventType: "ready",
       message: `Order ${item.order.order_no}, ${itemLabel(item)}, is now ${STATUS_LABELS[nextStatus]}.`,
       recipient: { type: "client", id: item.order.client_id },
       pushTitle: "Your order is ready",
-      url: clientPath("/orders"),
+      url: clientPath(conversationId ? chatHref(conversationId) : "/orders"),
     });
   }
 

@@ -74,6 +74,7 @@ export function OrderBoard({
   clients,
   agents,
   designers,
+  openItemId = null,
 }: {
   items: OrderItemWithOrder[];
   workers: WorkerLite[];
@@ -86,6 +87,8 @@ export function OrderBoard({
   clients: Client[];
   agents: Agent[];
   designers: DesignerPublic[];
+  /** Opens on this item's details (links from an order's chat: ?order=). */
+  openItemId?: string | null;
 }) {
   const [items, setItems] = useState(initialItems);
   const [filters, setFilters] = useState<OrderFilterState>(emptyFilters);
@@ -94,7 +97,7 @@ export function OrderBoard({
   const [showWithDesigner, setShowWithDesigner] = useState(false);
   const [showCancelled, setShowCancelled] = useState(false);
   const [tableRows, setTableRows] = useState<number>(TABLE_PAGE_SIZES[0]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(openItemId);
   const supabaseRef = useRef(createClient());
   const calendarInputRef = useRef<HTMLInputElement>(null);
 
@@ -394,7 +397,7 @@ export function OrderBoard({
                       filters.dateField === f ? "bg-brand-500 text-white" : "border border-border"
                     }`}
                   >
-                    {f === "due" ? "Due date" : "Created date"}
+                    {f === "due" ? "Due date" : "Date submitted"}
                   </button>
                 ))}
               </div>

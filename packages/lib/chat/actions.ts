@@ -18,6 +18,7 @@ import type {
   ChatPerson,
   ChatResult,
   ChatSearchResult,
+  OrderCardState,
   ParticipantRef,
   UploadedAttachment,
 } from "./types";
@@ -30,6 +31,11 @@ export async function searchContacts(query: string): Promise<ChatResult<ChatPers
 
 export async function searchMessages(query: string): Promise<ChatResult<ChatSearchResult[]>> {
   return run((v) => service.searchMessages(v, query));
+}
+
+/** What the order cards in this client order thread show the viewer now. */
+export async function getOrderCardState(conversationId: string): Promise<ChatResult<OrderCardState>> {
+  return run((v) => service.getOrderCardState(v, conversationId));
 }
 
 // --- Opening conversations -------------------------------------------------

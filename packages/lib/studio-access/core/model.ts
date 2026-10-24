@@ -47,7 +47,7 @@ export interface EmailCode {
 }
 
 /** The onboarding steps after the welcome, in order. */
-export type OnboardingStep = "details" | "logo" | "address" | "email" | "submit";
+export type OnboardingStep = "details" | "logo" | "address" | "services" | "email" | "submit";
 
 /** A studio as the boss sees it when reviewing. */
 export interface StudioForReview {

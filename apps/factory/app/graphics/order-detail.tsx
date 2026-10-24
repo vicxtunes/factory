@@ -68,6 +68,7 @@ export function OrderDetail({
   const [error, setError] = useState<string | null>(null);
   const [advancingId, setAdvancingId] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
+  const [clientName, setClientName] = useState("");
   const [deliveryDate, setDeliveryDate] = useState("");
   const [deadlineAt, setDeadlineAt] = useState("");
   const [itemEdits, setItemEdits] = useState<Record<string, ItemEditState>>({});
@@ -81,6 +82,7 @@ export function OrderDetail({
 
   function startEditing() {
     setError(null);
+    setClientName(order.clientName);
     setDeliveryDate(order.deliveryDate ?? "");
     setDeadlineAt(order.deadlineAt ? toLocalInputValue(order.deadlineAt) : "");
     setItemEdits(Object.fromEntries(editableItems.map((item) => [item.id, itemToEditState(item)])));
@@ -109,6 +111,7 @@ export function OrderDetail({
       });
       const res = await updateDesignerOrder({
         orderId: order.orderId,
+        client_name: clientName,
         delivery_date: deliveryDate,
         deadline_at: deadlineAt,
         items,
@@ -174,6 +177,9 @@ export function OrderDetail({
 
       {editing ? (
         <div className="space-y-3 rounded-[var(--radius)] border border-border bg-background p-3">
+          <Field label="Client name">
+            <TextInput value={clientName} onChange={(e) => setClientName(e.target.value)} maxLength={120} required />
+          </Field>
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Delivery date">
               <TextInput

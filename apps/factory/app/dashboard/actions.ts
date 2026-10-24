@@ -27,6 +27,7 @@ import {
 } from "@repo/lib/clients/dedupe";
 import { buildAndInsertOrder, verifyActiveWorker } from "@repo/lib/orders/create";
 import { applyCancellation, cleanReason, loadCancellableOrder } from "@repo/lib/orders/cancel";
+import { renameOrderClient } from "@repo/lib/orders/client-name";
 import type {
   ClientDuplicateHit,
   CreateOrderResult,
@@ -46,6 +47,8 @@ import {
   type ProductionStatus,
 } from "@repo/lib/types";
 import { clientPath } from "@repo/lib/client-portal/paths";
+import { postOrderCard } from "@repo/lib/chat/orders";
+import { chatHref } from "@repo/lib/chat/routes";
 
 type Result = { ok: true } | { ok: false; error: string };
 
@@ -407,13 +410,15 @@ export async function overrideStatus(
     const message = `Order ${item.order.order_no}, ${itemLabel(item)}, is now ${STATUS_LABELS[status]}.`;
     const recipient = { type: "client" as const, id: item.order.client_id };
     if (status === "ready_for_pickup") {
+      // Once the whole order is ready, its chat gets the "confirm received" card and this opens it.
+      const conversationId = await postOrderCard(item.order_id, "ready");
       await notifyOrderItem({
         orderItemId: itemId,
         eventType: "ready",
         message,
         recipient,
         pushTitle: "Your order is ready",
-        url: clientPath("/orders"),
+        url: clientPath(conversationId ? chatHref(conversationId) : "/orders"),
       });
     } else {
       await pushOnlyOrderItem(recipient, {
@@ -714,6 +719,8 @@ export async function updateClient(input: {
     }
     return { ok: false, error: error.message };
   }
+  // Each order keeps its own copy of the client's name.
+  await admin.from("orders").update({ client_name: name }).eq("client_id", input.id);
   // The client signs in with a code sent to this email (apps/client/app/actions.ts).
   // A changed email signs out whoever held the old one at once; the next
   // sign-in links the new address.
@@ -721,7 +728,17 @@ export async function updateClient(input: {
     await admin.from("client_identities").delete().eq("client_id", input.id);
   }
   revalidatePath("/dashboard/clients");
+  revalidatePath("/dashboard");
   return { ok: true };
+}
+
+// The client's name on an order, fixed from the order (renames the client on
+// file too: see renameOrderClient).
+export async function renameClientOnOrder(orderId: string, name: string): Promise<Result> {
+  await requireManager();
+  const res = await renameOrderClient(createAdminClient(), orderId, name);
+  if (res.ok) revalidatePath("/dashboard");
+  return res;
 }
 
 // Permanent, boss only — replaces the old deactivate/reactivate toggle.
@@ -1679,8 +1696,10 @@ export async function receiveClientOrder(
   const actor = await resolveActor();
   await logOrderEvent({ orderId, actor, action: "order_received", detail: price !== undefined ? { price } : {} });
 
-  // Tell the client the agreed photo-book price so they can pay.
-  if (price !== undefined && order.client_id) {
+  // The order's chat with the client gets Aming's "received" card (pay,
+  // attach a receipt, invoice), and the client's notification opens it.
+  if (order.client_id) {
+    const conversationId = await postOrderCard(orderId, "received");
     const { data: firstItem } = await admin
       .from("order_items")
       .select("id")
@@ -1691,10 +1710,13 @@ export async function receiveClientOrder(
       await notifyOrderItem({
         orderItemId: firstItem.id,
         eventType: "quote_ready",
-        message: `Order ${order.order_no} is confirmed — ${formatMoney(price, await fetchBaseCurrencySymbol())}. Open it to see how to pay.`,
+        message:
+          price !== undefined
+            ? `Order ${order.order_no} is confirmed — ${formatMoney(price, await fetchBaseCurrencySymbol())}. Open it to see how to pay.`
+            : `Order ${order.order_no} has been received. Open it to see how to pay.`,
         recipient: { type: "client", id: order.client_id },
         pushTitle: "Order confirmed",
-        url: clientPath("/orders"),
+        url: clientPath(conversationId ? chatHref(conversationId) : "/orders"),
       });
     }
   }
