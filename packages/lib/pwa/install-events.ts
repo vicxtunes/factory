@@ -39,6 +39,12 @@ export function isRunningStandalone(): boolean {
   );
 }
 
+/** A phone or tablet: a touch screen without a mouse. Computers never get the install reminder. */
+export function isTouchDevice(): boolean {
+  if (typeof window === "undefined") return false;
+  return window.matchMedia("(pointer: coarse) and (hover: none)").matches;
+}
+
 export function isIos(): boolean {
   if (typeof navigator === "undefined") return false;
   return /iPad|iPhone|iPod/.test(navigator.userAgent) && !("MSStream" in window);

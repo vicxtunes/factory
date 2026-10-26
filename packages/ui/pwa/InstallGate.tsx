@@ -3,7 +3,7 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 
 import { Button } from "@repo/ui/Button";
-import { getDeferredPrompt, isIos, isRunningStandalone } from "@repo/lib/pwa/install-events";
+import { getDeferredPrompt, isIos, isRunningStandalone, isTouchDevice } from "@repo/lib/pwa/install-events";
 
 const DISMISSED_KEY = "install-gate-dismissed";
 const noopSubscribe = () => () => {};
@@ -12,7 +12,8 @@ const noopSubscribe = () => () => {};
 // /dashboard, /factory, /graphics (not /display, not the pre-login screens,
 // not the role-picker). Shows once per browser session (sessionStorage, so
 // it reappears on the next login/session) until the app is actually
-// installed, at which point isRunningStandalone() makes it permanent.
+// installed, at which point isRunningStandalone() makes it permanent. Phones
+// and tablets only: on a computer its directions don't apply.
 //
 // The visibility check depends on sessionStorage + display-mode, neither of
 // which exist during SSR — read through useSyncExternalStore (server
@@ -22,7 +23,7 @@ const noopSubscribe = () => () => {};
 export function InstallGate({ appName = "AMING" }: { appName?: string }) {
   const shouldShow = useSyncExternalStore(
     noopSubscribe,
-    () => !isRunningStandalone() && !sessionStorage.getItem(DISMISSED_KEY),
+    () => isTouchDevice() && !isRunningStandalone() && !sessionStorage.getItem(DISMISSED_KEY),
     () => false,
   );
   const [dismissed, setDismissed] = useState(false);
