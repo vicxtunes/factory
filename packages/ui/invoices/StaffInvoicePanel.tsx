@@ -20,7 +20,7 @@ import {
   type InvoiceLineInput,
 } from "@repo/lib/invoices/actions";
 import type { DraftLine, InvoiceView, StaffInvoiceView } from "@repo/lib/invoices/types";
-import { MANUAL_METHODS, METHOD_LABELS, paymentMethodLabel } from "@repo/lib/wallet/policy";
+import { MANUAL_METHODS, METHOD_LABELS, checkReference, paymentMethodLabel } from "@repo/lib/wallet/policy";
 import type { PaymentMethod } from "@repo/lib/wallet/types";
 
 import { ActionMenu, type ActionMenuEntry } from "@repo/ui/ActionMenu";
@@ -683,6 +683,8 @@ function PaymentForm({
     e.preventDefault();
     if (!Number.isInteger(value) || value <= 0) return setError("Enter the amount received.");
     if (extra > 0 && !excessDisposition) return setError("Choose what happened to the excess amount.");
+    const referenceError = checkReference(method, reference);
+    if (referenceError) return setError(referenceError);
     const excessAction = excessDisposition === "wallet" ? "credit the excess to the client's wallet" : "record the excess as physically returned";
     if (!window.confirm(`Record ${money(value)} received${reference ? ` (ref ${reference})` : ""}?${extra > 0 ? ` ${money(extra)} will be ${excessAction}.` : ""}`)) return;
     setError(null);
@@ -713,7 +715,7 @@ function PaymentForm({
           ))}
         </Select>
       </Field>
-      <Field label="Reference (optional)" hint="Transaction ID, receipt number…">
+      <Field label={method === "mobile_money" ? "Transaction ID" : "Reference (optional)"} hint={method === "mobile_money" ? "From the mobile money message, so it can be found on the statement." : "Transaction ID, receipt number…"}>
         <TextInput value={reference} onChange={(e) => setReference(e.target.value)} maxLength={100} />
       </Field>
       <Field label="Note (optional)">
