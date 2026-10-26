@@ -20,6 +20,7 @@ import {
   MAX_REFERENCE_LENGTH,
   MIN_DEPOSIT,
   checkAmount,
+  checkReference,
   cleanReason,
   cleanText,
   isOrderPayable,
@@ -108,16 +109,20 @@ async function walletView(clientId: string, clientName: string): Promise<WalletV
   };
 }
 
-function checkDepositInput(input: { amount: number; method: string }, allowed: PaymentMethod[]) {
+function checkDepositInput(input: { amount: number; method: PaymentMethod; reference?: string | null }, allowed: PaymentMethod[]) {
   const amountError = checkAmount(input.amount, { min: MIN_DEPOSIT, max: MAX_DEPOSIT });
   if (amountError) throw new WalletError(amountError);
-  if (!allowed.includes(input.method as PaymentMethod)) throw new WalletError("Choose how the money was sent.");
+  if (!allowed.includes(input.method)) throw new WalletError("Choose how the money was sent.");
+  const referenceError = checkReference(input.method, input.reference);
+  if (referenceError) throw new WalletError(referenceError);
 }
 
-function checkOrderPaymentInput(input: { amount: number; method: string }) {
+function checkOrderPaymentInput(input: { amount: number; method: PaymentMethod; reference?: string | null }) {
   const amountError = checkAmount(input.amount, { min: 1, max: MAX_DEPOSIT, label: "Payment" });
   if (amountError) throw new WalletError(amountError);
-  if (!MANUAL_METHODS.includes(input.method as PaymentMethod)) throw new WalletError("Choose how the money was received.");
+  if (!MANUAL_METHODS.includes(input.method)) throw new WalletError("Choose how the money was received.");
+  const referenceError = checkReference(input.method, input.reference);
+  if (referenceError) throw new WalletError(referenceError);
 }
 
 /** Credits a pending payment and tells the client. The one path every deposit takes into a wallet. */

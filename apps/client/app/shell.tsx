@@ -2,7 +2,6 @@
 
 import { AnnouncementPopup } from "@repo/ui/announcements/AnnouncementPopup";
 import { InstallGate } from "@repo/ui/pwa/InstallGate";
-import { NotificationGate } from "@repo/ui/pwa/NotificationGate";
 
 import { ClientHomeBar } from "./home-bar";
 import { APP_IDENTITY } from "./identity";
@@ -25,13 +24,11 @@ export function ClientShell({
 }) {
   return (
     <div className="min-h-screen">
-      {/* Same install/notification-permission gates as the dashboard —
-          signed-in surfaces only, never the public showroom or pre-login
-          screens (InstallGate/NotificationGate's own docs). */}
+      {/* Same install gate as the dashboard — signed-in surfaces only,
+          never the public showroom or pre-login screens (InstallGate's own docs). */}
       {signedIn ? (
         <>
           <InstallGate appName={APP_IDENTITY.name} />
-          <NotificationGate />
           <AnnouncementPopup />
         </>
       ) : null}

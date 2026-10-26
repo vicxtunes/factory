@@ -3,7 +3,6 @@ import Link from "next/link";
 import { AnnouncementPopup } from "@repo/ui/announcements/AnnouncementPopup";
 import { NotificationBell } from "@repo/ui/notifications/NotificationBell";
 import { InstallGate } from "@repo/ui/pwa/InstallGate";
-import { NotificationGate } from "@repo/ui/pwa/NotificationGate";
 import { Header } from "@repo/ui/Header";
 import { HomeBar } from "@repo/ui/HomeBar";
 
@@ -17,7 +16,6 @@ export function WorkerChrome({ name, children }: { name: string; children: React
   return (
     <>
       <InstallGate />
-      <NotificationGate />
       <AnnouncementPopup />
       <Header
         surface="Factory"

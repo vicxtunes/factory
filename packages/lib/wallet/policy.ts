@@ -27,6 +27,14 @@ export const HISTORY_LIMIT = 100;
 /** Methods a person can pick when reporting or recording a deposit. `card` only comes from a provider. */
 export const MANUAL_METHODS: PaymentMethod[] = ["mobile_money", "bank_transfer", "cash", "other"];
 
+/**
+ * Staff recording money they received: mobile money needs its transaction ID,
+ * so every entry can be found on the mobile money statement.
+ */
+export function checkReference(method: PaymentMethod, reference: string | null | undefined): string | null {
+  return method === "mobile_money" && !reference?.trim() ? "Enter the mobile money transaction ID." : null;
+}
+
 export const METHOD_LABELS: Record<PaymentMethod | "wallet", string> = {
   mobile_money: "Mobile money",
   bank_transfer: "Bank transfer / deposit",

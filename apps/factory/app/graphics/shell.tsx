@@ -2,7 +2,6 @@
 
 import { AnnouncementPopup } from "@repo/ui/announcements/AnnouncementPopup";
 import { InstallGate } from "@repo/ui/pwa/InstallGate";
-import { NotificationGate } from "@repo/ui/pwa/NotificationGate";
 import { HomeBar, type HomeBarLink } from "@repo/ui/HomeBar";
 
 import { logoutDesigner } from "./actions";
@@ -36,7 +35,6 @@ export function GraphicsShell({
   return (
     <div className="min-h-screen">
       <InstallGate />
-      <NotificationGate />
       <AnnouncementPopup />
       <GraphicsSidebar />
       <div className="sidebar-offset flex min-h-screen flex-col md:pl-(--sidebar-w)">
