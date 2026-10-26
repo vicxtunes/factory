@@ -31,7 +31,7 @@ export function ClientShell({
       {signedIn ? (
         <>
           <InstallGate appName={APP_IDENTITY.name} />
-          <NotificationGate />
+          <NotificationGate appName={APP_IDENTITY.name} supportHref="/support" />
           <AnnouncementPopup />
         </>
       ) : null}
