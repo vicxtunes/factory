@@ -167,6 +167,31 @@ export function StaffInvoicePanel({
     else setViewing(false);
   }
 
+  // Paying from the client's wallet, offered beside Record payment and above its form
+  // (the invoice card's Record payment opens the form directly).
+  const walletButton =
+    (inv.walletBalance ?? 0) > 0 ? (
+      <Button
+        variant="secondary"
+        className="w-full"
+        loading={pending}
+        onClick={() => {
+          const take = Math.min(inv.walletBalance ?? 0, inv.balance);
+          if (!window.confirm(`Take ${money(take)} from ${inv.client.name}'s wallet for this invoice?`)) return;
+          act(
+            () => applyWalletToInvoice(inv.id),
+            (d) => {
+              setInvoice(d.invoice);
+              setMode("idle");
+              setNotice(`${money(d.applied)} paid from the wallet.`);
+            },
+          );
+        }}
+      >
+        Use wallet ({money(inv.walletBalance ?? 0)})
+      </Button>
+    ) : null;
+
   const messages = (
     <>
       {notice ? <p className="text-xs text-success-600 dark:text-success-500">{notice}</p> : null}
@@ -204,28 +229,11 @@ export function StaffInvoicePanel({
           <Button className="w-full" onClick={() => setMode("pay")}>
             Record payment
           </Button>
-          {(inv.walletBalance ?? 0) > 0 ? (
-            <Button
-              variant="secondary"
-              className="w-full"
-              loading={pending}
-              onClick={() => {
-                const take = Math.min(inv.walletBalance ?? 0, inv.balance);
-                if (!window.confirm(`Take ${money(take)} from ${inv.client.name}'s wallet for this invoice?`)) return;
-                act(
-                  () => applyWalletToInvoice(inv.id),
-                  (d) => {
-                    setInvoice(d.invoice);
-                    setNotice(`${money(d.applied)} paid from the wallet.`);
-                  },
-                );
-              }}
-            >
-              Use wallet ({money(inv.walletBalance ?? 0)})
-            </Button>
-          ) : null}
+          {walletButton}
         </div>
       ) : null}
+
+      {mode === "pay" && canTakeMoney ? walletButton : null}
 
       {mode === "pay" ? (
         <PaymentForm
