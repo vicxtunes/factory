@@ -4,6 +4,7 @@ import { Header } from "@repo/ui/Header";
 import { HomeBar } from "@repo/ui/HomeBar";
 import { AnnouncementPopup } from "@repo/ui/announcements/AnnouncementPopup";
 import { InstallGate } from "@repo/ui/pwa/InstallGate";
+import { NotificationGate } from "@repo/ui/pwa/NotificationGate";
 import { ChatLauncher } from "@repo/ui/chat/ChatLauncher";
 import { NotificationBell } from "@repo/ui/notifications/NotificationBell";
 import { InlineProfileTrigger } from "@repo/ui/profile/InlineProfileTrigger";
@@ -41,6 +42,7 @@ export default async function FactoryPage() {
   return (
     <>
       <InstallGate />
+      <NotificationGate />
       <AnnouncementPopup />
       <Header
         surface="Factory"
