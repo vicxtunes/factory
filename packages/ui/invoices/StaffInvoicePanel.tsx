@@ -20,7 +20,7 @@ import {
   type InvoiceLineInput,
 } from "@repo/lib/invoices/actions";
 import type { DraftLine, InvoiceView, StaffInvoiceView } from "@repo/lib/invoices/types";
-import { MANUAL_METHODS, METHOD_LABELS, paymentMethodLabel } from "@repo/lib/wallet/policy";
+import { MANUAL_METHODS, METHOD_LABELS, checkReference, paymentMethodLabel } from "@repo/lib/wallet/policy";
 import type { PaymentMethod } from "@repo/lib/wallet/types";
 
 import { ActionMenu, type ActionMenuEntry } from "@repo/ui/ActionMenu";
@@ -167,6 +167,31 @@ export function StaffInvoicePanel({
     else setViewing(false);
   }
 
+  // Paying from the client's wallet, offered beside Record payment and above its form
+  // (the invoice card's Record payment opens the form directly).
+  const walletButton =
+    (inv.walletBalance ?? 0) > 0 ? (
+      <Button
+        variant="secondary"
+        className="w-full"
+        loading={pending}
+        onClick={() => {
+          const take = Math.min(inv.walletBalance ?? 0, inv.balance);
+          if (!window.confirm(`Take ${money(take)} from ${inv.client.name}'s wallet for this invoice?`)) return;
+          act(
+            () => applyWalletToInvoice(inv.id),
+            (d) => {
+              setInvoice(d.invoice);
+              setMode("idle");
+              setNotice(`${money(d.applied)} paid from the wallet.`);
+            },
+          );
+        }}
+      >
+        Use wallet ({money(inv.walletBalance ?? 0)})
+      </Button>
+    ) : null;
+
   const messages = (
     <>
       {notice ? <p className="text-xs text-success-600 dark:text-success-500">{notice}</p> : null}
@@ -204,28 +229,11 @@ export function StaffInvoicePanel({
           <Button className="w-full" onClick={() => setMode("pay")}>
             Record payment
           </Button>
-          {(inv.walletBalance ?? 0) > 0 ? (
-            <Button
-              variant="secondary"
-              className="w-full"
-              loading={pending}
-              onClick={() => {
-                const take = Math.min(inv.walletBalance ?? 0, inv.balance);
-                if (!window.confirm(`Take ${money(take)} from ${inv.client.name}'s wallet for this invoice?`)) return;
-                act(
-                  () => applyWalletToInvoice(inv.id),
-                  (d) => {
-                    setInvoice(d.invoice);
-                    setNotice(`${money(d.applied)} paid from the wallet.`);
-                  },
-                );
-              }}
-            >
-              Use wallet ({money(inv.walletBalance ?? 0)})
-            </Button>
-          ) : null}
+          {walletButton}
         </div>
       ) : null}
+
+      {mode === "pay" && canTakeMoney ? walletButton : null}
 
       {mode === "pay" ? (
         <PaymentForm
@@ -683,6 +691,8 @@ function PaymentForm({
     e.preventDefault();
     if (!Number.isInteger(value) || value <= 0) return setError("Enter the amount received.");
     if (extra > 0 && !excessDisposition) return setError("Choose what happened to the excess amount.");
+    const referenceError = checkReference(method, reference);
+    if (referenceError) return setError(referenceError);
     const excessAction = excessDisposition === "wallet" ? "credit the excess to the client's wallet" : "record the excess as physically returned";
     if (!window.confirm(`Record ${money(value)} received${reference ? ` (ref ${reference})` : ""}?${extra > 0 ? ` ${money(extra)} will be ${excessAction}.` : ""}`)) return;
     setError(null);
@@ -713,7 +723,7 @@ function PaymentForm({
           ))}
         </Select>
       </Field>
-      <Field label="Reference (optional)" hint="Transaction ID, receipt number…">
+      <Field label={method === "mobile_money" ? "Transaction ID" : "Reference (optional)"} hint={method === "mobile_money" ? "From the mobile money message, so it can be found on the statement." : "Transaction ID, receipt number…"}>
         <TextInput value={reference} onChange={(e) => setReference(e.target.value)} maxLength={100} />
       </Field>
       <Field label="Note (optional)">

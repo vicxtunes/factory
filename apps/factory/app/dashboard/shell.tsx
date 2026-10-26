@@ -2,7 +2,6 @@
 
 import { AnnouncementPopup } from "@repo/ui/announcements/AnnouncementPopup";
 import { InstallGate } from "@repo/ui/pwa/InstallGate";
-import { NotificationGate } from "@repo/ui/pwa/NotificationGate";
 import type { AppRole, NotificationRow } from "@repo/lib/types";
 
 import { DashboardHomeBar } from "./home-bar";
@@ -27,7 +26,6 @@ export function DashboardShell({
   return (
     <div className="min-h-screen">
       <InstallGate />
-      <NotificationGate />
       <AnnouncementPopup />
       <DashboardSidebar role={role} email={email} />
       <div className="sidebar-offset flex min-h-screen flex-col lg:pl-(--sidebar-w)">

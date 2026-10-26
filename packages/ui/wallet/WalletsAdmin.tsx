@@ -13,7 +13,7 @@ import {
   recordDeposit,
   rejectDeposit,
 } from "@repo/lib/wallet/actions";
-import { MANUAL_METHODS, MAX_ADJUSTMENT, MAX_DEPOSIT, METHOD_LABELS, MIN_DEPOSIT, checkAmount } from "@repo/lib/wallet/policy";
+import { MANUAL_METHODS, MAX_ADJUSTMENT, MAX_DEPOSIT, METHOD_LABELS, MIN_DEPOSIT, checkAmount, checkReference } from "@repo/lib/wallet/policy";
 import type { PaymentMethod, PendingDeposit, WalletListRow, WalletView } from "@repo/lib/wallet/types";
 
 import { BalanceCard, EntryLine, MethodOptions, Panel, PaymentLine, formatWhen, parseAmount, useMoney } from "./shared";
@@ -309,6 +309,8 @@ function RecordDepositForm({ clientId, onDone }: { clientId: string; onDone: () 
     const value = parseAmount(amount);
     const amountError = checkAmount(value, { min: MIN_DEPOSIT, max: MAX_DEPOSIT });
     if (amountError) return setError(amountError);
+    const referenceError = checkReference(method, reference);
+    if (referenceError) return setError(referenceError);
     if (!window.confirm(`Add ${money(value)} to this wallet? Only record money you've actually received.`)) return;
     setError(null);
     start(async () => {
@@ -329,7 +331,7 @@ function RecordDepositForm({ clientId, onDone }: { clientId: string; onDone: () 
           <MethodOptions methods={MANUAL_METHODS} />
         </Select>
       </Field>
-      <Field label="Reference (optional)" hint="Receipt number, transaction ID…">
+      <Field label={method === "mobile_money" ? "Transaction ID" : "Reference (optional)"} hint={method === "mobile_money" ? "From the mobile money message, so it can be found on the statement." : "Receipt number, transaction ID…"}>
         <TextInput value={reference} onChange={(e) => setReference(e.target.value)} maxLength={100} />
       </Field>
       <Field label="Note (optional)">

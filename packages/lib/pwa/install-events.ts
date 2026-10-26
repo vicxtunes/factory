@@ -5,9 +5,7 @@
 // own modal, not the browser's auto-prompt) is to have called
 // event.preventDefault() and held onto it. packages/ui/pwa/InstallCapture.tsx
 // registers the listener once in the root layout; packages/ui/pwa/InstallGate.tsx
-// reads it through the functions below. isRunningStandalone() (checked fresh
-// every session, not via a one-shot event) is what actually sequences
-// InstallGate -> NotificationGate — see NotificationGate's comment.
+// reads it through the functions below.
 
 interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
