@@ -51,7 +51,10 @@ function fakes(quotaBytes = 10 * MB) {
     folders.some((f) => f.tenantId === t && f.parentId === parentId && same(f.name, name) && f.id !== except);
   const fileTaken = (t: string, folderId: string | null, name: string, except?: string) =>
     files.some((f) => f.tenantId === t && f.folderId === folderId && same(f.name, name) && f.id !== except);
+  /** What's attached to open Aming orders, as the database would answer (folder or file id → order number). */
+  const attachedOpen = { folders: new Map<string, string>(), files: new Map<string, string>() };
   const repo: FileRepository = {
+    attached: async () => attachedOpen,
     usage: async (s) => ({ usedBytes: used(s.tenantId), quotaBytes }),
     folders: async (s) => folders.filter((f) => f.tenantId === s.tenantId).map(({ id, parentId, name, projectId, holdsProjects }) => ({ id, parentId, name, projectId, holdsProjects })),
     createFolder: async (s, f) => {
@@ -185,7 +188,7 @@ function fakes(quotaBytes = 10 * MB) {
     await service.confirmUpload(s, { folderId, fileId: ticket.fileId, name, contentType }, access);
     return ticket.fileId;
   }
-  return { service, objects, files, folders, upload, choosing };
+  return { service, objects, files, folders, upload, choosing, attachedOpen };
 }
 
 const says = (pattern: RegExp) => (err: unknown) => err instanceof FileError && pattern.test(err.message);
@@ -638,14 +641,34 @@ test("a folder downloads with its folders as paths, as originals or optimised co
   assert.ok((await service.list(studioA, raw))!.files.find((f) => f.id === photo)!.optimisedUrl?.endsWith("as=IMG_01.jpg"));
 });
 
-test("a whole folder, picked: its files and its folders' files, only what the person may see", async () => {
-  const { service, nakato, raw } = await sharedDrive();
-  assert.deepEqual((await service.filesWithin(studioA, nakato)).map((f) => f.name), ["contract.pdf", "clip.pdf"]);
-  await assert.rejects(service.filesWithin(studioB, nakato), says(/no longer exists/));
-  await service.share(studioA, raw, { kind: "client", customerId: "c1" }, settings("viewer", true));
-  const client = await service.clientAccess(studioA, "c1");
-  assert.deepEqual((await service.filesWithin(studioA, raw, client)).map((f) => f.name), ["clip.pdf"]);
-  await assert.rejects(service.filesWithin(studioA, nakato, client), says(/no longer exists/));
+test("attached to an open order: never deleted or moved (nor what's in it, nor a folder holding it), still renamed and added to", async () => {
+  const f = await sharedDrive();
+  const { service, upload, nakato, raw, clients, amina, contract } = f;
+  f.attachedOpen.folders.set(raw, "2026-0480");
+  const inRaw = await upload(studioA, raw, "IMG_01.jpg", MB, MB, undefined, "image/jpeg");
+  f.attachedOpen.files.set(contract, "2026-0481");
+  for (const attempt of [
+    service.deleteFolder(studioA, raw),
+    service.deleteFolder(studioA, nakato), // holds it
+    service.moveFolder(studioA, raw, amina),
+    service.deleteFile(studioA, inRaw),
+    service.moveFile(studioA, inRaw, amina),
+    service.deleteFile(studioA, contract),
+  ]) {
+    await assert.rejects(attempt, says(/Attached to order 2026-048[01]/));
+  }
+  await service.renameFolder(studioA, raw, "Raw photos");
+  await upload(studioA, raw, "IMG_02.jpg", MB, MB, undefined, "image/jpeg");
+  const listing = (await service.list(studioA, nakato))!;
+  assert.equal(listing.attached?.[raw], "2026-0480");
+  assert.equal(listing.attached?.[nakato], "2026-0480", "the folder holding it, too");
+  assert.equal(listing.attached?.[contract], "2026-0481");
+  // The order done: free again.
+  f.attachedOpen.folders.clear();
+  f.attachedOpen.files.clear();
+  await service.moveFolder(studioA, raw, amina);
+  await service.deleteFile(studioA, contract);
+  assert.equal((await service.list(studioA, clients))!.attached?.[nakato], undefined);
 });
 
 test("a sent choice's photos move into a 'Chosen by …' folder inside the task's folder", async () => {

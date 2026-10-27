@@ -18,7 +18,7 @@ import { studios } from "@repo/lib/studios/server";
 import { tasks } from "@repo/lib/tasks/server";
 import { team } from "@repo/lib/team/server";
 
-import { filesCaller, type FilesCaller } from "./access";
+import { filesCaller, orderItemDriveLinks, type FilesCaller } from "./access";
 import {
   captionSchema,
   commentIdSchema,
@@ -29,6 +29,7 @@ import {
   folderIdSchema,
   folderNameSchema,
   newFolderSchema,
+  orderItemIdSchema,
   placeSchema,
   renameManySchema,
   shareIdSchema,
@@ -167,12 +168,23 @@ export async function drivePickerFolder(folderId: unknown): Promise<Result<{ lis
   });
 }
 
-/** Everything in a folder (and the folders in it) to send with an order: its photos and PDFs. */
-export async function drivePickerFolderFiles(folderId: unknown): Promise<Result<{ id: string; name: string }[]>> {
+/** What an Aming order item has from its studio's Drive, for staff: the folders to open, and files with download links. */
+export async function orderItemDrive(itemId: unknown): Promise<
+  Result<{ studioName: string; folders: { id: string; name: string }[]; files: { id: string; name: string; url: string }[] }>
+> {
   return runAction("files", async () => {
-    const { scope, access, drive } = await caller({ as: "studio" });
-    const found = await drive.filesWithin(scope, parseInput(folderIdSchema, folderId), access);
-    return found.filter((f) => f.contentType.startsWith("image/") || f.contentType === "application/pdf").map(({ id, name }) => ({ id, name }));
+    const id = parseInput(orderItemIdSchema, itemId);
+    const found = await caller({ as: "order", itemId: id });
+    const links = (await orderItemDriveLinks(id))!;
+    const folders = (await found.drive.list(found.scope, null, found.access))?.folders ?? [];
+    // A file attached on its own: staff may download it (the link is the permission).
+    const files = await Promise.all(
+      links.fileIds.map(async (fileId) => {
+        const [f] = await found.drive.downloads(found.scope, { fileIds: [fileId] }, "original");
+        return { id: fileId, name: f.path, url: f.url };
+      }),
+    );
+    return { studioName: found.studio.name, folders: folders.map(({ id, name }) => ({ id, name })), files };
   });
 }
 

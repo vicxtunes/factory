@@ -8,6 +8,7 @@ import { Linkify } from "@repo/ui/Linkify";
 import { UrgencyBadge } from "@repo/ui/UrgencyBadge";
 import { AddMediaButton } from "@repo/ui/media/AddMediaButton";
 import { MediaLinks } from "@repo/ui/media/MediaLinks";
+import { OrderItemDrive } from "@repo/ui/files/OrderItemDrive";
 import { ClientOrderChat, OrderChat } from "@repo/ui/chat/OrderChat";
 import { CancelledNotice, CancelOrderButton } from "@repo/ui/order/CancelOrder";
 import { ItemAttributes } from "@repo/ui/order/ItemAttributes";
@@ -620,6 +621,7 @@ export function OrderDetail({
       <div className="space-y-2">
         <p className="text-xs uppercase tracking-wide text-muted">Photos</p>
         <MediaLinks media={item.media} legacyLink={photoLink} editable trackDownloads onChanged={onChanged} />
+        <OrderItemDrive itemId={item.id} />
         <AddMediaButton orderItemId={item.id} onUploaded={onChanged} />
       </div>
 

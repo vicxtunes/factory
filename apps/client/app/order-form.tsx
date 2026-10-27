@@ -10,13 +10,13 @@ import { CurrencySelect } from "@repo/ui/CurrencySelect";
 import { Field, Select, TextArea, TextInput } from "@repo/ui/Field";
 import { SectionLabel } from "@repo/ui/SectionLabel";
 import { UploadRow } from "@repo/ui/UploadRow";
-import { DrivePicker, DrivePicks, drivePickFiles, type DrivePick } from "@repo/ui/files/DrivePicker";
+import { DrivePicker, DrivePicks, type DrivePick } from "@repo/ui/files/DrivePicker";
 import { UploadThumbs, uploadKey } from "@repo/ui/UploadThumbs";
 import { useCurrency } from "@repo/lib/currency/useCurrency";
 import { attributeChoices } from "@repo/lib/catalog-options";
 import { isPhotobookCategory } from "@repo/lib/orders/photobook";
 import type { OrderItemInput } from "@repo/lib/orders/types";
-import { copyDriveFileToItem } from "@repo/lib/storage/actions";
+import { attachDriveToItem } from "@repo/lib/storage/actions";
 import { canOptimizeImage } from "@repo/lib/storage/client";
 import { uploadFileToStorage } from "@repo/lib/storage/upload-client";
 import type { Currency, OrderType, Product, ProductCategory } from "@repo/lib/types";
@@ -30,9 +30,9 @@ import { OrderPlaced } from "./order-placed";
 // just sit here as plain File objects and get uploaded one by one right
 // after placeOrder resolves (see submit()). Not offered for Photo Books —
 // those go through a whole folder of photos, better suited to the existing
-// "Photo link" paste field than picking files one at a time here. Files
-// picked from the studio's Drive (`driveFiles`, any category) are copied
-// onto the item by the server the same way, after placeOrder.
+// "Photo link" paste field than picking files one at a time here. Folders
+// and files picked from the studio's Drive (`driveFiles`, any category) are
+// linked to the item after placeOrder (attachDriveToItem), not copied.
 interface ClientItemForm extends OrderItemInput {
   files: File[];
   driveFiles: DrivePick[];
@@ -230,20 +230,15 @@ export function OrderForm({
           );
           if (!uploadRes.ok) warnings.push(uploadRes.error);
         }
-        // Server to server, three at a time: a whole folder can be hundreds of photos.
-        const fromDrive = drivePickFiles(items[formIndex]?.driveFiles ?? []);
-        let copied = 0;
-        let next = 0;
-        const copyNext = async (): Promise<void> => {
-          const file = fromDrive[next++];
-          if (!file) return;
-          const copyRes = await copyDriveFileToItem(itemId, file.id);
-          if (!copyRes.ok) warnings.push(copyRes.error);
-          setUploadStatus(`Copying from your Drive (${++copied} of ${fromDrive.length})…`);
-          return copyNext();
-        };
-        if (fromDrive.length) setUploadStatus(`Copying from your Drive (0 of ${fromDrive.length})…`);
-        await Promise.all([copyNext(), copyNext(), copyNext()]);
+        const fromDrive = items[formIndex]?.driveFiles ?? [];
+        if (fromDrive.length) {
+          setUploadStatus("Attaching from your Drive…");
+          const attachRes = await attachDriveToItem(itemId, {
+            folderIds: fromDrive.flatMap((p) => (p.kind === "folder" ? [p.id] : [])),
+            fileIds: fromDrive.flatMap((p) => (p.kind === "file" ? [p.id] : [])),
+          });
+          if (!attachRes.ok) warnings.push(attachRes.error);
+        }
       }
       setUploadStatus(null);
       setUploadWarnings(warnings);

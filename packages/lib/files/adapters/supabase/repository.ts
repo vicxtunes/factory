@@ -110,6 +110,7 @@ const toFile = (r: FileRow): StoredFile => ({
 });
 
 function fail(what: string, error: { code?: string; message: string }): never {
+  if (error.message.includes("FILES:attached")) throw new FileError(ATTACHED);
   if (error.message.includes("FILES:over_quota")) throw new FileError("Not enough space left for that. Delete something, or get more space.");
   if (error.code === "23505" && error.message.includes("file_folders_name_key")) throw new FileError("There's already a folder with that name here.");
   if (error.code === "23505" && error.message.includes("files_name_key")) throw new FileError("There's already a file with that name here.");
@@ -121,6 +122,9 @@ function fail(what: string, error: { code?: string; message: string }): never {
 }
 
 const db = () => createAdminClient();
+
+/** The database's own refusal (20261126100000_order_drive_links.sql), when the service's check was raced. */
+const ATTACHED = "That's attached to an order that isn't done yet, so it can't be deleted or moved.";
 
 export const supabaseFileRepository: FileRepository = {
   async usage(scope) {
@@ -151,6 +155,16 @@ export const supabaseFileRepository: FileRepository = {
     return data.id;
   },
 
+  async attached(scope) {
+    const { data, error } = await db().rpc("files_attached_open", { p_tenant: scope.tenantId });
+    if (error) fail("check what's attached to orders", error);
+    const rows = (data ?? []) as { folder_id: string | null; file_id: string | null; order_no: string }[];
+    return {
+      folders: new Map(rows.flatMap((r) => (r.folder_id ? [[r.folder_id, r.order_no] as const] : []))),
+      files: new Map(rows.flatMap((r) => (r.file_id ? [[r.file_id, r.order_no] as const] : []))),
+    };
+  },
+
   async jobsFolder(scope) {
     const { data, error } = await db().rpc("files_jobs_folder", { p_tenant: scope.tenantId });
     if (error) fail("open the Jobs folder", error);
@@ -177,6 +191,7 @@ export const supabaseFileRepository: FileRepository = {
     if (error) {
       if (error.message.includes("FILES:no_folder")) return null;
       if (error.message.includes("FILES:locked")) throw new FileError("That folder belongs to a project, so it can't be deleted.");
+      if (error.message.includes("FILES:attached")) throw new FileError(ATTACHED);
       fail("delete the folder", error);
     }
     return data as string[];
