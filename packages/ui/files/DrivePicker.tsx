@@ -5,19 +5,29 @@ import { useEffect, useState } from "react";
 import { Button } from "@repo/ui/Button";
 import { FormSheet } from "@repo/ui/FormSheet";
 import { DocumentIcon, CloseIcon } from "@repo/ui/media/icons";
-import { drivePickerFolder } from "@repo/lib/files/actions";
-import type { FileView, FolderListing } from "@repo/lib/files/core";
+import { drivePickerFolder, drivePickerFolderFiles } from "@repo/lib/files/actions";
+import type { FileView, Folder, FolderListing } from "@repo/lib/files/core";
 
 import { FileBrowser } from "./FileBrowser";
+import { FolderArt } from "./FolderArt";
 
-/** A file picked from the Drive, waiting to be copied onto an order (copyDriveFileToItem). */
-export interface DrivePick {
-  id: string;
-  name: string;
-  thumbUrl: string | null;
+/**
+ * What was picked from the Drive, waiting to be copied onto an order
+ * (copyDriveFileToItem): a file, or a whole folder with the photos and PDFs
+ * in it (and in the folders inside it) at the time it was added.
+ */
+export type DrivePick =
+  | { kind: "file"; id: string; name: string; thumbUrl: string | null }
+  | { kind: "folder"; id: string; name: string; files: { id: string; name: string }[] };
+
+/** Every file a set of picks stands for, once each. */
+export function drivePickFiles(picks: DrivePick[]): { id: string; name: string }[] {
+  const all = picks.flatMap((p) => (p.kind === "file" ? [{ id: p.id, name: p.name }] : p.files));
+  return [...new Map(all.map((f) => [f.id, f])).values()];
 }
 
-const toPick = (f: FileView): DrivePick => ({ id: f.id, name: f.name, thumbUrl: f.thumbUrl });
+const toPick = (f: FileView): DrivePick => ({ kind: "file", id: f.id, name: f.name, thumbUrl: f.thumbUrl });
+type Chosen = { kind: "file"; pick: DrivePick } | { kind: "folder"; folder: Folder };
 
 // "From my Drive" on the order form: the studio's own Drive, as the Drive
 // screen itself shows it (./FileBrowser.tsx in its pick mode), to tick photos
@@ -28,7 +38,8 @@ export function DrivePicker({ picked, onAdd }: { picked: DrivePick[]; onAdd: (fi
   const [folderId, setFolderId] = useState<string | null>(null);
   const [shown, setShown] = useState<{ listing: FolderListing; scope: { locale: string; timeZone: string } } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [chosen, setChosen] = useState<Map<string, DrivePick>>(new Map());
+  const [chosen, setChosen] = useState<Map<string, Chosen>>(new Map());
+  const [adding, setAdding] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -49,11 +60,11 @@ export function DrivePicker({ picked, onAdd }: { picked: DrivePick[]; onAdd: (fi
   const here = (shown?.listing.files ?? []).filter((f) => !already.has(f.id));
   const allHereChosen = here.length > 0 && here.every((f) => chosen.has(f.id));
 
-  function toggle(file: FileView) {
-    if (already.has(file.id)) return;
+  function toggle(id: string, item: Chosen) {
+    if (already.has(id)) return;
     const next = new Map(chosen);
-    if (next.has(file.id)) next.delete(file.id);
-    else next.set(file.id, toPick(file));
+    if (next.has(id)) next.delete(id);
+    else next.set(id, item);
     setChosen(next);
   }
 
@@ -61,9 +72,32 @@ export function DrivePicker({ picked, onAdd }: { picked: DrivePick[]; onAdd: (fi
     const next = new Map(chosen);
     for (const f of here) {
       if (allHereChosen) next.delete(f.id);
-      else next.set(f.id, toPick(f));
+      else next.set(f.id, { kind: "file", pick: toPick(f) });
     }
     setChosen(next);
+  }
+
+  // A ticked folder is opened up on Add: what's in it (and in its folders) then.
+  async function add() {
+    setAdding(true);
+    setError(null);
+    const picks: DrivePick[] = [];
+    for (const item of chosen.values()) {
+      if (item.kind === "file") {
+        picks.push(item.pick);
+        continue;
+      }
+      const res = await drivePickerFolderFiles(item.folder.id);
+      if (!res.ok) {
+        setAdding(false);
+        return setError(`${item.folder.name}: ${res.error}`);
+      }
+      if (res.data.length) picks.push({ kind: "folder", id: item.folder.id, name: item.folder.name, files: res.data });
+    }
+    setAdding(false);
+    if (!picks.length) return setError("There are no photos or PDFs in what you ticked.");
+    onAdd(picks);
+    close();
   }
 
   function close() {
@@ -80,7 +114,7 @@ export function DrivePicker({ picked, onAdd }: { picked: DrivePick[]; onAdd: (fi
         <div className="space-y-3">
           {here.length ? (
             <div className="flex items-center justify-between gap-2">
-              <p className="text-xs text-muted">Tap photos to tick them.</p>
+              <p className="text-xs text-muted">Tap photos to tick them, or tick a whole folder.</p>
               <Button type="button" size="sm" variant="secondary" onClick={toggleAll}>
                 {allHereChosen ? "Untick this folder" : `Tick all ${here.length}`}
               </Button>
@@ -98,7 +132,8 @@ export function DrivePicker({ picked, onAdd }: { picked: DrivePick[]; onAdd: (fi
               topLabel="My Drive"
               picker={{
                 picked: new Set([...already, ...chosen.keys()]),
-                onToggle: toggle,
+                onToggle: (file) => toggle(file.id, { kind: "file", pick: toPick(file) }),
+                onToggleFolder: (folder) => toggle(folder.id, { kind: "folder", folder }),
                 onOpen: (id) => {
                   setShown(null);
                   setFolderId(id);
@@ -113,15 +148,7 @@ export function DrivePicker({ picked, onAdd }: { picked: DrivePick[]; onAdd: (fi
             <Button type="button" variant="secondary" className="flex-1" onClick={close}>
               Cancel
             </Button>
-            <Button
-              type="button"
-              className="flex-1"
-              disabled={chosen.size === 0}
-              onClick={() => {
-                onAdd([...chosen.values()]);
-                close();
-              }}
-            >
+            <Button type="button" className="flex-1" disabled={chosen.size === 0 || adding} loading={adding} onClick={add}>
               {chosen.size ? `Add ${chosen.size}` : "Add"}
             </Button>
           </div>
@@ -132,6 +159,15 @@ export function DrivePicker({ picked, onAdd }: { picked: DrivePick[]; onAdd: (fi
 }
 
 function Preview({ file }: { file: DrivePick }) {
+  if (file.kind === "folder") {
+    return (
+      <span className="flex h-full w-full flex-col items-center justify-center gap-0.5 p-1">
+        <FolderArt className="h-6 w-7" />
+        <span className="w-full truncate text-center text-[0.6rem] font-medium">{file.name}</span>
+        <span className="text-[0.6rem] text-muted">{file.files.length} files</span>
+      </span>
+    );
+  }
   // eslint-disable-next-line @next/next/no-img-element -- a short-lived signed thumbnail from the Drive
   if (file.thumbUrl) return <img src={file.thumbUrl} alt={file.name} loading="lazy" className="h-full w-full object-cover" />;
   return (
@@ -147,7 +183,7 @@ export function DrivePicks({ files, onRemove }: { files: DrivePick[]; onRemove: 
   if (!files.length) return null;
   return (
     <div>
-      <p className="mb-1 text-xs text-muted">{files.length} from your Drive, copied once the order is placed</p>
+      <p className="mb-1 text-xs text-muted">{drivePickFiles(files).length} from your Drive, copied once the order is placed</p>
       <ul className="flex flex-wrap gap-2">
         {files.map((f) => (
           <li key={f.id} className="relative h-16 w-16 overflow-hidden rounded-lg border border-border bg-background">

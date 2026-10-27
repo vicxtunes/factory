@@ -394,10 +394,16 @@ export function FileBrowser({
   protect?: { watermark: string };
   /**
    * Picking files for something else (the order form's "From my Drive",
-   * ./DrivePicker.tsx): folders open in place, a tap ticks a file, and
-   * nothing here is changed (pass read-only rights).
+   * ./DrivePicker.tsx): folders open in place, a tap ticks a file, a
+   * folder's tick takes all of it, and nothing here is changed (pass
+   * read-only rights).
    */
-  picker?: { picked: ReadonlySet<string>; onToggle: (file: FileView) => void; onOpen: (folderId: string | null) => void };
+  picker?: {
+    picked: ReadonlySet<string>;
+    onToggle: (file: FileView) => void;
+    onToggleFolder: (folder: Folder) => void;
+    onOpen: (folderId: string | null) => void;
+  };
 }) {
   const router = useRouter();
   const here = listing.folder?.id ?? null;
@@ -566,7 +572,9 @@ export function FileBrowser({
         onClick={(ev) => {
           ev.stopPropagation();
           const file = listing.files.find((f) => f.id === fileId);
+          const folder = listing.folders.find((f) => f.id === fileId);
           if (file) picker.onToggle(file);
+          else if (folder) picker.onToggleFolder(folder);
         }}
         className={`z-10 flex h-7 w-7 items-center justify-center rounded-full text-sm font-bold shadow-sm transition ${
           picker.picked.has(fileId) ? "bg-brand-500 text-white" : "border-2 border-white bg-gray-950/30 text-transparent"
@@ -1014,7 +1022,7 @@ export function FileBrowser({
 
   /** The look of an item: hovered, selected, or a folder something is dragged over. */
   function stateClass(e: Entry) {
-    if (picker && e.kind === "file" && picker.picked.has(e.id)) return "bg-brand-100/80 ring-2 ring-brand-500 dark:bg-brand-500/20";
+    if (picker && picker.picked.has(e.id)) return "bg-brand-100/80 ring-2 ring-brand-500 dark:bg-brand-500/20";
     if (e.kind === "folder" && dropOn === e.id) return "bg-brand-100 ring-2 ring-brand-400 dark:bg-brand-500/25";
     if (selected.has(keyOf(e))) return "bg-brand-100/80 ring-1 ring-brand-300 dark:bg-brand-500/20 dark:ring-brand-500/40";
     return "hover:bg-brand-50 dark:hover:bg-white/5";
@@ -1532,7 +1540,7 @@ export function FileBrowser({
             ) : null}
             {entries.map((e) => (
               <li key={keyOf(e)} className={`relative ${e.kind === "folder" ? "col-span-3 mb-1 sm:col-span-1 sm:mb-0" : ""}`}>
-                {e.kind === "file" ? heart(e.id, "absolute top-1 left-1 sm:top-3.5 sm:left-3.5") : null}
+                {e.kind === "file" || picker ? heart(e.id, e.kind === "folder" ? "absolute top-1/2 right-2 -translate-y-1/2 sm:top-3.5 sm:right-auto sm:left-3.5 sm:translate-y-0" : "absolute top-1 left-1 sm:top-3.5 sm:left-3.5") : null}
                 {protect && e.kind === "file" && e.file.previewUrl && e.file.contentType.startsWith("image/") ? (
                   <span className="pointer-events-none absolute inset-x-0 top-0 aspect-square sm:inset-x-2 sm:top-2">
                     <Watermark text={protect.watermark} />
@@ -1626,7 +1634,7 @@ export function FileBrowser({
                 );
                 return (
                   <li key={keyOf(e)} className="relative">
-                    {e.kind === "file" ? heart(e.id, "absolute top-1/2 -left-1 -translate-y-1/2 h-6 w-6 text-sm") : null}
+                    {e.kind === "file" || picker ? heart(e.id, "absolute top-1/2 -left-1 -translate-y-1/2 h-6 w-6 text-sm") : null}
                     {naming?.key === keyOf(e) ? (
                       <div className={`${row} bg-brand-100/80 dark:bg-brand-500/20`}>
                         <span className="flex min-w-0 items-center gap-3">

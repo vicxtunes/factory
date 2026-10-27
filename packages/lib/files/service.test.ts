@@ -638,6 +638,16 @@ test("a folder downloads with its folders as paths, as originals or optimised co
   assert.ok((await service.list(studioA, raw))!.files.find((f) => f.id === photo)!.optimisedUrl?.endsWith("as=IMG_01.jpg"));
 });
 
+test("a whole folder, picked: its files and its folders' files, only what the person may see", async () => {
+  const { service, nakato, raw } = await sharedDrive();
+  assert.deepEqual((await service.filesWithin(studioA, nakato)).map((f) => f.name), ["contract.pdf", "clip.pdf"]);
+  await assert.rejects(service.filesWithin(studioB, nakato), says(/no longer exists/));
+  await service.share(studioA, raw, { kind: "client", customerId: "c1" }, settings("viewer", true));
+  const client = await service.clientAccess(studioA, "c1");
+  assert.deepEqual((await service.filesWithin(studioA, raw, client)).map((f) => f.name), ["clip.pdf"]);
+  await assert.rejects(service.filesWithin(studioA, nakato, client), says(/no longer exists/));
+});
+
 test("a sent choice's photos move into a 'Chosen by …' folder inside the task's folder", async () => {
   const { service, upload, choosing, nakato, raw, contract, clip, amina, secret } = await sharedDrive();
   const twin = await upload(studioA, nakato, "clip.pdf", MB);

@@ -10,7 +10,7 @@ import { CurrencySelect } from "@repo/ui/CurrencySelect";
 import { Field, Select, TextArea, TextInput } from "@repo/ui/Field";
 import { SectionLabel } from "@repo/ui/SectionLabel";
 import { UploadRow } from "@repo/ui/UploadRow";
-import { DrivePicker, DrivePicks, type DrivePick } from "@repo/ui/files/DrivePicker";
+import { DrivePicker, DrivePicks, drivePickFiles, type DrivePick } from "@repo/ui/files/DrivePicker";
 import { UploadThumbs, uploadKey } from "@repo/ui/UploadThumbs";
 import { useCurrency } from "@repo/lib/currency/useCurrency";
 import { attributeChoices } from "@repo/lib/catalog-options";
@@ -230,12 +230,20 @@ export function OrderForm({
           );
           if (!uploadRes.ok) warnings.push(uploadRes.error);
         }
-        const fromDrive = items[formIndex]?.driveFiles ?? [];
-        for (const [i, file] of fromDrive.entries()) {
-          setUploadStatus(`Copying from your Drive (${i + 1} of ${fromDrive.length})…`);
+        // Server to server, three at a time: a whole folder can be hundreds of photos.
+        const fromDrive = drivePickFiles(items[formIndex]?.driveFiles ?? []);
+        let copied = 0;
+        let next = 0;
+        const copyNext = async (): Promise<void> => {
+          const file = fromDrive[next++];
+          if (!file) return;
           const copyRes = await copyDriveFileToItem(itemId, file.id);
           if (!copyRes.ok) warnings.push(copyRes.error);
-        }
+          setUploadStatus(`Copying from your Drive (${++copied} of ${fromDrive.length})…`);
+          return copyNext();
+        };
+        if (fromDrive.length) setUploadStatus(`Copying from your Drive (0 of ${fromDrive.length})…`);
+        await Promise.all([copyNext(), copyNext(), copyNext()]);
       }
       setUploadStatus(null);
       setUploadWarnings(warnings);

@@ -167,6 +167,15 @@ export async function drivePickerFolder(folderId: unknown): Promise<Result<{ lis
   });
 }
 
+/** Everything in a folder (and the folders in it) to send with an order: its photos and PDFs. */
+export async function drivePickerFolderFiles(folderId: unknown): Promise<Result<{ id: string; name: string }[]>> {
+  return runAction("files", async () => {
+    const { scope, access, drive } = await caller({ as: "studio" });
+    const found = await drive.filesWithin(scope, parseInput(folderIdSchema, folderId), access);
+    return found.filter((f) => f.contentType.startsWith("image/") || f.contentType === "application/pdf").map(({ id, name }) => ({ id, name }));
+  });
+}
+
 // ── Comments ──────────────────────────────────────────────────────────────
 
 export async function fileComments(via: unknown, fileId: unknown): Promise<Result<FileComment[]>> {

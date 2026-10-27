@@ -308,6 +308,20 @@ export class FileService {
     );
   }
 
+  /**
+   * Every file in a folder and the folders in it, at any depth, that the
+   * person may see, by folder then name: picking a whole folder (the order
+   * form's From my Drive). At most 2,000.
+   */
+  async filesWithin(scope: TenantScope, folderId: string, access: FileAccess = FULL_ACCESS): Promise<StoredFile[]> {
+    const folders = await this.repo.folders(scope);
+    if (!folders.some((f) => f.id === folderId) || !canSee(folders, access, folderId)) throw new FileError(NO_FOLDER);
+    const tree = folders.filter((f) => isWithin(folders, f.id, folderId) && canSee(folders, access, f.id));
+    const found = (await Promise.all(tree.map(async (f) => (await this.repo.files(scope, f.id)).sort(byName)))).flat();
+    if (found.length > 2000) throw new FileError("That's more than 2,000 files: pick a folder inside it instead.");
+    return found;
+  }
+
   /** Whether some pictures in this listing have no small copies yet. */
   static missingPreviews(listing: Pick<FolderListing, "files">): boolean {
     return listing.files.some((f) => f.awaitingCopies);
