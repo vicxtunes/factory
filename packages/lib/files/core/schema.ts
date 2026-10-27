@@ -82,12 +82,17 @@ export const viaSchema = z.discriminatedUnion("as", [
   z.object({ as: z.literal("vendor") }),
   // A vendor working on a studio's project: its folder (packages/lib/vendors → jobs).
   z.object({ as: z.literal("job"), id: z.uuid() }),
+  // Aming staff on an Aming order item: the studio folders attached to it (packages/lib/storage → attachDriveToItem).
+  z.object({ as: z.literal("order"), itemId: z.uuid() }),
   z.object({ as: z.literal("client"), slug: z.string().min(1).max(100) }),
   z.object({ as: z.literal("link"), slug: z.string().min(1).max(100), token: shareTokenSchema }),
   // A client's task opened by its link, without signing in.
   z.object({ as: z.literal("task"), slug: z.string().min(1).max(100), token: shareTokenSchema }),
 ]);
 export type Via = z.infer<typeof viaSchema>;
+
+/** An Aming order item, for what's attached to it from a Drive. */
+export const orderItemIdSchema = z.uuid("That order item doesn't exist.");
 
 /** Many items renamed at once, all in one folder (null: the top). */
 export const renameManySchema = z.object({

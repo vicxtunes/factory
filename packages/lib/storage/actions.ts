@@ -10,7 +10,6 @@ import { filesCaller } from "@repo/lib/files/access";
 import { logOrderEvent, resolveActor, type AuditActor } from "@repo/lib/audit/log";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { MEDIA_BUCKET, safeStorageSegment } from "./client";
-import { IMMUTABLE_CACHE_SECONDS } from "./xhr-upload";
 
 type Result = { ok: true } | { ok: false; error: string };
 
@@ -142,41 +141,51 @@ export async function confirmItemUpload(orderItemId: string, path: string): Prom
   return recordItemMedia(orderItemId, path, item.metadata?.mimetype ?? null);
 }
 
-/** The order-media bucket's own limit (20260911120000_order_media_bucket.sql). */
-const MAX_MEDIA_BYTES = 200 * 1024 * 1024;
-
-// A file from the studio's own Drive, put on an item of the order it just
-// placed: copied server to server (R2 → Storage, streamed), so nothing goes
-// through the phone. The Drive's own rules decide what the person may take
-// (the Files area, or what's shared with them); the order must be theirs.
-export async function copyDriveFileToItem(orderItemId: string, fileId: string): Promise<Result> {
+// Folders and files from the studio's own Drive, attached to an item of the
+// order it just placed: linked, not copied (order_item_drive_links). The
+// factory opens them from the order; while it's open they can't be deleted
+// or moved (packages/lib/files). The Drive's own rules decide what the
+// person may attach; the order must be theirs.
+export async function attachDriveToItem(orderItemId: string, picks: { folderIds: string[]; fileIds: string[] }): Promise<Result> {
   const session = await getClientSession();
   if (!session) return { ok: false, error: "Not signed in." };
   try {
     const admin = createAdminClient();
     const { data: item } = await admin
       .from("order_items")
-      .select("order:orders!inner (client_id)")
+      .select("order_id, product, product_type, order:orders!inner (client_id)")
       .eq("id", orderItemId)
-      .maybeSingle<{ order: { client_id: string | null } }>();
+      .maybeSingle<{ order_id: string; product: string; product_type: string | null; order: { client_id: string | null } }>();
     if (!item || item.order.client_id !== session.client_id) return { ok: false, error: "Order item not found." };
 
     const { drive, scope, access } = await filesCaller({ as: "studio" });
-    const [file] = await drive.downloads(scope, { fileIds: [fileId] }, "original", access);
-    if (file.bytes > MAX_MEDIA_BYTES) return { ok: false, error: `"${file.path}" is over 200 MB: send it as a link instead.` };
+    const folders = await Promise.all(picks.folderIds.map((id) => drive.list(scope, id, access)));
+    if (folders.some((f) => !f)) return { ok: false, error: "A folder you picked is gone. Pick it again." };
+    // Only what they may download: the factory gets it.
+    const files = picks.fileIds.length ? await drive.downloads(scope, { fileIds: picks.fileIds }, "original", access) : [];
 
-    const res = await fetch(file.url);
-    if (!res.ok || !res.body) return { ok: false, error: `"${file.path}" couldn't be read from your Drive.` };
-    const contentType = res.headers.get("content-type");
-    const path = await resolvePath(orderItemId, file.path);
-    const { error } = await admin.storage
-      .from(MEDIA_BUCKET)
-      .upload(path, res.body, { contentType: contentType ?? undefined, cacheControl: String(IMMUTABLE_CACHE_SECONDS), duplex: "half" });
-    if (error) return { ok: false, error: `"${file.path}" couldn't be copied: ${error.message}` };
+    const rows = [
+      ...picks.folderIds.map((folder_id) => ({ folder_id, file_id: null })),
+      ...picks.fileIds.map((file_id) => ({ folder_id: null, file_id })),
+    ].map((r) => ({ ...r, order_item_id: orderItemId, tenant_id: scope.tenantId, added_by_name: session.name }));
+    const { error } = await admin.from("order_item_drive_links").upsert(rows, { ignoreDuplicates: true });
+    if (error) return { ok: false, error: "Your Drive files couldn't be attached. Add them again from the order." };
 
-    return recordItemMedia(orderItemId, path, contentType);
+    await logOrderEvent({
+      orderId: item.order_id,
+      orderItemId,
+      actor: await resolveActor(),
+      action: "drive_attached",
+      detail: {
+        itemLabel: item.product_type ? `${item.product} (${item.product_type})` : item.product,
+        folders: folders.map((f) => f!.folder?.name),
+        files: files.map((f) => f.path),
+      },
+    });
+    revalidatePath("/dashboard/orders");
+    return { ok: true };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Couldn't copy that file from your Drive." };
+    return { ok: false, error: err instanceof Error ? err.message : "Your Drive files couldn't be attached." };
   }
 }
 
