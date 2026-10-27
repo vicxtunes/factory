@@ -5,6 +5,7 @@ import { Loading } from "@repo/ui/skeletons/Loading";
 import { getClientSession } from "@repo/lib/auth/session";
 import { projectIdSchema } from "@repo/lib/projects/core";
 import { projects } from "@repo/lib/projects/server";
+import { filesCaller } from "@repo/lib/files/access";
 import { studioOfCaller } from "@repo/lib/studios/server";
 import { fetchCurrencies, fetchProductCatalog, fetchShowroomSettings } from "@repo/lib/queries";
 
@@ -62,8 +63,19 @@ async function Form({
       showPrices={showroomSettings.show_prices}
       currencies={currencies}
       project={project}
+      hasDrive={await hasDrive()}
     />
   );
+}
+
+/** Whether the signed-in client can pick files from a business Drive: the owner, or a member with Files or shares. */
+async function hasDrive(): Promise<boolean> {
+  try {
+    const { access } = await filesCaller({ as: "studio" });
+    return access.kind === "full" || access.grants.length > 0;
+  } catch {
+    return false;
+  }
 }
 
 /**

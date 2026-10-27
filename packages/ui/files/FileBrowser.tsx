@@ -374,6 +374,7 @@ export function FileBrowser({
   sharing,
   task,
   protect,
+  picker,
 }: {
   listing: FolderListing;
   basePath: string;
@@ -391,6 +392,12 @@ export function FileBrowser({
    * them from the page, covered when it loses focus (see ./proof.tsx).
    */
   protect?: { watermark: string };
+  /**
+   * Picking files for something else (the order form's "From my Drive",
+   * ./DrivePicker.tsx): folders open in place, a tap ticks a file, and
+   * nothing here is changed (pass read-only rights).
+   */
+  picker?: { picked: ReadonlySet<string>; onToggle: (file: FileView) => void; onOpen: (folderId: string | null) => void };
 }) {
   const router = useRouter();
   const here = listing.folder?.id ?? null;
@@ -551,7 +558,23 @@ export function FileBrowser({
     }
   }
   const heart = (fileId: string, className: string) =>
-    choosing && (canPick || picks.has(fileId)) ? (
+    picker ? (
+      <button
+        type="button"
+        aria-pressed={picker.picked.has(fileId)}
+        aria-label={picker.picked.has(fileId) ? "Ticked: tap to untick" : "Tick this one"}
+        onClick={(ev) => {
+          ev.stopPropagation();
+          const file = listing.files.find((f) => f.id === fileId);
+          if (file) picker.onToggle(file);
+        }}
+        className={`z-10 flex h-7 w-7 items-center justify-center rounded-full text-sm font-bold shadow-sm transition ${
+          picker.picked.has(fileId) ? "bg-brand-500 text-white" : "border-2 border-white bg-gray-950/30 text-transparent"
+        } ${className}`}
+      >
+        ✓
+      </button>
+    ) : choosing && (canPick || picks.has(fileId)) ? (
       <button
         type="button"
         aria-pressed={picks.has(fileId)}
@@ -628,6 +651,7 @@ export function FileBrowser({
 
   const shownFiles = entries.flatMap((e) => (e.kind === "file" ? [e.file] : []));
   function open(e: Entry) {
+    if (picker) return e.kind === "folder" ? picker.onOpen(e.id) : picker.onToggle(e.file);
     if (e.kind === "folder") router.push(href(e.id));
     else setViewing(shownFiles.findIndex((f) => f.id === e.id));
   }
@@ -923,6 +947,7 @@ export function FileBrowser({
   function itemProps(e: Entry) {
     const key = keyOf(e);
     const showMenu = (x: number, y: number) => {
+      if (picker) return;
       if (!selected.has(key)) selectOnly(key);
       setMenu({ x, y, entry: e, touch: press.current.touch });
     };
@@ -946,6 +971,7 @@ export function FileBrowser({
       onPointerLeave: () => clearTimeout(press.current.timer),
       onClick: (ev: React.MouseEvent) => {
         if (press.current.long) return;
+        if (picker) return open(e);
         if (press.current.touch) return selecting ? toggle(key) : open(e);
         if (ev.ctrlKey || ev.metaKey) toggle(key);
         else if (ev.shiftKey) selectRange(key);
@@ -988,6 +1014,7 @@ export function FileBrowser({
 
   /** The look of an item: hovered, selected, or a folder something is dragged over. */
   function stateClass(e: Entry) {
+    if (picker && e.kind === "file" && picker.picked.has(e.id)) return "bg-brand-100/80 ring-2 ring-brand-500 dark:bg-brand-500/20";
     if (e.kind === "folder" && dropOn === e.id) return "bg-brand-100 ring-2 ring-brand-400 dark:bg-brand-500/25";
     if (selected.has(keyOf(e))) return "bg-brand-100/80 ring-1 ring-brand-300 dark:bg-brand-500/20 dark:ring-brand-500/40";
     return "hover:bg-brand-50 dark:hover:bg-white/5";
@@ -1074,13 +1101,24 @@ export function FileBrowser({
       {/* On a phone: back, and where you are. */}
       <div className="flex min-w-0 items-center gap-1 sm:hidden">
         {listing.path.length ? (
-          <Link
-            href={href(listing.path.length > 1 ? listing.path[listing.path.length - 2].id : null)}
-            aria-label={`Back to ${listing.path.length > 1 ? listing.path[listing.path.length - 2].name : topLabel}`}
-            className="-ml-2 rounded-full p-2 text-muted active:bg-background"
-          >
-            <Icon d={ICONS.back} className="h-5 w-5" />
-          </Link>
+          picker ? (
+            <button
+              type="button"
+              onClick={() => picker.onOpen(listing.path.length > 1 ? listing.path[listing.path.length - 2].id : null)}
+              aria-label={`Back to ${listing.path.length > 1 ? listing.path[listing.path.length - 2].name : topLabel}`}
+              className="-ml-2 rounded-full p-2 text-muted active:bg-background"
+            >
+              <Icon d={ICONS.back} className="h-5 w-5" />
+            </button>
+          ) : (
+            <Link
+              href={href(listing.path.length > 1 ? listing.path[listing.path.length - 2].id : null)}
+              aria-label={`Back to ${listing.path.length > 1 ? listing.path[listing.path.length - 2].name : topLabel}`}
+              className="-ml-2 rounded-full p-2 text-muted active:bg-background"
+            >
+              <Icon d={ICONS.back} className="h-5 w-5" />
+            </Link>
+          )
         ) : null}
         <h2 className="truncate text-lg font-semibold">{listing.folder?.name ?? topLabel}</h2>
       </div>
@@ -1105,6 +1143,10 @@ export function FileBrowser({
                 {i > 0 ? <Icon d={ICONS.chevron} className="h-4 w-4 shrink-0 text-muted" /> : null}
                 {i === listing.path.length ? (
                   <h2 className="truncate px-1 font-semibold">{name}</h2>
+                ) : picker ? (
+                  <button type="button" onClick={() => picker.onOpen(id)} className="truncate rounded-md px-1 text-muted hover:text-foreground">
+                    {name}
+                  </button>
                 ) : (
                   <Link
                     href={href(id)}
@@ -1453,7 +1495,7 @@ export function FileBrowser({
           } else if (e.key === "Escape") clearSelection();
         }}
         onContextMenu={(e) => {
-          if (e.defaultPrevented || (e.target as HTMLElement).closest("input, textarea")) return;
+          if (picker || e.defaultPrevented || (e.target as HTMLElement).closest("input, textarea")) return;
           e.preventDefault();
           clearSelection();
           setMenu({ x: e.clientX, y: e.clientY, entry: null });
@@ -1497,7 +1539,7 @@ export function FileBrowser({
                   </span>
                 ) : null}
                 {/* A phone has no right-click: a folder's options are on its ⋮. */}
-                {e.kind === "folder" && naming?.key !== keyOf(e) ? (
+                {e.kind === "folder" && naming?.key !== keyOf(e) && !picker ? (
                   <button
                     type="button"
                     aria-label={`Options for ${e.name}`}

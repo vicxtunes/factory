@@ -38,6 +38,7 @@ import {
   uploadStartSchema,
   viaSchema,
   type FileComment,
+  type FolderListing,
   type UploadTicket,
 } from "./core";
 import { FileError } from "./ports";
@@ -145,6 +146,24 @@ export async function downloadLinks(via: unknown, input: unknown): Promise<Resul
     const { scope, access, drive } = await caller(via);
     const { pick, version } = parseInput(downloadSchema, input);
     return drive.downloads(scope, pick, version, access);
+  });
+}
+
+/** One folder of the studio's own Drive, read-only, for picking photos and PDFs to send with an order (copyDriveFileToItem). */
+export async function drivePickerFolder(folderId: unknown): Promise<Result<{ listing: FolderListing; scope: { locale: string; timeZone: string } }>> {
+  return runAction("files", async () => {
+    const { scope, access, drive } = await caller({ as: "studio" });
+    const listing = await drive.list(scope, parseInput(placeSchema, folderId ?? null), access);
+    if (!listing) throw new FileError("That folder isn't there any more.");
+    return {
+      listing: {
+        ...listing,
+        files: listing.files.filter((f) => f.contentType.startsWith("image/") || f.contentType === "application/pdf"),
+        rights: { add: false, change: false, download: false, share: false },
+        addable: { top: false, folders: [] },
+      },
+      scope: { locale: scope.locale, timeZone: scope.timeZone },
+    };
   });
 }
 

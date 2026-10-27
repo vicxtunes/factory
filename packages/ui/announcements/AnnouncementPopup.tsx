@@ -7,7 +7,7 @@ import { dismissAnnouncement, getActiveAnnouncement } from "@repo/lib/announceme
 import { createClient } from "@repo/lib/supabase/browser";
 import type { Announcement } from "@repo/lib/types";
 
-// Mounted next to InstallGate on every signed-in surface
+// Mounted next to InstallGate/NotificationGate on every signed-in surface
 // (dashboard, factory, graphics, client portal, support). Checks once on
 // mount for the next announcement this actor hasn't dismissed yet — see
 // packages/lib/announcements/actions.ts's getActiveAnnouncement for the "targeted at

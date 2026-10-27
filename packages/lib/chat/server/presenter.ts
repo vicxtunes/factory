@@ -36,6 +36,8 @@ export interface PresentationContext {
   orderNumbers: Map<string, string>;
   /** Issue threads' report status, by conversation id. */
   issues: Map<string, IssueState>;
+  /** Orders that are finished (directory.getFinishedOrders). */
+  finishedOrders: Set<string>;
 }
 
 export function toRef(row: { participant_type: ParticipantRef["type"]; participant_id: string }): ParticipantRef {
@@ -64,15 +66,16 @@ export async function buildContext(conversations: ConversationLike[]): Promise<P
 
   const orderIds = conversations.filter((c) => c.order_id).map((c) => c.order_id!);
   const issueIds = conversations.filter((c) => c.kind === "issue").map((c) => c.id);
-  const [people, orderNumbers, issueRows] = await Promise.all([
+  const [people, orderNumbers, issueRows, finishedOrders] = await Promise.all([
     directory.resolvePeople(refs),
     directory.getOrderNumbers(orderIds),
     repo.getIssueStates(issueIds),
+    directory.getFinishedOrders(orderIds),
   ]);
   const issues = new Map(
     issueRows.map((r) => [r.conversation_id, { reportId: r.report_id, status: r.status, resolvedAt: r.resolved_at }]),
   );
-  return { membersByConversation, people, orderNumbers, issues };
+  return { membersByConversation, people, orderNumbers, issues, finishedOrders };
 }
 
 /** Viewer-relative title + avatar. */
@@ -124,6 +127,12 @@ export function presentConversation(
   }
 }
 
+/** An order's chats once the order is finished, and a resolved issue's. */
+export function isFinished(c: ConversationLike, ctx: PresentationContext): boolean {
+  if (c.kind === "issue") return ctx.issues.get(c.id)?.status === "resolved";
+  return (c.kind === "order" || c.kind === "client_order") && !!c.order_id && ctx.finishedOrders.has(c.order_id);
+}
+
 export function toSummary(viewer: ParticipantRef, row: repo.InboxRow, ctx: PresentationContext): ConversationSummary {
   const { title, avatarUrl } = presentConversation(viewer, row, ctx);
   return {
@@ -140,6 +149,7 @@ export function toSummary(viewer: ParticipantRef, row: repo.InboxRow, ctx: Prese
     muted: row.muted,
     isParticipant: row.is_participant,
     issue: ctx.issues.get(row.id) ?? null,
+    finished: isFinished(row, ctx),
   };
 }
 

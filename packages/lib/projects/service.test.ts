@@ -33,7 +33,7 @@ function fakes() {
     idForBooking: async (s, b) => rows.find((r) => r.tenantId === s.tenantId && r.bookingId === b)?.id ?? null,
     create: async (s, input, actorName) => {
       if (input.bookingId && rows.some((r) => r.bookingId === input.bookingId)) throw new ProjectError("This booking already has a project.");
-      const row = { ...input, id: `p${rows.length + 1}`, tenantId: s.tenantId, customerName: "", status: "upcoming" as const, createdAt: `2026-10-0${rows.length + 1}`, updatedAt: "" };
+      const row = { ...input, id: `p${rows.length + 1}`, tenantId: s.tenantId, customerName: "", invoiceId: null, status: "upcoming" as const, createdAt: `2026-10-0${rows.length + 1}`, updatedAt: "" };
       rows.push(row);
       log(row.id, "created", null, "upcoming", actorName);
       return row.id;
@@ -48,6 +48,12 @@ function fakes() {
       if (!r || r.status !== from) return false;
       r.status = to;
       log(id, "status", from, to, actorName);
+      return true;
+    },
+    setInvoice: async (s, id, invoiceId) => {
+      const r = mine(s, id);
+      if (!r || r.invoiceId) return false;
+      r.invoiceId = invoiceId;
       return true;
     },
   };
@@ -89,6 +95,20 @@ test("direct projects need an active client; a booked project's client stays", a
   const booked = await service.startFromBooking(studioA, "confirmed", owner);
   await assert.rejects(service.update(studioA, booked, { ...direct, customerId: "someone" }), /client can't change/);
   await service.update(studioA, booked, { ...direct, title: "Renamed" });
+});
+
+test("an invoice from a project without a booking: its client, once", async () => {
+  const { service } = fakes();
+  const id = await service.create(studioA, direct, owner);
+  await assert.rejects(service.checkInvoiceFor(studioA, id, "someone"), /project's client/);
+  await service.checkInvoiceFor(studioA, id, "grace");
+  await service.setInvoice(studioA, id, "inv-1");
+  assert.equal((await service.get(studioA, id))?.project.invoiceId, "inv-1");
+  await assert.rejects(service.checkInvoiceFor(studioA, id, "grace"), /already has an invoice/);
+  await assert.rejects(service.setInvoice(studioA, id, "inv-2"), /already has an invoice/);
+  const booked = await service.startFromBooking(studioA, "confirmed", owner);
+  await assert.rejects(service.checkInvoiceFor(studioA, booked, "grace"), /from the booking/);
+  await assert.rejects(service.checkInvoiceFor(studioB, id, "grace"), ProjectError);
 });
 
 test("active projects, by stage", async () => {

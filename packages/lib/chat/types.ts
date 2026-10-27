@@ -60,6 +60,8 @@ export interface ConversationSummary {
   isParticipant: boolean;
   /** Set for issue threads. */
   issue: IssueState | null;
+  /** Done with: its order is finished (collected and paid, or cancelled), or the issue resolved. */
+  finished: boolean;
 }
 
 export interface ConversationMember extends ChatPerson {

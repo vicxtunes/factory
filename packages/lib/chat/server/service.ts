@@ -33,6 +33,7 @@ import { ChatError, type ChatViewer } from "./identity";
 import { notifyRecipients } from "./notifier";
 import {
   buildContext,
+  isFinished,
   describeMessage,
   hydrateMessages,
   presentConversation,
@@ -175,6 +176,7 @@ export async function getConversationDetail(viewer: ChatViewer, conversationId: 
     muted: membership?.muted ?? false,
     isParticipant: !!membership,
     issue: ctx.issues.get(c.id) ?? null,
+    finished: isFinished(c, ctx),
     members: toMembers(c.id, ctx),
     me: { type: viewer.type, id: viewer.id },
     permissions: {
