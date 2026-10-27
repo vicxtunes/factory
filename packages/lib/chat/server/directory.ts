@@ -6,6 +6,7 @@ import "server-only";
 // this file turns them into names/avatars and answers relationship questions.
 
 import { createAdminClient } from "@repo/lib/supabase/admin";
+import { paidByOrders } from "@repo/lib/wallet/orders";
 
 import { participantKey, reachableTypes, requiresRelationship } from "../policy";
 import type { ChatPerson, ParticipantRef, ParticipantType } from "../types";
@@ -230,6 +231,26 @@ export function orderHref(person: ParticipantRef, orderId: string): string {
     case "worker":
       return "/factory";
   }
+}
+
+/**
+ * The orders that are finished, for the inbox to set their chats aside:
+ * cancelled, or every item collected and the price paid in full.
+ */
+export async function getFinishedOrders(orderIds: string[]): Promise<Set<string>> {
+  if (!orderIds.length) return new Set();
+  const admin = createAdminClient();
+  const [{ data: orders }, { data: items }, paid] = await Promise.all([
+    admin.from("orders").select("id, quoted_price, cancelled_at").in("id", orderIds),
+    admin.from("order_items").select("order_id, production_status").in("order_id", orderIds),
+    paidByOrders(orderIds),
+  ]);
+  const open = new Set((items ?? []).filter((i) => i.production_status !== "completed").map((i) => i.order_id as string));
+  return new Set(
+    (orders ?? [])
+      .filter((o) => o.cancelled_at || (!open.has(o.id) && o.quoted_price != null && (paid[o.id] ?? 0) >= Math.round(Number(o.quoted_price))))
+      .map((o) => o.id as string),
+  );
 }
 
 /** Order numbers for many orders at once (inbox titles). */
