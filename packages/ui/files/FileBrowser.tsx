@@ -576,8 +576,8 @@ export function FileBrowser({
           if (file) picker.onToggle(file);
           else if (folder) picker.onToggleFolder(folder);
         }}
-        className={`z-10 flex h-7 w-7 items-center justify-center rounded-full text-sm font-bold shadow-sm transition ${
-          picker.picked.has(fileId) ? "bg-brand-500 text-white" : "border-2 border-white bg-gray-950/30 text-transparent"
+        className={`z-10 flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold shadow-sm transition ${
+          picker.picked.has(fileId) ? "bg-brand-500 text-white" : "border-[1.5px] border-white bg-gray-950/30 text-transparent"
         } ${className}`}
       >
         ✓
@@ -1540,7 +1540,7 @@ export function FileBrowser({
             ) : null}
             {entries.map((e) => (
               <li key={keyOf(e)} className={`relative ${e.kind === "folder" ? "col-span-3 mb-1 sm:col-span-1 sm:mb-0" : ""}`}>
-                {e.kind === "file" || picker ? heart(e.id, e.kind === "folder" ? "absolute top-1/2 right-2 -translate-y-1/2 sm:top-3.5 sm:right-auto sm:left-3.5 sm:translate-y-0" : "absolute top-1 left-1 sm:top-3.5 sm:left-3.5") : null}
+                {e.kind === "file" || picker ? heart(e.id, e.kind === "folder" ? "absolute top-1/2 right-3 -translate-y-1/2 sm:top-3 sm:right-auto sm:left-3 sm:translate-y-0" : "absolute top-1.5 left-1.5 sm:top-3 sm:left-3") : null}
                 {protect && e.kind === "file" && e.file.previewUrl && e.file.contentType.startsWith("image/") ? (
                   <span className="pointer-events-none absolute inset-x-0 top-0 aspect-square sm:inset-x-2 sm:top-2">
                     <Watermark text={protect.watermark} />
@@ -1634,7 +1634,7 @@ export function FileBrowser({
                 );
                 return (
                   <li key={keyOf(e)} className="relative">
-                    {e.kind === "file" || picker ? heart(e.id, "absolute top-1/2 -left-1 -translate-y-1/2 h-6 w-6 text-sm") : null}
+                    {e.kind === "file" || picker ? heart(e.id, `absolute top-1/2 -left-1 -translate-y-1/2 ${picker ? "" : "h-6 w-6 text-sm"}`) : null}
                     {naming?.key === keyOf(e) ? (
                       <div className={`${row} bg-brand-100/80 dark:bg-brand-500/20`}>
                         <span className="flex min-w-0 items-center gap-3">
