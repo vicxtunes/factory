@@ -148,6 +148,29 @@ export async function downloadLinks(via: unknown, input: unknown): Promise<Resul
   });
 }
 
+/** A folder as the order form's "From my Drive" shows it: where it is, what's in it, and its photos and PDFs. */
+export interface DrivePickerFolder {
+  path: { id: string; name: string }[];
+  folders: { id: string; name: string }[];
+  files: { id: string; name: string; bytes: number; thumbUrl: string | null }[];
+}
+
+/** One folder of the studio's own Drive, for picking files to send with an order (copyDriveFileToItem). */
+export async function drivePickerFolder(folderId: unknown): Promise<Result<DrivePickerFolder>> {
+  return runAction("files", async () => {
+    const { scope, access, drive } = await caller({ as: "studio" });
+    const listing = await drive.list(scope, parseInput(placeSchema, folderId ?? null), access);
+    if (!listing) throw new FileError("That folder isn't there any more.");
+    return {
+      path: listing.path.map(({ id, name }) => ({ id, name })),
+      folders: listing.folders.map(({ id, name }) => ({ id, name })),
+      files: listing.files
+        .filter((f) => f.contentType.startsWith("image/") || f.contentType === "application/pdf")
+        .map((f) => ({ id: f.id, name: f.name, bytes: f.bytes, thumbUrl: f.thumbUrl })),
+    };
+  });
+}
+
 // ── Comments ──────────────────────────────────────────────────────────────
 
 export async function fileComments(via: unknown, fileId: unknown): Promise<Result<FileComment[]>> {
