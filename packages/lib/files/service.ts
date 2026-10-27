@@ -66,6 +66,8 @@ function refuseLocked(folder: Folder) {
   if (isLocked(folder)) throw new FileError(folder.holdsProjects ? LOCKED_PROJECTS : folder.holdsJobs ? LOCKED_JOBS : LOCKED_PROJECT);
 }
 
+const attachedTo = (orderNo: string) => `Attached to order ${orderNo} until it's done: it can't be deleted or moved.`;
+
 export class FileService {
   constructor(
     private readonly repo: FileRepository,
@@ -77,6 +79,23 @@ export class FileService {
     /** Whose Drives these are, for where their files are kept (core/rules.ts → fileKeys). */
     private readonly owners: "studios" | "vendors" = "studios",
   ) {}
+
+  /**
+   * What's attached to Aming orders still open (packages/lib/storage →
+   * attachDriveToItem), by the order's number: a folder that is attached or
+   * inside one (`within`), one holding such a folder (`holding`, so deleting
+   * it would delete that), and a file attached or inside an attached folder.
+   */
+  private async attachments(scope: TenantScope, folders: Folder[]) {
+    const a = this.repo.attached ? await this.repo.attached(scope) : { folders: new Map<string, string>(), files: new Map<string, string>() };
+    const within = (id: string | null) => (id ? pathTo(folders, id).map((f) => a.folders.get(f.id)).find(Boolean) : undefined);
+    const holding = (id: string) => [...a.folders].find(([attached]) => isWithin(folders, attached, id))?.[1];
+    return {
+      within,
+      holding,
+      file: (f: { id: string; folderId: string | null }) => a.files.get(f.id) ?? within(f.folderId),
+    };
+  }
 
   async usage(scope: TenantScope): Promise<Usage> {
     return this.repo.usage(scope);
@@ -127,9 +146,26 @@ export class FileService {
         }),
       ),
       allFolders: visible,
+      attached: await this.attachedIn(scope, every, folderId, files),
       rights,
       addable: { top: rightsIn(every, access, null).add, folders: visible.filter((f) => rightsIn(every, access, f.id).add).map((f) => f.id) },
     };
+  }
+
+  /** For a listing: which of its folders (and the one it's in) and files are attached to open orders. */
+  private async attachedIn(scope: TenantScope, folders: Folder[], folderId: string | null, files: StoredFile[]): Promise<Record<string, string>> {
+    if (!this.repo.attached) return {};
+    const lock = await this.attachments(scope, folders);
+    const out: Record<string, string> = {};
+    for (const f of folders.filter((f) => f.parentId === folderId || f.id === folderId)) {
+      const no = lock.within(f.id) ?? lock.holding(f.id);
+      if (no) out[f.id] = no;
+    }
+    for (const f of files) {
+      const no = lock.file(f);
+      if (no) out[f.id] = no;
+    }
+    return out;
   }
 
   /** The folder a project's files go in (made with the project). Null when it has none. */
@@ -171,12 +207,17 @@ export class FileService {
     const folder = await this.changeable(scope, access, id);
     const folders = await this.mayAdd(scope, access, toId);
     if (toId && isWithin(folders, toId, id)) throw new FileError("A folder can't be moved into itself.");
+    const attached = (await this.attachments(scope, folders)).within(id);
+    if (attached) throw new FileError(attachedTo(attached));
     if (!(await this.repo.updateFolder(scope, id, { parentId: toId, name: folder.name }))) throw new FileError(NO_FOLDER);
   }
 
   /** Deletes a folder and everything in it, freeing the space. */
   async deleteFolder(scope: TenantScope, id: string, access: FileAccess = FULL_ACCESS): Promise<void> {
     await this.changeable(scope, access, id);
+    const lock = await this.attachments(scope, await this.repo.folders(scope));
+    const attached = lock.within(id) ?? lock.holding(id);
+    if (attached) throw new FileError(attachedTo(attached));
     const keys = await this.repo.deleteFolder(scope, id);
     if (keys === null) throw new FileError(NO_FOLDER);
     await this.objects.remove(keys.flatMap(withCopies));
@@ -340,13 +381,17 @@ export class FileService {
   /** Moves a file into a folder, or to the top. */
   async moveFile(scope: TenantScope, id: string, toId: string | null, access: FileAccess = FULL_ACCESS): Promise<void> {
     const file = await this.changeableFile(scope, access, id);
-    await this.mayAdd(scope, access, toId);
+    const folders = await this.mayAdd(scope, access, toId);
+    const attached = (await this.attachments(scope, folders)).file(file);
+    if (attached) throw new FileError(attachedTo(attached));
     if (!(await this.repo.updateFile(scope, id, { folderId: toId, name: file.name }))) throw new FileError(NO_FILE);
   }
 
   /** Deletes a file, freeing its space. */
   async deleteFile(scope: TenantScope, id: string, access: FileAccess = FULL_ACCESS): Promise<void> {
-    await this.changeableFile(scope, access, id);
+    const file = await this.changeableFile(scope, access, id);
+    const attached = (await this.attachments(scope, await this.repo.folders(scope))).file(file);
+    if (attached) throw new FileError(attachedTo(attached));
     const key = await this.repo.deleteFile(scope, id);
     if (key === null) throw new FileError(NO_FILE);
     await this.objects.remove(withCopies(key));

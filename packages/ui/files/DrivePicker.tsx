@@ -6,18 +6,20 @@ import { Button } from "@repo/ui/Button";
 import { FormSheet } from "@repo/ui/FormSheet";
 import { DocumentIcon, CloseIcon } from "@repo/ui/media/icons";
 import { drivePickerFolder } from "@repo/lib/files/actions";
-import type { FileView, FolderListing } from "@repo/lib/files/core";
+import type { FileView, Folder, FolderListing } from "@repo/lib/files/core";
 
 import { FileBrowser } from "./FileBrowser";
+import { FolderArt } from "./FolderArt";
 
-/** A file picked from the Drive, waiting to be copied onto an order (copyDriveFileToItem). */
-export interface DrivePick {
-  id: string;
-  name: string;
-  thumbUrl: string | null;
-}
+/**
+ * What was picked from the Drive, waiting to be attached to an order item
+ * once it's placed (attachDriveToItem): a file, or a whole folder, linked as
+ * it is (what's added to it later is part of it too).
+ */
+export type DrivePick = { kind: "file"; id: string; name: string; thumbUrl: string | null } | { kind: "folder"; id: string; name: string };
 
-const toPick = (f: FileView): DrivePick => ({ id: f.id, name: f.name, thumbUrl: f.thumbUrl });
+const toPick = (f: FileView): DrivePick => ({ kind: "file", id: f.id, name: f.name, thumbUrl: f.thumbUrl });
+const folderPick = (f: Folder): DrivePick => ({ kind: "folder", id: f.id, name: f.name });
 
 // "From my Drive" on the order form: the studio's own Drive, as the Drive
 // screen itself shows it (./FileBrowser.tsx in its pick mode), to tick photos
@@ -49,11 +51,11 @@ export function DrivePicker({ picked, onAdd }: { picked: DrivePick[]; onAdd: (fi
   const here = (shown?.listing.files ?? []).filter((f) => !already.has(f.id));
   const allHereChosen = here.length > 0 && here.every((f) => chosen.has(f.id));
 
-  function toggle(file: FileView) {
-    if (already.has(file.id)) return;
+  function toggle(pick: DrivePick) {
+    if (already.has(pick.id)) return;
     const next = new Map(chosen);
-    if (next.has(file.id)) next.delete(file.id);
-    else next.set(file.id, toPick(file));
+    if (next.has(pick.id)) next.delete(pick.id);
+    else next.set(pick.id, pick);
     setChosen(next);
   }
 
@@ -66,11 +68,6 @@ export function DrivePicker({ picked, onAdd }: { picked: DrivePick[]; onAdd: (fi
     setChosen(next);
   }
 
-  function close() {
-    setOpen(false);
-    setChosen(new Map());
-  }
-
   return (
     <>
       <Button type="button" variant="secondary" className="w-full" onClick={() => setOpen(true)}>
@@ -80,7 +77,7 @@ export function DrivePicker({ picked, onAdd }: { picked: DrivePick[]; onAdd: (fi
         <div className="space-y-3">
           {here.length ? (
             <div className="flex items-center justify-between gap-2">
-              <p className="text-xs text-muted">Tap photos to tick them.</p>
+              <p className="text-xs text-muted">Tap photos to tick them, or tick a whole folder.</p>
               <Button type="button" size="sm" variant="secondary" onClick={toggleAll}>
                 {allHereChosen ? "Untick this folder" : `Tick all ${here.length}`}
               </Button>
@@ -98,7 +95,8 @@ export function DrivePicker({ picked, onAdd }: { picked: DrivePick[]; onAdd: (fi
               topLabel="My Drive"
               picker={{
                 picked: new Set([...already, ...chosen.keys()]),
-                onToggle: toggle,
+                onToggle: (file) => toggle(toPick(file)),
+                onToggleFolder: (folder) => toggle(folderPick(folder)),
                 onOpen: (id) => {
                   setShown(null);
                   setFolderId(id);
@@ -132,6 +130,14 @@ export function DrivePicker({ picked, onAdd }: { picked: DrivePick[]; onAdd: (fi
 }
 
 function Preview({ file }: { file: DrivePick }) {
+  if (file.kind === "folder") {
+    return (
+      <span className="flex h-full w-full flex-col items-center justify-center gap-0.5 p-1">
+        <FolderArt className="h-6 w-7" />
+        <span className="w-full truncate text-center text-[0.6rem] font-medium">{file.name}</span>
+      </span>
+    );
+  }
   // eslint-disable-next-line @next/next/no-img-element -- a short-lived signed thumbnail from the Drive
   if (file.thumbUrl) return <img src={file.thumbUrl} alt={file.name} loading="lazy" className="h-full w-full object-cover" />;
   return (
@@ -147,7 +153,7 @@ export function DrivePicks({ files, onRemove }: { files: DrivePick[]; onRemove: 
   if (!files.length) return null;
   return (
     <div>
-      <p className="mb-1 text-xs text-muted">{files.length} from your Drive, copied once the order is placed</p>
+      <p className="mb-1 text-xs text-muted">From your Drive: attached once the order is placed, and kept from being deleted until it&apos;s done</p>
       <ul className="flex flex-wrap gap-2">
         {files.map((f) => (
           <li key={f.id} className="relative h-16 w-16 overflow-hidden rounded-lg border border-border bg-background">

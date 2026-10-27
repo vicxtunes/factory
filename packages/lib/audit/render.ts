@@ -21,6 +21,10 @@ const ACTION_TEMPLATES: Record<string, (d: Record<string, unknown>) => string> =
   item_details_updated: (d) => `updated ${str(d.itemLabel)}'s ${str(d.field)} to "${str(d.to)}"`,
   photo_uploaded: (d) => `added a photo to ${str(d.itemLabel)}${d.fileName ? ` (${str(d.fileName)})` : ""}`,
   link_added: (d) => `added a link to ${str(d.itemLabel)}`,
+  drive_attached: (d) => {
+    const names = [...(Array.isArray(d.folders) ? d.folders.map((f) => `the folder "${str(f)}"`) : []), ...(Array.isArray(d.files) ? d.files.map(str) : [])];
+    return `attached from their Drive to ${str(d.itemLabel)}: ${names.slice(0, 3).join(", ")}${names.length > 3 ? ` and ${names.length - 3} more` : ""}`;
+  },
   media_removed: (d) => `removed a photo/link from ${str(d.itemLabel)}`,
   media_downloaded: (d) =>
     d.fileName

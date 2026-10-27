@@ -178,9 +178,11 @@ function tileOf(file: FileView): string | null {
  * filling its cell (like a phone's gallery), anything else as its type over
  * its name.
  */
-function PhoneTile({ entry: e, selected, shared }: { entry: Entry; selected: boolean; shared: boolean }) {
+function PhoneTile({ entry: e, selected, shared, attachedTo }: { entry: Entry; selected: boolean; shared: boolean; attachedTo?: string }) {
   if (e.kind === "folder") {
-    const tag = e.folder.business ? null : e.folder.holdsProjects ? "Every project" : e.folder.holdsJobs ? "Vendor jobs" : e.folder.projectId ? "Project" : shared ? "Shared" : null;
+    const tag = attachedTo
+      ? `🔒 Order ${attachedTo}`
+      : e.folder.business ? null : e.folder.holdsProjects ? "Every project" : e.folder.holdsJobs ? "Vendor jobs" : e.folder.projectId ? "Project" : shared ? "Shared" : null;
     return (
       <span className="flex w-full items-center gap-3 pr-10 text-left">
         <FolderArt className="h-9 w-11 shrink-0" />
@@ -394,10 +396,16 @@ export function FileBrowser({
   protect?: { watermark: string };
   /**
    * Picking files for something else (the order form's "From my Drive",
-   * ./DrivePicker.tsx): folders open in place, a tap ticks a file, and
-   * nothing here is changed (pass read-only rights).
+   * ./DrivePicker.tsx): folders open in place, a tap ticks a file, a
+   * folder's tick takes all of it, and nothing here is changed (pass
+   * read-only rights).
    */
-  picker?: { picked: ReadonlySet<string>; onToggle: (file: FileView) => void; onOpen: (folderId: string | null) => void };
+  picker?: {
+    picked: ReadonlySet<string>;
+    onToggle: (file: FileView) => void;
+    onToggleFolder: (folder: Folder) => void;
+    onOpen: (folderId: string | null) => void;
+  };
 }) {
   const router = useRouter();
   const here = listing.folder?.id ?? null;
@@ -566,10 +574,12 @@ export function FileBrowser({
         onClick={(ev) => {
           ev.stopPropagation();
           const file = listing.files.find((f) => f.id === fileId);
+          const folder = listing.folders.find((f) => f.id === fileId);
           if (file) picker.onToggle(file);
+          else if (folder) picker.onToggleFolder(folder);
         }}
-        className={`z-10 flex h-7 w-7 items-center justify-center rounded-full text-sm font-bold shadow-sm transition ${
-          picker.picked.has(fileId) ? "bg-brand-500 text-white" : "border-2 border-white bg-gray-950/30 text-transparent"
+        className={`z-10 flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold shadow-sm transition ${
+          picker.picked.has(fileId) ? "bg-brand-500 text-white" : "border-[1.5px] border-white bg-gray-950/30 text-transparent"
         } ${className}`}
       >
         ✓
@@ -685,6 +695,9 @@ export function FileBrowser({
   const sharedFolders = new Set(sharing?.shares.map((s) => s.folderId));
   /** Whether the person may rename, move or delete `e`. */
   const changeable = (e: Entry) => rights.change && !isLockedEntry(e);
+  /** The open Aming order `e` is attached to (or is inside, or holds): renamed, never deleted or moved. */
+  const attachedTo = (e: Entry) => listing.attached?.[e.id];
+  const removable = (e: Entry) => changeable(e) && !attachedTo(e);
   /** A Business category, service or product: renamed, moved and deleted for real (packages/lib/offerings). */
   const bizOf = (e: Entry) => (e.kind === "folder" && (e.folder.business?.kind === "category" || e.folder.business?.kind === "item") ? e.folder.business : null);
   /** Aming's products keep Aming's names. */
@@ -758,7 +771,7 @@ export function FileBrowser({
       return run(() => deleteInBusiness(b), clearSelection);
     }
     const many = actOn(e);
-    if (!many.every(changeable)) return;
+    if (!many.every(removable)) return;
     const folders = many.filter((x) => x.kind === "folder").length;
     const question =
       many.length > 1
@@ -788,7 +801,7 @@ export function FileBrowser({
       const target = listing.allFolders.find((f) => f.id === to)?.business;
       return target?.kind === "category" && target.offering === b.offering;
     }
-    if (!changeable(e) || to === here) return false;
+    if (!removable(e) || to === here) return false;
     if (!(to === null ? listing.addable.top : listing.addable.folders.includes(to))) return false;
     return !(e.kind === "folder" && to && isWithin(listing.allFolders, to, e.id));
   }
@@ -825,7 +838,8 @@ export function FileBrowser({
   /** Several selected: the same actions, for all of them. */
   function manyMenu(items: Entry[]): ContextEntry[] {
     const all = items.every(changeable);
-    const places = all ? destinations(items) : [];
+    const loose = all && items.every(removable);
+    const places = loose ? destinations(items) : [];
     const fileIds = items.flatMap((e) => (e.kind === "file" && !e.file.media ? [e.id] : []));
     return [
       { note: `${items.length} selected` },
@@ -835,7 +849,9 @@ export function FileBrowser({
             { label: `Rename ${items.length} items…`, onSelect: () => setRenaming({ entries: items }) },
             ...(places.length ? [{ label: `Move ${items.length} items to…`, onSelect: () => setMoving({ entries: items, value: places[0].value }) }] : []),
             "-",
-            { label: `Delete ${items.length} items`, danger: true, onSelect: () => remove(items[0]) },
+            loose
+              ? { label: `Delete ${items.length} items`, danger: true, onSelect: () => remove(items[0]) }
+              : { note: "Some are attached to an order that isn't done: they can't be deleted or moved yet." },
           ] satisfies ContextEntry[])
         : [{ note: rights.change ? "Some of these stay as they are (project or Business folders)." : "Shared with you to look at." } satisfies ContextEntry]),
       "-",
@@ -896,6 +912,19 @@ export function FileBrowser({
       return [...opener, ...folderZip, ...select, ...share, "-", { note }];
     }
     if (!rights.change) return [...opener, ...folderZip, ...select, ...share];
+    const order = attachedTo(e);
+    if (order) {
+      return [
+        ...opener,
+        ...folderZip,
+        ...select,
+        ...share,
+        "-",
+        { label: "Rename", onSelect: () => rename(e) },
+        "-",
+        { note: `Attached to order ${order}: it can't be deleted or moved until the order is done.` },
+      ];
+    }
     const places = destinations([e]);
     return [
       ...opener,
@@ -953,7 +982,7 @@ export function FileBrowser({
     };
     return {
       "data-item": key,
-      draggable: changeable(e) || bizOf(e)?.kind === "item",
+      draggable: removable(e) || bizOf(e)?.kind === "item",
       title: e.kind === "file" ? [e.name, formatBytes(e.file.bytes), e.file.createdAt ? formatDay(scope, e.file.createdAt) : null].filter(Boolean).join(" · ") : e.name,
       onPointerDown: (ev: React.PointerEvent) => {
         clearTimeout(press.current.timer);
@@ -1000,7 +1029,7 @@ export function FileBrowser({
         }
       },
       onDragStart: (ev: DragEvent) => {
-        dragged.current = actOn(e).filter((x) => changeable(x) || bizOf(x)?.kind === "item");
+        dragged.current = actOn(e).filter((x) => removable(x) || bizOf(x)?.kind === "item");
         ev.dataTransfer.setData(DRAG_TYPE, key);
         ev.dataTransfer.effectAllowed = "move";
       },
@@ -1014,7 +1043,7 @@ export function FileBrowser({
 
   /** The look of an item: hovered, selected, or a folder something is dragged over. */
   function stateClass(e: Entry) {
-    if (picker && e.kind === "file" && picker.picked.has(e.id)) return "bg-brand-100/80 ring-2 ring-brand-500 dark:bg-brand-500/20";
+    if (picker && picker.picked.has(e.id)) return "bg-brand-100/80 ring-2 ring-brand-500 dark:bg-brand-500/20";
     if (e.kind === "folder" && dropOn === e.id) return "bg-brand-100 ring-2 ring-brand-400 dark:bg-brand-500/25";
     if (selected.has(keyOf(e))) return "bg-brand-100/80 ring-1 ring-brand-300 dark:bg-brand-500/20 dark:ring-brand-500/40";
     return "hover:bg-brand-50 dark:hover:bg-white/5";
@@ -1532,7 +1561,7 @@ export function FileBrowser({
             ) : null}
             {entries.map((e) => (
               <li key={keyOf(e)} className={`relative ${e.kind === "folder" ? "col-span-3 mb-1 sm:col-span-1 sm:mb-0" : ""}`}>
-                {e.kind === "file" ? heart(e.id, "absolute top-1 left-1 sm:top-3.5 sm:left-3.5") : null}
+                {e.kind === "file" || picker ? heart(e.id, e.kind === "folder" ? "absolute top-1/2 right-3 -translate-y-1/2 sm:top-3 sm:right-auto sm:left-3 sm:translate-y-0" : "absolute top-1.5 left-1.5 sm:top-3 sm:left-3") : null}
                 {protect && e.kind === "file" && e.file.previewUrl && e.file.contentType.startsWith("image/") ? (
                   <span className="pointer-events-none absolute inset-x-0 top-0 aspect-square sm:inset-x-2 sm:top-2">
                     <Watermark text={protect.watermark} />
@@ -1567,7 +1596,7 @@ export function FileBrowser({
                     className={`flex w-full flex-col items-center gap-1.5 text-center ${e.kind === "folder" ? "rounded-xl px-3 py-2.5" : "rounded-none"} sm:rounded-xl sm:p-2 ${itemLook} ${stateClass(e)}`}
                   >
                     <span className="flex w-full sm:hidden">
-                      <PhoneTile entry={e} selected={selected.has(keyOf(e)) && (chosen.length > 1 || selecting)} shared={sharedFolders.has(e.id)} />
+                      <PhoneTile entry={e} selected={selected.has(keyOf(e)) && (chosen.length > 1 || selecting)} shared={sharedFolders.has(e.id)} attachedTo={attachedTo(e)} />
                     </span>
                     {/* Wider: a picture shows big, square; anything else as its icon. */}
                     {e.kind === "file" && tileOf(e.file) ? (
@@ -1586,7 +1615,10 @@ export function FileBrowser({
                         <Glyph entry={e} large shared={sharedFolders.has(e.id) && e.kind === "folder"} />
                       </span>
                     )}
-                    <span className={`hidden w-full text-xs leading-tight break-words sm:block ${selected.has(keyOf(e)) && chosen.length === 1 ? "" : "line-clamp-2"}`}>{e.name}</span>
+                    <span className={`hidden w-full text-xs leading-tight break-words sm:block ${selected.has(keyOf(e)) && chosen.length === 1 ? "" : "line-clamp-2"}`}>
+                      {attachedTo(e) ? <span title={`Attached to order ${attachedTo(e)}`}>🔒 </span> : null}
+                      {e.name}
+                    </span>
                     {e.kind === "file" && e.file.caption && !namingTask ? <span className="hidden w-full truncate text-[11px] text-muted sm:block">{e.file.caption}</span> : null}
                   </button>
                 )}
@@ -1626,7 +1658,7 @@ export function FileBrowser({
                 );
                 return (
                   <li key={keyOf(e)} className="relative">
-                    {e.kind === "file" ? heart(e.id, "absolute top-1/2 -left-1 -translate-y-1/2 h-6 w-6 text-sm") : null}
+                    {e.kind === "file" || picker ? heart(e.id, `absolute top-1/2 -left-1 -translate-y-1/2 ${picker ? "" : "h-6 w-6 text-sm"}`) : null}
                     {naming?.key === keyOf(e) ? (
                       <div className={`${row} bg-brand-100/80 dark:bg-brand-500/20`}>
                         <span className="flex min-w-0 items-center gap-3">
@@ -1639,7 +1671,10 @@ export function FileBrowser({
                       <button type="button" {...itemProps(e)} className={`${row} ${itemLook} ${stateClass(e)}`}>
                         <span className="flex min-w-0 items-center gap-3">
                           {glyph}
-                          <span className="truncate">{e.name}</span>
+                          <span className="truncate">
+                            {attachedTo(e) ? <span title={`Attached to order ${attachedTo(e)}`}>🔒 </span> : null}
+                            {e.name}
+                          </span>
                           {e.kind === "file" && e.file.caption && !namingTask ? <span className="hidden truncate text-xs text-muted md:inline">{e.file.caption}</span> : null}
                         </span>
                         {cells}

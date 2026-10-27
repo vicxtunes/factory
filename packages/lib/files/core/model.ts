@@ -80,6 +80,8 @@ export interface FolderListing {
   folders: Folder[];
   files: FileView[];
   allFolders: Folder[];
+  /** What here is attached to an Aming order still open (folders and files, by id → the order's number): it can't be deleted or moved. */
+  attached?: Record<string, string>;
   rights: FolderRights;
   /** Where the person may add (and so move) things: the top, and which folders. */
   addable: { top: boolean; folders: string[] };

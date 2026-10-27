@@ -9,7 +9,8 @@ import "server-only";
 // from the session or the link, never from what the browser claims.
 
 import { localDate } from "@repo/lib/accounting/core/period";
-import { getClientSession } from "@repo/lib/auth/session";
+import { getClientSession, getDashboardSession } from "@repo/lib/auth/session";
+import { createAdminClient } from "@repo/lib/supabase/admin";
 import { portalClient, studioAtSlug } from "@repo/lib/studio-portal/server";
 import { studioOfCaller, studios } from "@repo/lib/studios/server";
 import { tasks } from "@repo/lib/tasks/server";
@@ -35,6 +36,23 @@ export interface FilesCaller {
   person: { kind: "owner" } | { kind: "member"; memberId: string } | { kind: "client"; customerId: string; onlyTask?: string } | { kind: "guest" };
   /** The business, to tell its owner when a client finishes a task. */
   studio: { name: string; ownerClientId: string };
+}
+
+/** What's attached to an Aming order item from a studio's Drive: whose, and which folders and files. */
+export async function orderItemDriveLinks(itemId: string): Promise<{ tenantId: string; folderIds: string[]; fileIds: string[] } | null> {
+  const { data, error } = await createAdminClient()
+    .from("order_item_drive_links")
+    .select("tenant_id, folder_id, file_id")
+    .eq("order_item_id", itemId)
+    .order("created_at")
+    .returns<{ tenant_id: string; folder_id: string | null; file_id: string | null }[]>();
+  if (error) throw new Error(`files: could not load the order's Drive links: ${error.message}`);
+  if (!data.length) return null;
+  return {
+    tenantId: data[0].tenant_id,
+    folderIds: data.flatMap((l) => (l.folder_id ? [l.folder_id] : [])),
+    fileIds: data.flatMap((l) => (l.file_id ? [l.file_id] : [])),
+  };
 }
 
 /** The caller's files and rights, or a FileError when they have none here. */
@@ -68,6 +86,21 @@ export async function filesCaller(via: Via): Promise<FilesCaller> {
       scope,
       access: { kind: "shared", grants: [{ folderId, role: "contributor", canDownload: true }] },
       who: { kind: "member", name: job.vendor.name },
+      person: { kind: "guest" },
+      studio: { name: studio.name, ownerClientId: studio.ownerClientId },
+    };
+  }
+  if (via.as === "order") {
+    // Aming staff on an order: the folders attached to its item, to look at, download and add to (never delete).
+    const session = await getDashboardSession();
+    const links = session ? await orderItemDriveLinks(via.itemId) : null;
+    const studio = links ? await studios.get(links.tenantId) : null;
+    if (!session || !links || !studio) throw new FileError("Nothing from a Drive is attached to this order.");
+    return {
+      drive: files,
+      scope: studioScope(studio),
+      access: { kind: "shared", grants: links.folderIds.map((folderId) => ({ folderId, role: "contributor" as const, canDownload: true })) },
+      who: { kind: "member", name: `${session.fullName ?? "Staff"} (Aming)` },
       person: { kind: "guest" },
       studio: { name: studio.name, ownerClientId: studio.ownerClientId },
     };

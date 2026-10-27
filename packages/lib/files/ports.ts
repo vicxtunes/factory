@@ -38,6 +38,12 @@ export interface FileRepository {
 
   /** Every folder the studio has. */
   folders(scope: TenantScope): Promise<Folder[]>;
+  /**
+   * What's attached to Aming orders still open, with the order's number:
+   * those folders (and all in them) and files can't be deleted or moved.
+   * Only a studio's Drive has them.
+   */
+  attached?(scope: TenantScope): Promise<{ folders: Map<string, string>; files: Map<string, string> }>;
   /** The studio's Jobs folder, made the first time it's asked for. Only a studio's Drive has one. */
   jobsFolder?(scope: TenantScope): Promise<string>;
   /** Throws FileError when the name is taken there or the parent is gone. */
