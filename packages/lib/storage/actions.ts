@@ -5,10 +5,12 @@ import { randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
 
 import { createAdminClient } from "@repo/lib/supabase/admin";
-import { requireMediaUploadAccess } from "@repo/lib/auth/session";
+import { getClientSession, requireMediaUploadAccess } from "@repo/lib/auth/session";
+import { filesCaller } from "@repo/lib/files/access";
 import { logOrderEvent, resolveActor, type AuditActor } from "@repo/lib/audit/log";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { MEDIA_BUCKET, safeStorageSegment } from "./client";
+import { IMMUTABLE_CACHE_SECONDS } from "./xhr-upload";
 
 type Result = { ok: true } | { ok: false; error: string };
 
@@ -78,34 +80,18 @@ export async function createUploadSession(
   }
 }
 
-// Re-verifies the object actually landed in Storage (never trusts a
-// client-echoed "it worked") before recording it — same posture as the old
-// Cloudinary confirmItemUpload.
-export async function confirmItemUpload(orderItemId: string, path: string): Promise<Result> {
-  await requireMediaUploadAccess();
-  if (!orderItemId || !path) return { ok: false, error: "Missing upload details." };
-
-  const lastSlash = path.lastIndexOf("/");
-  const dir = path.slice(0, lastSlash);
-  const basename = path.slice(lastSlash + 1);
-
+// Puts a file now in Storage on the order item: its media row, the order's
+// history, and the boards refreshed.
+async function recordItemMedia(orderItemId: string, path: string, mimeType: string | null): Promise<Result> {
   const admin = createAdminClient();
-  const { data: found, error: listError } = await admin.storage
-    .from(MEDIA_BUCKET)
-    .list(dir, { search: basename, limit: 10 });
-  const item = found?.find((f) => f.name === basename);
-  if (listError || !item) {
-    return { ok: false, error: "Could not verify the uploaded file in storage." };
-  }
-
   const { data: pub } = admin.storage.from(MEDIA_BUCKET).getPublicUrl(path);
 
   const actor = await resolveActor();
-  const fileName = basename.replace(/^[0-9a-f-]{36}-/, "");
+  const fileName = path.slice(path.lastIndexOf("/") + 1).replace(/^[0-9a-f-]{36}-/, "");
   const { error } = await admin.from("order_item_media").insert({
     order_item_id: orderItemId,
     file_name: fileName,
-    mime_type: item.metadata?.mimetype ?? null,
+    mime_type: mimeType,
     storage_path: path,
     secure_url: pub.publicUrl,
     uploaded_by_type: actor?.type ?? null,
@@ -131,6 +117,67 @@ export async function confirmItemUpload(orderItemId: string, path: string): Prom
   revalidatePath("/factory");
   revalidatePath("/graphics");
   return { ok: true };
+}
+
+// Re-verifies the object actually landed in Storage (never trusts a
+// client-echoed "it worked") before recording it — same posture as the old
+// Cloudinary confirmItemUpload.
+export async function confirmItemUpload(orderItemId: string, path: string): Promise<Result> {
+  await requireMediaUploadAccess();
+  if (!orderItemId || !path) return { ok: false, error: "Missing upload details." };
+
+  const lastSlash = path.lastIndexOf("/");
+  const dir = path.slice(0, lastSlash);
+  const basename = path.slice(lastSlash + 1);
+
+  const admin = createAdminClient();
+  const { data: found, error: listError } = await admin.storage
+    .from(MEDIA_BUCKET)
+    .list(dir, { search: basename, limit: 10 });
+  const item = found?.find((f) => f.name === basename);
+  if (listError || !item) {
+    return { ok: false, error: "Could not verify the uploaded file in storage." };
+  }
+
+  return recordItemMedia(orderItemId, path, item.metadata?.mimetype ?? null);
+}
+
+/** The order-media bucket's own limit (20260911120000_order_media_bucket.sql). */
+const MAX_MEDIA_BYTES = 200 * 1024 * 1024;
+
+// A file from the studio's own Drive, put on an item of the order it just
+// placed: copied server to server (R2 → Storage, streamed), so nothing goes
+// through the phone. The Drive's own rules decide what the person may take
+// (the Files area, or what's shared with them); the order must be theirs.
+export async function copyDriveFileToItem(orderItemId: string, fileId: string): Promise<Result> {
+  const session = await getClientSession();
+  if (!session) return { ok: false, error: "Not signed in." };
+  try {
+    const admin = createAdminClient();
+    const { data: item } = await admin
+      .from("order_items")
+      .select("order:orders!inner (client_id)")
+      .eq("id", orderItemId)
+      .maybeSingle<{ order: { client_id: string | null } }>();
+    if (!item || item.order.client_id !== session.client_id) return { ok: false, error: "Order item not found." };
+
+    const { drive, scope, access } = await filesCaller({ as: "studio" });
+    const [file] = await drive.downloads(scope, { fileIds: [fileId] }, "original", access);
+    if (file.bytes > MAX_MEDIA_BYTES) return { ok: false, error: `"${file.path}" is over 200 MB: send it as a link instead.` };
+
+    const res = await fetch(file.url);
+    if (!res.ok || !res.body) return { ok: false, error: `"${file.path}" couldn't be read from your Drive.` };
+    const contentType = res.headers.get("content-type");
+    const path = await resolvePath(orderItemId, file.path);
+    const { error } = await admin.storage
+      .from(MEDIA_BUCKET)
+      .upload(path, res.body, { contentType: contentType ?? undefined, cacheControl: String(IMMUTABLE_CACHE_SECONDS), duplex: "half" });
+    if (error) return { ok: false, error: `"${file.path}" couldn't be copied: ${error.message}` };
+
+    return recordItemMedia(orderItemId, path, contentType);
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Couldn't copy that file from your Drive." };
+  }
 }
 
 // Records a pasted link (Drive, Dropbox, WeTransfer, etc.) alongside direct

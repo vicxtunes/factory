@@ -19,6 +19,10 @@ tenant-scoped, so a future product (vendors, service providers) reuses it.
 - **A project's page brings it together:** client, stage, its booking (day, time, place), the
   money (the invoice from the booking's quotation: paid, left, status), its files, notes and
   history.
+- **An invoice straight from a project:** a project created directly (no booking) has **Create
+  invoice** on its page. The invoice is for the project's client (fixed), has no shoot of its own
+  (so it books nothing: the project holds its day), and is linked as `projects.invoice_id`, one per
+  project. A booked project gets its invoice from its booking as before.
 - **Every project has a folder in Files** (Projects → its title), made with it by the database and
   renamed with it (packages/lib/files/README.md → "Project folders").
 - **Who acted:** today the studio owner (team members get no logins yet). The history stores the

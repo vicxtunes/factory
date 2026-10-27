@@ -64,7 +64,14 @@ export interface EditableDocument {
   lines: LineInput[];
 }
 
-type SaveInput = { customerId: string; date: string | null; shoot: Shoot | null; notes: string; lines: LineInput[]; bookingId: string | null };
+type SaveInput = { customerId: string; date: string | null; shoot: Shoot | null; notes: string; lines: LineInput[]; bookingId: string | null; projectId: string | null };
+
+/** A new invoice made from a project without a booking: its client, and the project it's for. */
+export interface FromProject {
+  id: string;
+  customerId: string;
+  title: string;
+}
 
 /** A new document made from a booking: its client, when, and what was agreed, ready to send. */
 export interface FromBooking {
@@ -92,7 +99,7 @@ const KINDS = {
     shootHint: "Optional. Saving the invoice books it (confirmed).",
     save: (doc: EditableDocument | undefined, input: SaveInput) => {
       const body = { customerId: input.customerId, dueDate: input.date, shoot: input.shoot, notes: input.notes, lines: input.lines };
-      return doc ? updateInvoice(doc.id, body) : createInvoice(body, input.bookingId);
+      return doc ? updateInvoice(doc.id, body) : createInvoice(body, input.bookingId, input.projectId);
     },
   },
 };
@@ -114,7 +121,10 @@ const HEADINGS: Record<string, [string, string]> = {
  * lines, copied from packages and services or typed, with line discounts;
  * then a last look with the totals and notes. Each step checks its own fields
  * before the next. A new one can start from a booking (`fromBooking`): its
- * client (fixed), shoot and package, and saving makes it that booking's. Totals update as you type, using the same rules the
+ * client (fixed), shoot and package, and saving makes it that booking's. An
+ * invoice can also start from a project without a booking (`fromProject`):
+ * its client (fixed), no Shoot step (the project holds its day), and saving
+ * makes it the project's. Totals update as you type, using the same rules the
  * server saves with.
  */
 export function DocumentEditor({
@@ -124,6 +134,7 @@ export function DocumentEditor({
   offerings,
   presetCustomerId,
   fromBooking,
+  fromProject,
   scope,
   basePath,
 }: {
@@ -133,13 +144,14 @@ export function DocumentEditor({
   offerings: Offering[];
   presetCustomerId?: string;
   fromBooking?: FromBooking;
+  fromProject?: FromProject;
   scope: Pick<TenantScope, "currency" | "locale" | "timeZone">;
   /** The document's pages live at `${basePath}/${id}`. */
   basePath: string;
 }) {
   const router = useRouter();
   const k = KINDS[kind];
-  const [customerId, setCustomerId] = useState(doc?.customerId ?? fromBooking?.customerId ?? presetCustomerId ?? "");
+  const [customerId, setCustomerId] = useState(doc?.customerId ?? fromBooking?.customerId ?? fromProject?.customerId ?? presetCustomerId ?? "");
   const startShoot = doc?.shoot ?? fromBooking?.shoot ?? null;
   const [date, setDate] = useState(doc?.date ?? "");
   const [shoot, setShoot] = useState<When>({
@@ -154,7 +166,7 @@ export function DocumentEditor({
   const [pending, start] = useTransition();
   // Its booking, if it has one: the booking holds the shoot's day and times.
   const linked = fromBooking ? { id: fromBooking.id, shoot: fromBooking.shoot } : (doc?.booking ?? null);
-  const STEPS: readonly string[] = linked ? BOOKED_STEPS : ALL_STEPS;
+  const STEPS: readonly string[] = linked || fromProject ? BOOKED_STEPS : ALL_STEPS;
   const steps = useSteps(STEPS.length, !!doc);
   const at = STEPS[steps.step];
   const savedShoot = linked ? linked.shoot : shoot.date ? { date: shoot.date, ...whenTimes(shoot) } : null;
@@ -198,6 +210,7 @@ export function DocumentEditor({
         notes,
         lines: lines.map(inputOf),
         bookingId: fromBooking?.id ?? null,
+        projectId: fromProject?.id ?? null,
       });
       if (!res.ok) return setError(res.error);
       router.push(`${basePath}/${res.data}`);
@@ -221,7 +234,7 @@ export function DocumentEditor({
       {at === "Client" ? (
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Client">
-            <Select value={customerId} onChange={(e) => setCustomerId(e.target.value)} required disabled={!!fromBooking}>
+            <Select value={customerId} onChange={(e) => setCustomerId(e.target.value)} required disabled={!!fromBooking || !!fromProject}>
               <option value="">Choose a client…</option>
               {customers.map((c) => (
                 <option key={c.id} value={c.id}>
@@ -240,6 +253,10 @@ export function DocumentEditor({
               <a href={`/studio/bookings/${linked.id}?edit`} className="font-medium text-brand-600 hover:underline">
                 Change it on the booking
               </a>
+            </p>
+          ) : fromProject ? (
+            <p className="text-sm sm:col-span-2">
+              <span className="text-muted">For the project:</span> <span className="font-medium">{fromProject.title}</span>
             </p>
           ) : null}
         </div>

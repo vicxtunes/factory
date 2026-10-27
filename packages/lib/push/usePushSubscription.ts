@@ -68,8 +68,10 @@ function refreshSubscription(): Promise<boolean> {
   return check;
 }
 
-// The subscribe/unsubscribe flow behind every "turn on notifications" button
-// (packages/ui/push/PushOptIn.tsx in the header, the notifications page's card).
+// Shared by packages/ui/push/PushOptIn.tsx (header button, every surface)
+// and packages/ui/pwa/NotificationGate.tsx (blocking prompt for installed
+// apps without push enabled) — same subscribe/unsubscribe flow, two
+// different entry points.
 export function usePushSubscription() {
   const [supported] = useState(
     () => typeof window !== "undefined" && "serviceWorker" in navigator && "PushManager" in window,

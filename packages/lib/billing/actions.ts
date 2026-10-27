@@ -22,6 +22,8 @@ import { parseInput, type Result } from "@repo/lib/kernel/core";
 import { notifyActor } from "@repo/lib/push/send";
 import { runAction } from "@repo/lib/kernel/server/action";
 import { productRequests } from "@repo/lib/product-requests/server";
+import { projectIdSchema } from "@repo/lib/projects/core";
+import { projects } from "@repo/lib/projects/server";
 import { applyStudioPayment } from "@repo/lib/studio-payments/server";
 import { deleteStudioRecord, studioOfCaller, studios } from "@repo/lib/studios/server";
 import { WalletError, checkStudioRequestPayment, startStudioRequestPayment } from "@repo/lib/wallet/studio";
@@ -237,14 +239,19 @@ export async function checkDocumentPayment(collectionId: unknown): Promise<Resul
 const INVOICES = "/studio/invoices";
 
 /** A new invoice, booked from its shoot day; made from a booking (`bookingId`), it's that booking's, which it confirms. */
-export async function createInvoice(input: unknown, bookingId?: unknown): Promise<Result<string>> {
+/** A new invoice; made from a booking (`bookingId`) or a project without one (`projectId`), it's theirs. */
+export async function createInvoice(input: unknown, bookingId?: unknown, projectId?: unknown): Promise<Result<string>> {
   return runAction("billing", async () => {
     const { scope } = await studioOfCaller("money");
     const details = parseInput(invoiceInputSchema, input);
     const booking = bookingId == null ? null : parseInput(bookingIdSchema, bookingId);
+    const project = projectId == null ? null : parseInput(projectIdSchema, projectId);
     if (booking) await bookings.checkDocumentFor(scope, booking, details.customerId, "invoice");
-    const id = await invoices.create(scope, details);
+    // The project holds its own day: an invoice for it never books a shoot.
+    if (project) await projects.checkInvoiceFor(scope, project, details.customerId);
+    const id = await invoices.create(scope, project ? { ...details, shoot: null } : details);
     if (booking) await bookings.setInvoice(scope, booking, id);
+    if (project) await projects.setInvoice(scope, project, id);
     await bookInvoice(scope, id);
     revalidatePath("/studio", "layout");
     return id;

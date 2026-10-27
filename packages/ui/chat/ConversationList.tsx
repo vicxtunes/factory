@@ -11,18 +11,17 @@ import { BackIcon, GroupIcon, IssueIcon, OrderIcon, PlusIcon, SupportIcon } from
 import { ConversationListSkeleton } from "./ChatSkeleton";
 import { MessageSearchResults } from "./MessageSearchResults";
 
-type Filter = "all" | "unread" | ConversationKind;
+type Filter = "all" | "unread" | "people" | "orders" | "help";
 
-const FILTERS: { value: Filter; label: string }[] = [
-  { value: "all", label: "All" },
-  { value: "unread", label: "Unread" },
-  { value: "direct", label: "Direct" },
-  { value: "group", label: "Groups" },
-  { value: "client_order", label: "Orders" },
-  { value: "order", label: "Order teams" },
-  { value: "support", label: "Support" },
-  { value: "issue", label: "Issues" },
+// Three groups by what a chat is about; each chat still carries its own kind's label.
+const GROUPS: { value: Filter; label: string; kinds: ConversationKind[] }[] = [
+  { value: "people", label: "People", kinds: ["direct", "group"] },
+  { value: "orders", label: "Orders", kinds: ["client_order", "order"] },
+  { value: "help", label: "Help", kinds: ["support", "issue"] },
 ];
+
+/** How many chats have something new (muted ones don't count). */
+const unreadIn = (chats: ConversationSummary[]) => chats.filter((c) => c.unreadCount > 0 && !c.muted).length;
 
 const KIND_ICONS = {
   group: GroupIcon,
@@ -84,21 +83,31 @@ export function ConversationList({
 }) {
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
+  const [showFinished, setShowFinished] = useState(false);
 
-  // Only offer filters that would show something (plus All/Unread).
+  // Only offer the groups that would show something (plus All/Unread), each with what's new in it.
   const available = useMemo(() => {
-    const kinds = new Set(conversations.map((c) => c.kind));
-    return FILTERS.filter((f) => f.value === "all" || f.value === "unread" || kinds.has(f.value as ConversationKind));
+    const groups = GROUPS.map((g) => ({ ...g, chats: conversations.filter((c) => g.kinds.includes(c.kind)) })).filter((g) => g.chats.length);
+    return [
+      { value: "all" as Filter, label: "All", unread: 0 },
+      { value: "unread" as Filter, label: "Unread", unread: unreadIn(conversations) },
+      ...groups.map((g) => ({ value: g.value, label: g.label, unread: unreadIn(g.chats) })),
+    ];
   }, [conversations]);
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
+    const kinds = GROUPS.find((g) => g.value === filter)?.kinds;
     return conversations.filter((c) => {
       if (filter === "unread" && c.unreadCount === 0) return false;
-      if (filter !== "all" && filter !== "unread" && c.kind !== filter) return false;
+      if (kinds && !kinds.includes(c.kind)) return false;
       return !q || c.title.toLowerCase().includes(q) || (c.lastMessagePreview ?? "").toLowerCase().includes(q);
     });
   }, [conversations, filter, query]);
+  // Finished orders and resolved issues wait at the bottom, folded, unless something new came in.
+  const isSetAside = (c: ConversationSummary) => c.finished && c.unreadCount === 0 && c.id !== activeId;
+  const current = visible.filter((c) => !isSetAside(c));
+  const finished = visible.filter(isSetAside);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -141,6 +150,9 @@ export function ConversationList({
                 }`}
               >
                 {f.label}
+                {f.unread && f.value !== "unread" ? (
+                  <span className={`ml-1 rounded-full px-1.5 text-[10px] ${filter === f.value ? "bg-white/25" : "bg-brand-500 text-white"}`}>{f.unread}</span>
+                ) : null}
               </button>
             ))}
           </div>
@@ -157,61 +169,87 @@ export function ConversationList({
             {conversations.length === 0 ? "No conversations yet. Start one with New." : "No chats match."}
           </p>
         ) : (
-          <ul className="p-1.5">
-            {visible.map((c) => {
-              const active = c.id === activeId;
-              const unread = c.unreadCount > 0;
-              return (
-                <li key={c.id}>
-                  <button
-                    type="button"
-                    onClick={() => onSelect(c.id)}
-                    aria-current={active ? "true" : undefined}
-                    className={`flex w-full items-center gap-3 rounded-[var(--radius)] p-2.5 text-left transition-colors ${
-                      active ? "bg-brand-50 dark:bg-brand-500/10" : "hover:bg-gray-50 dark:hover:bg-white/[0.03]"
-                    }`}
-                  >
-                    <ConversationAvatar c={c} />
-                    <span className="min-w-0 flex-1">
-                      <span className="flex items-baseline justify-between gap-2">
-                        <span className="flex min-w-0 items-center gap-1.5">
-                          <span className={`truncate text-sm ${unread ? "font-semibold" : "font-medium"}`}>{c.title}</span>
-                          {c.issue ? <IssueStatusBadge status={c.issue.status} /> : null}
-                        </span>
-                        <span className={`shrink-0 text-[11px] tnum ${unread ? "text-brand-600" : "text-muted"}`}>
-                          {formatListTime(c.lastMessageAt)}
-                        </span>
-                      </span>
-                      <span className="mt-0.5 flex items-center justify-between gap-2">
-                        <span className={`truncate text-xs ${unread ? "text-foreground" : "text-muted"}`}>
-                          {c.kind !== "direct" ? (
-                            <span className="mr-1 rounded bg-gray-100 px-1 py-px text-[10px] font-medium uppercase text-gray-500 dark:bg-white/5 dark:text-gray-400">
-                              {KIND_LABELS[c.kind]}
-                            </span>
-                          ) : null}
-                          {c.lastMessageSenderName && c.kind !== "direct" ? `${c.lastMessageSenderName}: ` : ""}
-                          {c.lastMessagePreview ?? "No messages yet"}
-                        </span>
-                        {unread ? (
-                          <span
-                            className={`inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full px-1.5 text-[11px] font-semibold text-white ${
-                              c.muted ? "bg-gray-400" : "bg-brand-500"
-                            }`}
-                          >
-                            {c.unreadCount > 99 ? "99+" : c.unreadCount}
-                          </span>
-                        ) : null}
-                      </span>
-                    </span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
+          <>
+            <ul className="p-1.5">
+              {current.map((c) => (
+                <ChatRow key={c.id} c={c} active={c.id === activeId} onSelect={() => onSelect(c.id)} />
+              ))}
+            </ul>
+            {finished.length ? (
+              <div className="border-t border-border p-1.5">
+                <button
+                  type="button"
+                  onClick={() => setShowFinished((v) => !v)}
+                  aria-expanded={showFinished}
+                  className="flex w-full items-center justify-between rounded-[var(--radius)] px-2.5 py-2 text-left text-xs font-medium text-muted hover:bg-gray-50 dark:hover:bg-white/[0.03]"
+                >
+                  <span>Finished ({finished.length})</span>
+                  <span aria-hidden>{showFinished ? "▴" : "▾"}</span>
+                </button>
+                {showFinished ? (
+                  <ul>
+                    {finished.map((c) => (
+                      <ChatRow key={c.id} c={c} active={false} onSelect={() => onSelect(c.id)} />
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
+            ) : null}
+          </>
         )}
         <MessageSearchResults query={query} onSelect={onSelect} />
       </div>
     </div>
+  );
+}
+
+/** One chat in the list: who or what, the last message, and what's new. */
+function ChatRow({ c, active, onSelect }: { c: ConversationSummary; active: boolean; onSelect: () => void }) {
+  const unread = c.unreadCount > 0;
+  return (
+    <li>
+      <button
+        type="button"
+        onClick={onSelect}
+        aria-current={active ? "true" : undefined}
+        className={`flex w-full items-center gap-3 rounded-[var(--radius)] p-2.5 text-left transition-colors ${
+          active ? "bg-brand-50 dark:bg-brand-500/10" : "hover:bg-gray-50 dark:hover:bg-white/[0.03]"
+        }`}
+      >
+        <ConversationAvatar c={c} />
+        <span className="min-w-0 flex-1">
+          <span className="flex items-baseline justify-between gap-2">
+            <span className="flex min-w-0 items-center gap-1.5">
+              <span className={`truncate text-sm ${unread ? "font-semibold" : "font-medium"}`}>{c.title}</span>
+              {c.issue ? <IssueStatusBadge status={c.issue.status} /> : null}
+            </span>
+            <span className={`shrink-0 text-[11px] tnum ${unread ? "text-brand-600" : "text-muted"}`}>
+              {formatListTime(c.lastMessageAt)}
+            </span>
+          </span>
+          <span className="mt-0.5 flex items-center justify-between gap-2">
+            <span className={`truncate text-xs ${unread ? "text-foreground" : "text-muted"}`}>
+              {c.kind !== "direct" ? (
+                <span className="mr-1 rounded bg-gray-100 px-1 py-px text-[10px] font-medium uppercase text-gray-500 dark:bg-white/5 dark:text-gray-400">
+                  {KIND_LABELS[c.kind]}
+                </span>
+              ) : null}
+              {c.lastMessageSenderName && c.kind !== "direct" ? `${c.lastMessageSenderName}: ` : ""}
+              {c.lastMessagePreview ?? "No messages yet"}
+            </span>
+            {unread ? (
+              <span
+                className={`inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full px-1.5 text-[11px] font-semibold text-white ${
+                  c.muted ? "bg-gray-400" : "bg-brand-500"
+                }`}
+              >
+                {c.unreadCount > 99 ? "99+" : c.unreadCount}
+              </span>
+            ) : null}
+          </span>
+        </span>
+      </button>
+    </li>
   );
 }
 

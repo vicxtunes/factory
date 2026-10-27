@@ -20,6 +20,8 @@ export interface ProjectStore {
   update(scope: TenantScope, id: string, input: ProjectInput): Promise<boolean>;
   /** Moves `from` → `to` and logs it, together, only if it's still at `from`. False otherwise. */
   setStatus(scope: TenantScope, id: string, from: ProjectStatus, to: ProjectStatus, actorName: string): Promise<boolean>;
+  /** Links the invoice made from it, only if it has none yet. False otherwise. */
+  setInvoice(scope: TenantScope, id: string, invoiceId: string): Promise<boolean>;
 }
 
 /** What projects need to know from outside: customers and bookings. */

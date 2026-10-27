@@ -10,11 +10,13 @@ import { CurrencySelect } from "@repo/ui/CurrencySelect";
 import { Field, Select, TextArea, TextInput } from "@repo/ui/Field";
 import { SectionLabel } from "@repo/ui/SectionLabel";
 import { UploadRow } from "@repo/ui/UploadRow";
+import { DrivePicker, DrivePicks, type DrivePick } from "@repo/ui/files/DrivePicker";
 import { UploadThumbs, uploadKey } from "@repo/ui/UploadThumbs";
 import { useCurrency } from "@repo/lib/currency/useCurrency";
 import { attributeChoices } from "@repo/lib/catalog-options";
 import { isPhotobookCategory } from "@repo/lib/orders/photobook";
 import type { OrderItemInput } from "@repo/lib/orders/types";
+import { copyDriveFileToItem } from "@repo/lib/storage/actions";
 import { canOptimizeImage } from "@repo/lib/storage/client";
 import { uploadFileToStorage } from "@repo/lib/storage/upload-client";
 import type { Currency, OrderType, Product, ProductCategory } from "@repo/lib/types";
@@ -28,9 +30,12 @@ import { OrderPlaced } from "./order-placed";
 // just sit here as plain File objects and get uploaded one by one right
 // after placeOrder resolves (see submit()). Not offered for Photo Books —
 // those go through a whole folder of photos, better suited to the existing
-// "Photo link" paste field than picking files one at a time here.
+// "Photo link" paste field than picking files one at a time here. Files
+// picked from the studio's Drive (`driveFiles`, any category) are copied
+// onto the item by the server the same way, after placeOrder.
 interface ClientItemForm extends OrderItemInput {
   files: File[];
+  driveFiles: DrivePick[];
 }
 
 // Delivery is quoted automatically instead of picked by the client — a
@@ -59,6 +64,7 @@ function emptyItem(categoryId = "", productId = "", variantId = ""): ClientItemF
     item_notes: "",
     media_link: "",
     files: [],
+    driveFiles: [],
   };
 }
 
@@ -99,6 +105,7 @@ export function OrderForm({
   showPrices,
   currencies,
   project,
+  hasDrive = false,
 }: {
   catalog: ProductCategory[];
   // Set when arriving from the showroom's "Place an order" button — left
@@ -112,6 +119,8 @@ export function OrderForm({
   currencies: Currency[];
   /** Ordering for a studio project: linked to it once placed (packages/lib/studio-orders). */
   project?: { id: string; title: string };
+  /** The client has a business Drive to pick files from ("From my Drive"). */
+  hasDrive?: boolean;
 }) {
   const router = useRouter();
   const [orderType, setOrderType] = useState<OrderType>("normal");
@@ -221,6 +230,12 @@ export function OrderForm({
           );
           if (!uploadRes.ok) warnings.push(uploadRes.error);
         }
+        const fromDrive = items[formIndex]?.driveFiles ?? [];
+        for (const [i, file] of fromDrive.entries()) {
+          setUploadStatus(`Copying from your Drive (${i + 1} of ${fromDrive.length})…`);
+          const copyRes = await copyDriveFileToItem(itemId, file.id);
+          if (!copyRes.ok) warnings.push(copyRes.error);
+        }
       }
       setUploadStatus(null);
       setUploadWarnings(warnings);
@@ -296,6 +311,7 @@ export function OrderForm({
                   onChange={(patch) => patchItem(idx, patch)}
                   onRemove={() => removeItem(idx)}
                   removable={items.length > 1}
+                  hasDrive={hasDrive}
                 />
               ))}
             </div>
@@ -394,12 +410,14 @@ function ItemRow({
   onChange,
   onRemove,
   removable,
+  hasDrive,
 }: {
   item: ClientItemForm;
   catalog: ProductCategory[];
   onChange: (patch: Partial<ClientItemForm>) => void;
   onRemove: () => void;
   removable: boolean;
+  hasDrive: boolean;
 }) {
   const category = catalog.find((c) => c.id === item.category_id) ?? null;
   const products = category?.products ?? [];
@@ -545,6 +563,12 @@ function ItemRow({
               items={item.files.map((file) => ({ key: uploadKey(file), file, state: "selected" as const }))}
               onRemove={(key) => onChange({ files: item.files.filter((f) => uploadKey(f) !== key) })}
             />
+          </div>
+        ) : null}
+        {hasDrive && category ? (
+          <div className="space-y-2">
+            <DrivePicker picked={item.driveFiles} onAdd={(files) => onChange({ driveFiles: [...item.driveFiles, ...files] })} />
+            <DrivePicks files={item.driveFiles} onRemove={(id) => onChange({ driveFiles: item.driveFiles.filter((f) => f.id !== id) })} />
           </div>
         ) : null}
       </div>
