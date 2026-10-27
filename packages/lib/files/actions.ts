@@ -38,6 +38,7 @@ import {
   uploadStartSchema,
   viaSchema,
   type FileComment,
+  type FolderListing,
   type UploadTicket,
 } from "./core";
 import { FileError } from "./ports";
@@ -148,25 +149,20 @@ export async function downloadLinks(via: unknown, input: unknown): Promise<Resul
   });
 }
 
-/** A folder as the order form's "From my Drive" shows it: where it is, what's in it, and its photos and PDFs. */
-export interface DrivePickerFolder {
-  path: { id: string; name: string }[];
-  folders: { id: string; name: string }[];
-  files: { id: string; name: string; bytes: number; thumbUrl: string | null }[];
-}
-
-/** One folder of the studio's own Drive, for picking files to send with an order (copyDriveFileToItem). */
-export async function drivePickerFolder(folderId: unknown): Promise<Result<DrivePickerFolder>> {
+/** One folder of the studio's own Drive, read-only, for picking photos and PDFs to send with an order (copyDriveFileToItem). */
+export async function drivePickerFolder(folderId: unknown): Promise<Result<{ listing: FolderListing; scope: { locale: string; timeZone: string } }>> {
   return runAction("files", async () => {
     const { scope, access, drive } = await caller({ as: "studio" });
     const listing = await drive.list(scope, parseInput(placeSchema, folderId ?? null), access);
     if (!listing) throw new FileError("That folder isn't there any more.");
     return {
-      path: listing.path.map(({ id, name }) => ({ id, name })),
-      folders: listing.folders.map(({ id, name }) => ({ id, name })),
-      files: listing.files
-        .filter((f) => f.contentType.startsWith("image/") || f.contentType === "application/pdf")
-        .map((f) => ({ id: f.id, name: f.name, bytes: f.bytes, thumbUrl: f.thumbUrl })),
+      listing: {
+        ...listing,
+        files: listing.files.filter((f) => f.contentType.startsWith("image/") || f.contentType === "application/pdf"),
+        rights: { add: false, change: false, download: false, share: false },
+        addable: { top: false, folders: [] },
+      },
+      scope: { locale: scope.locale, timeZone: scope.timeZone },
     };
   });
 }
