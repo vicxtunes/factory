@@ -32,6 +32,8 @@ export interface Project extends ProjectInput {
   status: ProjectStatus;
   /** The booking it was started from. */
   bookingId: string | null;
+  /** Its invoice, when made from the project itself (one without a booking). */
+  invoiceId: string | null;
   createdAt: string;
   updatedAt: string;
 }

@@ -14,6 +14,7 @@ interface Row {
   id: string;
   customer_id: string;
   booking_id: string | null;
+  invoice_id: string | null;
   title: string;
   event_date: string | null;
   notes: string | null;
@@ -33,7 +34,7 @@ interface EventRow {
   created_at: string;
 }
 
-const COLUMNS = `id, customer_id, booking_id, title, event_date, notes, photos_url, status, created_at, updated_at,
+const COLUMNS = `id, customer_id, booking_id, invoice_id, title, event_date, notes, photos_url, status, created_at, updated_at,
   customer:customers!projects_tenant_id_customer_id_fkey (name)`;
 
 const toProject = (r: Row): Project => ({
@@ -41,6 +42,7 @@ const toProject = (r: Row): Project => ({
   customerId: r.customer_id,
   customerName: r.customer?.name ?? "",
   bookingId: r.booking_id,
+  invoiceId: r.invoice_id,
   title: r.title,
   eventDate: r.event_date,
   notes: r.notes,
@@ -129,5 +131,16 @@ export const supabaseProjectStore: ProjectStore = {
     });
     if (error) fail("move the project", error);
     return data === true;
+  },
+
+  async setInvoice(scope, id, invoiceId) {
+    const { data, error } = await table()
+      .update({ invoice_id: invoiceId })
+      .eq("tenant_id", scope.tenantId)
+      .eq("id", id)
+      .is("invoice_id", null)
+      .select("id");
+    if (error) fail("link the invoice", error);
+    return data.length === 1;
   },
 };

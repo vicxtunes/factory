@@ -83,6 +83,24 @@ export class ProjectService {
     if (!(await this.store.update(scope, id, input))) throw new ProjectError(GONE);
   }
 
+  /**
+   * Whether an invoice for `customerId` may be made from this project: one
+   * without a booking (a booking's project gets it from the booking) and
+   * without an invoice yet, for the project's client.
+   */
+  async checkInvoiceFor(scope: TenantScope, id: string, customerId: string): Promise<void> {
+    const p = await this.store.get(scope, id);
+    if (!p) throw new ProjectError(GONE);
+    if (p.bookingId) throw new ProjectError("This project came from a booking: make its invoice from the booking.");
+    if (p.invoiceId) throw new ProjectError("This project already has an invoice.");
+    if (p.customerId !== customerId) throw new ProjectError("It must be for the project's client.");
+  }
+
+  /** Links the invoice made from this project. */
+  async setInvoice(scope: TenantScope, id: string, invoiceId: string): Promise<void> {
+    if (!(await this.store.setInvoice(scope, id, invoiceId))) throw new ProjectError("This project already has an invoice.");
+  }
+
   /** Moves it along the pipeline (or one step back), recorded in its history. */
   async setStatus(scope: TenantScope, id: string, to: ProjectStatus, actor: ProjectActor): Promise<void> {
     const current = await this.store.get(scope, id);

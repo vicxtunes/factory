@@ -154,10 +154,13 @@ export default async function StudioProjectPage({ params, searchParams }: { para
   );
 }
 
-// Everything behind it: its booking, and its invoice (made when an online request was confirmed, or from its quotation); the money only for those who handle it.
+// Everything behind it: its booking, and its invoice (its booking's: made when an online request was confirmed, or from its quotation;
+// or, without a booking, made from the project itself); the money only for those who handle it.
 async function BookingAndMoney({ scope, project: p, money }: { scope: TenantScope; project: Project; money: boolean }) {
   const booking = p.bookingId ? ((await bookings.get(scope, p.bookingId))?.booking ?? null) : null;
-  const invoiceId = !money ? null : (booking?.invoiceId ?? (booking?.quotationId ? await invoices.idForQuotation(scope, booking.quotationId) : null));
+  const invoiceId = !money
+    ? null
+    : (p.invoiceId ?? booking?.invoiceId ?? (booking?.quotationId ? await invoices.idForQuotation(scope, booking.quotationId) : null));
   const invoice = invoiceId ? await invoices.get(scope, invoiceId) : null;
   return (
     <section className="grid gap-3 rounded-2xl border border-border bg-surface p-4 text-sm shadow-theme-xs sm:grid-cols-2">
@@ -188,6 +191,11 @@ async function BookingAndMoney({ scope, project: p, money }: { scope: TenantScop
           ) : booking && (booking.status === "tentative" || booking.status === "confirmed") ? (
             // Made from its booking: client, when and package filled in; saving links it (and confirms the booking).
             <Link href={`/studio/invoices/new?booking=${booking.id}`} className={buttonClass("secondary", "sm")}>
+              Create invoice
+            </Link>
+          ) : !p.bookingId ? (
+            // A project of its own: the invoice is made from it, for its client.
+            <Link href={`/studio/invoices/new?project=${p.id}`} className={buttonClass("secondary", "sm")}>
               Create invoice
             </Link>
           ) : (
