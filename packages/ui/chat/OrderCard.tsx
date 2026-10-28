@@ -152,7 +152,7 @@ export function OrderCard({
   if (state && message.card === "ready" && latest && client && state.readyCount > 0) {
     actions.push(
       <Button key="collect" type="button" className="min-h-10 font-semibold" loading={busy} disabled={busy} onClick={confirmCollected}>
-        Confirm received
+        Confirm pickup
       </Button>,
     );
   }
@@ -209,77 +209,61 @@ export function OrderCardView({
   orderHref: string | null;
 }) {
   const money = useMoney();
-  const done = card === "payment" || card === "collected";
   const collected = !!state && state.itemCount > 0 && state.collectedCount === state.itemCount;
   const waiting = state ? state.itemCount - state.collectedCount : 0;
+  let headline = body;
+  if (state && card === "received") headline = "Order received";
+  if (state && card === "ready" && latest) {
+    headline = collected
+      ? "Order collected"
+      : state.readyCount > 0
+        ? "Ready for pickup"
+        : "Nothing waiting for pickup";
+  }
 
   let status: ReactNode = null;
   if (card === "received" && payment) {
     status =
       payment.due === 0 ? (
-        <Done>Paid in full</Done>
+        "Paid in full"
       ) : payment.amount == null ? (
-        <p className="mt-2 text-sm text-muted">The price is being confirmed.</p>
+        "Price being confirmed"
       ) : (
-        <dl className="mt-3 grid grid-cols-3 gap-2 text-xs">
-          <Figure label="Total" value={money(payment.amount)} />
-          <Figure label="Paid" value={money(payment.paid)} />
-          <Figure label="Due" value={money(payment.due ?? 0)} strong />
-        </dl>
+        <>Due {money(payment.due ?? 0)}</>
       );
   } else if (card === "ready" && state && latest) {
-    status = collected ? (
-      <Done>Collected</Done>
-    ) : state.readyCount === 0 ? (
-      <p className="mt-2 text-sm text-muted">Nothing is waiting for pickup right now.</p>
-    ) : (
-      <p className="mt-2 text-sm text-muted">
-        {state.readyCount === waiting
-          ? "Everything is ready."
-          : `${state.readyCount} of ${waiting} items ready. The rest is still being made.`}{" "}
-        {state.viewerIsClient ? "Tap Confirm received once you've collected it." : "Waiting for the client to confirm they collected it."}
-      </p>
-    );
+    status = collected
+      ? null
+      : state.readyCount === 0
+        ? "Nothing waiting for pickup"
+        : state.readyCount === waiting
+          ? waiting === 1
+            ? "1 item ready"
+            : `${waiting} items ready`
+          : `${state.readyCount} of ${waiting} items ready`;
   }
 
   return (
-    <div className="my-3 flex justify-center">
-      <div
-        className={`w-full max-w-sm rounded-2xl border bg-surface shadow-theme-xs ${
-          done ? "border-success-200 px-4 py-3 dark:border-success-500/30" : "border-border p-4"
-        }`}
-      >
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-600 dark:text-brand-400">Aming · {time}</p>
-        <p className={`mt-1 text-sm font-semibold ${done ? "text-success-700 dark:text-success-500" : ""}`}>
-          {done ? "✓ " : ""}
-          {body}
-        </p>
-        {status}
-        {error ? <p className="mt-2 text-xs text-error-600">{error}</p> : null}
+    <div className="my-2 flex justify-center">
+      <div className="w-full max-w-sm rounded-xl border border-border bg-surface px-3 py-2.5">
+        <div className="flex items-center justify-between gap-3 text-xs text-muted">
+          <span className="font-medium">{state ? `Order #${state.orderNo}` : "Order update"}</span>
+          <span>{time}</span>
+        </div>
+        <p className="mt-1 text-sm font-semibold">{headline}</p>
+        {status ? <p className="mt-1 text-sm text-muted">{status}</p> : null}
+        {error ? <p className="mt-1 text-xs text-error-600">{error}</p> : null}
         {actions.length || orderHref ? (
-          <div className="mt-3 flex flex-wrap items-center gap-2">
+          <div className="mt-2 flex flex-wrap items-center gap-2">
             {actions}
             {orderHref ? (
-              <Link href={orderHref} className="ml-auto inline-flex min-h-10 items-center text-sm font-medium text-brand-600 hover:underline dark:text-brand-400">
-                Open order ›
+              <Link href={orderHref} className="ml-auto inline-flex min-h-10 items-center text-xs font-medium text-brand-600 hover:underline dark:text-brand-400">
+                Open order
               </Link>
             ) : null}
           </div>
         ) : null}
       </div>
-    </div>
-  );
-}
-
-function Done({ children }: { children: ReactNode }) {
-  return <p className="mt-2 text-sm font-medium text-success-600 dark:text-success-500">✓ {children}</p>;
-}
-
-function Figure({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
-  return (
-    <div className="rounded-xl bg-gray-50 px-2 py-1.5 dark:bg-white/5">
-      <dt className="text-muted">{label}</dt>
-      <dd className={strong ? "font-semibold" : "font-medium"}>{value}</dd>
     </div>
   );
 }
