@@ -14,7 +14,6 @@ import {
   resolveOrCreateClient,
   type ClientMatchReason,
 } from "@repo/lib/clients/dedupe";
-import { renameOrderClient } from "@repo/lib/orders/client-name";
 import { buildAndInsertOrder, verifyActiveWorker } from "@repo/lib/orders/create";
 import { notifyOrderItem } from "@repo/lib/notifications/notify";
 import { fetchDesignerNotifications } from "@repo/lib/queries";
@@ -245,7 +244,6 @@ export interface DesignerItemEditInput {
 
 export interface DesignerOrderEditInput {
   orderId: string;
-  client_name: string;
   delivery_date: string;
   deadline_at: string; // required only when the order is express
   items: DesignerItemEditInput[];
@@ -289,9 +287,6 @@ export async function updateDesignerOrder(input: DesignerOrderEditInput): Promis
       error: "An item has already been delivered and can no longer be edited here.",
     };
   }
-
-  const renamed = await renameOrderClient(admin, input.orderId, input.client_name);
-  if (!renamed.ok) return renamed;
 
   // Look up catalog rows server-side rather than trusting client-supplied
   // names — same pattern as createOrder.

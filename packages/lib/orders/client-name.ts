@@ -6,7 +6,8 @@ import type { createAdminClient } from "@repo/lib/supabase/admin";
 // Fixes the client's name on an order, after it's submitted too. An order of
 // a client on file renames the client, and so every order of theirs (each
 // keeps its own copy of the name); one typed in without a client, just it.
-// Who may (staff managers, the order's designer) is the caller's check.
+// Only staff managers may (the caller's check); designers can't, since it
+// renames the client on file and every order of theirs.
 export async function renameOrderClient(
   admin: ReturnType<typeof createAdminClient>,
   orderId: string,
