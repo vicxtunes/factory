@@ -4,6 +4,8 @@ import "server-only";
 // that opted in: each one's public albums and its services on sale with
 // photos, just as its own page shows them ([slug]/page.tsx).
 
+import { unstable_cache } from "next/cache";
+
 import { offerings } from "@repo/lib/offerings/server";
 import { photos } from "@repo/lib/photos/server";
 import { studioAccess } from "@repo/lib/studio-access/server";
@@ -13,7 +15,13 @@ import { studios } from "@repo/lib/studios/server";
 import { mixFeed, type FeedItem } from "./core";
 import { portal } from "./server";
 
-export async function amingFeed(): Promise<FeedItem[]> {
+// Loading it asks every business for its albums and services and signs each
+// cover link, about half a second, so visitors share one copy for a minute.
+// Nothing here reads the visitor (admin client, no cookies), and a cover link
+// stays valid for at least an hour (VIEW_SECONDS in photos/service.ts).
+export const amingFeed = unstable_cache(loadFeed, ["aming-feed"], { revalidate: 60 });
+
+async function loadFeed(): Promise<FeedItem[]> {
   const shown = (await studios.list()).filter((s) => s.status === "active" && s.showOnAming);
   return mixFeed((await Promise.all(shown.map(businessFeed))).flat());
 }
