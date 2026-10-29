@@ -65,9 +65,13 @@ export function ExploreFeed({ items }: { items: FeedItem[] }) {
 
 function WorkTile({ item }: { item: FeedItem }) {
   const { business } = item;
+  // prefetch={false}: a screenful of tiles prefetched every work and studio
+  // page at once, and for a signed-in visitor whose token had just expired
+  // each prefetch tried to refresh the same session; Supabase refused the
+  // duplicates or timed out, and the tapped tile waited minutes behind them.
   return (
     <article>
-      <Link href={item.href} className="group relative block overflow-hidden rounded-lg bg-gray-100 dark:bg-white/5">
+      <Link href={item.href} prefetch={false} className="group relative block overflow-hidden rounded-lg bg-gray-100 dark:bg-white/5">
         {/* eslint-disable-next-line @next/next/no-img-element -- signed storage link, already resized */}
         <img src={item.coverUrl} alt="" loading="lazy" className="aspect-[4/3] w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]" />
         <span className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 bg-gradient-to-t from-black/70 via-black/30 to-transparent px-4 pt-10 pb-3 text-white opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-visible:opacity-100">
@@ -78,7 +82,7 @@ function WorkTile({ item }: { item: FeedItem }) {
         </span>
       </Link>
       <div className="mt-2.5 flex items-center justify-between gap-3">
-        <Link href={`/${business.slug}`} className="flex min-w-0 items-center gap-2 hover:underline">
+        <Link href={`/${business.slug}`} prefetch={false} className="flex min-w-0 items-center gap-2 hover:underline">
           {business.logoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element -- signed storage link
             <img src={business.logoUrl} alt="" className="h-6 w-6 shrink-0 rounded-full border border-border object-cover" />
