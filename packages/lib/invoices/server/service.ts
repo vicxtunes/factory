@@ -37,6 +37,11 @@ import * as repo from "./repository";
 import { clientPath } from "@repo/lib/client-portal/paths";
 
 const LIST_LIMIT = 500;
+// The list's orders and payments are read this many orders at a time: the
+// ids go in the request's URL, and from about 400 of them Supabase's reply
+// is refused (UND_ERR_HEADERS_OVERFLOW), so the whole list failed once
+// there were that many invoices.
+const ORDER_BATCH = 150;
 
 function cleanNotes(notes: string | null | undefined): string | null {
   const trimmed = (notes ?? "").trim();
@@ -377,7 +382,11 @@ export async function applyWallet(staff: InvoiceStaff, invoiceId: string): Promi
 export async function list(): Promise<InvoiceListRow[]> {
   const invoices = await repo.list(LIST_LIMIT);
   const orderIds = invoices.map((i) => i.order_id);
-  const [orders, paid] = await Promise.all([directory.loadOrders(orderIds), paidByOrders(orderIds)]);
+  const batches: string[][] = [];
+  for (let i = 0; i < orderIds.length; i += ORDER_BATCH) batches.push(orderIds.slice(i, i + ORDER_BATCH));
+  const loaded = await Promise.all(batches.map((ids) => Promise.all([directory.loadOrders(ids), paidByOrders(ids)])));
+  const orders = Object.assign({}, ...loaded.map(([o]) => o));
+  const paid: Record<string, number> = Object.assign({}, ...loaded.map(([, p]) => p));
   return invoices.flatMap((inv) => {
     const order = orders[inv.order_id];
     if (!order) return [];
