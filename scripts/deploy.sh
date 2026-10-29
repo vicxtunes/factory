@@ -47,7 +47,7 @@ set -e
 app=$1
 rel=/srv/aming/$app/releases/$(date +%Y%m%d%H%M%S)
 mkdir -p "$rel" && tar -xzf /tmp/$app.tgz -C "$rel"
-cp -R /tmp/sharp-linux/node_modules/@img/. "$rel/node_modules/@img/"
+cp -R /srv/aming/sharp-linux/node_modules/@img/. "$rel/node_modules/@img/"
 chown -R aming:aming "$rel"
 ln -sfn "$rel" /srv/aming/$app/current
 ls -1dt /srv/aming/$app/releases/* | tail -n +4 | xargs -r rm -rf
