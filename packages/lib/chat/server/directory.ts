@@ -233,12 +233,27 @@ export function orderHref(person: ParticipantRef, orderId: string): string {
   }
 }
 
+// An inbox's order chats are looked up this many at a time: the ids go in the
+// request's URL, and from about 400 of them Supabase's reply is refused
+// (UND_ERR_HEADERS_OVERFLOW), as it was for the invoice list.
+const ORDER_BATCH = 150;
+
+function batches(ids: string[]): string[][] {
+  const out: string[][] = [];
+  for (let i = 0; i < ids.length; i += ORDER_BATCH) out.push(ids.slice(i, i + ORDER_BATCH));
+  return out;
+}
+
 /**
  * The orders that are finished, for the inbox to set their chats aside:
  * cancelled, or every item collected and the price paid in full.
  */
 export async function getFinishedOrders(orderIds: string[]): Promise<Set<string>> {
   if (!orderIds.length) return new Set();
+  if (orderIds.length > ORDER_BATCH) {
+    const parts = await Promise.all(batches(orderIds).map(getFinishedOrders));
+    return new Set(parts.flatMap((part) => [...part]));
+  }
   const admin = createAdminClient();
   const [{ data: orders }, { data: items }, paid] = await Promise.all([
     admin.from("orders").select("id, quoted_price, cancelled_at").in("id", orderIds),
@@ -256,6 +271,10 @@ export async function getFinishedOrders(orderIds: string[]): Promise<Set<string>
 /** Order numbers for many orders at once (inbox titles). */
 export async function getOrderNumbers(orderIds: string[]): Promise<Map<string, string>> {
   if (!orderIds.length) return new Map();
+  if (orderIds.length > ORDER_BATCH) {
+    const parts = await Promise.all(batches(orderIds).map(getOrderNumbers));
+    return new Map(parts.flatMap((part) => [...part]));
+  }
   const { data } = await createAdminClient().from("orders").select("id, order_no").in("id", orderIds);
   return new Map((data ?? []).map((r) => [r.id as string, r.order_no as string]));
 }
