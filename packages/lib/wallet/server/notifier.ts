@@ -119,12 +119,18 @@ const MONEY_ALERT_TITLES: Record<MoneyAlertKind, string> = {
   payout_unconfirmed: "Payout not confirmed",
 };
 
-/** The money watch (watch.ts) found something that doesn't add up: the boss and supervisors, who see Accounts, hear of it. */
-export async function moneyAlert(alert: MoneyAlertRow): Promise<void> {
+/** The boss and supervisors: who sees Accounts, and hears from the money watch. */
+async function notifyMoneyWatchers(payload: { title: string; body: string; url: string }): Promise<void> {
   const { data: watchers } = await createAdminClient().from("profiles").select("id").in("role", ["supervisor", "boss"]);
-  await Promise.all(
-    (watchers ?? []).map((w: { id: string }) =>
-      notifyActor({ type: "dashboard_user", id: w.id }, { title: MONEY_ALERT_TITLES[alert.kind], body: alert.detail, url: "/dashboard/accounts" }),
-    ),
-  );
+  await Promise.all((watchers ?? []).map((w: { id: string }) => notifyActor({ type: "dashboard_user", id: w.id }, payload)));
+}
+
+/** The money watch (watch.ts) found something that doesn't add up. */
+export async function moneyAlert(alert: MoneyAlertRow): Promise<void> {
+  await notifyMoneyWatchers({ title: MONEY_ALERT_TITLES[alert.kind], body: alert.detail, url: "/dashboard/accounts" });
+}
+
+/** The evening money report (watch.ts). */
+export async function dailyMoneyReport(title: string, body: string): Promise<void> {
+  await notifyMoneyWatchers({ title, body, url: "/dashboard/accounts/payments?period=today" });
 }

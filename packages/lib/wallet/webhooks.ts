@@ -4,4 +4,4 @@ import "server-only";
 // (actions.ts is for the browser).
 
 export { handleWebhook as handleHivepayWebhook, reconcileWaiting as reconcileWaitingHivepay } from "./server/mobile-money";
-export { watchMoney } from "./server/watch";
+export { sendDailyReport as sendDailyMoneyReport, watchMoney } from "./server/watch";

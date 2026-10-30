@@ -699,3 +699,12 @@ export async function resolveMoneyAlert(id: string, byName: string): Promise<voi
     .is("resolved_at", null);
   if (error) throwDbError(error);
 }
+
+/** Takes the evening money report's turn for a day; false when it has already gone out. */
+export async function claimMoneyReport(day: string): Promise<boolean> {
+  const { error } = await createAdminClient().from("money_reports").insert({ day });
+  if (!error) return true;
+  if (error.code === "23505") return false;
+  throwDbError(error);
+  return false;
+}

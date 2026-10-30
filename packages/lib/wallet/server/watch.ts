@@ -7,7 +7,11 @@ import "server-only";
 // see the open ones on Accounts. Nothing here moves money: settling a prompt
 // stays with reconcile() in mobile-money.ts, which asks HivePay itself.
 
+import { CHANNELS } from "@repo/lib/accounting/core/model";
+import { localDate } from "@repo/lib/accounting/core/period";
+import { accounting } from "@repo/lib/accounting/index.server";
 import { formatMoney } from "@repo/lib/currency/format";
+import { resolveTenantScope } from "@repo/lib/tenancy/server/resolve";
 
 import type { MoneyAlert } from "../types";
 import * as notifier from "./notifier";
@@ -24,6 +28,14 @@ const STALE_PENDING_MS = 60 * MINUTE_MS;
 const DOUBLE_WITHIN_MS = 30 * MINUTE_MS;
 /** A payout HivePay hasn't confirmed this long after it went out. */
 const PAYOUT_STUCK_MS = 60 * MINUTE_MS;
+/**
+ * HivePay limits how often an account may ask ("Too Many Attempts"), and live
+ * payment screens and the waiting check share that limit: the watch asks at
+ * most once this often, and stops for the hour when HivePay says too many.
+ */
+const ASK_EVERY_MS = 2_000;
+
+const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const when = (iso: string) =>
   new Date(iso).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Africa/Kampala" });
@@ -43,10 +55,13 @@ export async function watchMoney(now = new Date()): Promise<repo.MoneyAlertRow[]
   // Prompts HivePay took, for the double check.
   const took: typeof rows = [];
 
-  for (const row of rows) {
+  for (const [i, row] of rows.entries()) {
+    if (i > 0) await pause(ASK_EVERY_MS);
     const res = await hivepay.status(toHivepayReference(row.id));
     if (!res.ok) {
       console.error("money watch: hivepay status failed:", row.id, res.message);
+      // Rate-limited: what's checked so far still counts; the rest waits for the next hour.
+      if (/too many/i.test(res.message)) break;
       continue;
     }
     const who = row.client_name ?? "A client";
@@ -125,4 +140,40 @@ export async function openAlerts(): Promise<MoneyAlert[]> {
 /** Someone looked into it: it leaves the open list, and isn't raised again. */
 export async function resolveAlert(id: string, byName: string): Promise<void> {
   await repo.resolveMoneyAlert(id, byName);
+}
+
+/** The evening money report goes out from this hour, local time. */
+const REPORT_HOUR = 20;
+
+const CHANNEL_NAMES: Record<(typeof CHANNELS)[number], string> = {
+  cash: "cash",
+  bank_transfer: "bank",
+  mobile_money: "mobile money",
+  card: "card",
+  other: "other",
+};
+
+/**
+ * Once a day, from 8 pm in the business's time zone: what came in today (per
+ * method and per person who recorded it, as Accounts → Payments shows it) and
+ * whether HivePay agrees (no open alerts). Called every few minutes; the day
+ * is claimed first (money_reports), so it goes out once even across restarts.
+ */
+export async function sendDailyReport(now = new Date()): Promise<boolean> {
+  const scope = await resolveTenantScope();
+  const hour = Number(new Intl.DateTimeFormat("en-GB", { hour: "numeric", hourCycle: "h23", timeZone: scope.timeZone }).format(now));
+  if (hour < REPORT_HOUR) return false;
+  if (!(await repo.claimMoneyReport(localDate(now, scope.timeZone)))) return false;
+
+  const [{ totals }, open] = await Promise.all([accounting.payments(scope, { preset: "today" }), repo.openMoneyAlerts()]);
+  const methods = CHANNELS.filter((c) => totals.byChannel[c] > 0).map((c) => `${CHANNEL_NAMES[c]} ${formatMoney(totals.byChannel[c])}`);
+  const recorders = totals.byRecorder.map((r) => `${r.name} ${formatMoney(r.amount)}`);
+  const check =
+    open.length === 0 ? "HivePay agrees with the app." : `${open.length} payment${open.length === 1 ? "" : "s"} need checking (Accounts).`;
+  const body =
+    totals.count === 0
+      ? `No payments today. ${check}`
+      : `${totals.count} payment${totals.count === 1 ? "" : "s"}: ${methods.join(", ")}. Recorded by ${recorders.join(", ")}. ${check}`;
+  await notifier.dailyMoneyReport(`Today's money: ${formatMoney(totals.total)}`, body);
+  return true;
 }
