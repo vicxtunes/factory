@@ -100,8 +100,10 @@ export async function startFileUpload(via: unknown, input: unknown): Promise<Res
 export async function confirmFileUpload(via: unknown, input: unknown): Promise<Result> {
   return runAction("files", async () => {
     const { scope, access, drive } = await caller(via);
+    // No touched(): it runs once per file, and each revalidation made every
+    // open page re-fetch everything it links to. FileBrowser refreshes once
+    // per batch instead.
     await drive.confirmUpload(scope, parseInput(uploadConfirmSchema, input), access);
-    touched();
   });
 }
 

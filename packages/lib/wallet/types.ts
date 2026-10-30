@@ -286,7 +286,7 @@ export type WalletResult<T = undefined> = T extends undefined
   : { ok: true; data: T } | { ok: false; error: string };
 
 /** What the money watch found that doesn't add up (packages/lib/wallet/server/watch.ts). */
-export type MoneyAlertKind = "paid_not_credited" | "credited_not_paid" | "possible_double" | "payout_unconfirmed";
+export type MoneyAlertKind = "paid_not_credited" | "credited_not_paid" | "possible_double" | "payout_unconfirmed" | "recorded_by_hand";
 
 export interface MoneyAlert {
   id: string;

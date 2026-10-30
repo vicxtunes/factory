@@ -15,6 +15,7 @@ import "server-only";
 // timeout, since the client may still approve the prompt.
 
 import { clientUrl } from "@repo/lib/client-portal/paths";
+import { formatMoney } from "@repo/lib/currency/format";
 import { parsePhone } from "@repo/lib/kernel/core/phone";
 import { createAdminClient } from "@repo/lib/supabase/admin";
 
@@ -324,10 +325,37 @@ async function reconcile(row: repo.CollectionRow, { quiet = false } = {}): Promi
       console.error("hivepay amount mismatch:", row.id, "asked", row.amount, "got", res.amount);
       return row;
     }
+    // Confirmed late, and staff already recorded it on the order by hand:
+    // crediting it as well would count it twice (J.One, 2026-10-30).
+    const byHand = await repo.receiptRecordedByHand(row);
+    if (byHand) {
+      if (await repo.matchCollectionToReceipt(row.id, byHand)) await raiseRecordedByHand(row, byHand.actor_name);
+      return (await repo.getCollection(row.id)) ?? row;
+    }
     const settled = await repo.settleCollection(row.id, ACTOR_NAME);
     if (!settled.alreadySettled) await announce(row);
   }
   return (await repo.getCollection(row.id)) ?? row;
+}
+
+/** Someone checks it really was one payment (not a prompt plus a second payment to our number). */
+async function raiseRecordedByHand(row: repo.CollectionRow, recordedBy: string | null): Promise<void> {
+  const order = row.order_id ? await directory.loadOrder(row.order_id) : null;
+  const ref = row.provider_ref ? ` (HivePay ${row.provider_ref})` : "";
+  const [alert] = await repo.insertMoneyAlerts([
+    {
+      kind: "recorded_by_hand",
+      collection_id: row.id,
+      withdrawal_id: null,
+      amount: row.amount,
+      phone: row.phone,
+      detail:
+        `A mobile money payment of ${formatMoney(row.amount)}${ref} for order ${order?.orderNo ?? "?"} was confirmed late. ` +
+        `${recordedBy ?? "Staff"} had already recorded ${formatMoney(row.amount)} on that order by hand, so it was taken as the same payment and not credited again. ` +
+        `If the client paid twice, credit the second payment to their wallet.`,
+    },
+  ]);
+  if (alert) await notifier.moneyAlert(alert).catch((err) => console.error("money alert push failed:", alert.id, err));
 }
 
 async function announce(row: repo.CollectionRow): Promise<void> {

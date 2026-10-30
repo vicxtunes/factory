@@ -117,6 +117,7 @@ const MONEY_ALERT_TITLES: Record<MoneyAlertKind, string> = {
   credited_not_paid: "Credited but not paid",
   possible_double: "Possible double payment",
   payout_unconfirmed: "Payout not confirmed",
+  recorded_by_hand: "Check a payment recorded by hand",
 };
 
 /** The boss and supervisors: who sees Accounts, and hears from the money watch. */

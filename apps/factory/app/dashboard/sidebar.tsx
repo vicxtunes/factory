@@ -80,7 +80,6 @@ export function DashboardSidebar({ role, email }: { role: AppRole; email: string
           <li>
             <Link
               href={HOME.href}
-              prefetch
               aria-current={homeActive ? "page" : undefined}
               data-tip={HOME.label}
               className={`menu-item ${homeActive ? "menu-item-active" : "menu-item-inactive"}`}
@@ -92,7 +91,6 @@ export function DashboardSidebar({ role, email }: { role: AppRole; email: string
           <li>
             <Link
               href={CHAT.href}
-              prefetch
               aria-current={chatActive ? "page" : undefined}
               data-tip={CHAT.label}
               className={`menu-item ${chatActive ? "menu-item-active" : "menu-item-inactive"}`}
