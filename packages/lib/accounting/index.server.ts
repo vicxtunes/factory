@@ -9,4 +9,4 @@ import { createAccountingService } from "./service";
 export const accounting = createAccountingService(factorySource);
 
 export { requireAccountsAccess } from "./access";
-export type { CustomerAccountView, CustomerAccountsView, OverviewView, PeriodInput, SalesView } from "./service";
+export type { CustomerAccountView, CustomerAccountsView, OverviewView, PaymentsView, PeriodInput, SalesView } from "./service";

@@ -14,6 +14,7 @@ import {
   localDate,
   monthlySeries,
   overview,
+  paymentsTotals,
   resolvePeriod,
   saleLine,
   salesTotals,
@@ -22,6 +23,8 @@ import {
   type HistoryEntry,
   type MonthPoint,
   type Overview,
+  type PaymentLine,
+  type PaymentsTotals,
   type Period,
   type SaleLine,
   type SalesTotals,
@@ -46,6 +49,13 @@ export interface SalesView {
   period: Period;
   lines: SaleLine[];
   totals: SalesTotals;
+}
+
+export interface PaymentsView {
+  period: Period;
+  /** Newest first. */
+  lines: PaymentLine[];
+  totals: PaymentsTotals;
 }
 
 export interface CustomerAccountsView {
@@ -92,6 +102,19 @@ export function createAccountingService(source: AccountingSource, clock: () => D
       return { period, lines: docs.map((d) => saleLine(d, today)), totals: salesTotals(docs) };
     },
 
+    /** Every payment received in the period: when, how much, how, from whom, and who recorded it. */
+    async payments(scope: TenantScope, input: PeriodInput): Promise<PaymentsView> {
+      const period = resolvePeriod(input, clock(), scope.timeZone);
+      const [moneyIn, customers] = await Promise.all([
+        source.moneyIn(scope, { range: { from: period.from, to: period.to } }),
+        source.customers(scope),
+      ]);
+      const names = new Map(customers.map((c) => [c.id, c.name]));
+      const lines = moneyIn
+        .map((m) => ({ ...m, customerName: names.get(m.customerId) ?? "Unknown client" }))
+        .sort((a, b) => b.receivedAt.localeCompare(a.receivedAt));
+      return { period, lines, totals: paymentsTotals(moneyIn) };
+    },
     /** Every customer's account, all time. */
     async customerAccounts(scope: TenantScope): Promise<CustomerAccountsView> {
       const today = localDate(clock(), scope.timeZone);

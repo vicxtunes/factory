@@ -239,6 +239,38 @@ export function customerHistory(moneyIn: MoneyIn[], held: HeldMovement[]): Histo
   return entries.sort((a, b) => b.at.localeCompare(a.at));
 }
 
+export interface PaymentLine extends MoneyIn {
+  customerName: string;
+}
+
+export interface PaymentsTotals {
+  total: number;
+  count: number;
+  byChannel: Record<Channel, number>;
+  /** Who recorded the money, most first. */
+  byRecorder: { name: string; amount: number; count: number }[];
+}
+
+/** Money received, in total, per channel and per person who recorded it. */
+export function paymentsTotals(lines: MoneyIn[]): PaymentsTotals {
+  const byChannel = Object.fromEntries(CHANNELS.map((c) => [c, 0])) as Record<Channel, number>;
+  const recorders = new Map<string, { name: string; amount: number; count: number }>();
+  for (const m of lines) {
+    byChannel[m.channel] += m.amount;
+    const name = m.recordedBy ?? "Not recorded";
+    const row = recorders.get(name) ?? { name, amount: 0, count: 0 };
+    row.amount += m.amount;
+    row.count += 1;
+    recorders.set(name, row);
+  }
+  return {
+    total: sum(lines, (m) => m.amount),
+    count: lines.length,
+    byChannel,
+    byRecorder: [...recorders.values()].sort((a, b) => b.amount - a.amount),
+  };
+}
+
 function sum<T>(items: T[], value: (item: T) => number): number {
   return items.reduce((total, item) => total + value(item), 0);
 }

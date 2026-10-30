@@ -9,6 +9,7 @@ import {
   monthlySeries,
   outstanding,
   overview,
+  paymentsTotals,
   salesTotals,
 } from "./figures";
 import type { Customer, HeldMovement, MoneyIn, SaleDocument } from "./model";
@@ -47,6 +48,7 @@ function money(over: Partial<MoneyIn>): MoneyIn {
     kind: "sale_receipt",
     orderNo: null,
     reference: null,
+    recordedBy: "Carol",
     ...over,
   };
 }
@@ -193,4 +195,23 @@ test("customer history merges money in and held movements, newest first", () => 
       ["in:m1", "received", 10_000, true],
     ],
   );
+});
+
+test("payments totals: per channel and per person who recorded them, most first", () => {
+  const t = paymentsTotals([
+    money({ id: "a", amount: 50_000, channel: "cash", recordedBy: "Carol" }),
+    money({ id: "b", amount: 20_000, channel: "mobile_money", recordedBy: "HivePay" }),
+    money({ id: "c", amount: 40_000, channel: "mobile_money", recordedBy: "HivePay" }),
+    money({ id: "d", amount: 5_000, channel: "bank_transfer", recordedBy: null }),
+  ]);
+  assert.equal(t.total, 115_000);
+  assert.equal(t.count, 4);
+  assert.equal(t.byChannel.cash, 50_000);
+  assert.equal(t.byChannel.mobile_money, 60_000);
+  assert.equal(t.byChannel.card, 0);
+  assert.deepEqual(t.byRecorder, [
+    { name: "HivePay", amount: 60_000, count: 2 },
+    { name: "Carol", amount: 50_000, count: 1 },
+    { name: "Not recorded", amount: 5_000, count: 1 },
+  ]);
 });

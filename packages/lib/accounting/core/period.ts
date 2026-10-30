@@ -2,13 +2,21 @@
 // business in Kampala starts at midnight Kampala time, whatever the server's
 // zone. A period is a half-open range of instants [from, to).
 
-export type PeriodPreset = "this_month" | "last_month" | "this_year" | "all" | "custom";
+export type PeriodPreset = "today" | "yesterday" | "this_week" | "this_month" | "last_month" | "this_year" | "all" | "custom";
 
 export const PERIOD_PRESETS: { value: Exclude<PeriodPreset, "custom">; label: string }[] = [
   { value: "this_month", label: "This month" },
   { value: "last_month", label: "Last month" },
   { value: "this_year", label: "This year" },
   { value: "all", label: "All time" },
+];
+
+/** With single days and the week first: where money is watched day by day (Aming's Accounts). */
+export const DAY_PERIOD_PRESETS: { value: Exclude<PeriodPreset, "custom">; label: string }[] = [
+  { value: "today", label: "Today" },
+  { value: "yesterday", label: "Yesterday" },
+  { value: "this_week", label: "This week" },
+  ...PERIOD_PRESETS,
 ];
 
 export interface Period {
@@ -96,6 +104,17 @@ export function resolvePeriod(
   const [year, month] = today.split("-").map(Number);
 
   switch (input.preset) {
+    case "today":
+      return range("today", today, today, timeZone);
+    case "yesterday": {
+      const yesterday = addDays(today, -1);
+      return range("yesterday", yesterday, yesterday, timeZone);
+    }
+    case "this_week": {
+      // Weeks start on Monday.
+      const weekday = new Date(`${today}T00:00:00Z`).getUTCDay();
+      return range("this_week", addDays(today, -((weekday + 6) % 7)), today, timeZone);
+    }
     case "last_month": {
       const start = monthStart(year, month - 1);
       return range("last_month", start, addDays(monthStart(year, month), -1), timeZone);

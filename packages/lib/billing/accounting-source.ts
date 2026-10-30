@@ -51,6 +51,8 @@ function moneyOf(records: Records, scope: TenantScope): MoneyIn[] {
         kind: "sale_receipt" as const,
         orderNo: null,
         reference: p.receiptNo,
+        // A studio's payment records don't say who took them.
+        recordedBy: null,
       })),
   );
 }

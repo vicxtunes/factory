@@ -36,6 +36,9 @@ const ACTOR_NAME = "HivePay";
 const ASK_PROVIDER_AFTER_MS = 10_000;
 /** While a prompt is this fresh and still pending, a new one isn't sent — the client gets the waiting one back. */
 const ONE_PROMPT_AT_A_TIME_MS = 3 * 60_000;
+const DAY_MS = 24 * 60 * 60_000;
+/** How far back the waiting-prompt check looks (reconcileWaiting). */
+const WAITING_LOOKBACK_MS = 30 * DAY_MS;
 
 function toView(row: repo.CollectionRow): MobileMoneyCollection {
   return {
@@ -296,8 +299,11 @@ export async function paidForStudioRequests(requestIds: string[]): Promise<Recor
   return repo.paidByProductRequest(requestIds);
 }
 
-/** Asks HivePay about a pending collection and settles or fails it. Returns the row as it now stands. */
-async function reconcile(row: repo.CollectionRow): Promise<repo.CollectionRow> {
+/**
+ * Asks HivePay about a pending collection and settles or fails it. Returns the row as it now stands.
+ * `quiet`: a failure isn't told to the client (a prompt from days ago they've long forgotten).
+ */
+async function reconcile(row: repo.CollectionRow, { quiet = false } = {}): Promise<repo.CollectionRow> {
   if (row.status !== "pending") return row;
   const res = await hivepay.status(toHivepayReference(row.id));
   if (!res.ok) {
@@ -308,7 +314,7 @@ async function reconcile(row: repo.CollectionRow): Promise<repo.CollectionRow> {
     await repo.failCollection(row.id, "The payment didn't go through.");
     // The client's own payment (a top-up or an Aming order): they hear it didn't go. A business's
     // customer pays without an Aming account, and sees it on the payment screen.
-    if (!row.product_request_id && !row.booking_id && !row.billing_document_id) {
+    if (!quiet && !row.product_request_id && !row.booking_id && !row.billing_document_id) {
       await notifier.paymentFailed(row.client_id, row.amount, row.vendor_job_id ? "/studio/jobs" : clientPath("/payment")).catch((err) => console.error("payment failed push failed:", err));
     }
   } else if (res.status === "success") {
@@ -345,18 +351,24 @@ export async function checkCollection(viewer: ClientViewer, id: string): Promise
 }
 
 /**
- * Asks HivePay about prompts still waiting from the last day — the ones whose
- * webhook never came and whose payment screen was closed. Run every few
+ * Asks HivePay about prompts still waiting from the last 30 days — the ones
+ * whose webhook never came and whose payment screen was closed. Run every few
  * minutes by the client app (instrumentation.ts). Returns the ids that are now
  * succeeded, for the caller to put on studio invoices like the webhook does.
+ *
+ * 30 days, not one: a check that misses a day (the database was down on
+ * 2026-10-29) used to leave a payment HivePay took pending for good — 58,000
+ * from 21 Oct was found a week later. Failures older than a day are closed
+ * quietly.
  */
 export async function reconcileWaiting(): Promise<string[]> {
   const now = Date.now();
-  const rows = await repo.pendingCollectionsBetween(new Date(now - 24 * 60 * 60_000), new Date(now - 2 * 60_000));
+  const rows = await repo.pendingCollectionsBetween(new Date(now - WAITING_LOOKBACK_MS), new Date(now - 2 * 60_000));
   const succeeded: string[] = [];
   for (const row of rows) {
     try {
-      if ((await reconcile(row)).status === "succeeded") succeeded.push(row.id);
+      const quiet = now - Date.parse(row.created_at) > DAY_MS;
+      if ((await reconcile(row, { quiet })).status === "succeeded") succeeded.push(row.id);
     } catch (error) {
       console.error("hivepay reconcile failed:", row.id, error);
     }

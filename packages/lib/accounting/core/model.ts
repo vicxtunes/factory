@@ -48,6 +48,8 @@ export interface MoneyIn {
   kind: "sale_receipt" | "prepayment";
   orderNo: string | null;
   reference: string | null;
+  /** Who recorded it: a staff member's name, or the gateway's ("HivePay"). Null when the source doesn't say. */
+  recordedBy: string | null;
 }
 
 /**
