@@ -7,7 +7,7 @@ export type PaymentMethod = "bank_transfer" | "mobile_money" | "cash" | "card" |
 export type PaymentStatus = "pending" | "succeeded" | "failed" | "cancelled";
 
 /** One ledger row's type. deposit/refund add money, order_payment takes it, adjustment and transfer (to or from the Business card) are either. */
-export type WalletEntryKind = "deposit" | "order_payment" | "refund" | "adjustment" | "transfer";
+export type WalletEntryKind = "deposit" | "order_payment" | "refund" | "adjustment" | "transfer" | "bonus";
 export type TransactionHistoryKind = WalletEntryKind | "deposit_report" | "order_payment_report";
 
 export interface TransactionHistoryFilters {
@@ -296,4 +296,27 @@ export interface MoneyAlert {
   /** What happened, in a sentence, with HivePay's reference. */
   detail: string;
   createdAt: string;
+}
+
+/** Extra on the Aming card for top-ups while it runs (Marketing → Top-up bonus; migration 20261129120000). */
+export interface TopupBonus {
+  id: string;
+  /** Percent of the top-up added, 1–100. */
+  percent: number;
+  /** Top-ups below this get nothing. */
+  minAmount: number;
+  startsAt: string;
+  /** Null = runs until ended. */
+  endsAt: string | null;
+  status: "scheduled" | "running" | "ended";
+  createdByName: string;
+}
+
+/** What someone fills in to start a top-up bonus. */
+export interface TopupBonusInput {
+  percent: number;
+  minAmount: number;
+  /** ISO instant; null = now. */
+  startsAt: string | null;
+  endsAt: string | null;
 }

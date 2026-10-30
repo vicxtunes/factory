@@ -16,6 +16,7 @@ import { revalidatePath } from "next/cache";
 
 import { WalletError } from "./server/errors";
 import { requireBusinessOwner, requireClient, requireStaff, getViewer } from "./server/identity";
+import * as bonus from "./server/bonus";
 import * as business from "./server/business";
 import * as vendorWallet from "./server/vendor";
 import * as mobileMoney from "./server/mobile-money";
@@ -29,6 +30,7 @@ import type {
   PaymentMethod,
   PendingDeposit,
   PendingWithdrawal,
+  TopupBonus,
   TransactionHistoryFilters,
   TransactionHistoryPage,
   WalletListRow,
@@ -332,5 +334,51 @@ export async function resolveMoneyAlert(id: string): Promise<WalletResult> {
     const session = await requireAccountsAccess();
     await watch.resolveAlert(id, session.fullName ?? session.email ?? "Staff");
     revalidatePath("/dashboard/accounts");
+  });
+}
+
+// --- Top-up bonus (Marketing) ----------------------------------------------
+
+/** Every top-up bonus, running first. Managers can look; the boss changes them. */
+export async function listTopupBonuses(): Promise<WalletResult<TopupBonus[]>> {
+  return run(async () => {
+    await requireStaff();
+    return bonus.listBonuses();
+  });
+}
+
+/** The running bonus, for "Add funds" (signed-in clients). */
+export async function getRunningTopupBonus(): Promise<WalletResult<TopupBonus | null>> {
+  return run(async () => {
+    await requireClient();
+    return bonus.runningBonus();
+  });
+}
+
+export async function createTopupBonus(input: {
+  percent: number;
+  minAmount: number;
+  startsAt: string | null;
+  endsAt: string | null;
+}): Promise<WalletResult<TopupBonus[]>> {
+  return run(async () => {
+    const isTime = (v: unknown) => v === null || (typeof v === "string" && !Number.isNaN(Date.parse(v)));
+    if (typeof input?.percent !== "number" || typeof input.minAmount !== "number" || !isTime(input.startsAt) || !isTime(input.endsAt)) {
+      throw new WalletError("Fill in the bonus, the minimum top-up and the dates.");
+    }
+    const { percent, minAmount, startsAt, endsAt } = input;
+    await bonus.createBonus(await requireStaff(), { percent, minAmount, startsAt, endsAt });
+    revalidatePath("/dashboard/marketing");
+    return bonus.listBonuses();
+  });
+}
+
+/** Ends the running bonus now, or cancels a planned one. */
+export async function stopTopupBonus(id: string): Promise<WalletResult<TopupBonus[]>> {
+  return run(async () => {
+    if (typeof id !== "string") throw new WalletError("That bonus no longer exists.");
+    await bonus.stopBonus(await requireStaff(), id);
+    revalidatePath("/dashboard/marketing");
+    return bonus.listBonuses();
   });
 }

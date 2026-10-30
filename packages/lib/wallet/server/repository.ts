@@ -8,9 +8,10 @@ import { randomUUID } from "node:crypto";
 // migration), which do their own locking and checks.
 
 import { createAdminClient } from "@repo/lib/supabase/admin";
+import { resolveTenantScope } from "@repo/lib/tenancy/server/resolve";
 
 import type { MoneyAlertKind, PaymentMethod, PaymentStatus, TransactionHistoryKind, WalletCard, WalletEntryKind } from "../types";
-import { throwDbError } from "./errors";
+import { WalletError, throwDbError } from "./errors";
 import type { WalletActor } from "./identity";
 
 export interface PaymentRow {
@@ -753,4 +754,63 @@ export async function claimMoneyReport(day: string): Promise<boolean> {
   if (error.code === "23505") return false;
   throwDbError(error);
   return false;
+}
+
+// --- Top-up bonus (migration 20261129120000) ---------------------------------
+
+// The database's BONUS:<code> refusals, as sentences.
+const BONUS_MESSAGES: Record<string, string> = {
+  overlap: "Another top-up bonus already runs or is planned in that period. End or cancel it first, or choose other dates.",
+  started: "This bonus has already started. It can only be ended now.",
+  invalid_end: "A running bonus can only be ended now.",
+};
+
+function throwBonusError(error: { message: string }): never {
+  const code = /BONUS:(\w+)/.exec(error.message)?.[1];
+  if (code && BONUS_MESSAGES[code]) throw new WalletError(BONUS_MESSAGES[code]);
+  throwDbError(error);
+}
+
+export interface TopupBonusRow {
+  id: string;
+  percent: number;
+  min_amount: number;
+  starts_at: string;
+  ends_at: string | null;
+  created_by_name: string;
+}
+
+export async function listTopupBonuses(): Promise<TopupBonusRow[]> {
+  const { data, error } = await createAdminClient()
+    .from("topup_bonuses")
+    .select("id, percent, min_amount, starts_at, ends_at, created_by_name")
+    .order("starts_at", { ascending: false })
+    .returns<TopupBonusRow[]>();
+  if (error) throwBonusError(error);
+  return (data ?? []).map((b) => ({ ...b, min_amount: num(b.min_amount) }));
+}
+
+export async function createTopupBonus(
+  input: { percent: number; minAmount: number; startsAt: string | null; endsAt: string | null },
+  actor: WalletActor,
+): Promise<void> {
+  const { error } = await createAdminClient().rpc("topup_bonus_create", {
+    p_tenant: (await resolveTenantScope()).tenantId,
+    p_percent: input.percent,
+    p_min_amount: input.minAmount,
+    p_starts_at: input.startsAt,
+    p_ends_at: input.endsAt,
+    p_actor_id: actor.id,
+    p_actor_name: actor.name,
+  });
+  if (error) throwBonusError(error);
+}
+
+/** Ends a running bonus now, or removes one that hasn't started. */
+export async function stopTopupBonus(id: string, started: boolean, actorName: string): Promise<void> {
+  const db = createAdminClient().from("topup_bonuses");
+  const { error } = started
+    ? await db.update({ ends_at: new Date().toISOString(), ended_by_name: actorName }).eq("id", id)
+    : await db.delete().eq("id", id);
+  if (error) throwBonusError(error);
 }

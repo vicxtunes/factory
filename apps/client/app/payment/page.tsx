@@ -7,7 +7,7 @@ import { Loading } from "@repo/ui/skeletons/Loading";
 import { getClientSession } from "@repo/lib/auth/session";
 import { listMyUnpaidInvoices } from "@repo/lib/invoices/actions";
 import { resolveTenantScope } from "@repo/lib/tenancy/server/resolve";
-import { getMyWallet } from "@repo/lib/wallet/actions";
+import { getMyWallet, getRunningTopupBonus } from "@repo/lib/wallet/actions";
 
 import { dueOn } from "../document-due";
 
@@ -35,7 +35,7 @@ export default async function ClientPaymentPage({ searchParams }: { searchParams
 
 // A client's own wallet: their Aming card alone. A business's card is in its own Wallet (My Business → Wallet).
 async function Wallet({ startAdding }: { startAdding: boolean }) {
-  const [wallet, unpaid, scope] = await Promise.all([getMyWallet(), listMyUnpaidInvoices(), resolveTenantScope()]);
+  const [wallet, unpaid, scope, bonus] = await Promise.all([getMyWallet(), listMyUnpaidInvoices(), resolveTenantScope(), getRunningTopupBonus()]);
   if (!wallet.ok) return <p className="rounded-2xl border border-border bg-surface p-4 text-sm text-error-600">{wallet.error}</p>;
   // If the invoices can't load, the wallet still works: it just has no "You owe".
   const invoices = unpaid.ok ? unpaid.data.map((i) => ({ ...i, due: dueOn(scope, "Due", i.dueDate, false) })) : [];
@@ -43,6 +43,7 @@ async function Wallet({ startAdding }: { startAdding: boolean }) {
     <ClientWallet
       wallet={wallet.data}
       startAdding={startAdding}
+      bonus={bonus.ok ? (bonus.data ?? null) : null}
       owing={invoices.length ? <ClientUnpaidInvoices invoices={invoices} walletBalance={wallet.data.balance} /> : null}
     />
   );

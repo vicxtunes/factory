@@ -191,7 +191,9 @@ async function Results({ history, filters }: { history: History; filters: { q?: 
                           ? "Adjustment"
                           : item.kind === "transfer"
                             ? "Card transfer"
-                            : "Deposit";
+                            : item.kind === "bonus"
+                              ? "Bonus"
+                              : "Deposit";
                 const sign = item.amount < 0 ? "−" : "+";
 
                 return (
