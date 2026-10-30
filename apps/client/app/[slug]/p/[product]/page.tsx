@@ -5,7 +5,7 @@ import { Loading } from "@repo/ui/skeletons/Loading";
 import { localDate } from "@repo/lib/accounting/core/period";
 import { notFound, permanentRedirect } from "next/navigation";
 
-import { amingShowcaseMedia, withOwnMedia } from "@repo/lib/offerings/core";
+import { amingShowcaseMedia, runningDeal, withOwnMedia } from "@repo/lib/offerings/core";
 import { amingProducts, offerings } from "@repo/lib/offerings/server";
 import { studioAccess } from "@repo/lib/studio-access/server";
 import { portalClient, studioAtSlug } from "@repo/lib/studio-portal/server";
@@ -89,6 +89,7 @@ async function Showcase({
       signedInPhone={signedInPhone}
       today={localDate(new Date(), at.scope.timeZone)}
       scope={at.scope}
+      deal={runningDeal(found, new Date())}
     />
   );
 }

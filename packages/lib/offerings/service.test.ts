@@ -70,7 +70,7 @@ function memoryStore() {
     serviceSlugs: async (scope) => services.filter((s) => s.tenantId === scope.tenantId).map((s) => s.slug),
     createService: async (scope, input) => {
       const position = services.filter((s) => s.tenantId === scope.tenantId).length + 1;
-      const row = { ...input, hiddenMedia: [], id: `s${services.length + 1}`, tenantId: scope.tenantId, position, archivedAt: null, createdAt: "2026-10-07T00:00:00Z" };
+      const row = { ...input, hiddenMedia: [], deal: null, id: `s${services.length + 1}`, tenantId: scope.tenantId, position, archivedAt: null, createdAt: "2026-10-07T00:00:00Z" };
       services.push(row);
       return strip(row);
     },

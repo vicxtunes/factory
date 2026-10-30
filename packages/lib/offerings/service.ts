@@ -23,6 +23,8 @@ import {
   type ServiceWithPackages,
   type ShowroomSettings,
   templatePrice,
+  validateDeal,
+  type Deal,
 } from "./core";
 import { OfferingError, type OfferingStore } from "./ports";
 
@@ -234,6 +236,15 @@ export class OfferingService {
 
   async setServiceDescription(scope: TenantScope, id: string, description: string | null): Promise<Service> {
     return this.updateService(scope, id, { description });
+  }
+
+  /** Puts a deal on a service or product (every package or size), or takes it off (null). */
+  async setDeal(scope: TenantScope, id: string, deal: Deal | null, now = new Date()): Promise<Service> {
+    if (deal) {
+      const errors = validateDeal(deal, now);
+      if (errors.length) throw new OfferingError(errors.join(" "));
+    }
+    return this.updateService(scope, id, { deal });
   }
 
   /** Moves a service to another active category (a product of the business's own to another of its own products categories). */
