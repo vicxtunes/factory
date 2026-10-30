@@ -80,7 +80,6 @@ export function ClientSidebar({ signedIn }: { signedIn: boolean }) {
                   <li key={item.href}>
                     <Link
                       href={item.href}
-                      prefetch
                       aria-current={active ? "page" : undefined}
                       data-tip={item.label}
                       className={`menu-item ${active ? "menu-item-active" : "menu-item-inactive"}`}

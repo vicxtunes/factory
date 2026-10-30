@@ -116,7 +116,6 @@ export function SidebarGroup({
       <li key={link.href}>
         <Link
           href={link.href}
-          prefetch
           aria-current={link.active ? "page" : undefined}
           onClick={inDropdown ? () => setDropdown(false) : undefined}
           className={`menu-item text-sm ${link.active ? "menu-item-active" : "menu-item-inactive"}`}

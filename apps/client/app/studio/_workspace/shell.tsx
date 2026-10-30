@@ -118,7 +118,6 @@ function StudioSidebar({ brand, nav, switcher }: { brand: StudioBrand; nav: Stud
                 <li key={item.href}>
                   <Link
                     href={item.href}
-                    prefetch
                     aria-current={item.active ? "page" : undefined}
                     data-tip={item.label}
                     className={`menu-item ${item.active ? "menu-item-active" : "menu-item-inactive"}`}
