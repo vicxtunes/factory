@@ -553,6 +553,52 @@ export async function markCollectionSent(id: string, providerRef: string, networ
   if (error) throwDbError(error);
 }
 
+/**
+ * A mobile money receipt staff recorded by hand on the prompt's order, for the
+ * same amount, after the prompt went out, and not yet tied to another prompt:
+ * most likely this very payment, recorded while the app still had it pending.
+ */
+export async function receiptRecordedByHand(
+  row: CollectionRow,
+): Promise<{ id: string; created_at: string; actor_name: string | null } | null> {
+  if (!row.order_id) return null;
+  const db = createAdminClient();
+  const { data, error } = await db
+    .from("order_payment_receipts")
+    .select("id, created_at, actor_name")
+    .eq("order_id", row.order_id)
+    .eq("method", "mobile_money")
+    .eq("amount_received", row.amount)
+    // Typed in by staff; a prompt that settles on an order records its own
+    // receipt (actor "system"), not always tied back to its prompt.
+    .eq("actor_type", "dashboard_user")
+    .is("wallet_payment_id", null)
+    .gte("created_at", row.created_at)
+    .order("created_at")
+    .returns<{ id: string; created_at: string; actor_name: string | null }[]>();
+  if (error) throwDbError(error);
+  if (!data?.length) return null;
+  const { data: taken, error: takenError } = await db
+    .from("provider_collections")
+    .select("receipt_id")
+    .in("receipt_id", data.map((r) => r.id));
+  if (takenError) throwDbError(takenError);
+  const used = new Set((taken ?? []).map((t) => t.receipt_id));
+  return data.find((r) => !used.has(r.id)) ?? null;
+}
+
+/** The prompt is the payment on this receipt: succeeded, with no money moved. Only while still pending. */
+export async function matchCollectionToReceipt(id: string, receipt: { id: string; created_at: string }): Promise<boolean> {
+  const { data, error } = await createAdminClient()
+    .from("provider_collections")
+    .update({ status: "succeeded", receipt_id: receipt.id, applied_at: receipt.created_at, resolved_at: new Date().toISOString() })
+    .eq("id", id)
+    .eq("status", "pending")
+    .select("id");
+  if (error) throwDbError(error);
+  return (data ?? []).length > 0;
+}
+
 /** Only while still pending: a collection that succeeded stays succeeded. */
 export async function failCollection(id: string, reason: string): Promise<void> {
   const { error } = await createAdminClient()
