@@ -81,6 +81,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Accounts",
     items: [
       { href: "/dashboard/accounts", label: "Overview", icon: "dashboard", visible: accountsViewers, exact: true },
+      { href: "/dashboard/accounts/payments", label: "Payments", icon: "payment", visible: accountsViewers },
       { href: "/dashboard/accounts/sales", label: "Sales", icon: "invoice", visible: accountsViewers },
       { href: "/dashboard/accounts/clients", label: "Client accounts", icon: "clients", visible: accountsViewers },
     ],
