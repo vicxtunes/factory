@@ -20,4 +20,8 @@ export const discountInputSchema = z.object({
   productIds: z.array(z.uuid("Choose products from the list.")).max(500, "Choose at most 500 products."),
   startsAt: isoInstant.nullable(),
   endsAt: isoInstant.nullable(),
+  code: z.string().max(40, "Keep the code under 20 letters and numbers.").nullable(),
+  maxUses: z.number("Enter the number of uses as a number.").nullable(),
 }) satisfies z.ZodType<DiscountInput>;
+
+export const promoCodeSchema = z.string().max(40, "That code isn't valid.");

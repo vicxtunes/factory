@@ -4,7 +4,7 @@
 
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
-import { discountStatus, validateDiscount, type Discount, type DiscountInput, type DiscountStatus } from "./core";
+import { discountStatus, normaliseCode, validateDiscount, type Discount, type DiscountInput, type DiscountStatus, type PromoCode } from "./core";
 import { DiscountError, type DiscountActor, type DiscountStore } from "./ports";
 
 export interface DiscountView extends Discount {
@@ -28,9 +28,28 @@ export class DiscountService {
   }
 
   async create(scope: TenantScope, input: DiscountInput, actor: DiscountActor): Promise<string> {
-    const errors = validateDiscount(input, this.clock());
+    const clean = { ...input, name: input.name.trim(), code: normaliseCode(input.code) };
+    const errors = validateDiscount(clean, this.clock());
     if (errors.length) throw new DiscountError(errors.join(" "));
-    return this.store.create(scope, { ...input, name: input.name.trim() }, actor);
+    return this.store.create(scope, clean, actor);
+  }
+
+  /** A promo code a client typed, if it can be used on an order placed now. */
+  async promoCode(scope: TenantScope, typed: string): Promise<PromoCode> {
+    const code = normaliseCode(typed);
+    const discount = code ? await this.store.findByCode(scope, code) : null;
+    if (!discount || !discount.code) throw new DiscountError(`“${typed.trim()}” isn't a promo code we know. Check the spelling.`);
+    const status = discountStatus(discount, this.clock());
+    if (status === "scheduled") throw new DiscountError(`The code ${discount.code} isn't on yet.`);
+    if (status === "ended") throw new DiscountError(`The code ${discount.code} has ended.`);
+    if (discount.maxUses !== null && discount.uses >= discount.maxUses) throw new DiscountError(`The code ${discount.code} has been used up.`);
+    const { id, kind, value, appliesTo, productIds } = discount;
+    return { discountId: id, code: discount.code, kind, value, appliesTo, productIds };
+  }
+
+  /** After an order was placed with a code. */
+  async applyCode(scope: TenantScope, orderId: string, discountId: string): Promise<void> {
+    await this.store.applyCode(scope, orderId, discountId);
   }
 
   /**

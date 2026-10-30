@@ -5,19 +5,18 @@
 
 import { revalidatePath } from "next/cache";
 
-import { getDashboardSession } from "@repo/lib/auth/session";
+import { getClientSession, getDashboardSession } from "@repo/lib/auth/session";
 import { catalogChanged } from "@repo/lib/catalog-cache";
 import { parseInput, type Result } from "@repo/lib/kernel/core";
 import { runAction } from "@repo/lib/kernel/server/action";
 import { resolveTenantScope } from "@repo/lib/tenancy/server/resolve";
 
-import { factoryStore } from "./adapters/factory/store";
-import { discountIdSchema, discountInputSchema } from "./core/schema";
+import type { PromoCode } from "./core/model";
+import { discountIdSchema, discountInputSchema, promoCodeSchema } from "./core/schema";
 import { canManageDiscounts, canViewDiscounts } from "./policy";
 import { DiscountError } from "./ports";
-import { DiscountService, type DiscountView } from "./service";
-
-const service = new DiscountService(factoryStore);
+import { discounts as service } from "./server";
+import type { DiscountView } from "./service";
 
 async function staff(manage: boolean) {
   const session = await getDashboardSession();
@@ -56,5 +55,13 @@ export async function stopDiscount(id: unknown): Promise<Result<DiscountView[]>>
     await service.stop(scope, parseInput(discountIdSchema, id), actor);
     changed();
     return service.list(scope);
+  });
+}
+
+/** The order form's promo code box: what the code takes off, if it can be used now. */
+export async function checkPromoCode(code: unknown): Promise<Result<PromoCode>> {
+  return runAction("discounts", async () => {
+    if (!(await getClientSession())) throw new DiscountError("Sign in to use a promo code.");
+    return service.promoCode(await resolveTenantScope(), parseInput(promoCodeSchema, code));
   });
 }

@@ -13,6 +13,8 @@ import { UploadRow } from "@repo/ui/UploadRow";
 import { DrivePicker, DrivePicks, type DrivePick } from "@repo/ui/files/DrivePicker";
 import { UploadThumbs, uploadKey } from "@repo/ui/UploadThumbs";
 import { useCurrency } from "@repo/lib/currency/useCurrency";
+import { checkPromoCode } from "@repo/lib/discounts/actions";
+import { offerBadge, promoPrice, type PromoCode } from "@repo/lib/discounts/core";
 import { attributeChoices } from "@repo/lib/catalog-options";
 import { isPhotobookCategory } from "@repo/lib/orders/photobook";
 import type { OrderItemInput } from "@repo/lib/orders/types";
@@ -96,7 +98,8 @@ function ArrowRightIcon({ className }: { className?: string }) {
 // summary right) rather than one long stacked form, per the shop's design
 // reference (public/design/order-page.jpg) — adapted to this being a
 // factory work order, not an e-commerce cart: no shipping/payment/review
-// steps, no address or discount code, since none of those exist here.
+// steps, no address. A promo code (packages/lib/discounts) can be applied in
+// the summary.
 export function OrderForm({
   catalog,
   initialCategoryId,
@@ -137,6 +140,7 @@ export function OrderForm({
   );
   const [uploadStatus, setUploadStatus] = useState<string | null>(null);
   const [uploadWarnings, setUploadWarnings] = useState<string[]>([]);
+  const [promo, setPromo] = useState<PromoCode | null>(null);
   const [pending, start] = useTransition();
 
   // Express is only ever offered when the order includes a Photo Books
@@ -195,6 +199,7 @@ export function OrderForm({
         delivery_date: deliveryDate,
         order_notes: orderNotes,
         project_id: project?.id ?? null,
+        promo_code: promo?.code ?? null,
         // Strip `files` before this crosses the Server Action boundary —
         // passing the raw File objects through would encode their bytes
         // into the action's request body, blowing straight through Next's
@@ -245,7 +250,7 @@ export function OrderForm({
 
       setReceipt({
         orderNo: res.orderNo,
-        total: orderTotal(resolveItems(catalog, items), showPrices),
+        total: orderTotal(resolveItems(catalog, items, res.promoApplied ? promo : null), showPrices),
         // Photo books get a call from the receptionist first, so the price
         // isn't final until then — don't ask for money up front.
         needsReview: hasPhotobookItem,
@@ -401,6 +406,8 @@ export function OrderForm({
           etaLabel={etaLabel}
           showPrices={showPrices}
           currencies={currencies}
+          promo={promo}
+          onPromo={setPromo}
         />
       </div>
     </form>
@@ -609,6 +616,74 @@ function BadgeCubeIcon({ className }: { className?: string }) {
   );
 }
 
+/** Type a promo code and apply it; once applied, what it takes off and a way to remove it. */
+function PromoCodeBox({
+  promo,
+  onPromo,
+  format,
+}: {
+  promo: PromoCode | null;
+  onPromo: (promo: PromoCode | null) => void;
+  format: (amount: number) => string;
+}) {
+  const [typed, setTyped] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+
+  if (promo) {
+    return (
+      <div className="mt-4 flex items-center justify-between gap-2 border-t border-border pt-4 text-sm">
+        <span>
+          <span className="font-semibold">{promo.code}</span>{" "}
+          <span className="text-success-600">{offerBadge(promo, format)} applied</span>
+          {promo.appliesTo === "products" ? <span className="block text-xs text-muted">On selected products</span> : null}
+        </span>
+        <Button type="button" variant="secondary" size="sm" onClick={() => onPromo(null)}>
+          Remove
+        </Button>
+      </div>
+    );
+  }
+
+  function apply() {
+    if (!typed.trim()) return;
+    setError(null);
+    start(async () => {
+      const res = await checkPromoCode(typed);
+      if (!res.ok) return setError(res.error);
+      onPromo(res.data ?? null);
+      setTyped("");
+    });
+  }
+
+  return (
+    <div className="mt-4 border-t border-border pt-4">
+      <div className="flex gap-2">
+        <TextInput
+          value={typed}
+          onChange={(e) => setTyped(e.target.value)}
+          onKeyDown={(e) => {
+            // Enter applies the code instead of placing the order.
+            if (e.key === "Enter") {
+              e.preventDefault();
+              apply();
+            }
+          }}
+          placeholder="Promo code"
+          aria-label="Promo code"
+          autoCapitalize="characters"
+          maxLength={20}
+          className="min-w-0 flex-1 uppercase"
+        />
+        <Button type="button" variant="secondary" loading={pending} disabled={pending || !typed.trim()} onClick={apply}>
+          Apply
+        </Button>
+      </div>
+      {error ? <p className="mt-1 text-xs text-error-600">{error}</p> : null}
+    </div>
+  );
+}
+
 const TRUST_BADGES = [
   { icon: BadgeCheckIcon, label: "Quality checked" },
   { icon: BadgeClockIcon, label: "Live tracking" },
@@ -620,7 +695,7 @@ const TRUST_BADGES = [
 // what's actually owed, which is worse than not showing a total at all.
 // Shared by the summary sidebar and the post-order payment prompt so both
 // always agree on the amount.
-function resolveItems(catalog: ProductCategory[], items: OrderItemInput[]) {
+function resolveItems(catalog: ProductCategory[], items: OrderItemInput[], promo: PromoCode | null) {
   return items.map((item) => {
     const category = catalog.find((c) => c.id === item.category_id) ?? null;
     const product: Product | null = category?.products.find((p) => p.id === item.product_id) ?? null;
@@ -628,8 +703,14 @@ function resolveItems(catalog: ProductCategory[], items: OrderItemInput[]) {
     // A variant's own price overrides the parent product's — see
     // ProductVariant.price's comment in packages/lib/types.ts. A running discount
     // (packages/lib/discounts) replaces either; the same one the order will get.
+    // A promo code applies instead when it gives the lower price (never both).
     const listPrice = variant?.price ?? product?.price ?? null;
-    const offer = (variant ?? product)?.offer ?? null;
+    const running = (variant ?? product)?.offer ?? null;
+    const withCode = promo ? promoPrice(promo, product?.id ?? null, listPrice) : null;
+    const offer =
+      withCode != null && listPrice != null && (running == null || withCode < running.price)
+        ? { listPrice, price: withCode }
+        : running;
     const unitPrice = offer?.price ?? listPrice;
     return { item, category, product, variant, unitPrice, offer };
   });
@@ -649,6 +730,8 @@ function OrderSummary({
   etaLabel,
   showPrices,
   currencies,
+  promo,
+  onPromo,
 }: {
   catalog: ProductCategory[];
   items: OrderItemInput[];
@@ -657,9 +740,11 @@ function OrderSummary({
   etaLabel: string;
   showPrices: boolean;
   currencies: Currency[];
+  promo: PromoCode | null;
+  onPromo: (promo: PromoCode | null) => void;
 }) {
   const currency = useCurrency(currencies);
-  const resolved = resolveItems(catalog, items);
+  const resolved = resolveItems(catalog, items, promo);
   const total = orderTotal(resolved, showPrices);
 
   return (
@@ -710,6 +795,8 @@ function OrderSummary({
           </div>
         </div>
       ) : null}
+
+      <PromoCodeBox promo={promo} onPromo={onPromo} format={currency.format} />
 
       {/* Pricing is boss-configurable (dashboard Products page) — see
           Product.price's comment in packages/lib/types.ts. */}

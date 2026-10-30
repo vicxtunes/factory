@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import type { DiscountInput } from "./model";
-import { discountStatus, discountedPrice, lineDiscountOf, offerBadge, parseOffer, validateDiscount, validateLineDiscount } from "./rules";
+import { discountStatus, discountedPrice, lineDiscountOf, offerBadge, parseOffer, validateDiscount, validateLineDiscount, normaliseCode, promoPrice } from "./rules";
 
 const NOW = new Date("2026-10-15T09:00:00Z");
 
@@ -13,7 +13,7 @@ test("status: scheduled, running, ended", () => {
   assert.equal(discountStatus({ startsAt: "2026-10-01T00:00:00Z", endsAt: "2026-10-15T09:00:00Z" }, NOW), "ended");
 });
 
-const ok: DiscountInput = { name: "Promo", kind: "percent", value: 10, appliesTo: "all", productIds: [], startsAt: null, endsAt: null };
+const ok: DiscountInput = { name: "Promo", kind: "percent", value: 10, appliesTo: "all", productIds: [], startsAt: null, endsAt: null, code: null, maxUses: null };
 
 test("a valid discount has no errors", () => {
   assert.deepEqual(validateDiscount(ok, NOW), []);
@@ -71,4 +71,23 @@ test("line discount: read from the item's columns (bigints may be strings)", () 
   assert.deepEqual(lineDiscountOf({ line_discount_kind: "amount", line_discount_value: "500" }), { kind: "amount", value: 500 });
   assert.equal(lineDiscountOf({ line_discount_kind: null, line_discount_value: null }), null);
   assert.equal(lineDiscountOf({}), null);
+});
+
+test("promo codes: 3 to 20 letters and numbers, a limit only with a code", () => {
+  assert.deepEqual(validateDiscount({ ...ok, code: "BLACKNOV", maxUses: 100 }, NOW), []);
+  assert.match(validateDiscount({ ...ok, code: "BN" }, NOW)[0], /3 to 20 letters/);
+  assert.match(validateDiscount({ ...ok, code: "BLACK NOV" }, NOW)[0], /3 to 20 letters/);
+  assert.match(validateDiscount({ ...ok, maxUses: 5 }, NOW)[0], /Only a promo code/);
+  assert.match(validateDiscount({ ...ok, code: "BLACKNOV", maxUses: 0 }, NOW)[0], /above 0/);
+  assert.equal(normaliseCode("  blacknov "), "BLACKNOV");
+  assert.equal(normaliseCode("   "), null);
+});
+
+test("a promo code's price: covered products only, same arithmetic as the database", () => {
+  const promo = { discountId: "d", code: "BN", kind: "percent" as const, value: 20, appliesTo: "products" as const, productIds: ["p1"] };
+  assert.equal(promoPrice(promo, "p1", 50_000), 40_000);
+  assert.equal(promoPrice(promo, "p2", 50_000), null);
+  assert.equal(promoPrice({ ...promo, appliesTo: "all" }, "p2", 50_000), 40_000);
+  assert.equal(promoPrice({ ...promo, kind: "amount", value: 60_000, appliesTo: "all" }, "p2", 50_000), 0);
+  assert.equal(promoPrice(promo, "p1", null), null);
 });

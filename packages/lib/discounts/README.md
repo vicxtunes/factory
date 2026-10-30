@@ -29,6 +29,22 @@ already being read, via PostgREST computed fields:
 `catalogUnitPrice()` in `packages/lib/orders/pricing.ts` returns the offer's price when there is one, so the
 existing pricing rules picked it up without other changes.
 
+## Promo codes
+
+A discount can have a **code** (3–20 letters and numbers, stored upper-case) and an optional
+**limit** on how many orders can use it (`discounts.code`, `max_uses`; migration
+`20261129110000_promo_codes.sql`).
+
+- A code discount never shows on public prices: `discount_offer()` (showroom, order form) skips it.
+- The client types the code in the order form's summary. `checkPromoCode` (actions.ts) checks it
+  (`DiscountService.promoCode`: running, not used up) and returns what it takes off. The form
+  prices each line with `promoPrice()`, and the code applies only where it beats the running discount.
+- `placeOrder` (apps/client/app/actions.ts) checks the code again before creating the order, then
+  `promo_code_apply()` puts it on the order (`orders.promo_discount_id`). That locks the discount,
+  so its last use can't go to two orders. `item_offer()` then counts the order's own code alongside
+  the running discounts, so everything priced from the order sees it.
+- Like any discount, the code and its limit are locked once it starts. Codes are unique, ended ones included.
+
 ## Discounts on invoices and in Accounts
 
 When invoice lines are first priced, `invoice_set_lines()` keeps each line's **list price**

@@ -1,7 +1,7 @@
 // Discount rules that don't need the database: status, input checks, and
 // reading/presenting an offer. Pure.
 
-import type { Discount, DiscountInput, DiscountStatus, LineDiscount, Offer } from "./model";
+import type { Discount, DiscountInput, DiscountStatus, LineDiscount, Offer, PromoCode } from "./model";
 
 export function discountStatus(d: Pick<Discount, "startsAt" | "endsAt">, now: Date): DiscountStatus {
   const t = now.getTime();
@@ -17,6 +17,11 @@ export function validateDiscount(input: DiscountInput, now: Date): string[] {
   if (!Number.isInteger(input.value) || input.value <= 0) errors.push("The discount must be a whole number above 0.");
   else if (input.kind === "percent" && input.value > 100) errors.push("A percentage can't be more than 100.");
   if (input.appliesTo === "products" && input.productIds.length === 0) errors.push("Choose at least one product.");
+  if (input.code !== null && !CODE_FORMAT.test(input.code)) errors.push("A code is 3 to 20 letters and numbers, no spaces.");
+  if (input.maxUses !== null) {
+    if (input.code === null) errors.push("Only a promo code can be limited to a number of orders.");
+    else if (!Number.isInteger(input.maxUses) || input.maxUses <= 0) errors.push("The number of uses must be a whole number above 0.");
+  }
 
   const starts = input.startsAt ? Date.parse(input.startsAt) : now.getTime();
   if (Number.isNaN(starts)) errors.push("The start date isn't a valid date.");
@@ -27,6 +32,21 @@ export function validateDiscount(input: DiscountInput, now: Date): string[] {
     else if (ends <= now.getTime()) errors.push("The end date is already past.");
   }
   return errors;
+}
+
+const CODE_FORMAT = /^[A-Z0-9]{3,20}$/;
+
+/** A code as typed ("  blacknov ") as stored ("BLACKNOV"); null when empty. */
+export function normaliseCode(typed: string | null): string | null {
+  const code = typed?.trim().toUpperCase() ?? "";
+  return code || null;
+}
+
+/** One unit's price with this promo code, or null when the code doesn't cover the product. */
+export function promoPrice(promo: PromoCode, productId: string | null, listPrice: number | null): number | null {
+  if (!productId || listPrice == null || listPrice <= 0) return null;
+  if (promo.appliesTo === "products" && !promo.productIds.includes(productId)) return null;
+  return discountedPrice(listPrice, promo.kind, promo.value);
 }
 
 /** The discounted price of one unit (same arithmetic as the database's discount_offer). */

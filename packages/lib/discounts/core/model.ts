@@ -20,6 +20,12 @@ export interface Discount {
   startsAt: string;
   /** Null = runs until ended. */
   endsAt: string | null;
+  /** A promo code: then it applies only to orders placed with this code. */
+  code: string | null;
+  /** How many orders can use the code; null = no limit. */
+  maxUses: number | null;
+  /** Orders placed with the code so far. */
+  uses: number;
   createdByName: string;
   createdAt: string;
 }
@@ -46,6 +52,19 @@ export interface DiscountInput {
   /** ISO instant; null = now. */
   startsAt: string | null;
   endsAt: string | null;
+  /** Null: everyone gets it, no code needed. */
+  code: string | null;
+  maxUses: number | null;
+}
+
+/** A promo code a client typed, as the order form needs it to show the price. */
+export interface PromoCode {
+  discountId: string;
+  code: string;
+  kind: DiscountKind;
+  value: number;
+  appliesTo: DiscountScope;
+  productIds: string[];
 }
 
 /** A manager's discount on one line of an order, on top of its catalog price (packages/lib/orders/pricing.ts). */
