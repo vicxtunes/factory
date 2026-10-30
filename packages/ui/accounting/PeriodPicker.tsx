@@ -9,8 +9,9 @@ import { Tabs } from "@repo/ui/Tabs";
 import { PERIOD_PRESETS, type Period, type PeriodPreset } from "@repo/lib/accounting/core/period";
 
 // The reporting period, kept in the URL (?period=…&from=…&to=…) so a view can
-// be bookmarked or shared and the server renders it directly.
-export function PeriodPicker({ period }: { period: Period }) {
+// be bookmarked or shared and the server renders it directly. `presets`: the
+// tabs offered (DAY_PERIOD_PRESETS adds today, yesterday and this week).
+export function PeriodPicker({ period, presets = PERIOD_PRESETS }: { period: Period; presets?: typeof PERIOD_PRESETS }) {
   const router = useRouter();
   const pathname = usePathname();
   const [custom, setCustom] = useState(period.preset === "custom");
@@ -36,7 +37,7 @@ export function PeriodPicker({ period }: { period: Period }) {
         label="Period"
         value={custom ? "custom" : period.preset}
         onChange={choose}
-        tabs={[...PERIOD_PRESETS.map((p) => ({ key: p.value as PeriodPreset, label: p.label })), { key: "custom", label: "Custom" }]}
+        tabs={[...presets.map((p) => ({ key: p.value as PeriodPreset, label: p.label })), { key: "custom", label: "Custom" }]}
       />
       {custom ? (
         <form

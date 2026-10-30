@@ -37,6 +37,28 @@ test("this month runs from the 1st, local, up to the end of today", () => {
   assert.equal(p.to, "2026-10-15T21:00:00.000Z");
 });
 
+test("today and yesterday are single local days", () => {
+  const today = resolvePeriod({ preset: "today" }, NOW, KAMPALA);
+  assert.deepEqual([today.fromDate, today.toDate], ["2026-10-15", "2026-10-15"]);
+  assert.equal(today.from, "2026-10-14T21:00:00.000Z");
+  assert.equal(today.to, "2026-10-15T21:00:00.000Z");
+  const yesterday = resolvePeriod({ preset: "yesterday" }, NOW, KAMPALA);
+  assert.deepEqual([yesterday.fromDate, yesterday.toDate], ["2026-10-14", "2026-10-14"]);
+  // Just after local midnight it's already the next day in Kampala.
+  const lateUtc = resolvePeriod({ preset: "today" }, new Date("2026-10-15T21:30:00Z"), KAMPALA);
+  assert.equal(lateUtc.fromDate, "2026-10-16");
+});
+
+test("this week starts on Monday, also from a Sunday", () => {
+  // 15 Oct 2026 is a Thursday.
+  const p = resolvePeriod({ preset: "this_week" }, NOW, KAMPALA);
+  assert.deepEqual([p.fromDate, p.toDate], ["2026-10-12", "2026-10-15"]);
+  const sunday = resolvePeriod({ preset: "this_week" }, new Date("2026-10-18T09:00:00Z"), KAMPALA);
+  assert.deepEqual([sunday.fromDate, sunday.toDate], ["2026-10-12", "2026-10-18"]);
+  const monday = resolvePeriod({ preset: "this_week" }, new Date("2026-10-19T09:00:00Z"), KAMPALA);
+  assert.deepEqual([monday.fromDate, monday.toDate], ["2026-10-19", "2026-10-19"]);
+});
+
 test("last month is the whole previous month, including across a year", () => {
   const p = resolvePeriod({ preset: "last_month" }, NOW, KAMPALA);
   assert.deepEqual([p.fromDate, p.toDate], ["2026-09-01", "2026-09-30"]);

@@ -59,6 +59,7 @@ interface MoneyInRow {
   kind: MoneyIn["kind"];
   order_no: string | null;
   reference: string | null;
+  recorded_by: string | null;
 }
 
 interface HeldRow {
@@ -105,6 +106,7 @@ const toMoneyIn = (r: MoneyInRow): MoneyIn => ({
   kind: r.kind,
   orderNo: r.order_no,
   reference: r.reference,
+  recordedBy: r.recorded_by,
 });
 
 const toCustomer = (r: CustomerRow): Customer => ({
