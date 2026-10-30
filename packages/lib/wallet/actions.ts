@@ -21,8 +21,10 @@ import * as vendorWallet from "./server/vendor";
 import * as mobileMoney from "./server/mobile-money";
 import { requireUnlocked } from "./server/pin";
 import * as service from "./server/service";
+import * as watch from "./server/watch";
 import type {
   MobileMoneyCollection,
+  MoneyAlert,
   OrderPaymentState,
   PaymentMethod,
   PendingDeposit,
@@ -34,6 +36,7 @@ import type {
   WalletSummary,
   WalletView,
 } from "./types";
+import { requireAccountsAccess } from "@repo/lib/accounting/access";
 import { clientPath } from "@repo/lib/client-portal/paths";
 import { vendors } from "@repo/lib/vendors/server";
 import { studioOfCaller } from "@repo/lib/studios/server";
@@ -313,5 +316,21 @@ export async function withdrawFromVendorWallet(amount: number, phone: string): P
     await requireUnlocked(client.id);
     await vendorWallet.requestVendorWithdrawal({ id: vendor.id, name: vendor.name, clientId: client.id }, amount, phone);
     revalidatePath("/vendors", "layout");
+  });
+}
+
+/** What the money watch found that doesn't add up and no one has looked into yet. Boss and supervisors (Accounts). */
+export async function getMoneyAlerts(): Promise<WalletResult<MoneyAlert[]>> {
+  return run(async () => {
+    await requireAccountsAccess();
+    return watch.openAlerts();
+  });
+}
+
+export async function resolveMoneyAlert(id: string): Promise<WalletResult> {
+  return run(async () => {
+    const session = await requireAccountsAccess();
+    await watch.resolveAlert(id, session.fullName ?? session.email ?? "Staff");
+    revalidatePath("/dashboard/accounts");
   });
 }

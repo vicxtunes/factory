@@ -10,6 +10,9 @@ import { createAdminClient } from "@repo/lib/supabase/admin";
 import { clientPath } from "@repo/lib/client-portal/paths";
 import { localPhone } from "@repo/lib/wallet/policy";
 
+import type { MoneyAlertKind } from "../types";
+import type { MoneyAlertRow } from "./repository";
+
 const CLIENT_URL = clientPath("/payment");
 
 async function pushClient(clientId: string, title: string, body: string): Promise<void> {
@@ -106,5 +109,22 @@ export async function paymentFailed(clientId: string, amount: number, url: strin
   await notifyActor(
     { type: "client", id: clientId },
     { title: "Payment didn't go through", body: `Your mobile money payment of ${formatMoney(amount)} wasn't completed, and no money was taken. You can try again.`, url },
+  );
+}
+
+const MONEY_ALERT_TITLES: Record<MoneyAlertKind, string> = {
+  paid_not_credited: "Payment not credited",
+  credited_not_paid: "Credited but not paid",
+  possible_double: "Possible double payment",
+  payout_unconfirmed: "Payout not confirmed",
+};
+
+/** The money watch (watch.ts) found something that doesn't add up: the boss and supervisors, who see Accounts, hear of it. */
+export async function moneyAlert(alert: MoneyAlertRow): Promise<void> {
+  const { data: watchers } = await createAdminClient().from("profiles").select("id").in("role", ["supervisor", "boss"]);
+  await Promise.all(
+    (watchers ?? []).map((w: { id: string }) =>
+      notifyActor({ type: "dashboard_user", id: w.id }, { title: MONEY_ALERT_TITLES[alert.kind], body: alert.detail, url: "/dashboard/accounts" }),
+    ),
   );
 }

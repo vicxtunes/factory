@@ -9,7 +9,7 @@ import { randomUUID } from "node:crypto";
 
 import { createAdminClient } from "@repo/lib/supabase/admin";
 
-import type { PaymentMethod, PaymentStatus, TransactionHistoryKind, WalletCard, WalletEntryKind } from "../types";
+import type { MoneyAlertKind, PaymentMethod, PaymentStatus, TransactionHistoryKind, WalletCard, WalletEntryKind } from "../types";
 import { throwDbError } from "./errors";
 import type { WalletActor } from "./identity";
 
@@ -608,4 +608,94 @@ export async function paidByProductRequest(requestIds: string[]): Promise<Record
   const paid: Record<string, number> = {};
   for (const r of data ?? []) paid[r.product_request_id as string] = (paid[r.product_request_id as string] ?? 0) + num(r.amount);
   return paid;
+}
+
+// --- Money watch (watch.ts) ---------------------------------------------------
+
+/**
+ * Prompts since `since` that HivePay has given an answer for: settled or failed
+ * ones, and pending ones older than `staleBefore` (the waiting check should
+ * have settled those). What the hourly check compares with HivePay.
+ */
+export async function collectionsToWatch(since: Date, staleBefore: Date): Promise<(CollectionRow & { client_name: string | null })[]> {
+  const { data, error } = await createAdminClient()
+    .from("provider_collections")
+    .select(`${COLLECTION_COLUMNS}, client:clients (name)`)
+    .not("provider_ref", "is", null)
+    .gte("created_at", since.toISOString())
+    .or(`status.neq.pending,created_at.lt.${staleBefore.toISOString()}`)
+    .order("created_at")
+    .returns<(CollectionRow & { client: { name: string } | null })[]>();
+  if (error) throwDbError(error);
+  return (data ?? []).map(({ client, ...row }) => ({ ...normaliseCollection(row), client_name: client?.name ?? null }));
+}
+
+export interface StuckPayoutRow {
+  id: string;
+  amount: number;
+  phone: string;
+  sent_at: string;
+}
+
+/** Withdrawals (a business's or a vendor's) still sending, sent before `before`. */
+export async function payoutsSendingBefore(before: Date): Promise<StuckPayoutRow[]> {
+  const db = createAdminClient();
+  const [business, vendor] = await Promise.all(
+    ["business_withdrawals", "vendor_withdrawals"].map((table) =>
+      db.from(table).select("id, amount, phone, sent_at").eq("status", "sending").lt("sent_at", before.toISOString()).returns<StuckPayoutRow[]>(),
+    ),
+  );
+  if (business.error) throwDbError(business.error);
+  if (vendor.error) throwDbError(vendor.error);
+  return [...(business.data ?? []), ...(vendor.data ?? [])].map((r) => ({ ...r, amount: num(r.amount) }));
+}
+
+export interface MoneyAlertRow {
+  id: string;
+  kind: MoneyAlertKind;
+  collection_id: string | null;
+  withdrawal_id: string | null;
+  amount: number;
+  phone: string | null;
+  detail: string;
+  created_at: string;
+  resolved_at: string | null;
+  resolved_by_name: string | null;
+}
+
+export type NewMoneyAlert = Pick<MoneyAlertRow, "kind" | "collection_id" | "withdrawal_id" | "amount" | "phone" | "detail">;
+
+/** Every alert ever raised (resolved too), as "kind:subject", so a problem is raised once. */
+export async function moneyAlertKeys(): Promise<Set<string>> {
+  const { data, error } = await createAdminClient().from("money_alerts").select("kind, collection_id, withdrawal_id");
+  if (error) throwDbError(error);
+  return new Set((data ?? []).map((a) => `${a.kind}:${a.collection_id ?? a.withdrawal_id}`));
+}
+
+export async function insertMoneyAlerts(alerts: NewMoneyAlert[]): Promise<MoneyAlertRow[]> {
+  if (!alerts.length) return [];
+  const { data, error } = await createAdminClient().from("money_alerts").insert(alerts).select("*").returns<MoneyAlertRow[]>();
+  if (error) throwDbError(error);
+  return (data ?? []).map((a) => ({ ...a, amount: num(a.amount) }));
+}
+
+/** Alerts not yet resolved, newest first. */
+export async function openMoneyAlerts(): Promise<MoneyAlertRow[]> {
+  const { data, error } = await createAdminClient()
+    .from("money_alerts")
+    .select("*")
+    .is("resolved_at", null)
+    .order("created_at", { ascending: false })
+    .returns<MoneyAlertRow[]>();
+  if (error) throwDbError(error);
+  return (data ?? []).map((a) => ({ ...a, amount: num(a.amount) }));
+}
+
+export async function resolveMoneyAlert(id: string, byName: string): Promise<void> {
+  const { error } = await createAdminClient()
+    .from("money_alerts")
+    .update({ resolved_at: new Date().toISOString(), resolved_by_name: byName })
+    .eq("id", id)
+    .is("resolved_at", null);
+  if (error) throwDbError(error);
 }

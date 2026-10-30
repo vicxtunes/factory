@@ -1,25 +1,36 @@
 // On the production server, asks HivePay every few minutes about mobile money
 // prompts still waiting, so a payment the client approved is recorded even
 // when HivePay's webhook never arrives and the payment screen was closed
-// (packages/lib/wallet: reconcileWaiting).
+// (packages/lib/wallet: reconcileWaiting). Every hour, the money watch compares
+// the last week with HivePay and alerts the boss to anything that doesn't add
+// up (packages/lib/wallet/server/watch.ts).
 
 import { applyStudioPayment } from "@repo/lib/studio-payments/server";
-import { reconcileWaitingHivepay } from "@repo/lib/wallet/webhooks";
+import { reconcileWaitingHivepay, watchMoney } from "@repo/lib/wallet/webhooks";
 
 const EVERY_MS = 2 * 60_000;
+const WATCH_EVERY_MS = 60 * 60_000;
 
-if (process.env.NODE_ENV === "production") {
+/** Runs `job` every `ms`, never two at once, logging what it throws. */
+function every(ms: number, name: string, job: () => Promise<unknown>) {
   let running = false;
   setInterval(async () => {
     if (running) return;
     running = true;
     try {
-      // A studio customer's payment goes on its invoice, as the webhook does.
-      for (const id of await reconcileWaitingHivepay()) await applyStudioPayment(id);
+      await job();
     } catch (error) {
-      console.error("hivepay: checking waiting payments failed:", error);
+      console.error(`${name} failed:`, error);
     } finally {
       running = false;
     }
-  }, EVERY_MS).unref();
+  }, ms).unref();
+}
+
+if (process.env.NODE_ENV === "production") {
+  every(EVERY_MS, "hivepay: checking waiting payments", async () => {
+    // A studio customer's payment goes on its invoice, as the webhook does.
+    for (const id of await reconcileWaitingHivepay()) await applyStudioPayment(id);
+  });
+  every(WATCH_EVERY_MS, "money watch", watchMoney);
 }

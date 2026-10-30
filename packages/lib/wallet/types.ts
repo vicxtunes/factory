@@ -284,3 +284,16 @@ export interface BusinessCardView {
 export type WalletResult<T = undefined> = T extends undefined
   ? { ok: true } | { ok: false; error: string }
   : { ok: true; data: T } | { ok: false; error: string };
+
+/** What the money watch found that doesn't add up (packages/lib/wallet/server/watch.ts). */
+export type MoneyAlertKind = "paid_not_credited" | "credited_not_paid" | "possible_double" | "payout_unconfirmed";
+
+export interface MoneyAlert {
+  id: string;
+  kind: MoneyAlertKind;
+  amount: number;
+  phone: string | null;
+  /** What happened, in a sentence, with HivePay's reference. */
+  detail: string;
+  createdAt: string;
+}
