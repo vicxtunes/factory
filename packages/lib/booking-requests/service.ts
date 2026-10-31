@@ -7,7 +7,7 @@
 import type { Booking } from "@repo/lib/bookings/core";
 import type { InvoiceInput, QuotationInput } from "@repo/lib/billing/core";
 import { AppError } from "@repo/lib/kernel/core";
-import { offeringLabel, type Offering, type ServiceWithPackages } from "@repo/lib/offerings/core";
+import { dealPrice, offeringLabel, runningDeal, type Offering, type ServiceWithPackages } from "@repo/lib/offerings/core";
 import type { PortalSession } from "@repo/lib/studio-portal/core";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
@@ -91,6 +91,9 @@ export class BookingRequestService {
     }
 
     const label = offeringLabel(pkg);
+    // The studio's deal running now: the booking takes its price; the
+    // quotation shows the list price with the deal as the line's discount.
+    const deal = pkg.price > 0 ? runningDeal(service, new Date()) : null;
     const bookingId = await this.deps.createRequest(scope, {
       customerId,
       title: label,
@@ -99,7 +102,7 @@ export class BookingRequestService {
       endTime: input.endTime,
       location: null,
       packageName: label,
-      amount: pkg.price,
+      amount: dealPrice(pkg.price, deal),
       notes: null,
       offeringId: pkg.id,
     });
@@ -109,7 +112,16 @@ export class BookingRequestService {
         validUntil: null,
         shoot: { date: input.date, startTime: input.startTime, endTime: input.endTime },
         notes: `Booking for ${input.date}.`,
-        lines: [{ offeringId: pkg.id, description: label, inclusions: pkg.inclusions, quantity: 1, unitPrice: pkg.price, discount: null }],
+        lines: [
+          {
+            offeringId: pkg.id,
+            description: label,
+            inclusions: pkg.inclusions,
+            quantity: 1,
+            unitPrice: pkg.price,
+            discount: deal ? { kind: "percent", value: deal.percent } : null,
+          },
+        ],
       });
       await this.deps.linkQuotation(scope, bookingId, quotationId);
     }

@@ -63,6 +63,7 @@ export const ENTRY_LABELS: Record<WalletEntryKind, string> = {
   refund: "Refund",
   adjustment: "Adjustment",
   transfer: "Card transfer",
+  bonus: "Bonus",
 };
 
 export const BUSINESS_ENTRY_LABELS: Record<BusinessEntryKind, string> = {
@@ -154,3 +155,19 @@ export function isOrderPayable(order: PayableOrder): boolean {
 
 /** What a money move answers while the wallet is locked (server/pin.ts); the browser asks for the PIN when it sees it. */
 export const PIN_NEEDED = "Enter your wallet PIN first.";
+
+/** Problems with a new top-up bonus, as sentences; empty when it's fine. */
+export function validateTopupBonus(input: { percent: number; minAmount: number; startsAt: string | null; endsAt: string | null }, now: Date): string[] {
+  const errors: string[] = [];
+  if (!Number.isInteger(input.percent) || input.percent < 1 || input.percent > 100) errors.push("The bonus is a whole percent from 1 to 100.");
+  if (!Number.isInteger(input.minAmount) || input.minAmount < 0) errors.push("The minimum top-up must be a whole amount, 0 or more.");
+  const starts = input.startsAt ? Date.parse(input.startsAt) : now.getTime();
+  if (Number.isNaN(starts)) errors.push("The start date isn't a valid date.");
+  if (input.endsAt) {
+    const ends = Date.parse(input.endsAt);
+    if (Number.isNaN(ends)) errors.push("The end date isn't a valid date.");
+    else if (ends <= starts) errors.push("It has to end after it starts.");
+    else if (ends <= now.getTime()) errors.push("The end date is already past.");
+  }
+  return errors;
+}

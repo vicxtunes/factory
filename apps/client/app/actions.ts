@@ -8,6 +8,9 @@ import { lockWallet } from "@repo/lib/wallet/server/pin";
 import { getClientSession } from "@repo/lib/auth/session";
 import { logOrderEvent, resolveActor } from "@repo/lib/audit/log";
 import { buildAndInsertOrder } from "@repo/lib/orders/create";
+import { discounts } from "@repo/lib/discounts/server";
+import { DiscountError } from "@repo/lib/discounts/ports";
+import { resolveTenantScope } from "@repo/lib/tenancy/server/resolve";
 import { applyCancellation, cleanReason, loadCancellableOrder } from "@repo/lib/orders/cancel";
 import { isPhotobookCategory } from "@repo/lib/orders/photobook";
 import type { CreateOrderResult, OrderItemInput } from "@repo/lib/orders/types";
@@ -35,9 +38,14 @@ export interface ClientOrderPayload {
   items: OrderItemInput[];
   /** A studio project this order is for (My Studio → project → "Order from Aming"). */
   project_id?: string | null;
+  /** A promo code the client applied (packages/lib/discounts). */
+  promo_code?: string | null;
 }
 
-export async function placeOrder(input: ClientOrderPayload): Promise<CreateOrderResult> {
+/** promoApplied: false when the order was placed without the code it was sent with. */
+export type PlaceOrderResult = (Extract<CreateOrderResult, { ok: true }> & { promoApplied: boolean }) | Extract<CreateOrderResult, { ok: false }>;
+
+export async function placeOrder(input: ClientOrderPayload): Promise<PlaceOrderResult> {
   const session = await getClientSession();
   if (!session) return { ok: false, error: "Not signed in." };
 
@@ -61,6 +69,19 @@ export async function placeOrder(input: ClientOrderPayload): Promise<CreateOrder
     : { data: [] };
   const needsCall = (categories ?? []).some((c) => isPhotobookCategory(c.name));
 
+  // A promo code is checked before the order exists, so a bad code is said
+  // while the client can still fix it or remove it.
+  const scope = await resolveTenantScope();
+  let promo: { discountId: string; code: string } | null = null;
+  if (input.promo_code?.trim()) {
+    try {
+      promo = await discounts.promoCode(scope, input.promo_code);
+    } catch (err) {
+      if (err instanceof DiscountError) return { ok: false, error: err.message };
+      throw err;
+    }
+  }
+
   const res = await buildAndInsertOrder(admin, {
     client,
     agentId: null,
@@ -78,6 +99,22 @@ export async function placeOrder(input: ClientOrderPayload): Promise<CreateOrder
   });
 
   if (!res.ok) return res;
+
+  // The order stands either way; a code that ran out in the meantime (its
+  // last use taken a moment ago) only comes back as a warning.
+  const warnings: string[] = [];
+  let promoApplied = false;
+  if (promo) {
+    try {
+      await discounts.applyCode(scope, res.orderId, promo.discountId);
+      promoApplied = true;
+    } catch (err) {
+      // Not thrown on: the order exists, and an error here would invite placing it again.
+      if (!(err instanceof DiscountError)) console.error("promo code not applied:", res.orderId, err);
+      const why = err instanceof DiscountError ? err.message : "The promo code couldn't be applied.";
+      warnings.push(`${why} Your order was placed without it; staff can adjust the price.`);
+    }
+  }
 
   {
     const { data: managers } = await admin.from("profiles").select("id").in("role", ["receptionist", "supervisor", "boss"]);
@@ -97,7 +134,6 @@ export async function placeOrder(input: ClientOrderPayload): Promise<CreateOrder
 
   // Ordered for one of the client's studio projects: link it there. The order
   // stands either way; a failed link only comes back as a warning.
-  const warnings: string[] = [];
   const project = input.project_id ? projectIdSchema.safeParse(input.project_id) : null;
   if (project?.success) {
     const problem = await linkPlacedOrder(project.data, res.orderId);
@@ -106,7 +142,7 @@ export async function placeOrder(input: ClientOrderPayload): Promise<CreateOrder
 
   revalidatePath("/");
   revalidatePath("/history");
-  return { ...res, warnings };
+  return { ...res, warnings, promoApplied };
 }
 
 // The client's half of the receptionist quote/approval loop (see

@@ -12,6 +12,8 @@ export interface ShowroomCard {
   label: string;
   image: string | null;
   href: string;
+  /** A short tag on the photo's corner, e.g. a studio deal's "−20%". */
+  badge?: string | null;
 }
 
 /** A titled row of cards that scrolls sideways. */
@@ -45,6 +47,9 @@ function PhotoCard({ card, fill = false }: { card: ShowroomCard; fill?: boolean 
         className="object-cover"
       />
       <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
+      {card.badge ? (
+        <span className="absolute left-2 top-2 rounded-full bg-error-600 px-2 py-0.5 text-xs font-bold text-white shadow-theme-xs">{card.badge}</span>
+      ) : null}
       <p className="absolute inset-x-0 bottom-3 px-2 text-center text-sm font-bold text-white">{card.label}</p>
     </Link>
   );

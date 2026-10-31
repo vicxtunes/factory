@@ -6,7 +6,7 @@ import { FormSheet } from "@repo/ui/FormSheet";
 import { HistoryIcon } from "@repo/ui/icons";
 import { PaymentMethods } from "@repo/ui/payments/PaymentMethods";
 import { ENTRY_LABELS, METHOD_LABELS } from "@repo/lib/wallet/policy";
-import type { WalletEntry, WalletView } from "@repo/lib/wallet/types";
+import type { TopupBonus, WalletEntry, WalletView } from "@repo/lib/wallet/types";
 
 import { BankCard } from "./BankCard";
 import { Action, Pill, TILE, TileHead, Transactions, type TransactionRow } from "./MoneyCards";
@@ -29,8 +29,11 @@ export function ClientWallet({
   wallet,
   owing,
   startAdding = false,
+  bonus = null,
 }: {
   wallet: WalletView;
+  /** The running top-up bonus, told where clients add funds. */
+  bonus?: TopupBonus | null;
   /** "You owe" and the unpaid invoices (packages/ui/invoices/ClientUnpaidInvoices). */
   owing?: ReactNode;
   /** Open "Add funds" straight away (the home screen's Add funds button links here with ?add=1). */
@@ -55,6 +58,7 @@ export function ClientWallet({
             addLabel="Add funds"
           />
           {waiting > 0 ? <p className="text-xs text-muted">{money(waiting)} waiting for confirmation</p> : null}
+          {bonus ? <BonusNote bonus={bonus} money={money} /> : null}
           <Action variant="solid" onClick={() => setAdding(true)}>
             Add funds
           </Action>
@@ -115,8 +119,20 @@ export function ClientWallet({
 
       {/* Over the page, not below it: a sheet on a phone, a side panel on a desktop. */}
       <FormSheet open={adding} onClose={() => setAdding(false)} title="Add funds to your Aming card">
+        {bonus ? <BonusNote bonus={bonus} money={money} /> : null}
         <PaymentMethods pay="top-up" bankExtra={<p className="text-xs text-muted">We add bank transfers to your wallet once we see them on our statement.</p>} />
       </FormSheet>
     </div>
+  );
+}
+
+/** "Top up 200,000 or more by 30 Nov and get 5% extra on your card." */
+function BonusNote({ bonus, money }: { bonus: TopupBonus; money: (n: number) => string }) {
+  const until = bonus.endsAt ? ` by ${new Date(bonus.endsAt).toLocaleDateString(undefined, { day: "numeric", month: "short" })}` : "";
+  return (
+    <p className="rounded-2xl bg-success-50 px-4 py-3 text-sm font-medium text-success-700 dark:bg-success-500/15 dark:text-success-500">
+      Top up {bonus.minAmount > 0 ? `${money(bonus.minAmount)} or more` : "any amount"}
+      {until} and get <span className="font-bold">{bonus.percent}% extra</span> on your card.
+    </p>
   );
 }

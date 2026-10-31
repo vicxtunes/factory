@@ -8,7 +8,7 @@ import type { OrderItemWithOrder } from "@repo/lib/types";
 
 type PricedItem = Pick<
   OrderItemWithOrder,
-  "qty" | "catalog_product" | "catalog_variant" | "offer" | "line_discount_kind" | "line_discount_value"
+  "qty" | "catalog_product" | "catalog_variant" | "offer" | "list_unit_price" | "line_discount_kind" | "line_discount_value"
 >;
 
 /**

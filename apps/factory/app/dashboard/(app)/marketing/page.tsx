@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { DiscountsPanel } from "@repo/ui/discounts/DiscountsPanel";
+import { TopupBonusPanel } from "@repo/ui/wallet/TopupBonusPanel";
 import { SectionLabel } from "@repo/ui/SectionLabel";
 import { ProductGridSkeleton, RowsSkeleton } from "@repo/ui/skeletons/blocks";
 import { Loading } from "@repo/ui/skeletons/Loading";
@@ -9,6 +10,7 @@ import { listDiscounts } from "@repo/lib/discounts/actions";
 import { canManageDiscounts } from "@repo/lib/discounts/policy";
 import { fetchMarketingSlides, fetchProductCatalog } from "@repo/lib/queries";
 import { isManagerRole } from "@repo/lib/types";
+import { listTopupBonuses } from "@repo/lib/wallet/actions";
 
 import { MarketingPanel } from "../../marketing-panel";
 import { MarketingTabs } from "../../marketing-tabs";
@@ -40,6 +42,11 @@ export default async function MarketingPage() {
             <Discounts canManage={canManageDiscounts(session.role)} />
           </Loading>
         }
+        bonus={
+          <Loading skeleton={<RowsSkeleton rows={2} />}>
+            <Bonuses canManage={canManage} />
+          </Loading>
+        }
       />
     </div>
   );
@@ -54,4 +61,10 @@ async function Discounts({ canManage }: { canManage: boolean }) {
   if (!discounts.ok) return <p className="text-sm text-error-600">{discounts.error}</p>;
   const products = catalog.flatMap((c) => c.products.map((p) => ({ id: p.id, name: p.name, category: c.name })));
   return <DiscountsPanel initial={discounts.data} products={products} canManage={canManage} />;
+}
+
+async function Bonuses({ canManage }: { canManage: boolean }) {
+  const bonuses = await listTopupBonuses();
+  if (!bonuses.ok) return <p className="text-sm text-error-600">{bonuses.error}</p>;
+  return <TopupBonusPanel initial={bonuses.data ?? []} canManage={canManage} />;
 }

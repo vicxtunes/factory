@@ -1521,6 +1521,50 @@ export async function setLineDiscount(itemId: string, discount: LineDiscount | n
   return { ok: true };
 }
 
+// The unit price agreed on the call for a line whose product has no catalog
+// price (photo books), before the order is confirmed. It's kept as the line's
+// list price (order_items.list_unit_price), so a running discount comes off it
+// like off a catalog price (item_offer, 20261129140000_price_on_call_offers.sql).
+export async function setAgreedUnitPrice(itemId: string, price: number): Promise<Result> {
+  await requireManager();
+  if (!Number.isInteger(price) || price <= 0) return { ok: false, error: "Enter a valid price." };
+
+  const admin = createAdminClient();
+  const { data: item } = await admin
+    .from("order_items")
+    .select(
+      "order_id, product, list_unit_price, catalog_product:products (price), catalog_variant:product_variants (price), order:orders!inner (approval_status, cancelled_at)",
+    )
+    .eq("id", itemId)
+    .maybeSingle<{
+      order_id: string;
+      product: string;
+      list_unit_price: number | null;
+      catalog_product: { price: number | null } | null;
+      catalog_variant: { price: number | null } | null;
+      order: { approval_status: string; cancelled_at: string | null };
+    }>();
+  if (!item) return { ok: false, error: "Item not found." };
+  if (item.order.cancelled_at) return { ok: false, error: "This order was cancelled." };
+  if (item.order.approval_status === "approved") return { ok: false, error: "This order is already confirmed." };
+  if (item.catalog_variant?.price != null || item.catalog_product?.price != null) {
+    return { ok: false, error: "This product has a catalog price." };
+  }
+
+  const { error } = await admin.from("order_items").update({ list_unit_price: price }).eq("id", itemId);
+  if (error) return { ok: false, error: error.message };
+
+  await logOrderEvent({
+    orderId: item.order_id,
+    orderItemId: itemId,
+    actor: await resolveActor(),
+    action: "agreed_price",
+    detail: { product: item.product, from: item.list_unit_price, to: price },
+  });
+  revalidatePath("/dashboard/order-approvals");
+  return { ok: true };
+}
+
 // Only valid from pending_review or changes_requested — quoting an order
 // that's already awaiting the client's response, approved, or routed would
 // silently clobber state a human is actively relying on.

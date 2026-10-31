@@ -28,6 +28,7 @@ const small: Offering = {
 const large: Offering = { ...small, id: "large", name: "12x18", price: 0 };
 const photobook: ServiceWithPackages = {
   id: "book",
+  deal: null,
   kind: "product",
   categoryId: "c",
   sourceProductId: "aming-1",

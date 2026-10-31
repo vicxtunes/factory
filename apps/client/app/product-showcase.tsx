@@ -59,7 +59,14 @@ export function ProductShowcase({
       details={
         <>
           {!showPrices || effectivePrice == null ? (
-            <p className="text-lg font-semibold text-showroom-ink/70">Pricing confirmed after review</p>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <p className="text-lg font-semibold text-showroom-ink/70">Pricing confirmed after review</p>
+              {product.pending_offer ? (
+                <span className="rounded-full bg-error-600 px-2 py-0.5 text-xs font-semibold text-white">
+                  {offerBadge(product.pending_offer, currency.format)} off the agreed price
+                </span>
+              ) : null}
+            </div>
           ) : (
             <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
               <p className="text-2xl font-bold tabular-nums text-brand-600 dark:text-brand-400 sm:text-3xl">

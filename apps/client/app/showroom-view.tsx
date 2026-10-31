@@ -5,6 +5,8 @@ import { ChipRowSkeleton, ProductGridSkeleton } from "@repo/ui/skeletons/blocks"
 import { Loading } from "@repo/ui/skeletons/Loading";
 import { getClientSession } from "@repo/lib/auth/session";
 import { isOptionCategory, optionCategory, type OptionKind } from "@repo/lib/catalog-options";
+import { formatMoney } from "@repo/lib/currency/format";
+import { offerBadge } from "@repo/lib/discounts/core";
 import { fetchProductCatalog } from "@repo/lib/queries";
 import type { Product, ProductCategory } from "@repo/lib/types";
 import { vendors } from "@repo/lib/vendors/server";
@@ -17,7 +19,15 @@ const card = (product: Product): ShowroomCard => ({
   image: product.display_image_url,
   // The product's own page (see [slug]/page.tsx).
   href: `/${encodeURIComponent(product.slug)}`,
+  badge: discountBadge(product),
 });
+
+/** "−20%" on a card while a discount runs on the product, or on one of its sizes (the best one), or on its price agreed on a call. */
+function discountBadge(product: Product): string | null {
+  const offer =
+    product.offer ?? product.variants.map((v) => v.offer).filter((o) => o != null).sort((a, b) => a.price - b.price)[0] ?? product.pending_offer;
+  return offer ? offerBadge(offer, (n) => formatMoney(n)) : null;
+}
 
 const optionTab = (catalog: ProductCategory[], kind: OptionKind, label: string): ShowroomTab => ({
   key: kind,

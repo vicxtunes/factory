@@ -51,6 +51,19 @@ packages ("8x12", "12x18"), each size with its price. A product's address is `/<
   pick from services' packages and products' sizes (`onSale(scope)`); bookings from services' only
   (`onSale(scope, "service")`).
 
+## Deals
+
+A studio can put a **deal** on a service or product: a percent off (1–90) every package or size,
+from one day to another (`offering_services.deal_*`, migration `20261129130000_studio_deals.sql`;
+**Put this … on a deal** on Packages & Services and Products).
+
+- While it runs, its page shows each price crossed out with the deal price and "−20% deal until …",
+  and its card on the studio's page carries a "−20%" badge. The page decides on the server whether
+  it's running (`runningDeal`), so what's shown and what's charged agree.
+- A booking or product request made while it runs takes the deal price (`dealPrice`, the same
+  arithmetic as discounts). Its quotation shows the list price with the deal as the line's discount.
+- Ending it ("End deal") takes it off at once. What was already booked or ordered keeps its price.
+
 ## Templates
 
 Ready-made services Aming keeps so a new studio isn't typing its catalog from scratch: e.g.

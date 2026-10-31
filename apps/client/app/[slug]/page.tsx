@@ -7,7 +7,7 @@ import { BannerSkeleton, CardGridSkeleton, ProductDetailSkeleton } from "@repo/u
 import { Loading } from "@repo/ui/skeletons/Loading";
 import { getClientSession } from "@repo/lib/auth/session";
 import { rememberedRequests } from "@repo/lib/booking-requests/server";
-import { amingShowcaseMedia } from "@repo/lib/offerings/core";
+import { amingShowcaseMedia, runningDeal } from "@repo/lib/offerings/core";
 import { amingProducts, offerings } from "@repo/lib/offerings/server";
 import { PhotoError } from "@repo/lib/photos/ports";
 import { photos } from "@repo/lib/photos/server";
@@ -110,6 +110,7 @@ async function StudioShowroom({
     amingProducts(),
     photos.albums(at.scope, true).catch(unlessNoStorage([])),
   ]);
+  const now = new Date();
   // Each category's services with their covers (small for the cards, large for the banner).
   const categories = await Promise.all(
     showroom.map(async (c) => ({
@@ -118,7 +119,8 @@ async function StudioShowroom({
       services: await Promise.all(
         c.services.map(async (s) => {
           const album = await photos.serviceGallery(at.scope, s.id).catch(unlessNoStorage(null));
-          return { ...s, coverUrl: album?.coverUrl ?? null, coverLargeUrl: album?.coverLargeUrl ?? null };
+          // Only a deal running now reaches the card's badge.
+          return { ...s, deal: runningDeal(s, now), coverUrl: album?.coverUrl ?? null, coverLargeUrl: album?.coverLargeUrl ?? null };
         }),
       ),
     })),
@@ -136,7 +138,7 @@ async function StudioShowroom({
               const source = p.sourceProductId ? aming.get(p.sourceProductId) : null;
               if (p.sourceProductId && !source) return [];
               const album = await photos.serviceGallery(at.scope, p.id).catch(unlessNoStorage(null));
-              return [{ ...p, coverUrl: album?.coverUrl ?? (source ? amingShowcaseMedia(source, p.hiddenMedia).coverUrl : null) }];
+              return [{ ...p, deal: runningDeal(p, now), coverUrl: album?.coverUrl ?? (source ? amingShowcaseMedia(source, p.hiddenMedia).coverUrl : null) }];
             }),
           )
         ).flat(),

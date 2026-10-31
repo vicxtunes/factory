@@ -57,11 +57,21 @@ export interface Service extends ServiceInput {
   sourceProductId: string | null;
   /** Of a picked product: Aming's photos and videos it leaves out (see AMING_COVER, AMING_VIDEO). */
   hiddenMedia: string[];
+  /** A percent off all its packages for a period, set by the studio; null when it has none. */
+  deal: Deal | null;
   /** The showroom's order, smallest first. */
   position: number;
   /** Archived services (and their packages) are off sale but kept for what already used them. */
   archivedAt: string | null;
   createdAt: string;
+}
+
+/** A studio's deal on a service or product (Black November): percent off every package, for a period. */
+export interface Deal {
+  /** 1–90. */
+  percent: number;
+  startsAt: string;
+  endsAt: string;
 }
 
 /** What the business fills in for a package. */

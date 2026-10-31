@@ -14,6 +14,13 @@ Clients who pay upfront keep a balance with us and spend it on orders.
 - **Refunds.** Cancelling an order puts everything paid for it back in the wallet automatically.
   Staff can also refund part or all of an order from the order screen.
 - **Adjustments.** Staff corrections (±) with a required reason, e.g. cash handed back.
+- **Top-up bonus.** While the boss runs one (Marketing → Top-up bonus), every deposit of at least
+  its minimum gets its percent extra, as a `bonus` ledger row tied to the deposit's payment (once).
+  It's posted by a trigger on the deposit row (`wallet_topup_bonus()`, migration `20261129120000`), so
+  every way of adding money counts. One bonus at a time (`topup_bonus_create()` refuses overlaps);
+  like discounts, a started one can only be ended. Aming card money never leaves as cash, so a bonus
+  can't be withdrawn. If a deposit is later corrected, correct its bonus too. Accounts count a bonus
+  as a correction of what's held. Clients see the running bonus where they add funds.
 - **History.** Every movement, who did it, and the balance after it, for the client and staff.
 
 Screens: `/payment` in the client app (client, "Wallet" in the menu), `/dashboard/wallets` (staff),

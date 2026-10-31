@@ -5,7 +5,7 @@ import { useState } from "react";
 
 import { backTo } from "@repo/ui/navigation/back";
 import { Showcase, type ShowcaseMedia } from "@repo/ui/showroom/Showcase";
-import type { OfferingKind, ServiceWithPackages } from "@repo/lib/offerings/core";
+import { dealPrice, type Deal, type OfferingKind, type ServiceWithPackages } from "@repo/lib/offerings/core";
 import { formatAmount } from "@repo/lib/tenancy/format";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
@@ -29,6 +29,7 @@ export function ServiceShowcase({
   signedInPhone,
   today,
   scope,
+  deal,
 }: {
   kind: OfferingKind;
   studio: { name: string };
@@ -47,9 +48,14 @@ export function ServiceShowcase({
   /** The studio's today: the first day that can be booked. */
   today: string;
   scope: Pick<TenantScope, "currency" | "locale" | "timeZone">;
+  /** The studio's deal running now (decided on the server, so the page and the booking agree). */
+  deal: Deal | null;
 }) {
   const router = useRouter();
   const [chosenId, setChosenId] = useState("");
+  // What booking or ordering now costs: the deal's price where there is one.
+  const priced = deal ? service.packages.map((p) => ({ ...p, price: dealPrice(p.price, deal) })) : service.packages;
+  const dealUntil = deal ? new Date(deal.endsAt).toLocaleDateString(scope.locale, { day: "numeric", month: "short", timeZone: scope.timeZone }) : null;
 
   return (
     <Showcase
@@ -68,6 +74,11 @@ export function ServiceShowcase({
           <p className="text-lg font-semibold text-showroom-ink/70">Ask us for prices</p>
         ) : (
           <div>
+            {deal && showPrices ? (
+              <p className="mb-3 inline-flex rounded-full bg-error-600 px-3 py-1 text-sm font-bold text-white">
+                −{deal.percent}% deal until {dealUntil}
+              </p>
+            ) : null}
             <p className="mb-1.5 text-xs uppercase tracking-widest text-showroom-ink/60">{kind === "service" ? "Choose a package" : "Choose a size"}</p>
             <div className="grid gap-3 sm:grid-cols-2">
               {service.packages.map((p) => {
@@ -89,7 +100,18 @@ export function ServiceShowcase({
                       <span className="text-lg font-bold">{p.name}</span>
                       <span className="shrink-0 text-lg font-bold tabular-nums text-brand-600 dark:text-brand-400">
                         {/* A tier priced 0 ("Custom") is quoted on request; quotations still use the number. */}
-                        {showPrices && p.price > 0 ? formatAmount(scope, p.price) : "Price on request"}
+                        {showPrices && p.price > 0 ? (
+                          deal ? (
+                            <>
+                              <span className="mr-1.5 text-sm font-medium text-showroom-ink/50 line-through">{formatAmount(scope, p.price)}</span>
+                              {formatAmount(scope, dealPrice(p.price, deal))}
+                            </>
+                          ) : (
+                            formatAmount(scope, p.price)
+                          )
+                        ) : (
+                          "Price on request"
+                        )}
                       </span>
                     </span>
                     {p.description ? <span className="block whitespace-pre-line text-sm text-showroom-ink/60">{p.description}</span> : null}
@@ -117,7 +139,7 @@ export function ServiceShowcase({
           <OrderNow
             studio={{ name: studio.name, slug }}
             productSlug={service.slug}
-            sizes={service.packages}
+            sizes={priced}
             chosenId={chosenId}
             signedIn={signedIn}
             signedInPhone={signedInPhone}
@@ -129,7 +151,7 @@ export function ServiceShowcase({
           <BookNow
             studio={{ name: studio.name, slug }}
             serviceSlug={service.slug}
-            packages={service.packages}
+            packages={priced}
             chosenId={chosenId}
             signedIn={signedIn}
             signedInPhone={signedInPhone}
