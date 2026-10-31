@@ -13,6 +13,9 @@ import "swiper/css";
 import "swiper/css/navigation";
 import "swiper/css/pagination";
 
+/** Cards in the ring at least: enough to fill a wide screen on both sides of the middle one. */
+const MIN_CARDS = 8;
+
 /** A product on the running discount, with the order form's link for it. */
 export interface Deal {
   product: Pick<Product, "id" | "name" | "slug" | "description" | "display_image_url">;
@@ -32,8 +35,9 @@ export interface Deal {
 export function DealsSlider({ title, deals, showPrices }: { title: string; deals: Deal[]; showPrices: boolean }) {
   const symbol = useCurrencySymbol();
   const money = (n: number) => formatMoney(n, symbol);
-  // Enough cards to fill both sides of the middle one before looping.
-  const loop = deals.length >= 4;
+  // Always an endless ring: with only a few deals, they repeat until there
+  // are enough cards for both sides of the middle one (Swiper's loop needs them).
+  const ring = Array.from({ length: Math.ceil(MIN_CARDS / deals.length) }, () => deals).flat();
 
   return (
     <section aria-label={title} className="overflow-hidden">
@@ -47,12 +51,12 @@ export function DealsSlider({ title, deals, showPrices }: { title: string; deals
         centeredSlides
         slidesPerView="auto"
         spaceBetween={16}
-        loop={loop}
-        initialSlide={loop ? 0 : Math.floor((deals.length - 1) / 2)}
+        loop
         speed={500}
         autoplay={{ delay: 4500, disableOnInteraction: false, pauseOnMouseEnter: true }}
         navigation
-        pagination={{ clickable: true }}
+        // A dot per product; none when the ring repeats them (dots would count copies).
+        pagination={ring.length === deals.length ? { clickable: true } : false}
         // Arrows from sm up; on a phone the cards are swiped.
         className="!pb-9 [&_.swiper-button-next]:hidden [&_.swiper-button-prev]:hidden sm:[&_.swiper-button-next]:flex sm:[&_.swiper-button-prev]:flex"
         style={
@@ -64,9 +68,9 @@ export function DealsSlider({ title, deals, showPrices }: { title: string; deals
           } as React.CSSProperties
         }
       >
-        {deals.map((deal) => (
+        {ring.map((deal, i) => (
           // `group`: the card styles itself from Swiper's swiper-slide-active class.
-          <SwiperSlide key={deal.product.id} className="group !w-[78%] max-w-80 py-2 sm:!w-80">
+          <SwiperSlide key={`${deal.product.id}-${i}`} className="group !w-[70%] max-w-80 py-2 sm:!w-80">
             <DealCard deal={deal} money={money} showPrices={showPrices} />
           </SwiperSlide>
         ))}
