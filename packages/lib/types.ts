@@ -1,4 +1,4 @@
-import type { DiscountKind, Offer } from "@repo/lib/discounts/core/model";
+import type { DiscountKind, Offer, PendingOffer } from "@repo/lib/discounts/core/model";
 
 // Hand-written DB row types. Regenerate with:
 //   npx supabase gen types typescript --linked > lib/database.types.ts
@@ -226,6 +226,8 @@ export interface Product {
   price: number | null;
   /** The discount running now, if any (packages/lib/discounts); its price replaces `price`. */
   offer?: Offer | null;
+  /** With no price (nor priced sizes): the discount that will come off the price agreed on the call. */
+  pending_offer?: PendingOffer | null;
   description: string | null;
   /** What it's sold in, shown on invoices: "Pc", "Sheet", "Service"… */
   unit: string | null;
@@ -413,6 +415,11 @@ export interface OrderItemWithOrder extends OrderItem {
   category: { name: string } | null;
   /** The line's agreed price once invoiced (see packages/lib/invoices); null before. */
   unit_price: number | null;
+  /**
+   * The line's list price: kept when it's invoiced, or, for a product with no
+   * catalog price (photo books), the price agreed on the call. Discounts come off it.
+   */
+  list_unit_price?: number | null;
   /** A manager's discount on this line, on top of its catalog price (packages/lib/orders/pricing.ts); both null when none. */
   line_discount_kind: DiscountKind | null;
   line_discount_value: number | null;

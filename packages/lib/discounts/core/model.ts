@@ -42,6 +42,14 @@ export interface Offer {
   price: number;
 }
 
+/**
+ * A discount running on a product that has no price yet (priced on a call,
+ * like photo books): what it takes off, for the badge. Its prices come once
+ * the price is agreed (see pending_offer() in
+ * supabase/migrations/20261129140000_price_on_call_offers.sql).
+ */
+export type PendingOffer = Pick<Offer, "discountId" | "name" | "kind" | "value">;
+
 /** What someone fills in to create a discount. */
 export interface DiscountInput {
   name: string;

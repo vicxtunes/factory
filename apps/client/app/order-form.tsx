@@ -773,6 +773,11 @@ function OrderSummary({
                 ) : null}
                 {currency.format(unitPrice * item.qty)}
               </span>
+            ) : unitPrice == null && product?.pending_offer ? (
+              // Priced on a call (photo books): the discount comes off the agreed price.
+              <span className="shrink-0 rounded-full bg-error-600 px-2 py-0.5 text-[11px] font-semibold text-white">
+                {offerBadge(product.pending_offer, currency.format)}
+              </span>
             ) : null}
           </div>
         ))}

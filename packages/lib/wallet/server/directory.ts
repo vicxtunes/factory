@@ -34,6 +34,7 @@ interface OrderRow {
   items: {
     qty: number;
     offer: Offer | null;
+    list_unit_price: number | null;
     line_discount_kind: DiscountKind | null;
     line_discount_value: number | null;
     catalog_product: { price: number | null } | null;
@@ -45,7 +46,7 @@ export async function loadOrder(orderId: string): Promise<WalletOrder | null> {
   const { data, error } = await createAdminClient()
     .from("orders")
     .select(
-      "id, order_no, client_id, approval_status, cancelled_at, quoted_price, items:order_items (qty, offer:item_offer, line_discount_kind, line_discount_value, catalog_product:products (price), catalog_variant:product_variants (price))",
+      "id, order_no, client_id, approval_status, cancelled_at, quoted_price, items:order_items (qty, offer:item_offer, list_unit_price, line_discount_kind, line_discount_value, catalog_product:products (price), catalog_variant:product_variants (price))",
     )
     .eq("id", orderId)
     .maybeSingle<OrderRow>();

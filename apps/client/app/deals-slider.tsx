@@ -7,7 +7,7 @@ import { Swiper, SwiperSlide } from "swiper/react";
 
 import { useCurrencySymbol } from "@repo/lib/currency/CurrencySymbolProvider";
 import { formatMoney } from "@repo/lib/currency/format";
-import { offerBadge, type Offer } from "@repo/lib/discounts/core";
+import { offerBadge, type Offer, type PendingOffer } from "@repo/lib/discounts/core";
 import type { Product } from "@repo/lib/types";
 
 import "swiper/css";
@@ -21,8 +21,8 @@ const MIN_CARDS = 8;
 export interface Deal {
   product: Pick<Product, "id" | "name" | "slug" | "description" | "display_image_url">;
   categoryId: string;
-  /** The product's own offer, or its best size's ("From …"). */
-  offer: Offer;
+  /** The product's own offer, or its best size's ("From …"); without prices when it's priced on a call. */
+  offer: Offer | PendingOffer;
   fromSizes: boolean;
 }
 
@@ -169,13 +169,17 @@ function DealCard({ deal, money, showPrices }: { deal: Deal; money: (n: number) 
       <div className="flex flex-1 flex-col items-center px-3 pb-3 pt-4 text-center">
         <h3 className="line-clamp-1 text-lg font-semibold">{product.name}</h3>
         {product.description ? <p className="mt-1 line-clamp-2 text-sm text-white/70">{product.description}</p> : null}
-        {showPrices ? (
-          <p className="mt-3 flex flex-wrap items-baseline justify-center gap-x-2">
-            {deal.fromSizes ? <span className="text-xs text-white/70">From</span> : null}
-            <span className="text-sm text-white/60 line-through">{money(offer.listPrice)}</span>
-            <span className="text-xl font-bold tabular-nums">{money(offer.price)}</span>
-          </p>
-        ) : null}
+        {"price" in offer ? (
+          showPrices ? (
+            <p className="mt-3 flex flex-wrap items-baseline justify-center gap-x-2">
+              {deal.fromSizes ? <span className="text-xs text-white/70">From</span> : null}
+              <span className="text-sm text-white/60 line-through">{money(offer.listPrice)}</span>
+              <span className="text-xl font-bold tabular-nums">{money(offer.price)}</span>
+            </p>
+          ) : null
+        ) : (
+          <p className="mt-3 text-sm text-white/80">Off the price we agree on your call</p>
+        )}
         <div className="mt-auto pt-4">
           <Link
             href={`/new?category=${deal.categoryId}&product=${product.id}`}

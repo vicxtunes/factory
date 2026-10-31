@@ -29,6 +29,16 @@ already being read, via PostgREST computed fields:
 `catalogUnitPrice()` in `packages/lib/orders/pricing.ts` returns the offer's price when there is one, so the
 existing pricing rules picked it up without other changes.
 
+## Products priced on a call (photo books)
+
+A product with no price and no priced sizes can't show a discounted price, so it shows the badge
+only: `pending_offer` on `products` (`{ discountId, name, kind, value }`, the largest running public
+discount covering it; `supabase/migrations/20261129140000_price_on_call_offers.sql`). In Client
+Orders the receptionist enters each such line's **price agreed on the call** (`setAgreedUnitPrice`,
+before confirming), kept as the line's list price (`order_items.list_unit_price`). `item_offer()`
+falls back to it after the catalog price, so the discount the order was placed under comes off it
+like off any product, and invoices and Accounts follow.
+
 ## Promo codes
 
 A discount can have a **code** (3–20 letters and numbers, stored upper-case) and an optional

@@ -27,6 +27,7 @@ export interface OrderAmount {
 
 type CatalogPriced = Pick<OrderItemWithOrder, "catalog_product" | "catalog_variant"> & {
   offer?: Offer | null;
+  list_unit_price?: number | null;
   line_discount_kind?: DiscountKind | null;
   line_discount_value?: number | null;
 };
@@ -36,9 +37,12 @@ type PricedItem = CatalogPriced &
     order: Pick<OrderItemWithOrder["order"], "quoted_price">;
   };
 
-/** An item's catalog list price, before any discount: the variant's own price overrides the product's. */
+/**
+ * An item's list price, before any discount: the variant's own price overrides
+ * the product's; with neither (photo books), the price agreed on the call.
+ */
 export function catalogListPrice(item: CatalogPriced): number | null {
-  const price = item.catalog_variant?.price ?? item.catalog_product?.price ?? null;
+  const price = item.catalog_variant?.price ?? item.catalog_product?.price ?? item.list_unit_price ?? null;
   return price == null ? null : Number(price);
 }
 
@@ -82,7 +86,8 @@ export function orderAmount(items: PricedItem[]): OrderAmount {
 //   1. A price staff set on the order (quoted_price) wins, as above.
 //   2. Otherwise each line: its agreed price (order_items.unit_price) if
 //      set, else the catalog price — except photo books, which are only
-//      priced after the receptionist has called the client.
+//      priced after the receptionist has called the client (then from the
+//      price agreed on the call, less any discount).
 //   3. Lines without a price leave the estimate incomplete ("+ photo books").
 
 type EstimatedItem = CatalogPriced &
@@ -94,7 +99,7 @@ type EstimatedItem = CatalogPriced &
 /** A line's estimated unit price, or null while it can't be priced (photo books, no catalog price). */
 export function estimateUnitPrice(item: EstimatedItem): number | null {
   if (item.unit_price != null) return Number(item.unit_price);
-  if (isPhotobookCategory(item.category?.name)) return null;
+  if (isPhotobookCategory(item.category?.name) && item.list_unit_price == null) return null;
   return catalogUnitPrice(item);
 }
 

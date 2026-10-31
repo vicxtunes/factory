@@ -93,7 +93,7 @@ async function Home({ client }: { client: { id: string; name: string; avatarUrl:
 }
 
 
-/** Aming's products on a running discount (their own price, or a size's), the ones with a picture first. */
+/** Aming's products on a running discount (their own price, a size's, or the price agreed on a call), the ones with a picture first. */
 function discounted(catalog: ProductCategory[]): Deal[] {
   return catalog
     .filter((c) => !isOptionCategory(c))
@@ -103,7 +103,7 @@ function discounted(catalog: ProductCategory[]): Deal[] {
           .map((v) => v.offer)
           .filter((o) => o != null)
           .sort((a, b) => a.price - b.price)[0];
-        const offer = product.offer ?? sizeOffer;
+        const offer = product.offer ?? sizeOffer ?? product.pending_offer;
         if (!offer) return [];
         // Only what the card shows crosses to the browser.
         const { id, name, slug, description, display_image_url } = product;

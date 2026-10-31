@@ -22,9 +22,10 @@ const card = (product: Product): ShowroomCard => ({
   badge: discountBadge(product),
 });
 
-/** "−20%" on a card while a discount runs on the product, or on one of its sizes (the best one). */
+/** "−20%" on a card while a discount runs on the product, or on one of its sizes (the best one), or on its price agreed on a call. */
 function discountBadge(product: Product): string | null {
-  const offer = product.offer ?? product.variants.map((v) => v.offer).filter((o) => o != null).sort((a, b) => a.price - b.price)[0];
+  const offer =
+    product.offer ?? product.variants.map((v) => v.offer).filter((o) => o != null).sort((a, b) => a.price - b.price)[0] ?? product.pending_offer;
   return offer ? offerBadge(offer, (n) => formatMoney(n)) : null;
 }
 
