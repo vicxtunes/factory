@@ -4,6 +4,8 @@ import type { ReactNode } from "react";
 import { Avatar } from "@repo/ui/Avatar";
 import { OrdersIcon, PlaceOrderIcon, ShowroomIcon } from "@repo/ui/icons";
 import { StatusPieChart } from "@repo/ui/charts/OrderCharts";
+import { formatMoney } from "@repo/lib/currency/format";
+import { offerBadge } from "@repo/lib/discounts/core";
 import { CLIENT_STATUS_LABELS, clientStatus, clientStatusSteps } from "@repo/lib/orders/clientStatus";
 import { BOARD_COLUMNS, STATUS_LABELS, type MarketingSlide, type OrderItemWithOrder, type Product } from "@repo/lib/types";
 
@@ -76,10 +78,15 @@ function InProgressCard({ item }: { item: OrderItemWithOrder }) {
 function ProductCard({ product, category }: { product: Product; category: string }) {
   return (
     <Link href={`/${encodeURIComponent(product.slug)}`} className="group block overflow-hidden rounded-3xl border border-border bg-surface shadow-theme-xs">
-      <div className="aspect-[4/3] overflow-hidden bg-gray-100 dark:bg-white/5">
+      <div className="relative aspect-[4/3] overflow-hidden bg-gray-100 dark:bg-white/5">
         {product.display_image_url ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={product.display_image_url} alt="" loading="lazy" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
+        ) : null}
+        {product.offer ? (
+          <span className="absolute left-2 top-2 rounded-full bg-error-600 px-2 py-0.5 text-xs font-bold text-white shadow-theme-xs">
+            {offerBadge(product.offer, (n) => formatMoney(n))}
+          </span>
         ) : null}
       </div>
       <div className="p-4">
