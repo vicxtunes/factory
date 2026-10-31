@@ -13,7 +13,7 @@ import { vendors } from "@repo/lib/vendors/server";
 import { getMyWalletSummary } from "@repo/lib/wallet/actions";
 
 import { ClientDashboard } from "./dashboard";
-import { DealsSlider, type Deal } from "./deals-slider";
+import { DealsWelcome, type Deal } from "./deals-slider";
 import { Landing } from "./landing";
 import { rememberedClient } from "./remembered-device";
 import { ClientShell } from "./shell";
@@ -78,7 +78,7 @@ async function Home({ client }: { client: { id: string; name: string; avatarUrl:
   return (
     <div className="space-y-6">
       {owing ? <OwingBanner owing={owing} /> : null}
-      {deals.length ? <DealsSlider title={dealsTitle(deals)} deals={deals} showPrices={showroomSettings.show_prices} /> : null}
+      {deals.length ? <DealsWelcome title={dealsTitle(deals)} deals={deals} showPrices={showroomSettings.show_prices} /> : null}
       {/* Cancelled orders aren't work in progress — keep them out of the stats. */}
       <ClientDashboard
         client={client}

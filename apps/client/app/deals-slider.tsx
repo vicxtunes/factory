@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useSyncExternalStore } from "react";
 import { A11y, Autoplay, Navigation, Pagination } from "swiper/modules";
 import { Swiper, SwiperSlide } from "swiper/react";
 
@@ -25,14 +26,87 @@ export interface Deal {
   fromSizes: boolean;
 }
 
-// The top of the home screen while a discount runs (Black November): its
-// products as a row of cards, the one in the middle large and dark, the ones
-// beside it smaller and dimmed. It moves on by itself every few seconds,
-// pauses while touched, and can be swiped or stepped with the arrows. Each
-// card shows the deal (old price crossed out) and goes straight to the order
-// form with that product picked. Shown only when there are deals
-// (apps/client/app/page.tsx).
-export function DealsSlider({ title, deals, showPrices }: { title: string; deals: Deal[]; showPrices: boolean }) {
+// "Seen this visit": once the client passes the welcome, it stays away until
+// the app is opened again (sessionStorage lasts as long as the tab or the
+// installed app's window). Kept outside React so every reader agrees.
+const SEEN_KEY = "aming:deals-welcome-seen";
+const seenListeners = new Set<() => void>();
+
+let seenNow = false;
+
+function seen(): boolean {
+  try {
+    return window.sessionStorage.getItem(SEEN_KEY) === "1";
+  } catch {
+    // Storage blocked: show it, and let Continue hide it for this page.
+    return seenNow;
+  }
+}
+
+function markSeen() {
+  seenNow = true;
+  try {
+    window.sessionStorage.setItem(SEEN_KEY, "1");
+  } catch {
+    // Storage blocked: hidden until the page is reloaded.
+  }
+  seenListeners.forEach((l) => l());
+}
+
+function subscribeSeen(listener: () => void) {
+  seenListeners.add(listener);
+  return () => seenListeners.delete(listener);
+}
+
+// What a client sees first when they open the app while a discount runs
+// (Black November): over the dashboard, its products as a row of cards, the
+// one in the middle large and dark, the ones beside it smaller and dimmed.
+// It moves on by itself every few seconds, pauses while touched, and can be
+// swiped or stepped with the arrows. Each card shows the deal (old price
+// crossed out) and goes straight to the order form with that product picked.
+// Continue (or ✕, or Escape) passes it to the dashboard, once per visit.
+// Shown only when there are deals (apps/client/app/page.tsx).
+export function DealsWelcome({ title, deals, showPrices }: { title: string; deals: Deal[]; showPrices: boolean }) {
+  // Hidden on the server and until the browser says whether it was seen.
+  const open = !useSyncExternalStore(subscribeSeen, seen, () => true);
+
+  useEffect(() => {
+    if (!open) return;
+    // The dashboard behind doesn't scroll while the welcome is up.
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && markSeen();
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = overflow;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  if (!open) return null;
+  return (
+    <div role="dialog" aria-modal="true" aria-label={title} className="fixed inset-0 z-[100] overflow-y-auto bg-background/95 backdrop-blur-sm">
+      <button
+        type="button"
+        onClick={markSeen}
+        aria-label="Close"
+        className="fixed right-4 top-4 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-surface text-xl shadow-theme-sm hover:bg-gray-100 dark:hover:bg-white/10"
+      >
+        ✕
+      </button>
+      <div className="flex min-h-full flex-col justify-center py-10">
+        <DealsSlider title={title} deals={deals} showPrices={showPrices} />
+        <div className="mt-6 flex justify-center px-4">
+          <button type="button" onClick={markSeen} className="min-h-11 rounded-full bg-gray-950 px-8 text-sm font-semibold text-white hover:bg-gray-800 dark:bg-white dark:text-gray-950 dark:hover:bg-white/90">
+            Continue to my dashboard
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DealsSlider({ title, deals, showPrices }: { title: string; deals: Deal[]; showPrices: boolean }) {
   const symbol = useCurrencySymbol();
   const money = (n: number) => formatMoney(n, symbol);
   // Always an endless ring: with only a few deals, they repeat until there
@@ -40,10 +114,10 @@ export function DealsSlider({ title, deals, showPrices }: { title: string; deals
   const ring = Array.from({ length: Math.ceil(MIN_CARDS / deals.length) }, () => deals).flat();
 
   return (
-    <section aria-label={title} className="overflow-hidden">
-      <div className="mb-4 text-center">
+    <section className="overflow-hidden">
+      <div className="mb-6 px-4 text-center">
         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-500">On now</p>
-        <h2 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">{title}</h2>
+        <h2 className="mt-1 text-3xl font-bold tracking-tight sm:text-4xl">{title}</h2>
         <p className="mt-1 text-sm text-muted">Order these at the lower price while the deal lasts.</p>
       </div>
       <Swiper
@@ -64,7 +138,7 @@ export function DealsSlider({ title, deals, showPrices }: { title: string; deals
             "--swiper-pagination-color": "var(--color-brand-500)",
             "--swiper-pagination-bottom": "0px",
             "--swiper-navigation-size": "18px",
-            "--swiper-navigation-color": "var(--color-gray-900)",
+            "--swiper-navigation-color": "var(--color-brand-500)",
           } as React.CSSProperties
         }
       >
@@ -82,7 +156,7 @@ export function DealsSlider({ title, deals, showPrices }: { title: string; deals
 function DealCard({ deal, money, showPrices }: { deal: Deal; money: (n: number) => string; showPrices: boolean }) {
   const { product, offer } = deal;
   return (
-    <article className="flex h-full flex-col rounded-[2rem] bg-gray-500/70 p-2 text-white opacity-70 shadow-theme-sm transition duration-500 group-[.swiper-slide-active]:scale-100 group-[.swiper-slide-active]:bg-gray-950 group-[.swiper-slide-active]:opacity-100 group-[.swiper-slide-active]:shadow-theme-lg sm:scale-95 dark:bg-white/10 dark:group-[.swiper-slide-active]:bg-gray-900">
+    <article className="flex h-full flex-col rounded-[2rem] bg-gray-500/70 p-2 text-white opacity-70 shadow-theme-sm transition duration-500 group-[.swiper-slide-active]:scale-100 group-[.swiper-slide-active]:bg-gray-950 group-[.swiper-slide-active]:opacity-100 group-[.swiper-slide-active]:shadow-theme-lg sm:scale-95 dark:bg-white/10 dark:group-[.swiper-slide-active]:bg-gray-900 dark:group-[.swiper-slide-active]:ring-1 dark:group-[.swiper-slide-active]:ring-white/20">
       <Link href={`/${encodeURIComponent(product.slug)}`} className="relative block aspect-[4/5] overflow-hidden rounded-[1.6rem] bg-gray-200 dark:bg-white/5">
         {product.display_image_url ? (
           // eslint-disable-next-line @next/next/no-img-element
