@@ -6,6 +6,7 @@ import Image from "next/image";
 import Link from "next/link";
 
 import { Button } from "@repo/ui/Button";
+import { QuantityInput } from "@repo/ui/QuantityInput";
 import { CurrencySelect } from "@repo/ui/CurrencySelect";
 import { Field, Select, TextArea, TextInput } from "@repo/ui/Field";
 import { SectionLabel } from "@repo/ui/SectionLabel";
@@ -503,13 +504,7 @@ function ItemRow({
           </Field>
         ) : null}
         <Field label="Quantity">
-          <TextInput
-            type="number"
-            min={1}
-            className="tnum"
-            value={item.qty}
-            onChange={(e) => onChange({ qty: Number(e.target.value) })}
-          />
+          <QuantityInput value={item.qty} onChange={(qty) => onChange({ qty })} />
         </Field>
       </div>
 

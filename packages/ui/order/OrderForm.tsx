@@ -6,6 +6,7 @@ import { Button } from "@repo/ui/Button";
 import { StepRail } from "@repo/ui/StepForm";
 import { Field, Select, TextArea, TextInput } from "@repo/ui/Field";
 import { PhoneInput } from "@repo/ui/PhoneInput";
+import { QuantityInput } from "@repo/ui/QuantityInput";
 import { SectionLabel } from "@repo/ui/SectionLabel";
 import { UploadRow } from "@repo/ui/UploadRow";
 import { UploadThumbs, uploadKey } from "@repo/ui/UploadThumbs";
@@ -935,13 +936,7 @@ function ItemRow({
           </Field>
         ) : null}
         <Field label="Quantity">
-          <TextInput
-            type="number"
-            min={1}
-            className="tnum"
-            value={item.qty}
-            onChange={(e) => onChange(index, { qty: Number(e.target.value) })}
-          />
+          <QuantityInput value={item.qty} onChange={(qty) => onChange(index, { qty })} />
         </Field>
       </div>
 
