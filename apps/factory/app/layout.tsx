@@ -7,6 +7,7 @@ import { InstallCapture } from "@repo/ui/pwa/InstallCapture";
 import { AppSplash } from "@repo/ui/pwa/AppSplash";
 import { NavigationProgress } from "@repo/ui/pwa/NavigationProgress";
 import { KeepFresh } from "@repo/ui/navigation/KeepFresh";
+import { TestCopyBanner } from "@repo/ui/TestCopyBanner";
 import { BackHistory } from "@repo/ui/navigation/back";
 import { SIDEBAR_COOKIE } from "@repo/ui/navigation/sidebar-init";
 import { CurrencySymbolProvider } from "@repo/lib/currency/CurrencySymbolProvider";
@@ -60,6 +61,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
       data-sidebar={(await cookies()).get(SIDEBAR_COOKIE)?.value === "1" ? "collapsed" : undefined}
     >
       <body className="min-h-full flex flex-col">
+        <TestCopyBanner />
         <SerwistProvider swUrl="/serwist/sw.js">
           <InstallCapture />
           <OfflineBanner />
