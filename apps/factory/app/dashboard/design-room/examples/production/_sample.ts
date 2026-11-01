@@ -1,4 +1,5 @@
-import { productCosts, type CostingCategory, type LenderAccount, type LenderDetail, type Loan, type Material, type MaterialDetail, type RecipeLine } from "@repo/lib/production/core";
+import type { QueuedItem } from "@repo/lib/production/service";
+import { productCosts, type CostingCategory, type ProductionRecord, type LenderAccount, type LenderDetail, type Loan, type Material, type MaterialDetail, type RecipeLine } from "@repo/lib/production/core";
 
 // Sample materials for the Production examples.
 export const MATERIALS: Material[] = [
@@ -96,3 +97,41 @@ const RECIPES = new Map<string, RecipeLine[]>([
 ]);
 
 export const PRODUCT_COSTS = productCosts(CATALOG, RECIPES, MATERIALS);
+
+// Sample usage: a photo book and a frame waiting (one with no recipe), and two records, one over its recipe.
+export const USAGE_QUEUE: QueuedItem[] = [
+  { itemId: "i1", orderNo: "2026-4012", clientName: "Grace Nakato", product: "Layflat photo book", productId: "book", variantId: "a4", sizeName: "A4", qty: 1, attributes: { Pages: 40 }, status: "quality_check", updatedAt: "2026-11-02T08:00:00Z", hasRecipe: true, expected: [{ materialId: "m1", qty: 40 }, { materialId: "m3", qty: 20 }, { materialId: "m4", qty: 1 }, { materialId: "m2", qty: 1 }], otherCost: 3_000 },
+  { itemId: "i2", orderNo: "2026-4010", clientName: "Okello Prints Ltd", product: "Photo mug", productId: "mug", variantId: null, sizeName: null, qty: 6, attributes: {}, status: "ready_for_pickup", updatedAt: "2026-11-01T15:00:00Z", hasRecipe: false, expected: [], otherCost: 0 },
+];
+
+export const RECORDS: ProductionRecord[] = [
+  {
+    id: "r1",
+    item: { itemId: "i0", orderNo: "2026-4002", clientName: "Kampala Bridal", product: "Layflat photo book", sizeName: "A3", qty: 1 },
+    otherCost: 4_500,
+    estimatedCost: 21_050,
+    actualCost: 22_250,
+    note: "Two spreads reprinted",
+    actorName: "Supervisor",
+    createdAt: "2026-11-01T12:00:00Z",
+    voidedAt: null,
+    voidReason: null,
+    lines: [
+      { materialId: "m1", materialName: "A4 photo paper", unit: "sheet", expectedQty: 40, actualQty: 50, unitCost: 120 },
+      { materialId: "m2", materialName: "Hard cover A4", unit: "pc", expectedQty: 2, actualQty: 2, unitCost: 4_500 },
+    ],
+  },
+  {
+    id: "r2",
+    item: { itemId: "i9", orderNo: "2026-3998", clientName: "Peter Ssempa", product: "Wooden frame", sizeName: "A4", qty: 2 },
+    otherCost: 0,
+    estimatedCost: 23_200,
+    actualCost: 23_200,
+    note: null,
+    actorName: "Supervisor",
+    createdAt: "2026-10-31T16:00:00Z",
+    voidedAt: null,
+    voidReason: null,
+    lines: [],
+  },
+];

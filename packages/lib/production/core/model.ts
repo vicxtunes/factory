@@ -161,3 +161,45 @@ export interface UnitCost {
   /** A line's material is gone or has no price yet. */
   unpriced: boolean;
 }
+
+// --- Production records -----------------------------------------------------
+
+/** An order item that reached Quality check or later, as recording its usage needs it. */
+export interface UsageItem {
+  itemId: string;
+  orderNo: string;
+  clientName: string;
+  product: string;
+  productId: string | null;
+  variantId: string | null;
+  sizeName: string | null;
+  qty: number;
+  /** The order's details by name (e.g. { Pages: 40 }). */
+  attributes: Record<string, string | number>;
+  status: string;
+  updatedAt: string;
+}
+
+export interface RecordLine {
+  materialId: string;
+  materialName: string;
+  unit: string;
+  expectedQty: number;
+  actualQty: number;
+  unitCost: number;
+}
+
+/** What an item used, against what its recipe expected, at the prices then. */
+export interface ProductionRecord {
+  id: string;
+  item: Pick<UsageItem, "itemId" | "orderNo" | "clientName" | "product" | "sizeName" | "qty">;
+  otherCost: number;
+  estimatedCost: number;
+  actualCost: number;
+  note: string | null;
+  actorName: string;
+  createdAt: string;
+  voidedAt: string | null;
+  voidReason: string | null;
+  lines: RecordLine[];
+}

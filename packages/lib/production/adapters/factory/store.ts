@@ -6,7 +6,7 @@ import "server-only";
 
 import { createAdminClient } from "@repo/lib/supabase/admin";
 
-import type { Lender, Loan, Material, MaterialMovement, MaterialPurchase, RecipeLine, Repayment } from "../../core/model";
+import type { Lender, Loan, Material, MaterialMovement, MaterialPurchase, ProductionRecord, RecipeLine, Repayment, UsageItem } from "../../core/model";
 import { unitCostOf } from "../../core/rules";
 import { ProductionError, type ProductionStore } from "../../ports";
 
@@ -64,6 +64,40 @@ interface RepaymentRow {
   voided_at: string | null;
   void_reason: string | null;
 }
+
+interface ItemRow {
+  id: string;
+  product: string;
+  product_id: string | null;
+  variant_id: string | null;
+  size: string | null;
+  qty: number;
+  attributes: Record<string, string | number> | null;
+  production_status: string;
+  updated_at: string;
+  order: { order_no: string; client_name: string; cancelled_at: string | null };
+  variant: { name: string } | null;
+}
+
+const ITEM_COLUMNS =
+  "id, product, product_id, variant_id, size, qty, attributes, production_status, updated_at, order:orders!inner (order_no, client_name, cancelled_at), variant:product_variants (name)";
+
+/** Statuses an item has once it's been made. */
+const MADE = ["quality_check", "ready_for_pickup", "completed"];
+
+const toItem = (r: ItemRow): UsageItem => ({
+  itemId: r.id,
+  orderNo: r.order.order_no,
+  clientName: r.order.client_name,
+  product: r.product,
+  productId: r.product_id,
+  variantId: r.variant_id,
+  sizeName: r.variant?.name ?? r.size,
+  qty: r.qty,
+  attributes: r.attributes ?? {},
+  status: r.production_status,
+  updatedAt: r.updated_at,
+});
 
 interface MaterialRow {
   id: string;
@@ -137,6 +171,9 @@ const MESSAGES: Record<string, string> = {
   before_loan: "A repayment can't be dated before the money was borrowed.",
   void_the_purchase: "This is a supplier's credit for a purchase: void the purchase instead (on its material's page).",
   no_product: "That product no longer exists.",
+  no_item: "That item no longer exists, or its order was cancelled.",
+  already_recorded: "What this item used has already been recorded. Void that record first to record it again.",
+  no_record: "That record no longer exists.",
   wrong_size: "One of the sizes no longer belongs to this product. Reload and try again.",
   credit_via_purchase: "Materials on credit are recorded as a purchase, on Materials.",
 };
@@ -430,6 +467,112 @@ export const factoryStore: ProductionStore = {
         : { variant_id: l.variantId, label: l.label, amount: l.amount },
     );
     const { error } = await createAdminClient().rpc("production_save_recipe", { p_tenant: scope.tenantId, p_product: input.productId, p_lines: lines });
+    if (error) fail(error);
+  },
+
+  async usageQueue(scope, since) {
+    const db = createAdminClient();
+    const { data, error } = await db
+      .from("order_items")
+      .select(ITEM_COLUMNS)
+      .in("production_status", MADE)
+      .is("order.cancelled_at", null)
+      .gte("updated_at", since)
+      .order("updated_at")
+      .limit(300)
+      .returns<ItemRow[]>();
+    if (error) fail(error);
+    const items = (data ?? []).map(toItem);
+    if (items.length === 0) return [];
+    const { data: recorded, error: recErr } = await db
+      .from("production_records")
+      .select("order_item_id")
+      .eq("tenant_id", scope.tenantId)
+      .is("voided_at", null)
+      .in("order_item_id", items.map((i) => i.itemId))
+      .returns<{ order_item_id: string }[]>();
+    if (recErr) fail(recErr);
+    const done = new Set((recorded ?? []).map((r) => r.order_item_id));
+    return items.filter((i) => !done.has(i.itemId));
+  },
+
+  async usageItem(_scope, itemId) {
+    const { data, error } = await createAdminClient().from("order_items").select(ITEM_COLUMNS).eq("id", itemId).maybeSingle<ItemRow>();
+    if (error) fail(error);
+    return data && !data.order.cancelled_at ? toItem(data) : null;
+  },
+
+  async records(scope, limit) {
+    const { data, error } = await createAdminClient()
+      .from("production_records")
+      .select(
+        `id, other_cost, estimated_cost, actual_cost, note, actor_name, created_at, voided_at, void_reason, item:order_items!inner (${ITEM_COLUMNS}), lines:production_record_lines (material_id, expected_qty, actual_qty, unit_cost, material:materials (name, unit))`,
+      )
+      .eq("tenant_id", scope.tenantId)
+      .order("created_at", { ascending: false })
+      .limit(limit)
+      .returns<
+        {
+          id: string;
+          other_cost: number | string;
+          estimated_cost: number | string;
+          actual_cost: number | string;
+          note: string | null;
+          actor_name: string;
+          created_at: string;
+          voided_at: string | null;
+          void_reason: string | null;
+          item: ItemRow;
+          lines: { material_id: string; expected_qty: number | string; actual_qty: number | string; unit_cost: number | string; material: { name: string; unit: string } }[];
+        }[]
+      >();
+    if (error) fail(error);
+    return (data ?? []).map((r): ProductionRecord => {
+      const item = toItem(r.item);
+      return {
+        id: r.id,
+        item: { itemId: item.itemId, orderNo: item.orderNo, clientName: item.clientName, product: item.product, sizeName: item.sizeName, qty: item.qty },
+        otherCost: Number(r.other_cost),
+        estimatedCost: Number(r.estimated_cost),
+        actualCost: Number(r.actual_cost),
+        note: r.note,
+        actorName: r.actor_name,
+        createdAt: r.created_at,
+        voidedAt: r.voided_at,
+        voidReason: r.void_reason,
+        lines: r.lines.map((l) => ({
+          materialId: l.material_id,
+          materialName: l.material.name,
+          unit: l.material.unit,
+          expectedQty: Number(l.expected_qty),
+          actualQty: Number(l.actual_qty),
+          unitCost: Number(l.unit_cost),
+        })),
+      };
+    });
+  },
+
+  async recordUsage(scope, input, actor) {
+    const { data, error } = await createAdminClient().rpc("production_record_usage", {
+      p_tenant: scope.tenantId,
+      p_item: input.itemId,
+      p_lines: input.lines.map((l) => ({ material_id: l.materialId, expected_qty: l.expectedQty, actual_qty: l.actualQty })),
+      p_other_cost: input.otherCost,
+      p_note: input.note,
+      p_actor_id: actor.id,
+      p_actor_name: actor.name,
+    });
+    if (error) fail(error);
+    return data as string;
+  },
+
+  async voidRecord(scope, input, actor) {
+    const { error } = await createAdminClient().rpc("production_void_record", {
+      p_tenant: scope.tenantId,
+      p_record: input.id,
+      p_reason: input.reason,
+      p_actor_name: actor.name,
+    });
     if (error) fail(error);
   },
 };

@@ -145,6 +145,7 @@ import ProductionMoneyWeOwe from "./examples/production/money-we-owe";
 import ProductionLender from "./examples/production/lender";
 import ProductionProductCosts from "./examples/production/product-costs";
 import ProductionRecipe from "./examples/production/recipe";
+import ProductionUsage from "./examples/production/usage";
 
 // Everything the Design Room shows. To add a component: build it in
 // packages/ui/, write its examples under ./examples/<slug>/ (one default
@@ -283,6 +284,15 @@ export const COMPONENTS: RoomComponent[] = [
       { title: "Product costs", file: "production/product-costs.tsx", Demo: ProductionProductCosts },
       { title: "A recipe", file: "production/recipe.tsx", Demo: ProductionRecipe },
     ],
+  },
+  {
+    slug: "record-usage",
+    name: "Record usage",
+    category: "Flows",
+    status: "live",
+    source: "packages/ui/production/UsageBoard.tsx",
+    summary: "Items made in the last 30 days (Quality check or later) with nothing recorded, oldest first; tapping one opens a form sheet filled with what its recipe expects (pages included), to correct with what was really used, add other materials, and save: it comes off stock. The latest records show what each used against its recipe (red when over), each voidable with a reason, which puts the stock back.",
+    examples: [{ title: "Record usage", file: "production/usage.tsx", Demo: ProductionUsage }],
   },
   {
     slug: "button",

@@ -18,11 +18,13 @@ import {
   recipeInputSchema,
   repaymentInputSchema,
   stockCountSchema,
+  usageInputSchema,
   voidSchema,
 } from "./core/schema";
 import { canManageProduction } from "./policy";
 import { ProductionError } from "./ports";
-import { production } from "./server";
+import { costingCatalog } from "./catalog";
+import { production, usage } from "./server";
 
 const MATERIALS = "/dashboard/production/materials";
 const OWED = "/dashboard/accounts/owed";
@@ -123,5 +125,26 @@ export async function saveRecipe(input: unknown): Promise<Result> {
     const { scope } = await staff();
     await production.saveRecipe(scope, parseInput(recipeInputSchema, input));
     revalidatePath("/dashboard/production/products", "layout");
+  });
+}
+
+const USAGE = "/dashboard/production/usage";
+
+/** What an item used; its stock comes off. */
+export async function recordUsage(input: unknown): Promise<Result> {
+  return runAction("production", async () => {
+    const { scope, actor } = await staff();
+    await usage.record(scope, await costingCatalog(), parseInput(usageInputSchema, input), actor);
+    revalidatePath(USAGE);
+    revalidatePath(MATERIALS, "layout");
+  });
+}
+
+export async function voidRecord(input: unknown): Promise<Result> {
+  return runAction("production", async () => {
+    const { scope, actor } = await staff();
+    await production.voidRecord(scope, parseInput(voidSchema, input), actor);
+    revalidatePath(USAGE);
+    revalidatePath(MATERIALS, "layout");
   });
 }

@@ -123,3 +123,13 @@ export const recipeInputSchema = z.object({
   lines: z.array(recipeLineSchema).max(100),
 });
 export type RecipeInput = z.output<typeof recipeInputSchema>;
+
+// --- Production records -----------------------------------------------------
+
+/** What an item actually used; what it should have used comes from its recipe, on the server. */
+export const usageInputSchema = z.object({
+  itemId: idSchema,
+  actual: z.array(z.object({ materialId: idSchema, qty: quantity.min(0, "A quantity can't be below zero.") })).max(100),
+  note: optionalText(500),
+});
+export type UsageInput = z.output<typeof usageInputSchema>;

@@ -1,7 +1,7 @@
 // What a product size costs to make, from its recipe and today's material
 // prices, and what it earns at its selling price. Pure.
 
-import type { Material, RecipeLine, UnitCost } from "./model";
+import type { Material, RecipeLine, UnitCost, UsageItem } from "./model";
 
 /** A size's recipe: the product's lines for every size, then the size's own. */
 export function recipeFor(lines: RecipeLine[], variantId: string | null): RecipeLine[] {
@@ -140,4 +140,27 @@ export function productCosts(
       };
     });
   });
+}
+
+/** A detail's value on an order item, as a number ("40 pages" → 40); 0 when missing. */
+export function detailNumber(attributes: Record<string, string | number>, name: string): number {
+  const raw = attributes[name];
+  const n = typeof raw === "number" ? raw : parseFloat(String(raw ?? "").replace(/,/g, ""));
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+/** What an order item should use by its recipe: `attributeNames` maps a detail's id to its name. */
+export function usagePlan(item: Pick<UsageItem, "variantId" | "qty" | "attributes">, lines: RecipeLine[], attributeNames: Map<string, string>) {
+  return expectedUsage(recipeFor(lines, item.variantId), item.qty, (id) => detailNumber(item.attributes, attributeNames.get(id) ?? ""));
+}
+
+/**
+ * The lines to save: every material the recipe expects (actual defaults to
+ * expected when not given) plus any other material actually used.
+ */
+export function mergeUsage(expected: { materialId: string; qty: number }[], actual: { materialId: string; qty: number }[]) {
+  const used = new Map(actual.map((a) => [a.materialId, a.qty]));
+  const lines = expected.map((e) => ({ materialId: e.materialId, expectedQty: e.qty, actualQty: used.get(e.materialId) ?? e.qty }));
+  for (const a of actual) if (!expected.some((e) => e.materialId === a.materialId) && a.qty > 0) lines.push({ materialId: a.materialId, expectedQty: 0, actualQty: a.qty });
+  return lines;
 }

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { costWith, expectedUsage, margin, productCosts, recipeFor, recipeInputSchema, unitCost, type RecipeLine } from "./index";
+import { costWith, detailNumber, expectedUsage, margin, mergeUsage, productCosts, usagePlan, recipeFor, recipeInputSchema, unitCost, type RecipeLine } from "./index";
 
 const A4 = "00000000-0000-4000-8000-0000000000a4";
 const A3 = "00000000-0000-4000-8000-0000000000a3";
@@ -102,4 +102,32 @@ test("each product size with its cost, price and margin; per-page products get n
   assert.deepEqual(f.sizes[0].margin, { profit: 25_000 - 11_000, percent: 56 });
   assert.equal(m.hasRecipe, false);
   assert.equal(m.sizes[0].margin, null, "no recipe, no margin");
+});
+
+test("an order item's plan reads its page count by the detail's name", () => {
+  const names = new Map([[PAGES, "Pages"]]);
+  const plan = usagePlan({ variantId: A4, qty: 1, attributes: { Pages: "40" } }, book, names);
+  assert.deepEqual(plan.materials.find((m) => m.materialId === "paper"), { materialId: "paper", qty: 40 });
+  assert.equal(plan.otherCost, 3_000);
+  assert.equal(detailNumber({ Pages: "1,200" }, "Pages"), 1200);
+  assert.equal(detailNumber({}, "Pages"), 0, "missing: per-page lines expect nothing");
+});
+
+test("saved lines: everything expected (actual defaults to it) plus extra materials used", () => {
+  const lines = mergeUsage(
+    [
+      { materialId: "paper", qty: 40 },
+      { materialId: "box", qty: 1 },
+    ],
+    [
+      { materialId: "paper", qty: 44 },
+      { materialId: "film", qty: 3 },
+      { materialId: "glue", qty: 0 },
+    ],
+  );
+  assert.deepEqual(lines, [
+    { materialId: "paper", expectedQty: 40, actualQty: 44 },
+    { materialId: "box", expectedQty: 1, actualQty: 1 },
+    { materialId: "film", expectedQty: 0, actualQty: 3 },
+  ]);
 });

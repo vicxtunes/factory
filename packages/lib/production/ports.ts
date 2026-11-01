@@ -4,7 +4,7 @@
 import { AppError } from "@repo/lib/kernel/core";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
-import type { Lender, Loan, Material, MaterialDetail, RecipeLine, Repayment } from "./core/model";
+import type { Lender, Loan, Material, MaterialDetail, ProductionRecord, RecipeLine, Repayment, UsageItem } from "./core/model";
 import type { LoanInput, MaterialInput, MaterialUpdate, PurchaseInput, RecipeInput, RepaymentInput, StockCountInput, VoidInput } from "./core/schema";
 
 export interface ProductionActor {
@@ -38,6 +38,20 @@ export interface ProductionStore {
   recipes(scope: TenantScope, productId?: string): Promise<Map<string, RecipeLine[]>>;
   /** Replaces a product's whole recipe (every size). */
   saveRecipe(scope: TenantScope, input: RecipeInput): Promise<void>;
+
+  /** Items at Quality check or later, changed since `since`, of live orders, with no live record yet; oldest first. */
+  usageQueue(scope: TenantScope, since: string): Promise<UsageItem[]>;
+  usageItem(scope: TenantScope, itemId: string): Promise<UsageItem | null>;
+  /** The latest records (voided ones too), newest first. */
+  records(scope: TenantScope, limit: number): Promise<ProductionRecord[]>;
+  /** Saves the lines at today's prices and takes what was used off stock. */
+  recordUsage(
+    scope: TenantScope,
+    input: { itemId: string; lines: { materialId: string; expectedQty: number; actualQty: number }[]; otherCost: number; note: string | null },
+    actor: ProductionActor,
+  ): Promise<string>;
+  /** What it used goes back into stock. */
+  voidRecord(scope: TenantScope, input: VoidInput, actor: ProductionActor): Promise<void>;
 }
 
 /** A problem the person should see (the message is safe to show). */
