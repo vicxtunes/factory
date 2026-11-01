@@ -1,4 +1,4 @@
-import type { QueuedItem } from "@repo/lib/production/service";
+import type { ProductionOverview, QueuedItem } from "@repo/lib/production/service";
 import { productCosts, type CostingCategory, type ProductionRecord, type LenderAccount, type LenderDetail, type Loan, type Material, type MaterialDetail, type RecipeLine } from "@repo/lib/production/core";
 
 // Sample materials for the Production examples.
@@ -135,3 +135,38 @@ export const RECORDS: ProductionRecord[] = [
     lines: [],
   },
 ];
+
+// A month of production: photo books mostly recorded, frames estimated from recipes, mugs with no recipe.
+export const OVERVIEW: ProductionOverview = {
+  period: { preset: "this_month", from: "2026-10-31T21:00:00Z", to: null, fromDate: "2026-11-01", toDate: "2026-11-30" },
+  figures: {
+    revenue: 6_420_000,
+    cost: 1_986_000,
+    profit: 4_434_000,
+    marginPercent: 69.1,
+    costRecorded: 1_402_000,
+    costEstimated: 584_000,
+    revenueWithoutRecipe: 360_000,
+    products: [
+      { key: "book", name: "Layflat photo book", units: 24, revenue: 4_050_000, cost: 1_210_000, profit: 2_840_000, marginPercent: 70.1, estimated: true, noRecipe: false },
+      { key: "crystal", name: "Crystal board", units: 14, revenue: 1_190_000, cost: 406_000, profit: 784_000, marginPercent: 65.9, estimated: false, noRecipe: false },
+      { key: "frame", name: "Wooden frame", units: 31, revenue: 820_000, cost: 370_000, profit: 450_000, marginPercent: 54.9, estimated: true, noRecipe: false },
+      { key: "mug", name: "Photo mug", units: 24, revenue: 360_000, cost: 0, profit: 360_000, marginPercent: null, estimated: false, noRecipe: true },
+    ],
+  },
+  before: { revenue: 5_800_000, cost: 1_920_000, profit: 3_880_000, marginPercent: 66.9 },
+  materialsUsed: {
+    now: [
+      { materialId: "m1", name: "A4 photo paper", unit: "sheet", qty: 1_180, value: 141_600 },
+      { materialId: "m2", name: "Hard cover A4", unit: "pc", qty: 30, value: 135_000 },
+      { materialId: "m4", name: "Gift box (large)", unit: "pc", qty: 38, value: 76_000 },
+    ],
+    before: 318_000,
+  },
+  wastage: [
+    { materialId: "m1", name: "A4 photo paper", unit: "sheet", qty: 64, value: 7_680 },
+    { materialId: "m3", name: "Lamination film", unit: "m", qty: 12, value: 450 },
+    { materialId: "m4", name: "Gift box (large)", unit: "pc", qty: -1, value: -2_000 },
+  ],
+  stockValue: 488_520,
+};

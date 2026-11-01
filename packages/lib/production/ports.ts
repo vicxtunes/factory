@@ -5,6 +5,7 @@ import { AppError } from "@repo/lib/kernel/core";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
 import type { Lender, Loan, Material, MaterialDetail, ProductionRecord, RecipeLine, Repayment, UsageItem } from "./core/model";
+import type { MaterialFigure, SoldOrder } from "./core/overview";
 import type { LoanInput, MaterialInput, MaterialUpdate, PurchaseInput, RecipeInput, RepaymentInput, StockCountInput, VoidInput } from "./core/schema";
 
 export interface ProductionActor {
@@ -52,6 +53,18 @@ export interface ProductionStore {
   ): Promise<string>;
   /** What it used goes back into stock. */
   voidRecord(scope: TenantScope, input: VoidInput, actor: ProductionActor): Promise<void>;
+
+  /** Live orders whose invoice was issued in [from, to) (null: open-ended), with their items. */
+  soldOrders(scope: TenantScope, range: { from: string | null; to: string | null }): Promise<SoldOrder[]>;
+  /** Live production records' actual cost, by item. */
+  recordedCosts(scope: TenantScope, itemIds: string[]): Promise<Map<string, number>>;
+  /** Materials taken off stock by production (usage net of voided records' reversals) between two local dates, inclusive. */
+  materialsUsed(scope: TenantScope, dates: { from: string | null; to: string | null }): Promise<MaterialFigure[]>;
+  /** The lines of live records made in [from, to). */
+  recordLines(
+    scope: TenantScope,
+    range: { from: string | null; to: string | null },
+  ): Promise<{ materialId: string; name: string; unit: string; expectedQty: number; actualQty: number; unitCost: number }[]>;
 }
 
 /** A problem the person should see (the message is safe to show). */

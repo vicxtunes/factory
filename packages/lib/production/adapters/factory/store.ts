@@ -7,6 +7,7 @@ import "server-only";
 import { createAdminClient } from "@repo/lib/supabase/admin";
 
 import type { Lender, Loan, Material, MaterialMovement, MaterialPurchase, ProductionRecord, RecipeLine, Repayment, UsageItem } from "../../core/model";
+import type { MaterialFigure, SoldOrder } from "../../core/overview";
 import { unitCostOf } from "../../core/rules";
 import { ProductionError, type ProductionStore } from "../../ports";
 
@@ -152,6 +153,18 @@ interface PurchaseRow {
   created_at: string;
   voided_at: string | null;
   void_reason: string | null;
+}
+
+/** PostgREST returns at most 1,000 rows a request: read page by page. */
+async function allPages<T>(page: (from: number, to: number) => PromiseLike<{ data: unknown; error: { message: string } | null }>): Promise<T[]> {
+  const rows: T[] = [];
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await page(from, from + 999);
+    if (error) fail(error);
+    const batch = (data ?? []) as T[];
+    rows.push(...batch);
+    if (batch.length < 1000) return rows;
+  }
 }
 
 // The database's PRODUCTION:<code> refusals, as sentences.
@@ -574,5 +587,99 @@ export const factoryStore: ProductionStore = {
       p_actor_name: actor.name,
     });
     if (error) fail(error);
+  },
+
+  async soldOrders(_scope, range) {
+    const rows = await allPages<{
+      order: {
+        quoted_price: number | string | null;
+        cancelled_at: string | null;
+        items: { id: string; product: string; product_id: string | null; variant_id: string | null; qty: number; unit_price: number | string | null; attributes: Record<string, string | number> | null }[];
+      };
+    }>((from, to) => {
+      let q = createAdminClient()
+        .from("invoices")
+        .select("order:orders!inner (quoted_price, cancelled_at, items:order_items (id, product, product_id, variant_id, qty, unit_price, attributes))")
+        .is("order.cancelled_at", null);
+      if (range.from) q = q.gte("issued_at", range.from);
+      if (range.to) q = q.lt("issued_at", range.to);
+      return q.order("issued_at").range(from, to);
+    });
+    return rows.map(
+      (r): SoldOrder => ({
+        total: Math.round(Number(r.order.quoted_price ?? 0)),
+        items: r.order.items.map((i) => ({
+          itemId: i.id,
+          productId: i.product_id,
+          product: i.product,
+          variantId: i.variant_id,
+          qty: i.qty,
+          unitPrice: i.unit_price === null ? null : Number(i.unit_price),
+          attributes: i.attributes ?? {},
+        })),
+      }),
+    );
+  },
+
+  async recordedCosts(scope, itemIds) {
+    const costs = new Map<string, number>();
+    for (let i = 0; i < itemIds.length; i += 200) {
+      const { data, error } = await createAdminClient()
+        .from("production_records")
+        .select("order_item_id, actual_cost")
+        .eq("tenant_id", scope.tenantId)
+        .is("voided_at", null)
+        .in("order_item_id", itemIds.slice(i, i + 200))
+        .returns<{ order_item_id: string; actual_cost: number | string }[]>();
+      if (error) fail(error);
+      for (const r of data ?? []) costs.set(r.order_item_id, Number(r.actual_cost));
+    }
+    return costs;
+  },
+
+  async materialsUsed(scope, dates) {
+    const rows = await allPages<{ material_id: string; qty: number | string; total: number | string; material: { name: string; unit: string } }>((from, to) => {
+      let q = createAdminClient()
+        .from("material_movements")
+        .select("material_id, qty, total, material:materials (name, unit)")
+        .eq("tenant_id", scope.tenantId)
+        .not("record_id", "is", null);
+      if (dates.from) q = q.gte("occurred_on", dates.from);
+      if (dates.to) q = q.lte("occurred_on", dates.to);
+      return q.order("created_at").range(from, to);
+    });
+    const by = new Map<string, MaterialFigure>();
+    for (const r of rows) {
+      const f = by.get(r.material_id) ?? { materialId: r.material_id, name: r.material.name, unit: r.material.unit, qty: 0, value: 0 };
+      f.qty = Math.round((f.qty - Number(r.qty)) * 1000) / 1000;
+      f.value -= Number(r.total);
+      by.set(r.material_id, f);
+    }
+    return [...by.values()].filter((f) => f.qty !== 0).sort((a, b) => b.value - a.value);
+  },
+
+  async recordLines(scope, range) {
+    const rows = await allPages<{ lines: { material_id: string; expected_qty: number | string; actual_qty: number | string; unit_cost: number | string; material: { name: string; unit: string } }[] }>(
+      (from, to) => {
+        let q = createAdminClient()
+          .from("production_records")
+          .select("lines:production_record_lines (material_id, expected_qty, actual_qty, unit_cost, material:materials (name, unit))")
+          .eq("tenant_id", scope.tenantId)
+          .is("voided_at", null);
+        if (range.from) q = q.gte("created_at", range.from);
+        if (range.to) q = q.lt("created_at", range.to);
+        return q.order("created_at").range(from, to);
+      },
+    );
+    return rows.flatMap((r) =>
+      r.lines.map((l) => ({
+        materialId: l.material_id,
+        name: l.material.name,
+        unit: l.material.unit,
+        expectedQty: Number(l.expected_qty),
+        actualQty: Number(l.actual_qty),
+        unitCost: Number(l.unit_cost),
+      })),
+    );
   },
 };

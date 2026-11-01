@@ -94,6 +94,7 @@ export const NAV_GROUPS: NavGroup[] = [
     id: "production",
     label: "Production",
     items: [
+      { href: "/dashboard/production", label: "Overview", icon: "dashboard", visible: production, exact: true },
       { href: "/dashboard/production/materials", label: "Materials", icon: "production", visible: production },
       { href: "/dashboard/production/products", label: "Product costs", icon: "products", visible: production },
       { href: "/dashboard/production/usage", label: "Record usage", icon: "tasks", visible: production },

@@ -4,8 +4,15 @@
 
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
+import { previousPeriod, resolvePeriod, type Period } from "@repo/lib/accounting/core/period";
+import type { PeriodInput } from "@repo/lib/accounting/service";
+
 import {
   lenderAccounts,
+  periodFigures,
+  wastageByMaterial,
+  type MaterialFigure,
+  type PeriodFigures,
   mergeUsage,
   usagePlan,
   weOwe,
@@ -13,6 +20,8 @@ import {
   type LenderAccount,
   type LenderDetail,
   type Loan,
+  type Material,
+  type RecipeLine,
   type UsageInput,
   type UsageItem,
 } from "./core";
@@ -84,6 +93,51 @@ export function createUsage(store: ProductionStore, clock: () => Date = () => ne
       const merged = mergeUsage(plan.materials, input.actual);
       if (merged.length === 0 && plan.otherCost === 0) throw new ProductionError("Nothing to record: add the materials it used.");
       return store.recordUsage(scope, { itemId: item.itemId, lines: merged, otherCost: plan.otherCost, note: input.note }, actor);
+    },
+  };
+}
+
+export interface ProductionOverview {
+  period: Period;
+  figures: PeriodFigures;
+  /** The same figures for the period before (see previousPeriod); null for all time. */
+  before: Pick<PeriodFigures, "revenue" | "cost" | "profit" | "marginPercent"> | null;
+  materialsUsed: { now: MaterialFigure[]; before: number | null };
+  wastage: MaterialFigure[];
+  /** As of now, whatever the period. */
+  stockValue: number;
+}
+
+/** Production's overview for a period: sales and what making them cost, per product; materials used; wastage. */
+export function createProductionOverview(store: ProductionStore, clock: () => Date = () => new Date()) {
+  async function figures(scope: TenantScope, period: Period, catalog: CostingCategory[], recipes: Map<string, RecipeLine[]>, materials: Material[]) {
+    const orders = await store.soldOrders(scope, { from: period.from, to: period.to });
+    const recorded = await store.recordedCosts(scope, orders.flatMap((o) => o.items.map((i) => i.itemId)));
+    return periodFigures(orders, recorded, recipes, materials, detailNames(catalog));
+  }
+
+  return {
+    async view(scope: TenantScope, catalog: CostingCategory[], input: PeriodInput): Promise<ProductionOverview> {
+      const now = clock();
+      const period = resolvePeriod(input, now, scope.timeZone);
+      const earlier = previousPeriod(period, now, scope.timeZone);
+      const [recipes, materials] = await Promise.all([store.recipes(scope), store.materials(scope)]);
+      const dates = (p: Period) => ({ from: p.fromDate, to: p.toDate });
+      const [current, prior, usedNow, usedBefore, lines] = await Promise.all([
+        figures(scope, period, catalog, recipes, materials),
+        earlier ? figures(scope, earlier, catalog, recipes, materials) : null,
+        store.materialsUsed(scope, dates(period)),
+        earlier ? store.materialsUsed(scope, dates(earlier)) : null,
+        store.recordLines(scope, { from: period.from, to: period.to }),
+      ]);
+      return {
+        period,
+        figures: current,
+        before: prior && { revenue: prior.revenue, cost: prior.cost, profit: prior.profit, marginPercent: prior.marginPercent },
+        materialsUsed: { now: usedNow, before: usedBefore ? usedBefore.reduce((s, m) => s + m.value, 0) : null },
+        wastage: wastageByMaterial(lines),
+        stockValue: materials.reduce((s, m) => s + Math.max(m.stockValue, 0), 0),
+      };
     },
   };
 }

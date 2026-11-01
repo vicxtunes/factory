@@ -146,6 +146,7 @@ import ProductionLender from "./examples/production/lender";
 import ProductionProductCosts from "./examples/production/product-costs";
 import ProductionRecipe from "./examples/production/recipe";
 import ProductionUsage from "./examples/production/usage";
+import ProductionOverviewExample from "./examples/production/overview";
 
 // Everything the Design Room shows. To add a component: build it in
 // packages/ui/, write its examples under ./examples/<slug>/ (one default
@@ -293,6 +294,15 @@ export const COMPONENTS: RoomComponent[] = [
     source: "packages/ui/production/UsageBoard.tsx",
     summary: "Items made in the last 30 days (Quality check or later) with nothing recorded, oldest first; tapping one opens a form sheet filled with what its recipe expects (pages included), to correct with what was really used, add other materials, and save: it comes off stock. The latest records show what each used against its recipe (red when over), each voidable with a reason, which puts the stock back.",
     examples: [{ title: "Record usage", file: "production/usage.tsx", Demo: ProductionUsage }],
+  },
+  {
+    slug: "production-overview",
+    name: "Production overview",
+    category: "Flows",
+    status: "live",
+    source: "packages/ui/production/ProductionOverviewView.tsx",
+    summary: "For a period: gross profit (orange), production cost, margin and materials used, each against the period before; how the cost is known (recorded usage, recipe estimates, sales with no recipe); products by profit with Excel/PDF export; wastage by material and materials used. Cards swipe on a phone, four across on a desktop.",
+    examples: [{ title: "This month", file: "production/overview.tsx", Demo: ProductionOverviewExample }],
   },
   {
     slug: "button",
