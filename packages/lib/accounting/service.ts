@@ -15,6 +15,7 @@ import {
   monthlySeries,
   overview,
   paymentsTotals,
+  previousPeriod,
   resolvePeriod,
   saleLine,
   salesTotals,
@@ -45,6 +46,25 @@ export interface OverviewView {
   series: MonthPoint[];
 }
 
+/** A figure for the period and, when there is one, for the period before (see previousPeriod). */
+export interface Compared {
+  now: number;
+  before: number | null;
+}
+
+export interface DashboardView {
+  period: Period;
+  received: Compared;
+  sales: Compared;
+  /** As of today, regardless of period. */
+  owed: Pick<Overview, "outstanding" | "overdue" | "overdueCount">;
+  byChannel: Overview["receivedByChannel"];
+  /** Sales vs received, last 12 months. */
+  series: MonthPoint[];
+  /** The period's latest payments, newest first. */
+  payments: PaymentLine[];
+}
+
 export interface SalesView {
   period: Period;
   lines: SaleLine[];
@@ -69,6 +89,7 @@ export interface CustomerAccountView {
 }
 
 const CHART_MONTHS = 12;
+const RECENT_PAYMENTS = 10;
 
 export function createAccountingService(source: AccountingSource, clock: () => Date = () => new Date()) {
   return {
@@ -90,6 +111,39 @@ export function createAccountingService(source: AccountingSource, clock: () => D
         period,
         overview: overview(period, docs, moneyIn, customers, today),
         series: monthlySeries(docs, moneyIn, months, scope.timeZone),
+      };
+    },
+
+    /** The bosses' money dashboard: the overview's figures, each against the period before, and the latest payments. */
+    async dashboard(scope: TenantScope, input: PeriodInput): Promise<DashboardView> {
+      const now = clock();
+      const period = resolvePeriod(input, now, scope.timeZone);
+      const before = previousPeriod(period, now, scope.timeZone);
+      const months = lastMonths(now, CHART_MONTHS, scope.timeZone);
+      // Money in: enough for the period, the one before and the chart's months. ISO instants sort as text.
+      const chartFrom = startOfLocalDay(`${months[0]}-01`, scope.timeZone).toISOString();
+      const from = period.from && [period.from, before?.from ?? period.from, chartFrom].sort()[0];
+
+      const [docs, moneyIn, customers] = await Promise.all([
+        source.saleDocuments(scope),
+        source.moneyIn(scope, { range: { from, to: null } }),
+        source.customers(scope),
+      ]);
+      const o = overview(period, docs, moneyIn, customers, localDate(now, scope.timeZone));
+      const earlier = before && overview(before, docs, moneyIn, customers, localDate(now, scope.timeZone));
+      const names = new Map(customers.map((c) => [c.id, c.name]));
+      return {
+        period,
+        received: { now: o.received, before: earlier?.received ?? null },
+        sales: { now: o.sales, before: earlier?.sales ?? null },
+        owed: { outstanding: o.outstanding, overdue: o.overdue, overdueCount: o.overdueCount },
+        byChannel: o.receivedByChannel,
+        series: monthlySeries(docs, moneyIn, months, scope.timeZone),
+        payments: moneyIn
+          .filter((m) => inPeriod(m.receivedAt, period))
+          .sort((a, b) => b.receivedAt.localeCompare(a.receivedAt))
+          .slice(0, RECENT_PAYMENTS)
+          .map((m) => ({ ...m, customerName: names.get(m.customerId) ?? "Unknown client" })),
       };
     },
 
