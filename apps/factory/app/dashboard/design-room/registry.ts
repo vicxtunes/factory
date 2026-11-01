@@ -141,6 +141,8 @@ import SocialIconAll from "./examples/social-icon/all";
 import MoneyDashboardBoss from "./examples/money-dashboard/boss";
 import ProductionMaterials from "./examples/production/materials";
 import ProductionMaterialDetail from "./examples/production/material-detail";
+import ProductionMoneyWeOwe from "./examples/production/money-we-owe";
+import ProductionLender from "./examples/production/lender";
 
 // Everything the Design Room shows. To add a component: build it in
 // packages/ui/, write its examples under ./examples/<slug>/ (one default
@@ -241,7 +243,7 @@ export const COMPONENTS: RoomComponent[] = [
     category: "Flows",
     status: "draft",
     source: "packages/ui/money/MoneyDashboard.tsx",
-    summary: "The bosses' money at a glance: money received (orange), sales and what clients owe, each against the period before; money in by channel; 12 months of cash flow with the hovered month lit up; the latest payments, searchable. Cards swipe on a phone, sit three across on a desktop.",
+    summary: "The bosses' money at a glance: money received (orange), sales and what clients owe and what the business owes (We owe), the first two against the period before; money in by channel; 12 months of cash flow with the hovered month lit up; the latest payments, searchable. Cards swipe on a phone, sit three across on a desktop.",
     examples: [{ title: "This month", file: "money-dashboard/boss.tsx", Demo: MoneyDashboardBoss }],
   },
   {
@@ -254,6 +256,18 @@ export const COMPONENTS: RoomComponent[] = [
     examples: [
       { title: "Materials", file: "production/materials.tsx", Demo: ProductionMaterials },
       { title: "One material", file: "production/material-detail.tsx", Demo: ProductionMaterialDetail },
+    ],
+  },
+  {
+    slug: "money-we-owe",
+    name: "Money we owe",
+    category: "Flows",
+    status: "live",
+    source: "packages/ui/production/MoneyWeOweBoard.tsx",
+    summary: "Everyone the business borrowed from (owners, suppliers' credit, banks and SACCOs, other projects) with what's still owed and overdue, most owed first; a tab per kind; cards on a phone, a table from md. Record money borrowed and Record repayment open in a form sheet; a repayment shows its interest share before it's saved. One lender lists each loan with its repayments, each voidable with a reason. Borrowed money isn't income; only interest is a cost.",
+    examples: [
+      { title: "Lenders", file: "production/money-we-owe.tsx", Demo: ProductionMoneyWeOwe },
+      { title: "One lender", file: "production/lender.tsx", Demo: ProductionLender },
     ],
   },
   {

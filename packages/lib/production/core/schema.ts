@@ -62,3 +62,42 @@ export const voidSchema = z.object({
   reason: text(300).min(1, "Say why it's being voided."),
 });
 export type VoidInput = z.output<typeof voidSchema>;
+
+// --- Money we owe -----------------------------------------------------------
+
+const channel = z.enum(["cash", "bank_transfer", "mobile_money", "other"]);
+const money = (what: string) => z.number().int("Enter whole shillings.").positive(`Enter ${what}.`);
+
+/** Money borrowed: from a lender already known (lenderId), or a new one (lender). */
+export const loanInputSchema = z
+  .object({
+    lenderId: idSchema.nullish().transform((v) => v ?? null),
+    lender: z
+      .object({
+        name: text(120).min(1, "Say who lent it."),
+        phone: optionalText(30),
+        kind: z.enum(["owner", "supplier", "lender", "project"]),
+      })
+      .nullish()
+      .transform((v) => v ?? null),
+    amount: money("how much was borrowed"),
+    toRepay: money("how much has to be paid back"),
+    receivedOn: day,
+    receivedInto: channel,
+    dueOn: day.nullish().transform((v) => v ?? null),
+    note: optionalText(500),
+  })
+  .refine((l) => !!l.lenderId !== !!l.lender, { message: "Choose who lent it, or add them.", path: ["lenderId"] })
+  .refine((l) => l.toRepay >= l.amount, { message: "What's paid back can't be less than what was borrowed.", path: ["toRepay"] })
+  .refine((l) => !l.dueOn || l.dueOn >= l.receivedOn, { message: "The due date can't be before the money came in.", path: ["dueOn"] });
+export type LoanInput = z.output<typeof loanInputSchema>;
+
+export const repaymentInputSchema = z.object({
+  loanId: idSchema,
+  amount: money("how much was paid back"),
+  paidOn: day,
+  paidFrom: channel,
+  reference: optionalText(120),
+  note: optionalText(500),
+});
+export type RepaymentInput = z.output<typeof repaymentInputSchema>;

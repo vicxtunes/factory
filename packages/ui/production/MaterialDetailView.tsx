@@ -9,12 +9,15 @@ import { useState } from "react";
 import { Button } from "@repo/ui/Button";
 import { useCurrencySymbol } from "@repo/lib/currency/CurrencySymbolProvider";
 import { formatMoney } from "@repo/lib/currency/format";
+import { voidPurchase } from "@repo/lib/production/actions";
 import { KIND_LABELS, MOVEMENT_LABELS, PAID_FROM_LABELS, formatQty, formatUnitCost, type MaterialDetail, type MaterialPurchase } from "@repo/lib/production/core";
 
 import { Tile } from "./MaterialsBoard";
-import { MaterialSheet, PurchaseSheet, StockCountSheet, VoidPurchaseSheet } from "./sheets";
+import { MaterialSheet, PurchaseSheet, StockCountSheet, VoidSheet } from "./sheets";
 
-const day = (iso: string) => new Date(`${iso}T12:00:00`).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+/** A calendar date ("28 Nov 2026"), the same on the server and in the browser. */
+const day = (iso: string) =>
+  new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 
 export function MaterialDetailView({ detail, today }: { detail: MaterialDetail; today: string }) {
   const { material, movements, purchases } = detail;
@@ -24,8 +27,8 @@ export function MaterialDetailView({ detail, today }: { detail: MaterialDetail; 
   const [voiding, setVoiding] = useState<MaterialPurchase | null>(null);
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+    <div className="@container space-y-6">
+      <div className="flex flex-col gap-3 @2xl:flex-row @2xl:items-start @2xl:justify-between">
         <div>
           <h2 className="text-xl font-semibold">{material.name}</h2>
           <p className="text-sm text-muted">
@@ -33,7 +36,7 @@ export function MaterialDetailView({ detail, today }: { detail: MaterialDetail; 
             {material.active ? "" : " · not in use"}
           </p>
         </div>
-        <div className="grid grid-cols-3 gap-2 sm:flex">
+        <div className="grid grid-cols-3 gap-2 @2xl:flex">
           <Button type="button" variant="secondary" size="sm" onClick={() => setSheet("edit")}>
             Edit
           </Button>
@@ -57,7 +60,7 @@ export function MaterialDetailView({ detail, today }: { detail: MaterialDetail; 
         </p>
       ) : null}
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-6 @5xl:grid-cols-2">
         <section>
           <h3 className="mb-2 text-sm font-semibold">Purchases</h3>
           {purchases.length === 0 ? (
@@ -119,11 +122,12 @@ export function MaterialDetailView({ detail, today }: { detail: MaterialDetail; 
       <PurchaseSheet open={sheet === "purchase"} onClose={() => setSheet(null)} materials={[material]} materialId={material.id} today={today} />
       <StockCountSheet open={sheet === "count"} onClose={() => setSheet(null)} material={material} />
       {voiding ? (
-        <VoidPurchaseSheet
+        <VoidSheet
           open
           onClose={() => setVoiding(null)}
-          purchaseId={voiding.id}
-          label={`${formatQty(voiding.qty)} ${material.unit} for ${money(voiding.total)} on ${day(voiding.purchasedOn)}`}
+          title="Void purchase"
+          explain={`${formatQty(voiding.qty)} ${material.unit} for ${money(voiding.total)} on ${day(voiding.purchasedOn)}. It stays in the history, marked void: its stock comes back off, its expense stops counting, and if it was on credit, we no longer owe it.`}
+          run={(reason) => voidPurchase({ id: voiding.id, reason })}
         />
       ) : null}
     </div>

@@ -2,7 +2,9 @@ import { MoneyAlerts } from "@repo/ui/accounting/MoneyAlerts";
 import { MoneyDashboard } from "@repo/ui/money/MoneyDashboard";
 import { ChartsSkeleton, StatTilesSkeleton } from "@repo/ui/skeletons/blocks";
 import { Loading } from "@repo/ui/skeletons/Loading";
+import { localDate } from "@repo/lib/accounting/core/period";
 import { accounting, requireAccountsAccess } from "@repo/lib/accounting/index.server";
+import { moneyWeOwe } from "@repo/lib/production/server";
 import { resolveTenantScope } from "@repo/lib/tenancy/server/resolve";
 import { getMoneyAlerts } from "@repo/lib/wallet/actions";
 
@@ -31,11 +33,15 @@ export default async function AccountsPage({ searchParams }: { searchParams: Sea
 
 async function Overview({ searchParams }: { searchParams: SearchParams }) {
   const [scope, params] = await Promise.all([resolveTenantScope(), searchParams]);
-  const [view, alerts] = await Promise.all([accounting.dashboard(scope, periodFrom(params)), getMoneyAlerts()]);
+  const [view, alerts, owed] = await Promise.all([
+    accounting.dashboard(scope, periodFrom(params)),
+    getMoneyAlerts(),
+    moneyWeOwe.overview(scope, localDate(new Date(), scope.timeZone)),
+  ]);
   return (
     <div className="space-y-6">
       <MoneyAlerts alerts={alerts.ok ? alerts.data ?? [] : []} />
-      <MoneyDashboard view={view} timeZone={scope.timeZone} />
+      <MoneyDashboard view={view} timeZone={scope.timeZone} weOwe={owed.totals} />
     </div>
   );
 }

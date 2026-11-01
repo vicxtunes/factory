@@ -51,20 +51,20 @@ export function MaterialsBoard({ materials, today, basePath }: { materials: Mate
   ];
 
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <Tile label="Stock value" value={money(value)} />
+    <div className="@container space-y-4">
+      <div className="grid grid-cols-2 gap-3 @2xl:grid-cols-3">
+        <Tile label="Stock value" value={money(value)} wide />
         <Tile label="Materials" value={String(materials.length - inactive)} />
         {belowZero ? <Tile label="Below zero" value={String(belowZero)} tone="error" /> : null}
       </div>
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <TextInput type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search materials" className="sm:max-w-xs" />
-        <div className="flex gap-2 sm:ml-auto">
-          <Button type="button" variant="secondary" className="flex-1 sm:flex-none" onClick={() => setSheet("add")}>
+      <div className="flex flex-col gap-3 @2xl:flex-row @2xl:items-center">
+        <TextInput type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search materials" className="@2xl:max-w-xs" />
+        <div className="flex gap-2 @2xl:ml-auto">
+          <Button type="button" variant="secondary" className="flex-1 @2xl:flex-none" onClick={() => setSheet("add")}>
             Add material
           </Button>
-          <Button type="button" className="flex-1 sm:flex-none" onClick={() => setSheet("purchase")} disabled={materials.length === 0}>
+          <Button type="button" className="flex-1 @2xl:flex-none" onClick={() => setSheet("purchase")} disabled={materials.length === 0}>
             Record purchase
           </Button>
         </div>
@@ -77,7 +77,7 @@ export function MaterialsBoard({ materials, today, basePath }: { materials: Mate
       ) : (
         <>
           {/* Phones: one card per material. */}
-          <ul className="space-y-2 md:hidden">
+          <ul className="space-y-2 @3xl:hidden">
             {shown.map((m) => (
               <li key={m.id}>
                 <Link href={`${basePath}/${m.id}`} className="block rounded-2xl border border-border bg-surface p-4 shadow-theme-xs active:bg-gray-50 dark:active:bg-white/5">
@@ -95,8 +95,8 @@ export function MaterialsBoard({ materials, today, basePath }: { materials: Mate
               </li>
             ))}
           </ul>
-          <DataTable className="hidden md:block" columns={columns} rows={shown} rowKey={(m) => m.id} onRowClick={(m) => router.push(`${basePath}/${m.id}`)} emptyMessage="No material matches." />
-          {shown.length === 0 ? <p className="text-center text-sm text-muted md:hidden">No material matches.</p> : null}
+          <DataTable className="hidden @3xl:block" columns={columns} rows={shown} rowKey={(m) => m.id} onRowClick={(m) => router.push(`${basePath}/${m.id}`)} emptyMessage="No material matches." />
+          {shown.length === 0 ? <p className="text-center text-sm text-muted @3xl:hidden">No material matches.</p> : null}
           {inactive ? (
             <button type="button" onClick={() => setShowInactive((v) => !v)} className="text-sm font-medium text-brand-600 hover:underline">
               {showInactive ? "Hide" : "Show"} {inactive} not in use
@@ -111,10 +111,11 @@ export function MaterialsBoard({ materials, today, basePath }: { materials: Mate
   );
 }
 
-export function Tile({ label, value, tone }: { label: string; value: string; tone?: "error" }) {
+/** `wide`: the row's headline figure, the full width on a phone so it never wraps. */
+export function Tile({ label, value, tone, wide }: { label: string; value: string; tone?: "error"; wide?: boolean }) {
   return (
-    <div className="rounded-2xl border border-border bg-surface p-4 shadow-theme-xs">
-      <p className={`text-xl font-bold tnum sm:text-2xl ${tone === "error" ? "text-error-600 dark:text-error-400" : ""}`}>{value}</p>
+    <div className={`rounded-2xl border border-border bg-surface p-4 shadow-theme-xs ${wide ? "col-span-2 @2xl:col-span-1" : ""}`}>
+      <p className={`text-lg font-bold tnum @2xl:text-2xl ${tone === "error" ? "text-error-600 dark:text-error-400" : ""}`}>{value}</p>
       <p className="mt-0.5 text-xs text-muted">{label}</p>
     </div>
   );

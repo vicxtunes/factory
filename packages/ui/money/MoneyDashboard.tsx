@@ -30,8 +30,19 @@ function compact(value: number): string {
   return new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 }).format(value);
 }
 
-/** `timeZone`: the business's; payment times show as its local time, the same on the server and in the browser. */
-export function MoneyDashboard({ view, timeZone }: { view: DashboardView; timeZone: string }) {
+/**
+ * `timeZone`: the business's; payment times show as its local time, the same on the server and in the browser.
+ * `weOwe`: what the business has borrowed and still has to pay back (packages/lib/production), as a fourth card.
+ */
+export function MoneyDashboard({
+  view,
+  timeZone,
+  weOwe,
+}: {
+  view: DashboardView;
+  timeZone: string;
+  weOwe?: { owed: number; overdue: number; overdueCount: number };
+}) {
   const money = useMoney();
   const { received, sales, owed } = view;
   // Payments and Sales open on the same period, so the figure can be traced to its lines.
@@ -52,8 +63,12 @@ export function MoneyDashboard({ view, timeZone }: { view: DashboardView; timeZo
         <PeriodSelect period={view.period} />
       </div>
 
-      {/* A swipe rail on a phone, three across on a desktop. */}
-      <div className="-mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-1 @4xl:mx-0 @4xl:grid @4xl:grid-cols-3 @4xl:overflow-visible @4xl:px-0">
+      {/* A swipe rail on a phone; three across on a desktop, or with We owe two then four across. */}
+      <div
+        className={`-mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-1 @4xl:mx-0 @4xl:grid @4xl:overflow-visible @4xl:px-0 ${
+          weOwe ? "@4xl:grid-cols-2 @7xl:grid-cols-4" : "@4xl:grid-cols-3"
+        }`}
+      >
         <HeadlineCard
           tone="brand"
           icon={ICONS.wallet}
@@ -82,6 +97,19 @@ export function MoneyDashboard({ view, timeZone }: { view: DashboardView; timeZo
           value={money(owed.outstanding)}
           link={{ label: "See clients", href: "/dashboard/accounts/clients" }}
         />
+        {weOwe ? (
+          <HeadlineCard
+            icon={ICONS.loan}
+            title="We owe"
+            subtitle={
+              weOwe.overdueCount > 0
+                ? `${money(weOwe.overdue)} overdue to ${weOwe.overdueCount} lender${weOwe.overdueCount === 1 ? "" : "s"}`
+                : "Borrowed, still to pay back"
+            }
+            value={money(weOwe.owed)}
+            link={{ label: "See who", href: "/dashboard/accounts/owed" }}
+          />
+        ) : null}
       </div>
 
       <div className="grid gap-4 @4xl:grid-cols-5">
@@ -379,6 +407,11 @@ const ICONS = {
   receipt: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="h-5 w-5">
       <path strokeLinecap="round" strokeLinejoin="round" d="M6 3h12v18l-3-2-3 2-3-2-3 2V3Zm3 5h6m-6 4h6m-6 4h3" />
+    </svg>
+  ),
+  loan: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="h-5 w-5">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 10 12 4l9 6M5 10v8m4-8v8m6-8v8m4-8v8M3 20h18" />
     </svg>
   ),
   clock: (

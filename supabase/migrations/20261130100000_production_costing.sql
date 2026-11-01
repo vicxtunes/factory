@@ -583,6 +583,50 @@ begin
 end;
 $$;
 
+-- Money borrowed, from a lender already known (p_lender) or a new one
+-- (p_lender_name and kind; an existing name is reused rather than doubled).
+create or replace function production_record_loan(
+  p_tenant uuid,
+  p_lender uuid,
+  p_lender_name text,
+  p_lender_phone text,
+  p_lender_kind text,
+  p_amount bigint,
+  p_to_repay bigint,
+  p_received_on date,
+  p_received_into text,
+  p_due_on date,
+  p_note text,
+  p_actor_id text,
+  p_actor_name text
+)
+returns uuid
+language plpgsql
+as $$
+declare
+  v_lender uuid := p_lender;
+  v_id uuid;
+begin
+  if p_received_on > production_today(p_tenant) then raise exception 'PRODUCTION:future_date'; end if;
+  if p_received_into = 'materials' then raise exception 'PRODUCTION:credit_via_purchase'; end if;
+  if v_lender is not null then
+    perform 1 from lenders where id = v_lender and tenant_id = p_tenant;
+    if not found then raise exception 'PRODUCTION:no_lender'; end if;
+  else
+    select id into v_lender from lenders where tenant_id = p_tenant and lower(trim(name)) = lower(trim(p_lender_name));
+    if v_lender is null then
+      insert into lenders (tenant_id, name, phone, kind, created_by_name)
+      values (p_tenant, trim(p_lender_name), nullif(trim(p_lender_phone), ''), p_lender_kind, p_actor_name)
+      returning id into v_lender;
+    end if;
+  end if;
+  insert into loans (tenant_id, lender_id, amount, to_repay, received_on, received_into, due_on, note, actor_id, actor_name)
+  values (p_tenant, v_lender, p_amount, p_to_repay, p_received_on, p_received_into, p_due_on, nullif(trim(p_note), ''), p_actor_id, p_actor_name)
+  returning id into v_id;
+  return v_id;
+end;
+$$;
+
 -- A repayment. Its interest share is pro rata (amount × extra ÷ to_repay); the
 -- last repayment takes whatever interest is left, so the shares always add up
 -- to exactly the extra. Never more than what's left to repay.
@@ -684,6 +728,7 @@ revoke all on function production_count_stock(uuid, uuid, numeric, text, text) f
 revoke all on function production_save_recipe(uuid, uuid, jsonb) from public, anon, authenticated;
 revoke all on function production_record_usage(uuid, uuid, jsonb, bigint, text, text, text) from public, anon, authenticated;
 revoke all on function production_void_record(uuid, uuid, text, text) from public, anon, authenticated;
+revoke all on function production_record_loan(uuid, uuid, text, text, text, bigint, bigint, date, text, date, text, text, text) from public, anon, authenticated;
 revoke all on function production_record_repayment(uuid, uuid, bigint, date, text, text, text, text, text) from public, anon, authenticated;
 revoke all on function production_void_repayment(uuid, uuid, text, text) from public, anon, authenticated;
 revoke all on function production_void_loan(uuid, uuid, text, text) from public, anon, authenticated;

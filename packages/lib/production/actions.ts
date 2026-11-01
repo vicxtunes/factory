@@ -10,12 +10,19 @@ import { parseInput, type Result } from "@repo/lib/kernel/core";
 import { runAction } from "@repo/lib/kernel/server/action";
 import { resolveTenantScope } from "@repo/lib/tenancy/server/resolve";
 
-import { materialInputSchema, materialUpdateSchema, purchaseInputSchema, stockCountSchema, voidSchema } from "./core/schema";
+import { loanInputSchema, materialInputSchema, materialUpdateSchema, purchaseInputSchema, repaymentInputSchema, stockCountSchema, voidSchema } from "./core/schema";
 import { canManageProduction } from "./policy";
 import { ProductionError } from "./ports";
 import { production } from "./server";
 
 const MATERIALS = "/dashboard/production/materials";
+const OWED = "/dashboard/accounts/owed";
+
+/** Money we owe shows on its own pages and as the We owe card on Accounts → Overview. */
+function owedChanged() {
+  revalidatePath(OWED, "layout");
+  revalidatePath("/dashboard/accounts");
+}
 
 async function staff() {
   const session = await getDashboardSession();
@@ -45,6 +52,7 @@ export async function recordPurchase(input: unknown): Promise<Result> {
     const { scope, actor } = await staff();
     await production.recordPurchase(scope, parseInput(purchaseInputSchema, input), actor);
     revalidatePath(MATERIALS, "layout");
+    owedChanged();
   });
 }
 
@@ -53,6 +61,7 @@ export async function voidPurchase(input: unknown): Promise<Result> {
     const { scope, actor } = await staff();
     await production.voidPurchase(scope, parseInput(voidSchema, input), actor);
     revalidatePath(MATERIALS, "layout");
+    owedChanged();
   });
 }
 
@@ -63,5 +72,38 @@ export async function countStock(input: unknown): Promise<Result<number>> {
     const delta = await production.countStock(scope, parseInput(stockCountSchema, input), actor);
     revalidatePath(MATERIALS, "layout");
     return delta;
+  });
+}
+
+export async function recordLoan(input: unknown): Promise<Result<string>> {
+  return runAction("production", async () => {
+    const { scope, actor } = await staff();
+    const id = await production.recordLoan(scope, parseInput(loanInputSchema, input), actor);
+    owedChanged();
+    return id;
+  });
+}
+
+export async function recordRepayment(input: unknown): Promise<Result> {
+  return runAction("production", async () => {
+    const { scope, actor } = await staff();
+    await production.recordRepayment(scope, parseInput(repaymentInputSchema, input), actor);
+    owedChanged();
+  });
+}
+
+export async function voidLoan(input: unknown): Promise<Result> {
+  return runAction("production", async () => {
+    const { scope, actor } = await staff();
+    await production.voidLoan(scope, parseInput(voidSchema, input), actor);
+    owedChanged();
+  });
+}
+
+export async function voidRepayment(input: unknown): Promise<Result> {
+  return runAction("production", async () => {
+    const { scope, actor } = await staff();
+    await production.voidRepayment(scope, parseInput(voidSchema, input), actor);
+    owedChanged();
   });
 }

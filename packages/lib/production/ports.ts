@@ -4,8 +4,8 @@
 import { AppError } from "@repo/lib/kernel/core";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
-import type { Material, MaterialDetail } from "./core/model";
-import type { MaterialInput, MaterialUpdate, PurchaseInput, StockCountInput, VoidInput } from "./core/schema";
+import type { Lender, Loan, Material, MaterialDetail, Repayment } from "./core/model";
+import type { LoanInput, MaterialInput, MaterialUpdate, PurchaseInput, RepaymentInput, StockCountInput, VoidInput } from "./core/schema";
 
 export interface ProductionActor {
   id: string | null;
@@ -22,6 +22,17 @@ export interface ProductionStore {
   voidPurchase(scope: TenantScope, input: VoidInput, actor: ProductionActor): Promise<void>;
   /** The stock becomes what was counted; returns the change. */
   countStock(scope: TenantScope, input: StockCountInput, actor: ProductionActor): Promise<number>;
+
+  lenders(scope: TenantScope): Promise<Lender[]>;
+  /** Every loan (voided ones too) with what's been repaid; one lender's when `lenderId` is given. */
+  loans(scope: TenantScope, lenderId?: string): Promise<Loan[]>;
+  /** Live and voided repayments of these loans, oldest first. */
+  repayments(scope: TenantScope, loanIds: string[]): Promise<Repayment[]>;
+  recordLoan(scope: TenantScope, input: LoanInput, actor: ProductionActor): Promise<string>;
+  /** Its interest share becomes an expense. Never more than what's left to repay. */
+  recordRepayment(scope: TenantScope, input: RepaymentInput, actor: ProductionActor): Promise<string>;
+  voidLoan(scope: TenantScope, input: VoidInput, actor: ProductionActor): Promise<void>;
+  voidRepayment(scope: TenantScope, input: VoidInput, actor: ProductionActor): Promise<void>;
 }
 
 /** A problem the person should see (the message is safe to show). */
