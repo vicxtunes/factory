@@ -101,3 +101,25 @@ export const repaymentInputSchema = z.object({
   note: optionalText(500),
 });
 export type RepaymentInput = z.output<typeof repaymentInputSchema>;
+
+// --- Recipes ----------------------------------------------------------------
+
+const recipeLineSchema = z.union([
+  z.object({
+    variantId: idSchema.nullable(),
+    materialId: idSchema,
+    qty: quantity.positive("Enter how much of it one unit takes."),
+    perAttributeId: idSchema.nullable(),
+  }),
+  z.object({
+    variantId: idSchema.nullable(),
+    label: text(80).min(1, "Name the cost (e.g. Binding)."),
+    amount: z.number().int("Enter whole shillings.").min(0),
+  }),
+]);
+
+export const recipeInputSchema = z.object({
+  productId: idSchema,
+  lines: z.array(recipeLineSchema).max(100),
+});
+export type RecipeInput = z.output<typeof recipeInputSchema>;

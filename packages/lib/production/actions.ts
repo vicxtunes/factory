@@ -10,7 +10,16 @@ import { parseInput, type Result } from "@repo/lib/kernel/core";
 import { runAction } from "@repo/lib/kernel/server/action";
 import { resolveTenantScope } from "@repo/lib/tenancy/server/resolve";
 
-import { loanInputSchema, materialInputSchema, materialUpdateSchema, purchaseInputSchema, repaymentInputSchema, stockCountSchema, voidSchema } from "./core/schema";
+import {
+  loanInputSchema,
+  materialInputSchema,
+  materialUpdateSchema,
+  purchaseInputSchema,
+  recipeInputSchema,
+  repaymentInputSchema,
+  stockCountSchema,
+  voidSchema,
+} from "./core/schema";
 import { canManageProduction } from "./policy";
 import { ProductionError } from "./ports";
 import { production } from "./server";
@@ -105,5 +114,14 @@ export async function voidRepayment(input: unknown): Promise<Result> {
     const { scope, actor } = await staff();
     await production.voidRepayment(scope, parseInput(voidSchema, input), actor);
     owedChanged();
+  });
+}
+
+/** Replaces a product's whole recipe. */
+export async function saveRecipe(input: unknown): Promise<Result> {
+  return runAction("production", async () => {
+    const { scope } = await staff();
+    await production.saveRecipe(scope, parseInput(recipeInputSchema, input));
+    revalidatePath("/dashboard/production/products", "layout");
   });
 }

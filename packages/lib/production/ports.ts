@@ -4,8 +4,8 @@
 import { AppError } from "@repo/lib/kernel/core";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
-import type { Lender, Loan, Material, MaterialDetail, Repayment } from "./core/model";
-import type { LoanInput, MaterialInput, MaterialUpdate, PurchaseInput, RepaymentInput, StockCountInput, VoidInput } from "./core/schema";
+import type { Lender, Loan, Material, MaterialDetail, RecipeLine, Repayment } from "./core/model";
+import type { LoanInput, MaterialInput, MaterialUpdate, PurchaseInput, RecipeInput, RepaymentInput, StockCountInput, VoidInput } from "./core/schema";
 
 export interface ProductionActor {
   id: string | null;
@@ -33,6 +33,11 @@ export interface ProductionStore {
   recordRepayment(scope: TenantScope, input: RepaymentInput, actor: ProductionActor): Promise<string>;
   voidLoan(scope: TenantScope, input: VoidInput, actor: ProductionActor): Promise<void>;
   voidRepayment(scope: TenantScope, input: VoidInput, actor: ProductionActor): Promise<void>;
+
+  /** Every product's recipe lines, by product id (one product's when `productId` is given). */
+  recipes(scope: TenantScope, productId?: string): Promise<Map<string, RecipeLine[]>>;
+  /** Replaces a product's whole recipe (every size). */
+  saveRecipe(scope: TenantScope, input: RecipeInput): Promise<void>;
 }
 
 /** A problem the person should see (the message is safe to show). */

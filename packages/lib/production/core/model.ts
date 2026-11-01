@@ -131,3 +131,33 @@ export interface LenderDetail {
   lender: LenderAccount;
   loans: (Loan & { repayments: Repayment[] })[];
 }
+
+// --- Recipes ----------------------------------------------------------------
+
+/**
+ * One line of what a unit of a product takes. `variantId` null: every size.
+ * A material line (materialId + qty), optionally per a number detail of the
+ * order (perAttributeId, e.g. Pages: qty × that value); or an other cost
+ * (label + a fixed amount per unit).
+ */
+export interface RecipeLine {
+  variantId: string | null;
+  materialId: string | null;
+  qty: number | null;
+  perAttributeId: string | null;
+  label: string | null;
+  amount: number | null;
+}
+
+/** What one unit of a size costs, split for the screens. */
+export interface UnitCost {
+  materials: number;
+  packaging: number;
+  other: number;
+  /** materials + packaging + other, for the lines that don't depend on a detail. */
+  fixed: number;
+  /** Lines that scale with a number detail: the cost for each 1 of it (e.g. per page). */
+  perDetail: { attributeId: string; perOne: number }[];
+  /** A line's material is gone or has no price yet. */
+  unpriced: boolean;
+}

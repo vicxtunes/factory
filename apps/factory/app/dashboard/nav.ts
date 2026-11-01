@@ -93,7 +93,10 @@ export const NAV_GROUPS: NavGroup[] = [
     // What production uses and costs (packages/lib/production). Boss and supervisors.
     id: "production",
     label: "Production",
-    items: [{ href: "/dashboard/production/materials", label: "Materials", icon: "production", visible: production }],
+    items: [
+      { href: "/dashboard/production/materials", label: "Materials", icon: "production", visible: production },
+      { href: "/dashboard/production/products", label: "Product costs", icon: "products", visible: production },
+    ],
   },
   {
     // What clients see in the portal: the catalog, links to share the

@@ -6,7 +6,7 @@ import "server-only";
 
 import { createAdminClient } from "@repo/lib/supabase/admin";
 
-import type { Lender, Loan, Material, MaterialMovement, MaterialPurchase, Repayment } from "../../core/model";
+import type { Lender, Loan, Material, MaterialMovement, MaterialPurchase, RecipeLine, Repayment } from "../../core/model";
 import { unitCostOf } from "../../core/rules";
 import { ProductionError, type ProductionStore } from "../../ports";
 
@@ -136,6 +136,8 @@ const MESSAGES: Record<string, string> = {
   over_repaid: "That's more than is left to pay back on this loan.",
   before_loan: "A repayment can't be dated before the money was borrowed.",
   void_the_purchase: "This is a supplier's credit for a purchase: void the purchase instead (on its material's page).",
+  no_product: "That product no longer exists.",
+  wrong_size: "One of the sizes no longer belongs to this product. Reload and try again.",
   credit_via_purchase: "Materials on credit are recorded as a purchase, on Materials.",
 };
 
@@ -384,6 +386,50 @@ export const factoryStore: ProductionStore = {
       p_reason: input.reason,
       p_actor_name: actor.name,
     });
+    if (error) fail(error);
+  },
+
+  async recipes(scope, productId) {
+    let query = createAdminClient()
+      .from("recipe_lines")
+      .select("product_id, variant_id, material_id, qty, per_attribute_id, label, amount")
+      .eq("tenant_id", scope.tenantId);
+    if (productId) query = query.eq("product_id", productId);
+    const { data, error } = await query.order("sort_order").returns<
+      {
+        product_id: string;
+        variant_id: string | null;
+        material_id: string | null;
+        qty: number | string | null;
+        per_attribute_id: string | null;
+        label: string | null;
+        amount: number | string | null;
+      }[]
+    >();
+    if (error) fail(error);
+    const byProduct = new Map<string, RecipeLine[]>();
+    for (const r of data ?? []) {
+      const lines = byProduct.get(r.product_id) ?? [];
+      lines.push({
+        variantId: r.variant_id,
+        materialId: r.material_id,
+        qty: r.qty === null ? null : Number(r.qty),
+        perAttributeId: r.per_attribute_id,
+        label: r.label,
+        amount: r.amount === null ? null : Number(r.amount),
+      });
+      byProduct.set(r.product_id, lines);
+    }
+    return byProduct;
+  },
+
+  async saveRecipe(scope, input) {
+    const lines = input.lines.map((l) =>
+      "materialId" in l
+        ? { variant_id: l.variantId, material_id: l.materialId, qty: l.qty, per_attribute_id: l.perAttributeId }
+        : { variant_id: l.variantId, label: l.label, amount: l.amount },
+    );
+    const { error } = await createAdminClient().rpc("production_save_recipe", { p_tenant: scope.tenantId, p_product: input.productId, p_lines: lines });
     if (error) fail(error);
   },
 };

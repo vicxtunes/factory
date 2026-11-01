@@ -143,6 +143,8 @@ import ProductionMaterials from "./examples/production/materials";
 import ProductionMaterialDetail from "./examples/production/material-detail";
 import ProductionMoneyWeOwe from "./examples/production/money-we-owe";
 import ProductionLender from "./examples/production/lender";
+import ProductionProductCosts from "./examples/production/product-costs";
+import ProductionRecipe from "./examples/production/recipe";
 
 // Everything the Design Room shows. To add a component: build it in
 // packages/ui/, write its examples under ./examples/<slug>/ (one default
@@ -268,6 +270,18 @@ export const COMPONENTS: RoomComponent[] = [
     examples: [
       { title: "Lenders", file: "production/money-we-owe.tsx", Demo: ProductionMoneyWeOwe },
       { title: "One lender", file: "production/lender.tsx", Demo: ProductionLender },
+    ],
+  },
+  {
+    slug: "product-costs",
+    name: "Product costs",
+    category: "Flows",
+    status: "live",
+    source: "packages/ui/production/ProductCostsBoard.tsx",
+    summary: "What each product size costs to make at today's material prices, its price, profit and margin (red at a loss, amber under 20%), by category; per-page products show the cost per page instead of a margin. A product's recipe: lines for every size and each size's own, materials per unit or per a number detail (pages), other costs as fixed amounts; each size's cost, price and margin beside it, with a page count to try.",
+    examples: [
+      { title: "Product costs", file: "production/product-costs.tsx", Demo: ProductionProductCosts },
+      { title: "A recipe", file: "production/recipe.tsx", Demo: ProductionRecipe },
     ],
   },
   {

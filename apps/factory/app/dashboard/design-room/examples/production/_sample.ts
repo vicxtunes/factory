@@ -1,4 +1,4 @@
-import type { LenderAccount, LenderDetail, Loan, Material, MaterialDetail } from "@repo/lib/production/core";
+import { productCosts, type CostingCategory, type LenderAccount, type LenderDetail, type Loan, type Material, type MaterialDetail, type RecipeLine } from "@repo/lib/production/core";
 
 // Sample materials for the Production examples.
 export const MATERIALS: Material[] = [
@@ -54,3 +54,45 @@ export const SACCO: LenderDetail = {
     },
   ],
 };
+
+// Sample recipes: a photo book costed per page (no margin until the pages are known), a frame, a mug with no recipe yet.
+const line = (over: Partial<RecipeLine>): RecipeLine => ({ variantId: null, materialId: null, qty: null, perAttributeId: null, label: null, amount: null, ...over });
+
+export const BOOK_CATEGORY: CostingCategory = {
+  id: "c1",
+  name: "Photo books",
+  attributes: [{ id: "pages", name: "Pages", type: "number" }],
+  products: [{ id: "book", name: "Layflat photo book", price: null, unit: "Pc", variants: [{ id: "a4", name: "A4", price: 150_000 }, { id: "a3", name: "A3", price: 220_000 }] }],
+};
+
+const CATALOG: CostingCategory[] = [
+  BOOK_CATEGORY,
+  {
+    id: "c2",
+    name: "Frames & boards",
+    attributes: [],
+    products: [
+      { id: "frame", name: "Wooden frame", price: null, unit: "Pc", variants: [{ id: "f1", name: "A4", price: 25_000 }, { id: "f2", name: "A3", price: 9_000 }] },
+      { id: "crystal", name: "Crystal board", price: 85_000, unit: "Pc", variants: [] },
+      { id: "mug", name: "Photo mug", price: 15_000, unit: "Pc", variants: [] },
+    ],
+  },
+];
+
+export const BOOK_RECIPE: RecipeLine[] = [
+  line({ materialId: "m1", qty: 1, perAttributeId: "pages" }),
+  line({ materialId: "m3", qty: 0.5, perAttributeId: "pages" }),
+  line({ materialId: "m4", qty: 1 }),
+  line({ variantId: "a4", materialId: "m2", qty: 1 }),
+  line({ variantId: "a4", label: "Binding", amount: 3_000 }),
+  line({ variantId: "a3", materialId: "m2", qty: 2 }),
+  line({ variantId: "a3", label: "Binding", amount: 4_500 }),
+];
+
+const RECIPES = new Map<string, RecipeLine[]>([
+  ["book", BOOK_RECIPE],
+  ["frame", [line({ materialId: "m5", qty: 1.2 }), line({ variantId: "f2", materialId: "m5", qty: 0.6 }), line({ materialId: "m4", qty: 1 })]],
+  ["crystal", [line({ materialId: "m2", qty: 2 }), line({ label: "Engraving", amount: 20_000 })]],
+]);
+
+export const PRODUCT_COSTS = productCosts(CATALOG, RECIPES, MATERIALS);
