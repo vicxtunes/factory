@@ -5,6 +5,7 @@
 
 import type { HomeBarIcon } from "@repo/ui/HomeBar";
 import { canViewAccounts } from "@repo/lib/accounting/policy";
+import { canManageProduction } from "@repo/lib/production/policy";
 import { canViewAnnouncements } from "@repo/lib/announcements/access";
 import { canViewAllStudios } from "@repo/lib/studios/policy";
 import { SUPPORT_OWNER_EMAIL } from "@repo/lib/support/constants";
@@ -27,7 +28,7 @@ export interface NavItem {
 }
 
 export interface NavGroup {
-  id: "orders" | "payments" | "accounts" | "catalog" | "people" | "help";
+  id: "orders" | "payments" | "accounts" | "production" | "catalog" | "people" | "help";
   label: string;
   items: NavItem[];
 }
@@ -36,6 +37,7 @@ const everyone = () => true;
 const managers = (v: NavViewer) => isManagerRole(v.role);
 const boss = (v: NavViewer) => v.role === "boss";
 const accountsViewers = (v: NavViewer) => canViewAccounts(v.role);
+const production = (v: NavViewer) => canManageProduction(v.role);
 const studiosOverseers = (v: NavViewer) => canViewAllStudios(v.role);
 // Support-report review is gated by email, not role: several accounts can
 // be "boss", only this one person should see what staff report.
@@ -85,6 +87,12 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/dashboard/accounts/sales", label: "Sales", icon: "invoice", visible: accountsViewers },
       { href: "/dashboard/accounts/clients", label: "Client accounts", icon: "clients", visible: accountsViewers },
     ],
+  },
+  {
+    // What production uses and costs (packages/lib/production). Boss and supervisors.
+    id: "production",
+    label: "Production",
+    items: [{ href: "/dashboard/production/materials", label: "Materials", icon: "production", visible: production }],
   },
   {
     // What clients see in the portal: the catalog, links to share the

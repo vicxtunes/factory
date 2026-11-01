@@ -139,6 +139,8 @@ import HireCardAvailable from "./examples/hire-card/available";
 import ServiceCardsVendor from "./examples/service-cards/vendor";
 import SocialIconAll from "./examples/social-icon/all";
 import MoneyDashboardBoss from "./examples/money-dashboard/boss";
+import ProductionMaterials from "./examples/production/materials";
+import ProductionMaterialDetail from "./examples/production/material-detail";
 
 // Everything the Design Room shows. To add a component: build it in
 // packages/ui/, write its examples under ./examples/<slug>/ (one default
@@ -241,6 +243,18 @@ export const COMPONENTS: RoomComponent[] = [
     source: "packages/ui/money/MoneyDashboard.tsx",
     summary: "The bosses' money at a glance: money received (orange), sales and what clients owe, each against the period before; money in by channel; 12 months of cash flow with the hovered month lit up; the latest payments, searchable. Cards swipe on a phone, sit three across on a desktop.",
     examples: [{ title: "This month", file: "money-dashboard/boss.tsx", Demo: MoneyDashboardBoss }],
+  },
+  {
+    slug: "production-materials",
+    name: "Production materials",
+    category: "Flows",
+    status: "live",
+    source: "packages/ui/production/MaterialsBoard.tsx",
+    summary: "What production uses: stock, price per unit and value for each material, cards on a phone and a table from md up; below-zero stock in red. Add material and Record purchase open in a form sheet; a purchase sets the price and counts as money spent, or as money we owe the supplier when on credit. One material shows its purchases (each can be voided with a reason) beside its stock history.",
+    examples: [
+      { title: "Materials", file: "production/materials.tsx", Demo: ProductionMaterials },
+      { title: "One material", file: "production/material-detail.tsx", Demo: ProductionMaterialDetail },
+    ],
   },
   {
     slug: "button",

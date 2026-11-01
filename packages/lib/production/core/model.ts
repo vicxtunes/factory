@@ -1,0 +1,64 @@
+// Production's records: materials and their stock, purchases (also expenses),
+// and the stock ledger. Pure; safe on client and server.
+
+export type MaterialKind = "material" | "packaging";
+
+/** Where money for a purchase came from; on credit: the supplier is paid later (money we owe). */
+export type PurchasePaidFrom = "cash" | "bank_transfer" | "mobile_money" | "other" | "on_credit";
+
+export interface Material {
+  id: string;
+  name: string;
+  /** What it's counted in: sheet, pc, m, ml… */
+  unit: string;
+  kind: MaterialKind;
+  /** The latest purchase's price per unit (or the price it was added with). */
+  unitCost: number;
+  active: boolean;
+  /** The sum of its movements; below zero when usage was recorded before the purchase. */
+  stock: number;
+  stockValue: number;
+  createdAt: string;
+}
+
+export type MovementKind = "purchase" | "usage" | "adjustment" | "reversal";
+
+/** One line of a material's stock history. */
+export interface MaterialMovement {
+  id: string;
+  kind: MovementKind;
+  /** + into stock, − out of it. */
+  qty: number;
+  unitCost: number;
+  total: number;
+  occurredOn: string;
+  reason: string | null;
+  actorName: string;
+  createdAt: string;
+  /** The purchase it came with, for purchases and their reversals. */
+  purchaseId: string | null;
+}
+
+export interface MaterialPurchase {
+  id: string;
+  materialId: string;
+  qty: number;
+  total: number;
+  unitCost: number;
+  supplier: string | null;
+  paidFrom: PurchasePaidFrom;
+  reference: string | null;
+  note: string | null;
+  purchasedOn: string;
+  actorName: string;
+  createdAt: string;
+  voidedAt: string | null;
+  voidReason: string | null;
+}
+
+/** A material with its history, for its own screen. */
+export interface MaterialDetail {
+  material: Material;
+  movements: MaterialMovement[];
+  purchases: MaterialPurchase[];
+}
