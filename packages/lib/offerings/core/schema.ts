@@ -52,3 +52,10 @@ export const offeringInputSchema = z.object({
 export const showroomSettingsSchema = z.object({
   showPrices: z.boolean("Choose whether prices show."),
 }) satisfies z.ZodType<ShowroomSettings, unknown>;
+
+const dealInstant = z.iso.datetime({ offset: true, message: "Choose when the deal starts and ends." });
+
+/** A studio's deal, or null to take it off. Whether it's sensible is validateDeal's. */
+export const dealSchema = z
+  .object({ percent: z.number("Enter the deal as a number."), startsAt: dealInstant, endsAt: dealInstant })
+  .nullable();

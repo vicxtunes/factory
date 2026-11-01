@@ -29,7 +29,9 @@ function every(ms: number, name: string, job: () => Promise<unknown>) {
   }, ms).unref();
 }
 
-if (process.env.NODE_ENV === "production") {
+// Not in the test copy (scripts/deploy.sh test): it has no HivePay keys, and
+// its data is a copy that must not be "reconciled" or reported on.
+if (process.env.NODE_ENV === "production" && process.env.NEXT_PUBLIC_TEST_COPY !== "1") {
   every(EVERY_MS, "hivepay: checking waiting payments", async () => {
     // A studio customer's payment goes on its invoice, as the webhook does.
     for (const id of await reconcileWaitingHivepay()) await applyStudioPayment(id);

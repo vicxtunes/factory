@@ -6,7 +6,7 @@
 
 import type { InvoiceInput, QuotationInput } from "@repo/lib/billing/core";
 import { AppError } from "@repo/lib/kernel/core";
-import { offeringLabel, type ServiceWithPackages } from "@repo/lib/offerings/core";
+import { dealPrice, offeringLabel, runningDeal, type ServiceWithPackages } from "@repo/lib/offerings/core";
 import type { PortalSession } from "@repo/lib/studio-portal/core";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
@@ -70,14 +70,27 @@ export class ProductRequestService {
     }
 
     const itemName = offeringLabel(size);
-    const requestId = await this.deps.createRequest(scope, { customerId, offeringId: size.id, itemName, quantity: input.quantity, unitPrice: size.price });
+    // The studio's deal running now: the request takes its price; the
+    // quotation shows the list price with the deal as the line's discount.
+    const deal = size.price > 0 ? runningDeal(product, new Date()) : null;
+    const unitPrice = dealPrice(size.price, deal);
+    const requestId = await this.deps.createRequest(scope, { customerId, offeringId: size.id, itemName, quantity: input.quantity, unitPrice });
     if (size.price > 0) {
       const quotationId = await this.deps.createQuotation(scope, {
         customerId,
         validUntil: null,
         shoot: null,
         notes: "Ordered online.",
-        lines: [{ offeringId: size.id, description: itemName, inclusions: [], quantity: input.quantity, unitPrice: size.price, discount: null }],
+        lines: [
+          {
+            offeringId: size.id,
+            description: itemName,
+            inclusions: [],
+            quantity: input.quantity,
+            unitPrice: size.price,
+            discount: deal ? { kind: "percent", value: deal.percent } : null,
+          },
+        ],
       });
       await this.deps.linkQuotation(scope, requestId, quotationId);
     }

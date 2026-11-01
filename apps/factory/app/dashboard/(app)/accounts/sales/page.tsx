@@ -2,6 +2,7 @@ import { PeriodPicker } from "@repo/ui/accounting/PeriodPicker";
 import { SalesTable, type SalesFilter } from "@repo/ui/accounting/SalesTable";
 import { ChipRowSkeleton, PanelStackSkeleton } from "@repo/ui/skeletons/blocks";
 import { Loading } from "@repo/ui/skeletons/Loading";
+import { DAY_PERIOD_PRESETS } from "@repo/lib/accounting/core/period";
 import { accounting, requireAccountsAccess } from "@repo/lib/accounting/index.server";
 import { resolveTenantScope } from "@repo/lib/tenancy/server/resolve";
 
@@ -41,7 +42,7 @@ async function Sales({ searchParams }: { searchParams: SearchParams }) {
   const status = param(params, "status") as SalesFilter | null;
   return (
     <>
-      <PeriodPicker period={view.period} />
+      <PeriodPicker period={view.period} presets={DAY_PERIOD_PRESETS} />
       <SalesTable
         // Remount when the period changes so filters start fresh on the new data.
         key={`${view.period.from}-${view.period.to}`}

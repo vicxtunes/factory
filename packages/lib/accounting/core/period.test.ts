@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { addDays, inPeriod, lastMonths, localDate, resolvePeriod, startOfLocalDay } from "./period";
+import { addDays, inPeriod, lastMonths, localDate, previousPeriod, resolvePeriod, startOfLocalDay } from "./period";
 
 const KAMPALA = "Africa/Kampala"; // UTC+3, no DST
 
@@ -96,4 +96,34 @@ test("bad or reversed custom ranges fall back to this month", () => {
 
 test("last months are oldest first and cross the year", () => {
   assert.deepEqual(lastMonths(new Date("2026-02-10T09:00:00Z"), 4, KAMPALA), ["2025-11", "2025-12", "2026-01", "2026-02"]);
+});
+
+test("a running period is compared with the one before, up to the same time of day", () => {
+  // NOW is 12:00 Kampala on Thursday 15 Oct 2026.
+  const today = previousPeriod(resolvePeriod({ preset: "today" }, NOW, KAMPALA), NOW, KAMPALA);
+  assert.deepEqual([today?.fromDate, today?.toDate], ["2026-10-14", "2026-10-14"]);
+  assert.equal(today?.to, "2026-10-14T09:00:00.000Z");
+  const week = previousPeriod(resolvePeriod({ preset: "this_week" }, NOW, KAMPALA), NOW, KAMPALA);
+  assert.deepEqual([week?.fromDate, week?.toDate], ["2026-10-05", "2026-10-08"]);
+  const month = previousPeriod(resolvePeriod({ preset: "this_month" }, NOW, KAMPALA), NOW, KAMPALA);
+  assert.deepEqual([month?.fromDate, month?.toDate], ["2026-09-01", "2026-09-15"]);
+  const year = previousPeriod(resolvePeriod({ preset: "this_year" }, NOW, KAMPALA), NOW, KAMPALA);
+  assert.deepEqual([year?.fromDate, year?.toDate], ["2025-01-01", "2025-10-15"]);
+});
+
+test("a finished period is compared with the whole one before", () => {
+  const yesterday = previousPeriod(resolvePeriod({ preset: "yesterday" }, NOW, KAMPALA), NOW, KAMPALA);
+  assert.deepEqual([yesterday?.fromDate, yesterday?.toDate], ["2026-10-13", "2026-10-13"]);
+  assert.equal(yesterday?.to, "2026-10-13T21:00:00.000Z");
+  // On 31 March, last month is February and the one before is January, whole.
+  const march31 = new Date("2026-03-31T09:00:00Z");
+  const last = previousPeriod(resolvePeriod({ preset: "last_month" }, march31, KAMPALA), march31, KAMPALA);
+  assert.deepEqual([last?.fromDate, last?.toDate], ["2026-01-01", "2026-01-31"]);
+  const custom = resolvePeriod({ preset: "custom", from: "2026-10-01", to: "2026-10-10" }, NOW, KAMPALA);
+  const before = previousPeriod(custom, NOW, KAMPALA);
+  assert.deepEqual([before?.fromDate, before?.toDate], ["2026-09-21", "2026-09-30"]);
+});
+
+test("all time has nothing to compare with", () => {
+  assert.equal(previousPeriod(resolvePeriod({ preset: "all" }, NOW, KAMPALA), NOW, KAMPALA), null);
 });

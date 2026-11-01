@@ -6,15 +6,19 @@ and sits on top of the existing invoice, payment and wallet data, so it can neve
 
 Screens (boss and supervisors only, sidebar **Accounts**):
 
-- **Overview** `/dashboard/accounts`:
-  - **Period tabs**: this month, last month, this year, all time, custom.
-  - **Headline figures**: Total sales, Payments received, Discounts given, Outstanding, Overdue, Client wallet balance.
+- **Overview** `/dashboard/accounts`, the bosses' money dashboard (`packages/ui/money/MoneyDashboard.tsx`, `accounting.dashboard`):
+  - **Period**: today, yesterday, this week, this month, last month, this year, all time.
+  - **Headline cards**: Money received and Sales, each with its change against the period before
+    (`previousPeriod`: the same stretch one step back, up to the same time of day while it's running),
+    and Owed to us with what's overdue.
   - **Received by channel.**
-  - **Sales vs received chart** for the last 12 months.
-  - **Clients owing the most.**
+  - **Cash flow** for the last 12 months, received or sales.
+  - **Recent payments**: the period's latest 10.
+  - Studios' `/studio/accounts` keeps the plain overview (`AccountsOverview`).
 - **Sales** `/dashboard/accounts/sales`: every invoiced order with value, discount, paid,
-  outstanding and status. Status tabs, search, totals row, Excel/PDF export. `?status=overdue`
-  opens on a status tab.
+  outstanding and status, for the same periods as Overview (today, yesterday, this week, …). Status tabs,
+  search, totals row, Excel/PDF export. `?status=overdue` opens on a status tab. Overview's Sales and
+  Money received cards open Sales and Payments on the period being viewed.
 - **Client accounts** `/dashboard/accounts/clients`: orders, invoiced, paid, outstanding, overdue and
   wallet balance per client, most owed first. Tabs: Owing / Overdue / Wallet credit / All.
 - **Client account** `/dashboard/accounts/clients/<id>`: the same totals, the client's invoices,

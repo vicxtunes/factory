@@ -13,11 +13,13 @@ import { lineDiscountOf, offerBadge } from "@repo/lib/discounts/core/rules";
 import { catalogUnitPrice, priceBreakdown } from "@repo/lib/orders/pricing";
 import type { OrderItemWithOrder } from "@repo/lib/types";
 
-import { receiveClientOrder, setLineDiscount } from "./actions";
+import { receiveClientOrder, setAgreedUnitPrice, setLineDiscount } from "./actions";
 
 // Confirming a client order: the receptionist goes through its prices, agrees
 // any discounts with the client (this is the only time a new one can be
-// given), then confirms from a summary of what the client will pay. After
+// given), then confirms from a summary of what the client will pay. A line
+// with no catalog price (photo books) gets the unit price agreed on the call,
+// and a running discount comes off it like off a catalog price. After
 // confirmation discounts can still be changed or removed until the invoice
 // is issued, but not added.
 
@@ -33,7 +35,7 @@ export function OrderConfirmation({
   orderNo: string;
   clientName: string;
   items: OrderItemWithOrder[];
-  /** The order has a photo book: its price is agreed on a call and entered as the order's total. */
+  /** The order has a photo book: its details and price are agreed on a call. */
   call: boolean;
   /** After a discount is saved or the order confirmed: reload the queue. */
   onChanged: () => void;
@@ -41,23 +43,20 @@ export function OrderConfirmation({
   const symbol = useCurrencySymbol();
   const money = (n: number) => formatMoney(n, symbol);
   const [editing, setEditing] = useState<string | null>(null);
-  const [agreedTotal, setAgreedTotal] = useState("");
   const [reviewing, setReviewing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
   const breakdown = priceBreakdown(items);
-  const agreedValue = Number(agreedTotal);
-  const agreedValid = agreedTotal.trim() !== "" && Number.isInteger(agreedValue) && agreedValue > 0;
-  // Photo-book orders: the price agreed on the call is the whole order's;
-  // otherwise it's what the catalog lines come to after discounts.
-  const toPay = call ? (agreedValid ? agreedValue : null) : breakdown.unpriced ? null : breakdown.total;
+  // What the lines come to after discounts, once every line has a price.
+  const toPay = breakdown.unpriced ? null : breakdown.total;
   const discounted = items.filter((i) => lineDiscountOf(i));
 
   function confirm() {
     setError(null);
     start(async () => {
-      const res = await receiveClientOrder(orderId, call ? agreedValue : undefined);
+      // Photo-book orders keep their agreed total on the order, as before.
+      const res = await receiveClientOrder(orderId, call && toPay != null ? toPay : undefined);
       if (!res.ok) return setError(res.error ?? "Couldn't confirm the order.");
       setReviewing(false);
       onChanged();
@@ -73,9 +72,10 @@ export function OrderConfirmation({
         </div>
         <ul className="divide-y divide-border">
           {items.map((item) => {
-            const priced = catalogUnitPrice(item) != null;
-            const current = lineDiscountOf(item);
             const unit = catalogUnitPrice(item);
+            const priced = unit != null;
+            const current = lineDiscountOf(item);
+            const onCall = item.catalog_variant?.price == null && item.catalog_product?.price == null;
             return (
               <li key={item.id} className="space-y-2 px-3 py-2.5">
                 <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
@@ -94,8 +94,25 @@ export function OrderConfirmation({
                     )}
                   </div>
                 </div>
-                {priced && editing !== item.id ? (
+                {onCall && (!priced || editing === `price:${item.id}`) ? (
+                  <AgreedPriceEditor
+                    current={item.list_unit_price ?? null}
+                    symbol={symbol}
+                    save={(price) => setAgreedUnitPrice(item.id, price)}
+                    onCancel={priced ? () => setEditing(null) : undefined}
+                    onDone={() => {
+                      setEditing(null);
+                      onChanged();
+                    }}
+                  />
+                ) : null}
+                {priced && editing !== item.id && editing !== `price:${item.id}` ? (
                   <div className="flex items-center gap-3 text-xs">
+                    {onCall ? (
+                      <button type="button" className="font-medium text-brand-600 hover:underline" onClick={() => setEditing(`price:${item.id}`)}>
+                        Change price
+                      </button>
+                    ) : null}
                     {current ? (
                       <span className="text-muted">
                         Agreed discount: <span className="font-semibold text-foreground">{offerBadge(current, (n) => money(n))}</span>
@@ -137,30 +154,14 @@ export function OrderConfirmation({
           ) : (
             <p className="text-xs text-muted">No phone number on file for this client.</p>
           )}
-          <div className="mt-3">
-            <Field
-              label={`Agreed total for the whole order (${symbol})`}
-              hint={breakdown.total ? `The other items come to ${money(breakdown.total)} after discounts; include them.` : undefined}
-            >
-              <TextInput
-                type="number"
-                inputMode="numeric"
-                min={1}
-                step="1"
-                className="tnum w-44"
-                value={agreedTotal}
-                onChange={(e) => setAgreedTotal(e.target.value)}
-                placeholder="0"
-              />
-            </Field>
-          </div>
+          <p className="mt-3 text-xs text-muted">Enter each photo book&apos;s agreed price above; any running discount comes off it.</p>
         </div>
       ) : null}
 
       <Button variant="primary" disabled={toPay == null || editing !== null} onClick={() => setReviewing(true)}>
         Review &amp; confirm
       </Button>
-      {editing !== null ? <p className="text-xs text-muted">Save or cancel the discount you&apos;re editing first.</p> : null}
+      {editing !== null ? <p className="text-xs text-muted">Save or cancel what you&apos;re editing first.</p> : null}
 
       <Drawer
         open={reviewing}
@@ -223,6 +224,64 @@ export function OrderConfirmation({
 
       {error && !reviewing ? <p className="text-sm text-error-600">{error}</p> : null}
     </section>
+  );
+}
+
+/** The unit price agreed on the call, for a line with no catalog price. */
+function AgreedPriceEditor({
+  current,
+  symbol,
+  save,
+  onCancel,
+  onDone,
+}: {
+  current: number | null;
+  symbol: string;
+  save: (price: number) => Promise<{ ok: boolean; error?: string }>;
+  onCancel?: () => void;
+  onDone: () => void;
+}) {
+  const [value, setValue] = useState(current != null ? String(current) : "");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+  const price = Number(value);
+  const valid = value.trim() !== "" && Number.isInteger(price) && price > 0;
+
+  function submit() {
+    setError(null);
+    start(async () => {
+      const res = await save(price);
+      if (!res.ok) return setError(res.error ?? "Couldn't save the price.");
+      onDone();
+    });
+  }
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex flex-wrap items-end gap-2">
+        <Field label={`Price agreed on the call, per unit (${symbol})`}>
+          <TextInput
+            type="number"
+            inputMode="numeric"
+            min={1}
+            step="1"
+            className="tnum w-44"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            placeholder="0"
+          />
+        </Field>
+        <Button variant="primary" type="button" className="min-h-9 text-xs" loading={pending} disabled={!valid || pending} onClick={submit}>
+          Save price
+        </Button>
+        {onCancel ? (
+          <Button variant="secondary" type="button" className="min-h-9 text-xs" disabled={pending} onClick={onCancel}>
+            Cancel
+          </Button>
+        ) : null}
+      </div>
+      {error ? <p className="text-xs text-error-600">{error}</p> : null}
+    </div>
   );
 }
 

@@ -26,14 +26,17 @@ import { PatternPad } from "./pattern-pad";
 type Method = "email" | "phone";
 
 // What the screen shows. "code" remembers how the flow started, so
-// "Resend code" can repeat it.
+// "Resend code" can repeat it, and, when the person typed the email on the
+// screen before (sign up, adding a first email), that screen, so the email
+// shows in full and can be corrected. Other flows keep it masked: it's the
+// email on file, which whoever typed the phone number shouldn't see.
 type View =
   | { kind: "unlock" }
   | { kind: "signin" }
   | { kind: "signup" }
   | { kind: "reset" }
   | { kind: "add-email" }
-  | { kind: "code"; sentTo: string; resend: () => Promise<AuthStep> }
+  | { kind: "code"; sentTo: string; resend: () => Promise<AuthStep>; typedOn: "signup" | "add-email" | null }
   | { kind: "password" };
 
 const METHOD_TABS: { key: Method; label: string }[] = [
@@ -78,13 +81,17 @@ export function ContinueForm({
 
   /** Runs a step and moves to what it leads to. */
   function run(action: () => Promise<AuthStep>) {
+    const from = view.kind;
     setError(null);
     start(async () => {
       const res = await action();
       if (!res.ok) return setError(res.error);
       if (res.step === "done") return router.refresh();
       setCode("");
-      if (res.step === "code") setView({ kind: "code", sentTo: res.sentTo, resend: action });
+      if (res.step === "code") {
+        const typedOn = from === "signup" || from === "add-email" ? from : null;
+        setView({ kind: "code", sentTo: res.sentTo, resend: action, typedOn });
+      }
       else setView({ kind: res.step });
     });
   }
@@ -288,9 +295,10 @@ export function ContinueForm({
   }
 
   if (view.kind === "code") {
+    const typedOn = view.typedOn;
     return screen({
       title: "Check your email",
-      subtitle: `We emailed a 6-digit code to ${view.sentTo}. It works for 10 minutes.`,
+      subtitle: `We emailed a 6-digit code to ${typedOn ? email.trim() : view.sentTo}. It works for 10 minutes.`,
       onSubmit: () => run(() => verifyCode(code)),
       submit: "Continue",
       submitting: "Checking…",
@@ -309,7 +317,20 @@ export function ContinueForm({
               autoFocus
             />
           </Field>
-          <div className="flex justify-end">
+          <div className={`flex ${typedOn ? "justify-between" : "justify-end"} gap-3`}>
+            {typedOn ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setError(null);
+                  setView({ kind: typedOn });
+                }}
+                disabled={pending}
+                className={linkClass}
+              >
+                Wrong email? Change it
+              </button>
+            ) : null}
             <button type="button" onClick={() => run(view.resend)} disabled={pending} className={linkClass}>
               Resend code
             </button>

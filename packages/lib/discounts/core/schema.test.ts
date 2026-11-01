@@ -5,7 +5,7 @@ import { AppError, parseInput } from "@repo/lib/kernel/core";
 
 import { discountIdSchema, discountInputSchema } from "./schema";
 
-const ok = { name: "Sale", kind: "percent", value: 10, appliesTo: "all", productIds: [], startsAt: null, endsAt: "2026-10-20T00:00:00.000Z" };
+const ok = { name: "Sale", kind: "percent", value: 10, appliesTo: "all", productIds: [], startsAt: null, endsAt: "2026-10-20T00:00:00.000Z", code: "BLACKNOV", maxUses: null };
 
 test("well-formed input passes through unchanged", () => {
   assert.deepEqual(parseInput(discountInputSchema, ok), ok);

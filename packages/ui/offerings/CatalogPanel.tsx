@@ -27,6 +27,7 @@ import {
   setCategoryActive,
   setHiddenMedia,
   setServiceActive,
+  setServiceDeal,
   setServiceDescription,
 } from "@repo/lib/offerings/actions";
 import type { AmingMediaItem, CategoryWithServices, OfferingKind, ServiceTemplate, ServiceWithPackages, ShowroomSettings } from "@repo/lib/offerings/core";
@@ -656,6 +657,8 @@ function ServiceCard({
         />
       </div>
 
+      {active ? <DealEditor service={service} words={words} run={run} pending={pending} /> : null}
+
       <div className="space-y-2">
         <button type="button" onClick={() => setShowMedia((v) => !v)} className="text-xs font-semibold uppercase tracking-wide text-muted hover:text-foreground">
           {showMedia ? "▾" : "▸"} Photos and video
@@ -679,6 +682,99 @@ function ServiceCard({
         ) : null}
       </div>
     </div>
+  );
+}
+
+/** A local calendar day as an instant: its start, or its last moment. */
+function dayInstant(day: string, end: boolean): string {
+  return new Date(`${day}T${end ? "23:59:59" : "00:00:00"}`).toISOString();
+}
+
+/**
+ * A deal on the whole service or product (Black November): a percent off
+ * every package or size, from one day to another. Clients see the price
+ * crossed out, and booking or ordering takes the deal's price.
+ */
+function DealEditor({ service, words, run, pending }: { service: ServiceWithPackages; words: Words; run: Run; pending: boolean }) {
+  const deal = service.deal;
+  const [editing, setEditing] = useState(false);
+  const [percent, setPercent] = useState("");
+  const [from, setFrom] = useState(() => new Date().toLocaleDateString("en-CA"));
+  const [until, setUntil] = useState("");
+  // When the panel opened: enough to say running, planned or over.
+  const [now] = useState(() => Date.now());
+  const day = (iso: string) => new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+
+  if (deal && !editing) {
+    const state = Date.parse(deal.endsAt) <= now ? "ended" : Date.parse(deal.startsAt) > now ? "starts" : "running";
+    return (
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-surface p-3 text-sm">
+        <span>
+          <span className="mr-2 rounded-full bg-error-600 px-2 py-0.5 text-xs font-bold text-white">−{deal.percent}%</span>
+          {state === "ended"
+            ? `Deal ended ${day(deal.endsAt)}`
+            : state === "starts"
+              ? `Deal from ${day(deal.startsAt)} to ${day(deal.endsAt)}`
+              : `Deal running until ${day(deal.endsAt)}`}
+        </span>
+        <span className="flex gap-2">
+          {state === "ended" ? (
+            <Button variant="secondary" className="min-h-8 text-xs" onClick={() => setEditing(true)}>
+              New deal
+            </Button>
+          ) : null}
+          <Button variant="secondary" className="min-h-8 text-xs" loading={pending} disabled={pending} onClick={() => run(() => setServiceDeal(service.id, null))}>
+            {state === "ended" ? "Clear" : "End deal"}
+          </Button>
+        </span>
+      </div>
+    );
+  }
+
+  if (!editing) {
+    return (
+      <button type="button" onClick={() => setEditing(true)} className="text-xs font-semibold uppercase tracking-wide text-muted hover:text-foreground">
+        ▸ Put this {words.item} on a deal
+      </button>
+    );
+  }
+
+  return (
+    <form
+      className="space-y-3 rounded-xl border border-border bg-surface p-3"
+      onSubmit={(e) => {
+        e.preventDefault();
+        run(async () => {
+          const res = await setServiceDeal(service.id, { percent: Number(percent), startsAt: dayInstant(from, false), endsAt: dayInstant(until, true) });
+          if (res.ok) setEditing(false);
+          return res;
+        });
+      }}
+    >
+      <p className="text-xs text-muted">
+        A percent off every {service.kind === "service" ? "package" : "size"} of this {words.item}. Clients see the old price crossed out, and bookings and orders
+        made during the deal take the deal&apos;s price.
+      </p>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Field label="Percent off">
+          <TextInput inputMode="numeric" className="tnum" value={percent} onChange={(e) => setPercent(e.target.value)} placeholder="20" required />
+        </Field>
+        <Field label="From">
+          <TextInput type="date" value={from} onChange={(e) => setFrom(e.target.value)} required />
+        </Field>
+        <Field label="Until (included)">
+          <TextInput type="date" value={until} min={from} onChange={(e) => setUntil(e.target.value)} required />
+        </Field>
+      </div>
+      <div className="flex gap-2">
+        <Button type="submit" variant="primary" className="min-h-8 text-xs" loading={pending} disabled={pending}>
+          Save deal
+        </Button>
+        <Button type="button" variant="secondary" className="min-h-8 text-xs" onClick={() => setEditing(false)}>
+          Cancel
+        </Button>
+      </div>
+    </form>
   );
 }
 

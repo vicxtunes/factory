@@ -108,6 +108,9 @@ export function DiscountsPanel({
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="font-semibold">{d.name}</p>
+                    {d.code ? (
+                      <span className="rounded-md border border-border px-2 py-0.5 font-mono text-xs font-semibold">{d.code}</span>
+                    ) : null}
                     <span className="rounded-full bg-error-600 px-2 py-0.5 text-xs font-semibold text-white">
                       {offerBadge(d, money)}
                     </span>
@@ -123,6 +126,12 @@ export function DiscountsPanel({
                   <p className="mt-1 text-xs text-muted">
                     {period(d)} · by {d.createdByName}
                   </p>
+                  {d.code ? (
+                    <p className="mt-1 text-xs text-muted">
+                      Only with the code · used on {d.uses} order{d.uses === 1 ? "" : "s"}
+                      {d.maxUses !== null ? ` of ${d.maxUses}` : ""}
+                    </p>
+                  ) : null}
                 </div>
                 {canManage && d.status !== "ended" ? (
                   <Button variant="secondary" className="text-xs" disabled={pending} onClick={() => stop(d)}>
@@ -169,6 +178,8 @@ function DiscountForm({
   const [startsNow, setStartsNow] = useState(true);
   const [startsAt, setStartsAt] = useState("");
   const [endsAt, setEndsAt] = useState("");
+  const [code, setCode] = useState("");
+  const [maxUses, setMaxUses] = useState("");
   const [search, setSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -194,6 +205,8 @@ function DiscountForm({
         // datetime-local values are local wall time; Date turns them into instants.
         startsAt: startsNow || !startsAt ? null : new Date(startsAt).toISOString(),
         endsAt: endsAt ? new Date(endsAt).toISOString() : null,
+        code: code.trim() || null,
+        maxUses: code.trim() && maxUses.trim() ? Number(maxUses.replace(/[,\s]/g, "")) : null,
       });
       if (res.ok) onCreated(res.data);
       else setError(res.error);
@@ -205,6 +218,23 @@ function DiscountForm({
       <Field label="Name" hint="Shown to staff, e.g. “October album promo”.">
         <TextInput value={name} onChange={(e) => setName(e.target.value)} required maxLength={80} />
       </Field>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Promo code (optional)" hint="Empty: everyone gets it. With a code: only orders placed with the code.">
+          <TextInput
+            value={code}
+            onChange={(e) => setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))}
+            placeholder="BLACKNOV"
+            maxLength={20}
+            className="font-mono"
+          />
+        </Field>
+        {code ? (
+          <Field label="Limit uses (optional)" hint="How many orders can use the code. Empty: no limit.">
+            <TextInput inputMode="numeric" className="tnum" value={maxUses} onChange={(e) => setMaxUses(e.target.value)} placeholder="100" />
+          </Field>
+        ) : null}
+      </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Type">

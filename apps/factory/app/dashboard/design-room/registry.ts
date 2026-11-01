@@ -138,6 +138,7 @@ import WalletCardVendor from "./examples/wallet-card/vendor";
 import HireCardAvailable from "./examples/hire-card/available";
 import ServiceCardsVendor from "./examples/service-cards/vendor";
 import SocialIconAll from "./examples/social-icon/all";
+import MoneyDashboardBoss from "./examples/money-dashboard/boss";
 
 // Everything the Design Room shows. To add a component: build it in
 // packages/ui/, write its examples under ./examples/<slug>/ (one default
@@ -231,6 +232,15 @@ export const COMPONENTS: RoomComponent[] = [
     source: "packages/ui/home/HomeBits.tsx (HomeGreeting, HomeHero, QuickActions, HomeSection, CardRail), packages/ui/home/PackageList.tsx",
     summary: "A dashboard's first screen: a greeting, a dark banner with the one thing to do next, shortcut tiles (one can be marked Soon), and cards to swipe through: what's coming up, and what's on sale filtered by chips.",
     examples: [{ title: "A studio's home", file: "home/studio.tsx", Demo: HomeStudio }],
+  },
+  {
+    slug: "money-dashboard",
+    name: "Money dashboard",
+    category: "Flows",
+    status: "draft",
+    source: "packages/ui/money/MoneyDashboard.tsx",
+    summary: "The bosses' money at a glance: money received (orange), sales and what clients owe, each against the period before; money in by channel; 12 months of cash flow with the hovered month lit up; the latest payments, searchable. Cards swipe on a phone, sit three across on a desktop.",
+    examples: [{ title: "This month", file: "money-dashboard/boss.tsx", Demo: MoneyDashboardBoss }],
   },
   {
     slug: "button",

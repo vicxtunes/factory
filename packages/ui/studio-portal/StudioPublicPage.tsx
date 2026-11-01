@@ -10,6 +10,9 @@ import type { Studio } from "@repo/lib/studios/core";
 
 import { PortalSignIn } from "./PortalForms";
 
+/** A service's or product's deal on its card; the page passes only a deal running now. */
+const dealBadge = (s: Pick<Service, "deal">) => (s.deal ? `−${s.deal.percent}%` : null);
+
 /**
  * A studio's showroom, its public home at client.<domain>/<slug>, laid out
  * in its own brand (apps/client [slug]/layout.tsx): a photo banner,
@@ -58,7 +61,7 @@ export function StudioPublicPage({
         id: c.id,
         title: c.name,
         emptyText: "",
-        cards: c.services.map((s) => ({ id: s.id, label: s.name, image: s.coverUrl, href: `/${slug}/s/${s.slug}` })),
+        cards: c.services.map((s) => ({ id: s.id, label: s.name, image: s.coverUrl, href: `/${slug}/s/${s.slug}`, badge: dealBadge(s) })),
       })),
     },
     ...(products.length
@@ -71,7 +74,7 @@ export function StudioPublicPage({
               id: c.id,
               title: c.name,
               emptyText: "",
-              cards: c.products.map((p) => ({ id: p.id, label: p.name, image: p.coverUrl, href: `/${slug}/p/${p.slug}` })),
+              cards: c.products.map((p) => ({ id: p.id, label: p.name, image: p.coverUrl, href: `/${slug}/p/${p.slug}`, badge: dealBadge(p) })),
             })),
           },
         ]

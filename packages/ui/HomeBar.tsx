@@ -166,6 +166,7 @@ export function HomeBar({
   logout,
   afterLogout,
   hideFrom = "md",
+  docked = false,
 }: {
   /** Primary destinations, 1–4. */
   tabs: HomeBarLink[];
@@ -175,6 +176,13 @@ export function HomeBar({
   logout?: () => Promise<void>;
   afterLogout?: string;
   hideFrom?: keyof typeof HIDE_FROM;
+  /**
+   * The bar is the last row of a full-height frame whose content scrolls
+   * above it (see AppFrame in globals.css), instead of fixed over the page.
+   * On iPhone a fixed bar bobs up and down as Safari's toolbar shrinks and
+   * grows while the page scrolls; docked, the page never scrolls, so it can't.
+   */
+  docked?: boolean;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -212,9 +220,9 @@ export function HomeBar({
   const activeSlot = hasMore && (moreOpen || moreActive) ? tabs.length : tabIndex;
 
   return (
-    <div ref={ref} className={`fixed inset-x-0 bottom-0 z-40 ${HIDE_FROM[hideFrom]}`}>
+    <div ref={ref} className={`${docked ? "relative shrink-0" : "fixed inset-x-0 bottom-0"} z-40 ${HIDE_FROM[hideFrom]}`}>
       {moreOpen ? (
-        <div className="mb-2 ml-auto mr-3 max-h-[60vh] w-60 overflow-y-auto rounded-2xl border border-border bg-surface p-2 shadow-theme-lg">
+        <div className={`${docked ? "absolute bottom-full right-3" : "ml-auto mr-3"} mb-2 max-h-[60vh] w-60 overflow-y-auto rounded-2xl border border-border bg-surface p-2 shadow-theme-lg`}>
           {more.map((link, i) => {
             const Icon = ICONS[link.icon];
             const active = isActive(pathname, link);

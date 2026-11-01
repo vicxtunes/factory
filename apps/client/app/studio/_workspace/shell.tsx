@@ -193,7 +193,7 @@ function StudioHomeBar({ nav }: { nav: StudioNavSection[] }) {
     ...items.filter((i) => !STUDIO_TABS.includes(i.href)),
     { href: "/", label: "Back to Aming", icon: "back" as const, exact: true, section: "Aming" },
   ];
-  return <HomeBar tabs={tabs} more={more} logout={logoutClient} afterLogout="/" />;
+  return <HomeBar tabs={tabs} more={more} logout={logoutClient} afterLogout="/" docked />;
 }
 
 // Pages built around a kanban board: the full width of the screen, the board
@@ -223,11 +223,18 @@ export function StudioShell({
   const nav = studioNavFor(access);
   const wide = BOARD_PAGES.includes(usePathname());
   return (
-    <div className="min-h-screen">
+    // Phones: an app frame the height of the screen. The page scrolls inside
+    // it (data-scroll-root) and the home bar is its last row, so the browser
+    // page itself never scrolls and Safari's toolbar never moves the bar.
+    // From md the window scrolls as before, with the sidebar.
+    <div data-app-frame className="flex h-dvh flex-col md:block md:h-auto md:min-h-screen">
       <StudioSidebar brand={brand} nav={nav} switcher={switcher} />
-      <div className="sidebar-offset flex min-h-screen flex-col md:pl-(--sidebar-w)">
+      <div
+        data-scroll-root
+        className="sidebar-offset flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain md:min-h-screen md:overflow-visible md:pl-(--sidebar-w)"
+      >
         <StudioTopbar brand={brand} user={user} owner={access.owner} />
-        <main className="flex-1 bg-background px-4 py-6 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:px-6 md:pb-6">
+        <main className="flex-1 bg-background px-4 py-6 sm:px-6">
           <div className={`space-y-4 ${wide ? BOARD_BLEED : "mx-auto max-w-5xl"}`}>
             {switcher ? <div className="-mx-4 -mt-6 sm:-mx-6 md:hidden">{switcher}</div> : null}
             {children}

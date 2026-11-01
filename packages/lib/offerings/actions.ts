@@ -20,6 +20,7 @@ import {
   categoryIdSchema,
   hiddenMediaSchema,
   categoryNameSchema,
+  dealSchema,
   offeringIdSchema,
   offeringInputSchema,
   offeringKindSchema,
@@ -83,6 +84,11 @@ export async function setServiceDescription(id: unknown, description: unknown): 
   return change((scope) =>
     offerings.setServiceDescription(scope, parseInput(serviceIdSchema, id), parseInput(serviceDescriptionSchema, description)),
   );
+}
+
+/** A deal (percent off every package, for a period) on a service or product, or null to end it. */
+export async function setServiceDeal(id: unknown, deal: unknown): Promise<Result<Service>> {
+  return change((scope) => offerings.setDeal(scope, parseInput(serviceIdSchema, id), parseInput(dealSchema, deal)));
 }
 
 export async function moveService(id: unknown, categoryId: unknown): Promise<Result<Service>> {

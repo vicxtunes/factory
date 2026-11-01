@@ -34,6 +34,9 @@ interface ServiceRow {
   description: string | null;
   source_product_id: string | null;
   hidden_media: string[];
+  deal_percent: number | null;
+  deal_starts_at: string | null;
+  deal_ends_at: string | null;
   position: number;
   archived_at: string | null;
   created_at: string;
@@ -53,7 +56,8 @@ interface PackageRow {
 }
 
 const CATEGORY = "id, kind, name, source_category_id, position, archived_at, created_at";
-const SERVICE = "id, kind, category_id, name, slug, description, source_product_id, hidden_media, position, archived_at, created_at";
+const SERVICE =
+  "id, kind, category_id, name, slug, description, source_product_id, hidden_media, deal_percent, deal_starts_at, deal_ends_at, position, archived_at, created_at";
 const PACKAGE =
   "id, service_id, name, description, price, inclusions, position, archived_at, created_at, service:offering_services!offerings_service_fkey (name)";
 
@@ -76,6 +80,10 @@ const toService = (r: ServiceRow): Service => ({
   description: r.description,
   sourceProductId: r.source_product_id,
   hiddenMedia: r.hidden_media,
+  deal:
+    r.deal_percent != null && r.deal_starts_at && r.deal_ends_at
+      ? { percent: r.deal_percent, startsAt: r.deal_starts_at, endsAt: r.deal_ends_at }
+      : null,
   position: r.position,
   archivedAt: r.archived_at,
   createdAt: r.created_at,
@@ -101,6 +109,9 @@ const servicePatch = (patch: Parameters<OfferingStore["updateService"]>[2]) => (
   ...(patch.description !== undefined ? { description: patch.description } : {}),
   ...(patch.categoryId !== undefined ? { category_id: patch.categoryId } : {}),
   ...(patch.hiddenMedia !== undefined ? { hidden_media: patch.hiddenMedia } : {}),
+  ...(patch.deal !== undefined
+    ? { deal_percent: patch.deal?.percent ?? null, deal_starts_at: patch.deal?.startsAt ?? null, deal_ends_at: patch.deal?.endsAt ?? null }
+    : {}),
 });
 const packageColumns = (input: OfferingInput) => ({
   name: input.name,

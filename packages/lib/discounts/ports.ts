@@ -19,6 +19,10 @@ export interface DiscountStore {
   end(scope: TenantScope, id: string, at: string, actor: DiscountActor): Promise<void>;
   /** Only before it starts. */
   remove(scope: TenantScope, id: string): Promise<void>;
+  /** The discount with this promo code (normalised), whatever its status. */
+  findByCode(scope: TenantScope, code: string): Promise<Discount | null>;
+  /** Puts the code on a just-placed order; refused if it wasn't running then or is used up. */
+  applyCode(scope: TenantScope, orderId: string, discountId: string): Promise<void>;
 }
 
 /** A problem the person should see (the message is safe to show). */

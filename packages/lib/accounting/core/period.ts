@@ -146,3 +146,52 @@ export function lastMonths(now: Date, count: number, timeZone: string): string[]
   const [year, month] = localDate(now, timeZone).split("-").map(Number);
   return Array.from({ length: count }, (_, i) => monthStart(year, month - (count - 1 - i)).slice(0, 7));
 }
+
+/** "yyyy-mm-dd" shifted by whole months, kept within the month (31 Mar − 1 month = 28/29 Feb). */
+function addMonths(date: string, months: number): string {
+  const [y, m, d] = date.split("-").map(Number);
+  const lastDay = new Date(Date.UTC(y, m - 1 + months + 1, 0)).getUTCDate();
+  return new Date(Date.UTC(y, m - 1 + months, Math.min(d, lastDay))).toISOString().slice(0, 10);
+}
+
+/**
+ * The period to compare with: the same stretch one step back (today →
+ * yesterday, this week → last week so far, this month → last month so far,
+ * a custom range → as many days before it). A period still running is
+ * compared only up to the same time of day, so a morning isn't measured
+ * against a whole day. Null for all time.
+ */
+export function previousPeriod(period: Period, now: Date, timeZone: string): Period | null {
+  if (!period.fromDate || !period.toDate) return null;
+  const today = localDate(now, timeZone);
+  // The same preset, resolved as if today were an earlier date.
+  const asOf = (date: string) => resolvePeriod({ preset: period.preset }, startOfLocalDay(date, timeZone), timeZone);
+
+  let earlier: Period;
+  switch (period.preset) {
+    case "today":
+    case "yesterday":
+      earlier = asOf(addDays(today, -1));
+      break;
+    case "this_week":
+      earlier = asOf(addDays(today, -7));
+      break;
+    case "this_month":
+    case "last_month":
+      earlier = asOf(addMonths(today, -1));
+      break;
+    case "this_year":
+      earlier = asOf(addMonths(today, -12));
+      break;
+    default: {
+      const days = (Date.parse(period.toDate) - Date.parse(period.fromDate)) / 86_400_000 + 1;
+      earlier = range("custom", addDays(period.fromDate, -days), addDays(period.fromDate, -1), timeZone);
+    }
+  }
+
+  if (period.to && Date.parse(period.to) > now.getTime() && earlier.toDate) {
+    const sinceMidnight = now.getTime() - startOfLocalDay(today, timeZone).getTime();
+    earlier = { ...earlier, to: new Date(startOfLocalDay(earlier.toDate, timeZone).getTime() + sinceMidnight).toISOString() };
+  }
+  return earlier;
+}

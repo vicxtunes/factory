@@ -6,6 +6,9 @@ import "server-only";
 //   EMAIL_FROM      the sender, on a domain verified in Resend, e.g. "Aming <studio@aming.ug>"
 // Without a key outside production, emails are printed in the server log
 // instead, so codes can be tried locally.
+//   TEST_EMAIL_TO   testing on a copy of real data: every email goes to this
+//                   inbox instead, its real recipient in the subject, so no
+//                   client hears from a test.
 
 import { AppError } from "@repo/lib/kernel/core";
 
@@ -14,7 +17,10 @@ import type { Mailer } from "../../ports";
 import { LOGO_PNG_BASE64 } from "./logo";
 
 export const resendMailer: Mailer = {
-  async send({ to, subject, text, html }) {
+  async send({ to: recipient, subject: title, text, html }) {
+    const testInbox = process.env.TEST_EMAIL_TO;
+    const to = testInbox || recipient;
+    const subject = testInbox ? `[TEST → ${recipient}] ${title}` : title;
     const key = process.env.RESEND_API_KEY;
     const from = process.env.EMAIL_FROM;
     if (!key || !from) {

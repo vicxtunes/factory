@@ -20,20 +20,22 @@ function memoryStore(seed: Discount[] = []) {
     get: async (_s, id) => rows.get(id) ?? null,
     create: async (_s, input, by) => {
       const id = `d${rows.size + 1}`;
-      rows.set(id, { id, ...input, startsAt: input.startsAt ?? NOW.toISOString(), createdByName: by.name, createdAt: NOW.toISOString() });
+      rows.set(id, { id, ...input, startsAt: input.startsAt ?? NOW.toISOString(), uses: 0, createdByName: by.name, createdAt: NOW.toISOString() });
       return id;
     },
     end: async (_s, id, at) => void (rows.get(id)!.endsAt = at),
     remove: async (_s, id) => void rows.delete(id),
+    findByCode: async (_s, code) => [...rows.values()].find((d) => d.code === code) ?? null,
+    applyCode: async () => {},
   };
   return { store, rows };
 }
 
 const discount = (id: string, startsAt: string, endsAt: string | null = null): Discount => ({
-  id, name: id, kind: "percent", value: 10, appliesTo: "all", productIds: [], startsAt, endsAt, createdByName: "Boss", createdAt: startsAt,
+  id, name: id, kind: "percent", value: 10, appliesTo: "all", productIds: [], startsAt, endsAt, code: null, maxUses: null, uses: 0, createdByName: "Boss", createdAt: startsAt,
 });
 
-const input: DiscountInput = { name: "  October sale ", kind: "percent", value: 10, appliesTo: "all", productIds: [], startsAt: null, endsAt: null };
+const input: DiscountInput = { name: "  October sale ", kind: "percent", value: 10, appliesTo: "all", productIds: [], startsAt: null, endsAt: null, code: null, maxUses: null };
 
 test("list puts running first, then scheduled, then ended", async () => {
   const { store } = memoryStore([
@@ -74,4 +76,30 @@ test("stop refuses a missing or already-ended discount", async () => {
   const service = new DiscountService(store, () => NOW);
   await assert.rejects(service.stop(scope, "nope", actor), /no longer exists/);
   await assert.rejects(service.stop(scope, "ended", actor), /already ended/);
+});
+
+test("create stores a typed code as BLACKNOV", async () => {
+  const { store, rows } = memoryStore();
+  const id = await new DiscountService(store, () => NOW).create(scope, { ...input, code: " blacknov " }, actor);
+  assert.equal(rows.get(id)?.code, "BLACKNOV");
+});
+
+test("a promo code works only while running and not used up, typed in any case", async () => {
+  const withCode = (id: string, code: string, startsAt: string, endsAt: string | null, uses = 0, maxUses: number | null = null) => ({
+    ...discount(id, startsAt, endsAt), code, uses, maxUses,
+  });
+  const { store } = memoryStore([
+    withCode("on", "BLACKNOV", "2026-10-01T00:00:00Z", null),
+    withCode("soon", "DEC", "2026-12-01T00:00:00Z", null),
+    withCode("over", "SEPT", "2026-09-01T00:00:00Z", "2026-09-30T00:00:00Z"),
+    withCode("full", "FIRST10", "2026-10-01T00:00:00Z", null, 10, 10),
+  ]);
+  const service = new DiscountService(store, () => NOW);
+  assert.deepEqual(await service.promoCode(scope, " blacknov "), {
+    discountId: "on", code: "BLACKNOV", kind: "percent", value: 10, appliesTo: "all", productIds: [],
+  });
+  await assert.rejects(service.promoCode(scope, "DEC"), /isn't on yet/);
+  await assert.rejects(service.promoCode(scope, "sept"), /has ended/);
+  await assert.rejects(service.promoCode(scope, "FIRST10"), /used up/);
+  await assert.rejects(service.promoCode(scope, "NOPE"), /isn't a promo code we know/);
 });

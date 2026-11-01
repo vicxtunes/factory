@@ -7,7 +7,7 @@
 import { AppError } from "@repo/lib/kernel/core";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
-import type { Category, Offering, OfferingInput, OfferingKind, Service, ServiceInput, ShowroomSettings } from "./core/model";
+import type { Category, Deal, Offering, OfferingInput, OfferingKind, Service, ServiceInput, ShowroomSettings } from "./core/model";
 
 export interface OfferingStore {
   /** Every category, active and deactivated. */
@@ -35,11 +35,11 @@ export interface OfferingStore {
     scope: TenantScope,
     input: ServiceInput & { slug: string; categoryId: string; kind: OfferingKind; sourceProductId: string | null },
   ): Promise<Service>;
-  /** Changes what's given (name, description, category, media left out). Null when there is no such service in this tenant. */
+  /** Changes what's given (name, description, category, media left out, deal). Null when there is no such service in this tenant. */
   updateService(
     scope: TenantScope,
     id: string,
-    patch: Partial<ServiceInput & { categoryId: string; hiddenMedia: string[] }>,
+    patch: Partial<ServiceInput & { categoryId: string; hiddenMedia: string[]; deal: Deal | null }>,
   ): Promise<Service | null>;
   /** Archives (now) or restores. Null when there is no such service in this tenant. */
   setServiceArchived(scope: TenantScope, id: string, archived: boolean): Promise<Service | null>;
