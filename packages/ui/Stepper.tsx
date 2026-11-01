@@ -13,7 +13,11 @@ export function useSteps(count: number, open: boolean) {
   const go = (to: number) => {
     setStep(to);
     setReached((r) => Math.max(r, to));
-    if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      // My Business on a phone scrolls inside its frame, not the window.
+      document.querySelector("[data-scroll-root]")?.scrollTo({ top: 0, behavior: "smooth" });
+    }
   };
   return { step, reached, go, next: () => go(Math.min(step + 1, count - 1)), back: () => go(Math.max(step - 1, 0)), last: step === count - 1 };
 }

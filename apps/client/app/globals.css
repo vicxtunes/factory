@@ -2,3 +2,15 @@
 @import "@repo/ui/theme.css";
 /* Class names used by the shared packages (monorepo: outside this app). */
 @source "../../../packages";
+
+/* AppFrame (My Business on a phone, see studio/_workspace/shell.tsx): the
+   frame is the screen's height and scrolls inside itself, so the page under
+   it must never scroll or bounce. If it did, Safari's toolbar would shrink and
+   grow and drag the home bar up and down with it. Below md (48rem) only. */
+@media (width < 48rem) {
+  html:has([data-app-frame]),
+  html:has([data-app-frame]) body {
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+}
