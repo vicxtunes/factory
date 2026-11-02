@@ -100,7 +100,7 @@ export function DayBookBoard({ book, timeZone }: { book: DayBook; timeZone: stri
         </Card>
       ) : null}
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {book.accounts.map((a) => (
           <AccountTile key={a.id} account={a} lines={book.lines} />
         ))}
@@ -403,7 +403,7 @@ function CloseSheet({ book, onClose }: { book: DayBook; onClose: () => void }) {
   return (
     <FormSheet open onClose={onClose} title={`Close ${dayName(book.day)}`}>
       <form onSubmit={submit} className="space-y-3">
-        <p className="text-sm text-muted">A closed day can&apos;t be changed. Count the cash; add bank and mobile money if you can see their balances.</p>
+        <p className="text-sm text-muted">A closed day can&apos;t be changed. Count the cash; add the other accounts if you can see their balances.</p>
         {book.accounts.map((a) => {
           const c = counted(a);
           const difference = c === null || a.expected === null ? null : c - a.expected;

@@ -33,7 +33,7 @@ export const DAY_CLOSED_MESSAGE = "That day is closed, so it can't change. Recor
 export interface DayAccount {
   id: string;
   name: string;
-  kind: "cash" | "bank" | "mobile_money";
+  kind: "cash" | "bank" | "mobile_money" | "hivepay";
   /** Null when no opening balance covers this day: the first count came later, or hasn't happened. */
   opening: number | null;
   moneyIn: number;

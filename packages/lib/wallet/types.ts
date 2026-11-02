@@ -297,7 +297,7 @@ export interface MoneySource {
   accountId: string;
 }
 
-export type MoneyAccountKind = "cash" | "bank" | "mobile_money";
+export type MoneyAccountKind = "cash" | "bank" | "mobile_money" | "hivepay";
 
 export interface MoneyAccount {
   id: string;
