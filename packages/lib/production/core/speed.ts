@@ -65,6 +65,11 @@ export function lateness(j: ItemJourney, today: string, dayOf: (iso: string) => 
   return today > j.dueOn ? "late_open" : "open";
 }
 
+/** How late (in days past the due date) an open item can be and still be worth chasing rather than tidying up. */
+export const STALE_DAYS = 21;
+
+const daysBetween = (from: string, to: string) => Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
+
 function median(values: number[]): number | null {
   if (!values.length) return null;
   const s = [...values].sort((a, b) => a - b);
@@ -92,8 +97,14 @@ export interface SpeedFigures {
   /** On time among finished items with a due date, %. */
   onTimePercent: number | null;
   late: number;
-  /** Not ready and already past the due date: the list to chase today. */
+  /** Not ready and past the due date, by up to STALE_DAYS: the list to chase today. */
   lateNow: ItemJourney[];
+  /**
+   * Not ready and past the due date by more than STALE_DAYS: almost always
+   * handed over without being marked ready, so kept apart from the list to
+   * chase (they'd bury it), as a count to tidy up.
+   */
+  staleOpen: number;
   /** Median hours per stage, in stage order. */
   stages: { key: Stage; label: string; hint: string; median: number | null; items: number }[];
   products: SpeedGroup[];
@@ -150,7 +161,10 @@ export function speedFigures(journeys: ItemJourney[], today: string, dayOf: (iso
     leadMedian: median(done.map((j) => leadHours(j) as number)),
     onTimePercent: dated.length ? Math.round((onTime / dated.length) * 1000) / 10 : null,
     late: journeys.filter((j) => status.get(j.itemId) === "late").length,
-    lateNow: journeys.filter((j) => status.get(j.itemId) === "late_open").sort((a, b) => (a.dueOn ?? "").localeCompare(b.dueOn ?? "")),
+    lateNow: journeys
+      .filter((j) => status.get(j.itemId) === "late_open" && daysBetween(j.dueOn as string, today) <= STALE_DAYS)
+      .sort((a, b) => (a.dueOn ?? "").localeCompare(b.dueOn ?? "")),
+    staleOpen: journeys.filter((j) => status.get(j.itemId) === "late_open" && daysBetween(j.dueOn as string, today) > STALE_DAYS).length,
     stages: STAGES.map((s) => {
       const values = journeys.map((j) => stageHours(j)[s.key]).filter((h): h is number => h !== undefined);
       return { ...s, median: median(values), items: values.length };

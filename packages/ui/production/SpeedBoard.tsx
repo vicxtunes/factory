@@ -10,7 +10,7 @@ import Link from "next/link";
 
 import { dayLabel } from "@repo/ui/charts/format";
 import { ChartCard, FlowDiagram, MatrixHeat, RankBars, SERIES, TimeLines } from "@repo/ui/charts/kit";
-import { formatHours } from "@repo/lib/production/core";
+import { STALE_DAYS, formatHours } from "@repo/lib/production/core";
 import type { SpeedView } from "@repo/lib/production/service";
 
 const WINDOWS = [30, 90, 180];
@@ -56,6 +56,13 @@ export function SpeedBoard({ view, today, basePath }: { view: SpeedView; today: 
         <Stat label="Late right now" value={String(view.lateNow.length)} tone={view.lateNow.length ? "error" : undefined} hint="not ready, past the due date" />
         <Stat label="Items finished" value={String(view.done)} hint={slowest ? `longest wait: ${slowest.label.toLowerCase()}` : undefined} />
       </div>
+
+      {view.staleOpen ? (
+        <p className="rounded-xl bg-warning-50 px-4 py-3 text-sm text-warning-700 dark:bg-warning-500/15 dark:text-warning-500">
+          {view.staleOpen} older {view.staleOpen === 1 ? "item is" : "items are"} still not marked ready though due more than {STALE_DAYS / 7} weeks ago:
+          most likely handed over without being marked. Mark them in Office Orders so these figures stay true.
+        </p>
+      ) : null}
 
       {view.lateNow.length ? (
         <section className="space-y-2">
@@ -204,7 +211,7 @@ export function SpeedBoard({ view, today, basePath }: { view: SpeedView; today: 
 
         <ChartCard
           title="Making time by worker"
-          subtitle="The middle time from starting an item to quality check"
+          subtitle="The middle time from starting an item to quality check; a few minutes usually means the steps were clicked through at once, not timed as the work happened"
           empty={view.workers.some((x) => x.makingMedian !== null) ? null : "No items made in this window yet."}
           table={{
             columns: [

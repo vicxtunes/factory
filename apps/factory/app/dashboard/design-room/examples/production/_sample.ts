@@ -285,6 +285,7 @@ export const SPEED: SpeedView = {
   leadMedian: 62,
   onTimePercent: 81.4,
   late: 58,
+  staleOpen: 7,
   lateNow: [
     { itemId: "x1", orderNo: "2026-4031", clientName: "Kampala Bridal", productId: "book", product: "Layflat photo book", workerName: "Mayanja Dan", placedAt: "2026-10-25T08:00:00Z", releasedAt: "2026-10-25T12:00:00Z", toFactoryAt: "2026-10-27T09:00:00Z", inProductionAt: null, checkAt: null, readyAt: null, dueOn: "2026-10-30" },
     { itemId: "x2", orderNo: "2026-4036", clientName: "Peter Ssempa", productId: "crystal", product: "Crystal board", workerName: null, placedAt: "2026-10-28T08:00:00Z", releasedAt: "2026-10-28T10:00:00Z", toFactoryAt: null, inProductionAt: null, checkAt: null, readyAt: null, dueOn: "2026-11-01" },

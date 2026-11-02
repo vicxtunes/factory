@@ -45,6 +45,7 @@ test("the figures: medians, on time, what to chase, by product and by worker", (
       j({ itemId: "a" }),
       j({ itemId: "b", readyAt: "2026-10-04T16:00:00Z" }),
       j({ itemId: "c", productId: "frame", product: "Frame", workerName: "Ann", readyAt: null, checkAt: null, dueOn: "2026-10-02" }),
+      j({ itemId: "old", readyAt: null, checkAt: null, dueOn: "2026-09-01" }),
     ],
     "2026-10-05",
     dayOf,
@@ -53,7 +54,8 @@ test("the figures: medians, on time, what to chase, by product and by worker", (
   assert.equal(f.leadMedian, (32 + 80) / 2);
   assert.equal(f.onTimePercent, 50);
   assert.equal(f.late, 1);
-  assert.deepEqual(f.lateNow.map((x) => x.itemId), ["c"]);
+  assert.deepEqual(f.lateNow.map((x) => x.itemId), ["c"], "the list to chase");
+  assert.equal(f.staleOpen, 1, "over three weeks late and never marked ready: to tidy up, not chase");
   assert.equal(f.stages.find((s) => s.key === "making")?.median, 6);
   const frame = f.products.find((p) => p.name === "Frame");
   assert.deepEqual([frame?.done, frame?.late, frame?.leadMedian], [0, 1, null]);
