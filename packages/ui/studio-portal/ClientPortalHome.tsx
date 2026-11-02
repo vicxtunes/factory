@@ -53,6 +53,7 @@ export function ClientPortalHome({
   signOut,
   directions,
   pay,
+  addPhotos,
 }: {
   view: ClientPortalView;
   scope: Omit<TenantScope, "tenantId">;
@@ -62,6 +63,8 @@ export function ClientPortalHome({
   directions?: ReactNode;
   /** The "Pay to confirm" button for a priced booking or order still waiting for the studio. */
   pay?: (target: { kind: "booking" | "order"; id: string; total: number }) => ReactNode;
+  /** Add photos to one of their orders (the app's own, with its uploads). */
+  addPhotos?: (order: ProductRequest) => ReactNode;
 }) {
   const money = (n: number) => formatAmount(scope, n);
   const toAnswer = view.quotations.filter((q) => q.status === "open");
@@ -170,10 +173,16 @@ export function ClientPortalHome({
                     {formatDay(scope, localDate(new Date(r.createdAt), scope.timeZone))}
                     {r.unitPrice > 0 ? ` · ${money(r.unitPrice * r.quantity)}` : ""}
                   </p>
+                  {r.status === "declined" ? null : r.media.length ? (
+                    <p className="text-xs text-muted">{r.media.length === 1 ? "1 photo or link sent" : `${r.media.length} photos or links sent`}</p>
+                  ) : (
+                    <p className="text-xs font-medium text-error-600 dark:text-error-400">Add your photos so the studio can make it</p>
+                  )}
                 </div>
                 <div className="flex shrink-0 flex-col items-end gap-2">
                   <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${ORDER_TONES[r.status]}`}>{PRODUCT_REQUEST_STATUS_LABELS[r.status]}</span>
-                  {pay && r.status === "requested" && r.unitPrice > 0 ? pay({ kind: "order", id: r.id, total: r.unitPrice * r.quantity }) : null}
+                  {r.status !== "declined" && addPhotos ? addPhotos(r) : null}
+                  {pay && r.status === "requested" && r.unitPrice > 0 && r.media.length ? pay({ kind: "order", id: r.id, total: r.unitPrice * r.quantity }) : null}
                 </div>
               </li>
             ))}

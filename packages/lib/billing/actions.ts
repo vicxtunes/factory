@@ -192,6 +192,7 @@ export async function approveAndPayQuotation(token: unknown, input: { amount: un
     const bookingId = await bookings.idForQuotation(scope, quotation.id);
     const booking = bookingId ? (await bookings.get(scope, bookingId))?.booking : null;
     const request = await productRequests.forQuotation(scope, quotation.id);
+    if (request?.status === "requested" && !request.media.length) throw new BillingError("Add your photos first, so the studio can make your order: open your orders on the studio's page.");
     const waiting = booking?.status === "requested" ? { bookingId: booking.id } : request?.status === "requested" ? { requestId: request.id } : null;
     if (waiting && quotation.status === "open") {
       return walletStep(() =>

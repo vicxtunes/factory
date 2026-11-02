@@ -17,15 +17,17 @@ import type { TenantScope } from "@repo/lib/tenancy/types";
 
 import { PayNow } from "@repo/ui/payments/PayNow";
 
-type Step = "size" | "details" | "review" | "pay" | "sent";
+import { useOrderPhotos } from "./order-photos";
+
+type Step = "size" | "photos" | "details" | "review" | "sending" | "pay" | "sent";
 /** The steps shown on the rail, by short name. */
-const RAIL: Partial<Record<Step, string>> = { size: "Size", details: "Details", review: "Review" };
+const RAIL: Partial<Record<Step, string>> = { size: "Size", photos: "Photos", details: "Details", review: "Review" };
 
 /**
  * "Order now" on a studio's product page, like Book now (./book-now.tsx):
- * the size and how many, who they are unless they're signed in at the
- * studio, a last look, and the order goes straight to the studio. Then they
- * may pay now by MTN / Airtel — in full or a deposit — or skip; the money
+ * the size and how many, the photos to make it from, who they are unless
+ * they're signed in at the studio, a last look, and the order goes straight
+ * to the studio with its photos. Only then may they pay now by MTN / Airtel — in full or a deposit — or skip; the money
  * goes to the studio's Business card. A new
  * client is signed in to their page on this phone for good; a number the
  * studio already knows gets their page from the studio.
@@ -64,21 +66,25 @@ export function OrderNow({
   const [paid, setPaid] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  const photos = useOrderPhotos(studio.slug);
 
   const size = sizes.find((p) => p.id === packageId) ?? null;
   const picked = sizes.find((p) => p.id === chosenId) ?? null;
   const count = Number(quantity) || 0;
   const price = (p: Offering, n = 1) => (showPrices && p.price > 0 ? formatAmount(scope, p.price * n) : "Price on request");
-  const steps: Step[] = signedIn ? ["size", "review"] : ["size", "details", "review"];
+  const steps: Step[] = signedIn ? ["size", "photos", "review"] : ["size", "photos", "details", "review"];
   const index = steps.indexOf(step);
   const next = () => setStep(steps[index + 1]);
   const back = () => setStep(steps[index - 1]);
 
   function begin() {
+    setOpen(true);
+    // An order placed whose photos didn't all go: carry on with them, never a second order.
+    if (step === "sending") return;
+    photos.reset();
     setPackageId(chosenId || packageId);
     setStep("size");
     setError(null);
-    setOpen(true);
   }
 
   function send() {
@@ -88,14 +94,25 @@ export function OrderNow({
       if (!res.ok) return setError(res.error);
       setResult(res.data);
       setPaid(0);
-      setStep(payOnline ? "pay" : "sent");
+      setStep("sending");
+      if (await photos.send(res.data.requestId)) setStep(payOnline ? "pay" : "sent");
+    });
+  }
+
+  /** Sends what didn't go. Some in is enough to carry on: the rest can follow from their page. */
+  function retry() {
+    if (!result) return;
+    start(async () => {
+      if (await photos.send(result.requestId)) setStep(payOnline ? "pay" : "sent");
     });
   }
 
   const titles: Record<Step, string> = {
     size: "Choose a size",
     details: "Your details",
+    photos: "Your photos",
     review: "Check your order",
+    sending: "Sending your photos",
     pay: "Pay now?",
     sent: "Order placed",
   };
@@ -143,6 +160,20 @@ export function OrderNow({
             </form>
           ) : null}
 
+          {step === "photos" ? (
+            <div className="space-y-3">
+              {photos.fields}
+              <div className="flex gap-2">
+                <Button type="button" variant="secondary" onClick={back}>
+                  Previous
+                </Button>
+                <Button type="button" className="flex-1" disabled={!photos.ready} onClick={next}>
+                  Continue
+                </Button>
+              </div>
+            </div>
+          ) : null}
+
           {step === "details" ? (
             <form
               className="space-y-3"
@@ -175,6 +206,7 @@ export function OrderNow({
                   ["Product", `${size.serviceName} · ${size.name}`],
                   ["How many", String(count)],
                   ["Price", price(size, count)],
+                  ["Photos", "Added"],
                   ...(signedIn ? [] : [["Name", name], ["Phone", phone]]),
                 ].map(([label, value]) => (
                   <div key={label} className="flex justify-between gap-3 p-3">
@@ -192,6 +224,26 @@ export function OrderNow({
                   Order now
                 </Button>
               </div>
+            </div>
+          ) : null}
+
+          {step === "sending" ? (
+            <div className="space-y-3">
+              <p className="text-sm text-muted">{pending ? "Your order is placed. Keep this open while your photos go…" : "Your order is placed, but not all your photos went."}</p>
+              {photos.fields}
+              {photos.error ? <p className="text-sm text-error-600 dark:text-error-400">{photos.error}</p> : null}
+              {pending ? null : (
+                <div className="flex gap-2">
+                  {photos.done > 0 ? (
+                    <Button type="button" variant="secondary" onClick={() => setStep(payOnline ? "pay" : "sent")}>
+                      Continue with {photos.done}
+                    </Button>
+                  ) : null}
+                  <Button type="button" className="flex-1" disabled={!photos.ready} onClick={retry}>
+                    Try again
+                  </Button>
+                </div>
+              )}
             </div>
           ) : null}
 

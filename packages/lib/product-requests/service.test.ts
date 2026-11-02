@@ -5,7 +5,7 @@ import type { InvoiceInput, QuotationInput } from "@repo/lib/billing/core";
 import type { Offering, ServiceWithPackages } from "@repo/lib/offerings/core";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
-import { MAX_OPEN_PRODUCT_REQUESTS, orderNowSchema, type ProductRequest } from "./core";
+import { MAX_OPEN_PRODUCT_REQUESTS, isOrderFileType, isOrderMediaPath, orderLinkSchema, orderNowSchema, type ProductRequest } from "./core";
 import { ProductRequestService } from "./service";
 
 // The orchestration against fakes of the modules it uses: what gets made,
@@ -66,7 +66,7 @@ function fakes() {
     openRequests: async (_s, customerId) => requests.filter((r) => r.customerId === customerId && r.status === "requested").length,
     request: async (_s, id) => requests.find((r) => r.id === id) ?? null,
     createRequest: async (_s, input) => {
-      const r: ProductRequest = { ...input, id: `r${requests.length + 1}`, customerName: "", status: "requested", quotationId: null, invoiceId: null, createdAt: "" };
+      const r: ProductRequest = { ...input, id: `r${requests.length + 1}`, customerName: "", status: "requested", quotationId: null, invoiceId: null, createdAt: "", media: [] };
       requests.push(r);
       return r.id;
     },
@@ -154,4 +154,24 @@ test("decline, and answered requests stay answered", async () => {
   await assert.rejects(service.decline(scope, requestId), /already been answered/);
   await assert.rejects(service.confirm(scope, requestId), /already been answered/);
   await assert.rejects(service.confirm(scope, "nope"), /no longer exists/);
+});
+
+test("what an order can be sent: photos and PDFs, never something a browser would run", () => {
+  for (const ok of ["image/jpeg", "image/png", "image/heic", "application/pdf"]) assert.equal(isOrderFileType(ok), true, ok);
+  for (const no of ["image/svg+xml", "text/html", "video/mp4", "", null, undefined]) assert.equal(isOrderFileType(no), false, String(no));
+});
+
+test("an upload is only saved on the order it was started for", () => {
+  const good = "product-requests/studio-a/r1/uuid-photo.jpg";
+  assert.equal(isOrderMediaPath(good, "studio-a", "r1"), true);
+  assert.equal(isOrderMediaPath(good, "studio-b", "r1"), false);
+  assert.equal(isOrderMediaPath(good, "studio-a", "r2"), false);
+  assert.equal(isOrderMediaPath("product-requests/studio-a/r1/", "studio-a", "r1"), false);
+  assert.equal(isOrderMediaPath("product-requests/studio-a/r1/../r2/x.jpg", "studio-a", "r1"), false);
+  assert.equal(isOrderMediaPath("product-requests/studio-a/r1/deep/x.jpg", "studio-a", "r1"), false);
+});
+
+test("a photo link must be a real web address", () => {
+  assert.equal(orderLinkSchema.safeParse("https://drive.google.com/x").success, true);
+  for (const no of ["javascript:alert(1)", "drive.google.com/x", "https://a b", ""]) assert.equal(orderLinkSchema.safeParse(no).success, false, no);
 });

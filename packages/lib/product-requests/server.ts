@@ -62,6 +62,9 @@ export const productRequests = {
   forQuotation: async (scope: TenantScope, quotationId: string) => (await store.list(scope, { quotationId }))[0] ?? null,
   /** A client's requests, newest first. */
   forCustomer: (scope: TenantScope, customerId: string) => store.list(scope, { customerId }),
+  /** The latest confirmed, for the studio to make them from what the client sent. */
+  confirmed: (scope: TenantScope) => store.list(scope, { status: "confirmed", limit: 30 }),
+  addMedia: store.addMedia,
 };
 
 // --- Requests sent from a device that isn't signed in -------------------------

@@ -4,6 +4,7 @@ import { ClientPortalHome } from "@repo/ui/studio-portal/ClientPortalHome";
 import { DirectionsButton } from "@repo/ui/maps/Directions";
 import { PortalSignOutButton } from "@repo/ui/studio-portal/PortalForms";
 
+import { AddOrderPhotos } from "../../order-photos";
 import { PayRequestButton } from "../../pay-request-button";
 import { CardGridSkeleton, TitleRowSkeleton } from "@repo/ui/skeletons/blocks";
 import { Loading } from "@repo/ui/skeletons/Loading";
@@ -160,6 +161,7 @@ async function Home({ at, me, slug }: { at: NonNullable<Awaited<ReturnType<typeo
           <DirectionsButton to={at.studio.location ?? { query: at.studio.address! }} name={at.studio.name} className="min-h-9 text-xs" />
         ) : null
       }
+      addPhotos={(order) => <AddOrderPhotos slug={slug} requestId={order.id} missing={!order.media.length} />}
       pay={payOnline ? (target) => <PayRequestButton slug={slug} phone={me.phone ?? null} scope={{ currency: scope.currency, locale: scope.locale }} {...target} /> : undefined}
       />
     </>

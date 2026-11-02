@@ -20,6 +20,7 @@ import { ProductPageView } from "../product-page-view";
 import { ClientShell } from "../shell";
 import { requireShowroomVisitor } from "../showroom-view";
 import { StudioShell } from "./studio-shell";
+import { AddOrderPhotos } from "../order-photos";
 
 // The client portal's top-level addresses, client.<domain>/{slug}: shared
 // between products and studios. The database never gives the two the same
@@ -158,6 +159,7 @@ async function StudioShowroom({
       albums={albums}
       bannerUrl={bannerUrl}
       signedInAs={signedInAs}
+      addPhotos={(order) => <AddOrderPhotos slug={slug} requestId={order.id} missing={!order.media.length} />}
       requests={requests}
       orderRequests={orderRequests}
     />
