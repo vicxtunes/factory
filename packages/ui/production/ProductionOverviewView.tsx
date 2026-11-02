@@ -15,7 +15,7 @@ import { useState } from "react";
 import { ExportButtons } from "@repo/ui/ExportButtons";
 import { PeriodPicker } from "@repo/ui/accounting/PeriodPicker";
 import { compactNumber, median, monthDate, monthLabel, percent } from "@repo/ui/charts/format";
-import { BubbleMap, ChartCard, GroupedColumns, RankBars, SERIES, TimeLines } from "@repo/ui/charts/kit";
+import { BubbleMap, CalendarHeat, ChartCard, GroupedColumns, RankBars, SERIES, ShadeLegend, TimeLines, Treemap } from "@repo/ui/charts/kit";
 import { useCurrencySymbol } from "@repo/lib/currency/CurrencySymbolProvider";
 import { formatMoney } from "@repo/lib/currency/format";
 import { formatQty } from "@repo/lib/production/core";
@@ -202,7 +202,11 @@ export function ProductionOverviewView({ view, productHref }: { view: Production
 
 /** A year of sales against cost, the margin month by month, and the product map. */
 function YearCharts({ view, money }: { view: ProductionOverview; money: (n: number) => string }) {
-  const { months, figures } = view;
+  const { months, figures, days, categories } = view;
+  const dayValues = new Map(days.map((d) => [d.date, d.revenue]));
+  const lastMonth = months[months.length - 1]?.month;
+  // The calendar runs from the first of the oldest month to the end of the current one.
+  const calendarTo = lastMonth ? new Date(Date.UTC(Number(lastMonth.slice(0, 4)), Number(lastMonth.slice(5, 7)), 0)).toISOString().slice(0, 10) : "";
   const sold = months.some((m) => m.revenue > 0);
   const mapped = figures.products.filter((p) => p.marginPercent !== null && p.revenue > 0);
   const monthRows = months.map((m) => ({
@@ -302,6 +306,53 @@ function YearCharts({ view, money }: { view: ProductionOverview; money: (n: numb
           />
         )}
       </ChartCard>
+      <div className="@5xl:col-span-2">
+        <ChartCard
+          title="Where the sales come from"
+          subtitle="This period, by category and product: a tile's size is its sales, its shade the margin (pale earns little)"
+          empty={categories.length ? null : "Nothing invoiced in this period."}
+          table={{
+            columns: [
+              { key: "category", label: "Category" },
+              { key: "name", label: "Product" },
+              { key: "sales", label: "Sales", align: "right" },
+              { key: "margin", label: "Margin", align: "right" },
+            ],
+            rows: categories.flatMap((c) =>
+              c.products.map((p) => ({ category: c.name, name: p.name, sales: money(p.revenue), margin: p.marginPercent === null ? "no recipe" : percent(p.marginPercent) })),
+            ),
+          }}
+        >
+          {(w) => (
+            <>
+              <Treemap
+                width={w}
+                groups={categories.map((c) => ({ key: c.name, label: c.name, items: c.products.map((p) => ({ key: p.key, label: p.name, value: p.revenue, shade: p.marginPercent })) }))}
+                format={money}
+                shadeOf={(m) => m / 100}
+                shadeLabel={(m) => (m === null ? "no recipe: margin unknown" : `${percent(m)} margin`)}
+              />
+              <ShadeLegend low="Low margin" high="High margin" none="No recipe" />
+            </>
+          )}
+        </ChartCard>
+      </div>
+      <div className="@5xl:col-span-2">
+        <ChartCard
+          title="Sales by day"
+          subtitle="The last 12 months, one square a day, by invoice date: busy seasons and quiet weeks"
+          empty={days.length ? null : "Nothing invoiced in the last 12 months."}
+          table={{
+            columns: [
+              { key: "date", label: "Day" },
+              { key: "sales", label: "Sales", align: "right" },
+            ],
+            rows: [...days].reverse().map((d) => ({ date: d.date, sales: money(d.revenue) })),
+          }}
+        >
+          {(w) => <CalendarHeat width={w} from={`${months[0]?.month}-01`} to={calendarTo} values={dayValues} format={money} />}
+        </ChartCard>
+      </div>
     </div>
   );
 }

@@ -303,7 +303,7 @@ export const COMPONENTS: RoomComponent[] = [
     category: "Flows",
     status: "live",
     source: "packages/ui/production/ProductionOverviewView.tsx",
-    summary: "For a period: gross profit (orange), production cost, margin and materials used, each against the period before; how the cost is known; a year of sales against cost (grouped columns), margin by month (line), a product map (sales against margin, bubble = units, four quadrants saying what to do); products by profit with Excel/PDF export; wastage and materials used as ranked bars. Every chart has a hover readout and a table view.",
+    summary: "For a period: gross profit (orange), production cost, margin and materials used, each against the period before; how the cost is known; a year of sales against cost (grouped columns), margin by month (line), a product map (sales against margin, bubble = units, four quadrants saying what to do), where the sales come from (treemap: category → product, size = sales, shade = margin), sales by day (calendar heatmap); products by profit with Excel/PDF export; wastage and materials used as ranked bars. Every chart has a hover readout and a table view.",
     examples: [{ title: "This month", file: "production/overview.tsx", Demo: ProductionOverviewExample }],
   },
   {

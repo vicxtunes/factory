@@ -9,8 +9,9 @@
 import Link from "next/link";
 
 import { dayLabel } from "@repo/ui/charts/format";
-import { ChartCard, RankBars, SERIES, TimeLines } from "@repo/ui/charts/kit";
-import { formatHours, type SpeedFigures } from "@repo/lib/production/core";
+import { ChartCard, FlowDiagram, MatrixHeat, RankBars, SERIES, TimeLines } from "@repo/ui/charts/kit";
+import { formatHours } from "@repo/lib/production/core";
+import type { SpeedView } from "@repo/lib/production/service";
 
 const WINDOWS = [30, 90, 180];
 
@@ -27,7 +28,7 @@ function Stat({ label, value, hint, tone }: { label: string; value: string; hint
 
 const day = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
 
-export function SpeedBoard({ view, today, basePath }: { view: SpeedFigures & { days: number }; today: string; basePath: string }) {
+export function SpeedBoard({ view, today, basePath }: { view: SpeedView; today: string; basePath: string }) {
   const days = (h: number) => Math.round((h / 24) * 10) / 10;
   const stages = view.stages.filter((s) => s.items > 0);
   const slowest = view.stages.reduce<(typeof view.stages)[number] | null>((a, s) => (s.median !== null && (!a || (s.median ?? 0) > (a.median ?? 0)) ? s : a), null);
@@ -81,6 +82,23 @@ export function SpeedBoard({ view, today, basePath }: { view: SpeedFigures & { d
       ) : null}
 
       <div className="grid items-start gap-4 @5xl:grid-cols-2">
+        <div className="@5xl:col-span-2">
+          <ChartCard
+            title="How items move"
+            subtitle="Every item ordered in this window, step by step; grey ends are items still stuck before the next step"
+            empty={view.flow.length ? null : "No items in this window yet."}
+            table={{
+              columns: [
+                { key: "from", label: "From" },
+                { key: "to", label: "To" },
+                { key: "items", label: "Items", align: "right" },
+              ],
+              rows: view.flow.map((l) => ({ from: l.from, to: l.to, items: l.items })),
+            }}
+          >
+            {(w) => <FlowDiagram width={w} links={view.flow} unit="items" />}
+          </ChartCard>
+        </div>
         <ChartCard
           title="Where items wait"
           subtitle="The middle time in each stage, in the order an item goes through them"
@@ -129,6 +147,28 @@ export function SpeedBoard({ view, today, basePath }: { view: SpeedFigures & { d
           )}
         </ChartCard>
 
+        <div className="@5xl:col-span-2">
+          <ChartCard
+            title="When orders arrive"
+            subtitle="Orders placed in this window, by weekday and hour: plan people for the busy hours"
+            empty={view.arrivals.flat().some((n) => n > 0) ? null : "No orders in this window yet."}
+            table={{
+              columns: [{ key: "day", label: "Day" }, ...Array.from({ length: 24 }, (_, h) => ({ key: String(h), label: `${h}h`, align: "right" as const }))],
+              rows: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d, i) => ({ day: d, ...Object.fromEntries(view.arrivals[i].map((n, h) => [String(h), n])) })),
+            }}
+          >
+            {(w) => (
+              <MatrixHeat
+                width={w}
+                rows={["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]}
+                columns={Array.from({ length: 24 }, (_, h) => String(h))}
+                values={view.arrivals}
+                format={(n) => `${n} ${n === 1 ? "order" : "orders"}`}
+                columnLabel={(c) => `${c.padStart(2, "0")}h`}
+              />
+            )}
+          </ChartCard>
+        </div>
         <ChartCard
           title="Slowest products"
           subtitle="The middle time from order to ready"

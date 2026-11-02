@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { formatHours, lateness, leadHours, speedFigures, stageHours, type ItemJourney } from "./index";
+import { arrivals, formatHours, itemFlow, lateness, leadHours, speedFigures, stageHours, type ItemJourney } from "./index";
 
 const dayOf = (iso: string) => iso.slice(0, 10);
 
@@ -65,4 +65,30 @@ test("durations read plainly", () => {
   assert.equal(formatHours(6), "6 h");
   assert.equal(formatHours(60), "2.5 days");
   assert.equal(formatHours(null), "—");
+});
+
+test("orders arrive by weekday and hour, each order once", () => {
+  const grid = arrivals(
+    [j({ itemId: "a", orderNo: "1" }), j({ itemId: "b", orderNo: "1" }), j({ itemId: "c", orderNo: "2", placedAt: "2026-10-02T15:30:00Z" })],
+    (iso) => ({ weekday: (new Date(iso).getUTCDay() + 6) % 7, hour: new Date(iso).getUTCHours() }),
+  );
+  // 1 Oct 2026 is a Thursday (3), 2 Oct a Friday (4).
+  assert.equal(grid[3][8], 1);
+  assert.equal(grid[4][15], 1);
+  assert.equal(grid.flat().reduce((a, b) => a + b, 0), 2);
+});
+
+test("the flow: designer or straight, then each step or stuck before it; a jumped status still counts", () => {
+  const links = itemFlow([
+    j({ itemId: "done" }),
+    j({ itemId: "designed", toFactoryAt: "2026-10-01T20:00:00Z", inProductionAt: null, checkAt: null, readyAt: null }),
+    j({ itemId: "jumped", inProductionAt: null, checkAt: null }),
+    j({ itemId: "new", releasedAt: null, inProductionAt: null, checkAt: null, readyAt: null }),
+  ]);
+  const get = (from: string, to: string) => links.find((l) => l.from === from && l.to === to)?.items ?? 0;
+  assert.equal(get("Ordered", "Straight to factory"), 2);
+  assert.equal(get("Ordered", "Designer"), 1);
+  assert.equal(get("Ordered", "Not released yet"), 1);
+  assert.equal(get("Designer", "Still waiting to start"), 1);
+  assert.equal(get("Quality check", "Ready"), 2);
 });

@@ -168,3 +168,65 @@ export function formatHours(h: number | null): string {
   if (h < 48) return `${Math.round(h * 10) / 10} h`;
   return `${Math.round((h / 24) * 10) / 10} days`;
 }
+
+/**
+ * When orders arrive: a count per weekday (0 = Monday) and hour (0–23),
+ * each order once. `placedAt` turns an instant into the business's local
+ * weekday and hour.
+ */
+export function arrivals(journeys: ItemJourney[], local: (iso: string) => { weekday: number; hour: number }): number[][] {
+  const grid = Array.from({ length: 7 }, () => Array<number>(24).fill(0));
+  const seen = new Set<string>();
+  for (const j of journeys) {
+    if (seen.has(j.orderNo)) continue;
+    seen.add(j.orderNo);
+    const { weekday, hour } = local(j.placedAt);
+    grid[weekday][hour] += 1;
+  }
+  return grid;
+}
+
+export interface FlowLink {
+  from: string;
+  to: string;
+  items: number;
+}
+
+/**
+ * How items moved through production: from the order, through the designer
+ * or straight to the factory, into production, quality check and ready; the
+ * ones that haven't moved on end in a "still …" step. A later step implies
+ * the earlier ones (a status jumped by hand still counts as having passed them).
+ */
+export function itemFlow(journeys: ItemJourney[]): FlowLink[] {
+  const counts = new Map<string, number>();
+  const add = (from: string, to: string) => counts.set(`${from}→${to}`, (counts.get(`${from}→${to}`) ?? 0) + 1);
+  for (const j of journeys) {
+    const ready = !!j.readyAt;
+    const checked = ready || !!j.checkAt;
+    const made = checked || !!j.inProductionAt;
+    const designed = !!j.toFactoryAt;
+    const released = made || designed || !!j.releasedAt;
+    if (!released) {
+      add("Ordered", "Not released yet");
+      continue;
+    }
+    const route = designed ? "Designer" : "Straight to factory";
+    add("Ordered", route);
+    if (!made) {
+      add(route, "Still waiting to start");
+      continue;
+    }
+    add(route, "In production");
+    if (!checked) {
+      add("In production", "Still being made");
+      continue;
+    }
+    add("In production", "Quality check");
+    add("Quality check", ready ? "Ready" : "Still in check");
+  }
+  return [...counts].map(([k, items]) => {
+    const [from, to] = k.split("→");
+    return { from, to, items };
+  });
+}

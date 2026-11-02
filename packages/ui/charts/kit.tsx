@@ -10,7 +10,9 @@
 // Charts lay out by their card's own width (ResizeObserver), not the screen's.
 
 import { extent, max, min } from "d3-array";
+import { hierarchy, treemap, treemapSquarify } from "d3-hierarchy";
 import { scaleBand, scaleLinear, scaleSqrt, scaleTime } from "d3-scale";
+import { sankey, sankeyLinkHorizontal, type SankeyLink, type SankeyNode } from "d3-sankey";
 import { curveMonotoneX, line as d3line } from "d3-shape";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
@@ -152,7 +154,7 @@ export interface TipRow {
   color?: string;
 }
 
-function Tip({ x, y, width, title, rows }: { x: number; y: number; width: number; title: string; rows: TipRow[] }) {
+export function Tip({ x, y, width, title, rows }: { x: number; y: number; width: number; title: string; rows: TipRow[] }) {
   const w = 240;
   const left = Math.min(Math.max(x - w / 2, 0), Math.max(width - w, 0));
   return (
@@ -608,6 +610,393 @@ export function BubbleMap({
             { label: yLabel, value: yFormat(hovered.y) },
             { label: "", value: sizeLabel(hovered.size) },
           ]}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * A one-hue sequential shade for magnitude (0..1): the series colour from a
+ * faint wash to full strength, so it works on both surfaces. Text on a tile
+ * flips to white once the shade is strong enough.
+ */
+function shade(t: number, color: string = SERIES[0]) {
+  const clamped = Math.max(0, Math.min(1, t));
+  return { fill: color, opacity: 0.12 + 0.88 * clamped, ink: clamped > 0.75 ? "#ffffff" : "var(--foreground)" };
+}
+
+/** A legend strip for a shade: low to high, with its two end labels. */
+export function ShadeLegend({ low, high, color = SERIES[0], none }: { low: string; high: string; color?: string; none?: string }) {
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted">
+      <span>{low}</span>
+      <span className="flex h-2.5 w-28 overflow-hidden rounded-full" aria-hidden>
+        {[0, 0.25, 0.5, 0.75, 1].map((t) => (
+          <span key={t} className="flex-1" style={{ background: color, opacity: 0.12 + 0.88 * t }} />
+        ))}
+      </span>
+      <span>{high}</span>
+      {none ? (
+        <span className="ml-2 flex items-center gap-1.5">
+          <span aria-hidden className="size-2.5 rounded-[3px]" style={{ background: "var(--viz-grid)" }} />
+          {none}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * A treemap: groups (categories) split into their items (products); a tile's
+ * area is its value, its shade a second measure (e.g. margin; null = unknown,
+ * drawn grey). Tiles big enough carry their name and value; every tile has a
+ * tooltip. 2px surface gaps between tiles.
+ */
+export function Treemap({
+  width,
+  groups,
+  format,
+  shadeOf,
+  shadeLabel,
+  height = 320,
+}: {
+  width: number;
+  groups: { key: string; label: string; items: { key: string; label: string; value: number; shade: number | null }[] }[];
+  format: (n: number) => string;
+  /** The shade's 0..1 position for a value (e.g. margin 0–100% → 0..1). */
+  shadeOf: (shade: number) => number;
+  shadeLabel: (shade: number | null) => string;
+  height?: number;
+}) {
+  const [hover, setHover] = useState<string | null>(null);
+  type Leaf = { key: string; label: string; value: number; shade: number | null; group: string };
+  type Node = { children?: (Node | Leaf)[]; key: string; label: string };
+  const data: Node = {
+    key: "root",
+    label: "",
+    children: groups.map((g) => ({ key: g.key, label: g.label, children: g.items.filter((i) => i.value > 0).map((i) => ({ ...i, group: g.label })) })),
+  };
+  const root = treemap<Node | Leaf>()
+    .size([width, height])
+    .paddingInner(2)
+    .paddingTop((n) => (n.depth === 1 ? 18 : 0))
+    .tile(treemapSquarify)(
+    hierarchy<Node | Leaf>(data, (d) => ("children" in d ? d.children : undefined))
+      .sum((d) => ("value" in d ? d.value : 0))
+      .sort((a, b) => (b.value ?? 0) - (a.value ?? 0)),
+  );
+  const leaves = root.leaves();
+  const hovered = leaves.find((l) => (l.data as Leaf).key === hover);
+  const total = root.value ?? 0;
+
+  return (
+    <div className="relative">
+      <svg width={width} height={height} role="img" aria-label="Treemap" className="block">
+        {root.children?.map((g) => (
+          <text key={g.data.key} x={g.x0 + 2} y={g.y0 + 12} className="fill-muted text-[11px] font-semibold uppercase tracking-wide">
+            {g.x1 - g.x0 > 70 ? `${g.data.label} · ${Math.round(((g.value ?? 0) / total) * 100)}%` : ""}
+          </text>
+        ))}
+        {leaves.map((l) => {
+          const d = l.data as Leaf;
+          const w = l.x1 - l.x0;
+          const h = l.y1 - l.y0;
+          const sh = d.shade === null ? null : shade(shadeOf(d.shade));
+          const ink = sh ? sh.ink : "var(--foreground)";
+          return (
+            <g key={d.key} opacity={hover === null || hover === d.key ? 1 : 0.6}>
+              <rect x={l.x0} y={l.y0} width={w} height={h} rx={4} fill={sh ? sh.fill : "var(--viz-grid)"} fillOpacity={sh ? sh.opacity : 1} />
+              {w > 64 && h > 34 ? (
+                <>
+                  <text x={l.x0 + 6} y={l.y0 + 16} fill={ink} className="text-[12px] font-medium">
+                    {d.label.length > Math.floor(w / 7) ? `${d.label.slice(0, Math.max(3, Math.floor(w / 7) - 1))}…` : d.label}
+                  </text>
+                  <text x={l.x0 + 6} y={l.y0 + 31} fill={ink} className="text-[11px] tnum" opacity={0.85}>
+                    {format(d.value)}
+                  </text>
+                </>
+              ) : null}
+              <rect
+                x={l.x0}
+                y={l.y0}
+                width={w}
+                height={h}
+                fill="transparent"
+                tabIndex={0}
+                aria-label={`${d.label} (${d.group}): ${format(d.value)}, ${shadeLabel(d.shade)}`}
+                onPointerEnter={() => setHover(d.key)}
+                onPointerLeave={() => setHover(null)}
+                onFocus={() => setHover(d.key)}
+                onBlur={() => setHover(null)}
+              />
+            </g>
+          );
+        })}
+      </svg>
+      {hovered ? (
+        <Tip
+          x={(hovered.x0 + hovered.x1) / 2}
+          y={hovered.y0 + 4}
+          width={width}
+          title={`${(hovered.data as Leaf).label} · ${(hovered.data as Leaf).group}`}
+          rows={[
+            { label: `${Math.round(((hovered.value ?? 0) / total) * 1000) / 10}% of sales`, value: format(hovered.value ?? 0) },
+            { label: "", value: shadeLabel((hovered.data as Leaf).shade) },
+          ]}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/**
+ * A calendar heatmap: one square per day for a run of weeks (columns,
+ * Monday on top), shaded by the day's value; months named along the top.
+ */
+export function CalendarHeat({
+  width,
+  from,
+  to,
+  values,
+  format,
+}: {
+  width: number;
+  /** First and last day shown (yyyy-mm-dd). */
+  from: string;
+  to: string;
+  values: Map<string, number>;
+  format: (n: number) => string;
+}) {
+  const [hover, setHover] = useState<string | null>(null);
+  const start = new Date(`${from}T00:00:00Z`);
+  start.setUTCDate(start.getUTCDate() - ((start.getUTCDay() + 6) % 7));
+  const end = new Date(`${to}T00:00:00Z`);
+  const days: { date: string; week: number; weekday: number }[] = [];
+  for (let d = new Date(start), i = 0; d <= end; d.setUTCDate(d.getUTCDate() + 1), i++) {
+    days.push({ date: d.toISOString().slice(0, 10), week: Math.floor(i / 7), weekday: i % 7 });
+  }
+  const weeks = (days[days.length - 1]?.week ?? 0) + 1;
+  const left = 30;
+  const top = 16;
+  const cell = Math.max(6, Math.min(16, Math.floor((width - left) / weeks) - 2));
+  const gap = 2;
+  const height = top + 7 * (cell + gap);
+  const peak = max([...values.values()]) ?? 1;
+  const hovered = days.find((d) => d.date === hover);
+
+  return (
+    <div className="relative">
+      <svg width={Math.min(width, left + weeks * (cell + gap))} height={height} role="img" aria-label="Sales by day" className="block">
+        {[0, 2, 4].map((wd) => (
+          <text key={wd} x={0} y={top + wd * (cell + gap) + cell - 1} className="fill-muted text-[10px]">
+            {WEEKDAYS[wd]}
+          </text>
+        ))}
+        {days
+          .filter((d) => d.date.endsWith("-01") || (d.week === 0 && d.weekday === 0))
+          .map((d) => (
+            <text key={`m-${d.date}`} x={left + d.week * (cell + gap)} y={10} className="fill-muted text-[10px]">
+              {MONTH_NAMES[Number(d.date.slice(5, 7)) - 1]}
+            </text>
+          ))}
+        {days.map((d) => {
+          const v = values.get(d.date) ?? 0;
+          const outside = d.date < from || d.date > to;
+          const sh = shade(peak ? v / peak : 0);
+          return (
+            <rect
+              key={d.date}
+              x={left + d.week * (cell + gap)}
+              y={top + d.weekday * (cell + gap)}
+              width={cell}
+              height={cell}
+              rx={2}
+              fill={outside ? "transparent" : v ? sh.fill : "var(--viz-grid)"}
+              fillOpacity={v ? sh.opacity : 1}
+              stroke={hover === d.date ? "var(--foreground)" : "none"}
+              strokeWidth={1}
+              tabIndex={outside ? -1 : 0}
+              aria-label={`${d.date}: ${format(v)}`}
+              onPointerEnter={() => !outside && setHover(d.date)}
+              onPointerLeave={() => setHover(null)}
+              onFocus={() => setHover(d.date)}
+              onBlur={() => setHover(null)}
+            />
+          );
+        })}
+      </svg>
+      {hovered ? (
+        <Tip
+          x={left + hovered.week * (cell + gap)}
+          y={top + hovered.weekday * (cell + gap)}
+          width={width}
+          title={new Date(`${hovered.date}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })}
+          rows={[{ label: "sales", value: format(values.get(hovered.date) ?? 0) }]}
+        />
+      ) : null}
+      <ShadeLegend low="Less" high="More" none="None" />
+    </div>
+  );
+}
+
+/** A grid heatmap: rows × columns of counts (e.g. weekday × hour), shaded by value. */
+export function MatrixHeat({
+  width,
+  rows,
+  columns,
+  values,
+  format,
+  columnLabel = (c) => c,
+}: {
+  width: number;
+  rows: string[];
+  columns: string[];
+  values: number[][];
+  format: (n: number) => string;
+  columnLabel?: (c: string, i: number) => string;
+}) {
+  const [hover, setHover] = useState<[number, number] | null>(null);
+  const left = 34;
+  const top = 18;
+  const gap = 2;
+  const cell = Math.max(8, Math.floor((width - left) / columns.length) - gap);
+  const rowH = Math.min(cell, 22);
+  const height = top + rows.length * (rowH + gap);
+  const peak = max(values.flat()) ?? 1;
+  const every = cell < 18 ? 3 : 1;
+
+  return (
+    <div className="relative">
+      <svg width={width} height={height} role="img" aria-label="Heatmap" className="block">
+        {columns.map((c, i) =>
+          i % every === 0 ? (
+            <text key={c} x={left + i * (cell + gap) + cell / 2} y={11} textAnchor="middle" className="fill-muted text-[10px] tnum">
+              {columnLabel(c, i)}
+            </text>
+          ) : null,
+        )}
+        {rows.map((r, ri) => (
+          <g key={r}>
+            <text x={0} y={top + ri * (rowH + gap) + rowH / 2} dy="0.32em" className="fill-muted text-[11px]">
+              {r}
+            </text>
+            {columns.map((c, ci) => {
+              const v = values[ri]?.[ci] ?? 0;
+              const sh = shade(peak ? v / peak : 0);
+              const on = hover?.[0] === ri && hover?.[1] === ci;
+              return (
+                <rect
+                  key={c}
+                  x={left + ci * (cell + gap)}
+                  y={top + ri * (rowH + gap)}
+                  width={cell}
+                  height={rowH}
+                  rx={3}
+                  fill={v ? sh.fill : "var(--viz-grid)"}
+                  fillOpacity={v ? sh.opacity : 1}
+                  stroke={on ? "var(--foreground)" : "none"}
+                  tabIndex={0}
+                  aria-label={`${r} ${c}: ${format(v)}`}
+                  onPointerEnter={() => setHover([ri, ci])}
+                  onPointerLeave={() => setHover(null)}
+                  onFocus={() => setHover([ri, ci])}
+                  onBlur={() => setHover(null)}
+                />
+              );
+            })}
+          </g>
+        ))}
+      </svg>
+      {hover ? (
+        <Tip
+          x={left + hover[1] * (cell + gap) + cell / 2}
+          y={top + hover[0] * (rowH + gap)}
+          width={width}
+          title={`${rows[hover[0]]}, ${columnLabel(columns[hover[1]], hover[1])}`}
+          rows={[{ label: "", value: format(values[hover[0]]?.[hover[1]] ?? 0) }]}
+        />
+      ) : null}
+      <ShadeLegend low="Fewer" high="More" none="None" />
+    </div>
+  );
+}
+
+/**
+ * A flow diagram (Sankey): how many things moved from step to step; a band's
+ * thickness is its count. Steps whose name starts with "Still" or "Not" are
+ * where things are stuck, drawn grey; the rest in the series colour.
+ */
+export function FlowDiagram({ width, links, unit, height = 300 }: { width: number; links: { from: string; to: string; items: number }[]; unit: string; height?: number }) {
+  const [hover, setHover] = useState<number | null>(null);
+  const names = [...new Set(links.flatMap((l) => [l.from, l.to]))];
+  type N = { name: string };
+  type L = { source: number; target: number; value: number };
+  const graph = sankey<N, L>()
+    .nodeWidth(10)
+    .nodePadding(14)
+    .extent([
+      [1, 8],
+      [width - 1, height - 8],
+    ])({
+    nodes: names.map((name) => ({ name })),
+    links: links.filter((l) => l.items > 0).map((l) => ({ source: names.indexOf(l.from), target: names.indexOf(l.to), value: l.items })),
+  });
+  const stuck = (n: string) => /^(Still|Not)\b/.test(n);
+  const node = (n: SankeyNode<N, L>) => n as SankeyNode<N, L> & { x0: number; x1: number; y0: number; y1: number; value: number };
+  const hovered = hover === null ? null : (graph.links[hover] as SankeyLink<N, L> & { source: SankeyNode<N, L>; target: SankeyNode<N, L>; width: number });
+
+  return (
+    <div className="relative">
+      <svg width={width} height={height} role="img" aria-label="Flow" className="block">
+        {graph.links.map((l, i) => {
+          const target = node(l.target as SankeyNode<N, L>);
+          return (
+            <path
+              key={i}
+              d={sankeyLinkHorizontal()(l) ?? ""}
+              fill="none"
+              stroke={stuck(target.name) ? "var(--viz-axis)" : SERIES[2]}
+              strokeOpacity={hover === null ? 0.35 : hover === i ? 0.6 : 0.15}
+              strokeWidth={Math.max(1, (l as { width?: number }).width ?? 1)}
+              tabIndex={0}
+              aria-label={`${node(l.source as SankeyNode<N, L>).name} to ${target.name}: ${l.value} ${unit}`}
+              onPointerEnter={() => setHover(i)}
+              onPointerLeave={() => setHover(null)}
+              onFocus={() => setHover(i)}
+              onBlur={() => setHover(null)}
+            />
+          );
+        })}
+        {graph.nodes.map((raw) => {
+          const n = node(raw);
+          const rightSide = n.x0 > width / 2;
+          return (
+            <g key={n.name}>
+              <rect x={n.x0} y={n.y0} width={n.x1 - n.x0} height={Math.max(1, n.y1 - n.y0)} rx={2} fill={stuck(n.name) ? "var(--viz-axis)" : SERIES[2]} />
+              <text
+                x={rightSide ? n.x0 - 6 : n.x1 + 6}
+                y={(n.y0 + n.y1) / 2}
+                dy="0.32em"
+                textAnchor={rightSide ? "end" : "start"}
+                className={`text-[11px] ${stuck(n.name) ? "fill-muted" : "fill-foreground font-medium"}`}
+              >
+                {n.name} <tspan className="fill-muted tnum">{n.value}</tspan>
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+      {hovered ? (
+        <Tip
+          x={(node(hovered.source).x1 + node(hovered.target).x0) / 2}
+          y={((node(hovered.source).y0 + node(hovered.source).y1) / 2 + (node(hovered.target).y0 + node(hovered.target).y1) / 2) / 2}
+          width={width}
+          title={`${node(hovered.source).name} → ${node(hovered.target).name}`}
+          rows={[{ label: unit, value: String(hovered.value) }]}
         />
       ) : null}
     </div>

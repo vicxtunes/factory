@@ -10,6 +10,8 @@ import {
   lenderAccounts,
   mergeUsage,
   monthlyFigures,
+  arrivals,
+  itemFlow,
   ordersWhere,
   periodFigures,
   speedFigures,
@@ -17,6 +19,7 @@ import {
   wastageByMaterial,
   weOwe,
   type CostingCategory,
+  type FlowLink,
   type LenderAccount,
   type LenderDetail,
   type Loan,
@@ -111,6 +114,10 @@ export interface ProductionOverview {
   stockValue: number;
   /** The last 12 months, oldest first, whatever the period. */
   months: MonthFigures[];
+  /** Each day's sales over the last 12 months (yyyy-mm-dd), days with none left out. */
+  days: { date: string; revenue: number }[];
+  /** The period's sales by category and product, with each product's margin (null: no recipe). */
+  categories: { name: string; products: { key: string; name: string; revenue: number; marginPercent: number | null }[] }[];
 }
 
 /** How one product is doing. */
@@ -128,6 +135,35 @@ export interface ProductPerformance {
 }
 
 const TREND_MONTHS = 12;
+
+/** Each day's sales (by invoice date, in the business's zone), oldest first. */
+function dailySales(orders: SoldOrder[], timeZone: string) {
+  const by = new Map<string, number>();
+  for (const o of orders) {
+    const d = localDate(o.issuedAt, timeZone);
+    by.set(d, (by.get(d) ?? 0) + o.total);
+  }
+  return [...by].sort(([a], [b]) => a.localeCompare(b)).map(([date, revenue]) => ({ date, revenue }));
+}
+
+/** The period's products grouped by their catalog category (products not in the catalog: "Other"). */
+function byCategory(figures: PeriodFigures, catalog: CostingCategory[]) {
+  const categoryOf = new Map(catalog.flatMap((c) => c.products.map((p) => [p.id, c.name] as const)));
+  const by = new Map<string, ProductionOverview["categories"][number]["products"]>();
+  for (const p of figures.products) {
+    if (p.revenue <= 0) continue;
+    const name = categoryOf.get(p.key) ?? "Other";
+    by.set(name, [...(by.get(name) ?? []), { key: p.key, name: p.name, revenue: p.revenue, marginPercent: p.marginPercent }]);
+  }
+  return [...by].map(([name, products]) => ({ name, products }));
+}
+
+/** An instant's weekday (0 = Monday) and hour in a time zone. */
+function weekdayHour(iso: string, timeZone: string): { weekday: number; hour: number } {
+  const parts = new Intl.DateTimeFormat("en-GB", { timeZone, weekday: "short", hour: "numeric", hourCycle: "h23" }).formatToParts(new Date(iso));
+  const wd = parts.find((p) => p.type === "weekday")?.value ?? "Mon";
+  return { weekday: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].indexOf(wd), hour: Number(parts.find((p) => p.type === "hour")?.value ?? 0) };
+}
 
 /** Production's overview for a period, and how each product is doing: sales and what making them cost; materials used; wastage. */
 export function createProductionOverview(store: ProductionStore, clock: () => Date = () => new Date()) {
@@ -171,6 +207,8 @@ export function createProductionOverview(store: ProductionStore, clock: () => Da
         wastage: wastageByMaterial(lines),
         stockValue: materials.reduce((s, m) => s + Math.max(m.stockValue, 0), 0),
         months: monthlyFigures(t.orders, t.months, t.monthOf, await costs(scope, t.orders), recipes, materials, names),
+        days: dailySales(t.orders, scope.timeZone),
+        categories: byCategory(current, catalog),
       };
     },
 
@@ -245,13 +283,25 @@ export function createProductionOverview(store: ProductionStore, clock: () => Da
   };
 }
 
+export interface SpeedView extends SpeedFigures {
+  days: number;
+  /** Orders placed per weekday (0 = Monday) and hour. */
+  arrivals: number[][];
+  flow: FlowLink[];
+}
+
 /** How fast items go from the client's order to ready, over the last `days` days of orders. */
 export function createSpeed(store: ProductionStore, clock: () => Date = () => new Date()) {
   return {
-    async view(scope: TenantScope, days: number): Promise<SpeedFigures & { days: number }> {
+    async view(scope: TenantScope, days: number): Promise<SpeedView> {
       const now = clock();
       const journeys = await store.journeys(scope, new Date(now.getTime() - days * 86_400_000).toISOString());
-      return { ...speedFigures(journeys, localDate(now, scope.timeZone), (iso) => localDate(iso, scope.timeZone)), days };
+      return {
+        ...speedFigures(journeys, localDate(now, scope.timeZone), (iso) => localDate(iso, scope.timeZone)),
+        days,
+        arrivals: arrivals(journeys, (iso) => weekdayHour(iso, scope.timeZone)),
+        flow: itemFlow(journeys),
+      };
     },
   };
 }

@@ -1,5 +1,4 @@
-import type { ProductPerformance, ProductionOverview, QueuedItem } from "@repo/lib/production/service";
-import type { SpeedFigures } from "@repo/lib/production/core";
+import type { ProductPerformance, ProductionOverview, QueuedItem, SpeedView } from "@repo/lib/production/service";
 import { productCosts, type CostingCategory, type ProductionRecord, type LenderAccount, type LenderDetail, type Loan, type Material, type MaterialDetail, type RecipeLine } from "@repo/lib/production/core";
 
 // Sample materials for the Production examples.
@@ -175,6 +174,20 @@ export const OVERVIEW: ProductionOverview = {
     { materialId: "m4", name: "Gift box (large)", unit: "pc", qty: -1, value: -2_000 },
   ],
   stockValue: 488_520,
+  categories: [
+    { name: "Photo books", products: [{ key: "book", name: "Layflat photo book", revenue: 4_050_000, marginPercent: 70.1 }, { key: "mini", name: "Mini album", revenue: 380_000, marginPercent: 48 }] },
+    { name: "Frames & boards", products: [{ key: "crystal", name: "Crystal board", revenue: 1_190_000, marginPercent: 65.9 }, { key: "frame", name: "Wooden frame", revenue: 820_000, marginPercent: 54.9 }, { key: "canvas", name: "Canvas print", revenue: 410_000, marginPercent: 22 }] },
+    { name: "Gifts", products: [{ key: "mug", name: "Photo mug", revenue: 360_000, marginPercent: null }, { key: "tee", name: "T-shirt print", revenue: 140_000, marginPercent: 35 }] },
+  ],
+  // Every day of the year: weekends quieter, December and August busy.
+  days: Array.from({ length: 366 }, (_, i) => {
+    const d = new Date(Date.UTC(2025, 11, 1 + i));
+    const month = d.getUTCMonth();
+    const weekday = d.getUTCDay();
+    const season = month === 11 ? 2.2 : month === 7 ? 1.4 : month === 0 ? 0.6 : 1;
+    const revenue = weekday === 0 ? 0 : Math.round((120_000 + ((i * 7919) % 13) * 25_000) * season * (weekday === 6 ? 1.3 : 1));
+    return { date: d.toISOString().slice(0, 10), revenue };
+  }).filter((d) => d.date <= "2026-11-30" && d.revenue > 0),
   // A year of sales and cost: a December peak, a thin June when material prices jumped.
   months: [
     ["2025-12", 7_900_000, 2_380_000, 118],
@@ -244,8 +257,30 @@ export const BOOK_PERFORMANCE: ProductPerformance = {
 };
 
 // 90 days of speed: making is quick, items wait longest before work starts; two items late now.
-export const SPEED: SpeedFigures & { days: number } = {
+export const SPEED: SpeedView = {
   days: 90,
+  // Orders mostly come in on weekday mornings and after lunch, with a Saturday rush.
+  arrivals: Array.from({ length: 7 }, (_, d) =>
+    Array.from({ length: 24 }, (_, h) => {
+      if (h < 7 || h > 20) return 0;
+      const weekday = d < 5 ? 1 : d === 5 ? 1.4 : 0.3;
+      const peak = Math.exp(-((h - 10) ** 2) / 6) * 9 + Math.exp(-((h - 15) ** 2) / 5) * 6;
+      return Math.round(peak * weekday);
+    }),
+  ),
+  flow: [
+    { from: "Ordered", to: "Designer", items: 141 },
+    { from: "Ordered", to: "Straight to factory", items: 287 },
+    { from: "Ordered", to: "Not released yet", items: 9 },
+    { from: "Designer", to: "In production", items: 132 },
+    { from: "Designer", to: "Still waiting to start", items: 9 },
+    { from: "Straight to factory", to: "In production", items: 281 },
+    { from: "Straight to factory", to: "Still waiting to start", items: 6 },
+    { from: "In production", to: "Quality check", items: 409 },
+    { from: "In production", to: "Still being made", items: 4 },
+    { from: "Quality check", to: "Ready", items: 405 },
+    { from: "Quality check", to: "Still in check", items: 4 },
+  ],
   done: 412,
   leadMedian: 62,
   onTimePercent: 81.4,
