@@ -56,7 +56,7 @@ test("costs: recorded when there's a record, else the recipe's estimate, else un
   assert.equal(figures.costEstimated, 6_800);
   assert.equal(figures.revenueWithoutRecipe, 15_000);
   assert.equal(figures.revenue, 315_000);
-  assert.equal(figures.profit, 315_000 - 14_300);
+  assert.equal(figures.profit, 300_000 - 14_300, "the mug, with no recipe, isn't counted as profit");
   const [book, mug] = figures.products;
   assert.deepEqual([book.name, book.units, book.cost, book.estimated, book.marginPercent], ["Photo book", 2, 14_300, true, 95.2]);
   assert.deepEqual([mug.name, mug.noRecipe, mug.marginPercent], ["Mug", true, null]);
@@ -107,4 +107,11 @@ test("one product's lines keep their share of each order's total", () => {
   assert.equal(orders.length, 1);
   assert.equal(orders[0].total, 60_000);
   assert.deepEqual(orders[0].items.map((i) => i.itemId), ["a"]);
+});
+
+test("margin counts only sales whose cost is known; none known, no margin", () => {
+  const mug = { issuedAt: "", clientName: "", total: 15_000, items: [item({ itemId: "m", productId: "mug", product: "Mug", unitPrice: 15_000 })] };
+  assert.equal(periodFigures([mug], new Map(), new Map(), [], new Map()).marginPercent, null, "no recipe anywhere: not 100%");
+  const book = { issuedAt: "", clientName: "", total: 10_000, items: [item({ itemId: "b", productId: "book", product: "Book", unitPrice: 10_000 })] };
+  assert.equal(periodFigures([mug, book], new Map([["b", 4_000]]), new Map(), [], new Map()).marginPercent, 60, "the mug's sales left out");
 });

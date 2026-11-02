@@ -60,7 +60,7 @@ export function ProductionOverviewView({ view, productHref }: { view: Production
     units: p.units,
     sales: p.revenue,
     cost: p.cost,
-    profit: p.profit,
+    profit: p.noRecipe ? "" : p.profit,
     margin: p.marginPercent === null ? "" : `${p.marginPercent}%`,
     costFrom: p.noRecipe ? "no recipe" : p.estimated ? "partly recipe estimate" : "recorded usage",
   }));
@@ -70,7 +70,13 @@ export function ProductionOverviewView({ view, productHref }: { view: Production
       <PeriodPicker period={view.period} />
 
       <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-1 @4xl:mx-0 @4xl:grid @4xl:grid-cols-2 @7xl:grid-cols-4 @4xl:overflow-visible @4xl:px-0">
-        <Card tone="brand" title="Gross profit" value={money(f.profit)} delta={change(f.profit, before?.profit)} hint={`on ${money(f.revenue)} of sales`} />
+        <Card
+          tone="brand"
+          title="Gross profit"
+          value={money(f.profit)}
+          delta={change(f.profit, before?.profit)}
+          hint={f.revenueWithoutRecipe ? `on ${money(f.revenue - f.revenueWithoutRecipe)} of sales with a recipe` : `on ${money(f.revenue)} of sales`}
+        />
         <Card title="Production cost" value={money(f.cost)} delta={change(f.cost, before?.cost)} hint="what making what was sold cost" />
         <Card
           title="Margin"
@@ -85,7 +91,7 @@ export function ProductionOverviewView({ view, productHref }: { view: Production
           Cost from recorded usage {money(f.costRecorded)}, estimated from recipes {money(f.costEstimated)}
           {f.revenueWithoutRecipe > 0 ? (
             <span className="text-warning-600 dark:text-warning-500">
-              ; {money(f.revenueWithoutRecipe)} of sales have no recipe, so their cost isn&apos;t counted and the profit reads high
+              ; {money(f.revenueWithoutRecipe)} of sales have no recipe, so they&apos;re left out of the profit and margin until they get one
             </span>
           ) : null}
           .
@@ -139,12 +145,14 @@ export function ProductionOverviewView({ view, productHref }: { view: Production
                   {p.marginPercent === null ? "—" : `${p.marginPercent}%`}
                 </span>
                 <span className="col-span-2 text-xs text-muted tnum @3xl:col-span-1 @3xl:text-right @3xl:text-sm @3xl:text-foreground">
-                  <span className="@3xl:hidden">{p.units} sold · {money(p.revenue)} sales · {money(p.cost)} cost · {money(p.profit)} profit</span>
+                  <span className="@3xl:hidden">
+                    {p.units} sold · {money(p.revenue)} sales{p.noRecipe ? " · cost unknown" : ` · ${money(p.cost)} cost · ${money(p.profit)} profit`}
+                  </span>
                   <span className="hidden @3xl:inline">{p.units}</span>
                 </span>
                 <span className="hidden text-right tnum @3xl:block">{money(p.revenue)}</span>
-                <span className="hidden text-right tnum @3xl:block">{money(p.cost)}</span>
-                <span className={`hidden text-right tnum @3xl:block ${p.profit < 0 ? "text-error-600 dark:text-error-400" : ""}`}>{money(p.profit)}</span>
+                <span className="hidden text-right tnum @3xl:block">{p.noRecipe ? "—" : money(p.cost)}</span>
+                <span className={`hidden text-right tnum @3xl:block ${p.profit < 0 ? "text-error-600 dark:text-error-400" : ""}`}>{p.noRecipe ? "—" : money(p.profit)}</span>
               </li>
             ))}
           </ul>
