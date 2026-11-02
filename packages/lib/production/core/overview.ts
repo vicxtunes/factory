@@ -24,6 +24,9 @@ export interface SoldItem {
 export interface SoldOrder {
   /** The order's agreed total (orders.quoted_price), what Accounts counts. */
   total: number;
+  /** When its invoice was issued: when it counts as a sale. */
+  issuedAt: string;
+  clientName: string;
   items: SoldItem[];
 }
 
@@ -159,4 +162,51 @@ export function wastageByMaterial(
     by.set(l.materialId, f);
   }
   return [...by.values()].filter((f) => f.value !== 0 || f.qty !== 0).sort((a, b) => b.value - a.value);
+}
+
+/** One month's figures, for trends. */
+export interface MonthFigures {
+  /** "2026-10" */
+  month: string;
+  revenue: number;
+  cost: number;
+  profit: number;
+  marginPercent: number | null;
+  units: number;
+}
+
+/**
+ * The figures month by month (`months` as "yyyy-mm", oldest first; a month
+ * with no sales is all zeros). `monthOf` turns an instant into its month in
+ * the business's time zone.
+ */
+export function monthlyFigures(
+  orders: SoldOrder[],
+  months: string[],
+  monthOf: (instant: string) => string,
+  costs: Parameters<typeof periodFigures>[1],
+  recipes: Parameters<typeof periodFigures>[2],
+  materials: Parameters<typeof periodFigures>[3],
+  detailNames: Parameters<typeof periodFigures>[4],
+): MonthFigures[] {
+  const byMonth = new Map<string, SoldOrder[]>();
+  for (const o of orders) {
+    const m = monthOf(o.issuedAt);
+    byMonth.set(m, [...(byMonth.get(m) ?? []), o]);
+  }
+  return months.map((month) => {
+    const f = periodFigures(byMonth.get(month) ?? [], costs, recipes, materials, detailNames);
+    return { month, revenue: f.revenue, cost: f.cost, profit: f.profit, marginPercent: f.marginPercent, units: f.products.reduce((s, p) => s + p.units, 0) };
+  });
+}
+
+/** Only the lines that match, in orders that have any (their share of each order's total is kept). */
+export function ordersWhere(orders: SoldOrder[], keep: (item: SoldItem) => boolean): SoldOrder[] {
+  return orders.flatMap((o) => {
+    if (!o.items.some(keep)) return [];
+    const shares = shareRevenue(o);
+    const items = o.items.filter(keep);
+    const total = items.reduce((s, i) => s + (shares.get(i.itemId) ?? 0), 0);
+    return [{ ...o, total, items }];
+  });
 }

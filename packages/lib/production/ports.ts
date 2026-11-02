@@ -66,6 +66,8 @@ export interface ProductionStore {
   recordedCosts(scope: TenantScope, itemIds: string[]): Promise<Map<string, number>>;
   /** Materials taken off stock by production (usage net of voided records' reversals) between two local dates, inclusive. */
   materialsUsed(scope: TenantScope, dates: { from: string | null; to: string | null }): Promise<MaterialFigure[]>;
+  /** The lines of these items' live records. */
+  recordLinesOf(scope: TenantScope, itemIds: string[]): Promise<{ materialId: string; name: string; unit: string; expectedQty: number; actualQty: number; unitCost: number }[]>;
   /** The lines of live records made in [from, to). */
   recordLines(
     scope: TenantScope,

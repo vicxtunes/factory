@@ -4,7 +4,7 @@
 // material prices, its selling price, the profit and the margin. Products
 // whose cost depends on a detail (pages) show the cost per page instead of a
 // margin. Cards on a phone, a table from the container's 3xl; tap a product
-// to edit its recipe.
+// for how it's doing (or, without a recipe yet, to add one).
 
 import Link from "next/link";
 import { useState } from "react";
@@ -69,10 +69,10 @@ export function ProductCostsBoard({ products, basePath }: { products: ProductCos
               .filter((p) => p.categoryName === category)
               .map((p) => (
                 <li key={p.productId} className="border-b border-border last:border-b-0">
-                  <Link href={`${basePath}/${p.productId}`} className="block p-4 hover:bg-gray-50 active:bg-gray-50 dark:hover:bg-white/5 dark:active:bg-white/5">
+                  <Link href={`${basePath}/${p.productId}${p.hasRecipe ? "" : "/recipe"}`} className="block p-4 hover:bg-gray-50 active:bg-gray-50 dark:hover:bg-white/5 dark:active:bg-white/5">
                     <div className="flex items-baseline justify-between gap-3">
                       <p className="truncate font-medium">{p.name}</p>
-                      {p.hasRecipe ? <span className="shrink-0 text-xs text-muted">Edit recipe →</span> : <span className="shrink-0 text-xs font-medium text-brand-600">Add a recipe →</span>}
+                      {p.hasRecipe ? <span className="shrink-0 text-xs text-muted">How it&apos;s doing →</span> : <span className="shrink-0 text-xs font-medium text-brand-600">Add a recipe →</span>}
                     </div>
                     {p.hasRecipe ? (
                       <div className="mt-2 grid gap-1">

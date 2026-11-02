@@ -35,5 +35,5 @@ export default async function ProductionPage({ searchParams }: { searchParams: S
 async function Overview({ searchParams }: { searchParams: SearchParams }) {
   const [scope, params, catalog] = await Promise.all([resolveTenantScope(), searchParams, costingCatalog()]);
   const view = await productionOverview.view(scope, catalog, periodFrom(params));
-  return <ProductionOverviewView view={view} />;
+  return <ProductionOverviewView view={view} productHref="/dashboard/production/products" />;
 }

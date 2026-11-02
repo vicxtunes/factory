@@ -607,15 +607,17 @@ export const factoryStore: ProductionStore = {
 
   async soldOrders(_scope, range) {
     const rows = await allPages<{
+      issued_at: string;
       order: {
         quoted_price: number | string | null;
         cancelled_at: string | null;
+        client_name: string;
         items: { id: string; product: string; product_id: string | null; variant_id: string | null; qty: number; unit_price: number | string | null; attributes: Record<string, string | number> | null }[];
       };
     }>((from, to) => {
       let q = createAdminClient()
         .from("invoices")
-        .select("order:orders!inner (quoted_price, cancelled_at, items:order_items (id, product, product_id, variant_id, qty, unit_price, attributes))")
+        .select("issued_at, order:orders!inner (quoted_price, cancelled_at, client_name, items:order_items (id, product, product_id, variant_id, qty, unit_price, attributes))")
         .is("order.cancelled_at", null);
       if (range.from) q = q.gte("issued_at", range.from);
       if (range.to) q = q.lt("issued_at", range.to);
@@ -624,6 +626,8 @@ export const factoryStore: ProductionStore = {
     return rows.map(
       (r): SoldOrder => ({
         total: Math.round(Number(r.order.quoted_price ?? 0)),
+        issuedAt: r.issued_at,
+        clientName: r.order.client_name,
         items: r.order.items.map((i) => ({
           itemId: i.id,
           productId: i.product_id,
@@ -697,5 +701,30 @@ export const factoryStore: ProductionStore = {
         unitCost: Number(l.unit_cost),
       })),
     );
+  },
+
+  async recordLinesOf(scope, itemIds) {
+    const lines: Awaited<ReturnType<ProductionStore["recordLinesOf"]>> = [];
+    for (let i = 0; i < itemIds.length; i += 200) {
+      const { data, error } = await createAdminClient()
+        .from("production_records")
+        .select("lines:production_record_lines (material_id, expected_qty, actual_qty, unit_cost, material:materials (name, unit))")
+        .eq("tenant_id", scope.tenantId)
+        .is("voided_at", null)
+        .in("order_item_id", itemIds.slice(i, i + 200))
+        .returns<{ lines: { material_id: string; expected_qty: number | string; actual_qty: number | string; unit_cost: number | string; material: { name: string; unit: string } }[] }[]>();
+      if (error) fail(error);
+      for (const r of data ?? [])
+        for (const l of r.lines)
+          lines.push({
+            materialId: l.material_id,
+            name: l.material.name,
+            unit: l.material.unit,
+            expectedQty: Number(l.expected_qty),
+            actualQty: Number(l.actual_qty),
+            unitCost: Number(l.unit_cost),
+          });
+    }
+    return lines;
   },
 };

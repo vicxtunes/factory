@@ -1,4 +1,4 @@
-import type { ProductionOverview, QueuedItem } from "@repo/lib/production/service";
+import type { ProductPerformance, ProductionOverview, QueuedItem } from "@repo/lib/production/service";
 import { productCosts, type CostingCategory, type ProductionRecord, type LenderAccount, type LenderDetail, type Loan, type Material, type MaterialDetail, type RecipeLine } from "@repo/lib/production/core";
 
 // Sample materials for the Production examples.
@@ -174,4 +174,70 @@ export const OVERVIEW: ProductionOverview = {
     { materialId: "m4", name: "Gift box (large)", unit: "pc", qty: -1, value: -2_000 },
   ],
   stockValue: 488_520,
+  // A year of sales and cost: a December peak, a thin June when material prices jumped.
+  months: [
+    ["2025-12", 7_900_000, 2_380_000, 118],
+    ["2026-01", 3_100_000, 1_090_000, 47],
+    ["2026-02", 3_600_000, 1_200_000, 55],
+    ["2026-03", 4_200_000, 1_380_000, 63],
+    ["2026-04", 4_900_000, 1_610_000, 72],
+    ["2026-05", 5_300_000, 1_820_000, 80],
+    ["2026-06", 4_400_000, 2_150_000, 66],
+    ["2026-07", 5_100_000, 1_900_000, 77],
+    ["2026-08", 6_200_000, 2_050_000, 92],
+    ["2026-09", 5_600_000, 1_850_000, 84],
+    ["2026-10", 5_800_000, 1_920_000, 88],
+    ["2026-11", 6_420_000, 1_986_000, 93],
+  ].map(([month, revenue, cost, units]) => ({
+    month: month as string,
+    revenue: revenue as number,
+    cost: cost as number,
+    profit: (revenue as number) - (cost as number),
+    marginPercent: Math.round((((revenue as number) - (cost as number)) / (revenue as number)) * 1000) / 10,
+    units: units as number,
+  })),
+};
+
+// One product over a year: the photo book, with paper getting dearer from June (its cost of one creeps up).
+export const BOOK_PERFORMANCE: ProductPerformance = {
+  period: { preset: "this_month", from: "2026-10-31T21:00:00Z", to: null, fromDate: "2026-11-01", toDate: "2026-11-30" },
+  product: { id: "book", name: "Layflat photo book", categoryName: "Photo books", unit: "Pc" },
+  figures: { revenue: 4_050_000, cost: 1_210_000, profit: 2_840_000, marginPercent: 70.1, costRecorded: 860_000, costEstimated: 350_000, units: 24, noRecipe: false, orders: 19 },
+  before: { revenue: 3_600_000, profit: 2_590_000, units: 22, marginPercent: 71.9 },
+  months: [
+    ["2025-12", 5_200_000, 1_400_000, 32],
+    ["2026-01", 1_800_000, 490_000, 11],
+    ["2026-02", 2_100_000, 570_000, 13],
+    ["2026-03", 2_500_000, 690_000, 15],
+    ["2026-04", 2_900_000, 800_000, 18],
+    ["2026-05", 3_100_000, 860_000, 19],
+    ["2026-06", 2_700_000, 900_000, 16],
+    ["2026-07", 3_000_000, 960_000, 18],
+    ["2026-08", 3_700_000, 1_150_000, 22],
+    ["2026-09", 3_300_000, 1_060_000, 20],
+    ["2026-10", 3_600_000, 1_010_000, 22],
+    ["2026-11", 4_050_000, 1_210_000, 24],
+  ].map(([month, revenue, cost, units]) => ({
+    month: month as string,
+    revenue: revenue as number,
+    cost: cost as number,
+    profit: (revenue as number) - (cost as number),
+    marginPercent: Math.round((((revenue as number) - (cost as number)) / (revenue as number)) * 1000) / 10,
+    units: units as number,
+  })),
+  sizes: [
+    { key: "a4", name: "A4", units: 15, revenue: 2_250_000, cost: 640_000, profit: 1_610_000, marginPercent: 71.6 },
+    { key: "a3", name: "A3", units: 7, revenue: 1_540_000, cost: 470_000, profit: 1_070_000, marginPercent: 69.5 },
+    { key: "sq", name: "Square 30", units: 2, revenue: 260_000, cost: 100_000, profit: 160_000, marginPercent: 61.5 },
+  ],
+  clients: [
+    { name: "Kampala Bridal", orders: 4, units: 6, revenue: 1_120_000 },
+    { name: "Okello Prints Ltd", orders: 3, units: 4, revenue: 680_000 },
+    { name: "Grace Nakato", orders: 2, units: 2, revenue: 310_000 },
+    { name: "J.One Studios", orders: 2, units: 2, revenue: 300_000 },
+  ],
+  wastage: [
+    { materialId: "m1", name: "A4 photo paper", unit: "sheet", qty: 46, value: 5_520 },
+    { materialId: "m3", name: "Lamination film", unit: "m", qty: 8, value: 300 },
+  ],
 };

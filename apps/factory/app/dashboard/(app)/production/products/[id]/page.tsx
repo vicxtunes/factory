@@ -1,17 +1,20 @@
 import { notFound } from "next/navigation";
 
 import { BackLink } from "@repo/ui/navigation/back";
-import { RecipeEditor } from "@repo/ui/production/RecipeEditor";
-import { FormSkeleton, TitleRowSkeleton } from "@repo/ui/skeletons/blocks";
+import { ProductPerformanceView } from "@repo/ui/production/ProductPerformanceView";
+import { ChartsSkeleton, StatTilesSkeleton, TitleRowSkeleton } from "@repo/ui/skeletons/blocks";
 import { Loading } from "@repo/ui/skeletons/Loading";
+import { periodFrom } from "@repo/lib/accounting/params";
 import { requireProductionAccess } from "@repo/lib/production/access";
 import { costingCatalog } from "@repo/lib/production/catalog";
-import { production } from "@repo/lib/production/server";
+import { productionOverview } from "@repo/lib/production/server";
 import { resolveTenantScope } from "@repo/lib/tenancy/server/resolve";
 
 export const dynamic = "force-dynamic";
 
-export default async function RecipePage({ params }: { params: Promise<{ id: string }> }) {
+type SearchParams = Promise<Record<string, string | string[] | undefined>>;
+
+export default async function ProductPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: SearchParams }) {
   await requireProductionAccess();
   const { id } = await params;
   return (
@@ -22,44 +25,26 @@ export default async function RecipePage({ params }: { params: Promise<{ id: str
       <Loading
         skeleton={
           <div className="mt-1 space-y-6">
-            <TitleRowSkeleton action={false} />
-            <FormSkeleton fields={4} />
+            <TitleRowSkeleton />
+            <StatTilesSkeleton count={4} />
+            <ChartsSkeleton />
           </div>
         }
       >
-        <Recipe id={id} />
+        <Performance id={id} searchParams={searchParams} />
       </Loading>
     </div>
   );
 }
 
-async function Recipe({ id }: { id: string }) {
-  const scope = await resolveTenantScope();
-  const [catalog, recipes, materials] = await Promise.all([costingCatalog(), production.recipes(scope, id), production.materials(scope)]);
-  const category = catalog.find((c) => c.products.some((p) => p.id === id));
-  const product = category?.products.find((p) => p.id === id);
-  if (!category || !product) notFound();
+async function Performance({ id, searchParams }: { id: string; searchParams: SearchParams }) {
+  if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
+  const [scope, query, catalog] = await Promise.all([resolveTenantScope(), searchParams, costingCatalog()]);
+  const view = await productionOverview.product(scope, catalog, id, periodFrom(query));
+  if (!view) notFound();
   return (
-    <div className="mt-1 space-y-4">
-      <div>
-        <h2 className="text-xl font-semibold">{product.name}</h2>
-        <p className="text-sm text-muted">
-          {category.name}. What one {product.unit?.toLowerCase() ?? "unit"} takes; costs follow the materials&apos; latest prices.
-        </p>
-      </div>
-      <RecipeEditor
-        product={{
-          id: product.id,
-          name: product.name,
-          categoryName: category.name,
-          unit: product.unit,
-          price: product.price,
-          sizes: product.variants.map((v) => ({ id: v.id, name: v.name, price: v.price ?? product.price })),
-          details: category.attributes.map((a) => ({ id: a.id, name: a.name })),
-        }}
-        materials={materials}
-        lines={recipes.get(id) ?? []}
-      />
+    <div className="mt-1">
+      <ProductPerformanceView view={view} recipeHref={`/dashboard/production/products/${id}/recipe`} />
     </div>
   );
 }
