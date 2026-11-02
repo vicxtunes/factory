@@ -8,6 +8,10 @@ requests (packages/lib/booking-requests/README.md): no WhatsApp, no password, no
 1. On a product's page (`/<studio>/p/<product>`), **Order now** (or "Order 8x12 now" when a size is
    picked) opens a few steps: the **size** and **how many** (1–99), their **name and phone**
    (skipped when they're signed in at the studio), a last look, **Send order request**.
+   The **photos** step asks for what to make it from: files (photos, PDFs) or a link. Without
+   any, they can't go on. Files go straight to storage after the order is made, before any payment.
+   **No order can be paid for without them**: not after Order now, not on their page, not from the
+   quotation's link. Their page and the showroom's "Your requests" let them add photos later.
 2. It goes straight to the studio as a request, **Requested**, and the owner gets a push
    notification. The size's name ("Photobook · 8x12") and price are copied, so later edits never
    change it.
@@ -25,6 +29,9 @@ client can have at most 3 requests waiting at a studio.
   - **Confirm**: the **invoice** is made (quantity × price, due today; none for a size priced 0, "on
     request") and opens. Safe to tap twice: a request confirmed before only gets what it's missing.
   - **Decline**.
+  - Each order shows what the client sent, or **Photos missing**.
+- **Confirmed orders**, under it, keeps the latest 30 with their photos: an order paid for
+  confirms itself, so it never waits in the list above.
 
 ## Layout
 

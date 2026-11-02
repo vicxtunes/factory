@@ -7,7 +7,7 @@ import "server-only";
 import { createAdminClient } from "@repo/lib/supabase/admin";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
-import type { ProductRequest, ProductRequestStatus } from "../../core";
+import type { ProductRequest, ProductRequestMedia, ProductRequestStatus } from "../../core";
 import { ProductRequestError } from "../../service";
 
 interface Row {
@@ -22,10 +22,12 @@ interface Row {
   invoice_id: string | null;
   created_at: string;
   customer: { name: string } | null;
+  media: { id: string; file_name: string; storage_path: string | null; mime_type: string | null; url: string; created_at: string }[] | null;
 }
 
 const COLUMNS = `id, customer_id, offering_id, item_name, quantity, unit_price, status, quotation_id, invoice_id, created_at,
-  customer:customers!product_requests_tenant_id_customer_id_fkey (name)`;
+  customer:customers!product_requests_tenant_id_customer_id_fkey (name),
+  media:product_request_media (id, file_name, storage_path, mime_type, url, created_at)`;
 
 const toRequest = (r: Row): ProductRequest => ({
   id: r.id,
@@ -40,6 +42,9 @@ const toRequest = (r: Row): ProductRequest => ({
   quotationId: r.quotation_id,
   invoiceId: r.invoice_id,
   createdAt: r.created_at,
+  media: [...(r.media ?? [])]
+    .sort((a, b) => a.created_at.localeCompare(b.created_at))
+    .map((m): ProductRequestMedia => ({ id: m.id, fileName: m.file_name, storagePath: m.storage_path, mimeType: m.mime_type, url: m.url })),
 });
 
 function fail(what: string, error: { code?: string; message: string }): never {
@@ -51,13 +56,15 @@ function fail(what: string, error: { code?: string; message: string }): never {
 const table = () => createAdminClient().from("product_requests");
 
 export const supabaseProductRequestStore = {
-  async list(scope: TenantScope, filter: { customerId?: string; status?: ProductRequestStatus; ids?: string[]; quotationId?: string }): Promise<ProductRequest[]> {
+  async list(scope: TenantScope, filter: { customerId?: string; status?: ProductRequestStatus; ids?: string[]; quotationId?: string; limit?: number }): Promise<ProductRequest[]> {
     let query = table().select(COLUMNS).eq("tenant_id", scope.tenantId);
     if (filter.customerId) query = query.eq("customer_id", filter.customerId);
     if (filter.status) query = query.eq("status", filter.status);
     if (filter.ids) query = query.in("id", filter.ids);
     if (filter.quotationId) query = query.eq("quotation_id", filter.quotationId);
-    const { data, error } = await query.order("created_at", { ascending: false }).returns<Row[]>();
+    query = query.order("created_at", { ascending: false });
+    if (filter.limit) query = query.limit(filter.limit);
+    const { data, error } = await query.returns<Row[]>();
     if (error) fail("list requests", error);
     return data.map(toRequest);
   },
@@ -94,6 +101,14 @@ export const supabaseProductRequestStore = {
   async setQuotation(scope: TenantScope, id: string, quotationId: string): Promise<void> {
     const { error } = await table().update({ quotation_id: quotationId }).eq("tenant_id", scope.tenantId).eq("id", id);
     if (error) fail("link the quotation", error);
+  },
+
+  /** Saves a sent file or link. The same upload saved twice stays one. */
+  async addMedia(scope: TenantScope, requestId: string, media: Omit<ProductRequestMedia, "id">): Promise<void> {
+    const { error } = await createAdminClient()
+      .from("product_request_media")
+      .insert({ tenant_id: scope.tenantId, request_id: requestId, file_name: media.fileName, storage_path: media.storagePath, mime_type: media.mimeType, url: media.url });
+    if (error && error.code !== "23505") fail("save the photo", error);
   },
 
   async setInvoice(scope: TenantScope, id: string, invoiceId: string): Promise<void> {
