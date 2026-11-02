@@ -30,6 +30,17 @@
      navy text, meant for the light pastel backdrops below. Swapped for a
      pale tone under dark mode, same pattern as --foreground/--background. */
   --showroom-ink: #1b2a4b;
+
+  /* Charts (packages/ui/charts/kit): series slots in a fixed order (brand
+     orange, blue, aqua), validated with the dataviz validator against these
+     surfaces (#ffffff light, #101828 dark), all pairs: colour-blind and
+     normal-vision separation pass. Aqua is under 3:1 on white, so every chart
+     carries direct labels or a table view. Text never wears these. */
+  --viz-1: #ce5c09;
+  --viz-2: #2a78d6;
+  --viz-3: #1baf7a;
+  --viz-grid: #eaecf0;
+  --viz-axis: #d0d5dd;
 }
 
 @theme inline {
@@ -119,6 +130,11 @@
     --muted: #98a2b3;
     --border: #1d2939;
     --showroom-ink: #e7ebf5;
+    --viz-1: #e8670f;
+    --viz-2: #3987e5;
+    --viz-3: #199e70;
+    --viz-grid: #1d2939;
+    --viz-axis: #344054;
   }
 }
 
