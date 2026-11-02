@@ -98,7 +98,7 @@ const RECIPES = new Map<string, RecipeLine[]>([
 
 export const PRODUCT_COSTS = productCosts(CATALOG, RECIPES, MATERIALS);
 
-// Sample usage: a photo book and a frame waiting (one with no recipe), and two records, one over its recipe.
+// Sample usage: a photo book made before automatic recording and a mug with no recipe, not recorded; two records, one corrected (over its recipe), one automatic.
 export const USAGE_QUEUE: QueuedItem[] = [
   { itemId: "i1", orderNo: "2026-4012", clientName: "Grace Nakato", product: "Layflat photo book", productId: "book", variantId: "a4", sizeName: "A4", qty: 1, attributes: { Pages: 40 }, status: "quality_check", updatedAt: "2026-11-02T08:00:00Z", hasRecipe: true, expected: [{ materialId: "m1", qty: 40 }, { materialId: "m3", qty: 20 }, { materialId: "m4", qty: 1 }, { materialId: "m2", qty: 1 }], otherCost: 3_000 },
   { itemId: "i2", orderNo: "2026-4010", clientName: "Okello Prints Ltd", product: "Photo mug", productId: "mug", variantId: null, sizeName: null, qty: 6, attributes: {}, status: "ready_for_pickup", updatedAt: "2026-11-01T15:00:00Z", hasRecipe: false, expected: [], otherCost: 0 },
@@ -109,6 +109,7 @@ export const RECORDS: ProductionRecord[] = [
     id: "r1",
     item: { itemId: "i0", orderNo: "2026-4002", clientName: "Kampala Bridal", product: "Layflat photo book", sizeName: "A3", qty: 1 },
     otherCost: 4_500,
+    automatic: false,
     estimatedCost: 21_050,
     actualCost: 22_250,
     note: "Two spreads reprinted",
@@ -125,14 +126,18 @@ export const RECORDS: ProductionRecord[] = [
     id: "r2",
     item: { itemId: "i9", orderNo: "2026-3998", clientName: "Peter Ssempa", product: "Wooden frame", sizeName: "A4", qty: 2 },
     otherCost: 0,
+    automatic: true,
     estimatedCost: 23_200,
     actualCost: 23_200,
     note: null,
-    actorName: "Supervisor",
+    actorName: "Automatic, from the recipe",
     createdAt: "2026-10-31T16:00:00Z",
     voidedAt: null,
     voidReason: null,
-    lines: [],
+    lines: [
+      { materialId: "m5", materialName: "Old frame moulding", unit: "m", expectedQty: 2.4, actualQty: 2.4, unitCost: 8_000 },
+      { materialId: "m4", materialName: "Gift box (large)", unit: "pc", expectedQty: 2, actualQty: 2, unitCost: 2_000 },
+    ],
   },
 ];
 

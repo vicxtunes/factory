@@ -16,7 +16,8 @@ export default async function UsagePage() {
   return (
     <div className="space-y-6">
       <p className="text-sm text-muted">
-        What each item actually used, against its recipe. Saving takes it off stock; the difference is wastage.
+        An item with a recipe is recorded by itself when it reaches Quality check. Correct it when it used something different: that difference is
+        the wastage.
       </p>
       <Loading
         skeleton={

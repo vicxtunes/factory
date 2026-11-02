@@ -133,3 +133,11 @@ export const usageInputSchema = z.object({
   note: optionalText(500),
 });
 export type UsageInput = z.output<typeof usageInputSchema>;
+
+/** What a recorded item really used, replacing its record (expected quantities and other costs stay). */
+export const correctionInputSchema = z.object({
+  recordId: idSchema,
+  actual: z.array(z.object({ materialId: idSchema, qty: quantity.min(0, "A quantity can't be below zero.") })).max(100),
+  note: optionalText(500),
+});
+export type CorrectionInput = z.output<typeof correctionInputSchema>;

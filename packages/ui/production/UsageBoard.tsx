@@ -1,10 +1,11 @@
 "use client";
 
-// Production → Record usage: items that reached Quality check or later with
-// nothing recorded yet, oldest first. Opening one fills in what its recipe
-// expects (pages included); the supervisor corrects what was really used and
-// saves, and it comes off stock. Below, the latest records with their
-// wastage (actual against expected), each voidable with a reason.
+// Production → Record usage. An item with a recipe is recorded by itself when
+// it reaches Quality check, as if it went exactly to plan (the database does
+// it: production_auto_record). Here the supervisor corrects a record when the
+// item used something different (that difference is the wastage), and
+// records by hand the items that weren't recorded: no recipe, or made before
+// automatic recording. Records can be voided with a reason (stock goes back).
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
@@ -14,7 +15,7 @@ import { Field, Select, TextInput } from "@repo/ui/Field";
 import { FormSheet } from "@repo/ui/FormSheet";
 import { useCurrencySymbol } from "@repo/lib/currency/CurrencySymbolProvider";
 import { formatMoney } from "@repo/lib/currency/format";
-import { recordUsage, voidRecord } from "@repo/lib/production/actions";
+import { correctRecord, recordUsage, voidRecord } from "@repo/lib/production/actions";
 import { formatQty, type Material, type ProductionRecord } from "@repo/lib/production/core";
 import type { QueuedItem } from "@repo/lib/production/service";
 
@@ -29,25 +30,29 @@ export function UsageBoard({ queue, records, materials, sinceDays }: { queue: Qu
   const symbol = useCurrencySymbol();
   const money = (n: number) => formatMoney(n, symbol);
   const [open, setOpen] = useState<QueuedItem | null>(null);
+  const [correcting, setCorrecting] = useState<ProductionRecord | null>(null);
   const [voiding, setVoiding] = useState<ProductionRecord | null>(null);
 
   const live = records.filter((r) => !r.voidedAt);
   const wasted = live.reduce((s, r) => s + Math.max(r.actualCost - r.estimatedCost, 0), 0);
-  const noRecipe = queue.filter((q) => !q.hasRecipe).length;
+  const automatic = live.filter((r) => r.automatic).length;
 
   return (
     <div className="@container space-y-6">
       <div className="grid grid-cols-2 gap-3 @2xl:grid-cols-3">
-        <Tile label="Waiting to be recorded" value={String(queue.length)} wide />
-        <Tile label={`Used beyond the recipe (latest ${live.length})`} value={money(wasted)} tone={wasted ? "error" : undefined} />
-        <Tile label="Waiting, with no recipe" value={String(noRecipe)} />
+        <Tile label={`Used beyond the recipe (latest ${live.length})`} value={money(wasted)} tone={wasted ? "error" : undefined} wide />
+        <Tile label={`Recorded automatically (latest ${live.length})`} value={String(automatic)} />
+        <Tile label="Not recorded" value={String(queue.length)} tone={queue.length ? "error" : undefined} />
       </div>
 
       <section className="space-y-2">
-        <h3 className="text-sm font-semibold">Waiting to be recorded</h3>
-        <p className="text-xs text-muted">Made in the last {sinceDays} days (at Quality check or later), with nothing recorded yet.</p>
+        <h3 className="text-sm font-semibold">Not recorded</h3>
+        <p className="text-xs text-muted">
+          Made in the last {sinceDays} days with nothing recorded: products with no recipe (give them one to record them by themselves), or items made
+          before automatic recording.
+        </p>
         {queue.length === 0 ? (
-          <p className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted">Nothing waiting: every item made lately has its usage recorded.</p>
+          <p className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted">Every item made lately has its usage recorded.</p>
         ) : (
           <ul className="grid gap-2 @3xl:grid-cols-2">
             {queue.map((q) => (
@@ -78,6 +83,7 @@ export function UsageBoard({ queue, records, materials, sinceDays }: { queue: Qu
 
       <section className="space-y-2">
         <h3 className="text-sm font-semibold">Recorded lately</h3>
+        <p className="text-xs text-muted">Correct one when it used something different from its recipe: reprints, a spoiled cover, extra film.</p>
         {records.length === 0 ? (
           <p className="text-sm text-muted">Nothing recorded yet.</p>
         ) : (
@@ -90,7 +96,7 @@ export function UsageBoard({ queue, records, materials, sinceDays }: { queue: Qu
                     <div className="min-w-0">
                       <p className={`font-medium ${r.voidedAt ? "line-through" : ""}`}>{itemTitle(r.item)}</p>
                       <p className="mt-0.5 text-xs text-muted">
-                        #{r.item.orderNo} · {r.item.clientName} · {r.actorName}
+                        #{r.item.orderNo} · {r.item.clientName} · {r.automatic ? "automatic, from the recipe" : r.actorName}
                       </p>
                     </div>
                     <div className="shrink-0 text-right">
@@ -112,9 +118,12 @@ export function UsageBoard({ queue, records, materials, sinceDays }: { queue: Qu
                   {r.voidedAt ? (
                     <p className="mt-1 text-xs text-error-600 dark:text-error-400">Void: {r.voidReason}</p>
                   ) : (
-                    <div className="mt-2 flex justify-end">
+                    <div className="mt-2 flex justify-end gap-2">
                       <Button type="button" variant="ghost" size="sm" onClick={() => setVoiding(r)}>
                         Void
+                      </Button>
+                      <Button type="button" variant="secondary" size="sm" onClick={() => setCorrecting(r)}>
+                        Correct
                       </Button>
                     </div>
                   )}
@@ -125,7 +134,34 @@ export function UsageBoard({ queue, records, materials, sinceDays }: { queue: Qu
         )}
       </section>
 
-      {open ? <UsageSheet key={open.itemId} item={open} materials={materials} onClose={() => setOpen(null)} /> : null}
+      {open ? (
+        <UsageSheet
+          key={open.itemId}
+          title="What it used"
+          submit="Save and take off stock"
+          item={open}
+          rows={open.expected.map((e) => ({ materialId: e.materialId, expected: e.qty, actual: String(e.qty) }))}
+          otherCost={open.otherCost}
+          empty={open.hasRecipe ? "Its recipe uses no materials." : "No recipe: add each material it used."}
+          materials={materials}
+          onClose={() => setOpen(null)}
+          save={(actual, note) => recordUsage({ itemId: open.itemId, actual, note })}
+        />
+      ) : null}
+      {correcting ? (
+        <UsageSheet
+          key={correcting.id}
+          title="Correct what it used"
+          submit="Save correction"
+          item={correcting.item}
+          rows={correcting.lines.map((l) => ({ materialId: l.materialId, expected: l.expectedQty, actual: String(l.actualQty) }))}
+          otherCost={correcting.otherCost}
+          empty="It used no materials."
+          materials={materials}
+          onClose={() => setCorrecting(null)}
+          save={(actual, note) => correctRecord({ recordId: correcting.id, actual, note })}
+        />
+      ) : null}
       {voiding ? (
         <VoidSheet
           open
@@ -145,25 +181,45 @@ interface Row {
   actual: string;
 }
 
-function UsageSheet({ item, materials, onClose }: { item: QueuedItem; materials: Material[]; onClose: () => void }) {
+function UsageSheet({
+  title,
+  submit,
+  item,
+  rows: initial,
+  otherCost,
+  empty,
+  materials,
+  onClose,
+  save: run,
+}: {
+  title: string;
+  submit: string;
+  item: { orderNo: string; clientName: string; product: string; sizeName: string | null; qty: number };
+  rows: Row[];
+  otherCost: number;
+  empty: string;
+  materials: Material[];
+  onClose: () => void;
+  save: (actual: { materialId: string; qty: number }[], note: string) => Promise<{ ok: true } | { ok: false; error: string }>;
+}) {
   const router = useRouter();
   const symbol = useCurrencySymbol();
   const money = (n: number) => formatMoney(n, symbol);
   const byId = new Map(materials.map((m) => [m.id, m]));
-  const [rows, setRows] = useState<Row[]>(() => item.expected.map((e) => ({ materialId: e.materialId, expected: e.qty, actual: String(e.qty) })));
+  const [rows, setRows] = useState<Row[]>(initial);
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const unused = materials.filter((m) => m.active && !rows.some((r) => r.materialId === m.id));
 
-  const cost = (qty: (r: Row) => number) => rows.reduce((s, r) => s + Math.round(qty(r) * (byId.get(r.materialId)?.unitCost ?? 0)), 0) + item.otherCost;
+  const cost = (qty: (r: Row) => number) => rows.reduce((s, r) => s + Math.round(qty(r) * (byId.get(r.materialId)?.unitCost ?? 0)), 0) + otherCost;
   const expected = cost((r) => r.expected);
   const actual = cost((r) => parseNumber(r.actual) || 0);
 
   function save() {
     setError(null);
     start(async () => {
-      const res = await recordUsage({ itemId: item.itemId, actual: rows.map((r) => ({ materialId: r.materialId, qty: parseNumber(r.actual) || 0 })), note });
+      const res = await run(rows.map((r) => ({ materialId: r.materialId, qty: parseNumber(r.actual) || 0 })), note);
       if (!res.ok) return setError(res.error);
       onClose();
       router.refresh();
@@ -171,7 +227,7 @@ function UsageSheet({ item, materials, onClose }: { item: QueuedItem; materials:
   }
 
   return (
-    <FormSheet open onClose={onClose} title="What it used">
+    <FormSheet open onClose={onClose} title={title}>
       <div className="space-y-4">
         <div>
           <p className="font-medium">{itemTitle(item)}</p>
@@ -179,7 +235,7 @@ function UsageSheet({ item, materials, onClose }: { item: QueuedItem; materials:
             #{item.orderNo} · {item.clientName}
           </p>
         </div>
-        {rows.length === 0 ? <p className="text-sm text-muted">{item.hasRecipe ? "Its recipe uses no materials." : "No recipe: add each material it used."}</p> : null}
+        {rows.length === 0 ? <p className="text-sm text-muted">{empty}</p> : null}
         <ul className="space-y-3">
           {rows.map((r, i) => {
             const m = byId.get(r.materialId);
@@ -227,11 +283,11 @@ function UsageSheet({ item, materials, onClose }: { item: QueuedItem; materials:
             <span>Actually used</span>
             <span className={`tnum ${actual > expected ? "text-error-600 dark:text-error-400" : ""}`}>{money(actual)}</span>
           </div>
-          {item.otherCost ? <p className="mt-1 text-xs text-muted">Both include {money(item.otherCost)} of other costs.</p> : null}
+          {otherCost ? <p className="mt-1 text-xs text-muted">Both include {money(otherCost)} of other costs.</p> : null}
         </div>
         {error ? <p className="text-sm text-error-600 dark:text-error-400">{error}</p> : null}
-        <Button type="button" className="w-full" onClick={save} loading={pending} disabled={pending || (rows.length === 0 && item.otherCost === 0)}>
-          Save and take off stock
+        <Button type="button" className="w-full" onClick={save} loading={pending} disabled={pending || (rows.length === 0 && otherCost === 0)}>
+          {submit}
         </Button>
       </div>
     </FormSheet>

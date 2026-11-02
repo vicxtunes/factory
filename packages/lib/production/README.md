@@ -12,8 +12,9 @@ Screens:
   Record purchase, Stock count; one material's purchases (void with a reason) and stock history.
 - **Production → Product costs** `/dashboard/production/products`: each product size's cost, price, profit and
   margin; one product's recipe.
-- **Production → Record usage** `/dashboard/production/usage`: items made in the last 30 days with nothing
-  recorded; what each actually used against its recipe; the latest records (void puts the stock back).
+- **Production → Record usage** `/dashboard/production/usage`: the latest records, each corrected when it used
+  something different from its recipe; items made in the last 30 days with nothing recorded (no recipe, or made
+  before automatic recording), recorded by hand.
 - **Accounts → Money we owe** `/dashboard/accounts/owed`: lenders, loans and repayments; the **We owe** card on
   Accounts → Overview.
 
@@ -27,9 +28,15 @@ Screens:
 - **A recipe** is per product: lines for every size plus each size's own. A material line is per unit or per a
   number detail of the order (`per_attribute_id`, e.g. Pages: qty × the item's pages); an other cost is a fixed
   amount. Labour isn't costed (decided 2026-11-02).
-- **Recording usage**: what an item should have used and its other costs come from its recipe on the server
+- **Recording usage is automatic** (chosen 2026-11-02): when an item reaches Quality check (or later, from
+  before), a trigger records it from its recipe as if it went exactly to plan (`production_auto_record`, the same
+  sums as `usagePlan` in `core/costing.ts`) and its stock comes off. It never blocks the status change: a failure
+  is a database warning. Nothing is recorded for a product with no recipe. A supervisor **corrects** a record when
+  the item used something different (`production_correct_record`: the old one voided, a new one with the same
+  expected quantities, in one transaction); only corrections show as wastage, so wastage nobody reports stays
+  invisible. When recording by hand, what an item should have used comes from its recipe on the server
   (`createUsage` in `service.ts`); the browser only sends what was actually used. Costs are at the materials'
-  prices when it's saved, so later price changes never change them.
+  prices when it's saved.
 - **Profit** (`core/overview.ts`): sales as Accounts counts them (live orders, on the invoice's issue date, at the
   order's agreed total, shared over its lines by their confirmed prices); an item's cost is its record's actual cost,
   else its recipe's estimate at today's prices, else unknown (no recipe), and the overview says how much of each.

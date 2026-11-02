@@ -292,7 +292,7 @@ export const COMPONENTS: RoomComponent[] = [
     category: "Flows",
     status: "live",
     source: "packages/ui/production/UsageBoard.tsx",
-    summary: "Items made in the last 30 days (Quality check or later) with nothing recorded, oldest first; tapping one opens a form sheet filled with what its recipe expects (pages included), to correct with what was really used, add other materials, and save: it comes off stock. The latest records show what each used against its recipe (red when over), each voidable with a reason, which puts the stock back.",
+    summary: "Items with a recipe are recorded by themselves at Quality check (marked automatic). Correct opens a form sheet with what it was expected to use, to enter what it really used or add other materials; the record is replaced and the stock follows, and the difference is the wastage (red when over). Items made in the last 30 days with nothing recorded (no recipe, or made before) are recorded by hand. Records can be voided with a reason, which puts the stock back.",
     examples: [{ title: "Record usage", file: "production/usage.tsx", Demo: ProductionUsage }],
   },
   {

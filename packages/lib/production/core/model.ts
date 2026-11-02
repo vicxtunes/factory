@@ -194,6 +194,8 @@ export interface ProductionRecord {
   id: string;
   item: Pick<UsageItem, "itemId" | "orderNo" | "clientName" | "product" | "sizeName" | "qty">;
   otherCost: number;
+  /** Recorded by itself from the recipe at Quality check; false once a person recorded or corrected it. */
+  automatic: boolean;
   estimatedCost: number;
   actualCost: number;
   note: string | null;

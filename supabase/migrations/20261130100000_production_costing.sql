@@ -4,7 +4,9 @@
 -- stock counts, reversals), what buying them cost (each purchase is also an
 -- expense, the first kind of money going out), recipes (the materials and
 -- other costs one unit of a product size takes), production records (what an
--- order item actually used, against what its recipe expected), and borrowed
+-- order item actually used, against what its recipe expected: recorded by
+-- itself from the recipe when the item reaches Quality check, corrected by a
+-- supervisor when it went differently), and borrowed
 -- money: who lent it, what has to be paid back, and the repayments, whose
 -- interest share is an expense too. Borrowed money is never income and paying
 -- back what was borrowed is never a cost; only the extra on top is.
@@ -111,6 +113,9 @@ create table production_records (
   order_item_id    uuid not null references order_items (id) on delete restrict,
   -- Other costs from the recipe (fixed amounts × units), in both totals.
   other_cost       bigint not null default 0 check (other_cost >= 0),
+  -- Recorded by itself from the recipe when the item reached Quality check
+  -- (production_auto_record); false when a person recorded or corrected it.
+  automatic        boolean not null default false,
   estimated_cost   bigint not null check (estimated_cost >= 0),
   actual_cost      bigint not null check (actual_cost >= 0),
   note             text,
@@ -510,7 +515,8 @@ create or replace function production_record_usage(
   p_other_cost bigint,
   p_note text,
   p_actor_id text,
-  p_actor_name text
+  p_actor_name text,
+  p_automatic boolean
 )
 returns uuid
 language plpgsql
@@ -540,8 +546,8 @@ begin
     v_actual_cost := v_actual_cost + round(coalesce((v_line->>'actual_qty')::numeric, 0) * v_material.unit_cost)::bigint;
   end loop;
 
-  insert into production_records (tenant_id, order_item_id, other_cost, estimated_cost, actual_cost, note, actor_id, actor_name)
-  values (p_tenant, p_item, coalesce(p_other_cost, 0), v_estimated, v_actual_cost, nullif(trim(p_note), ''), p_actor_id, p_actor_name)
+  insert into production_records (tenant_id, order_item_id, other_cost, automatic, estimated_cost, actual_cost, note, actor_id, actor_name)
+  values (p_tenant, p_item, coalesce(p_other_cost, 0), coalesce(p_automatic, false), v_estimated, v_actual_cost, nullif(trim(p_note), ''), p_actor_id, p_actor_name)
   returning id into v_id;
 
   for v_line in select * from jsonb_array_elements(coalesce(p_lines, '[]'::jsonb)) loop
@@ -582,6 +588,128 @@ begin
   end loop;
 end;
 $$;
+
+-- Corrects a record with what was really used: the old one is voided (its
+-- stock goes back) and a new one saved in the same transaction, with the
+-- same expected quantities and other costs. p_lines: [{material_id,
+-- actual_qty}, …]; a material of the old record not listed keeps its actual,
+-- one not in the old record is added with nothing expected.
+create or replace function production_correct_record(
+  p_tenant uuid,
+  p_record uuid,
+  p_lines jsonb,
+  p_note text,
+  p_actor_id text,
+  p_actor_name text
+)
+returns uuid
+language plpgsql
+as $$
+declare
+  v_record production_records;
+  v_lines jsonb;
+begin
+  select * into v_record from production_records where id = p_record and tenant_id = p_tenant;
+  if not found then raise exception 'PRODUCTION:no_record'; end if;
+  if v_record.voided_at is not null then raise exception 'PRODUCTION:already_voided'; end if;
+
+  select coalesce(jsonb_agg(line), '[]'::jsonb) into v_lines from (
+    select jsonb_build_object(
+             'material_id', l.material_id,
+             'expected_qty', l.expected_qty,
+             'actual_qty', coalesce((select (x->>'actual_qty')::numeric from jsonb_array_elements(coalesce(p_lines, '[]'::jsonb)) x
+                                      where (x->>'material_id')::uuid = l.material_id limit 1), l.actual_qty)) as line
+      from production_record_lines l where l.record_id = p_record
+    union all
+    select jsonb_build_object('material_id', (x->>'material_id')::uuid, 'expected_qty', 0, 'actual_qty', (x->>'actual_qty')::numeric)
+      from jsonb_array_elements(coalesce(p_lines, '[]'::jsonb)) x
+     where not exists (select 1 from production_record_lines l where l.record_id = p_record and l.material_id = (x->>'material_id')::uuid)
+       and coalesce((x->>'actual_qty')::numeric, 0) > 0
+  ) lines;
+
+  perform production_void_record(p_tenant, p_record, 'Corrected', p_actor_name);
+  return production_record_usage(p_tenant, v_record.order_item_id, v_lines, v_record.other_cost,
+                                 coalesce(nullif(trim(p_note), ''), v_record.note), p_actor_id, p_actor_name, false);
+end;
+$$;
+
+-- A number detail's value on an order item ("40", "1,200 pages" → 40, 1200); 0
+-- when missing. Matches detailNumber() in packages/lib/production/core/costing.ts.
+create or replace function production_detail_value(p_attributes jsonb, p_name text)
+returns numeric
+language sql
+immutable
+as $$
+  select coalesce(nullif(substring(replace(coalesce(p_attributes->>p_name, ''), ',', '') from '^\s*([0-9]+(?:\.[0-9]+)?)'), '')::numeric, 0);
+$$;
+
+-- Records what an item used, by itself, from its recipe (the size's lines and
+-- the shared ones; per-detail lines × the item's value of that detail; × the
+-- item's quantity), as if it went exactly to plan. Nothing happens when the
+-- item already has a live record or its product has no recipe. Matches
+-- usagePlan() in packages/lib/production/core/costing.ts.
+create or replace function production_auto_record(p_item uuid)
+returns uuid
+language plpgsql
+as $$
+declare
+  v_item order_items;
+  v_tenant uuid := default_tenant_id();
+  v_lines jsonb;
+  v_other bigint;
+begin
+  select * into v_item from order_items where id = p_item;
+  if not found or v_item.product_id is null then return null; end if;
+  if exists (select 1 from production_records where order_item_id = p_item and voided_at is null) then return null; end if;
+  if not exists (select 1 from recipe_lines where tenant_id = v_tenant and product_id = v_item.product_id
+                  and (variant_id is null or variant_id = v_item.variant_id)) then
+    return null;
+  end if;
+
+  with recipe as (
+    select r.material_id, r.qty, r.amount, a.name as detail
+      from recipe_lines r
+      left join category_attributes a on a.id = r.per_attribute_id
+     where r.tenant_id = v_tenant and r.product_id = v_item.product_id
+       and (r.variant_id is null or r.variant_id = v_item.variant_id)
+  )
+  select
+    (select coalesce(jsonb_agg(jsonb_build_object('material_id', material_id, 'expected_qty', q, 'actual_qty', q)), '[]'::jsonb)
+       from (select material_id,
+                    round(sum(qty * case when detail is null then 1 else production_detail_value(v_item.attributes, detail) end) * v_item.qty, 3) as q
+               from recipe where material_id is not null group by material_id) m),
+    (select coalesce(sum(amount), 0) * v_item.qty from recipe where material_id is null)
+  into v_lines, v_other;
+
+  return production_record_usage(v_tenant, p_item, v_lines, v_other, null, null, 'Automatic, from the recipe', true);
+end;
+$$;
+
+-- When an item reaches Quality check (or later, from before it), its usage is
+-- recorded from its recipe. Costing must never stop production: anything that
+-- goes wrong here is logged as a warning and the status change goes through.
+create or replace function production_auto_record_on_status()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if new.production_status in ('quality_check', 'ready_for_pickup', 'completed')
+     and old.production_status not in ('quality_check', 'ready_for_pickup', 'completed') then
+    begin
+      perform production_auto_record(new.id);
+    exception when others then
+      raise warning 'production: usage of item % not recorded automatically: %', new.id, sqlerrm;
+    end;
+  end if;
+  return null;
+end;
+$$;
+
+create trigger order_items_auto_usage
+  after update of production_status on order_items
+  for each row execute function production_auto_record_on_status();
 
 -- Money borrowed, from a lender already known (p_lender) or a new one
 -- (p_lender_name and kind; an existing name is reused rather than doubled).
@@ -726,7 +854,10 @@ revoke all on function production_record_purchase(uuid, uuid, numeric, bigint, t
 revoke all on function production_void_purchase(uuid, uuid, text, text) from public, anon, authenticated;
 revoke all on function production_count_stock(uuid, uuid, numeric, text, text) from public, anon, authenticated;
 revoke all on function production_save_recipe(uuid, uuid, jsonb) from public, anon, authenticated;
-revoke all on function production_record_usage(uuid, uuid, jsonb, bigint, text, text, text) from public, anon, authenticated;
+revoke all on function production_record_usage(uuid, uuid, jsonb, bigint, text, text, text, boolean) from public, anon, authenticated;
+revoke all on function production_correct_record(uuid, uuid, jsonb, text, text, text) from public, anon, authenticated;
+revoke all on function production_auto_record(uuid) from public, anon, authenticated;
+revoke all on function production_auto_record_on_status() from public, anon, authenticated;
 revoke all on function production_void_record(uuid, uuid, text, text) from public, anon, authenticated;
 revoke all on function production_record_loan(uuid, uuid, text, text, text, bigint, bigint, date, text, date, text, text, text) from public, anon, authenticated;
 revoke all on function production_record_repayment(uuid, uuid, bigint, date, text, text, text, text, text) from public, anon, authenticated;

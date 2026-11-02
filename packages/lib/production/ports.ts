@@ -6,7 +6,7 @@ import type { TenantScope } from "@repo/lib/tenancy/types";
 
 import type { Lender, Loan, Material, MaterialDetail, ProductionRecord, RecipeLine, Repayment, UsageItem } from "./core/model";
 import type { MaterialFigure, SoldOrder } from "./core/overview";
-import type { LoanInput, MaterialInput, MaterialUpdate, PurchaseInput, RecipeInput, RepaymentInput, StockCountInput, VoidInput } from "./core/schema";
+import type { CorrectionInput, LoanInput, MaterialInput, MaterialUpdate, PurchaseInput, RecipeInput, RepaymentInput, StockCountInput, VoidInput } from "./core/schema";
 
 export interface ProductionActor {
   id: string | null;
@@ -40,7 +40,11 @@ export interface ProductionStore {
   /** Replaces a product's whole recipe (every size). */
   saveRecipe(scope: TenantScope, input: RecipeInput): Promise<void>;
 
-  /** Items at Quality check or later, changed since `since`, of live orders, with no live record yet; oldest first. */
+  /**
+   * Items at Quality check or later, changed since `since`, of live orders, with no live record yet;
+   * oldest first. Items with a recipe are recorded by themselves at Quality check, so these are mostly
+   * products with no recipe.
+   */
   usageQueue(scope: TenantScope, since: string): Promise<UsageItem[]>;
   usageItem(scope: TenantScope, itemId: string): Promise<UsageItem | null>;
   /** The latest records (voided ones too), newest first. */
@@ -51,6 +55,8 @@ export interface ProductionStore {
     input: { itemId: string; lines: { materialId: string; expectedQty: number; actualQty: number }[]; otherCost: number; note: string | null },
     actor: ProductionActor,
   ): Promise<string>;
+  /** Replaces a record with what was really used (the old one voided, its stock back), in one go. */
+  correctRecord(scope: TenantScope, input: CorrectionInput, actor: ProductionActor): Promise<string>;
   /** What it used goes back into stock. */
   voidRecord(scope: TenantScope, input: VoidInput, actor: ProductionActor): Promise<void>;
 

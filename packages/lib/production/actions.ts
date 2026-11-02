@@ -17,6 +17,7 @@ import {
   purchaseInputSchema,
   recipeInputSchema,
   repaymentInputSchema,
+  correctionInputSchema,
   stockCountSchema,
   usageInputSchema,
   voidSchema,
@@ -135,6 +136,16 @@ export async function recordUsage(input: unknown): Promise<Result> {
   return runAction("production", async () => {
     const { scope, actor } = await staff();
     await usage.record(scope, await costingCatalog(), parseInput(usageInputSchema, input), actor);
+    revalidatePath(USAGE);
+    revalidatePath(MATERIALS, "layout");
+  });
+}
+
+/** What a recorded item really used; its record is replaced and the stock follows. */
+export async function correctRecord(input: unknown): Promise<Result> {
+  return runAction("production", async () => {
+    const { scope, actor } = await staff();
+    await production.correctRecord(scope, parseInput(correctionInputSchema, input), actor);
     revalidatePath(USAGE);
     revalidatePath(MATERIALS, "layout");
   });

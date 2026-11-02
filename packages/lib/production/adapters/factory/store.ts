@@ -519,7 +519,7 @@ export const factoryStore: ProductionStore = {
     const { data, error } = await createAdminClient()
       .from("production_records")
       .select(
-        `id, other_cost, estimated_cost, actual_cost, note, actor_name, created_at, voided_at, void_reason, item:order_items!inner (${ITEM_COLUMNS}), lines:production_record_lines (material_id, expected_qty, actual_qty, unit_cost, material:materials (name, unit))`,
+        `id, other_cost, automatic, estimated_cost, actual_cost, note, actor_name, created_at, voided_at, void_reason, item:order_items!inner (${ITEM_COLUMNS}), lines:production_record_lines (material_id, expected_qty, actual_qty, unit_cost, material:materials (name, unit))`,
       )
       .eq("tenant_id", scope.tenantId)
       .order("created_at", { ascending: false })
@@ -528,6 +528,7 @@ export const factoryStore: ProductionStore = {
         {
           id: string;
           other_cost: number | string;
+          automatic: boolean;
           estimated_cost: number | string;
           actual_cost: number | string;
           note: string | null;
@@ -546,6 +547,7 @@ export const factoryStore: ProductionStore = {
         id: r.id,
         item: { itemId: item.itemId, orderNo: item.orderNo, clientName: item.clientName, product: item.product, sizeName: item.sizeName, qty: item.qty },
         otherCost: Number(r.other_cost),
+        automatic: r.automatic,
         estimatedCost: Number(r.estimated_cost),
         actualCost: Number(r.actual_cost),
         note: r.note,
@@ -571,6 +573,20 @@ export const factoryStore: ProductionStore = {
       p_item: input.itemId,
       p_lines: input.lines.map((l) => ({ material_id: l.materialId, expected_qty: l.expectedQty, actual_qty: l.actualQty })),
       p_other_cost: input.otherCost,
+      p_note: input.note,
+      p_actor_id: actor.id,
+      p_actor_name: actor.name,
+      p_automatic: false,
+    });
+    if (error) fail(error);
+    return data as string;
+  },
+
+  async correctRecord(scope, input, actor) {
+    const { data, error } = await createAdminClient().rpc("production_correct_record", {
+      p_tenant: scope.tenantId,
+      p_record: input.recordId,
+      p_lines: input.actual.map((a) => ({ material_id: a.materialId, actual_qty: a.qty })),
       p_note: input.note,
       p_actor_id: actor.id,
       p_actor_name: actor.name,
