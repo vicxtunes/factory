@@ -148,6 +148,7 @@ import ProductionRecipe from "./examples/production/recipe";
 import ProductionUsage from "./examples/production/usage";
 import ProductionOverviewExample from "./examples/production/overview";
 import ProductionProduct from "./examples/production/product";
+import ProductionSpeed from "./examples/production/speed";
 
 // Everything the Design Room shows. To add a component: build it in
 // packages/ui/, write its examples under ./examples/<slug>/ (one default
@@ -313,6 +314,15 @@ export const COMPONENTS: RoomComponent[] = [
     source: "packages/ui/production/ProductPerformanceView.tsx",
     summary: "One product for a period: gross profit, sales, units and margin against the period before; a year of sales against cost, units by month, what one cost to make by month; its sizes, its clients and its wastage as ranked bars. Every chart has a table view. Built on the D3 chart kit (packages/ui/charts/kit.tsx).",
     examples: [{ title: "A photo book", file: "production/product.tsx", Demo: ProductionProduct }],
+  },
+  {
+    slug: "production-speed",
+    name: "Production speed",
+    category: "Flows",
+    status: "live",
+    source: "packages/ui/production/SpeedBoard.tsx",
+    summary: "From each item's history: order to ready (the middle item), on time against the client's date, items late right now (a list to chase), where items wait (each stage's middle time, in journey order), the trend week by week, the slowest products and making time by worker. Time is drawn in aqua so it never reads as money; every chart has a table view.",
+    examples: [{ title: "90 days", file: "production/speed.tsx", Demo: ProductionSpeed }],
   },
   {
     slug: "button",

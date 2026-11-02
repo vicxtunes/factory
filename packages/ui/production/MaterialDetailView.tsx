@@ -1,12 +1,16 @@
 "use client";
 
-// One material: its stock, price and value, what's been bought (each can be
-// voided with a reason), and every movement of its stock. Phones stack it;
+// One material: its stock, price and value; its price at every purchase (a
+// supplier raising prices shows here first) and its stock over time; what's
+// been bought (each can be voided with a reason), and every movement of its
+// stock. Phones stack it;
 // from lg the purchases and the history sit side by side.
 
 import { useState } from "react";
 
 import { Button } from "@repo/ui/Button";
+import { compactNumber, dayLabel } from "@repo/ui/charts/format";
+import { ChartCard, SERIES, TimeLines } from "@repo/ui/charts/kit";
 import { useCurrencySymbol } from "@repo/lib/currency/CurrencySymbolProvider";
 import { formatMoney } from "@repo/lib/currency/format";
 import { voidPurchase } from "@repo/lib/production/actions";
@@ -59,6 +63,8 @@ export function MaterialDetailView({ detail, today }: { detail: MaterialDetail; 
           More has been used than bought: a purchase hasn&apos;t been recorded yet, or the stock needs counting.
         </p>
       ) : null}
+
+      <MaterialCharts detail={detail} />
 
       <div className="grid gap-6 @5xl:grid-cols-2">
         <section>
@@ -130,6 +136,83 @@ export function MaterialDetailView({ detail, today }: { detail: MaterialDetail; 
           run={(reason) => voidPurchase({ id: voiding.id, reason })}
         />
       ) : null}
+    </div>
+  );
+}
+
+/** The price paid at each purchase, and the stock level after each movement. */
+function MaterialCharts({ detail }: { detail: MaterialDetail }) {
+  const symbol = useCurrencySymbol();
+  const { material, movements, purchases } = detail;
+  const at = (iso: string) => new Date(`${iso}T00:00:00Z`);
+  const prices = purchases
+    .filter((p) => !p.voidedAt)
+    .sort((a, b) => a.purchasedOn.localeCompare(b.purchasedOn) || a.createdAt.localeCompare(b.createdAt))
+    .map((p) => ({ date: at(p.purchasedOn), value: p.unitCost }));
+  // Walk back from today's stock through the movements (newest first) to get the level after each.
+  const levels: { date: Date; value: number }[] = [];
+  let level = material.stock;
+  for (const m of movements) {
+    levels.push({ date: at(m.occurredOn), value: Math.round(level * 1000) / 1000 });
+    level -= m.qty;
+  }
+  // One point per day (the day's closing level), oldest first.
+  const byDay = new Map<number, number>();
+  for (const l of [...levels].reverse()) byDay.set(l.date.getTime(), l.value);
+  const stock = [...byDay].map(([t, value]) => ({ date: new Date(t), value }));
+  const change = prices.length >= 2 ? Math.round(((prices[prices.length - 1].value - prices[0].value) / prices[0].value) * 1000) / 10 : null;
+
+  return (
+    <div className="grid items-start gap-4 @5xl:grid-cols-2">
+      <ChartCard
+        title={`Price per ${material.unit}`}
+        subtitle={change === null ? "At each purchase" : `At each purchase: ${change >= 0 ? "up" : "down"} ${Math.abs(change)}% since the first`}
+        empty={prices.length ? null : "Record a purchase to see its price."}
+        table={{
+          columns: [
+            { key: "date", label: "Bought" },
+            { key: "price", label: `Per ${material.unit}`, align: "right" },
+          ],
+          rows: [...prices].reverse().map((p) => ({ date: dayLabel(p.date), price: formatUnitCost(p.value, symbol) })),
+        }}
+      >
+        {(w) => (
+          <TimeLines
+            width={w}
+            height={180}
+            step
+            zeroBased={false}
+            series={[{ label: `Per ${material.unit}`, color: SERIES[1], points: prices }]}
+            format={(n) => formatUnitCost(n, symbol)}
+            axisFormat={compactNumber}
+            dateLabel={dayLabel}
+          />
+        )}
+      </ChartCard>
+      <ChartCard
+        title="Stock"
+        subtitle={`In ${material.unit}, after each day's movements`}
+        empty={stock.length ? null : "No movements yet."}
+        table={{
+          columns: [
+            { key: "date", label: "Day" },
+            { key: "level", label: `Stock (${material.unit})`, align: "right" },
+          ],
+          rows: [...stock].reverse().map((l) => ({ date: dayLabel(l.date), level: formatQty(l.value) })),
+        }}
+      >
+        {(w) => (
+          <TimeLines
+            width={w}
+            height={180}
+            step
+            series={[{ label: `Stock (${material.unit})`, color: SERIES[1], points: stock }]}
+            format={(n) => `${formatQty(n)} ${material.unit}`}
+            axisFormat={compactNumber}
+            dateLabel={dayLabel}
+          />
+        )}
+      </ChartCard>
     </div>
   );
 }

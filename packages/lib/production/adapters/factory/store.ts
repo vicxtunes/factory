@@ -8,6 +8,7 @@ import { createAdminClient } from "@repo/lib/supabase/admin";
 
 import type { Lender, Loan, Material, MaterialMovement, MaterialPurchase, ProductionRecord, RecipeLine, Repayment, UsageItem } from "../../core/model";
 import type { MaterialFigure, SoldOrder } from "../../core/overview";
+import type { ItemJourney } from "../../core/speed";
 import { unitCostOf } from "../../core/rules";
 import { ProductionError, type ProductionStore } from "../../ports";
 
@@ -726,5 +727,69 @@ export const factoryStore: ProductionStore = {
           });
     }
     return lines;
+  },
+
+  async journeys(_scope, since) {
+    const items = await allPages<{
+      id: string;
+      order_id: string;
+      product: string;
+      product_id: string | null;
+      worker: { name: string } | null;
+      order: { order_no: string; client_name: string; created_at: string; submitted_at: string | null; released_at: string | null; delivery_date: string | null };
+    }>((from, to) =>
+      createAdminClient()
+        .from("order_items")
+        .select(
+          "id, order_id, product, product_id, worker:workers!assigned_worker_id (name), order:orders!inner (order_no, client_name, created_at, submitted_at, released_at, delivery_date, cancelled_at)",
+        )
+        .is("order.cancelled_at", null)
+        .gte("order.created_at", since)
+        .order("created_at")
+        .range(from, to),
+    );
+    // Each item's first time at each step, from the order history.
+    const orderIds = [...new Set(items.map((i) => i.order_id))];
+    const first = new Map<string, Map<string, string>>();
+    const mark = (itemId: string, step: string, at: string) => {
+      const steps = first.get(itemId) ?? new Map<string, string>();
+      if (!steps.has(step)) steps.set(step, at);
+      first.set(itemId, steps);
+    };
+    for (let i = 0; i < orderIds.length; i += 100) {
+      const events = await allPages<{ order_item_id: string | null; action: string; detail: { to?: string } | null; created_at: string }>((from, to) =>
+        createAdminClient()
+          .from("order_audit_log")
+          .select("order_item_id, action, detail, created_at")
+          .in("order_id", orderIds.slice(i, i + 100))
+          .in("action", ["item_sent_to_factory", "status_advanced", "status_overridden"])
+          .not("order_item_id", "is", null)
+          .order("created_at")
+          .range(from, to),
+      );
+      for (const e of events) {
+        if (!e.order_item_id) continue;
+        if (e.action === "item_sent_to_factory") mark(e.order_item_id, "factory", e.created_at);
+        else if (e.detail?.to) mark(e.order_item_id, e.detail.to, e.created_at);
+      }
+    }
+    return items.map((i): ItemJourney => {
+      const steps = first.get(i.id) ?? new Map<string, string>();
+      return {
+        itemId: i.id,
+        orderNo: i.order.order_no,
+        clientName: i.order.client_name,
+        productId: i.product_id,
+        product: i.product,
+        workerName: i.worker?.name ?? null,
+        placedAt: i.order.submitted_at ?? i.order.created_at,
+        releasedAt: i.order.released_at,
+        toFactoryAt: steps.get("factory") ?? null,
+        inProductionAt: steps.get("in_production") ?? null,
+        checkAt: steps.get("quality_check") ?? null,
+        readyAt: steps.get("ready_for_pickup") ?? steps.get("completed") ?? null,
+        dueOn: i.order.delivery_date,
+      };
+    });
   },
 };

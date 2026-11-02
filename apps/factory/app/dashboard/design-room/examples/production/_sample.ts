@@ -1,4 +1,5 @@
 import type { ProductPerformance, ProductionOverview, QueuedItem } from "@repo/lib/production/service";
+import type { SpeedFigures } from "@repo/lib/production/core";
 import { productCosts, type CostingCategory, type ProductionRecord, type LenderAccount, type LenderDetail, type Loan, type Material, type MaterialDetail, type RecipeLine } from "@repo/lib/production/core";
 
 // Sample materials for the Production examples.
@@ -240,4 +241,39 @@ export const BOOK_PERFORMANCE: ProductPerformance = {
     { materialId: "m1", name: "A4 photo paper", unit: "sheet", qty: 46, value: 5_520 },
     { materialId: "m3", name: "Lamination film", unit: "m", qty: 8, value: 300 },
   ],
+};
+
+// 90 days of speed: making is quick, items wait longest before work starts; two items late now.
+export const SPEED: SpeedFigures & { days: number } = {
+  days: 90,
+  done: 412,
+  leadMedian: 62,
+  onTimePercent: 81.4,
+  late: 58,
+  lateNow: [
+    { itemId: "x1", orderNo: "2026-4031", clientName: "Kampala Bridal", productId: "book", product: "Layflat photo book", workerName: "Mayanja Dan", placedAt: "2026-10-25T08:00:00Z", releasedAt: "2026-10-25T12:00:00Z", toFactoryAt: "2026-10-27T09:00:00Z", inProductionAt: null, checkAt: null, readyAt: null, dueOn: "2026-10-30" },
+    { itemId: "x2", orderNo: "2026-4036", clientName: "Peter Ssempa", productId: "crystal", product: "Crystal board", workerName: null, placedAt: "2026-10-28T08:00:00Z", releasedAt: "2026-10-28T10:00:00Z", toFactoryAt: null, inProductionAt: null, checkAt: null, readyAt: null, dueOn: "2026-11-01" },
+  ],
+  stages: [
+    { key: "receiving", label: "Being received", hint: "from the client's order to released into production", median: 5.5, items: 398 },
+    { key: "designing", label: "Designing", hint: "with the designer, until sent to the factory", median: 19, items: 141 },
+    { key: "waiting", label: "Waiting to start", hint: "in the factory, before work starts", median: 26, items: 405 },
+    { key: "making", label: "Making", hint: "in production, until quality check", median: 7.5, items: 409 },
+    { key: "checking", label: "Quality check", hint: "until ready for pickup", median: 2, items: 410 },
+  ],
+  products: [
+    { key: "book", name: "Layflat photo book", done: 96, leadMedian: 101, makingMedian: 11, late: 21, latePercent: 22.8 },
+    { key: "crystal", name: "Crystal board", done: 64, leadMedian: 70, makingMedian: 9, late: 11, latePercent: 17.2 },
+    { key: "frame", name: "Wooden frame", done: 121, leadMedian: 49, makingMedian: 5, late: 14, latePercent: 11.9 },
+    { key: "mug", name: "Photo mug", done: 131, leadMedian: 30, makingMedian: 2, late: 12, latePercent: 9.4 },
+  ],
+  workers: [
+    { key: "Mayanja Dan", name: "Mayanja Dan", done: 160, leadMedian: 58, makingMedian: 6.5, late: 19, latePercent: 12 },
+    { key: "Akello Ruth", name: "Akello Ruth", done: 142, leadMedian: 64, makingMedian: 8, late: 22, latePercent: 15 },
+    { key: "Ssali Ivan", name: "Ssali Ivan", done: 110, leadMedian: 66, makingMedian: 9.5, late: 17, latePercent: 15 },
+  ],
+  weeks: [
+    ["2026-08-10", 70], ["2026-08-17", 66], ["2026-08-24", 72], ["2026-08-31", 64], ["2026-09-07", 61], ["2026-09-14", 68],
+    ["2026-09-21", 59], ["2026-09-28", 63], ["2026-10-05", 57], ["2026-10-12", 60], ["2026-10-19", 55], ["2026-10-26", 62],
+  ].map(([week, h]) => ({ week: week as string, leadMedian: h as number, done: 30 })),
 };

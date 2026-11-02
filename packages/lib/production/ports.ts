@@ -6,6 +6,7 @@ import type { TenantScope } from "@repo/lib/tenancy/types";
 
 import type { Lender, Loan, Material, MaterialDetail, ProductionRecord, RecipeLine, Repayment, UsageItem } from "./core/model";
 import type { MaterialFigure, SoldOrder } from "./core/overview";
+import type { ItemJourney } from "./core/speed";
 import type { CorrectionInput, LoanInput, MaterialInput, MaterialUpdate, PurchaseInput, RecipeInput, RepaymentInput, StockCountInput, VoidInput } from "./core/schema";
 
 export interface ProductionActor {
@@ -66,6 +67,8 @@ export interface ProductionStore {
   recordedCosts(scope: TenantScope, itemIds: string[]): Promise<Map<string, number>>;
   /** Materials taken off stock by production (usage net of voided records' reversals) between two local dates, inclusive. */
   materialsUsed(scope: TenantScope, dates: { from: string | null; to: string | null }): Promise<MaterialFigure[]>;
+  /** Items of live orders placed since `since`, each with the moments in its history. */
+  journeys(scope: TenantScope, since: string): Promise<ItemJourney[]>;
   /** The lines of these items' live records. */
   recordLinesOf(scope: TenantScope, itemIds: string[]): Promise<{ materialId: string; name: string; unit: string; expectedQty: number; actualQty: number; unitCost: number }[]>;
   /** The lines of live records made in [from, to). */

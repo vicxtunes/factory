@@ -12,6 +12,7 @@ import {
   monthlyFigures,
   ordersWhere,
   periodFigures,
+  speedFigures,
   usagePlan,
   wastageByMaterial,
   weOwe,
@@ -23,6 +24,7 @@ import {
   type MonthFigures,
   type PeriodFigures,
   type SoldOrder,
+  type SpeedFigures,
   type UsageInput,
   type UsageItem,
 } from "./core";
@@ -239,6 +241,17 @@ export function createProductionOverview(store: ProductionStore, clock: () => Da
         clients: [...byClient.values()].sort((a, b) => b.revenue - a.revenue).slice(0, 8),
         wastage: wastageByMaterial(await store.recordLinesOf(scope, nowOrders.flatMap((o) => o.items.map((i) => i.itemId)))),
       };
+    },
+  };
+}
+
+/** How fast items go from the client's order to ready, over the last `days` days of orders. */
+export function createSpeed(store: ProductionStore, clock: () => Date = () => new Date()) {
+  return {
+    async view(scope: TenantScope, days: number): Promise<SpeedFigures & { days: number }> {
+      const now = clock();
+      const journeys = await store.journeys(scope, new Date(now.getTime() - days * 86_400_000).toISOString());
+      return { ...speedFigures(journeys, localDate(now, scope.timeZone), (iso) => localDate(iso, scope.timeZone)), days };
     },
   };
 }

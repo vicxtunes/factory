@@ -30,6 +30,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/dashboard/production/materials": "Materials",
   "/dashboard/production/products": "Product costs",
   "/dashboard/production/usage": "Record usage",
+  "/dashboard/production/speed": "Production speed",
   "/dashboard/studios": "Businesses",
   "/dashboard/service-templates": "Service templates",
   "/support": "Support",

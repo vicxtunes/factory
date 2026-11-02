@@ -15,6 +15,12 @@ Screens:
 - **Production → Record usage** `/dashboard/production/usage`: the latest records, each corrected when it used
   something different from its recipe; items made in the last 30 days with nothing recorded (no recipe, or made
   before automatic recording), recorded by hand.
+- **Production → Speed** `/dashboard/production/speed`: from each item's history (order_audit_log) and its
+  order's dates: order to ready, on time against the client's date, items late right now, where items wait (each
+  stage's middle time), the trend week by week, the slowest products, making time by worker (`core/speed.ts`).
+- **A product's page** `/dashboard/production/products/<id>`: its sales, profit, units and margin against the
+  period before, a year of sales against cost, units and cost of one by month, its sizes, clients and wastage;
+  its recipe at `/recipe`.
 - **Accounts → Money we owe** `/dashboard/accounts/owed`: lenders, loans and repayments; the **We owe** card on
   Accounts → Overview.
 
@@ -60,5 +66,6 @@ packages/lib/production/
   actions.ts     "use server": the browser's only entry point.
   policy.ts / access.ts / server.ts
 packages/ui/production/        The screens.
+packages/ui/charts/kit.tsx     The D3 chart kit they use (orange = money in, blue = cost, aqua = time).
 supabase/migrations/20261130100000_production_costing.sql
 ```
