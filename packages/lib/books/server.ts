@@ -30,7 +30,7 @@ const REFUSALS: Record<string, string> = {
   first_due: "Enter the first due date.",
   every: "Choose how often it repeats.",
   gone: "That expense was voided or doesn't exist.",
-  automatic: "This one records itself. Change it where it came from: the material purchase or the loan repayment.",
+  automatic: "This one records itself, so it follows where it came from: a material purchase, a loan repayment or a HivePay collection.",
   rejected: "The boss rejected this expense, so it can't be paid.",
   paid_date: "The day it was paid can't be in the future.",
   method: "Choose how it was paid.",

@@ -60,7 +60,8 @@ export type DayLineKind =
   | "vendor_withdrawal"
   | "wallet_money_back"
   | "expense"
-  | "move";
+  | "move"
+  | "hivepay_fee";
 
 export const DAY_LINE_LABELS: Record<DayLineKind, string> = {
   ...OTHER_MONEY_LABELS,
@@ -73,6 +74,7 @@ export const DAY_LINE_LABELS: Record<DayLineKind, string> = {
   wallet_money_back: "Money back from a wallet",
   expense: "Expense",
   move: "Moved between accounts",
+  hivepay_fee: "HivePay fee (3%)",
 };
 
 export interface DayLine {

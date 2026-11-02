@@ -566,7 +566,7 @@ function ExpenseSheet({ expense: e, today, isBoss, timeZone, onClose }: { expens
           </dl>
 
           {e.automatic ? (
-            <p className="text-sm text-muted">This one records itself from a material purchase or a loan repayment. Change it there.</p>
+            <p className="text-sm text-muted">This one records itself from a material purchase, a loan repayment or a HivePay collection.</p>
           ) : null}
 
           {e.approval === "waiting" && isBoss && !closed ? (
