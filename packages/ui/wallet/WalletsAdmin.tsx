@@ -370,6 +370,8 @@ function AdjustForm({
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const target = mode === "undo" ? earlier.find((e) => e.id === undoing) : undefined;
+  const { accounts } = useMoneySource("cash");
+  const [leftAccount, setLeftAccount] = useState("");
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -382,7 +384,7 @@ function AdjustForm({
     if (!reason.trim()) return setError("Give a reason — it's kept in the wallet history.");
     setError(null);
     start(async () => {
-      const res = await adjustWallet(clientId, takes ? -value : value, reason, target?.id ?? null);
+      const res = await adjustWallet(clientId, takes ? -value : value, reason, target?.id ?? null, mode === "remove" ? leftAccount || null : null);
       if (!res.ok) return setError(res.error);
       await onDone();
     });
@@ -426,6 +428,18 @@ function AdjustForm({
       <Field label="Amount">
         <TextInput inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value)} />
       </Field>
+      {mode === "remove" ? (
+        <Field label="Did money really leave an account?" hint="Yes if cash was handed back, or the deposit never truly arrived. It then shows as money out on Today.">
+          <Select value={leftAccount} onChange={(e) => setLeftAccount(e.target.value)}>
+            <option value="">No, this only corrects the balance</option>
+            {accounts.map((a) => (
+              <option key={a.id} value={a.id}>
+                Yes, it left {a.name}
+              </option>
+            ))}
+          </Select>
+        </Field>
+      ) : null}
       <Field label="Reason (kept in the history, the client sees it)">
         <TextInput value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} />
       </Field>

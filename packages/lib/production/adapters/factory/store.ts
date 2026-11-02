@@ -4,6 +4,7 @@ import "server-only";
 // (supabase/migrations/20261130100000_production_costing.sql). Every query is
 // filtered by the scope's tenant.
 
+import { DAY_CLOSED_MESSAGE } from "@repo/lib/books/model";
 import { createAdminClient } from "@repo/lib/supabase/admin";
 
 import type { Lender, Loan, Material, MaterialMovement, MaterialPurchase, ProductionRecord, RecipeLine, Repayment, UsageItem } from "../../core/model";
@@ -194,6 +195,7 @@ const MESSAGES: Record<string, string> = {
 
 function fail(error: { message: string; code?: string }): never {
   if (error.code === "23505") throw new ProductionError("There's already a material with that name.");
+  if (error.message.includes("DAYBOOK:day_closed")) throw new ProductionError(DAY_CLOSED_MESSAGE);
   const code = /PRODUCTION:(\w+)/.exec(error.message)?.[1];
   if (code && MESSAGES[code]) throw new ProductionError(MESSAGES[code]);
   throw new Error(`production: ${error.message}`);

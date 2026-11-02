@@ -39,6 +39,11 @@ export function formatDate(iso: string | null): string {
   return date.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
 }
 
+/** An instant in the business's own time, the same on the server and every device. */
+export function formatDayTime(iso: string, timeZone: string): string {
+  return new Intl.DateTimeFormat("en-GB", { timeZone, day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(iso));
+}
+
 /** One headline figure. */
 export function FigureTile({
   label,

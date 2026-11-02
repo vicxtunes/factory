@@ -441,7 +441,10 @@ export async function adjustWallet(
   amount: number,
   reason: string,
   reverses: string | null = null,
+  /** The account the money really left, when it did (cash handed back, a deposit that never arrived). */
+  moneyLeftAccount: string | null = null,
 ): Promise<number> {
+  if (moneyLeftAccount && (amount > 0 || reverses)) throw new WalletError("Only money taken from the balance can leave an account.");
   if (amount > 0 && !reverses) throw new WalletError("Money that came in has to be recorded as a deposit, so it reaches the books. Use Record deposit.");
   const amountError = checkAmount(Math.abs(amount), { min: 1, max: MAX_ADJUSTMENT });
   if (amountError) throw new WalletError(amountError);
@@ -449,7 +452,9 @@ export async function adjustWallet(
   if (!clean) throw new WalletError("Give a reason for the adjustment — it's kept in the wallet history.");
   if (!(await directory.loadClient(clientId))) throw new WalletError("Client not found.");
 
-  const balance = await repo.adjust(clientId, amount, clean, viewer, reverses);
+  const balance = moneyLeftAccount
+    ? await repo.takeWithMoneyOut(clientId, Math.abs(amount), clean, moneyLeftAccount, viewer)
+    : await repo.adjust(clientId, amount, clean, viewer, reverses);
   await notifier.walletChangedByStaff(clientId, amount, balance, clean);
   return balance;
 }

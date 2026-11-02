@@ -8,14 +8,10 @@ import { TextInput } from "@repo/ui/Field";
 import { CHANNELS } from "@repo/lib/accounting/core/model";
 import { paymentsTotals, type PaymentLine } from "@repo/lib/accounting/core/figures";
 
-import { CHANNEL_LABELS, Card, EmptyState, FigureTile, useMoney } from "./shared";
+import { CHANNEL_LABELS, Card, EmptyState, FigureTile, formatDayTime, useMoney } from "./shared";
 
-function time(iso: string): string {
-  return new Date(iso).toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
-}
-
-/** Who the money came from, when that's more than the client it's for. */
-const cameFrom = (l: PaymentLine) => [l.senderName && l.senderName !== l.customerName ? l.senderName : null, l.senderPhone].filter(Boolean).join(" · ");
+/** Who the money came from, as recorded. Older hand-recorded money has no sender. */
+const cameFrom = (l: PaymentLine) => [l.senderName, l.senderPhone].filter(Boolean).join(" · ");
 
 const forWhat = (l: PaymentLine) => (l.orderNo ? `Order ${l.orderNo}` : "Wallet top-up");
 
@@ -31,8 +27,9 @@ function matchesSearch(l: PaymentLine, query: string): boolean {
  * recorded it, then each payment with when, from whom, for what and its
  * reference. A card per payment on a phone, a table on wider screens.
  */
-export function PaymentsTable({ lines, exportName }: { lines: PaymentLine[]; exportName: string }) {
+export function PaymentsTable({ lines, exportName, timeZone }: { lines: PaymentLine[]; exportName: string; timeZone: string }) {
   const money = useMoney();
+  const time = (iso: string) => formatDayTime(iso, timeZone);
   const [search, setSearch] = useState("");
   const query = search.trim().toLowerCase();
 

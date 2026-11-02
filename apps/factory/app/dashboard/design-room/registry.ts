@@ -149,6 +149,7 @@ import ProductionUsage from "./examples/production/usage";
 import ProductionOverviewExample from "./examples/production/overview";
 import ProductionProduct from "./examples/production/product";
 import ProductionSpeed from "./examples/production/speed";
+import BooksDayBook from "./examples/books/day-book";
 
 // Everything the Design Room shows. To add a component: build it in
 // packages/ui/, write its examples under ./examples/<slug>/ (one default
@@ -263,6 +264,15 @@ export const COMPONENTS: RoomComponent[] = [
       { title: "Materials", file: "production/materials.tsx", Demo: ProductionMaterials },
       { title: "One material", file: "production/material-detail.tsx", Demo: ProductionMaterialDetail },
     ],
+  },
+  {
+    slug: "day-book",
+    name: "Today (day book)",
+    category: "Flows",
+    status: "live",
+    source: "packages/ui/books/DayBookBoard.tsx",
+    summary: "One day's money under Accounts: for each of cash, bank and mobile money, opening + in − out = closing, then every line with who, why, account, source and who recorded it. Search, Excel and PDF. Any past day can be opened. Close the day takes a count in a form sheet (cash required, a difference needs a reason); a closed day can't change, and money that arrives after closing is marked and carries to the next opening. Tiles stack on a phone; lines are cards on a phone, a table from md.",
+    examples: [{ title: "A day ready to close", file: "books/day-book.tsx", Demo: BooksDayBook }],
   },
   {
     slug: "money-we-owe",

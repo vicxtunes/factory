@@ -17,3 +17,17 @@ export const otherMoneyInputSchema = z.object({
 export type OtherMoneyInput = z.output<typeof otherMoneyInputSchema>;
 
 export const voidOtherMoneySchema = z.object({ id: z.string().uuid(), reason: z.string().trim().min(3, "Say why.").max(500) });
+
+const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Choose a day.");
+
+export const openingInputSchema = z.object({
+  counts: z.array(z.object({ accountId: z.string().uuid(), amount: z.number().int().min(0, "A balance can't be negative.") })).min(1, "Enter a balance."),
+});
+
+export const closeDayInputSchema = z.object({
+  day,
+  counts: z.array(z.object({ accountId: z.string().uuid(), counted: z.number().int().min(0, "A count can't be negative.").nullable() })),
+  note: z.string().trim().max(500).nullish().transform((v) => v || null),
+});
+
+export type CloseDayInput = z.output<typeof closeDayInputSchema>;

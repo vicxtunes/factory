@@ -463,6 +463,19 @@ export async function adjust(clientId: string, amount: number, note: string, act
   return num(data);
 }
 
+/** Takes from a wallet where the money really left an account: the day book shows it as money out. */
+export async function takeWithMoneyOut(clientId: string, amount: number, note: string, accountId: string, actor: WalletActor): Promise<number> {
+  const { data, error } = await createAdminClient().rpc("money_wallet_take", {
+    p_client: clientId,
+    p_amount: amount,
+    p_note: note,
+    p_account: accountId,
+    ...actorArgs(actor),
+  });
+  if (error) throwDbError(error);
+  return num(data);
+}
+
 // --- Mobile money collections (provider prompts) ----------------------------
 
 export interface CollectionRow {

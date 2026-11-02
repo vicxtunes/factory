@@ -65,6 +65,7 @@ function refreshMoneyPages() {
     clientPath("/orders"),
     "/dashboard/wallets",
     "/dashboard/transactions",
+    "/dashboard/accounts/today",
   ]) {
     revalidatePath(path);
   }
@@ -263,9 +264,15 @@ export async function listMoneyAccounts(): Promise<WalletResult<MoneyAccount[]>>
   });
 }
 
-export async function adjustWallet(clientId: string, amount: number, reason: string, reverses: string | null = null): Promise<WalletResult<number>> {
+export async function adjustWallet(
+  clientId: string,
+  amount: number,
+  reason: string,
+  reverses: string | null = null,
+  moneyLeftAccount: string | null = null,
+): Promise<WalletResult<number>> {
   return run(async () => {
-    const balance = await service.adjustWallet(await requireStaff(), clientId, amount, reason, reverses);
+    const balance = await service.adjustWallet(await requireStaff(), clientId, amount, reason, reverses, moneyLeftAccount);
     refreshMoneyPages();
     return balance;
   });

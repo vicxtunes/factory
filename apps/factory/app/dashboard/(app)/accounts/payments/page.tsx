@@ -52,6 +52,7 @@ async function Payments({ searchParams }: { searchParams: SearchParams }) {
         key={`${view.period.from}-${view.period.to}`}
         lines={view.lines}
         exportName="payments"
+        timeZone={scope.timeZone}
       />
       <OtherMoneyPanel lines={other} />
     </>
