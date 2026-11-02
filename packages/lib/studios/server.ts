@@ -23,7 +23,7 @@ import { createAdminClient } from "@repo/lib/supabase/admin";
 import { supabaseStudioStore } from "./adapters/supabase/store";
 import { studioScope, type Studio, type StudioOwner } from "./core";
 import { STUDIOS_ENABLED } from "./feature";
-import { canViewAllStudios } from "./policy";
+import { businessToOpen, canViewAllStudios } from "./policy";
 import { StudioError } from "./ports";
 import { StudioService } from "./service";
 
@@ -59,8 +59,8 @@ export const studiosOf = cache(async (clientId: string) => {
 
 /**
  * The signed-in client's studio, or null when signed out or studios are off.
- * One they work for when this device chose it (or they have none of their
- * own), else their own, opened on first use.
+ * One they work for when this device chose it (or their own isn't open for
+ * business: see businessToOpen), else their own, opened on first use.
  */
 const callerStudio = cache(async (): Promise<CallerStudio | null> => {
   if (!STUDIOS_ENABLED) return null;
@@ -68,7 +68,8 @@ const callerStudio = cache(async (): Promise<CallerStudio | null> => {
   if (!session) return null;
   const { owned, working } = await studiosOf(session.client_id);
   const chosen = (await cookies()).get(STUDIO_CHOICE_COOKIE)?.value;
-  const member = working.find((w) => w.studio.id === chosen) ?? (owned ? undefined : working[0]);
+  const opening = businessToOpen(chosen, working.map((w) => w.studio.id), owned ? { active: owned.status === "active" } : null);
+  const member = working.find((w) => w.studio.id === opening);
   if (member) {
     const access: StudioAccess = { owner: false, memberId: member.membership.memberId, areas: member.membership.access };
     return { session, studio: member.studio, scope: studioScope(member.studio), access };

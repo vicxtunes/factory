@@ -8,13 +8,27 @@ import { studioAccess } from "@repo/lib/studio-access/server";
 import { stepsDone } from "@repo/lib/studio-access/core";
 import { slugFromName } from "@repo/lib/studio-portal/core";
 import { offerings, templatesOnOffer } from "@repo/lib/offerings/server";
-import { requireOwnStudio } from "@repo/lib/studios/server";
+import { requireOwnStudio, studiosOf } from "@repo/lib/studios/server";
+import { StudioSwitcher } from "@repo/ui/studios/StudioSwitcher";
 
 export const metadata = { title: "My Business" };
 
 // Where My Studio goes until the studio works: set-up (first time, or after
 // Aming sent it back), waiting for review, or suspended.
+// An account that also works for other businesses can go back to them from here.
 export default async function StudioWelcomePage() {
+  const { session, studio } = await requireOwnStudio();
+  const { working } = await studiosOf(session.client_id);
+  const options = [{ value: "own", label: `${studio.name} (yours)` }, ...working.map((w) => ({ value: w.studio.id, label: w.studio.name }))];
+  return (
+    <>
+      {working.length ? <StudioSwitcher options={options} current="own" /> : null}
+      <Welcome />
+    </>
+  );
+}
+
+async function Welcome() {
   const { studio, scope } = await requireOwnStudio();
   const a = await studioAccess.access(studio.id);
   if (a.status === "active") redirect("/studio");
