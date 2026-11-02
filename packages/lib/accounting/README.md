@@ -45,8 +45,7 @@ once, as the receipt.
 
 **Nothing gets in unrecorded.** `money_not_in_books` lists wallet money added without a payment and HivePay collections with no money-in line. It should stay empty; the hourly money watch raises an alert for anything in it. Money that isn't from a client (`other_money_in`, money borrowed) shows separately under Payments and isn't counted as Payments received.
 
-**Money out isn't tracked** by the app (expenses, bank transfers), so channels show money received,
-not running bank or cash balances.
+**Money out** is under Expenses, and **Today** (`money_day_lines`, `money_day_balances`) shows each account's opening + in − out = closing for a day. Channels here show money received only. Moves between the business's own accounts aren't tracked yet.
 
 ## Layout
 

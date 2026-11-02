@@ -20,11 +20,31 @@ const REFUSALS: Record<string, string> = {
   opening_missing: "Set the opening balance of every account before closing a day.",
   count_cash: "Enter the cash you counted.",
   note_needed: "Say why the count is different from what's expected.",
+  name: "Say what the expense is.",
+  amount: "Enter an amount above zero.",
+  date: "The expense's date can't be in the future.",
+  category: "Choose a category. Materials and loan interest record themselves.",
+  first_due: "Enter the first due date.",
+  every: "Choose how often it repeats.",
+  gone: "That expense was voided or doesn't exist.",
+  automatic: "This one records itself. Change it where it came from: the material purchase or the loan repayment.",
+  rejected: "The boss rejected this expense, so it can't be paid.",
+  paid_date: "The day it was paid can't be in the future.",
+  method: "Choose how it was paid.",
+  reference: "Enter the transaction ID or bank reference.",
+  account: "Choose which account it was paid from.",
+  actual: "Enter the real amount.",
+  needs_approval: "This amount needs the boss's approval before it can be paid.",
+  too_much: "That's more than is left to pay.",
+  not_waiting: "This expense isn't waiting for approval.",
+  reject_reason: "Say why it's rejected.",
+  void_reason: "Say why it's being voided.",
+  has_payments: "Void its payments first.",
 };
 
 /** A sentence for one of the database's refusals; anything else stays a plain error, logged and hidden. */
 function fail(error: { message: string }): never {
-  const code = /DAYBOOK:(\w+)/.exec(error.message)?.[1];
+  const code = /(?:DAYBOOK|EXPENSE):(\w+)/.exec(error.message)?.[1];
   if (code && REFUSALS[code]) throw new AppError(REFUSALS[code]);
   throw new Error(`books: ${error.message}`);
 }
@@ -179,6 +199,9 @@ export async function dayBook(scope: TenantScope, day: string): Promise<DayBook>
     })),
   };
 }
+
+/** The refusal sentences, for the other server files in this module. */
+export { fail as failBooks };
 
 export async function setOpenings(counts: { accountId: string; amount: number }[], actor: { id: string; name: string }): Promise<void> {
   const db = createAdminClient();

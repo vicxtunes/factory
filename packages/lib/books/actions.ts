@@ -12,16 +12,40 @@ import { runAction } from "@repo/lib/kernel/server/action";
 import { resolveTenantScope } from "@repo/lib/tenancy/server/resolve";
 import { checkMoneySource } from "@repo/lib/wallet/policy";
 
-import { closeDayInputSchema, openingInputSchema, otherMoneyInputSchema, voidOtherMoneySchema } from "./schema";
+import type { ExpenseDetail } from "./expenses";
+import {
+  approvalLimitSchema,
+  categoryInputSchema,
+  closeDayInputSchema,
+  decideInputSchema,
+  expenseInputSchema,
+  expensePaymentInputSchema,
+  openingInputSchema,
+  otherMoneyInputSchema,
+  scheduleInputSchema,
+  voidInputSchema,
+  voidOtherMoneySchema,
+} from "./schema";
+import * as expenses from "./expenses-server";
 import * as store from "./server";
 
 const PAYMENTS = "/dashboard/accounts/payments";
 const TODAY = "/dashboard/accounts/today";
+const EXPENSES = "/dashboard/accounts/expenses";
+
+function expensesChanged() {
+  revalidatePath(EXPENSES);
+  revalidatePath(TODAY);
+}
 
 async function staff() {
   const session = await getDashboardSession();
   if (!session || !canViewAccounts(session.role)) throw new AppError("Only the boss and supervisors can do this.");
-  return { actor: { id: session.userId, name: session.fullName ?? session.email ?? "Staff" }, scope: await resolveTenantScope() };
+  return {
+    actor: { id: session.userId, name: session.fullName ?? session.email ?? "Staff" },
+    scope: await resolveTenantScope(),
+    isBoss: session.role === "boss",
+  };
 }
 
 export async function recordOtherMoney(input: unknown): Promise<Result> {
@@ -60,5 +84,107 @@ export async function closeDay(input: unknown): Promise<Result> {
     const { actor } = await staff();
     await store.closeDay(parseInput(closeDayInputSchema, input), actor);
     revalidatePath(TODAY);
+  });
+}
+
+// --- Expenses ----------------------------------------------------------------
+
+export async function recordExpense(input: unknown): Promise<Result> {
+  return runAction("books", async () => {
+    const { actor, isBoss } = await staff();
+    await expenses.recordExpense(parseInput(expenseInputSchema, input), isBoss, actor);
+    expensesChanged();
+  });
+}
+
+export async function addExpenseSchedule(input: unknown): Promise<Result> {
+  return runAction("books", async () => {
+    const { actor, isBoss } = await staff();
+    await expenses.addSchedule(parseInput(scheduleInputSchema, input), isBoss, actor);
+    expensesChanged();
+  });
+}
+
+export async function endExpenseSchedule(id: unknown): Promise<Result> {
+  return runAction("books", async () => {
+    const { actor } = await staff();
+    await expenses.endSchedule(parseInput(voidInputSchema.pick({ id: true }), { id }).id, actor.name);
+    expensesChanged();
+  });
+}
+
+export async function payExpense(input: unknown): Promise<Result> {
+  return runAction("books", async () => {
+    const { actor, isBoss } = await staff();
+    await expenses.pay(parseInput(expensePaymentInputSchema, input), isBoss, actor);
+    expensesChanged();
+  });
+}
+
+export async function voidExpensePayment(input: unknown): Promise<Result> {
+  return runAction("books", async () => {
+    const { actor } = await staff();
+    const { id, reason } = parseInput(voidInputSchema, input);
+    await expenses.voidPayment(id, reason, actor.name);
+    expensesChanged();
+  });
+}
+
+export async function voidExpense(input: unknown): Promise<Result> {
+  return runAction("books", async () => {
+    const { actor } = await staff();
+    const { id, reason } = parseInput(voidInputSchema, input);
+    await expenses.voidExpense(id, reason, actor.name);
+    expensesChanged();
+  });
+}
+
+export async function decideExpense(input: unknown): Promise<Result> {
+  return runAction("books", async () => {
+    const { actor, isBoss } = await staff();
+    if (!isBoss) throw new AppError("Only the boss can approve or reject an expense.");
+    const { id, approve, note } = parseInput(decideInputSchema, input);
+    await expenses.decide(id, approve, note, actor.name);
+    expensesChanged();
+  });
+}
+
+export async function setExpenseApprovalLimit(input: unknown): Promise<Result> {
+  return runAction("books", async () => {
+    const { actor, isBoss } = await staff();
+    if (!isBoss) throw new AppError("Only the boss can set the approval limit.");
+    await expenses.setApprovalLimit(parseInput(approvalLimitSchema, input).above, actor.name);
+    expensesChanged();
+  });
+}
+
+export async function addExpenseCategory(input: unknown): Promise<Result<{ key: string; name: string; automatic: boolean }>> {
+  return runAction("books", async () => {
+    await staff();
+    const category = await expenses.addCategory(parseInput(categoryInputSchema, input).name);
+    revalidatePath(EXPENSES);
+    return category;
+  });
+}
+
+export async function getExpenseDetail(id: unknown): Promise<Result<ExpenseDetail>> {
+  return runAction("books", async () => {
+    await staff();
+    return expenses.detail(parseInput(voidInputSchema.pick({ id: true }), { id }).id);
+  });
+}
+
+export async function startExpenseDocumentUpload(input: { expenseId: string; fileName: string }): Promise<Result<{ path: string; token: string }>> {
+  return runAction("books", async () => {
+    await staff();
+    return expenses.startDocumentUpload(parseInput(voidInputSchema.pick({ id: true }), { id: input.expenseId }).id, input.fileName);
+  });
+}
+
+export async function confirmExpenseDocument(input: { expenseId: string; path: string }): Promise<Result> {
+  return runAction("books", async () => {
+    const { actor } = await staff();
+    await expenses.confirmDocument(parseInput(voidInputSchema.pick({ id: true }), { id: input.expenseId }).id, input.path, actor.name);
+    revalidatePath(EXPENSES);
   });
 }

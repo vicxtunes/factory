@@ -58,7 +58,8 @@ export type DayLineKind =
   | "loan_repayment"
   | "business_withdrawal"
   | "vendor_withdrawal"
-  | "wallet_money_back";
+  | "wallet_money_back"
+  | "expense";
 
 export const DAY_LINE_LABELS: Record<DayLineKind, string> = {
   ...OTHER_MONEY_LABELS,
@@ -69,6 +70,7 @@ export const DAY_LINE_LABELS: Record<DayLineKind, string> = {
   business_withdrawal: "Studio withdrawal",
   vendor_withdrawal: "Vendor withdrawal",
   wallet_money_back: "Money back from a wallet",
+  expense: "Expense",
 };
 
 export interface DayLine {

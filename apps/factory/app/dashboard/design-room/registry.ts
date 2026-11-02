@@ -150,6 +150,7 @@ import ProductionOverviewExample from "./examples/production/overview";
 import ProductionProduct from "./examples/production/product";
 import ProductionSpeed from "./examples/production/speed";
 import BooksDayBook from "./examples/books/day-book";
+import BooksExpenses from "./examples/books/expenses";
 
 // Everything the Design Room shows. To add a component: build it in
 // packages/ui/, write its examples under ./examples/<slug>/ (one default
@@ -273,6 +274,15 @@ export const COMPONENTS: RoomComponent[] = [
     source: "packages/ui/books/DayBookBoard.tsx",
     summary: "One day's money under Accounts: for each of cash, bank and mobile money, opening + in − out = closing, then every line with who, why, account, source and who recorded it. Search, Excel and PDF. Any past day can be opened. Close the day takes a count in a form sheet (cash required, a difference needs a reason); a closed day can't change, and money that arrives after closing is marked and carries to the next opening. Tiles stack on a phone; lines are cards on a phone, a table from md.",
     examples: [{ title: "A day ready to close", file: "books/day-book.tsx", Demo: BooksDayBook }],
+  },
+  {
+    slug: "expenses",
+    name: "Expenses",
+    category: "Flows",
+    status: "live",
+    source: "packages/ui/books/ExpensesBoard.tsx",
+    summary: "One-time, recurring same amount and recurring varying amount in one list, with to pay, overdue and spent tiles. Status comes from the payments: unpaid, part paid, paid, overdue. Opening one shows its record, full or part payments each with a printable receipt, and its documents. Mistakes are voided with a reason. The boss sets a limit and approves what's above it. Forms in a form sheet; cards on a phone, a table from md.",
+    examples: [{ title: "Expenses", file: "books/expenses.tsx", Demo: BooksExpenses }],
   },
   {
     slug: "money-we-owe",
