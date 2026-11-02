@@ -8,8 +8,12 @@
 // - Confirm / decline (the studio owner): the studio comes from the owner's
 //   session; an id from another studio is simply "not found".
 
+import { randomUUID } from "crypto";
+
 import { revalidatePath } from "next/cache";
 
+import { MEDIA_BUCKET, safeStorageSegment } from "@repo/lib/storage/client";
+import { createAdminClient } from "@repo/lib/supabase/admin";
 import { parseInput, type Result } from "@repo/lib/kernel/core";
 import { runAction } from "@repo/lib/kernel/server/action";
 import { slugSchema } from "@repo/lib/studio-portal/core";
@@ -20,7 +24,7 @@ import type { MobileMoneyCollection } from "@repo/lib/wallet/types";
 import { applyStudioPayment } from "@repo/lib/studio-payments/server";
 import { WalletError, checkStudioRequestPayment, startStudioRequestPayment } from "@repo/lib/wallet/studio";
 
-import { orderNowSchema, productRequestIdSchema, type OrderNowOutcome } from "./core";
+import { MAX_ORDER_MEDIA, isOrderFileType, isOrderMediaPath, orderLinkSchema, orderMediaFolder, orderNowSchema, productRequestIdSchema, type OrderNowOutcome } from "./core";
 import { isRememberedProductRequest, productRequests, rememberProductRequest } from "./server";
 import { ProductRequestError } from "./service";
 
@@ -35,6 +39,68 @@ export async function orderNow(slug: unknown, input: unknown): Promise<Result<Or
     if (!outcome.signedIn) await rememberProductRequest(at.studio.id, outcome.requestId);
     revalidatePath("/studio", "layout");
     return outcome;
+  });
+}
+
+/** The order, if it's this device's or the signed-in client's own, and not declined. */
+async function myRequest(slug: unknown, id: unknown) {
+  const at = await studioAtSlug(parseInput(slugSchema, slug));
+  if (!at || at.redirectTo) throw new ProductRequestError("This studio's page doesn't exist.");
+  const requestId = parseInput(productRequestIdSchema, id);
+  const request = await productRequests.get(at.scope, requestId);
+  const signedIn = await portalClient(at.studio.id);
+  const mine = request && (signedIn?.customerId === request.customerId || (await isRememberedProductRequest(at.studio.id, requestId)));
+  if (!request || !mine) throw new ProductRequestError("That order doesn't exist.");
+  if (request.status === "declined") throw new ProductRequestError("The studio declined this order.");
+  return { at, request };
+}
+
+/** Starts one file of the client's own order: straight to storage from their phone, like a factory order's. */
+export async function startOrderUpload(slug: unknown, input: { requestId: unknown; fileName: unknown; fileType: unknown }): Promise<Result<{ path: string; token: string }>> {
+  return runAction("product-requests", async () => {
+    const { at, request } = await myRequest(slug, input.requestId);
+    if (request.media.length >= MAX_ORDER_MEDIA) throw new ProductRequestError(`That's the most one order can hold (${MAX_ORDER_MEDIA}). Send the rest as a link.`);
+    if (!isOrderFileType(String(input.fileType ?? ""))) throw new ProductRequestError("Send photos or PDFs.");
+    const path = `${orderMediaFolder(at.scope.tenantId, request.id)}/${randomUUID()}-${safeStorageSegment(String(input.fileName ?? "photo"))}`;
+    const { data, error } = await createAdminClient().storage.from(MEDIA_BUCKET).createSignedUploadUrl(path);
+    if (error || !data) throw new Error(`product-requests: could not start an upload: ${error?.message}`);
+    return { path: data.path, token: data.token };
+  });
+}
+
+/** Saves an uploaded file on the order, once it's really in storage and really a photo or PDF. */
+export async function saveOrderUpload(slug: unknown, input: { requestId: unknown; path: unknown }): Promise<Result> {
+  return runAction("product-requests", async () => {
+    const { at, request } = await myRequest(slug, input.requestId);
+    const path = String(input.path ?? "");
+    if (!isOrderMediaPath(path, at.scope.tenantId, request.id)) throw new ProductRequestError("That upload isn't for this order.");
+    const name = path.slice(path.lastIndexOf("/") + 1);
+    const bucket = createAdminClient().storage.from(MEDIA_BUCKET);
+    const { data: found, error } = await bucket.list(path.slice(0, path.lastIndexOf("/")), { search: name, limit: 10 });
+    const file = found?.find((f) => f.name === name);
+    if (error || !file) throw new ProductRequestError("Could not find that upload. Try again.");
+    const mimeType: string | null = file.metadata?.mimetype ?? null;
+    if (!isOrderFileType(mimeType)) {
+      await bucket.remove([path]);
+      throw new ProductRequestError("Send photos or PDFs.");
+    }
+    await productRequests.addMedia(at.scope, request.id, {
+      fileName: name.replace(/^[0-9a-f-]{36}-/, ""),
+      storagePath: path,
+      mimeType,
+      url: bucket.getPublicUrl(path).data.publicUrl,
+    });
+    revalidatePath("/studio", "layout");
+  });
+}
+
+/** Saves a link to the client's photos on their order (Drive, Dropbox…), for a set too big to upload. */
+export async function addOrderLink(slug: unknown, input: { requestId: unknown; url: unknown }): Promise<Result> {
+  return runAction("product-requests", async () => {
+    const { at, request } = await myRequest(slug, input.requestId);
+    const url = parseInput(orderLinkSchema, input.url);
+    await productRequests.addMedia(at.scope, request.id, { fileName: "Photo link", storagePath: null, mimeType: null, url });
+    revalidatePath("/studio", "layout");
   });
 }
 
@@ -58,14 +124,9 @@ export async function payForProductRequest(
   input: { requestId: unknown; amount: unknown; phone: unknown },
 ): Promise<Result<MobileMoneyCollection>> {
   return runAction("product-requests", async () => {
-    const at = await studioAtSlug(parseInput(slugSchema, slug));
-    if (!at || at.redirectTo) throw new ProductRequestError("This studio's page doesn't exist.");
-    const requestId = parseInput(productRequestIdSchema, input.requestId);
-    const request = await productRequests.get(at.scope, requestId);
-    const signedIn = await portalClient(at.studio.id);
-    const mine = request && (signedIn?.customerId === request.customerId || (await isRememberedProductRequest(at.studio.id, requestId)));
-    if (!request || !mine) throw new ProductRequestError("That order doesn't exist.");
-    if (request.status === "declined") throw new ProductRequestError("The studio declined this order.");
+    const { at, request } = await myRequest(slug, input.requestId);
+    if (!request.media.length) throw new ProductRequestError("Add your photos first, so the studio can make your order.");
+    const requestId = request.id;
 
     const amount = Number(input.amount);
     const total = request.unitPrice * request.quantity;
@@ -119,7 +180,12 @@ export async function declineProductRequest(id: unknown): Promise<Result> {
 export async function deleteProductRequest(id: unknown): Promise<Result> {
   return runAction("product-requests", async () => {
     const { scope } = await studioOfCaller("money");
-    await deleteStudioRecord(scope, "product_request", parseInput(productRequestIdSchema, id));
+    const requestId = parseInput(productRequestIdSchema, id);
+    const request = await productRequests.get(scope, requestId);
+    await deleteStudioRecord(scope, "product_request", requestId);
+    // Its files go with it. Best effort: the order is already gone.
+    const paths = request?.media.flatMap((m) => (m.storagePath ? [m.storagePath] : [])) ?? [];
+    if (paths.length) await createAdminClient().storage.from(MEDIA_BUCKET).remove(paths).catch(() => {});
     revalidatePath("/studio", "layout");
   });
 }

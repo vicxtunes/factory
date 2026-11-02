@@ -49,16 +49,28 @@ export default async function StudioAccountsPage({ searchParams }: { searchParam
   );
 }
 
-// Clients who asked for a product online: Confirm makes the invoice.
+// Clients who asked for a product online: Confirm makes the invoice. Then confirmed ones, with what to make them from.
 async function OrderRequests({ scope }: { scope: TenantScope }) {
-  const requests = await productRequests.open(scope);
-  if (!requests.length) return null;
-  const paid = await paidForStudioRequests(requests.map((r) => r.id));
+  const [requests, confirmed] = await Promise.all([productRequests.open(scope), productRequests.confirmed(scope)]);
+  if (!requests.length && !confirmed.length) return null;
+  const paid = await paidForStudioRequests([...requests, ...confirmed].map((r) => r.id));
+  const list = (shown: typeof requests) => <ProductRequestsList requests={shown} paid={paid} scope={scope} invoicesPath="/studio/invoices" clientsPath="/studio/clients" />;
   return (
-    <section>
-      <SectionLabel>Order requests ({requests.length})</SectionLabel>
-      <ProductRequestsList requests={requests} paid={paid} scope={scope} invoicesPath="/studio/invoices" clientsPath="/studio/clients" />
-    </section>
+    <>
+      {requests.length ? (
+        <section>
+          <SectionLabel>Order requests ({requests.length})</SectionLabel>
+          {list(requests)}
+        </section>
+      ) : null}
+      {/* Paying confirms an order by itself, so this is where its photos stay. */}
+      {confirmed.length ? (
+        <section>
+          <SectionLabel>Confirmed orders</SectionLabel>
+          {list(confirmed)}
+        </section>
+      ) : null}
+    </>
   );
 }
 

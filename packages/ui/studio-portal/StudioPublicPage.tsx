@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 
 import { BookingStatusBadge } from "@repo/ui/bookings/BookingBits";
 import { DirectionsButton } from "@repo/ui/maps/Directions";
@@ -32,6 +33,7 @@ export function StudioPublicPage({
   signedInAs,
   requests,
   orderRequests,
+  addPhotos,
 }: {
   studio: Studio;
   slug: string;
@@ -48,6 +50,8 @@ export function StudioPublicPage({
   /** Requests this device sent while not signed in, as they stand: bookings, and products asked for. */
   requests: Booking[];
   orderRequests: ProductRequest[];
+  /** Add photos to an order this device sent. */
+  addPhotos: (order: ProductRequest) => ReactNode;
 }) {
   const outline = "inline-flex min-h-11 items-center rounded-[var(--radius)] border border-border bg-surface px-4 text-sm hover:bg-background";
 
@@ -132,6 +136,7 @@ export function StudioPublicPage({
                       {r.quantity} × {r.itemName}
                     </span>
                     <span className="rounded-full bg-surface px-2 py-0.5 text-xs font-medium">{PRODUCT_REQUEST_STATUS_LABELS[r.status]}</span>
+                    {r.status === "declined" ? null : addPhotos(r)}
                   </li>
                 ))}
               </ul>
