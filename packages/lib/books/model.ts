@@ -59,7 +59,8 @@ export type DayLineKind =
   | "business_withdrawal"
   | "vendor_withdrawal"
   | "wallet_money_back"
-  | "expense";
+  | "expense"
+  | "move";
 
 export const DAY_LINE_LABELS: Record<DayLineKind, string> = {
   ...OTHER_MONEY_LABELS,
@@ -71,6 +72,7 @@ export const DAY_LINE_LABELS: Record<DayLineKind, string> = {
   vendor_withdrawal: "Vendor withdrawal",
   wallet_money_back: "Money back from a wallet",
   expense: "Expense",
+  move: "Moved between accounts",
 };
 
 export interface DayLine {
@@ -105,15 +107,31 @@ export interface DayBook {
   lastClosedDay: string | null;
 }
 
-/** Totals of the day's lines, including money in no account. */
-export function dayTotals(lines: Pick<DayLine, "direction" | "amount" | "accountId">[]) {
+/**
+ * Totals of the day's lines, including money in no account. A move between the
+ * business's own accounts isn't money in or out: it only changes where it sits.
+ */
+export function dayTotals(lines: Pick<DayLine, "direction" | "amount" | "accountId" | "kind">[]) {
   let moneyIn = 0;
   let moneyOut = 0;
   let inNoAccount = 0;
   for (const l of lines) {
+    if (l.kind === "move") continue;
     if (l.direction === "in") moneyIn += l.amount;
     else moneyOut += l.amount;
     if (l.accountId === null) inNoAccount += l.amount;
   }
   return { moneyIn, moneyOut, net: moneyIn - moneyOut, inNoAccount };
+}
+
+/** What one account moved to and from the business's other accounts that day. */
+export function accountMoves(lines: Pick<DayLine, "direction" | "amount" | "accountId" | "kind">[], accountId: string) {
+  let movedIn = 0;
+  let movedOut = 0;
+  for (const l of lines) {
+    if (l.kind !== "move" || l.accountId !== accountId) continue;
+    if (l.direction === "in") movedIn += l.amount;
+    else movedOut += l.amount;
+  }
+  return { movedIn, movedOut };
 }

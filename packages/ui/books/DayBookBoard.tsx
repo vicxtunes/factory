@@ -10,14 +10,14 @@ import { useMemo, useState, useTransition } from "react";
 
 import { Button } from "@repo/ui/Button";
 import { ExportButtons } from "@repo/ui/ExportButtons";
-import { Field, TextInput } from "@repo/ui/Field";
+import { Field, Select, TextInput } from "@repo/ui/Field";
 import { FormSheet } from "@repo/ui/FormSheet";
 import { Card, EmptyState, FigureTile, formatDayTime, useMoney } from "@repo/ui/accounting/shared";
-import { parseNumber } from "@repo/ui/production/sheets";
-import { closeDay, setOpeningBalances } from "@repo/lib/books/actions";
-import { DAY_LINE_LABELS, dayTotals, type DayAccount, type DayBook, type DayLine } from "@repo/lib/books/model";
+import { VoidSheet, parseNumber } from "@repo/ui/production/sheets";
+import { closeDay, moveMoney, setOpeningBalances, voidMoneyMove } from "@repo/lib/books/actions";
+import { DAY_LINE_LABELS, accountMoves, dayTotals, type DayAccount, type DayBook, type DayLine } from "@repo/lib/books/model";
 
-const METHODS: Record<string, string> = { cash: "Cash", mobile_money: "Mobile money", bank_transfer: "Bank transfer", card: "Card", other: "Other" };
+const METHODS: Record<string, string> = { cash: "Cash", mobile_money: "Mobile money", bank_transfer: "Bank transfer", card: "Card", other: "Other", move: "Own accounts" };
 
 /** A calendar day moved by some days, in plain date arithmetic so no zone can shift it. */
 function shiftDay(day: string, by: number): string {
@@ -49,7 +49,8 @@ export function DayBookBoard({ book, timeZone }: { book: DayBook; timeZone: stri
   const money = useMoney();
   const router = useRouter();
   const [search, setSearch] = useState("");
-  const [sheet, setSheet] = useState<"opening" | "close" | null>(null);
+  const [sheet, setSheet] = useState<"opening" | "close" | "move" | null>(null);
+  const [voidingMove, setVoidingMove] = useState<DayLine | null>(null);
   const query = search.trim().toLowerCase();
   const accountName = useMemo(() => new Map(book.accounts.map((a) => [a.id, a.name])), [book.accounts]);
   const nameOf = (l: DayLine) => (l.accountId ? accountName.get(l.accountId) ?? "" : "No account");
@@ -101,7 +102,7 @@ export function DayBookBoard({ book, timeZone }: { book: DayBook; timeZone: stri
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {book.accounts.map((a) => (
-          <AccountTile key={a.id} account={a} />
+          <AccountTile key={a.id} account={a} lines={book.lines} />
         ))}
         <FigureTile label="Net for the day" value={money(allTotals.net)} hint={`${money(allTotals.moneyIn)} in · ${money(allTotals.moneyOut)} out`} />
       </div>
@@ -139,9 +140,14 @@ export function DayBookBoard({ book, timeZone }: { book: DayBook; timeZone: stri
             </p>
           ) : null}
         </Card>
-      ) : canClose ? (
-        <Button onClick={() => setSheet("close")}>Close {isToday ? "today" : "this day"}</Button>
       ) : null}
+
+      <div className="flex flex-wrap items-center gap-2">
+        {!book.close && canClose ? <Button onClick={() => setSheet("close")}>Close {isToday ? "today" : "this day"}</Button> : null}
+        <Button variant="secondary" onClick={() => setSheet("move")}>
+          Move money
+        </Button>
+      </div>
 
       <div className="flex flex-wrap items-center gap-2">
         <div className="w-full sm:w-auto sm:min-w-0 sm:flex-1">
@@ -190,7 +196,7 @@ export function DayBookBoard({ book, timeZone }: { book: DayBook; timeZone: stri
         <>
           <ul className="space-y-2 md:hidden">
             {visible.map((l) => (
-              <li key={`${l.kind}-${l.id}`} className="rounded-2xl border border-border bg-surface p-3 shadow-theme-xs">
+              <li key={`${l.kind}-${l.id}-${l.direction}`} className="rounded-2xl border border-border bg-surface p-3 shadow-theme-xs">
                 <div className="flex items-start justify-between gap-2">
                   <p className="min-w-0 truncate font-medium">{who(l)}</p>
                   <SignedAmount line={l} />
@@ -206,6 +212,7 @@ export function DayBookBoard({ book, timeZone }: { book: DayBook; timeZone: stri
                   {l.recordedBy ? ` · By ${l.recordedBy}` : ""}
                 </p>
                 {l.late ? <LateTag /> : null}
+                {l.kind === "move" && l.direction === "out" ? <VoidMoveButton onClick={() => setVoidingMove(l)} /> : null}
               </li>
             ))}
           </ul>
@@ -225,7 +232,7 @@ export function DayBookBoard({ book, timeZone }: { book: DayBook; timeZone: stri
               </thead>
               <tbody className="divide-y divide-border">
                 {visible.map((l) => (
-                  <tr key={`${l.kind}-${l.id}`}>
+                  <tr key={`${l.kind}-${l.id}-${l.direction}`}>
                     <td className="whitespace-nowrap px-4 py-2 tnum">
                       {formatDayTime(l.at, timeZone)}
                       {l.late ? <LateTag /> : null}
@@ -243,7 +250,10 @@ export function DayBookBoard({ book, timeZone }: { book: DayBook; timeZone: stri
                       {METHODS[l.method] ?? l.method}
                       {l.phone || l.reference ? <span className="block text-xs">{[l.phone, l.reference].filter(Boolean).join(" · ")}</span> : null}
                     </td>
-                    <td className="whitespace-nowrap px-4 py-2 text-muted">{l.recordedBy ?? "—"}</td>
+                    <td className="whitespace-nowrap px-4 py-2 text-muted">
+                      {l.recordedBy ?? "—"}
+                      {l.kind === "move" && l.direction === "out" ? <VoidMoveButton onClick={() => setVoidingMove(l)} /> : null}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -263,6 +273,20 @@ export function DayBookBoard({ book, timeZone }: { book: DayBook; timeZone: stri
 
       {sheet === "opening" ? <OpeningSheet accounts={unset} onClose={() => setSheet(null)} /> : null}
       {sheet === "close" ? <CloseSheet book={book} onClose={() => setSheet(null)} /> : null}
+      {sheet === "move" ? <MoveSheet book={book} onClose={() => setSheet(null)} /> : null}
+      {voidingMove ? (
+        <VoidSheet
+          open
+          onClose={() => setVoidingMove(null)}
+          title="Void this move"
+          explain={`${money(voidingMove.amount)} goes back to where it was. It stays on record with your reason. A closed day can't change.`}
+          run={async (reason) => {
+            const res = await voidMoneyMove({ id: voidingMove.id, reason });
+            if (res.ok) router.refresh();
+            return res.ok ? { ok: true } : res;
+          }}
+        />
+      ) : null}
     </div>
   );
 }
@@ -277,16 +301,28 @@ function SignedAmount({ line }: { line: DayLine }) {
   );
 }
 
+function VoidMoveButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button type="button" className="mt-1 block text-xs text-muted underline" onClick={onClick}>
+      Void
+    </button>
+  );
+}
+
 function LateTag() {
   return <span className="mt-1 block text-xs font-medium text-warning-700 dark:text-warning-500">After closing</span>;
 }
 
-function AccountTile({ account: a }: { account: DayAccount }) {
+function AccountTile({ account: a, lines }: { account: DayAccount; lines: DayLine[] }) {
   const money = useMoney();
+  // The database's in and out include moves; here they're shown apart.
+  const { movedIn, movedOut } = accountMoves(lines, a.id);
   const rows: [string, string][] = [
     ...(a.opening === null ? [] : ([["Opening", money(a.opening)]] as [string, string][])),
-    ["Money in", `+${money(a.moneyIn)}`],
-    ["Money out", `−${money(a.moneyOut)}`],
+    ["Money in", `+${money(a.moneyIn - movedIn)}`],
+    ["Money out", `−${money(a.moneyOut - movedOut)}`],
+    ...(movedIn ? ([["Moved in", `+${money(movedIn)}`]] as [string, string][]) : []),
+    ...(movedOut ? ([["Moved out", `−${money(movedOut)}`]] as [string, string][]) : []),
     ...(a.difference ? ([[a.difference > 0 ? "Over at count" : "Short at count", money(Math.abs(a.difference))]] as [string, string][]) : []),
   ];
   return (
@@ -395,6 +431,90 @@ function CloseSheet({ book, onClose }: { book: DayBook; onClose: () => void }) {
         {error ? <p className="text-xs text-error-600">{error}</p> : null}
         <Button type="submit" loading={pending} className="w-full">
           Close the day
+        </Button>
+      </form>
+    </FormSheet>
+  );
+}
+
+/** Cash banked, cash drawn, mobile money sent to the bank: the business holds the same money, in another place. */
+function MoveSheet({ book, onClose }: { book: DayBook; onClose: () => void }) {
+  const money = useMoney();
+  const router = useRouter();
+  const [id] = useState(() => crypto.randomUUID());
+  const [from, setFrom] = useState(book.accounts[0]?.id ?? "");
+  const [to, setTo] = useState(book.accounts[1]?.id ?? "");
+  const [amount, setAmount] = useState("");
+  const [movedOn, setMovedOn] = useState(book.today);
+  const [reference, setReference] = useState("");
+  const [note, setNote] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+
+  const source = book.accounts.find((a) => a.id === from);
+  const needsReference = book.accounts.some((a) => (a.id === from || a.id === to) && a.kind !== "cash");
+  const value = parseNumber(amount);
+  // Today's closing is only what's there now when looking at today.
+  const held = book.day === book.today ? source?.closing ?? null : null;
+
+  function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (from === to) return setError("Choose two different accounts.");
+    if (!(value > 0) || !Number.isInteger(value)) return setError("Enter the amount in whole shillings.");
+    if (needsReference && !reference.trim()) return setError("Enter the slip number or transaction ID.");
+    setError(null);
+    start(async () => {
+      const res = await moveMoney({ id, fromAccountId: from, toAccountId: to, amount: value, movedOn, reference, note });
+      if (!res.ok) return setError(res.error);
+      router.refresh();
+      onClose();
+    });
+  }
+
+  return (
+    <FormSheet open onClose={onClose} title="Move money">
+      <form onSubmit={submit} className="space-y-3">
+        <p className="text-sm text-muted">From one of the business&apos;s accounts to another, like banking cash. It isn&apos;t income or an expense. Record any charges as an expense.</p>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <Field label="From">
+            <Select value={from} onChange={(e) => setFrom(e.target.value)}>
+              {book.accounts.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="To">
+            <Select value={to} onChange={(e) => setTo(e.target.value)}>
+              {book.accounts.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        </div>
+        <Field label="Amount">
+          <TextInput inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value)} />
+          {held !== null && value > held ? (
+            <p className="mt-1 text-xs font-medium text-warning-700 dark:text-warning-500">
+              {source?.name} should only hold {money(held)}. Check the amount before saving.
+            </p>
+          ) : null}
+        </Field>
+        <Field label="Day it moved">
+          <TextInput type="date" value={movedOn} max={book.today} onChange={(e) => setMovedOn(e.target.value)} />
+        </Field>
+        <Field label={needsReference ? "Slip number or transaction ID" : "Reference (optional)"}>
+          <TextInput value={reference} onChange={(e) => setReference(e.target.value)} maxLength={100} />
+        </Field>
+        <Field label="Note (optional)">
+          <TextInput value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} />
+        </Field>
+        {error ? <p className="text-xs text-error-600">{error}</p> : null}
+        <Button type="submit" loading={pending} className="w-full">
+          Move money
         </Button>
       </form>
     </FormSheet>

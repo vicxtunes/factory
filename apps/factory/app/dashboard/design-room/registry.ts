@@ -272,7 +272,7 @@ export const COMPONENTS: RoomComponent[] = [
     category: "Flows",
     status: "live",
     source: "packages/ui/books/DayBookBoard.tsx",
-    summary: "One day's money under Accounts: for each of cash, bank and mobile money, opening + in − out = closing, then every line with who, why, account, source and who recorded it. Search, Excel and PDF. Any past day can be opened. Close the day takes a count in a form sheet (cash required, a difference needs a reason); a closed day can't change, and money that arrives after closing is marked and carries to the next opening. Tiles stack on a phone; lines are cards on a phone, a table from md.",
+    summary: "One day's money under Accounts: for each of cash, bank and mobile money, opening + in − out = closing, then every line with who, why, account, source and who recorded it. Search, Excel and PDF. Any past day can be opened. Move money records cash banked or drawn, shown apart from money in and out. Close the day takes a count in a form sheet (cash required, a difference needs a reason); a closed day can't change, and money that arrives after closing is marked and carries to the next opening. Tiles stack on a phone; lines are cards on a phone, a table from md.",
     examples: [{ title: "A day ready to close", file: "books/day-book.tsx", Demo: BooksDayBook }],
   },
   {

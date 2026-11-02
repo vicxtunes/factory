@@ -8,7 +8,7 @@ import { createAdminClient } from "@repo/lib/supabase/admin";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
 import { DAY_CLOSED_MESSAGE, type DayAccount, type DayBook, type DayLineKind, type OtherMoneyLine, type OtherMoneyLineKind } from "./model";
-import type { CloseDayInput, OtherMoneyInput } from "./schema";
+import type { CloseDayInput, MoneyMoveInput, OtherMoneyInput } from "./schema";
 
 const REFUSALS: Record<string, string> = {
   day_closed: DAY_CLOSED_MESSAGE,
@@ -20,6 +20,9 @@ const REFUSALS: Record<string, string> = {
   opening_missing: "Set the opening balance of every account before closing a day.",
   count_cash: "Enter the cash you counted.",
   note_needed: "Say why the count is different from what's expected.",
+  move_same: "Choose two different accounts.",
+  move_date: "The day it moved can't be in the future.",
+  move_reference: "Enter the slip number or transaction ID.",
   name: "Say what the expense is.",
   amount: "Enter an amount above zero.",
   date: "The expense's date can't be in the future.",
@@ -219,5 +222,25 @@ export async function closeDay(input: CloseDayInput, actor: { id: string; name: 
     p_actor_id: actor.id,
     p_actor_name: actor.name,
   });
+  if (error) fail(error);
+}
+
+export async function moveMoney(input: MoneyMoveInput, actor: { id: string; name: string }): Promise<void> {
+  const { error } = await createAdminClient().rpc("money_move", {
+    p_id: input.id,
+    p_from: input.fromAccountId,
+    p_to: input.toAccountId,
+    p_amount: input.amount,
+    p_moved_on: input.movedOn,
+    p_reference: input.reference,
+    p_note: input.note,
+    p_actor_id: actor.id,
+    p_actor_name: actor.name,
+  });
+  if (error) fail(error);
+}
+
+export async function voidMove(id: string, reason: string, byName: string): Promise<void> {
+  const { error } = await createAdminClient().from("money_moves").update({ voided_at: new Date().toISOString(), void_reason: reason, voided_by_name: byName }).eq("id", id).is("voided_at", null);
   if (error) fail(error);
 }

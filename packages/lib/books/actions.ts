@@ -20,10 +20,12 @@ import {
   decideInputSchema,
   expenseInputSchema,
   expensePaymentInputSchema,
+  moneyMoveInputSchema,
   openingInputSchema,
   otherMoneyInputSchema,
   scheduleInputSchema,
   voidInputSchema,
+  voidMoneyMoveSchema,
   voidOtherMoneySchema,
 } from "./schema";
 import * as expenses from "./expenses-server";
@@ -83,6 +85,23 @@ export async function closeDay(input: unknown): Promise<Result> {
   return runAction("books", async () => {
     const { actor } = await staff();
     await store.closeDay(parseInput(closeDayInputSchema, input), actor);
+    revalidatePath(TODAY);
+  });
+}
+
+export async function moveMoney(input: unknown): Promise<Result> {
+  return runAction("books", async () => {
+    const { actor } = await staff();
+    await store.moveMoney(parseInput(moneyMoveInputSchema, input), actor);
+    revalidatePath(TODAY);
+  });
+}
+
+export async function voidMoneyMove(input: unknown): Promise<Result> {
+  return runAction("books", async () => {
+    const { actor } = await staff();
+    const { id, reason } = parseInput(voidMoneyMoveSchema, input);
+    await store.voidMove(id, reason, actor.name);
     revalidatePath(TODAY);
   });
 }

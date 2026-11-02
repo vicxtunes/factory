@@ -32,6 +32,20 @@ export const closeDayInputSchema = z.object({
 
 export type CloseDayInput = z.output<typeof closeDayInputSchema>;
 
+export const moneyMoveInputSchema = z.object({
+  id: z.string().uuid(),
+  fromAccountId: z.string().uuid("Choose the account it left."),
+  toAccountId: z.string().uuid("Choose the account it went into."),
+  amount: z.number().int().positive("Enter the amount moved."),
+  movedOn: day,
+  reference: z.string().trim().max(100).nullish().transform((v) => v || null),
+  note: z.string().trim().max(500).nullish().transform((v) => v || null),
+});
+
+export const voidMoneyMoveSchema = z.object({ id: z.string().uuid(), reason: z.string().trim().min(3, "Say why.").max(500) });
+
+export type MoneyMoveInput = z.output<typeof moneyMoveInputSchema>;
+
 // --- Expenses ----------------------------------------------------------------
 
 const text = (max: number) => z.string().trim().max(max).nullish().transform((v) => v || null);
