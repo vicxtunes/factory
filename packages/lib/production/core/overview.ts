@@ -36,6 +36,7 @@ export interface ProductFigures {
   units: number;
   revenue: number;
   cost: number;
+  /** Over the sales whose cost is known, like the margin: a sale with no recipe isn't counted as profit. */
   profit: number;
   /** null without revenue. */
   marginPercent: number | null;
@@ -48,7 +49,12 @@ export interface ProductFigures {
 export interface PeriodFigures {
   revenue: number;
   cost: number;
+  /** Over the sales whose cost is known, like the margin: a sale with no recipe isn't counted as profit. */
   profit: number;
+  /**
+   * Over the sales whose cost is known (recorded or from a recipe): sales
+   * with no recipe would count as all margin. Null when no sale's cost is known.
+   */
   marginPercent: number | null;
   /** How the cost is known: from recorded usage, from recipes, or not at all (revenue with no recipe). */
   costRecorded: number;
@@ -132,15 +138,16 @@ export function periodFigures(
   }
 
   const products = [...byProduct.values()]
-    .map((p) => ({ ...p, profit: p.revenue - p.cost, marginPercent: p.noRecipe ? null : percent(p.revenue - p.cost, p.revenue) }))
+    // A product with no recipe has no known profit: 0 here, shown as "—", and it sorts last.
+    .map((p) => ({ ...p, profit: p.noRecipe ? 0 : p.revenue - p.cost, marginPercent: p.noRecipe ? null : percent(p.revenue - p.cost, p.revenue) }))
     .sort((a, b) => b.profit - a.profit || b.revenue - a.revenue);
   const revenue = products.reduce((s, p) => s + p.revenue, 0);
   const cost = costRecorded + costEstimated;
   return {
     revenue,
     cost,
-    profit: revenue - cost,
-    marginPercent: percent(revenue - cost, revenue),
+    profit: revenue - revenueWithoutRecipe - cost,
+    marginPercent: percent(revenue - revenueWithoutRecipe - cost, revenue - revenueWithoutRecipe),
     costRecorded,
     costEstimated,
     revenueWithoutRecipe,
