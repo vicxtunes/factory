@@ -139,6 +139,16 @@ import HireCardAvailable from "./examples/hire-card/available";
 import ServiceCardsVendor from "./examples/service-cards/vendor";
 import SocialIconAll from "./examples/social-icon/all";
 import MoneyDashboardBoss from "./examples/money-dashboard/boss";
+import ProductionMaterials from "./examples/production/materials";
+import ProductionMaterialDetail from "./examples/production/material-detail";
+import ProductionMoneyWeOwe from "./examples/production/money-we-owe";
+import ProductionLender from "./examples/production/lender";
+import ProductionProductCosts from "./examples/production/product-costs";
+import ProductionRecipe from "./examples/production/recipe";
+import ProductionUsage from "./examples/production/usage";
+import ProductionOverviewExample from "./examples/production/overview";
+import ProductionProduct from "./examples/production/product";
+import ProductionSpeed from "./examples/production/speed";
 
 // Everything the Design Room shows. To add a component: build it in
 // packages/ui/, write its examples under ./examples/<slug>/ (one default
@@ -239,8 +249,80 @@ export const COMPONENTS: RoomComponent[] = [
     category: "Flows",
     status: "draft",
     source: "packages/ui/money/MoneyDashboard.tsx",
-    summary: "The bosses' money at a glance: money received (orange), sales and what clients owe, each against the period before; money in by channel; 12 months of cash flow with the hovered month lit up; the latest payments, searchable. Cards swipe on a phone, sit three across on a desktop.",
+    summary: "The bosses' money at a glance: money received (orange), sales and what clients owe and what the business owes (We owe), the first two against the period before; money in by channel; 12 months of cash flow with the hovered month lit up; the latest payments, searchable. Cards swipe on a phone, sit three across on a desktop.",
     examples: [{ title: "This month", file: "money-dashboard/boss.tsx", Demo: MoneyDashboardBoss }],
+  },
+  {
+    slug: "production-materials",
+    name: "Production materials",
+    category: "Flows",
+    status: "live",
+    source: "packages/ui/production/MaterialsBoard.tsx",
+    summary: "What production uses: stock, price per unit and value for each material, cards on a phone and a table from md up; below-zero stock in red. Add material and Record purchase open in a form sheet; a purchase sets the price and counts as money spent, or as money we owe the supplier when on credit. One material shows its purchases (each can be voided with a reason) beside its stock history.",
+    examples: [
+      { title: "Materials", file: "production/materials.tsx", Demo: ProductionMaterials },
+      { title: "One material", file: "production/material-detail.tsx", Demo: ProductionMaterialDetail },
+    ],
+  },
+  {
+    slug: "money-we-owe",
+    name: "Money we owe",
+    category: "Flows",
+    status: "live",
+    source: "packages/ui/production/MoneyWeOweBoard.tsx",
+    summary: "Everyone the business borrowed from (owners, suppliers' credit, banks and SACCOs, other projects) with what's still owed and overdue, most owed first; a tab per kind; cards on a phone, a table from md. Record money borrowed and Record repayment open in a form sheet; a repayment shows its interest share before it's saved. One lender lists each loan with its repayments, each voidable with a reason. Borrowed money isn't income; only interest is a cost.",
+    examples: [
+      { title: "Lenders", file: "production/money-we-owe.tsx", Demo: ProductionMoneyWeOwe },
+      { title: "One lender", file: "production/lender.tsx", Demo: ProductionLender },
+    ],
+  },
+  {
+    slug: "product-costs",
+    name: "Product costs",
+    category: "Flows",
+    status: "live",
+    source: "packages/ui/production/ProductCostsBoard.tsx",
+    summary: "What each product size costs to make at today's material prices, its price, profit and margin (red at a loss, amber under 20%), by category; per-page products show the cost per page instead of a margin. A product's recipe: lines for every size and each size's own, materials per unit or per a number detail (pages), other costs as fixed amounts; each size's cost, price and margin beside it, with a page count to try.",
+    examples: [
+      { title: "Product costs", file: "production/product-costs.tsx", Demo: ProductionProductCosts },
+      { title: "A recipe", file: "production/recipe.tsx", Demo: ProductionRecipe },
+    ],
+  },
+  {
+    slug: "record-usage",
+    name: "Record usage",
+    category: "Flows",
+    status: "live",
+    source: "packages/ui/production/UsageBoard.tsx",
+    summary: "Items with a recipe are recorded by themselves at Quality check (marked automatic). Correct opens a form sheet with what it was expected to use, to enter what it really used or add other materials; the record is replaced and the stock follows, and the difference is the wastage (red when over). Items made in the last 30 days with nothing recorded (no recipe, or made before) are recorded by hand. Records can be voided with a reason, which puts the stock back.",
+    examples: [{ title: "Record usage", file: "production/usage.tsx", Demo: ProductionUsage }],
+  },
+  {
+    slug: "production-overview",
+    name: "Production overview",
+    category: "Flows",
+    status: "live",
+    source: "packages/ui/production/ProductionOverviewView.tsx",
+    summary: "For a period: gross profit (orange), production cost, margin and materials used, each against the period before; how the cost is known; a year of sales against cost (grouped columns), margin by month (line), a product map (sales against margin, bubble = units, four quadrants saying what to do), where the sales come from (treemap: category → product, size = sales, shade = margin), sales by day (calendar heatmap); products by profit with Excel/PDF export; wastage and materials used as ranked bars. Every chart has a hover readout and a table view.",
+    examples: [{ title: "This month", file: "production/overview.tsx", Demo: ProductionOverviewExample }],
+  },
+  {
+    slug: "product-performance",
+    name: "Product performance",
+    category: "Flows",
+    status: "live",
+    source: "packages/ui/production/ProductPerformanceView.tsx",
+    summary: "One product for a period: gross profit, sales, units and margin against the period before; a year of sales against cost, units by month, what one cost to make by month; its sizes, its clients and its wastage as ranked bars. Every chart has a table view. Built on the D3 chart kit (packages/ui/charts/kit.tsx).",
+    examples: [{ title: "A photo book", file: "production/product.tsx", Demo: ProductionProduct }],
+  },
+  {
+    slug: "production-speed",
+    name: "Production speed",
+    category: "Flows",
+    status: "live",
+    source: "packages/ui/production/SpeedBoard.tsx",
+    summary: "From each item's history: order to ready (the middle item), on time against the client's date, items late right now (a list to chase), where items wait (each stage's middle time, in journey order), the trend week by week, the slowest products and making time by worker. Time is drawn in aqua so it never reads as money; every chart has a table view.",
+    examples: [{ title: "90 days", file: "production/speed.tsx", Demo: ProductionSpeed }],
   },
   {
     slug: "button",

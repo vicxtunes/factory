@@ -18,6 +18,7 @@ export default function MoneyDashboardBoss() {
   return (
     <MoneyDashboard
       timeZone="Africa/Kampala"
+      weOwe={{ owed: 2_724_000, overdue: 700_000, overdueCount: 1 }}
       view={{
         period: { preset: "this_month", from: null, to: null, fromDate: "2026-10-01", toDate: "2026-10-31" },
         received: { now: 42_000_000, before: 63_000_000 },

@@ -13,6 +13,7 @@ import {
   DashboardIcon,
   OrdersIcon,
   PaymentIcon,
+  ProductionIcon,
   ProductsIcon,
   SupportIcon,
 } from "@repo/ui/icons";
@@ -25,6 +26,7 @@ const GROUP_ICONS: Record<NavGroup["id"], typeof DashboardIcon> = {
   catalog: ProductsIcon,
   payments: PaymentIcon,
   accounts: AccountsIcon,
+  production: ProductionIcon,
   people: ClientsIcon,
   help: SupportIcon,
 };
