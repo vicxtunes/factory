@@ -7,7 +7,7 @@
 // (packages/lib/wallet/server/watch.ts).
 
 import { applyStudioPayment } from "@repo/lib/studio-payments/server";
-import { reconcileWaitingHivepay, sendDailyMoneyReport, watchMoney } from "@repo/lib/wallet/webhooks";
+import { reconcileWaitingHivepay, sendDailyMoneyReport, sendLateMoneyNote, watchMoney } from "@repo/lib/wallet/webhooks";
 
 const EVERY_MS = 2 * 60_000;
 const WATCH_EVERY_MS = 60 * 60_000;
@@ -38,4 +38,5 @@ if (process.env.NODE_ENV === "production" && process.env.NEXT_PUBLIC_TEST_COPY !
   });
   every(WATCH_EVERY_MS, "money watch", watchMoney);
   every(REPORT_CHECK_EVERY_MS, "daily money report", sendDailyMoneyReport);
+  every(REPORT_CHECK_EVERY_MS, "late money note", sendLateMoneyNote);
 }

@@ -20,12 +20,18 @@ import {
   MAX_REFERENCE_LENGTH,
   MIN_DEPOSIT,
   checkAmount,
+  checkMoneySource,
   checkReference,
   cleanReason,
   cleanText,
   isOrderPayable,
 } from "../policy";
+import { localDate } from "@repo/lib/accounting/core/period";
+import { resolveTenantScope } from "@repo/lib/tenancy/server/resolve";
+
 import type {
+  MoneyAccount,
+  MoneySource,
   OrderPaymentBreakdown,
   OrderPaymentExcessDisposition,
   OrderPaymentRecord,
@@ -116,6 +122,20 @@ function checkDepositInput(input: { amount: number; method: PaymentMethod; refer
   const referenceError = checkReference(input.method, input.reference);
   if (referenceError) throw new WalletError(referenceError);
 }
+
+/** Money recorded by hand has to say where it came from and where it went. */
+async function requireSource(input: { method: PaymentMethod; reference?: string | null; source?: MoneySource | null }) {
+  const scope = await resolveTenantScope();
+  const error = checkMoneySource({ method: input.method, reference: input.reference, ...input.source }, localDate(new Date(), scope.timeZone));
+  if (error) throw new WalletError(error);
+}
+
+const cleanSource = (source: MoneySource): MoneySource => ({
+  senderName: source.senderName.trim().slice(0, 120),
+  senderPhone: cleanText(source.senderPhone, 30),
+  receivedOn: source.receivedOn,
+  accountId: source.accountId,
+});
 
 function checkOrderPaymentInput(input: { amount: number; method: PaymentMethod; reference?: string | null }) {
   const amountError = checkAmount(input.amount, { min: 1, max: MAX_DEPOSIT, label: "Payment" });
@@ -379,37 +399,57 @@ export async function rejectDeposit(viewer: StaffViewer, paymentId: string, reas
   await notifier.depositRejected(payment.client_id, payment.amount, clean);
 }
 
+export async function listMoneyAccounts(): Promise<MoneyAccount[]> {
+  return repo.listMoneyAccounts();
+}
+
 /** Staff take money at the counter / see it on the statement: recorded and credited in one step. */
 export async function recordDeposit(
   viewer: StaffViewer,
   clientId: string,
-  input: { amount: number; method: PaymentMethod; reference?: string | null; note?: string | null },
+  input: { amount: number; method: PaymentMethod; reference?: string | null; note?: string | null; source: MoneySource },
 ): Promise<number> {
   checkDepositInput(input, MANUAL_METHODS);
+  await requireSource(input);
   const client = await directory.loadClient(clientId);
   if (!client) throw new WalletError("Client not found.");
 
-  const payment = await repo.insertPayment({
+  const paymentId = await repo.insertSourcedDeposit({
     clientId,
     amount: input.amount,
     method: input.method,
     reference: cleanText(input.reference, MAX_REFERENCE_LENGTH),
     note: cleanText(input.note, MAX_NOTE_LENGTH),
-    createdBy: viewer,
+    source: cleanSource(input.source),
+    actor: viewer,
   });
+  const payment = await repo.getPayment(paymentId);
+  if (!payment) throw new WalletError("Deposit not found.");
   // If this fails the payment stays pending in the "to confirm" queue —
   // nothing is lost, and confirming it there finishes the job.
   return settle(payment, viewer);
 }
 
-export async function adjustWallet(viewer: StaffViewer, clientId: string, amount: number, reason: string): Promise<number> {
+/**
+ * Corrects a balance. Taking money off needs a reason; adding is only for
+ * undoing an earlier adjustment (`reverses`), since money that came in has to
+ * be a deposit to reach the books.
+ */
+export async function adjustWallet(
+  viewer: StaffViewer,
+  clientId: string,
+  amount: number,
+  reason: string,
+  reverses: string | null = null,
+): Promise<number> {
+  if (amount > 0 && !reverses) throw new WalletError("Money that came in has to be recorded as a deposit, so it reaches the books. Use Record deposit.");
   const amountError = checkAmount(Math.abs(amount), { min: 1, max: MAX_ADJUSTMENT });
   if (amountError) throw new WalletError(amountError);
   const clean = cleanReason(reason);
   if (!clean) throw new WalletError("Give a reason for the adjustment — it's kept in the wallet history.");
   if (!(await directory.loadClient(clientId))) throw new WalletError("Client not found.");
 
-  const balance = await repo.adjust(clientId, amount, clean, viewer);
+  const balance = await repo.adjust(clientId, amount, clean, viewer, reverses);
   await notifier.walletChangedByStaff(clientId, amount, balance, clean);
   return balance;
 }
@@ -466,9 +506,11 @@ export async function recordOrderPayment(
     reference?: string | null;
     note?: string | null;
     excessDisposition?: OrderPaymentExcessDisposition | null;
+    source: MoneySource;
   },
 ): Promise<{ applied: number; toWallet: number; physicallyRefunded: number; balance: number }> {
   checkOrderPaymentInput(input);
+  await requireSource(input);
   const order = await prepareOrderForPayment(orderId);
   const result = await repo.recordOrderReceipt({
     orderId,
@@ -477,6 +519,7 @@ export async function recordOrderPayment(
     reference: cleanText(input.reference, MAX_REFERENCE_LENGTH),
     note: cleanText(input.note, MAX_NOTE_LENGTH),
     excessDisposition: input.excessDisposition ?? null,
+    source: cleanSource(input.source),
     actor,
   });
   await directory.logOnOrder(orderId, actor, "order_payment_received", {

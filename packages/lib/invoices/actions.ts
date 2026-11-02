@@ -12,7 +12,7 @@
 import { revalidatePath } from "next/cache";
 
 import { WalletError, checkOrderLinkPayment, startOrderLinkPayment } from "@repo/lib/wallet/orders";
-import type { MobileMoneyCollection, OrderPaymentExcessDisposition, PaymentMethod } from "@repo/lib/wallet/types";
+import type { MobileMoneyCollection, MoneySource, OrderPaymentExcessDisposition, PaymentMethod } from "@repo/lib/wallet/types";
 
 import { countAttempt, tooManyAttempts } from "@repo/lib/auth/attempts";
 import { canViewAccounts } from "@repo/lib/accounting/policy";
@@ -62,6 +62,7 @@ export interface InvoicePaymentInput {
   reference?: string | null;
   note?: string | null;
   excessDisposition?: OrderPaymentExcessDisposition | null;
+  source: MoneySource;
 }
 
 // --- Staff -----------------------------------------------------------------

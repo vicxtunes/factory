@@ -38,6 +38,15 @@ const MESSAGES: Record<string, string> = {
   no_business: "This account has no business.",
   terms_not_accepted: "Agree to the wallet terms first: open My Business → Wallet.",
   withdrawal_not_pending: "This withdrawal was already handled.",
+  source_sender: "Say who sent the money.",
+  source_phone: "Enter the phone number the money came from.",
+  source_reference: "Enter the transaction ID or bank reference.",
+  source_date: "Enter the day the money arrived.",
+  source_future: "The day the money arrived can't be in the future.",
+  source_account: "Choose which account the money went into.",
+  adjust_cannot_add: "Money that came in has to be recorded as a deposit, so it reaches the books. Use Record deposit.",
+  adjust_bad_reversal: "That adjustment can't be undone from here.",
+  adjust_over_reversal: "That's more than is left to undo on that adjustment.",
 };
 
 /** The WALLET code in a database error message, if there is one. */

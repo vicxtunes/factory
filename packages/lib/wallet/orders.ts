@@ -8,7 +8,7 @@ import { WalletError, walletErrorMessage } from "./server/errors";
 import type { WalletActor } from "./server/identity";
 import * as mobileMoney from "./server/mobile-money";
 import * as service from "./server/service";
-import type { MobileMoneyCollection, OrderPaymentExcessDisposition, OrderPaymentRecord, PaymentMethod } from "./types";
+import type { MobileMoneyCollection, MoneySource, OrderPaymentExcessDisposition, OrderPaymentRecord, PaymentMethod } from "./types";
 
 /**
  * Called when an order is cancelled: everything paid for it goes back to the
@@ -54,6 +54,7 @@ export async function recordOrderPayment(
     reference?: string | null;
     note?: string | null;
     excessDisposition?: OrderPaymentExcessDisposition | null;
+    source: MoneySource;
   },
 ): Promise<{ applied: number; toWallet: number; physicallyRefunded: number; balance: number }> {
   return service.recordOrderPayment(actor, orderId, input);

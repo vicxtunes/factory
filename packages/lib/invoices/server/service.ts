@@ -14,7 +14,7 @@ import {
   paidByOrders,
   recordOrderPayment,
 } from "@repo/lib/wallet/orders";
-import type { OrderPaymentExcessDisposition, PaymentMethod } from "@repo/lib/wallet/types";
+import type { MoneySource, OrderPaymentExcessDisposition, PaymentMethod } from "@repo/lib/wallet/types";
 import { formatMoney } from "@repo/lib/currency/format";
 import { notifyActor } from "@repo/lib/push/send";
 
@@ -362,6 +362,7 @@ export async function recordPayment(
     reference?: string | null;
     note?: string | null;
     excessDisposition?: OrderPaymentExcessDisposition | null;
+    source: MoneySource;
   },
 ): Promise<{ applied: number; toWallet: number; physicallyRefunded: number; invoice: StaffInvoiceView }> {
   const invoice = await loadInvoice(invoiceId);

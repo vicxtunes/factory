@@ -13,8 +13,9 @@ import {
   recordDeposit,
   rejectDeposit,
 } from "@repo/lib/wallet/actions";
-import { MANUAL_METHODS, MAX_ADJUSTMENT, MAX_DEPOSIT, METHOD_LABELS, MIN_DEPOSIT, checkAmount, checkReference } from "@repo/lib/wallet/policy";
-import type { PaymentMethod, PendingDeposit, WalletListRow, WalletView } from "@repo/lib/wallet/types";
+import { MANUAL_METHODS, MAX_ADJUSTMENT, MAX_DEPOSIT, METHOD_LABELS, MIN_DEPOSIT, checkAmount, checkMoneySource } from "@repo/lib/wallet/policy";
+import type { PaymentMethod, PendingDeposit, WalletEntry, WalletListRow, WalletView } from "@repo/lib/wallet/types";
+import { MoneySourceFields, todayHere, useMoneySource } from "./MoneySourceFields";
 
 import { BalanceCard, EntryLine, MethodOptions, Panel, PaymentLine, formatWhen, parseAmount, useMoney } from "./shared";
 
@@ -252,8 +253,8 @@ function ClientWalletDrawer({ clientId, onClose }: { clientId: string | null; on
             </Button>
           </BalanceCard>
 
-          {form === "deposit" ? <RecordDepositForm clientId={current.clientId} onDone={reload} /> : null}
-          {form === "adjust" ? <AdjustForm clientId={current.clientId} balance={current.balance} onDone={reload} /> : null}
+          {form === "deposit" ? <RecordDepositForm clientId={current.clientId} clientName={current.clientName} onDone={reload} /> : null}
+          {form === "adjust" ? <AdjustForm clientId={current.clientId} balance={current.balance} entries={current.entries} onDeposit={() => setForm("deposit")} onDone={reload} /> : null}
 
           {current.pending.length ? (
             <Panel title="Waiting for confirmation">
@@ -295,7 +296,7 @@ function ClientWalletDrawer({ clientId, onClose }: { clientId: string | null; on
   );
 }
 
-function RecordDepositForm({ clientId, onDone }: { clientId: string; onDone: () => Promise<void> }) {
+function RecordDepositForm({ clientId, clientName, onDone }: { clientId: string; clientName: string; onDone: () => Promise<void> }) {
   const money = useMoney();
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState<PaymentMethod>("cash");
@@ -303,18 +304,19 @@ function RecordDepositForm({ clientId, onDone }: { clientId: string; onDone: () 
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  const sourceForm = useMoneySource(method, clientName);
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
     const value = parseAmount(amount);
     const amountError = checkAmount(value, { min: MIN_DEPOSIT, max: MAX_DEPOSIT });
     if (amountError) return setError(amountError);
-    const referenceError = checkReference(method, reference);
-    if (referenceError) return setError(referenceError);
+    const sourceError = checkMoneySource({ method, reference, ...sourceForm.value }, todayHere());
+    if (sourceError) return setError(sourceError);
     if (!window.confirm(`Add ${money(value)} to this wallet? Only record money you've actually received.`)) return;
     setError(null);
     start(async () => {
-      const res = await recordDeposit(clientId, { amount: value, method, reference, note });
+      const res = await recordDeposit(clientId, { amount: value, method, reference, note, source: sourceForm.value });
       if (!res.ok) return setError(res.error);
       await onDone();
     });
@@ -331,9 +333,10 @@ function RecordDepositForm({ clientId, onDone }: { clientId: string; onDone: () 
           <MethodOptions methods={MANUAL_METHODS} />
         </Select>
       </Field>
-      <Field label={method === "mobile_money" ? "Transaction ID" : "Reference (optional)"} hint={method === "mobile_money" ? "From the mobile money message, so it can be found on the statement." : "Receipt number, transaction ID…"}>
+      <Field label={method === "mobile_money" ? "Transaction ID" : method === "bank_transfer" ? "Bank reference" : "Reference (optional)"} hint={method === "mobile_money" ? "From the mobile money message, so it can be found on the statement." : "Receipt number, transaction ID…"}>
         <TextInput value={reference} onChange={(e) => setReference(e.target.value)} maxLength={100} />
       </Field>
+      <MoneySourceFields form={sourceForm} method={method} />
       <Field label="Note (optional)">
         <TextInput value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} />
       </Field>
@@ -345,23 +348,41 @@ function RecordDepositForm({ clientId, onDone }: { clientId: string; onDone: () 
   );
 }
 
-function AdjustForm({ clientId, balance, onDone }: { clientId: string; balance: number; onDone: () => Promise<void> }) {
+function AdjustForm({
+  clientId,
+  balance,
+  entries,
+  onDeposit,
+  onDone,
+}: {
+  clientId: string;
+  balance: number;
+  entries: WalletEntry[];
+  onDeposit: () => void;
+  onDone: () => Promise<void>;
+}) {
   const money = useMoney();
-  const [direction, setDirection] = useState<"add" | "remove">("add");
+  const earlier = entries.filter((e) => e.kind === "adjustment");
+  const [mode, setMode] = useState<"remove" | "undo">("remove");
+  const [undoing, setUndoing] = useState(earlier[0]?.id ?? "");
   const [amount, setAmount] = useState("");
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  const target = mode === "undo" ? earlier.find((e) => e.id === undoing) : undefined;
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (mode === "undo" && !target) return setError("Choose the adjustment to undo.");
     const value = parseAmount(amount);
-    const amountError = checkAmount(value, { min: 1, max: direction === "remove" ? Math.min(balance, MAX_ADJUSTMENT) : MAX_ADJUSTMENT });
-    if (amountError) return setError(direction === "remove" && value > balance ? `The balance is only ${money(balance)}.` : amountError);
+    // Undoing an addition takes money off the balance, like taking from it.
+    const takes = mode === "remove" || (target?.amount ?? 0) > 0;
+    const amountError = checkAmount(value, { min: 1, max: takes ? Math.min(balance, MAX_ADJUSTMENT) : MAX_ADJUSTMENT });
+    if (amountError) return setError(takes && value > balance ? `The balance is only ${money(balance)}.` : amountError);
     if (!reason.trim()) return setError("Give a reason — it's kept in the wallet history.");
     setError(null);
     start(async () => {
-      const res = await adjustWallet(clientId, direction === "add" ? value : -value, reason);
+      const res = await adjustWallet(clientId, takes ? -value : value, reason, target?.id ?? null);
       if (!res.ok) return setError(res.error);
       await onDone();
     });
@@ -371,15 +392,37 @@ function AdjustForm({ clientId, balance, onDone }: { clientId: string; balance: 
     <form onSubmit={submit} className="space-y-3 rounded-2xl border border-border p-3">
       <p className="text-sm font-semibold">Correct the balance</p>
       <p className="text-xs text-muted">
-        For fixing mistakes, or money handed back to the client in cash. Deposits go through “Record deposit”; order refunds
-        through the order.
+        Money came in?{" "}
+        <button type="button" className="font-medium text-brand-600 underline" onClick={onDeposit}>
+          Use Record deposit
+        </button>{" "}
+        so it reaches the books with where it came from. This form can&apos;t add money, except to undo an earlier correction.
       </p>
-      <Field label="Direction">
-        <Select value={direction} onChange={(e) => setDirection(e.target.value as "add" | "remove")}>
-          <option value="add">Add to balance</option>
+      <Field label="What are you doing?">
+        <Select value={mode} onChange={(e) => setMode(e.target.value as "remove" | "undo")}>
           <option value="remove">Take from balance</option>
+          {earlier.length ? <option value="undo">Undo an earlier correction</option> : null}
         </Select>
       </Field>
+      {mode === "undo" ? (
+        <Field label="Which correction">
+          <Select
+            value={undoing}
+            onChange={(e) => {
+              setUndoing(e.target.value);
+              setAmount("");
+            }}
+          >
+            {earlier.map((entry) => (
+              <option key={entry.id} value={entry.id}>
+                {entry.amount > 0 ? "+" : "−"}
+                {money(Math.abs(entry.amount))} · {new Date(entry.createdAt).toLocaleDateString(undefined, { day: "numeric", month: "short" })}
+                {entry.note ? ` · ${entry.note.slice(0, 40)}` : ""}
+              </option>
+            ))}
+          </Select>
+        </Field>
+      ) : null}
       <Field label="Amount">
         <TextInput inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value)} />
       </Field>

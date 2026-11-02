@@ -118,6 +118,7 @@ const MONEY_ALERT_TITLES: Record<MoneyAlertKind, string> = {
   possible_double: "Possible double payment",
   payout_unconfirmed: "Payout not confirmed",
   recorded_by_hand: "Check a payment recorded by hand",
+  money_not_in_books: "Money not in the books",
 };
 
 /** The boss and supervisors: who sees Accounts, and hears from the money watch. */
@@ -132,6 +133,6 @@ export async function moneyAlert(alert: MoneyAlertRow): Promise<void> {
 }
 
 /** The evening money report (watch.ts). */
-export async function dailyMoneyReport(title: string, body: string): Promise<void> {
-  await notifyMoneyWatchers({ title, body, url: "/dashboard/accounts/payments?period=today" });
+export async function dailyMoneyReport(title: string, body: string, period: "today" | "yesterday" = "today"): Promise<void> {
+  await notifyMoneyWatchers({ title, body, url: `/dashboard/accounts/payments?period=${period}` });
 }

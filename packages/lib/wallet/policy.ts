@@ -2,7 +2,7 @@
 // so forms can check input before sending it and the server re-checks the
 // same rules before touching money.
 
-import type { BusinessEntryKind, PaymentMethod, PaymentStatus, WalletEntryKind } from "./types";
+import type { BusinessEntryKind, MoneyAccountKind, PaymentMethod, PaymentStatus, WalletEntryKind } from "./types";
 
 /** Smallest deposit a client can report (UGX). Stops typos like "5" for 5,000. */
 export const MIN_DEPOSIT = 1_000;
@@ -33,6 +33,40 @@ export const MANUAL_METHODS: PaymentMethod[] = ["mobile_money", "bank_transfer",
  */
 export function checkReference(method: PaymentMethod, reference: string | null | undefined): string | null {
   return method === "mobile_money" && !reference?.trim() ? "Enter the mobile money transaction ID." : null;
+}
+
+/**
+ * What staff must say about money they record by hand, or null when it's
+ * complete. The database checks the same (money_check_source). `today` is the
+ * business's date, YYYY-MM-DD.
+ */
+export function checkMoneySource(
+  input: {
+    method: PaymentMethod;
+    reference?: string | null;
+    senderName?: string | null;
+    senderPhone?: string | null;
+    receivedOn?: string | null;
+    accountId?: string | null;
+  },
+  today: string,
+): string | null {
+  if (!input.senderName?.trim()) return "Say who sent the money.";
+  if (input.method === "mobile_money" && !input.senderPhone?.trim()) return "Enter the phone number the money came from.";
+  const referenceError = checkReference(input.method, input.reference);
+  if (referenceError) return referenceError;
+  if (input.method === "bank_transfer" && !input.reference?.trim()) return "Enter the bank reference.";
+  if (!input.receivedOn) return "Enter the day the money arrived.";
+  if (input.receivedOn > today) return "The day the money arrived can't be in the future.";
+  if (!input.accountId) return "Choose which account the money went into.";
+  return null;
+}
+
+/** Which account money received by this method usually goes into. */
+export function accountKindFor(method: PaymentMethod): MoneyAccountKind {
+  if (method === "cash") return "cash";
+  if (method === "mobile_money") return "mobile_money";
+  return "bank";
 }
 
 export const METHOD_LABELS: Record<PaymentMethod | "wallet", string> = {

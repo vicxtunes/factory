@@ -43,6 +43,8 @@ but not a *sale*. When the client spends it on an invoice, that invoice's *paid*
 money is received. A receipt larger than what's due, whose excess is credited to the wallet, counts
 once, as the receipt.
 
+**Nothing gets in unrecorded.** `money_not_in_books` lists wallet money added without a payment and HivePay collections with no money-in line. It should stay empty; the hourly money watch raises an alert for anything in it. Money that isn't from a client (`other_money_in`, money borrowed) shows separately under Payments and isn't counted as Payments received.
+
 **Money out isn't tracked** by the app (expenses, bank transfers), so channels show money received,
 not running bank or cash balances.
 
