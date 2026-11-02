@@ -80,7 +80,7 @@ export function StudioMark({ brand, size }: { brand: Pick<StudioBrand, "name" | 
 }
 
 // Desktop/tablet (md+): the studio's mark and name, its menu, and the way back to Aming.
-function StudioSidebar({ brand, nav, switcher }: { brand: StudioBrand; nav: StudioNavSection[]; switcher: React.ReactNode }) {
+function StudioSidebar({ brand, nav }: { brand: StudioBrand; nav: StudioNavSection[] }) {
   const pathname = usePathname();
   const groupsOpen = useOpenGroups("studio-sidebar-open-groups");
   return (
@@ -92,7 +92,6 @@ function StudioSidebar({ brand, nav, switcher }: { brand: StudioBrand; nav: Stud
           <p className="text-xs text-muted">My Business</p>
         </div>
       </header>
-      <div className="sidebar-label">{switcher}</div>
       <nav aria-label="My Business" className="flex-1 overflow-y-auto px-3 py-4">
         <ul className="space-y-1">
           {nav.map((section) => {
@@ -228,15 +227,16 @@ export function StudioShell({
     // page itself never scrolls and Safari's toolbar never moves the bar.
     // From md the window scrolls as before, with the sidebar.
     <div data-app-frame className="flex h-dvh flex-col md:block md:h-auto md:min-h-screen">
-      <StudioSidebar brand={brand} nav={nav} switcher={switcher} />
+      <StudioSidebar brand={brand} nav={nav} />
       <div
         data-scroll-root
         className="sidebar-offset flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain md:min-h-screen md:overflow-visible md:pl-(--sidebar-w)"
       >
         <StudioTopbar brand={brand} user={user} owner={access.owner} />
+        {/* Under the top bar on every screen: a collapsed sidebar can't hide the way back to their own business. */}
+        {switcher ? <div className="bg-surface">{switcher}</div> : null}
         <main className="flex-1 bg-background px-4 py-6 sm:px-6">
           <div className={`space-y-4 ${wide ? BOARD_BLEED : "mx-auto max-w-5xl"}`}>
-            {switcher ? <div className="-mx-4 -mt-6 sm:-mx-6 md:hidden">{switcher}</div> : null}
             {children}
           </div>
         </main>

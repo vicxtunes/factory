@@ -56,14 +56,13 @@ export async function chooseStudio(choice: unknown): Promise<Result> {
     const session = await getClientSession();
     if (!session) throw new StudioError("Sign in first.");
     const store = await cookies();
-    if (choice === "own") {
-      store.delete(STUDIO_CHOICE_COOKIE);
-    } else {
-      const id = parseInput(studioIdSchema, choice);
+    let id = "own";
+    if (choice !== "own") {
+      id = parseInput(studioIdSchema, choice);
       const { working } = await studiosOf(session.client_id);
       if (!working.some((w) => w.studio.id === id)) throw new StudioError("You don't work for that business.");
-      store.set(STUDIO_CHOICE_COOKIE, id, { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/", maxAge: 400 * 86_400 });
     }
+    store.set(STUDIO_CHOICE_COOKIE, id, { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/", maxAge: 400 * 86_400 });
     revalidatePath("/studio", "layout");
   });
 }
