@@ -14,6 +14,7 @@ import { expenseReminder } from "@repo/lib/books/expenses";
 import { claimExpenseReminder, createDueExpenses, openExpenses } from "@repo/lib/books/expenses-server";
 import { otherMoneyIn } from "@repo/lib/books/server";
 import { formatMoney } from "@repo/lib/currency/format";
+import { moneyWeOwe } from "@repo/lib/production/server";
 import { resolveTenantScope } from "@repo/lib/tenancy/server/resolve";
 
 import type { MoneyAlert } from "../types";
@@ -245,8 +246,8 @@ const EXPENSE_REMINDER_HOUR = 8;
 
 /**
  * Each morning: creates what recurring expenses now owe, then one message to
- * the boss and supervisors with what's overdue, due soon or waiting for
- * approval. Silent when there's none. Called every few minutes.
+ * the boss and supervisors with the bills and debts overdue or due soon, and
+ * what's waiting for approval. Silent when there's none. Called every few minutes.
  */
 export async function sendExpenseReminder(now = new Date()): Promise<boolean> {
   const scope = await resolveTenantScope();
@@ -255,7 +256,24 @@ export async function sendExpenseReminder(now = new Date()): Promise<boolean> {
   const today = localDate(now, scope.timeZone);
   await createDueExpenses(today);
   if (!(await claimExpenseReminder(today))) return false;
-  const reminder = expenseReminder(await openExpenses(), today, formatMoney);
+  const [bills, debts] = await Promise.all([openExpenses(), moneyWeOwe.overview(scope, today)]);
+  const reminder = expenseReminder(
+    [
+      ...bills,
+      ...debts.open.map((l) => ({
+        name: `Loan from ${l.lenderName}`,
+        amount: l.toRepay - l.repaid,
+        paid: 0,
+        dueOn: l.dueOn,
+        voidedAt: null,
+        approval: "approved" as const,
+        onCredit: false,
+        amountIsEstimate: false,
+      })),
+    ],
+    today,
+    formatMoney,
+  );
   if (!reminder) return false;
   await notifier.expenseReminder(reminder.title, reminder.body);
   return true;
