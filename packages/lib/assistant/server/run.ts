@@ -1,6 +1,6 @@
 import "server-only";
 
-import { postAssistantMessage } from "@repo/lib/chat/assistant";
+import { announceTyping, postAssistantMessage } from "@repo/lib/chat/assistant";
 import { chatHref } from "@repo/lib/chat/routes";
 import { createAdminClient } from "@repo/lib/supabase/admin";
 
@@ -11,6 +11,7 @@ import { assistantTools, tellManagers, type ToolContext } from "./tools";
 
 const MESSAGES_READ = 40;
 const CHATS_AT_ONCE = 5;
+const TYPING_EVERY_MS = 4_000;
 const SORRY = "Sorry, I can't help with that right now. Someone from the team will reply here shortly.";
 
 interface ChatRow {
@@ -56,6 +57,16 @@ function toMessages(rows: ChatRow[]): ChatTurn[] {
   return messages;
 }
 
+/** What changes from call to call. The chat shows only words, so it says what's waiting behind them. */
+async function contextFor(conversationId: string, clientName: string): Promise<string> {
+  const lines = [`Today is ${new Date().toISOString().slice(0, 10)}. You're talking to ${clientName}.`];
+  const pending = await store.getPendingOrder(conversationId);
+  if (pending?.posted_at) {
+    lines.push(`This order summary has been shown to the client and is ready to place:\n${pending.summary}\nIf their latest message agrees to it, call place_order now, without prepare_order. If they change something, call prepare_order again.`);
+  }
+  return lines.join("\n\n");
+}
+
 async function loadClient(id: string): Promise<ToolContext["client"] | null> {
   const { data } = await createAdminClient().from("clients").select("id, name, email, phone").eq("id", id).maybeSingle();
   return data;
@@ -82,16 +93,18 @@ async function answer(thread: store.ThreadRow, settings: store.AssistantSettings
       return;
     }
 
-    const ctx: ToolContext = { conversationId, client, actions: [] };
+    const ctx: ToolContext = { conversationId, client, actions: [], choices: [], images: [] };
     const model = findModel(settings.model);
     let totals: TokenUsage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
     let reply: string | null = null;
     let failure: string | null = null;
+    void announceTyping(conversationId, ASSISTANT_NAME, true);
+    const typing = setInterval(() => void announceTyping(conversationId, ASSISTANT_NAME, true), TYPING_EVERY_MS);
     try {
       if (!model) throw new Error(`Unknown model ${settings.model}.`);
       const answered = await askModel({
         model,
-        context: `Today is ${new Date().toISOString().slice(0, 10)}. You're talking to ${client.name}.`,
+        context: await contextFor(conversationId, client.name),
         tools: assistantTools(ctx),
         messages: toMessages(rows),
         onUsage: (u) => {
@@ -104,15 +117,17 @@ async function answer(thread: store.ThreadRow, settings: store.AssistantSettings
     } catch (err) {
       failure = err instanceof Error ? err.message : "The AI couldn't be reached.";
       console.error("assistant failed:", conversationId, err);
+    } finally {
+      clearInterval(typing);
+      void announceTyping(conversationId, ASSISTANT_NAME, false);
     }
 
-    // Someone took over while it was thinking: they speak now, unless it handed over itself.
-    const handedOverItself = ctx.actions.some((a) => a.startsWith("Handed to staff"));
-    const quiet = (await store.threadState(conversationId)) === "staff" && !handedOverItself;
+    // Someone took over while it was thinking: they speak now.
+    const quiet = (await store.threadState(conversationId)) === "staff";
     if (failure) {
       await handOver(handCtx, `The assistant couldn't answer: ${failure}`, !quiet);
     } else if (reply && !quiet) {
-      await postAssistantMessage(conversationId, client.id, ASSISTANT_NAME, reply);
+      await postAssistantMessage(conversationId, client.id, ASSISTANT_NAME, reply, { choices: ctx.choices, images: ctx.images });
       await store.markSummaryPosted(conversationId);
     }
     await store.logRun({ conversationId, clientId: client.id, reply, actions: ctx.actions, error: failure, ...totals, costUsd: model ? costUsd(model, totals) : 0 });

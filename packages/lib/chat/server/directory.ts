@@ -6,6 +6,7 @@ import "server-only";
 // this file turns them into names/avatars and answers relationship questions.
 
 import { createAdminClient } from "@repo/lib/supabase/admin";
+import { mayAnswer } from "@repo/lib/assistant/core/rules";
 import { clientPath, clientUrl } from "@repo/lib/client-portal/paths";
 import { paidByOrders } from "@repo/lib/wallet/orders";
 
@@ -323,4 +324,16 @@ export async function getOrderReceipts(orderId: string): Promise<{ at: string; h
   const { data, error } = await createAdminClient().from("order_receipts").select("created_at, share_token").eq("order_id", orderId);
   if (error) throw new Error(error.message);
   return (data ?? []).map((r) => ({ at: r.created_at, href: clientUrl(clientPath(`/receipt/${r.share_token}`)) }));
+}
+
+/** The assistant will answer this client in this chat, so no person needs telling yet. */
+export async function assistantIsHandling(conversationId: string, clientId: string): Promise<boolean> {
+  const db = createAdminClient();
+  const [settings, thread, client] = await Promise.all([
+    db.from("assistant_settings").select("mode, test_clients").maybeSingle(),
+    db.from("assistant_threads").select("state").eq("conversation_id", conversationId).maybeSingle(),
+    db.from("clients").select("email, phone").eq("id", clientId).maybeSingle(),
+  ]);
+  if (!settings.data || !client.data || thread.data?.state === "staff") return false;
+  return mayAnswer(settings.data.mode, settings.data.test_clients, client.data);
 }

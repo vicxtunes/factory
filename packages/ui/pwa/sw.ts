@@ -53,12 +53,23 @@ self.addEventListener("push", (event) => {
     data = { title: "AMING", body: event.data.text() };
   }
 
+  const url = data.url ?? "/";
+  const isChat = url.includes("/chat?c=");
   event.waitUntil(
-    self.registration.showNotification(data.title, {
-      body: data.body,
-      icon: "/icon-192.png",
-      data: { url: data.url ?? "/" },
-    }),
+    (async () => {
+      // Nothing to announce about a chat that's on screen right now.
+      if (isChat) {
+        const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+        if (windows.some((w) => w.focused && w.url.endsWith(url))) return;
+      }
+      await self.registration.showNotification(data.title, {
+        body: data.body,
+        icon: "/icon-192.png",
+        data: { url },
+        // One chat, one notification: a newer message replaces the last, rather than stacking.
+        ...(isChat ? { tag: url } : {}),
+      });
+    })(),
   );
 });
 

@@ -22,7 +22,8 @@ export async function notifyRecipients(recipients: ParticipantRef[], n: ChatNoti
   const body = n.body.length > PREVIEW_LENGTH ? `${n.body.slice(0, PREVIEW_LENGTH - 1)}…` : n.body;
   await Promise.all(
     recipients.map((r) =>
-      notifyActor({ type: r.type, id: r.id }, { title: n.title, body, url: chatHref(n.conversationId) }),
+      // A push only: chat has its own unread badges, so messages don't fill the notifications list.
+      notifyActor({ type: r.type, id: r.id }, { title: n.title, body, url: chatHref(n.conversationId) }, { inbox: false }),
     ),
   );
 }

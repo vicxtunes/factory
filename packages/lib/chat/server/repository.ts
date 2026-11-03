@@ -50,6 +50,8 @@ export interface MessageRow {
   sender_name: string | null;
   kind: MessageKind;
   card: OrderCardKind | null;
+  choices: string[] | null;
+  images: { url: string; name: string }[] | null;
   body: string;
   reply_to_id: string | null;
   created_at: string;
@@ -338,7 +340,7 @@ export const setRole = (conversationId: string, p: ParticipantRef, role: "owner"
 
 export async function insertMessage(
   row: Pick<MessageRow, "conversation_id" | "kind" | "body"> &
-    Partial<Pick<MessageRow, "sender_type" | "sender_id" | "sender_name" | "reply_to_id" | "card">>,
+    Partial<Pick<MessageRow, "choices" | "images" | "sender_type" | "sender_id" | "sender_name" | "reply_to_id" | "card">>,
 ): Promise<MessageRow> {
   const { data, error } = await db().from("chat_messages").insert(row).select("*").single<MessageRow>();
   if (error || !data) fail("insertMessage", error ?? { message: "no row returned" });

@@ -20,7 +20,7 @@ import "server-only";
 import { createHmac } from "crypto";
 
 import { isStaff, participantKey } from "../policy";
-import { CHAT_SIGNAL_EVENT, type ChatSignal, type ParticipantRef } from "../types";
+import { CHAT_SIGNAL_EVENT, TYPING_EVENT, type ChatSignal, type ParticipantRef } from "../types";
 
 function secret(): string {
   const s = process.env.APP_SECRET;
@@ -84,4 +84,20 @@ export async function ringPeople(people: ParticipantRef[], signal: ChatSignal, i
   const channels = people.map(personalChannel);
   if (includeStaffTeam) channels.push(staffTeamChannel());
   await ringChannels(channels, signal);
+}
+
+/** Shows someone as typing in an open chat. Best-effort; browsers forget it after a few seconds. */
+export async function announceTyping(conversationId: string, name: string, typing: boolean): Promise<void> {
+  try {
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+    await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/realtime/v1/api/broadcast`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", apikey: key, Authorization: `Bearer ${key}` },
+      body: JSON.stringify({
+        messages: [{ topic: conversationChannel(conversationId), event: TYPING_EVENT, payload: { key: "assistant", name, typing } }],
+      }),
+    });
+  } catch (err) {
+    console.error("typing broadcast threw:", err);
+  }
 }
