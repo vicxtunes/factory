@@ -3,7 +3,7 @@ import "server-only";
 import { bookListPrice } from "@repo/lib/production/sheets/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { logOrderEvent, resolveActor } from "@repo/lib/audit/log";
+import { logOrderEvent, resolveActor, type AuditActor } from "@repo/lib/audit/log";
 import { validateLineDiscount, type LineDiscount, type LineDiscountChange } from "@repo/lib/discounts/core";
 import { notifyOrderItem } from "@repo/lib/notifications/notify";
 import { postOrderCard } from "@repo/lib/chat/orders";
@@ -53,6 +53,8 @@ export interface BuildOrderParams {
   // (agreed at intake, the staff order's confirmation). Ignored otherwise,
   // so a designer's or client's payload can't carry a discount in.
   allowLineDiscounts?: boolean;
+  // Who's placing it, when no one is signed in (the assistant).
+  actor?: AuditActor;
 }
 
 export type BuildOrderResult =
@@ -156,7 +158,7 @@ export async function buildAndInsertOrder(
     });
   }
 
-  const actor = await resolveActor();
+  const actor = p.actor ?? (await resolveActor());
 
   const { data: order, error: orderErr } = await admin
     .from("orders")

@@ -7,7 +7,7 @@ import "server-only";
 
 import { getClientIdOrNull, getStaffOrNull } from "./server/identity";
 import * as service from "./server/service";
-import type { InvoiceView } from "./types";
+import type { InvoiceView, ReceiptView } from "./types";
 
 /** The invoice behind a share token, or null for an unknown / revoked link. */
 export async function getInvoiceByToken(token: string): Promise<InvoiceView | null> {
@@ -26,4 +26,9 @@ export async function getProformaForViewer(orderId: string) {
     if (!clientId || !(await service.clientOwnsOrder(clientId, orderId))) return null;
   }
   return service.proforma(orderId);
+}
+
+/** The receipt behind a share token, or null. */
+export async function getReceiptByToken(token: string): Promise<ReceiptView | null> {
+  return service.receiptByToken(token);
 }

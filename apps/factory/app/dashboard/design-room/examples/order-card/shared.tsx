@@ -11,6 +11,7 @@ export function orderState(p: Partial<OrderCardState>): OrderCardState {
   return {
     orderId: "o1",
     orderNo: "20260022",
+    receipts: [],
     viewerIsClient: true,
     orderHref: "#",
     readyCount: 0,

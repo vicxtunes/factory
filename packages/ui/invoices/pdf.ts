@@ -8,9 +8,10 @@
 
 import { formatMoney } from "@repo/lib/currency/format";
 import { STATUS_LABELS } from "@repo/lib/invoices/policy";
-import type { InvoiceView } from "@repo/lib/invoices/types";
+import type { InvoiceView, ReceiptView } from "@repo/lib/invoices/types";
 import { PAYMENT_METHODS } from "@repo/lib/payments/details";
 import { paymentMethodLabel } from "@repo/lib/wallet/policy";
+import type { PaymentMethod } from "@repo/lib/wallet/types";
 
 import { pdfText as safe } from "@repo/ui/pdf/files";
 
@@ -330,5 +331,61 @@ export async function invoicePdf(invoice: InvoiceView, currencySymbol: string): 
     doc.text(`Page ${i} of ${pages}`, RIGHT, PAGE_H - 8, { align: "right" });
   }
 
+  return doc.output("blob");
+}
+
+/** A payment's receipt as an A4 PDF file. */
+export async function receiptPdf(receipt: ReceiptView, currencySymbol: string): Promise<Blob> {
+  const { issuer } = receipt;
+  const [{ default: jsPDF }, logo] = await Promise.all([import("jspdf"), loadImage(issuer.logoUrl ?? "/icon-192.png")]);
+  const doc = new jsPDF({ unit: "mm", format: "a4" });
+  const money = (n: number) => safe(formatMoney(n, currencySymbol));
+
+  if (logo) {
+    const { width, height } = doc.getImageProperties(logo);
+    const scale = Math.min(40 / width, 22 / height);
+    doc.addImage(logo, "PNG", M, 10, width * scale, height * scale);
+  }
+  doc.setTextColor(...INK).setFont("helvetica", "bold").setFontSize(14);
+  doc.text(safe(issuer.companyName), PAGE_W / 2, 17, { align: "center" });
+  doc.setFont("helvetica", "normal").setFontSize(9).setTextColor(...MUTED);
+  const contact = [issuer.address, issuer.phone, issuer.email].filter(Boolean).join("   ");
+  if (contact) doc.text(safe(contact), PAGE_W / 2, 22, { align: "center", maxWidth: 100 });
+  doc.setTextColor(...INK).setFont("helvetica", "bold").setFontSize(15);
+  doc.text("RECEIPT", RIGHT, 19, { align: "right" });
+  doc.setDrawColor(...RULE).setLineWidth(0.2).line(M, 36, RIGHT, 36);
+
+  doc.setFontSize(10).text("RECEIVED FROM", M, 44);
+  doc.setFont("helvetica", "normal");
+  let y = 49;
+  for (const line of [receipt.client.name, receipt.client.phone]) {
+    if (!line) continue;
+    doc.text(safe(line), M, y);
+    y += 5;
+  }
+  doc.text(`Receipt# ${receipt.receiptNo}`, RIGHT, 44, { align: "right" });
+  doc.text(`Date: ${formatInvoiceDate(receipt.issuedAt)}`, RIGHT, 49, { align: "right" });
+
+  doc.setFillColor(...SHADE).rect(M, 62, RIGHT - M, 14, "F");
+  doc.setFont("helvetica", "bold").setFontSize(12).text("Amount received", M + 3, 71);
+  doc.text(money(receipt.amount), RIGHT - 3, 71, { align: "right" });
+
+  const rows: [string, string][] = [
+    ["Paid by", paymentMethodLabel(receipt.method as PaymentMethod)],
+    ...(receipt.reference ? ([["Reference", safe(receipt.reference)]] as [string, string][]) : []),
+    ["For", receipt.orderNo ? `Order ${receipt.orderNo}` : "Wallet top-up"],
+    ...(receipt.orderTotal != null ? ([["Order total", money(receipt.orderTotal)]] as [string, string][]) : []),
+    ...(receipt.balanceAfter != null ? ([["Left to pay", money(receipt.balanceAfter)]] as [string, string][]) : []),
+    ...(receipt.walletCredit > 0 ? ([["Kept in your wallet", money(receipt.walletCredit)]] as [string, string][]) : []),
+  ];
+  y = 86;
+  doc.setFontSize(10);
+  for (const [label, value] of rows) {
+    doc.setFont("helvetica", "normal").setTextColor(...MUTED).text(label, M + 3, y);
+    doc.setFont("helvetica", "bold").setTextColor(...INK).text(value, RIGHT - 3, y, { align: "right" });
+    y += 7;
+  }
+  doc.setFont("helvetica", "normal").setFontSize(9).setTextColor(...MUTED);
+  doc.text("Thank you. This receipt was issued automatically when the payment was recorded.", M + 3, y + 6);
   return doc.output("blob");
 }

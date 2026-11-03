@@ -148,7 +148,18 @@ export function OrderCard({
       );
     }
   }
-  if (state && message.card === "payment" && client) actions.push(<ClientInvoiceLink key="invoice" orderId={state.orderId} />);
+  if (state && message.card === "payment") {
+    // Written in the same transaction as this card, so they carry the same time.
+    const receipt = state.receipts.find((r) => Date.parse(r.at) === Date.parse(message.createdAt));
+    if (receipt) {
+      actions.push(
+        <a key="receipt" href={receipt.href} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center rounded-[var(--radius)] border border-brand-300 bg-surface px-4 text-sm font-semibold text-brand-700 dark:text-brand-300">
+          View receipt
+        </a>,
+      );
+    }
+    if (client) actions.push(<ClientInvoiceLink key="invoice" orderId={state.orderId} />);
+  }
   if (state && message.card === "ready" && latest && client && state.readyCount > 0) {
     actions.push(
       <Button key="collect" type="button" className="min-h-10 font-semibold" loading={busy} disabled={busy} onClick={confirmCollected}>

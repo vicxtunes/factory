@@ -6,6 +6,7 @@ import "server-only";
 // this file turns them into names/avatars and answers relationship questions.
 
 import { createAdminClient } from "@repo/lib/supabase/admin";
+import { clientPath, clientUrl } from "@repo/lib/client-portal/paths";
 import { paidByOrders } from "@repo/lib/wallet/orders";
 
 import { participantKey, reachableTypes, requiresRelationship } from "../policy";
@@ -315,4 +316,11 @@ export function canUseClientOrderThread(person: ParticipantRef, order: OrderChat
     case "worker":
       return false;
   }
+}
+
+/** An order's receipts, as links that work from either app. */
+export async function getOrderReceipts(orderId: string): Promise<{ at: string; href: string }[]> {
+  const { data, error } = await createAdminClient().from("order_receipts").select("created_at, share_token").eq("order_id", orderId);
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((r) => ({ at: r.created_at, href: clientUrl(clientPath(`/receipt/${r.share_token}`)) }));
 }

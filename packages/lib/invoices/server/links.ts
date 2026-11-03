@@ -24,7 +24,9 @@ export async function invoiceUrl(token: string): Promise<string> {
   const url = clientUrl(path);
   if (!url.startsWith("/")) return url;
 
-  const h = await headers();
+  // A background job in local dev has no request to work the address out from.
+  const h = await headers().catch(() => null);
+  if (!h) return url;
   const host = (h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3000")
     .replace(/^localhost:3000$/, "localhost:3001")
     .replace(/-3000\.app\.github\.dev$/, "-3001.app.github.dev");
