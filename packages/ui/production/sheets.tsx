@@ -17,6 +17,7 @@ import { addMaterial, countStock, recordLoan, recordPurchase, recordRepayment, u
 import {
   CHANNEL_LABELS,
   KIND_LABELS,
+  INTEREST_PER_LABELS,
   LENDER_KIND_ONE,
   PAID_FROM_LABELS,
   formatQty,
@@ -25,6 +26,7 @@ import {
   loanOwed,
   unitCostOf,
   type Lender,
+  type InterestPer,
   type LenderKind,
   type Loan,
   type Material,
@@ -338,6 +340,9 @@ export function LoanSheet({ open, onClose, lenders, lenderId, today }: { open: b
   const [kind, setKind] = useState<LenderKind>("owner");
   const [amount, setAmount] = useState("");
   const [toRepay, setToRepay] = useState("");
+  const [terms, setTerms] = useState<"fixed" | "rate">("fixed");
+  const [rate, setRate] = useState("");
+  const [per, setPer] = useState<InterestPer>("month");
   const [into, setInto] = useState<MoneyChannel>("cash");
   const [on, setOn] = useState(today);
   const [due, setDue] = useState("");
@@ -350,7 +355,9 @@ export function LoanSheet({ open, onClose, lenders, lenderId, today }: { open: b
     onClose();
   });
   const a = parseNumber(amount);
-  const back = toRepay.trim() ? parseNumber(toRepay) : a;
+  const withRate = terms === "rate";
+  const r = parseNumber(rate);
+  const back = !withRate && toRepay.trim() ? parseNumber(toRepay) : a;
   const extra = a > 0 && back >= a ? back - a : 0;
 
   return (
@@ -363,6 +370,8 @@ export function LoanSheet({ open, onClose, lenders, lenderId, today }: { open: b
               lender: who === "new" ? { name, phone, kind } : null,
               amount: a,
               toRepay: back,
+              interestRate: withRate ? r : null,
+              interestPer: withRate ? per : null,
               receivedOn: on,
               receivedInto: into,
               dueOn: due || null,
@@ -409,11 +418,40 @@ export function LoanSheet({ open, onClose, lenders, lenderId, today }: { open: b
           <Field label="Amount borrowed">
             <TextInput inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="e.g. 1000000" required />
           </Field>
-          <Field label="To pay back in all" hint="Leave empty if it's the same.">
-            <TextInput inputMode="numeric" value={toRepay} onChange={(e) => setToRepay(e.target.value)} placeholder={a > 0 ? String(a) : "e.g. 1100000"} />
+          <Field label="Interest">
+            <Select value={terms} onChange={(e) => setTerms(e.target.value as "fixed" | "rate")}>
+              <option value="fixed">None, or a fixed extra</option>
+              <option value="rate">A rate</option>
+            </Select>
           </Field>
         </div>
-        {extra > 0 ? <p className="text-sm text-muted">{money(extra)} interest or extra, counted as a cost as it&apos;s paid back.</p> : null}
+        {withRate ? (
+          <>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Rate (%)">
+                <TextInput inputMode="decimal" value={rate} onChange={(e) => setRate(e.target.value)} placeholder="e.g. 3" required />
+              </Field>
+              <Field label="Per">
+                <Select value={per} onChange={(e) => setPer(e.target.value as InterestPer)}>
+                  <option value="day">Day</option>
+                  <option value="month">Month (30 days)</option>
+                  <option value="year">Year (365 days)</option>
+                </Select>
+              </Field>
+            </div>
+            <p className="text-sm text-muted">
+              {a > 0 && r > 0 ? `${money(Math.round((a * r) / 100))} ${INTEREST_PER_LABELS[per]} to begin with. ` : ""}
+              Simple interest on what&apos;s left of the amount borrowed. Each repayment clears the interest first, and only interest counts as a cost.
+            </p>
+          </>
+        ) : (
+          <>
+            <Field label="To pay back in all" hint="Leave empty if it's the same.">
+              <TextInput inputMode="numeric" value={toRepay} onChange={(e) => setToRepay(e.target.value)} placeholder={a > 0 ? String(a) : "e.g. 1100000"} />
+            </Field>
+            {extra > 0 ? <p className="text-sm text-muted">{money(extra)} interest or extra, counted as a cost as it&apos;s paid back.</p> : null}
+          </>
+        )}
         <div className="grid grid-cols-2 gap-3">
           <Field label="Came in as">
             <Select value={into} onChange={(e) => setInto(e.target.value as MoneyChannel)}>
@@ -435,7 +473,7 @@ export function LoanSheet({ open, onClose, lenders, lenderId, today }: { open: b
           <TextArea value={note} onChange={(e) => setNote(e.target.value)} rows={2} />
         </Field>
         <ErrorLine error={error} />
-        <Button type="submit" className="w-full" loading={pending} disabled={pending || !(a > 0) || back < a}>
+        <Button type="submit" className="w-full" loading={pending} disabled={pending || !(a > 0) || back < a || (withRate && !(r > 0))}>
           Record{a > 0 ? ` ${money(a)} borrowed` : ""}
         </Button>
       </Form>
@@ -463,6 +501,8 @@ export function RepaymentSheet({ open, onClose, loans, loanId, today }: { open: 
   const a = parseNumber(amount);
   const tooMuch = a > left;
   const interest = picked && a > 0 && !tooMuch ? interestShare(picked, a) : 0;
+  // A rate's interest depends on the day: what's shown is as of today.
+  const otherDay = picked?.interestRate != null && on !== today;
 
   return (
     <FormSheet open={open} onClose={onClose} title="Record a repayment">
@@ -487,8 +527,9 @@ export function RepaymentSheet({ open, onClose, loans, loanId, today }: { open: 
               <TextInput type="date" value={on} min={picked?.receivedOn} max={today} onChange={(e) => setOn(e.target.value)} required />
             </Field>
           </div>
+          {otherDay ? <p className="text-sm text-muted">Interest is worked out for the date you chose when you save, so the amount left may differ from this.</p> : null}
           {tooMuch ? <p className="text-sm text-error-600 dark:text-error-400">That&apos;s more than the {money(left)} left on this loan.</p> : null}
-          {interest > 0 ? <p className="text-sm text-muted">{money(interest)} of it is interest, counted as a cost; {money(a - interest)} pays back what was borrowed.</p> : null}
+          {interest > 0 && !otherDay ? <p className="text-sm text-muted">{money(interest)} of it is interest, counted as a cost; {money(a - interest)} pays back what was borrowed.</p> : null}
           <Field label="Paid from">
             <Select value={from} onChange={(e) => setFrom(e.target.value as MoneyChannel)}>
               {(Object.keys(CHANNEL_LABELS) as MoneyChannel[]).map((c) => (
@@ -505,7 +546,7 @@ export function RepaymentSheet({ open, onClose, loans, loanId, today }: { open: 
             <TextArea value={note} onChange={(e) => setNote(e.target.value)} rows={2} />
           </Field>
           <ErrorLine error={error} />
-          <Button type="submit" className="w-full" loading={pending} disabled={pending || !(a > 0) || tooMuch}>
+          <Button type="submit" className="w-full" loading={pending} disabled={pending || !(a > 0) || (tooMuch && !otherDay)}>
             Record{a > 0 ? ` ${money(a)} repaid` : " repayment"}
           </Button>
         </Form>

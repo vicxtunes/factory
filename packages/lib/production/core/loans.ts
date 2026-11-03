@@ -2,7 +2,7 @@
 // interest share. Pure; the database works the share out the same way
 // (production_record_repayment), this is for showing it before saving.
 
-import type { Lender, LenderAccount, LenderKind, Loan, MoneyChannel, ReceivedInto } from "./model";
+import type { InterestPer, Lender, LenderAccount, LenderKind, Loan, MoneyChannel, ReceivedInto } from "./model";
 
 export const LENDER_KIND_LABELS: Record<LenderKind, string> = {
   owner: "Owners",
@@ -28,6 +28,8 @@ export const CHANNEL_LABELS: Record<MoneyChannel, string> = {
 
 export const RECEIVED_INTO_LABELS: Record<ReceivedInto, string> = { ...CHANNEL_LABELS, materials: "Materials on credit" };
 
+export const INTEREST_PER_LABELS: Record<InterestPer, string> = { day: "a day", month: "a month", year: "a year" };
+
 /** What's still to pay back on a live loan (0 once void). */
 export function loanOwed(loan: Pick<Loan, "toRepay" | "repaid" | "voidedAt">): number {
   return loan.voidedAt ? 0 : Math.max(loan.toRepay - loan.repaid, 0);
@@ -42,9 +44,11 @@ export function loanOverdue(loan: Pick<Loan, "toRepay" | "repaid" | "voidedAt" |
  * The interest share of a repayment of `amount`, given what's already been
  * repaid and the interest already counted: pro rata (amount × extra ÷ to
  * repay), and the last repayment takes whatever's left so the shares add up
- * to exactly the extra. Matches production_record_repayment().
+ * to exactly the extra. With a rate, a repayment clears the interest so far
+ * first. Matches production_record_repayment().
  */
-export function interestShare(loan: Pick<Loan, "amount" | "toRepay" | "repaid" | "interestPaid">, amount: number): number {
+export function interestShare(loan: Pick<Loan, "amount" | "toRepay" | "repaid" | "interestPaid" | "interestRate" | "interestDue">, amount: number): number {
+  if (loan.interestRate !== null) return Math.min(amount, loan.interestDue);
   const extra = loan.toRepay - loan.amount;
   if (extra <= 0) return 0;
   const left = extra - loan.interestPaid;

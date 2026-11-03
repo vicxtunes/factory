@@ -80,14 +80,21 @@ export interface Lender {
   kind: LenderKind;
 }
 
+export type InterestPer = "day" | "month" | "year";
+
 export interface Loan {
   id: string;
   lenderId: string;
   lenderName: string;
   lenderKind: LenderKind;
   amount: number;
-  /** The amount plus any interest or extra. */
+  /** The amount plus any interest or extra. With a rate: what's been repaid plus what's owed today. */
   toRepay: number;
+  /** Percent per `interestPer`; null when the amount to pay back is fixed. */
+  interestRate: number | null;
+  interestPer: InterestPer | null;
+  /** With a rate: the interest not yet paid, as of today. */
+  interestDue: number;
   receivedOn: string;
   receivedInto: ReceivedInto;
   /** Supplier credit: the purchase it came with. */
