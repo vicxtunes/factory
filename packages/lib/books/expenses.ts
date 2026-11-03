@@ -68,7 +68,19 @@ export interface ExpenseDocument {
   recordedAt: string;
 }
 
+export interface ExpensePayout {
+  id: string;
+  /** What the phone should receive. */
+  amount: number;
+  phone: string;
+  status: "sending" | "paid" | "failed";
+  error: string | null;
+  sentBy: string;
+  sentAt: string;
+}
+
 export interface ExpenseDetail {
+  payouts: ExpensePayout[];
   payments: ExpensePayment[];
   documents: ExpenseDocument[];
 }
@@ -116,6 +128,21 @@ export function expenseStatus(e: Pick<ExpenseLine, "amount" | "paid" | "dueOn" |
   return e.paid > 0 ? "part_paid" : "unpaid";
 }
 
+/**
+ * HivePay's prices for sending money: the fee on anything up to `upTo`. It
+ * publishes no table and no way to ask, so they come from HivePay directly.
+ * While this is empty, the app doesn't offer sending at all.
+ */
+export const HIVEPAY_SEND_FEES: { upTo: number; fee: number }[] = [];
+
+/**
+ * The fee to send on top so the phone receives exactly `amount`, or null when
+ * it's beyond the list. The band goes by what's sent, the amount plus the fee.
+ */
+export function hivepaySendFee(amount: number, bands = HIVEPAY_SEND_FEES): number | null {
+  return bands.find((b) => amount + b.fee <= b.upTo)?.fee ?? null;
+}
+
 /** What the dashboard shows: expense_dashboard in the database. */
 export interface ExpenseSummary {
   toPay: number;
@@ -135,21 +162,24 @@ const REMIND_WITHIN_DAYS = 3;
 /** A phone notification stays short: the rest are on the page. */
 const NAMED_IN_REMINDER = 4;
 
+/** Bills, and debts put in the same shape. */
+export type Reminded = Pick<ExpenseLine, "name" | "amount" | "paid" | "dueOn" | "voidedAt" | "approval" | "onCredit" | "amountIsEstimate">;
+
 /**
  * The morning reminder: one message, whatever the number of bills, or null
  * when nothing needs attention. Every overdue or nearly due bill is counted
  * each day until it's paid or voided.
  */
-export function expenseReminder(lines: ExpenseLine[], today: string, money: (amount: number) => string): { title: string; body: string } | null {
+export function expenseReminder(lines: Reminded[], today: string, money: (amount: number) => string): { title: string; body: string } | null {
   const soonBy = addDays(today, REMIND_WITHIN_DAYS);
   const open = lines.filter((e) => expenseBalance(e) > 0);
-  const byDue = (a: ExpenseLine, b: ExpenseLine) => (a.dueOn ?? "").localeCompare(b.dueOn ?? "");
+  const byDue = (a: Reminded, b: Reminded) => (a.dueOn ?? "").localeCompare(b.dueOn ?? "");
   const overdue = open.filter((e) => expenseStatus(e, today) === "overdue").sort(byDue);
   const waiting = open.filter((e) => e.approval === "waiting");
   const soon = open.filter((e) => e.approval === "approved" && e.dueOn !== null && e.dueOn >= today && e.dueOn <= soonBy).sort(byDue);
   if (overdue.length + soon.length + waiting.length === 0) return null;
 
-  const named = (list: ExpenseLine[]) => {
+  const named = (list: Reminded[]) => {
     const shown = list.slice(0, NAMED_IN_REMINDER).map((e) => `${e.name} ${e.amountIsEstimate ? "about " : ""}${money(expenseBalance(e))}`);
     const more = list.length - shown.length;
     return shown.join(", ") + (more > 0 ? ` and ${more} more` : "");
@@ -164,5 +194,5 @@ export function expenseReminder(lines: ExpenseLine[], today: string, money: (amo
     soon.length ? `${soon.length} due soon` : "",
     waiting.length ? `${waiting.length} waiting for approval` : "",
   ];
-  return { title: `Expenses: ${counts.filter(Boolean).join(", ")}`, body: parts.filter(Boolean).join(" ") };
+  return { title: `To pay: ${counts.filter(Boolean).join(", ")}`, body: parts.filter(Boolean).join(" ") };
 }

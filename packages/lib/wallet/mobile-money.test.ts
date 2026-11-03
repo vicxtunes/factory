@@ -59,3 +59,15 @@ test("HivePay payout reference: a withdrawal's, never mistaken for a collection'
     assert.equal(fromPayoutReference(toHivepayReference(id)), null, "a collection isn't a payout");
   }
 });
+
+test("HivePay bill payout reference: comes back as itself, never mistaken for another kind", async () => {
+  const { fromExpensePayoutReference, fromHivepayReference, fromPayoutReference, toExpensePayoutReference, toPayoutReference } = await import("./server/providers/hivepay-reference");
+  for (const id of ["ffffffff-ffff-ffff-ffff-ffffffffffff", crypto.randomUUID()]) {
+    const reference = toExpensePayoutReference(id);
+    assert.ok(reference.length <= 30);
+    assert.equal(fromExpensePayoutReference(reference), id);
+    assert.equal(fromPayoutReference(reference), null);
+    assert.equal(fromHivepayReference(reference), null);
+    assert.equal(fromExpensePayoutReference(toPayoutReference(id)), null);
+  }
+});
