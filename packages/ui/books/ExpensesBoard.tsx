@@ -14,7 +14,10 @@ import { Field, Select, TextArea, TextInput } from "@repo/ui/Field";
 import { FormSheet } from "@repo/ui/FormSheet";
 import { TableFilters } from "@repo/ui/TableFilters";
 import { UploadRow } from "@repo/ui/UploadRow";
+import { PeriodPicker } from "@repo/ui/accounting/PeriodPicker";
 import { Card, EmptyState, FigureTile, formatDayTime, useMoney } from "@repo/ui/accounting/shared";
+import { ChartCard, RankBars, SERIES } from "@repo/ui/charts/kit";
+import { DAY_PERIOD_PRESETS, type Period } from "@repo/lib/accounting/core/period";
 import { VoidSheet, parseNumber } from "@repo/ui/production/sheets";
 import { todayHere, useMoneySource } from "@repo/ui/wallet/MoneySourceFields";
 import {
@@ -35,7 +38,6 @@ import {
   EXPENSE_STATUS_LABELS,
   expenseBalance,
   expenseStatus,
-  expenseTotals,
   type ExpenseCategory,
   type ExpenseDetail,
   type ExpenseEvery,
@@ -43,6 +45,7 @@ import {
   type ExpensePayment,
   type ExpenseSchedule,
   type ExpenseStatus,
+  type ExpenseSummary,
 } from "@repo/lib/books/expenses";
 import type { PaymentMethod } from "@repo/lib/wallet/types";
 
@@ -76,6 +79,8 @@ function matches(e: ExpenseLine, query: string): boolean {
 export function ExpensesBoard({
   today,
   lines,
+  summary,
+  period,
   categories,
   schedules,
   approvalAbove,
@@ -84,6 +89,8 @@ export function ExpensesBoard({
 }: {
   today: string;
   lines: ExpenseLine[];
+  summary: ExpenseSummary;
+  period: Period;
   categories: ExpenseCategory[];
   schedules: ExpenseSchedule[];
   approvalAbove: number | null;
@@ -112,7 +119,6 @@ export function ExpensesBoard({
   const shown = tab === "recurring" ? [] : lines.filter(inTab[tab]).filter((e) => matches(e, query));
   // What's still to pay: soonest first, so the next thing due is at the top.
   const visible = tab === "to_pay" || tab === "overdue" || tab === "waiting" ? [...shown].sort((a, b) => (a.dueOn ?? a.spentOn).localeCompare(b.dueOn ?? b.spentOn)) : shown;
-  const totals = expenseTotals(lines, today);
 
   const columns: DataTableColumn<ExpenseLine>[] = [
     { key: "name", header: "Expense", render: (e) => <span className="font-medium">{e.name}</span> },
@@ -127,12 +133,6 @@ export function ExpensesBoard({
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-3 sm:grid-cols-3">
-        <FigureTile label="To pay" value={money(totals.toPay)} />
-        <FigureTile label="Overdue" value={money(totals.overdue)} tone={totals.overdue > 0 ? "warning" : undefined} />
-        <FigureTile label="Expenses this month" value={money(totals.spentThisMonth)} />
-      </div>
-
       <div className="flex flex-wrap items-center gap-2">
         <Button onClick={() => setSheet("new")}>Record expense</Button>
         {isBoss ? (
@@ -143,6 +143,48 @@ export function ExpensesBoard({
           <p className="text-xs text-muted">The boss approves anything above {money(approvalAbove)}.</p>
         ) : null}
       </div>
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        <FigureTile label="To pay" value={money(summary.toPay)} hint="Everything still owed, as of today" />
+        <FigureTile
+          label="Overdue"
+          value={money(summary.overdue)}
+          hint={`${summary.overdueCount} ${summary.overdueCount === 1 ? "bill" : "bills"} past the due date`}
+          tone={summary.overdue > 0 ? "warning" : undefined}
+        />
+        <FigureTile label="Coming up" value={money(summary.upcoming)} hint={`${summary.upcomingCount} due in the next 14 days`} />
+      </div>
+
+      <PeriodPicker period={period} presets={DAY_PERIOD_PRESETS} />
+      <div className="grid gap-3 sm:grid-cols-3">
+        <FigureTile label="Expenses in this period" value={money(summary.total)} />
+        <FigureTile label="Paid" value={money(summary.paid)} />
+        <FigureTile label="Left to pay" value={money(summary.owing)} />
+      </div>
+      <ChartCard
+        title="Expenses by category"
+        subtitle="Largest first, for this period"
+        empty={summary.byCategory.length ? null : "No expenses in this period."}
+        table={{
+          columns: [
+            { key: "name", label: "Category" },
+            { key: "total", label: "Expenses", align: "right" },
+            { key: "paid", label: "Paid", align: "right" },
+            { key: "owing", label: "Left to pay", align: "right" },
+          ],
+          rows: summary.byCategory.map((c) => ({ name: c.name, total: money(c.total), paid: money(c.paid), owing: money(c.owing) })),
+        }}
+      >
+        {(w) => (
+          <RankBars
+            width={w}
+            format={money}
+            color={SERIES[1]}
+            limit={summary.byCategory.length}
+            rows={summary.byCategory.map((c) => ({ key: c.key, label: c.name, value: c.total, detail: `${money(c.owing)} left to pay` }))}
+          />
+        )}
+      </ChartCard>
 
       <TableFilters
         search={search}

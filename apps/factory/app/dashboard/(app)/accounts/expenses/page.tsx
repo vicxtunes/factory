@@ -1,13 +1,17 @@
 import { ExpensesBoard } from "@repo/ui/books/ExpensesBoard";
 import { PanelStackSkeleton, StatTilesSkeleton } from "@repo/ui/skeletons/blocks";
 import { Loading } from "@repo/ui/skeletons/Loading";
+import { resolvePeriod } from "@repo/lib/accounting/core/period";
 import { requireAccountsAccess } from "@repo/lib/accounting/index.server";
-import { expensesBoard } from "@repo/lib/books/expenses-server";
+import { periodFrom } from "@repo/lib/accounting/params";
+import { expenseDashboard, expensesBoard } from "@repo/lib/books/expenses-server";
 import { resolveTenantScope } from "@repo/lib/tenancy/server/resolve";
 
 export const dynamic = "force-dynamic";
 
-export default async function AccountsExpensesPage() {
+type SearchParams = Promise<Record<string, string | string[] | undefined>>;
+
+export default async function AccountsExpensesPage({ searchParams }: { searchParams: SearchParams }) {
   const session = await requireAccountsAccess();
 
   return (
@@ -21,14 +25,17 @@ export default async function AccountsExpensesPage() {
           </div>
         }
       >
-        <Board isBoss={session.role === "boss"} />
+        <Board isBoss={session.role === "boss"} searchParams={searchParams} />
       </Loading>
     </div>
   );
 }
 
-async function Board({ isBoss }: { isBoss: boolean }) {
-  const scope = await resolveTenantScope();
+async function Board({ isBoss, searchParams }: { isBoss: boolean; searchParams: SearchParams }) {
+  const [scope, params] = await Promise.all([resolveTenantScope(), searchParams]);
+  const period = resolvePeriod(periodFrom(params), new Date(), scope.timeZone);
+  // The board first: it creates what recurring expenses now owe, and the figures must include them.
   const board = await expensesBoard(scope);
-  return <ExpensesBoard {...board} isBoss={isBoss} timeZone={scope.timeZone} />;
+  const summary = await expenseDashboard(scope, period);
+  return <ExpensesBoard {...board} summary={summary} period={period} isBoss={isBoss} timeZone={scope.timeZone} />;
 }

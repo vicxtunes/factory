@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { expenseBalance, expenseStatus, expenseTotals, type ExpenseLine } from "./expenses";
+import { expenseBalance, expenseReminder, expenseStatus, type ExpenseLine } from "./expenses";
 
 const TODAY = "2026-11-03";
 const line = (o: Partial<ExpenseLine> = {}): ExpenseLine => ({
@@ -58,15 +58,45 @@ test("nothing is owed on a voided, rejected or on-credit expense", () => {
   assert.equal(expenseBalance(line({ paid: 30 })), 70);
 });
 
-test("totals add up what's left, what's late and this month's spending", () => {
-  const totals = expenseTotals(
+const money = (n: number) => String(n);
+
+test("no reminder when nothing needs attention", () => {
+  assert.equal(expenseReminder([], TODAY, money), null);
+  assert.equal(
+    expenseReminder(
+      [
+        line({ dueOn: "2026-11-07" }),
+        line({ dueOn: "2026-11-01", paid: 100 }),
+        line({ dueOn: "2026-11-01", voidedAt: "x" }),
+        line({ dueOn: "2026-11-01", onCredit: true }),
+        line({ dueOn: null }),
+      ],
+      TODAY,
+      money,
+    ),
+    null,
+  );
+});
+
+test("one reminder covers overdue, nearly due and waiting, with what's left on each", () => {
+  const r = expenseReminder(
     [
-      line({ paid: 30 }),
-      line({ dueOn: "2026-10-01", spentOn: "2026-10-01" }),
-      line({ voidedAt: "x" }),
-      line({ approval: "rejected" }),
+      line({ name: "Water", dueOn: TODAY, amountIsEstimate: true }),
+      line({ name: "Rent", dueOn: "2026-11-01", paid: 40 }),
+      line({ name: "Power", dueOn: "2026-11-06" }),
+      line({ name: "Repair", approval: "waiting", dueOn: "2026-11-01" }),
     ],
     TODAY,
+    money,
   );
-  assert.deepEqual(totals, { toPay: 170, overdue: 100, spentThisMonth: 100 });
+  assert.deepEqual(r, {
+    title: "Expenses: 1 overdue, 2 due soon, 1 waiting for approval",
+    body: "Overdue: Rent 60. Due soon: Water about 100, Power 100. Waiting for approval: Repair 100.",
+  });
+});
+
+test("a long list stays short and still counts every bill", () => {
+  const r = expenseReminder(Array.from({ length: 6 }, (_, i) => line({ name: `B${i}`, dueOn: "2026-11-01" })), TODAY, money);
+  assert.equal(r?.title, "Expenses: 6 overdue");
+  assert.equal(r?.body, "Overdue: B0 100, B1 100, B2 100, B3 100 and 2 more.");
 });

@@ -136,3 +136,8 @@ export async function moneyAlert(alert: MoneyAlertRow): Promise<void> {
 export async function dailyMoneyReport(title: string, body: string, period: "today" | "yesterday" = "today"): Promise<void> {
   await notifyMoneyWatchers({ title, body, url: `/dashboard/accounts/payments?period=${period}` });
 }
+
+/** The morning reminder of what's due (watch.ts). */
+export async function expenseReminder(title: string, body: string): Promise<void> {
+  await notifyMoneyWatchers({ title, body, url: "/dashboard/accounts/expenses" });
+}

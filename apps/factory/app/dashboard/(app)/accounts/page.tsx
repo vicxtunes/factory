@@ -4,6 +4,7 @@ import { ChartsSkeleton, StatTilesSkeleton } from "@repo/ui/skeletons/blocks";
 import { Loading } from "@repo/ui/skeletons/Loading";
 import { localDate } from "@repo/lib/accounting/core/period";
 import { accounting, requireAccountsAccess } from "@repo/lib/accounting/index.server";
+import { moneyFlow } from "@repo/lib/books/expenses-server";
 import { moneyWeOwe } from "@repo/lib/production/server";
 import { resolveTenantScope } from "@repo/lib/tenancy/server/resolve";
 import { getMoneyAlerts } from "@repo/lib/wallet/actions";
@@ -38,10 +39,11 @@ async function Overview({ searchParams }: { searchParams: SearchParams }) {
     getMoneyAlerts(),
     moneyWeOwe.overview(scope, localDate(new Date(), scope.timeZone)),
   ]);
+  const flow = await moneyFlow(view.period);
   return (
     <div className="space-y-6">
       <MoneyAlerts alerts={alerts.ok ? alerts.data ?? [] : []} />
-      <MoneyDashboard view={view} timeZone={scope.timeZone} weOwe={owed.totals} />
+      <MoneyDashboard view={view} timeZone={scope.timeZone} weOwe={owed.totals} flow={flow} />
     </div>
   );
 }

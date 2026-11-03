@@ -12,7 +12,7 @@ import { safeStorageSegment } from "@repo/lib/storage/client";
 import { createAdminClient } from "@repo/lib/supabase/admin";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
-import type { ExpenseCategory, ExpenseDetail, ExpenseEvery, ExpenseLine, ExpenseSchedule } from "./expenses";
+import type { ExpenseCategory, ExpenseDetail, ExpenseEvery, ExpenseLine, ExpenseSchedule, ExpenseSummary } from "./expenses";
 import { EXPENSE_DOCUMENTS_BUCKET } from "./expenses";
 import type { ExpenseInput, ExpensePaymentInput, ScheduleInput } from "./schema";
 import { failBooks as fail } from "./server";
@@ -81,17 +81,20 @@ export async function expensesBoard(scope: TenantScope) {
   const today = localDate(new Date(), scope.timeZone);
   const { error: dueError } = await db.rpc("expense_generate_due", { p_today: today });
   if (dueError) fail(dueError);
-  const [lines, categories, schedules, settings] = await Promise.all([
+  const [lines, open, categories, schedules, settings] = await Promise.all([
     db.from("expense_lines").select("*").eq("tenant_id", scope.tenantId).order("spent_on", { ascending: false }).order("created_at", { ascending: false }).limit(2000).returns<LineRow[]>(),
+    // However old, what's still owed stays on the list.
+    db.rpc("expense_open_lines"),
     db.from("expense_categories").select("key, name, automatic").eq("tenant_id", scope.tenantId).order("created_at").order("name").returns<ExpenseCategory[]>(),
     db.from("expense_schedules").select("id, name, category, recipient, amount, varies, every, first_due_on, actor_name, ended_at, ended_by_name").eq("tenant_id", scope.tenantId).order("created_at", { ascending: false }),
     db.from("expense_settings").select("approval_above").eq("tenant_id", scope.tenantId).maybeSingle<{ approval_above: number | string | null }>(),
   ]);
-  for (const r of [lines, categories, schedules, settings]) if (r.error) fail(r.error);
+  for (const r of [lines, open, categories, schedules, settings]) if (r.error) fail(r.error);
   const names = new Map((categories.data ?? []).map((c) => [c.key, c.name]));
+  const listed = new Set((lines.data ?? []).map((l) => l.id));
   return {
     today,
-    lines: (lines.data ?? []).map(toLine),
+    lines: [...(lines.data ?? []), ...((open.data ?? []) as LineRow[]).filter((l) => !listed.has(l.id))].map(toLine),
     categories: categories.data ?? [],
     approvalAbove: settings.data?.approval_above == null ? null : Number(settings.data.approval_above),
     schedules: (schedules.data ?? []).map(
@@ -110,6 +113,40 @@ export async function expensesBoard(scope: TenantScope) {
       }),
     ),
   };
+}
+
+/** The figures on top of Accounts → Expenses. Run after anything a schedule owes has been created. */
+export async function expenseDashboard(scope: TenantScope, period: { fromDate: string | null; toDate: string | null }): Promise<ExpenseSummary> {
+  const { data, error } = await createAdminClient().rpc("expense_dashboard", { p_from: period.fromDate, p_to: period.toDate, p_today: localDate(new Date(), scope.timeZone) });
+  if (error) fail(error);
+  return data as ExpenseSummary;
+}
+
+/** All the money in and out over a period, as Today counts it, for Accounts → Overview. */
+export async function moneyFlow(period: { fromDate: string | null; toDate: string | null }): Promise<{ moneyIn: number; moneyOut: number }> {
+  const { data, error } = await createAdminClient().rpc("money_flow", { p_from: period.fromDate, p_to: period.toDate });
+  if (error) fail(error);
+  return data as { moneyIn: number; moneyOut: number };
+}
+
+/** Creates anything a schedule now owes, without waiting for someone to open the page. */
+export async function createDueExpenses(today: string): Promise<void> {
+  const { error } = await createAdminClient().rpc("expense_generate_due", { p_today: today });
+  if (error) fail(error);
+}
+
+/** Claims the day's reminder: true only the first time, so it goes out once even across restarts. */
+export async function claimExpenseReminder(day: string): Promise<boolean> {
+  const { error } = await createAdminClient().from("expense_reminders").insert({ day });
+  if (!error) return true;
+  if (error.code === "23505") return false;
+  fail(error);
+}
+
+export async function openExpenses(): Promise<ExpenseLine[]> {
+  const { data, error } = await createAdminClient().rpc("expense_open_lines");
+  if (error) fail(error);
+  return ((data ?? []) as LineRow[]).map(toLine);
 }
 
 export async function recordExpense(input: ExpenseInput, isBoss: boolean, actor: Actor): Promise<void> {

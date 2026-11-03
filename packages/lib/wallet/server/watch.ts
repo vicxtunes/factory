@@ -10,6 +10,8 @@ import "server-only";
 import { CHANNELS } from "@repo/lib/accounting/core/model";
 import { addDays, localDate } from "@repo/lib/accounting/core/period";
 import { accounting } from "@repo/lib/accounting/index.server";
+import { expenseReminder } from "@repo/lib/books/expenses";
+import { claimExpenseReminder, createDueExpenses, openExpenses } from "@repo/lib/books/expenses-server";
 import { otherMoneyIn } from "@repo/lib/books/server";
 import { formatMoney } from "@repo/lib/currency/format";
 import { resolveTenantScope } from "@repo/lib/tenancy/server/resolve";
@@ -235,5 +237,26 @@ export async function sendLateMoneyNote(now = new Date()): Promise<boolean> {
     late.map((l) => `${l.customerName} ${formatMoney(l.amount)}`).join(", "),
     "yesterday",
   );
+  return true;
+}
+
+/** The expense reminder goes out from this hour, local time. */
+const EXPENSE_REMINDER_HOUR = 8;
+
+/**
+ * Each morning: creates what recurring expenses now owe, then one message to
+ * the boss and supervisors with what's overdue, due soon or waiting for
+ * approval. Silent when there's none. Called every few minutes.
+ */
+export async function sendExpenseReminder(now = new Date()): Promise<boolean> {
+  const scope = await resolveTenantScope();
+  const hour = Number(new Intl.DateTimeFormat("en-GB", { hour: "numeric", hourCycle: "h23", timeZone: scope.timeZone }).format(now));
+  if (hour < EXPENSE_REMINDER_HOUR) return false;
+  const today = localDate(now, scope.timeZone);
+  await createDueExpenses(today);
+  if (!(await claimExpenseReminder(today))) return false;
+  const reminder = expenseReminder(await openExpenses(), today, formatMoney);
+  if (!reminder) return false;
+  await notifier.expenseReminder(reminder.title, reminder.body);
   return true;
 }

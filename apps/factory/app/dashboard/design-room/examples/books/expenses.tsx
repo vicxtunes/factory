@@ -40,6 +40,23 @@ export default function BooksExpenses() {
     <ExpensesBoard
       today="2026-11-03"
       lines={LINES}
+      summary={{
+        toPay: 2_080_000,
+        overdue: 1_000_000,
+        overdueCount: 1,
+        upcoming: 180_000,
+        upcomingCount: 1,
+        total: 2_640_000,
+        paid: 560_000,
+        owing: 2_080_000,
+        byCategory: [
+          { key: "rent", name: "Rent", total: 1_500_000, paid: 500_000, owing: 1_000_000 },
+          { key: "other", name: "Other", total: 900_000, paid: 0, owing: 900_000 },
+          { key: "utilities", name: "Utilities", total: 180_000, paid: 0, owing: 180_000 },
+          { key: "transport", name: "Transport", total: 60_000, paid: 60_000, owing: 0 },
+        ],
+      }}
+      period={{ preset: "this_month", from: "2026-10-31T21:00:00.000Z", to: "2026-11-03T21:00:00.000Z", fromDate: "2026-11-01", toDate: "2026-11-03" }}
       categories={[{ key: "rent", name: "Rent", automatic: false }, { key: "utilities", name: "Utilities", automatic: false }]}
       schedules={[{ id: "00000000-0000-4000-8000-000000000020", name: "Office rent", categoryName: "Rent", recipient: "Sample Landlord", amount: 1_500_000, varies: false, every: "month", firstDueOn: "2026-11-01", recordedBy: "Boss", endedAt: null, endedBy: null }]}
       approvalAbove={500_000}

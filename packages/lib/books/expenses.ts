@@ -1,5 +1,7 @@
 // Expenses: what they are and what state they're in. Pure.
 
+import { addDays } from "@repo/lib/accounting/core/period";
+
 export const EXPENSE_DOCUMENTS_BUCKET = "expense-documents";
 
 export type ExpenseEvery = "week" | "month" | "year";
@@ -114,18 +116,53 @@ export function expenseStatus(e: Pick<ExpenseLine, "amount" | "paid" | "dueOn" |
   return e.paid > 0 ? "part_paid" : "unpaid";
 }
 
-/** What the tiles show. A waiting expense still counts as owed. */
-export function expenseTotals(lines: ExpenseLine[], today: string) {
-  const month = today.slice(0, 7);
-  let toPay = 0;
-  let overdue = 0;
-  let spentThisMonth = 0;
-  for (const e of lines) {
-    if (e.voidedAt || e.approval === "rejected") continue;
-    const left = expenseBalance(e);
-    toPay += left;
-    if (expenseStatus(e, today) === "overdue") overdue += left;
-    if (e.spentOn.startsWith(month)) spentThisMonth += e.amount;
-  }
-  return { toPay, overdue, spentThisMonth };
+/** What the dashboard shows: expense_dashboard in the database. */
+export interface ExpenseSummary {
+  toPay: number;
+  overdue: number;
+  overdueCount: number;
+  /** Due in the next 14 days. */
+  upcoming: number;
+  upcomingCount: number;
+  total: number;
+  paid: number;
+  owing: number;
+  byCategory: { key: string; name: string; total: number; paid: number; owing: number }[];
+}
+
+/** A bill is mentioned this many days before it's due. */
+const REMIND_WITHIN_DAYS = 3;
+/** A phone notification stays short: the rest are on the page. */
+const NAMED_IN_REMINDER = 4;
+
+/**
+ * The morning reminder: one message, whatever the number of bills, or null
+ * when nothing needs attention. Every overdue or nearly due bill is counted
+ * each day until it's paid or voided.
+ */
+export function expenseReminder(lines: ExpenseLine[], today: string, money: (amount: number) => string): { title: string; body: string } | null {
+  const soonBy = addDays(today, REMIND_WITHIN_DAYS);
+  const open = lines.filter((e) => expenseBalance(e) > 0);
+  const byDue = (a: ExpenseLine, b: ExpenseLine) => (a.dueOn ?? "").localeCompare(b.dueOn ?? "");
+  const overdue = open.filter((e) => expenseStatus(e, today) === "overdue").sort(byDue);
+  const waiting = open.filter((e) => e.approval === "waiting");
+  const soon = open.filter((e) => e.approval === "approved" && e.dueOn !== null && e.dueOn >= today && e.dueOn <= soonBy).sort(byDue);
+  if (overdue.length + soon.length + waiting.length === 0) return null;
+
+  const named = (list: ExpenseLine[]) => {
+    const shown = list.slice(0, NAMED_IN_REMINDER).map((e) => `${e.name} ${e.amountIsEstimate ? "about " : ""}${money(expenseBalance(e))}`);
+    const more = list.length - shown.length;
+    return shown.join(", ") + (more > 0 ? ` and ${more} more` : "");
+  };
+  const parts = [
+    overdue.length ? `Overdue: ${named(overdue)}.` : "",
+    soon.length ? `Due soon: ${named(soon)}.` : "",
+    waiting.length ? `Waiting for approval: ${named(waiting)}.` : "",
+  ];
+  const counts = [
+    overdue.length ? `${overdue.length} overdue` : "",
+    soon.length ? `${soon.length} due soon` : "",
+    waiting.length ? `${waiting.length} waiting for approval` : "",
+  ];
+  return { title: `Expenses: ${counts.filter(Boolean).join(", ")}`, body: parts.filter(Boolean).join(" ") };
 }
