@@ -21,9 +21,6 @@ interface LoanRow {
   lender_kind: Loan["lenderKind"];
   amount: number | string;
   to_repay: number | string;
-  interest_rate: number | string | null;
-  interest_per: Loan["interestPer"];
-  interest_due: number | string;
   received_on: string;
   received_into: Loan["receivedInto"];
   purchase_id: string | null;
@@ -37,7 +34,7 @@ interface LoanRow {
 }
 
 const LOAN_COLUMNS =
-  "id, lender_id, lender_name, lender_kind, amount, to_repay, interest_rate, interest_per, interest_due, received_on, received_into, purchase_id, due_on, note, actor_name, repaid, interest_paid, voided_at, void_reason";
+  "id, lender_id, lender_name, lender_kind, amount, to_repay, received_on, received_into, purchase_id, due_on, note, actor_name, repaid, interest_paid, voided_at, void_reason";
 
 const toLoan = (r: LoanRow): Loan => ({
   id: r.id,
@@ -46,9 +43,6 @@ const toLoan = (r: LoanRow): Loan => ({
   lenderKind: r.lender_kind,
   amount: Number(r.amount),
   toRepay: Number(r.to_repay),
-  interestRate: r.interest_rate === null ? null : Number(r.interest_rate),
-  interestPer: r.interest_per,
-  interestDue: Number(r.interest_due),
   receivedOn: r.received_on,
   receivedInto: r.received_into,
   purchaseId: r.purchase_id,
@@ -189,8 +183,6 @@ const MESSAGES: Record<string, string> = {
   no_loan: "That loan no longer exists.",
   no_repayment: "That repayment no longer exists.",
   loan_voided: "That loan has been voided.",
-  repay_in_order: "This loan has a later repayment. With a rate, enter repayments in date order: void the later one first.",
-  void_latest_first: "Void this loan's latest repayment first: each one's interest depends on those before it.",
   over_repaid: "That's more than is left to pay back on this loan.",
   before_loan: "A repayment can't be dated before the money was borrowed.",
   void_the_purchase: "This is a supplier's credit for a purchase: void the purchase instead (on its material's page).",
@@ -404,8 +396,6 @@ export const factoryStore: ProductionStore = {
       p_lender_kind: input.lender?.kind ?? null,
       p_amount: input.amount,
       p_to_repay: input.toRepay,
-      p_interest_rate: input.interestRate,
-      p_interest_per: input.interestPer,
       p_received_on: input.receivedOn,
       p_received_into: input.receivedInto,
       p_due_on: input.dueOn,

@@ -29,13 +29,13 @@ export const PAPER: MaterialDetail = {
 // Sample money we owe: the owner's money, a SACCO loan with interest (part repaid, overdue), and a supplier's credit.
 
 const LOANS: Loan[] = [
-  { id: "l1", lenderId: "a", lenderName: "Centenary SACCO", lenderKind: "lender", amount: 1_000_000, toRepay: 1_100_000, interestRate: null, interestPer: null, interestDue: 0, receivedOn: "2026-09-15", receivedInto: "bank_transfer", purchaseId: null, dueOn: "2026-10-31", note: "Three months, 10% on top", actorName: "Boss", repaid: 400_000, interestPaid: 36_364, voidedAt: null, voidReason: null },
-  { id: "l2", lenderId: "b", lenderName: "Boss", lenderKind: "owner", amount: 2_000_000, toRepay: 2_060_000, interestRate: 3, interestPer: "month", interestDue: 60_000, receivedOn: "2026-10-05", receivedInto: "cash", purchaseId: null, dueOn: null, note: "For the new laminator", actorName: "Boss", repaid: 0, interestPaid: 0, voidedAt: null, voidReason: null },
-  { id: "l3", lenderId: "c", lenderName: "Kampala Papers", lenderKind: "supplier", amount: 24_000, toRepay: 24_000, interestRate: null, interestPer: null, interestDue: 0, receivedOn: "2026-10-28", receivedInto: "materials", purchaseId: "p2", dueOn: "2026-11-28", note: "A4 photo paper on credit", actorName: "Boss", repaid: 0, interestPaid: 0, voidedAt: null, voidReason: null },
+  { id: "l1", lenderId: "a", lenderName: "Centenary SACCO", lenderKind: "lender", amount: 1_000_000, toRepay: 1_100_000, receivedOn: "2026-09-15", receivedInto: "bank_transfer", purchaseId: null, dueOn: "2026-10-31", note: "Three months, 10% on top", actorName: "Boss", repaid: 400_000, interestPaid: 36_364, voidedAt: null, voidReason: null },
+  { id: "l2", lenderId: "b", lenderName: "Boss", lenderKind: "owner", amount: 2_000_000, toRepay: 2_000_000, receivedOn: "2026-10-05", receivedInto: "cash", purchaseId: null, dueOn: null, note: "For the new laminator", actorName: "Boss", repaid: 0, interestPaid: 0, voidedAt: null, voidReason: null },
+  { id: "l3", lenderId: "c", lenderName: "Kampala Papers", lenderKind: "supplier", amount: 24_000, toRepay: 24_000, receivedOn: "2026-10-28", receivedInto: "materials", purchaseId: "p2", dueOn: "2026-11-28", note: "A4 photo paper on credit", actorName: "Boss", repaid: 0, interestPaid: 0, voidedAt: null, voidReason: null },
 ];
 
 export const LENDER_ACCOUNTS: LenderAccount[] = [
-  { id: "b", name: "Boss", phone: null, kind: "owner", borrowed: 2_000_000, toRepay: 2_060_000, repaid: 0, interestPaid: 0, owed: 2_060_000, overdue: 0, nextDue: null },
+  { id: "b", name: "Boss", phone: null, kind: "owner", borrowed: 2_000_000, toRepay: 2_000_000, repaid: 0, interestPaid: 0, owed: 2_000_000, overdue: 0, nextDue: null },
   { id: "a", name: "Centenary SACCO", phone: "0772 000 111", kind: "lender", borrowed: 1_000_000, toRepay: 1_100_000, repaid: 400_000, interestPaid: 36_364, owed: 700_000, overdue: 700_000, nextDue: "2026-10-31" },
   { id: "c", name: "Kampala Papers", phone: null, kind: "supplier", borrowed: 24_000, toRepay: 24_000, repaid: 0, interestPaid: 0, owed: 24_000, overdue: 0, nextDue: "2026-11-28" },
   { id: "d", name: "Wedding project fund", phone: null, kind: "project", borrowed: 300_000, toRepay: 300_000, repaid: 300_000, interestPaid: 0, owed: 0, overdue: 0, nextDue: null },

@@ -90,13 +90,13 @@ test("one reminder covers overdue, nearly due and waiting, with what's left on e
     money,
   );
   assert.deepEqual(r, {
-    title: "To pay: 1 overdue, 2 due soon, 1 waiting for approval",
+    title: "Expenses: 1 overdue, 2 due soon, 1 waiting for approval",
     body: "Overdue: Rent 60. Due soon: Water about 100, Power 100. Waiting for approval: Repair 100.",
   });
 });
 
 test("a long list stays short and still counts every bill", () => {
   const r = expenseReminder(Array.from({ length: 6 }, (_, i) => line({ name: `B${i}`, dueOn: "2026-11-01" })), TODAY, money);
-  assert.equal(r?.title, "To pay: 6 overdue");
+  assert.equal(r?.title, "Expenses: 6 overdue");
   assert.equal(r?.body, "Overdue: B0 100, B1 100, B2 100, B3 100 and 2 more.");
 });

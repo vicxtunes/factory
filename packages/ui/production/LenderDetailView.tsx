@@ -10,7 +10,7 @@ import { Button } from "@repo/ui/Button";
 import { useCurrencySymbol } from "@repo/lib/currency/CurrencySymbolProvider";
 import { formatMoney } from "@repo/lib/currency/format";
 import { voidLoan, voidRepayment } from "@repo/lib/production/actions";
-import { CHANNEL_LABELS, INTEREST_PER_LABELS, LENDER_KIND_ONE, RECEIVED_INTO_LABELS, loanOverdue, loanOwed, type LenderDetail, type Loan, type Repayment } from "@repo/lib/production/core";
+import { CHANNEL_LABELS, LENDER_KIND_ONE, RECEIVED_INTO_LABELS, loanOverdue, loanOwed, type LenderDetail, type Loan, type Repayment } from "@repo/lib/production/core";
 
 import { Tile } from "./MaterialsBoard";
 import { shortDay } from "./MoneyWeOweBoard";
@@ -70,11 +70,7 @@ export function LenderDetailView({ detail, today }: { detail: LenderDetail; toda
                   </p>
                   <p className="mt-0.5 text-xs text-muted">
                     {RECEIVED_INTO_LABELS[loan.receivedInto]}
-                    {loan.interestRate !== null && loan.interestPer
-                      ? ` · ${loan.interestRate}% ${INTEREST_PER_LABELS[loan.interestPer]} · ${money(extra)} interest so far, ${money(loan.interestDue)} not yet paid`
-                      : extra > 0
-                        ? ` · ${money(loan.toRepay)} to pay back (${money(extra)} extra)`
-                        : " · no interest"}
+                    {extra > 0 ? ` · ${money(loan.toRepay)} to pay back (${money(extra)} extra)` : " · no interest"}
                     {loan.dueOn ? ` · due ${shortDay(loan.dueOn)}` : ""} · {loan.actorName}
                   </p>
                   {loan.note ? <p className="mt-0.5 text-xs text-muted">{loan.note}</p> : null}

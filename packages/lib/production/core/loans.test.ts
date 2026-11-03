@@ -10,9 +10,6 @@ const loan = (over: Partial<Loan> = {}): Loan => ({
   lenderKind: "lender",
   amount: 1_000_000,
   toRepay: 1_100_000,
-  interestRate: null,
-  interestPer: null,
-  interestDue: 0,
   receivedOn: "2026-10-01",
   receivedInto: "bank_transfer",
   purchaseId: null,
@@ -76,19 +73,4 @@ test("money borrowed needs a lender, and can't be paid back with less", () => {
   assert.ok(!loanInputSchema.safeParse(base).success, "no lender");
   assert.ok(!loanInputSchema.safeParse({ ...base, lender: { name: "X", kind: "owner" }, toRepay: 400_000 }).success);
   assert.ok(!loanInputSchema.safeParse({ ...base, lender: { name: "X", kind: "owner" }, dueOn: "2026-10-01" }).success, "due before received");
-});
-
-test("with a rate, a repayment clears the interest so far first", () => {
-  const withRate = loan({ interestRate: 2, interestPer: "month", toRepay: 1_020_000, interestDue: 20_000 });
-  assert.equal(interestShare(withRate, 5_000), 5_000);
-  assert.equal(interestShare(withRate, 20_000), 20_000);
-  assert.equal(interestShare(withRate, 500_000), 20_000);
-});
-
-test("a rate needs its period, and the other way round", () => {
-  const base = { lenderId: "00000000-0000-4000-8000-000000000001", amount: 100, toRepay: 100, receivedOn: "2026-10-01", receivedInto: "cash", dueOn: null, note: "" };
-  assert.equal(loanInputSchema.safeParse({ ...base, interestRate: 2, interestPer: "month" }).success, true);
-  assert.equal(loanInputSchema.safeParse({ ...base, interestRate: 2 }).success, false);
-  assert.equal(loanInputSchema.safeParse({ ...base, interestPer: "month" }).success, false);
-  assert.equal(loanInputSchema.safeParse(base).success, true);
 });

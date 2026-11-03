@@ -82,15 +82,12 @@ export const loanInputSchema = z
       .transform((v) => v ?? null),
     amount: money("how much was borrowed"),
     toRepay: money("how much has to be paid back"),
-    interestRate: z.number().positive("Enter the interest rate.").max(100, "That rate is too high. Enter it as a percent.").nullish().transform((v) => v ?? null),
-    interestPer: z.enum(["day", "month", "year"]).nullish().transform((v) => v ?? null),
     receivedOn: day,
     receivedInto: channel,
     dueOn: day.nullish().transform((v) => v ?? null),
     note: optionalText(500),
   })
   .refine((l) => !!l.lenderId !== !!l.lender, { message: "Choose who lent it, or add them.", path: ["lenderId"] })
-  .refine((l) => (l.interestRate === null) === (l.interestPer === null), { message: "Say the rate and whether it's per day, month or year.", path: ["interestRate"] })
   .refine((l) => l.toRepay >= l.amount, { message: "What's paid back can't be less than what was borrowed.", path: ["toRepay"] })
   .refine((l) => !l.dueOn || l.dueOn >= l.receivedOn, { message: "The due date can't be before the money came in.", path: ["dueOn"] });
 export type LoanInput = z.output<typeof loanInputSchema>;
