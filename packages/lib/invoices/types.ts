@@ -110,6 +110,22 @@ export interface DraftLine {
 }
 
 /** The staff version adds the share link and the client's wallet balance. */
+/** A payment's receipt (order_receipts), as its link shows it. */
+export interface ReceiptView {
+  receiptNo: string;
+  issuedAt: string;
+  amount: number;
+  method: string;
+  reference: string | null;
+  walletCredit: number;
+  /** Null for a wallet top-up. */
+  orderNo: string | null;
+  orderTotal: number | null;
+  balanceAfter: number | null;
+  client: { name: string; phone: string | null };
+  issuer: InvoiceIssuer;
+}
+
 export interface StaffInvoiceView extends InvoiceView {
   shareUrl: string;
   /** The lines as the price editor needs them. */

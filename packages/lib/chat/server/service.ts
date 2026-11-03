@@ -451,6 +451,7 @@ export async function getOrderCardState(viewer: ChatViewer, conversationId: stri
     viewerIsClient,
     orderHref: directory.orderHref(viewer, order.orderId),
     ...progress,
+    receipts: viewer.type === "designer" ? [] : await directory.getOrderReceipts(order.orderId),
   };
 }
 
