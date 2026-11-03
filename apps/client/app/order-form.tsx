@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
@@ -16,6 +16,7 @@ import { UploadThumbs, uploadKey } from "@repo/ui/UploadThumbs";
 import { useCurrency } from "@repo/lib/currency/useCurrency";
 import { checkPromoCode } from "@repo/lib/discounts/actions";
 import { offerBadge, promoPrice, type PromoCode } from "@repo/lib/discounts/core";
+import { discountedPrice } from "@repo/lib/discounts/core/rules";
 import { attributeChoices } from "@repo/lib/catalog-options";
 import { isPhotobookCategory } from "@repo/lib/orders/photobook";
 import type { OrderItemInput } from "@repo/lib/orders/types";
@@ -24,7 +25,7 @@ import { canOptimizeImage } from "@repo/lib/storage/client";
 import { uploadFileToStorage } from "@repo/lib/storage/upload-client";
 import type { Currency, OrderType, Product, ProductCategory } from "@repo/lib/types";
 
-import { placeOrder } from "./actions";
+import { estimateBookPrice, placeOrder } from "./actions";
 import { OrderPlaced } from "./order-placed";
 
 // Local-only staging for direct photo uploads — mirrors
@@ -143,6 +144,7 @@ export function OrderForm({
   const [uploadWarnings, setUploadWarnings] = useState<string[]>([]);
   const [promo, setPromo] = useState<PromoCode | null>(null);
   const [pending, start] = useTransition();
+  const quotes = useBookQuotes(catalog, items);
 
   // Express is only ever offered when the order includes a Photo Books
   // item — everything else is always Normal, no choice shown at all.
@@ -251,7 +253,7 @@ export function OrderForm({
 
       setReceipt({
         orderNo: res.orderNo,
-        total: orderTotal(resolveItems(catalog, items, res.promoApplied ? promo : null), showPrices),
+        total: orderTotal(resolveItems(catalog, items, res.promoApplied ? promo : null, quotes), showPrices),
         // Photo books get a call from the receptionist first, so the price
         // isn't final until then — don't ask for money up front.
         needsReview: hasPhotobookItem,
@@ -409,6 +411,7 @@ export function OrderForm({
           currencies={currencies}
           promo={promo}
           onPromo={setPromo}
+          quotes={quotes}
         />
       </div>
     </form>
@@ -690,7 +693,7 @@ const TRUST_BADGES = [
 // what's actually owed, which is worse than not showing a total at all.
 // Shared by the summary sidebar and the post-order payment prompt so both
 // always agree on the amount.
-function resolveItems(catalog: ProductCategory[], items: OrderItemInput[], promo: PromoCode | null) {
+function resolveItems(catalog: ProductCategory[], items: OrderItemInput[], promo: PromoCode | null, quotes: BookQuotes) {
   return items.map((item) => {
     const category = catalog.find((c) => c.id === item.category_id) ?? null;
     const product: Product | null = category?.products.find((p) => p.id === item.product_id) ?? null;
@@ -699,8 +702,11 @@ function resolveItems(catalog: ProductCategory[], items: OrderItemInput[], promo
     // ProductVariant.price's comment in packages/lib/types.ts. A running discount
     // (packages/lib/discounts) replaces either; the same one the order will get.
     // A promo code applies instead when it gives the lower price (never both).
-    const listPrice = variant?.price ?? product?.price ?? null;
-    const running = (variant ?? product)?.offer ?? null;
+    // A photo book priced by the sheet is an estimate until the call.
+    const quote = quotes[quoteKey(item)] ?? null;
+    const listPrice = variant?.price ?? product?.price ?? quote;
+    const pending = product?.pending_offer ?? null;
+    const running = (variant ?? product)?.offer ?? (quote != null && pending ? { listPrice: quote, price: discountedPrice(quote, pending.kind, pending.value) } : null);
     const withCode = promo ? promoPrice(promo, product?.id ?? null, listPrice) : null;
     const offer =
       withCode != null && listPrice != null && (running == null || withCode < running.price)
@@ -709,6 +715,37 @@ function resolveItems(catalog: ProductCategory[], items: OrderItemInput[], promo
     const unitPrice = offer?.price ?? listPrice;
     return { item, category, product, variant, unitPrice, offer };
   });
+}
+
+type BookQuotes = Record<string, number | null>;
+
+const quoteKey = (item: OrderItemInput) => `${item.product_id}|${JSON.stringify(item.attributes)}`;
+
+/** Asks the server what each photo book comes to as its details are filled in. */
+function useBookQuotes(catalog: ProductCategory[], items: OrderItemInput[]): BookQuotes {
+  const [quotes, setQuotes] = useState<BookQuotes>({});
+  const books = items.filter((i) => i.product_id && isPhotobookCategory(catalog.find((c) => c.id === i.category_id)?.name));
+  const keys = books.map(quoteKey).join("~");
+  useEffect(() => {
+    if (!keys) return;
+    let stale = false;
+    // A short wait, so typing a number of sheets asks once.
+    const timer = setTimeout(() => {
+      for (const book of books) {
+        estimateBookPrice(book.product_id, book.attributes)
+          .then((price) => {
+            if (!stale) setQuotes((all) => ({ ...all, [quoteKey(book)]: price }));
+          })
+          .catch(() => {});
+      }
+    }, 400);
+    return () => {
+      stale = true;
+      clearTimeout(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `keys` says when the books changed
+  }, [keys]);
+  return quotes;
 }
 
 function orderTotal(resolved: ReturnType<typeof resolveItems>, showPrices: boolean): number | null {
@@ -727,9 +764,11 @@ function OrderSummary({
   currencies,
   promo,
   onPromo,
+  quotes,
 }: {
   catalog: ProductCategory[];
   items: OrderItemInput[];
+  quotes: BookQuotes;
   orderType: OrderType;
   hasPhotobookItem: boolean;
   etaLabel: string;
@@ -739,7 +778,7 @@ function OrderSummary({
   onPromo: (promo: PromoCode | null) => void;
 }) {
   const currency = useCurrency(currencies);
-  const resolved = resolveItems(catalog, items, promo);
+  const resolved = resolveItems(catalog, items, promo, quotes);
   const total = orderTotal(resolved, showPrices);
 
   return (
@@ -785,6 +824,9 @@ function OrderSummary({
 
       {hasPhotobookItem ? (
         <div className="mt-4 space-y-2 border-t border-border pt-4 text-sm">
+          {showPrices && resolved.some((r) => r.unitPrice != null && isPhotobookCategory(r.category?.name)) ? (
+            <p className="text-xs text-muted">Photo book prices are an estimate until we call you to confirm the details.</p>
+          ) : null}
           <div className="flex items-center justify-between">
             <span className="text-muted">Rush</span>
             <span className="font-medium">{orderType === "express" ? "Express" : "Normal"}</span>

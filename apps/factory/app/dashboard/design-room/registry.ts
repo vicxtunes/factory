@@ -149,6 +149,7 @@ import ProductionUsage from "./examples/production/usage";
 import ProductionOverviewExample from "./examples/production/overview";
 import ProductionProduct from "./examples/production/product";
 import ProductionSpeed from "./examples/production/speed";
+import ProductionSheetPrices from "./examples/production/sheet-prices";
 import BooksDayBook from "./examples/books/day-book";
 import BooksExpenses from "./examples/books/expenses";
 
@@ -307,6 +308,15 @@ export const COMPONENTS: RoomComponent[] = [
       { title: "Product costs", file: "production/product-costs.tsx", Demo: ProductionProductCosts },
       { title: "A recipe", file: "production/recipe.tsx", Demo: ProductionRecipe },
     ],
+  },
+  {
+    slug: "sheet-prices",
+    name: "Sheet prices",
+    category: "Flows",
+    status: "live",
+    source: "packages/ui/production/SheetPricesEditor.tsx",
+    summary: "A product priced by the sheet (photo books). Client price per sheet: components, each for a size or every size and a choice like Matt or Glossy; a size's own line beats the every-size one. What one sheet uses from stock gives the real cost. A table works out each size and choice live, and Try a book adds sheets and packaging. Rows are cards on a phone, a row of fields from md.",
+    examples: [{ title: "Sheet prices", file: "production/sheet-prices.tsx", Demo: ProductionSheetPrices }],
   },
   {
     slug: "record-usage",

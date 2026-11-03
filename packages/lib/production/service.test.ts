@@ -37,6 +37,7 @@ function fakeStore(saved: unknown[]): ProductionStore {
     usageItem: async (_s, id) => (id === ITEM ? item : null),
     usageQueue: async () => [item],
     recipes: async () => new Map([["book", recipe]]),
+    sheetCostedProducts: async () => new Set<string>(),
     recordUsage: async (_s, input) => {
       saved.push(input);
       return "r1";

@@ -5,6 +5,7 @@ import "server-only";
 // filtered by the scope's tenant.
 
 import { DAY_CLOSED_MESSAGE } from "@repo/lib/books/model";
+import { sheetCostedProducts } from "@repo/lib/production/sheets/server";
 import { createAdminClient } from "@repo/lib/supabase/admin";
 
 import type { Lender, Loan, Material, MaterialMovement, MaterialPurchase, ProductionRecord, RecipeLine, Repayment, UsageItem } from "../../core/model";
@@ -441,6 +442,8 @@ export const factoryStore: ProductionStore = {
     });
     if (error) fail(error);
   },
+
+  sheetCostedProducts,
 
   async recipes(scope, productId) {
     let query = createAdminClient()

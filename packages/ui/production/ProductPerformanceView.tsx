@@ -41,7 +41,7 @@ function Stat({ label, value, delta, hint, tone }: { label: string; value: strin
   );
 }
 
-export function ProductPerformanceView({ view, recipeHref }: { view: ProductPerformance; recipeHref: string }) {
+export function ProductPerformanceView({ view, recipeHref, sheetsHref }: { view: ProductPerformance; recipeHref: string; sheetsHref?: string }) {
   const symbol = useCurrencySymbol();
   const money = (n: number) => formatMoney(n, symbol);
   const { product, figures: f, before, months, sizes, clients, wastage } = view;
@@ -65,6 +65,11 @@ export function ProductPerformanceView({ view, recipeHref }: { view: ProductPerf
             {product.categoryName} · {f.orders} {f.orders === 1 ? "order" : "orders"} in this period
           </p>
         </div>
+        {sheetsHref ? (
+          <Link href={sheetsHref} className={buttonClass("secondary", "sm")}>
+            Sheet prices
+          </Link>
+        ) : null}
         <Link href={recipeHref} className={buttonClass("secondary", "sm")}>
           {f.noRecipe ? "Add a recipe" : "Edit recipe"}
         </Link>
