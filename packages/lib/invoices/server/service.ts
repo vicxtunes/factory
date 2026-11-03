@@ -1,4 +1,5 @@
 import "server-only";
+import { createAdminClient } from "@repo/lib/supabase/admin";
 
 // Invoice use cases. An invoice is a document over an order: the total is the
 // order's price, and everything about money — recording installments, what's
@@ -28,6 +29,7 @@ import type {
   InvoiceSettingsInput,
   InvoiceView,
   StaffInvoiceView,
+  ReceiptView,
 } from "../types";
 import * as directory from "./directory";
 import { InvoiceError } from "./errors";
@@ -234,7 +236,7 @@ export async function preview(
  * sum of the lines, so the invoice total can't move if catalog prices change.
  */
 export async function generate(
-  staff: InvoiceStaff,
+  staff: Pick<InvoiceStaff, "id" | "name">,
   orderId: string,
   input: {
     lines: { itemId: string; unitPrice: number; unit?: string | null }[];
@@ -549,4 +551,31 @@ export async function byToken(token: string): Promise<InvoiceView | null> {
   if (!invoice) return null;
   const order = await directory.loadOrder(invoice.order_id);
   return order ? buildView(invoice, order) : null;
+}
+
+/** The receipt behind a link, or null. Holding the link is the permission. */
+export async function receiptByToken(token: string): Promise<ReceiptView | null> {
+  if (!isWellFormedToken(token)) return null;
+  const { data, error } = await createAdminClient()
+    .from("order_receipts")
+    .select("receipt_no, created_at, amount, method, reference, wallet_credit, order_total, balance_after, clients(name, phone), orders(order_no)")
+    .eq("share_token", token)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) return null;
+  const client = data.clients as unknown as { name: string; phone: string | null };
+  const order = data.orders as unknown as { order_no: string } | null;
+  return {
+    receiptNo: data.receipt_no,
+    issuedAt: data.created_at,
+    amount: Number(data.amount),
+    method: data.method,
+    reference: data.reference,
+    walletCredit: Number(data.wallet_credit),
+    orderNo: order?.order_no ?? null,
+    orderTotal: data.order_total == null ? null : Number(data.order_total),
+    balanceAfter: data.balance_after == null ? null : Number(data.balance_after),
+    client: { name: client.name, phone: client.phone },
+    issuer: await getIssuer(),
+  };
 }

@@ -171,3 +171,12 @@ wallet balance, overpayment going to the wallet, refusing payments on a paid inv
 by token (and junk or reset tokens returning nothing), client link scoping, the price guard,
 walk-in orders, the list, and cancellation (status Cancelled, refund in the history). The public
 page and the client's order view were checked in a browser, including print.
+
+## Receipts
+
+Every payment by an Aming client gets a numbered receipt (`RCT-000001`, table `order_receipts`), issued by
+database triggers, so every way of paying is covered: mobile money, staff-recorded money, the wallet and
+top-ups. A failure issuing one is logged and never stops the payment. An overpayment gets one receipt, not two;
+change handed back in cash isn't counted. The order's "Payment received" chat card links to its receipt, and
+`/receipt/<token>` shows it as a PDF with no sign-in. Payments from before this existed have no receipt on
+purpose: some old records aren't true payments.

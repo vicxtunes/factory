@@ -131,6 +131,8 @@ export interface OrderCardState {
   readyCount: number;
   collectedCount: number;
   itemCount: number;
+  /** This order's receipts, for its client and staff. A payment card shows the one from its own moment. */
+  receipts: { at: string; href: string }[];
 }
 
 export interface ChatMessage {
