@@ -1,7 +1,7 @@
 // The reference HivePay carries for one of our transactions. HivePay allows
 // at most 30 characters, letters and digits — our ids are 36-character uuids
 // — so the same 128 bits go as base 36 behind a prefix (27 at most): "AM" for
-// a collection, "WD" for a withdrawal's payout. They're turned back into the
+// a collection, "WD" for a withdrawal's payout, "EX" for paying a bill. They're turned back into the
 // uuid when HivePay reports. Pure, so it can be tested.
 
 function encode(prefix: string, id: string): string {
@@ -25,6 +25,11 @@ export const toHivepayReference = (collectionId: string): string => encode("AM",
 export const fromHivepayReference = (reference: string): string | null => decode("AM", reference);
 
 export const toPayoutReference = (withdrawalId: string): string => encode("WD", withdrawalId);
+
+export const toExpensePayoutReference = (payoutId: string): string => encode("EX", payoutId);
+
+/** The bill payout id a HivePay reference stands for, or null when it isn't one. */
+export const fromExpensePayoutReference = (reference: string): string | null => decode("EX", reference);
 
 /** The withdrawal id a HivePay reference stands for, or null when it isn't one of our payouts. */
 export const fromPayoutReference = (reference: string): string | null => decode("WD", reference);

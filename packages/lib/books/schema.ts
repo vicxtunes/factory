@@ -86,6 +86,14 @@ export const expensePaymentInputSchema = z.object({
   note: text(500),
 });
 
+export const expensePayoutInputSchema = z.object({
+  id: z.string().uuid(),
+  expenseId: z.string().uuid(),
+  amount: z.number().int().positive("Enter the amount to send."),
+  actual: z.number().int().positive("Enter the real amount.").nullish().transform((v) => v ?? null),
+  phone: z.string().trim().min(1, "Enter the phone number to send it to."),
+});
+
 export const voidInputSchema = z.object({ id: z.string().uuid(), reason: z.string().trim().min(3, "Say why.").max(500) });
 export const decideInputSchema = z.object({ id: z.string().uuid(), approve: z.boolean(), note: text(500) });
 export const approvalLimitSchema = z.object({ above: z.number().int().min(0, "The limit can't be negative.").nullable() });
@@ -93,4 +101,5 @@ export const categoryInputSchema = z.object({ name: z.string().trim().min(2, "Gi
 
 export type ExpenseInput = z.output<typeof expenseInputSchema>;
 export type ScheduleInput = z.output<typeof scheduleInputSchema>;
+export type ExpensePayoutInput = z.output<typeof expensePayoutInputSchema>;
 export type ExpensePaymentInput = z.output<typeof expensePaymentInputSchema>;

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { expenseBalance, expenseReminder, expenseStatus, type ExpenseLine } from "./expenses";
+import { expenseBalance, expenseReminder, expenseStatus, hivepaySendFee, type ExpenseLine } from "./expenses";
 
 const TODAY = "2026-11-03";
 const line = (o: Partial<ExpenseLine> = {}): ExpenseLine => ({
@@ -99,4 +99,16 @@ test("a long list stays short and still counts every bill", () => {
   const r = expenseReminder(Array.from({ length: 6 }, (_, i) => line({ name: `B${i}`, dueOn: "2026-11-01" })), TODAY, money);
   assert.equal(r?.title, "To pay: 6 overdue");
   assert.equal(r?.body, "Overdue: B0 100, B1 100, B2 100, B3 100 and 2 more.");
+});
+
+test("the sending fee goes by what's sent, the amount plus the fee", () => {
+  const bands = [
+    { upTo: 50_000, fee: 1_000 },
+    { upTo: 100_000, fee: 2_000 },
+  ];
+  assert.equal(hivepaySendFee(49_000, bands), 1_000);
+  assert.equal(hivepaySendFee(49_500, bands), 2_000, "49,500 + 1,000 is past the first band");
+  assert.equal(hivepaySendFee(98_000, bands), 2_000);
+  assert.equal(hivepaySendFee(98_001, bands), null, "beyond the list: not offered");
+  assert.equal(hivepaySendFee(1_000, []), null);
 });

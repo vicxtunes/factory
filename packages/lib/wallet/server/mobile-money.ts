@@ -15,6 +15,7 @@ import "server-only";
 // timeout, since the client may still approve the prompt.
 
 import { clientUrl } from "@repo/lib/client-portal/paths";
+import { reconcileExpensePayout } from "@repo/lib/books/payouts-server";
 import { formatMoney } from "@repo/lib/currency/format";
 import { parsePhone } from "@repo/lib/kernel/core/phone";
 import { createAdminClient } from "@repo/lib/supabase/admin";
@@ -27,7 +28,7 @@ import type { ClientViewer } from "./identity";
 import { businessTermsAccepted, reconcilePayout } from "./business";
 import * as notifier from "./notifier";
 import * as hivepay from "./providers/hivepay";
-import { fromHivepayReference, fromPayoutReference, toHivepayReference } from "./providers/hivepay-reference";
+import { fromHivepayReference, fromPayoutReference, toHivepayReference, fromExpensePayoutReference } from "./providers/hivepay-reference";
 import * as repo from "./repository";
 import { clientPath } from "@repo/lib/client-portal/paths";
 
@@ -428,6 +429,12 @@ export async function handleWebhook(rawBody: string, signature: string | null): 
   const withdrawalId = reference ? fromPayoutReference(reference) : null;
   if (withdrawalId) {
     await reconcilePayout(withdrawalId);
+    return answer(200);
+  }
+  // A bill paid through the app, settled the same way.
+  const expensePayoutId = reference ? fromExpensePayoutReference(reference) : null;
+  if (expensePayoutId) {
+    await reconcileExpensePayout(expensePayoutId);
     return answer(200);
   }
   // Ours stand for a collection id (see hivepay-reference.ts); anything else isn't a collection we started.

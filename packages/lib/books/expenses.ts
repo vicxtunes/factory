@@ -68,7 +68,19 @@ export interface ExpenseDocument {
   recordedAt: string;
 }
 
+export interface ExpensePayout {
+  id: string;
+  /** What the phone should receive. */
+  amount: number;
+  phone: string;
+  status: "sending" | "paid" | "failed";
+  error: string | null;
+  sentBy: string;
+  sentAt: string;
+}
+
 export interface ExpenseDetail {
+  payouts: ExpensePayout[];
   payments: ExpensePayment[];
   documents: ExpenseDocument[];
 }
@@ -114,6 +126,21 @@ export function expenseStatus(e: Pick<ExpenseLine, "amount" | "paid" | "dueOn" |
   if (e.approval === "waiting") return "waiting";
   if (e.dueOn && e.dueOn < today) return "overdue";
   return e.paid > 0 ? "part_paid" : "unpaid";
+}
+
+/**
+ * HivePay's prices for sending money: the fee on anything up to `upTo`. It
+ * publishes no table and no way to ask, so they come from HivePay directly.
+ * While this is empty, the app doesn't offer sending at all.
+ */
+export const HIVEPAY_SEND_FEES: { upTo: number; fee: number }[] = [];
+
+/**
+ * The fee to send on top so the phone receives exactly `amount`, or null when
+ * it's beyond the list. The band goes by what's sent, the amount plus the fee.
+ */
+export function hivepaySendFee(amount: number, bands = HIVEPAY_SEND_FEES): number | null {
+  return bands.find((b) => amount + b.fee <= b.upTo)?.fee ?? null;
 }
 
 /** What the dashboard shows: expense_dashboard in the database. */

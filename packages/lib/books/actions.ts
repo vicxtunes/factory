@@ -10,7 +10,8 @@ import { getDashboardSession } from "@repo/lib/auth/session";
 import { AppError, parseInput, type Result } from "@repo/lib/kernel/core";
 import { runAction } from "@repo/lib/kernel/server/action";
 import { resolveTenantScope } from "@repo/lib/tenancy/server/resolve";
-import { checkMoneySource } from "@repo/lib/wallet/policy";
+import { parsePhone } from "@repo/lib/kernel/core/phone";
+import { checkMoneySource, networkOfPhone } from "@repo/lib/wallet/policy";
 
 import type { ExpenseDetail } from "./expenses";
 import {
@@ -20,6 +21,7 @@ import {
   decideInputSchema,
   expenseInputSchema,
   expensePaymentInputSchema,
+  expensePayoutInputSchema,
   moneyMoveInputSchema,
   openingInputSchema,
   otherMoneyInputSchema,
@@ -29,6 +31,7 @@ import {
   voidOtherMoneySchema,
 } from "./schema";
 import * as expenses from "./expenses-server";
+import { sendPayout } from "./payouts-server";
 import * as store from "./server";
 
 const PAYMENTS = "/dashboard/accounts/payments";
@@ -136,6 +139,20 @@ export async function payExpense(input: unknown): Promise<Result> {
   return runAction("books", async () => {
     const { actor, isBoss } = await staff();
     await expenses.pay(parseInput(expensePaymentInputSchema, input), isBoss, actor);
+    expensesChanged();
+  });
+}
+
+/** Real money: only the boss. The person gets the amount; the fee goes on top. */
+export async function sendExpensePayout(input: unknown): Promise<Result> {
+  return runAction("books", async () => {
+    const { actor, isBoss } = await staff();
+    if (!isBoss) throw new AppError("Only the boss can send money from the app.");
+    const payout = parseInput(expensePayoutInputSchema, input);
+    const phone = parsePhone(payout.phone);
+    if (!phone.ok) throw new AppError(phone.error);
+    if (!networkOfPhone(phone.store)) throw new AppError("HivePay can only send to MTN and Airtel Uganda numbers.");
+    await sendPayout(payout, phone.store, actor);
     expensesChanged();
   });
 }
