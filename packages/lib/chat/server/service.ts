@@ -841,10 +841,23 @@ export async function removeIssueThreadFiles(reportId: string): Promise<void> {
 }
 
 /** The assistant's reply: rings the chat, and pushes to the client only, so staff aren't told of every answer. */
-export async function postAssistantMessage(conversationId: string, clientId: string, senderName: string, body: string): Promise<void> {
+export async function postAssistantMessage(
+  conversationId: string,
+  clientId: string,
+  senderName: string,
+  body: string,
+  extras?: { choices: string[]; images: { url: string; name: string }[] },
+): Promise<void> {
   const conversation = await repo.getConversation(conversationId);
   if (!conversation) return;
-  await repo.insertMessage({ conversation_id: conversationId, kind: "text", sender_name: senderName, body: body.slice(0, CHAT_LIMITS.maxMessageLength) });
+  await repo.insertMessage({
+    conversation_id: conversationId,
+    kind: "text",
+    sender_name: senderName,
+    body: body.slice(0, CHAT_LIMITS.maxMessageLength),
+    choices: extras?.choices.length ? extras.choices : null,
+    images: extras?.images.length ? extras.images : null,
+  });
   ringConversation(conversation, "message");
   await notifyRecipients([{ type: "client", id: clientId }], { title: senderName, body: body.slice(0, 120), conversationId });
 }

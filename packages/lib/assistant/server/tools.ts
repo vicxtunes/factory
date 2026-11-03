@@ -21,7 +21,7 @@ import { paidByOrders } from "@repo/lib/wallet/orders";
 import { WalletError } from "@repo/lib/wallet/server/errors";
 import { startOrderPayment } from "@repo/lib/wallet/server/mobile-money";
 
-import { ASSISTANT_NAME, MAX_PROMPTS_PER_DAY, canAutoApprove, clientConfirmedAfter, everyItemHasPhotos } from "../core/rules";
+import { ASSISTANT_NAME, MAX_CHOICES, MAX_IMAGES, MAX_PROMPTS_PER_DAY, canAutoApprove, clientConfirmedAfter, everyItemHasPhotos } from "../core/rules";
 import * as store from "./store";
 import type { PendingItem } from "./store";
 
@@ -32,6 +32,9 @@ export interface ToolContext {
   client: { id: string; name: string; email: string | null; phone: string | null };
   /** What it did, for the boss's list. */
   actions: string[];
+  /** Goes out with its reply: buttons to tap, and product photos. */
+  choices: string[];
+  images: { url: string; name: string }[];
 }
 
 export async function tellManagers(title: string, body: string, url: string): Promise<void> {
@@ -111,7 +114,46 @@ export function assistantTools(ctx: ToolContext): AssistantTool[] {
   const db = createAdminClient();
   const did = (what: string) => ctx.actions.push(what);
 
-  return [
+  const tools = [
+    tool({
+      name: "offer_choices",
+      description: "Puts tappable buttons under your reply. Use whenever the client picks from a short list or answers yes or no. Still write the question in your reply.",
+      inputSchema: z.object({ options: z.array(z.string()).describe(`At most ${MAX_CHOICES} short answers, in the client's words.`) }),
+      run: async ({ options }) => {
+        ctx.choices = [...new Set(options.map((o) => o.trim()).filter(Boolean))].slice(0, MAX_CHOICES).map((o) => o.slice(0, 60));
+        return "The buttons will show under your reply.";
+      },
+    }),
+
+    tool({
+      name: "show_product_photos",
+      description: "Puts photos of a product under your reply. Use when the client asks for samples or to see something.",
+      inputSchema: z.object({ product_id: z.string() }),
+      run: async ({ product_id }) => {
+        const [product, media] = await Promise.all([
+          db.from("products").select("name, display_image_url").eq("id", product_id).maybeSingle(),
+          db.from("product_media").select("secure_url, kind").eq("product_id", product_id).order("sort_order").limit(MAX_IMAGES * 2),
+        ]);
+        if (!product.data) return "Refused: that product isn't in the catalog.";
+        const urls = [product.data.display_image_url, ...(media.data ?? []).filter((m) => m.kind !== "video").map((m) => m.secure_url)].filter(Boolean) as string[];
+        const fresh = urls.filter((url) => !ctx.images.some((i) => i.url === url));
+        if (!urls.length) return `There are no photos of ${product.data.name} here. Say so, point to the Showroom, and offer to ask the team.`;
+        ctx.images = [...ctx.images, ...[...new Set(fresh)].map((url) => ({ url, name: product.data!.name }))].slice(0, MAX_IMAGES);
+        return `${ctx.images.length} photos will show under your reply. Don't list their links.`;
+      },
+    }),
+
+    tool({
+      name: "get_typical_times",
+      description: "How many days each kind of product has really taken lately, from order placed to done. Typical, not a promise.",
+      inputSchema: z.object({}),
+      run: async () => {
+        const { data, error } = await db.rpc("assistant_typical_days");
+        if (error) throw new Error(error.message);
+        return JSON.stringify(data ?? []);
+      },
+    }),
+
     tool({
       name: "get_catalog",
       description: "The products clients can order, with their ids, variants, prices when shown, and the attributes each needs.",
@@ -275,7 +317,9 @@ export function assistantTools(ctx: ToolContext): AssistantTool[] {
           if (link && !/^https?:\/\/\S+$/.test(link)) return "Refused: photo_link isn't a valid link.";
 
           const unit = (variant?.price ?? product.price) ?? (await bookListPrice(product.id, item.attributes));
-          const unitPrice = unit == null ? null : Number(unit);
+          // The running offer, decided by the database as it will be on the order and its invoice.
+          const offer = unit == null ? null : await db.rpc("discount_offer", { p_product: product.id, p_list_price: unit, p_at: new Date().toISOString() });
+          const unitPrice = unit == null ? null : Number((offer?.data as { price?: number } | null)?.price ?? unit);
           if (unitPrice == null || unitPrice <= 0) unknown = true;
           else total += unitPrice * item.qty;
           lines.push(`${item.qty} × ${product.name}${variant ? ` (${variant.name})` : ""}: ${unitPrice == null ? "price to be confirmed" : formatMoney(unitPrice * item.qty)}`);
@@ -292,7 +336,13 @@ export function assistantTools(ctx: ToolContext): AssistantTool[] {
         }
         if (!everyItemHasPhotos(pending)) return "Refused: every item needs its photos attached or a link first. Ask the client for them.";
         const summary = [...lines, unknown ? "Total: reception will confirm the price" : `Total: ${formatMoney(total)}`, `Needed by ${delivery_date}${express ? " (express)" : ""}`].join("\n");
-        await store.setPendingOrder(ctx.conversationId, { items: pending, delivery_date, order_type: express ? "express" : "normal", summary });
+        const order_type = express ? "express" : "normal";
+        // The same order again: the client has still seen it, so their yes still counts.
+        const earlier = await store.getPendingOrder(ctx.conversationId);
+        const same =
+          !!earlier?.posted_at && JSON.stringify([earlier.items, earlier.delivery_date, earlier.order_type]) === JSON.stringify([pending, delivery_date, order_type]);
+        if (same) return "The client has already seen this exact summary. If they agreed to it, call place_order now.";
+        await store.setPendingOrder(ctx.conversationId, { items: pending, delivery_date, order_type, summary });
         did("Prepared an order summary");
         return `Show the client this summary and ask if you should place it:\n${summary}`;
       },
@@ -349,6 +399,7 @@ export function assistantTools(ctx: ToolContext): AssistantTool[] {
 
         const { lines } = await invoices.draft(res.orderId);
         let invoiceUrl: string | null = null;
+        let invoiceTotal: number | null = null;
         if (canAutoApprove(lines)) {
           const received = await receiveOrder(res.orderId, ASSISTANT_ACTOR);
           if (!received.ok) {
@@ -362,6 +413,7 @@ export function assistantTools(ctx: ToolContext): AssistantTool[] {
             );
             did(`Invoiced order ${res.orderNo}: ${invoice.invoiceNo}`);
             invoiceUrl = invoice.shareUrl;
+            invoiceTotal = invoice.amount;
           }
         }
         await tellManagers(
@@ -374,6 +426,7 @@ export function assistantTools(ctx: ToolContext): AssistantTool[] {
           order_no: res.orderNo,
           approved_and_invoiced: !!invoiceUrl,
           invoice_url: invoiceUrl,
+          total: invoiceTotal,
           summary: pending.summary,
           problems,
         });
@@ -431,14 +484,23 @@ export function assistantTools(ctx: ToolContext): AssistantTool[] {
 
     tool({
       name: "hand_to_staff",
-      description: "Passes this chat to the team and stops answering it until they hand it back.",
+      description: "Tells the team this chat needs a person. You keep answering until one of them writes.",
       inputSchema: z.object({ reason: z.string() }),
       run: async ({ reason }) => {
-        await store.setState(ctx.conversationId, "staff");
         await tellManagers(`${ctx.client.name} needs a person`, reason, chatHref(ctx.conversationId));
-        did(`Handed to staff: ${reason}`);
-        return "Handed over. Tell the client someone from the team will reply here.";
+        did(`Asked staff: ${reason}`);
+        return "The team has been told. Say someone will reply here, and keep helping with anything else until they do.";
       },
     }),
   ];
+
+  // Refusals go on the boss's list, so a stuck chat can be seen for what it is.
+  return tools.map((t) => ({
+    ...t,
+    run: async (input: never) => {
+      const result = await t.run(input);
+      if (/^(Refused|Failed)/.test(result)) did(`${t.name}: ${result}`);
+      return result;
+    },
+  }));
 }

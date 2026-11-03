@@ -250,6 +250,7 @@ export function ConversationView({
     meKey && myName ? { key: meKey, name: myName } : null,
   );
   const typingLabel = describeTyping(typing.typingNames);
+  const lastMessage = messages[messages.length - 1];
 
   const avatarByKey = useMemo(
     () => new Map((detail?.members ?? []).map((m) => [participantKey(m), m.avatarUrl])),
@@ -455,6 +456,24 @@ export function ConversationView({
             </p>
           </div>
         ))}
+
+        {!pending.length && lastMessage?.choices?.length && detail.me.type === "client" && !isMine(lastMessage) ? (
+          <div className="mt-2 flex flex-wrap gap-2 pl-1" role="group" aria-label="Suggested answers">
+            {lastMessage.choices.map((choice) => (
+              <button
+                key={choice}
+                type="button"
+                onClick={() => {
+                  setReplyTo(null);
+                  sendText({ tempId: `pending-${Date.now()}-${Math.random()}`, body: choice, replyTo: null, createdAt: new Date().toISOString(), failed: false });
+                }}
+                className="min-h-10 rounded-full border border-brand-300 bg-surface px-4 text-sm font-medium text-brand-700 hover:bg-brand-50 dark:text-brand-300 dark:hover:bg-white/5"
+              >
+                {choice}
+              </button>
+            ))}
+          </div>
+        ) : null}
 
         {receipt && !pending.length ? <p className="mt-1 px-1 text-right text-[11px] text-muted">{receipt}</p> : null}
       </div>

@@ -12,7 +12,7 @@ import { applyStudioPayment } from "@repo/lib/studio-payments/server";
 import { reconcileWaitingHivepay, reconcileExpensePayouts, sendDailyMoneyReport, sendExpenseReminder, sendLateMoneyNote, watchMoney } from "@repo/lib/wallet/webhooks";
 
 const EVERY_MS = 2 * 60_000;
-const ASSISTANT_EVERY_MS = 5_000;
+const ASSISTANT_EVERY_MS = 2_000;
 const WATCH_EVERY_MS = 60 * 60_000;
 const REPORT_CHECK_EVERY_MS = 10 * 60_000;
 

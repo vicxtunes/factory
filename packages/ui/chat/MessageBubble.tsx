@@ -189,6 +189,16 @@ export function MessageBubble({
                   ))}
                 </div>
               ) : null}
+              {message.images?.length ? (
+                <div className="mb-1.5 grid grid-cols-2 gap-1.5">
+                  {message.images.map((image) => (
+                    <a key={image.url} href={image.url} target="_blank" rel="noreferrer" title={image.name}>
+                      {/* eslint-disable-next-line @next/next/no-img-element -- stored product photos, any shape */}
+                      <img src={image.url} alt={image.name} loading="lazy" className="aspect-square w-full rounded-lg object-cover" />
+                    </a>
+                  ))}
+                </div>
+              ) : null}
               {message.body ? (
                 <Linkify
                   text={message.body}
