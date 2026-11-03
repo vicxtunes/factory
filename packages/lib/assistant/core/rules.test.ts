@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { canAutoApprove, clientConfirmedAfter, costUsd, everyItemHasPhotos, findModel, mayAnswer } from "./rules";
+import { canAutoApprove, clientConfirmedAfter, costUsd, everyItemHasPhotos, findModel, mayAnswer, projectMonthTotal } from "./rules";
 
 describe("assistant rules", () => {
   it("approves only when every line has a price", () => {
@@ -28,6 +28,12 @@ describe("assistant rules", () => {
     assert.equal(mayAnswer("test", "0772123456", client), true);
     assert.equal(mayAnswer("test", "b@x.com\n0700000000", client), false);
     assert.equal(mayAnswer("test", "", { email: null, phone: null }), false);
+  });
+  it("projects the month from the daily rate", () => {
+    const now = new Date("2026-11-11T00:00:00Z");
+    assert.equal(projectMonthTotal(2, "2026-11-01T00:00:00Z", now, 30), 6);
+    assert.equal(projectMonthTotal(1, "2026-11-10T23:00:00Z", now, 30), 30);
+    assert.equal(projectMonthTotal(0, null, now, 30), 0);
   });
   it("prices a run by its model", () => {
     const opus = findModel("claude-opus-5-5")!;

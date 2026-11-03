@@ -2,7 +2,7 @@ import "server-only";
 
 import { createAdminClient } from "@repo/lib/supabase/admin";
 
-import { QUIET_BEFORE_ANSWER_MS, RUN_STALE_MS, TOO_OLD_TO_ANSWER_MS, type AssistantMode } from "../core/rules";
+import { projectMonthTotal, QUIET_BEFORE_ANSWER_MS, RUN_STALE_MS, TOO_OLD_TO_ANSWER_MS, type AssistantMode } from "../core/rules";
 
 export interface AssistantSettings {
   mode: AssistantMode;
@@ -185,6 +185,22 @@ function startOfToday(): string {
 export async function spentToday(): Promise<number> {
   const rows = must(await createAdminClient().from("assistant_runs").select("cost_usd").gte("created_at", startOfToday()));
   return rows.reduce((sum, r) => sum + Number(r.cost_usd), 0);
+}
+
+/** This month in Kampala so far, and where it's heading. */
+export async function monthStats(): Promise<{ spent: number; replies: number; perReply: number; projected: number }> {
+  const now = new Date();
+  const kampala = new Date(now.getTime() + 3 * 3_600_000);
+  const start = new Date(Date.UTC(kampala.getUTCFullYear(), kampala.getUTCMonth(), 1) - 3 * 3_600_000);
+  const daysInMonth = new Date(Date.UTC(kampala.getUTCFullYear(), kampala.getUTCMonth() + 1, 0)).getUTCDate();
+  const rows = must(await createAdminClient().rpc("assistant_month_stats", { p_since: start.toISOString() })) as {
+    total_usd: number;
+    replies: number;
+    first_at: string | null;
+  }[];
+  const spent = Number(rows[0]?.total_usd ?? 0);
+  const replies = Number(rows[0]?.replies ?? 0);
+  return { spent, replies, perReply: replies ? spent / replies : 0, projected: projectMonthTotal(spent, rows[0]?.first_at ?? null, now, daysInMonth) };
 }
 
 export interface RunRow {

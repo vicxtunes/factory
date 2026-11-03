@@ -71,3 +71,12 @@ revoke all on function assistant_track_message() from public, anon, authenticate
 create trigger chat_messages_assistant_track
   after insert on chat_messages
   for each row execute function assistant_track_message();
+
+-- What the month has cost so far, for the boss's page. Summed here so it's right however many answers there are.
+create or replace function assistant_month_stats(p_since timestamptz)
+returns table (total_usd numeric, replies bigint, first_at timestamptz)
+language sql stable as $$
+  select coalesce(sum(cost_usd), 0), count(*) filter (where reply is not null), min(created_at)
+  from assistant_runs where created_at >= p_since;
+$$;
+revoke all on function assistant_month_stats(timestamptz) from public, anon, authenticated;

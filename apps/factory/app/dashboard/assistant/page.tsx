@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { recentRuns, getSettings, spentToday } from "@repo/lib/assistant/server/store";
+import { monthStats, recentRuns, getSettings, spentToday } from "@repo/lib/assistant/server/store";
 import { getDashboardSession } from "@repo/lib/auth/session";
 import { chatHref } from "@repo/lib/chat/routes";
 import { SUPPORT_OWNER_EMAIL } from "@repo/lib/support/constants";
@@ -17,13 +17,24 @@ export default async function AssistantPage() {
   const session = await getDashboardSession();
   const developer = session?.email === SUPPORT_OWNER_EMAIL;
   if (session?.role !== "boss" && !developer) redirect("/dashboard");
-  const [settings, spent, runs] = await Promise.all([getSettings(), spentToday(), recentRuns(50)]);
+  const [settings, spent, month, runs] = await Promise.all([getSettings(), spentToday(), monthStats(), recentRuns(50)]);
 
   return (
     <div className="mx-auto grid w-full max-w-6xl gap-6 p-4 lg:grid-cols-[22rem_1fr]">
       <section className="h-fit rounded-xl border border-border bg-surface p-4">
         <h1 className="text-lg font-semibold">Assistant</h1>
-        <p className="mt-1 text-sm text-muted">Spent today: US${spent.toFixed(2)}</p>
+        <dl className="mt-2 grid grid-cols-[1fr_auto] gap-x-4 gap-y-1 text-sm">
+          <dt className="text-muted">Spent today</dt>
+          <dd className="text-right tabular-nums">US${spent.toFixed(2)}</dd>
+          <dt className="text-muted">This month so far</dt>
+          <dd className="text-right tabular-nums">US${month.spent.toFixed(2)}</dd>
+          <dt className="text-muted">Replies this month</dt>
+          <dd className="text-right tabular-nums">{month.replies}</dd>
+          <dt className="text-muted">Average per reply</dt>
+          <dd className="text-right tabular-nums">US${month.perReply.toFixed(3)}</dd>
+          <dt className="text-muted">Month at this rate</dt>
+          <dd className="text-right font-semibold tabular-nums">US${month.projected.toFixed(2)}</dd>
+        </dl>
         <div className="mt-4">
           <AssistantForm settings={settings} canChooseModel={developer} />
         </div>

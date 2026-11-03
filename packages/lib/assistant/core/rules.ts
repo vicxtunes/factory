@@ -64,3 +64,13 @@ export interface TokenUsage {
 export function costUsd(model: AssistantModel, u: TokenUsage): number {
   return (u.input * model.input + u.output * model.output + u.cacheRead * model.cacheRead + u.cacheWrite * model.cacheWrite) / 1_000_000;
 }
+
+/**
+ * The month's likely total, at the daily rate since the first answer this month
+ * (a part-day counts as a whole one, so a first hour doesn't look like a whole day's spend ×24).
+ */
+export function projectMonthTotal(spent: number, firstAt: string | null, now: Date, daysInMonth: number): number {
+  if (!firstAt || spent <= 0) return 0;
+  const days = Math.max(Math.ceil((now.getTime() - Date.parse(firstAt)) / 86_400_000), 1);
+  return (spent / days) * daysInMonth;
+}
