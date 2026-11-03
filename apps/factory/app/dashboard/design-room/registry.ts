@@ -149,6 +149,9 @@ import ProductionUsage from "./examples/production/usage";
 import ProductionOverviewExample from "./examples/production/overview";
 import ProductionProduct from "./examples/production/product";
 import ProductionSpeed from "./examples/production/speed";
+import ProductionSheetPrices from "./examples/production/sheet-prices";
+import BooksDayBook from "./examples/books/day-book";
+import BooksExpenses from "./examples/books/expenses";
 
 // Everything the Design Room shows. To add a component: build it in
 // packages/ui/, write its examples under ./examples/<slug>/ (one default
@@ -265,6 +268,24 @@ export const COMPONENTS: RoomComponent[] = [
     ],
   },
   {
+    slug: "day-book",
+    name: "Today (day book)",
+    category: "Flows",
+    status: "live",
+    source: "packages/ui/books/DayBookBoard.tsx",
+    summary: "One day's money under Accounts: for each of cash, bank, mobile money and HivePay, opening + in − out = closing, then every line with who, why, account, source and who recorded it. Search, Excel and PDF. Any past day can be opened. Move money records cash banked or drawn, shown apart from money in and out. Close the day takes a count in a form sheet (cash required, a difference needs a reason); a closed day can't change, and money that arrives after closing is marked and carries to the next opening. Tiles stack on a phone; lines are cards on a phone, a table from md.",
+    examples: [{ title: "A day ready to close", file: "books/day-book.tsx", Demo: BooksDayBook }],
+  },
+  {
+    slug: "expenses",
+    name: "Expenses",
+    category: "Flows",
+    status: "live",
+    source: "packages/ui/books/ExpensesBoard.tsx",
+    summary: "One-time, recurring same amount and recurring varying amount in one list, with to pay, overdue and spent tiles. Status comes from the payments: unpaid, part paid, paid, overdue. Opening one shows its record, full or part payments each with a printable receipt, and its documents. Mistakes are voided with a reason. The boss sets a limit and approves what's above it. Forms in a form sheet; cards on a phone, a table from md.",
+    examples: [{ title: "Expenses", file: "books/expenses.tsx", Demo: BooksExpenses }],
+  },
+  {
     slug: "money-we-owe",
     name: "Money we owe",
     category: "Flows",
@@ -287,6 +308,15 @@ export const COMPONENTS: RoomComponent[] = [
       { title: "Product costs", file: "production/product-costs.tsx", Demo: ProductionProductCosts },
       { title: "A recipe", file: "production/recipe.tsx", Demo: ProductionRecipe },
     ],
+  },
+  {
+    slug: "sheet-prices",
+    name: "Sheet prices",
+    category: "Flows",
+    status: "live",
+    source: "packages/ui/production/SheetPricesEditor.tsx",
+    summary: "A product priced by the sheet (photo books). Client price per sheet: components, each for a size or every size and a choice like Matt or Glossy; a size's own line beats the every-size one. What one sheet uses from stock gives the real cost. A table works out each size and choice live, and Try a book adds sheets and packaging. Rows are cards on a phone, a row of fields from md.",
+    examples: [{ title: "Sheet prices", file: "production/sheet-prices.tsx", Demo: ProductionSheetPrices }],
   },
   {
     slug: "record-usage",

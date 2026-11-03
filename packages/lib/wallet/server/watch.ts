@@ -8,8 +8,11 @@ import "server-only";
 // stays with reconcile() in mobile-money.ts, which asks HivePay itself.
 
 import { CHANNELS } from "@repo/lib/accounting/core/model";
-import { localDate } from "@repo/lib/accounting/core/period";
+import { addDays, localDate } from "@repo/lib/accounting/core/period";
 import { accounting } from "@repo/lib/accounting/index.server";
+import { expenseReminder } from "@repo/lib/books/expenses";
+import { claimExpenseReminder, createDueExpenses, openExpenses } from "@repo/lib/books/expenses-server";
+import { otherMoneyIn } from "@repo/lib/books/server";
 import { formatMoney } from "@repo/lib/currency/format";
 import { resolveTenantScope } from "@repo/lib/tenancy/server/resolve";
 
@@ -40,18 +43,44 @@ const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const when = (iso: string) =>
   new Date(iso).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Africa/Kampala" });
 
-const key = (a: { kind: string; collection_id: string | null; withdrawal_id: string | null }) => `${a.kind}:${a.collection_id ?? a.withdrawal_id}`;
+const key = (a: { kind: string; collection_id: string | null; withdrawal_id: string | null; ledger_id?: string | null }) =>
+  `${a.kind}:${a.collection_id ?? a.withdrawal_id ?? a.ledger_id}`;
+
+/** Money that got in without being recorded as received: nothing but the app's own records involved. */
+function notInBooksAlert(row: repo.NotInBooksRow): repo.NewMoneyAlert {
+  const who = row.client_name ?? "A client";
+  const by = row.by_name ? ` by ${row.by_name}` : "";
+  return row.source === "adjustment"
+    ? {
+        kind: "money_not_in_books",
+        collection_id: null,
+        withdrawal_id: null,
+        ledger_id: row.id,
+        amount: row.amount,
+        phone: row.phone,
+        detail: `${formatMoney(row.amount)} was added to ${who}'s wallet${by} on ${when(row.created_at)} as an adjustment${row.note ? ` ("${row.note}")` : ""}, not as a payment. It isn't in Money received and has no source. Undo the adjustment and record a deposit.`,
+      }
+    : {
+        kind: "money_not_in_books",
+        collection_id: row.id,
+        withdrawal_id: null,
+        amount: row.amount,
+        phone: row.phone,
+        detail: `HivePay collected ${formatMoney(row.amount)} from ${who} on ${when(row.created_at)}${row.note ? ` (${row.note})` : ""}, but it isn't in Money received.`,
+      };
+}
 
 /** Runs the check; returns the alerts it raised (already-known problems aren't raised again). */
 export async function watchMoney(now = new Date()): Promise<repo.MoneyAlertRow[]> {
   const t = now.getTime();
-  const [rows, stuckPayouts, known] = await Promise.all([
+  const [rows, stuckPayouts, known, notInBooks] = await Promise.all([
     repo.collectionsToWatch(new Date(t - WATCH_MS), new Date(t - STALE_PENDING_MS)),
     repo.payoutsSendingBefore(new Date(t - PAYOUT_STUCK_MS)),
     repo.moneyAlertKeys(),
+    repo.moneyNotInBooks(),
   ]);
 
-  const alerts: repo.NewMoneyAlert[] = [];
+  const alerts: repo.NewMoneyAlert[] = notInBooks.map(notInBooksAlert);
   // Prompts HivePay took, for the double check.
   const took: typeof rows = [];
 
@@ -144,6 +173,8 @@ export async function resolveAlert(id: string, byName: string): Promise<void> {
 
 /** The evening money report goes out from this hour, local time. */
 const REPORT_HOUR = 20;
+/** Money recorded after the report is reported from this hour the next morning. */
+const LATE_NOTE_HOUR = 7;
 
 const CHANNEL_NAMES: Record<(typeof CHANNELS)[number], string> = {
   cash: "cash",
@@ -165,15 +196,67 @@ export async function sendDailyReport(now = new Date()): Promise<boolean> {
   if (hour < REPORT_HOUR) return false;
   if (!(await repo.claimMoneyReport(localDate(now, scope.timeZone)))) return false;
 
-  const [{ totals }, open] = await Promise.all([accounting.payments(scope, { preset: "today" }), repo.openMoneyAlerts()]);
+  const day = localDate(now, scope.timeZone);
+  const [{ totals }, open, other] = await Promise.all([
+    accounting.payments(scope, { preset: "today" }),
+    repo.openMoneyAlerts(),
+    otherMoneyIn(scope, { from: day, to: day }),
+  ]);
+  const otherTotal = other.reduce((sum, l) => sum + l.amount, 0);
+  const otherNote = otherTotal > 0 ? ` Plus ${formatMoney(otherTotal)} not from clients (owners' money, other income, money borrowed).` : "";
   const methods = CHANNELS.filter((c) => totals.byChannel[c] > 0).map((c) => `${CHANNEL_NAMES[c]} ${formatMoney(totals.byChannel[c])}`);
   const recorders = totals.byRecorder.map((r) => `${r.name} ${formatMoney(r.amount)}`);
   const check =
     open.length === 0 ? "HivePay agrees with the app." : `${open.length} payment${open.length === 1 ? "" : "s"} need checking (Accounts).`;
   const body =
     totals.count === 0
-      ? `No payments today. ${check}`
-      : `${totals.count} payment${totals.count === 1 ? "" : "s"}: ${methods.join(", ")}. Recorded by ${recorders.join(", ")}. ${check}`;
+      ? `No payments today.${otherNote} ${check}`
+      : `${totals.count} payment${totals.count === 1 ? "" : "s"}: ${methods.join(", ")}. Recorded by ${recorders.join(", ")}.${otherNote} ${check}`;
   await notifier.dailyMoneyReport(`Today's money: ${formatMoney(totals.total)}`, body);
+  return true;
+}
+
+/**
+ * The next morning: anything recorded after last night's report went out, so
+ * late money isn't left out of what the boss heard. Silent when there's none.
+ */
+export async function sendLateMoneyNote(now = new Date()): Promise<boolean> {
+  const scope = await resolveTenantScope();
+  const hour = Number(new Intl.DateTimeFormat("en-GB", { hour: "numeric", hourCycle: "h23", timeZone: scope.timeZone }).format(now));
+  if (hour < LATE_NOTE_HOUR) return false;
+  const yesterday = addDays(localDate(now, scope.timeZone), -1);
+  const sentAt = await repo.claimLateMoneyCheck(yesterday);
+  if (!sentAt) return false;
+
+  const { lines } = await accounting.payments(scope, { preset: "yesterday" });
+  const late = lines.filter((l) => (l.recordedAt ?? l.receivedAt) > sentAt);
+  if (late.length === 0) return false;
+  const total = late.reduce((sum, l) => sum + l.amount, 0);
+  await notifier.dailyMoneyReport(
+    `After last night's report: ${formatMoney(total)}`,
+    late.map((l) => `${l.customerName} ${formatMoney(l.amount)}`).join(", "),
+    "yesterday",
+  );
+  return true;
+}
+
+/** The expense reminder goes out from this hour, local time. */
+const EXPENSE_REMINDER_HOUR = 8;
+
+/**
+ * Each morning: creates what recurring expenses now owe, then one message to
+ * the boss and supervisors with what's overdue, due soon or waiting for
+ * approval. Silent when there's none. Called every few minutes.
+ */
+export async function sendExpenseReminder(now = new Date()): Promise<boolean> {
+  const scope = await resolveTenantScope();
+  const hour = Number(new Intl.DateTimeFormat("en-GB", { hour: "numeric", hourCycle: "h23", timeZone: scope.timeZone }).format(now));
+  if (hour < EXPENSE_REMINDER_HOUR) return false;
+  const today = localDate(now, scope.timeZone);
+  await createDueExpenses(today);
+  if (!(await claimExpenseReminder(today))) return false;
+  const reminder = expenseReminder(await openExpenses(), today, formatMoney);
+  if (!reminder) return false;
+  await notifier.expenseReminder(reminder.title, reminder.body);
   return true;
 }

@@ -13,7 +13,8 @@ Clients who pay upfront keep a balance with us and spend it on orders.
   the wallet.
 - **Refunds.** Cancelling an order puts everything paid for it back in the wallet automatically.
   Staff can also refund part or all of an order from the order screen.
-- **Adjustments.** Staff corrections (±) with a required reason, e.g. cash handed back.
+- **Adjustments.** Staff corrections with a required reason, e.g. cash handed back. They can only take money off, or undo an earlier adjustment (`wallet_adjustment_reversals`): money that came in has to be a deposit, so it reaches Accounts with its source (migration 20261202100000).
+- **Source of hand-recorded money.** Every receipt and deposit staff record says who sent it, from which phone, the day it arrived and the account it went into (`money_in_details`, `checkMoneySource`).
 - **Top-up bonus.** While the boss runs one (Marketing → Top-up bonus), every deposit of at least
   its minimum gets its percent extra, as a `bonus` ledger row tied to the deposit's payment (once).
   It's posted by a trigger on the deposit row (`wallet_topup_bonus()`, migration `20261129120000`), so

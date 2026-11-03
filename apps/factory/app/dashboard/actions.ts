@@ -1,5 +1,6 @@
 "use server";
 
+import { bookListPrice } from "@repo/lib/production/sheets/server";
 import { randomBytes } from "crypto";
 
 import Papa from "papaparse";
@@ -444,6 +445,8 @@ export interface UpdateOrderItemInput {
   deadline_at: string; // required only when the order is express
 }
 
+const sortedEntries = (attributes: unknown) => Object.entries((attributes ?? {}) as Record<string, string>).sort(([a], [b]) => a.localeCompare(b));
+
 // Full-order editing for the dashboard (client asks for a change) — every
 // manager role gets this (receptionist included), same "editable until
 // Completed" cutoff the designer side already uses in updateDesignerOrder.
@@ -453,7 +456,7 @@ export async function updateOrderItem(input: UpdateOrderItemInput): Promise<Resu
 
   const { data: item } = await admin
     .from("order_items")
-    .select("id, order_id, product, product_type, qty, production_status")
+    .select("id, order_id, product, product_type, qty, production_status, product_id, attributes, list_unit_price")
     .eq("id", input.itemId)
     .maybeSingle();
   if (!item) return { ok: false, error: "Item not found." };
@@ -466,7 +469,7 @@ export async function updateOrderItem(input: UpdateOrderItemInput): Promise<Resu
 
   const { data: order } = await admin
     .from("orders")
-    .select("id, order_type, delivery_date, deadline_at")
+    .select("id, order_type, delivery_date, deadline_at, approval_status")
     .eq("id", item.order_id)
     .maybeSingle();
   if (!order) return { ok: false, error: "Order not found." };
@@ -510,6 +513,12 @@ export async function updateOrderItem(input: UpdateOrderItemInput): Promise<Resu
   const newQty = Number.isFinite(input.qty) && input.qty > 0 ? Math.floor(input.qty) : 1;
   const newProductType = variant?.name ?? null;
 
+  // A book priced by the sheet follows its details while the order's still being
+  // confirmed: more sheets, a bigger size. A price agreed on the call stands
+  // until the details change. A confirmed order's price never moves here.
+  const detailsChanged = JSON.stringify(sortedEntries(item.attributes)) !== JSON.stringify(sortedEntries(attributes)) || item.product_id !== input.product_id;
+  const sheetTotal = detailsChanged && order.approval_status !== "approved" ? await bookListPrice(input.product_id, attributes) : null;
+
   const { error: itemError } = await admin
     .from("order_items")
     .update({
@@ -520,6 +529,7 @@ export async function updateOrderItem(input: UpdateOrderItemInput): Promise<Resu
       product_type: newProductType,
       qty: newQty,
       attributes,
+      ...(sheetTotal === null ? {} : { list_unit_price: sheetTotal }),
     })
     .eq("id", input.itemId);
   if (itemError) return { ok: false, error: itemError.message };

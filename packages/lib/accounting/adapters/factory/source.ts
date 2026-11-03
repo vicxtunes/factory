@@ -60,6 +60,10 @@ interface MoneyInRow {
   order_no: string | null;
   reference: string | null;
   recorded_by: string | null;
+  sender_name: string | null;
+  sender_phone: string | null;
+  recorded_at: string;
+  account_name: string | null;
 }
 
 interface HeldRow {
@@ -107,6 +111,10 @@ const toMoneyIn = (r: MoneyInRow): MoneyIn => ({
   orderNo: r.order_no,
   reference: r.reference,
   recordedBy: r.recorded_by,
+  senderName: r.sender_name,
+  senderPhone: r.sender_phone,
+  recordedAt: r.recorded_at,
+  accountName: r.account_name,
 });
 
 const toCustomer = (r: CustomerRow): Customer => ({

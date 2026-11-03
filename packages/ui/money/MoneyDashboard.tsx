@@ -11,7 +11,7 @@ import type { Channel } from "@repo/lib/accounting/core/model";
 import { DAY_PERIOD_PRESETS, type Period } from "@repo/lib/accounting/core/period";
 import type { Compared, DashboardView } from "@repo/lib/accounting/service";
 
-import { CHANNEL_LABELS, useMoney } from "../accounting/shared";
+import { CHANNEL_LABELS, FigureTile, useMoney } from "../accounting/shared";
 
 // The bosses' money dashboard: three headline cards, money in by channel,
 // cash flow over the last 12 months and the latest payments, from the
@@ -33,15 +33,18 @@ function compact(value: number): string {
 /**
  * `timeZone`: the business's; payment times show as its local time, the same on the server and in the browser.
  * `weOwe`: what the business has borrowed and still has to pay back (packages/lib/production), as a fourth card.
+ * `flow`: all the money in and out over the period, as Accounts → Today counts it.
  */
 export function MoneyDashboard({
   view,
   timeZone,
   weOwe,
+  flow,
 }: {
   view: DashboardView;
   timeZone: string;
   weOwe?: { owed: number; overdue: number; overdueCount: number };
+  flow?: { moneyIn: number; moneyOut: number };
 }) {
   const money = useMoney();
   const { received, sales, owed } = view;
@@ -111,6 +114,19 @@ export function MoneyDashboard({
           />
         ) : null}
       </div>
+
+      {flow ? (
+        <div className="grid gap-3 @xl:grid-cols-3">
+          <FigureTile label="All money in" value={money(flow.moneyIn)} hint="Clients, plus owners' money, other income and money borrowed" />
+          <FigureTile label="Money out" value={money(flow.moneyOut)} hint="Expenses, materials, repayments and payouts" href="/dashboard/accounts/expenses" />
+          <FigureTile
+            label="Net cash"
+            value={money(flow.moneyIn - flow.moneyOut)}
+            hint="In minus out. Moves between our own accounts don't count"
+            tone={flow.moneyIn < flow.moneyOut ? "warning" : undefined}
+          />
+        </div>
+      ) : null}
 
       <div className="grid gap-4 @4xl:grid-cols-5">
         <ChannelGrid byChannel={view.byChannel} total={received.now} />

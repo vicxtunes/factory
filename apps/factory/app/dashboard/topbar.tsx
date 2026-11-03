@@ -23,6 +23,8 @@ const PAGE_TITLES: Record<string, string> = {
   "/dashboard/announcements": "Announcements",
   "/dashboard/accounts": "Accounts",
   "/dashboard/accounts/payments": "Payments",
+  "/dashboard/accounts/today": "Today",
+  "/dashboard/accounts/expenses": "Expenses",
   "/dashboard/accounts/sales": "Sales",
   "/dashboard/accounts/clients": "Client accounts",
   "/dashboard/accounts/owed": "Money we owe",

@@ -20,8 +20,9 @@ import {
   type InvoiceLineInput,
 } from "@repo/lib/invoices/actions";
 import type { DraftLine, InvoiceView, StaffInvoiceView } from "@repo/lib/invoices/types";
-import { MANUAL_METHODS, METHOD_LABELS, checkReference, paymentMethodLabel } from "@repo/lib/wallet/policy";
-import type { PaymentMethod } from "@repo/lib/wallet/types";
+import { MANUAL_METHODS, METHOD_LABELS, checkMoneySource, paymentMethodLabel } from "@repo/lib/wallet/policy";
+import type { MoneySource, PaymentMethod } from "@repo/lib/wallet/types";
+import { MoneySourceFields, todayHere, useMoneySource } from "@repo/ui/wallet/MoneySourceFields";
 
 import { ActionMenu, type ActionMenuEntry } from "@repo/ui/ActionMenu";
 import { Drawer } from "@repo/ui/Drawer";
@@ -238,6 +239,7 @@ export function StaffInvoicePanel({
       {mode === "pay" ? (
         <PaymentForm
           balance={inv.balance}
+          clientName={inv.client.name}
           money={money}
           pending={pending}
           onCancel={() => setMode("idle")}
@@ -661,12 +663,14 @@ function GeneratePanel({
 
 function PaymentForm({
   balance,
+  clientName,
   money,
   pending,
   onSubmit,
   onCancel,
 }: {
   balance: number;
+  clientName: string;
   money: (n: number) => string;
   pending: boolean;
   onSubmit: (input: {
@@ -675,6 +679,7 @@ function PaymentForm({
     reference: string;
     note: string;
     excessDisposition: "wallet" | "physical_refund" | null;
+    source: MoneySource;
   }) => void;
   onCancel: () => void;
 }) {
@@ -684,6 +689,7 @@ function PaymentForm({
   const [note, setNote] = useState("");
   const [excessDisposition, setExcessDisposition] = useState<"wallet" | "physical_refund" | "">("");
   const [error, setError] = useState<string | null>(null);
+  const sourceForm = useMoneySource(method, clientName);
   const value = parseAmount(amount);
   const extra = Number.isFinite(value) ? value - balance : 0;
 
@@ -691,12 +697,12 @@ function PaymentForm({
     e.preventDefault();
     if (!Number.isInteger(value) || value <= 0) return setError("Enter the amount received.");
     if (extra > 0 && !excessDisposition) return setError("Choose what happened to the excess amount.");
-    const referenceError = checkReference(method, reference);
-    if (referenceError) return setError(referenceError);
+    const sourceError = checkMoneySource({ method, reference, ...sourceForm.value }, todayHere());
+    if (sourceError) return setError(sourceError);
     const excessAction = excessDisposition === "wallet" ? "credit the excess to the client's wallet" : "record the excess as physically returned";
     if (!window.confirm(`Record ${money(value)} received${reference ? ` (ref ${reference})` : ""}?${extra > 0 ? ` ${money(extra)} will be ${excessAction}.` : ""}`)) return;
     setError(null);
-    onSubmit({ amount: value, method, reference, note, excessDisposition: extra > 0 && excessDisposition ? excessDisposition : null });
+    onSubmit({ amount: value, method, reference, note, excessDisposition: extra > 0 && excessDisposition ? excessDisposition : null, source: sourceForm.value });
   }
 
   return (
@@ -723,9 +729,10 @@ function PaymentForm({
           ))}
         </Select>
       </Field>
-      <Field label={method === "mobile_money" ? "Transaction ID" : "Reference (optional)"} hint={method === "mobile_money" ? "From the mobile money message, so it can be found on the statement." : "Transaction ID, receipt number…"}>
+      <Field label={method === "mobile_money" ? "Transaction ID" : method === "bank_transfer" ? "Bank reference" : "Reference (optional)"} hint={method === "mobile_money" ? "From the mobile money message, so it can be found on the statement." : "Transaction ID, receipt number…"}>
         <TextInput value={reference} onChange={(e) => setReference(e.target.value)} maxLength={100} />
       </Field>
+      <MoneySourceFields form={sourceForm} method={method} />
       <Field label="Note (optional)">
         <TextInput value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} placeholder="e.g. 2nd installment" />
       </Field>

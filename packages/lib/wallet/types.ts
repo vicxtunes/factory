@@ -286,7 +286,24 @@ export type WalletResult<T = undefined> = T extends undefined
   : { ok: true; data: T } | { ok: false; error: string };
 
 /** What the money watch found that doesn't add up (packages/lib/wallet/server/watch.ts). */
-export type MoneyAlertKind = "paid_not_credited" | "credited_not_paid" | "possible_double" | "payout_unconfirmed" | "recorded_by_hand";
+export type MoneyAlertKind = "paid_not_credited" | "credited_not_paid" | "possible_double" | "payout_unconfirmed" | "recorded_by_hand" | "money_not_in_books";
+
+/** Where money staff record by hand came from, and where it went. */
+export interface MoneySource {
+  senderName: string;
+  senderPhone?: string | null;
+  /** The day it really arrived, YYYY-MM-DD. */
+  receivedOn: string;
+  accountId: string;
+}
+
+export type MoneyAccountKind = "cash" | "bank" | "mobile_money" | "hivepay";
+
+export interface MoneyAccount {
+  id: string;
+  name: string;
+  kind: MoneyAccountKind;
+}
 
 export interface MoneyAlert {
   id: string;

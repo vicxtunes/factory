@@ -23,6 +23,7 @@ import * as mobileMoney from "./server/mobile-money";
 import { requireUnlocked } from "./server/pin";
 import * as service from "./server/service";
 import * as watch from "./server/watch";
+import type { MoneyAccount, MoneySource } from "./types";
 import type {
   MobileMoneyCollection,
   MoneyAlert,
@@ -64,6 +65,7 @@ function refreshMoneyPages() {
     clientPath("/orders"),
     "/dashboard/wallets",
     "/dashboard/transactions",
+    "/dashboard/accounts/today",
   ]) {
     revalidatePath(path);
   }
@@ -74,6 +76,7 @@ export interface DepositInput {
   method: PaymentMethod;
   reference?: string | null;
   note?: string | null;
+  source: MoneySource;
 }
 
 // --- Client ----------------------------------------------------------------
@@ -254,9 +257,22 @@ export async function recordDeposit(clientId: string, input: DepositInput): Prom
 }
 
 /** `amount` is signed: positive adds, negative takes away. Returns the new balance. */
-export async function adjustWallet(clientId: string, amount: number, reason: string): Promise<WalletResult<number>> {
+export async function listMoneyAccounts(): Promise<WalletResult<MoneyAccount[]>> {
   return run(async () => {
-    const balance = await service.adjustWallet(await requireStaff(), clientId, amount, reason);
+    await requireStaff();
+    return service.listMoneyAccounts();
+  });
+}
+
+export async function adjustWallet(
+  clientId: string,
+  amount: number,
+  reason: string,
+  reverses: string | null = null,
+  moneyLeftAccount: string | null = null,
+): Promise<WalletResult<number>> {
+  return run(async () => {
+    const balance = await service.adjustWallet(await requireStaff(), clientId, amount, reason, reverses, moneyLeftAccount);
     refreshMoneyPages();
     return balance;
   });
