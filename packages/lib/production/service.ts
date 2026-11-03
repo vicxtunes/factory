@@ -236,7 +236,8 @@ export function createProductionOverview(store: ProductionStore, clock: () => Da
       ]);
       const fig = (orders: SoldOrder[], c: Map<string, number>) => periodFigures(orders, c, recipes, materials, names);
       const units = (f: PeriodFigures) => f.products.reduce((s, p) => s + p.units, 0);
-      const noRecipe = !recipes.get(productId)?.length;
+      // A book priced by the sheet gets its cost from what a sheet uses, recipe or not.
+      const noRecipe = !recipes.get(productId)?.length && !(await store.sheetCostedProducts()).has(productId);
       const marginOf = (f: PeriodFigures) => (noRecipe ? null : f.marginPercent);
       const current = fig(nowOrders, nowCosts);
       const prior = beforeOrders ? fig(beforeOrders, beforeCosts) : null;

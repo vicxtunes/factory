@@ -43,8 +43,9 @@ but not a *sale*. When the client spends it on an invoice, that invoice's *paid*
 money is received. A receipt larger than what's due, whose excess is credited to the wallet, counts
 once, as the receipt.
 
-**Money out isn't tracked** by the app (expenses, bank transfers), so channels show money received,
-not running bank or cash balances.
+**Nothing gets in unrecorded.** `money_not_in_books` lists wallet money added without a payment and HivePay collections with no money-in line. It should stay empty; the hourly money watch raises an alert for anything in it. Money that isn't from a client (`other_money_in`, money borrowed) shows separately under Payments and isn't counted as Payments received.
+
+**Money out** is under Expenses, and **Today** (`money_day_lines`, `money_day_balances`) shows each account's opening + in − out = closing for a day. Channels here show money received only. Money from HivePay prompts and HivePay payouts sits in the HivePay account, and each successful collection records HivePay's 3% as an automatic expense out of it; hand-recorded mobile money in Mobile money. Moves between the business's own accounts (`money_moves`) change balances but are neither income nor spending.
 
 ## Layout
 

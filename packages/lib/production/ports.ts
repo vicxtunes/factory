@@ -38,6 +38,8 @@ export interface ProductionStore {
 
   /** Every product's recipe lines, by product id (one product's when `productId` is given). */
   recipes(scope: TenantScope, productId?: string): Promise<Map<string, RecipeLine[]>>;
+  /** Products whose cost comes from what a sheet uses, even with no recipe of their own. */
+  sheetCostedProducts(): Promise<Set<string>>;
   /** Replaces a product's whole recipe (every size). */
   saveRecipe(scope: TenantScope, input: RecipeInput): Promise<void>;
 

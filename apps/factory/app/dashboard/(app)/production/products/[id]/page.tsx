@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 
+import { isSheetCategory } from "@repo/lib/production/sheets/model";
 import { BackLink } from "@repo/ui/navigation/back";
 import { ProductPerformanceView } from "@repo/ui/production/ProductPerformanceView";
 import { ChartsSkeleton, StatTilesSkeleton, TitleRowSkeleton } from "@repo/ui/skeletons/blocks";
@@ -42,9 +43,14 @@ async function Performance({ id, searchParams }: { id: string; searchParams: Sea
   const [scope, query, catalog] = await Promise.all([resolveTenantScope(), searchParams, costingCatalog()]);
   const view = await productionOverview.product(scope, catalog, id, periodFrom(query));
   if (!view) notFound();
+  const category = catalog.find((c) => c.products.some((p) => p.id === id));
   return (
     <div className="mt-1">
-      <ProductPerformanceView view={view} recipeHref={`/dashboard/production/products/${id}/recipe`} />
+      <ProductPerformanceView
+        view={view}
+        recipeHref={`/dashboard/production/products/${id}/recipe`}
+        sheetsHref={category && isSheetCategory(category.attributes) ? `/dashboard/production/products/${id}/sheets` : undefined}
+      />
     </div>
   );
 }

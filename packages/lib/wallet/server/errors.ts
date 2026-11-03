@@ -3,6 +3,8 @@ import "server-only";
 // Turns the database's 'WALLET:<code>' exceptions (see the wallet migration)
 // into sentences a person can act on.
 
+import { DAY_CLOSED_MESSAGE } from "@repo/lib/books/model";
+
 /**
  * An error whose message is safe to show the user. The action layer turns
  * these into `{ ok: false, error }`; anything else is logged and replaced
@@ -38,6 +40,16 @@ const MESSAGES: Record<string, string> = {
   no_business: "This account has no business.",
   terms_not_accepted: "Agree to the wallet terms first: open My Business → Wallet.",
   withdrawal_not_pending: "This withdrawal was already handled.",
+  source_sender: "Say who sent the money.",
+  source_phone: "Enter the phone number the money came from.",
+  source_reference: "Enter the transaction ID or bank reference.",
+  source_date: "Enter the day the money arrived.",
+  source_future: "The day the money arrived can't be in the future.",
+  source_account: "Choose which account the money went into.",
+  adjust_cannot_add: "Money that came in has to be recorded as a deposit, so it reaches the books. Use Record deposit.",
+  adjust_bad_reversal: "That adjustment can't be undone from here.",
+  adjust_over_reversal: "That's more than is left to undo on that adjustment.",
+  adjust_money_left: "Money left an account for that one, so it can't be undone here. If the money came back, record it as a deposit.",
 };
 
 /** The WALLET code in a database error message, if there is one. */
@@ -53,6 +65,7 @@ export function walletErrorCode(message: string | undefined | null): string | nu
 export function throwDbError(error: { message: string }): never {
   const code = walletErrorCode(error.message);
   if (code && MESSAGES[code]) throw new WalletError(MESSAGES[code]);
+  if (error.message.includes("DAYBOOK:day_closed")) throw new WalletError(DAY_CLOSED_MESSAGE);
   throw new Error(error.message);
 }
 

@@ -13,6 +13,7 @@ const TITLES: Record<MoneyAlertKind, string> = {
   possible_double: "Possible double payment",
   payout_unconfirmed: "Payout not confirmed",
   recorded_by_hand: "Check a payment recorded by hand",
+  money_not_in_books: "Money not in the books",
 };
 
 /**
@@ -26,7 +27,7 @@ export function MoneyAlerts({ alerts }: { alerts: MoneyAlert[] }) {
       <h2 className="text-sm font-semibold text-error-700 dark:text-error-400">
         {alerts.length === 1 ? "1 payment needs checking" : `${alerts.length} payments need checking`}
       </h2>
-      <p className="mt-0.5 text-xs text-muted">Found by comparing the app&apos;s records with HivePay&apos;s.</p>
+      <p className="mt-0.5 text-xs text-muted">Found by checking the app&apos;s records against each other and against HivePay.</p>
       <ul className="mt-3 space-y-2">
         {alerts.map((a) => (
           <AlertRow key={a.id} alert={a} />

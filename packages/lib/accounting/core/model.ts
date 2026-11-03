@@ -50,6 +50,13 @@ export interface MoneyIn {
   reference: string | null;
   /** Who recorded it: a staff member's name, or the gateway's ("HivePay"). Null when the source doesn't say. */
   recordedBy: string | null;
+  /** Who sent it and from which phone, when known. Older hand-recorded money has no sender. */
+  senderName?: string | null;
+  senderPhone?: string | null;
+  /** When it was typed in, if another moment than receivedAt. */
+  recordedAt?: string | null;
+  /** The account it went into, when recorded. */
+  accountName?: string | null;
 }
 
 /**

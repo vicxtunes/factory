@@ -8,17 +8,16 @@ import { TextInput } from "@repo/ui/Field";
 import { CHANNELS } from "@repo/lib/accounting/core/model";
 import { paymentsTotals, type PaymentLine } from "@repo/lib/accounting/core/figures";
 
-import { CHANNEL_LABELS, Card, EmptyState, FigureTile, useMoney } from "./shared";
+import { CHANNEL_LABELS, Card, EmptyState, FigureTile, formatDayTime, useMoney } from "./shared";
 
-function time(iso: string): string {
-  return new Date(iso).toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
-}
+/** Who the money came from, as recorded. Older hand-recorded money has no sender. */
+const cameFrom = (l: PaymentLine) => [l.senderName, l.senderPhone].filter(Boolean).join(" · ");
 
 const forWhat = (l: PaymentLine) => (l.orderNo ? `Order ${l.orderNo}` : "Wallet top-up");
 
 function matchesSearch(l: PaymentLine, query: string): boolean {
   if (!query) return true;
-  return [l.customerName, l.orderNo ?? "", l.reference ?? "", l.recordedBy ?? "", CHANNEL_LABELS[l.channel]].some((f) =>
+  return [l.customerName, l.orderNo ?? "", l.reference ?? "", l.recordedBy ?? "", l.senderName ?? "", l.senderPhone ?? "", l.accountName ?? "", CHANNEL_LABELS[l.channel]].some((f) =>
     f.toLowerCase().includes(query),
   );
 }
@@ -28,8 +27,9 @@ function matchesSearch(l: PaymentLine, query: string): boolean {
  * recorded it, then each payment with when, from whom, for what and its
  * reference. A card per payment on a phone, a table on wider screens.
  */
-export function PaymentsTable({ lines, exportName }: { lines: PaymentLine[]; exportName: string }) {
+export function PaymentsTable({ lines, exportName, timeZone }: { lines: PaymentLine[]; exportName: string; timeZone: string }) {
   const money = useMoney();
+  const time = (iso: string) => formatDayTime(iso, timeZone);
   const [search, setSearch] = useState("");
   const query = search.trim().toLowerCase();
 
@@ -42,6 +42,8 @@ export function PaymentsTable({ lines, exportName }: { lines: PaymentLine[]; exp
     client: l.customerName,
     amount: l.amount,
     method: CHANNEL_LABELS[l.channel],
+    from: cameFrom(l),
+    account: l.accountName ?? "",
     for: forWhat(l),
     reference: l.reference ?? "",
     recordedBy: l.recordedBy ?? "",
@@ -92,7 +94,7 @@ export function PaymentsTable({ lines, exportName }: { lines: PaymentLine[]; exp
           type="search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search client, order, reference, method or staff…"
+          placeholder="Search client, sender, phone, order, reference, method or staff…"
           aria-label="Search payments"
           className="min-w-0 flex-1"
         />
@@ -104,6 +106,8 @@ export function PaymentsTable({ lines, exportName }: { lines: PaymentLine[]; exp
             { key: "client", label: "Client" },
             { key: "amount", label: "Amount" },
             { key: "method", label: "Method" },
+            { key: "from", label: "Came from" },
+            { key: "account", label: "Went into" },
             { key: "for", label: "For" },
             { key: "reference", label: "Reference" },
             { key: "recordedBy", label: "Recorded by" },
@@ -129,6 +133,8 @@ export function PaymentsTable({ lines, exportName }: { lines: PaymentLine[]; exp
                   {time(l.receivedAt)} · {CHANNEL_LABELS[l.channel]} · {forWhat(l)}
                 </p>
                 <p className="mt-0.5 text-xs text-muted">
+                  {cameFrom(l) ? <span className="tnum">From {cameFrom(l)} · </span> : null}
+                  {l.accountName ? <span>Into {l.accountName} · </span> : null}
                   {l.reference ? <span className="tnum">{l.reference} · </span> : null}
                   Recorded by {l.recordedBy ?? "—"}
                 </p>
@@ -138,13 +144,15 @@ export function PaymentsTable({ lines, exportName }: { lines: PaymentLine[]; exp
 
           {/* Wider screens: a table. */}
           <div className="hidden overflow-x-auto rounded-2xl border border-border bg-surface shadow-theme-xs sm:block">
-            <table className="w-full min-w-[760px] text-sm">
+            <table className="w-full min-w-[980px] text-sm">
               <thead>
                 <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted">
                   <th className="px-4 py-2 font-medium">When</th>
                   <th className="px-4 py-2 font-medium">Client</th>
                   <th className="px-4 py-2 text-right font-medium">Amount</th>
                   <th className="px-4 py-2 font-medium">Method</th>
+                  <th className="px-4 py-2 font-medium">Came from</th>
+                  <th className="px-4 py-2 font-medium">Went into</th>
                   <th className="px-4 py-2 font-medium">For</th>
                   <th className="px-4 py-2 font-medium">Reference</th>
                   <th className="px-4 py-2 font-medium">Recorded by</th>
@@ -161,6 +169,8 @@ export function PaymentsTable({ lines, exportName }: { lines: PaymentLine[]; exp
                     </td>
                     <td className="whitespace-nowrap px-4 py-2 text-right font-medium tnum">{money(l.amount)}</td>
                     <td className="whitespace-nowrap px-4 py-2">{CHANNEL_LABELS[l.channel]}</td>
+                    <td className="whitespace-nowrap px-4 py-2 text-muted tnum">{cameFrom(l) || "—"}</td>
+                    <td className="whitespace-nowrap px-4 py-2 text-muted">{l.accountName ?? "—"}</td>
                     <td className="whitespace-nowrap px-4 py-2 text-muted">{forWhat(l)}</td>
                     <td className="whitespace-nowrap px-4 py-2 text-muted tnum">{l.reference ?? "—"}</td>
                     <td className="whitespace-nowrap px-4 py-2">{l.recordedBy ?? "—"}</td>
@@ -173,7 +183,7 @@ export function PaymentsTable({ lines, exportName }: { lines: PaymentLine[]; exp
                     Total ({totals.count} payment{totals.count === 1 ? "" : "s"})
                   </td>
                   <td className="whitespace-nowrap px-4 py-2 text-right tnum">{money(totals.total)}</td>
-                  <td colSpan={4} />
+                  <td colSpan={6} />
                 </tr>
               </tfoot>
             </table>

@@ -1,11 +1,13 @@
 import { MoneyAlerts } from "@repo/ui/accounting/MoneyAlerts";
 import { PaymentsTable } from "@repo/ui/accounting/PaymentsTable";
+import { OtherMoneyPanel } from "@repo/ui/books/OtherMoneyPanel";
 import { PeriodPicker } from "@repo/ui/accounting/PeriodPicker";
 import { PanelStackSkeleton, StatTilesSkeleton } from "@repo/ui/skeletons/blocks";
 import { Loading } from "@repo/ui/skeletons/Loading";
 import { DAY_PERIOD_PRESETS } from "@repo/lib/accounting/core/period";
 import { accounting, requireAccountsAccess } from "@repo/lib/accounting/index.server";
 import { periodFrom } from "@repo/lib/accounting/params";
+import { otherMoneyIn } from "@repo/lib/books/server";
 import { resolveTenantScope } from "@repo/lib/tenancy/server/resolve";
 import { getMoneyAlerts } from "@repo/lib/wallet/actions";
 
@@ -19,7 +21,7 @@ export default async function AccountsPaymentsPage({ searchParams }: { searchPar
   return (
     <div className="space-y-6">
       <p className="text-sm text-muted">
-        Every payment received: cash, bank, mobile money and wallet top-ups, each counted once, with who recorded it.
+        Every payment received: cash, bank, mobile money and wallet top-ups, each counted once, with where it came from and who recorded it.
       </p>
       <Loading
         skeleton={
@@ -40,6 +42,7 @@ async function Payments({ searchParams }: { searchParams: SearchParams }) {
   const input = periodFrom(params);
   // Money is watched day by day: the page opens on today.
   const [view, alerts] = await Promise.all([accounting.payments(scope, { ...input, preset: input.preset ?? "today" }), getMoneyAlerts()]);
+  const other = await otherMoneyIn(scope, { from: view.period.fromDate, to: view.period.toDate });
   return (
     <>
       <MoneyAlerts alerts={alerts.ok ? alerts.data ?? [] : []} />
@@ -49,7 +52,9 @@ async function Payments({ searchParams }: { searchParams: SearchParams }) {
         key={`${view.period.from}-${view.period.to}`}
         lines={view.lines}
         exportName="payments"
+        timeZone={scope.timeZone}
       />
+      <OtherMoneyPanel lines={other} />
     </>
   );
 }

@@ -10,7 +10,7 @@ import { randomUUID } from "node:crypto";
 import { createAdminClient } from "@repo/lib/supabase/admin";
 import { resolveTenantScope } from "@repo/lib/tenancy/server/resolve";
 
-import type { MoneyAlertKind, PaymentMethod, PaymentStatus, TransactionHistoryKind, WalletCard, WalletEntryKind } from "../types";
+import type { MoneyAccount, MoneyAlertKind, MoneySource, PaymentMethod, PaymentStatus, TransactionHistoryKind, WalletCard, WalletEntryKind } from "../types";
 import { WalletError, throwDbError } from "./errors";
 import type { WalletActor } from "./identity";
 
@@ -339,6 +339,36 @@ export async function settlePayment(
   };
 }
 
+const sourceArgs = (source: MoneySource) => ({
+  p_sender_name: source.senderName,
+  p_sender_phone: source.senderPhone ?? null,
+  p_received_on: source.receivedOn,
+  p_account: source.accountId,
+});
+
+/** A deposit staff received, waiting to be settled, with where it came from. */
+export async function insertSourcedDeposit(input: {
+  clientId: string;
+  amount: number;
+  method: PaymentMethod;
+  reference: string | null;
+  note: string | null;
+  source: MoneySource;
+  actor: WalletActor;
+}): Promise<string> {
+  const { data, error } = await createAdminClient().rpc("money_record_deposit", {
+    p_client: input.clientId,
+    p_amount: input.amount,
+    p_method: input.method,
+    p_reference: input.reference,
+    p_note: input.note,
+    ...sourceArgs(input.source),
+    ...actorArgs(input.actor),
+  });
+  if (error) throwDbError(error);
+  return data as string;
+}
+
 export async function recordOrderReceipt(input: {
   orderId: string;
   amount: number;
@@ -346,9 +376,10 @@ export async function recordOrderReceipt(input: {
   reference: string | null;
   note: string | null;
   excessDisposition: "wallet" | "physical_refund" | null;
+  source: MoneySource;
   actor: WalletActor;
 }): Promise<{ applied: number; toWallet: number; physicallyRefunded: number; balance: number }> {
-  const { data, error } = await createAdminClient().rpc("wallet_record_order_receipt", {
+  const { data, error } = await createAdminClient().rpc("money_record_order_receipt", {
     p_receipt: randomUUID(),
     p_order: input.orderId,
     p_amount: input.amount,
@@ -356,6 +387,7 @@ export async function recordOrderReceipt(input: {
     p_reference: input.reference,
     p_note: input.note,
     p_excess_disposition: input.excessDisposition,
+    ...sourceArgs(input.source),
     ...actorArgs(input.actor),
   });
   if (error) throwDbError(error);
@@ -419,11 +451,25 @@ export async function refundOrder(
   return num(data);
 }
 
-export async function adjust(clientId: string, amount: number, note: string, actor: WalletActor): Promise<number> {
+export async function adjust(clientId: string, amount: number, note: string, actor: WalletActor, reverses: string | null): Promise<number> {
   const { data, error } = await createAdminClient().rpc("wallet_adjust", {
     p_client: clientId,
     p_amount: amount,
     p_note: note,
+    p_reverses: reverses,
+    ...actorArgs(actor),
+  });
+  if (error) throwDbError(error);
+  return num(data);
+}
+
+/** Takes from a wallet where the money really left an account: the day book shows it as money out. */
+export async function takeWithMoneyOut(clientId: string, amount: number, note: string, accountId: string, actor: WalletActor): Promise<number> {
+  const { data, error } = await createAdminClient().rpc("money_wallet_take", {
+    p_client: clientId,
+    p_amount: amount,
+    p_note: note,
+    p_account: accountId,
     ...actorArgs(actor),
   });
   if (error) throwDbError(error);
@@ -702,6 +748,7 @@ export interface MoneyAlertRow {
   kind: MoneyAlertKind;
   collection_id: string | null;
   withdrawal_id: string | null;
+  ledger_id: string | null;
   amount: number;
   phone: string | null;
   detail: string;
@@ -710,13 +757,50 @@ export interface MoneyAlertRow {
   resolved_by_name: string | null;
 }
 
-export type NewMoneyAlert = Pick<MoneyAlertRow, "kind" | "collection_id" | "withdrawal_id" | "amount" | "phone" | "detail">;
+export interface NotInBooksRow {
+  source: "adjustment" | "collection";
+  id: string;
+  amount: number;
+  client_name: string | null;
+  phone: string | null;
+  by_name: string | null;
+  note: string | null;
+  created_at: string;
+}
+
+/** Money that got in without being recorded as received. Should be empty. */
+export async function moneyNotInBooks(): Promise<NotInBooksRow[]> {
+  const { data, error } = await createAdminClient().from("money_not_in_books").select("*").returns<NotInBooksRow[]>();
+  if (error) throwDbError(error);
+  return (data ?? []).map((r) => ({ ...r, amount: num(r.amount) }));
+}
+
+export async function listMoneyAccounts(): Promise<MoneyAccount[]> {
+  const { data, error } = await createAdminClient().from("money_accounts").select("id, name, kind").order("created_at").returns<MoneyAccount[]>();
+  if (error) throwDbError(error);
+  return data ?? [];
+}
+
+/** Claims yesterday's late check once; null if it's done or the evening report never went out. Returns when the report was sent. */
+export async function claimLateMoneyCheck(day: string): Promise<string | null> {
+  const { data, error } = await createAdminClient()
+    .from("money_reports")
+    .update({ late_checked_at: new Date().toISOString() })
+    .eq("day", day)
+    .is("late_checked_at", null)
+    .select("sent_at")
+    .maybeSingle<{ sent_at: string }>();
+  if (error) throwDbError(error);
+  return data?.sent_at ?? null;
+}
+
+export type NewMoneyAlert = Pick<MoneyAlertRow, "kind" | "collection_id" | "withdrawal_id" | "amount" | "phone" | "detail"> & { ledger_id?: string | null };
 
 /** Every alert ever raised (resolved too), as "kind:subject", so a problem is raised once. */
 export async function moneyAlertKeys(): Promise<Set<string>> {
-  const { data, error } = await createAdminClient().from("money_alerts").select("kind, collection_id, withdrawal_id");
+  const { data, error } = await createAdminClient().from("money_alerts").select("kind, collection_id, withdrawal_id, ledger_id");
   if (error) throwDbError(error);
-  return new Set((data ?? []).map((a) => `${a.kind}:${a.collection_id ?? a.withdrawal_id}`));
+  return new Set((data ?? []).map((a) => `${a.kind}:${a.collection_id ?? a.withdrawal_id ?? a.ledger_id}`));
 }
 
 export async function insertMoneyAlerts(alerts: NewMoneyAlert[]): Promise<MoneyAlertRow[]> {

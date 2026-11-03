@@ -120,7 +120,7 @@ export function AccountsOverview({
               </li>
             </ul>
           )}
-          <p className="mt-3 text-xs text-muted">Money in only. Expenses and transfers aren&apos;t recorded in the app.</p>
+          <p className="mt-3 text-xs text-muted">Money in only. Money out is under Expenses, and each day&apos;s balances are under Today.</p>
         </Card>
       </div>
 
