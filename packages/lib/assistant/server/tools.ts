@@ -483,6 +483,26 @@ export function assistantTools(ctx: ToolContext): AssistantTool[] {
     }),
 
     tool({
+      name: "add_photos_to_order",
+      description: "Puts files the client attached in this chat, or a link, on one of their orders that still needs photos. It's then confirmed and invoiced automatically within a minute or two if it's well ordered.",
+      inputSchema: z.object({ order_id: z.string(), attachment_ids: z.array(z.string()), photo_link: z.string().describe("A link, or empty.") }),
+      run: async ({ order_id, attachment_ids, photo_link }) => {
+        const order = await ownOrder(ctx, order_id);
+        if (!order) return "Refused: not this client's order.";
+        const link = photo_link.trim();
+        if (link && !/^https?:\/\/\S+$/.test(link)) return "Refused: that isn't a valid link.";
+        if (!attachment_ids.length && !link) return "Refused: no files or link given.";
+        const { data: items } = await db.from("order_items").select("id, media_link, order_item_media(id)").eq("order_id", order.id);
+        const missing = (items ?? []).filter((i) => !i.media_link && !i.order_item_media.length);
+        for (const item of missing) {
+          await photosToItem(ctx, item.id, order.order_no, order.id, { attachment_ids, photo_link: link || null } as PendingItem);
+        }
+        did(`Added photos to order ${order.order_no}`);
+        return "Added. Tell the client the order will be confirmed and invoiced here shortly if everything's in order.";
+      },
+    }),
+
+    tool({
       name: "hand_to_staff",
       description: "Tells the team this chat needs a person. You keep answering until one of them writes.",
       inputSchema: z.object({ reason: z.string() }),

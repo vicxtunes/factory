@@ -17,6 +17,15 @@ export function canAutoApprove(lines: { unitPrice: number | null }[]): boolean {
   return lines.length > 0 && lines.every((l) => l.unitPrice != null && l.unitPrice > 0);
 }
 
+/** How long after an order is placed its uploads may still be going. */
+export const UPLOAD_GRACE_MS = 2 * 60_000;
+
+/** What a client's own order needs next: "approve" when it's well ordered. */
+export function reviewOutcome(lines: { unitPrice: number | null }[], items: { hasPhotos: boolean }[]): "approve" | "needs_price" | "needs_photos" {
+  if (!canAutoApprove(lines)) return "needs_price";
+  return items.length > 0 && items.every((i) => i.hasPhotos) ? "approve" : "needs_photos";
+}
+
 /** Every item has something to print from. */
 export function everyItemHasPhotos(items: { attachment_ids: string[]; photo_link: string | null }[]): boolean {
   return items.length > 0 && items.every((i) => i.attachment_ids.length > 0 || !!i.photo_link);

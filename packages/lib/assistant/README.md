@@ -17,3 +17,7 @@ products and the app. Runs on OpenAI or Claude (`server/providers.ts`, official 
   discount or route to production, and it never asks HivePay for status.
 - **Sent to the chosen AI company:** chat text, names, phone on file, order and money figures for that client. Not the photos: it
   sees only file names and ids. Promo codes go to staff.
+
+**Orders from the order form** (`server/review.ts`, every minute, 2 minutes after placing so uploads can finish, for 24 hours): every item
+priced and with photos or a link means approved, invoiced and the client asked to pay in the order's chat. Otherwise it tells the client once
+what's missing: it asks for photos (added from chat, then reviewed again), or says reception will confirm the price. Same off/test/live switch.
