@@ -581,12 +581,16 @@ async function fanOutNewMessage(sender: ChatViewer, conversation: repo.Conversat
 
     await ringPeople(members.map(toRef), { type: "message", conversationId: conversation.id }, isTeam);
 
+    // While the assistant is answering a client, staff aren't told of each
+    // message: it calls them when it needs a person.
+    const assistantAnswers = sender.type === "client" && isTeam && (await directory.assistantIsHandling(conversation.id, sender.id));
     const recipients = members
       .filter((m) => !m.muted && !sameParticipant(toRef(m), sender))
+      .filter((m) => !assistantAnswers || m.participant_type !== "dashboard_user")
       .map(toRef);
     // A client writing into a thread no staff member follows yet must still
     // reach someone: notify the whole team.
-    if (isTeam && !policy.isStaff(sender) && !members.some((m) => m.participant_type === "dashboard_user")) {
+    if (!assistantAnswers && isTeam && !policy.isStaff(sender) && !members.some((m) => m.participant_type === "dashboard_user")) {
       recipients.push(...(await directory.listStaffRefs()));
     }
     if (!recipients.length) return;
@@ -841,10 +845,23 @@ export async function removeIssueThreadFiles(reportId: string): Promise<void> {
 }
 
 /** The assistant's reply: rings the chat, and pushes to the client only, so staff aren't told of every answer. */
-export async function postAssistantMessage(conversationId: string, clientId: string, senderName: string, body: string): Promise<void> {
+export async function postAssistantMessage(
+  conversationId: string,
+  clientId: string,
+  senderName: string,
+  body: string,
+  extras?: { choices: string[]; images: { url: string; name: string }[] },
+): Promise<void> {
   const conversation = await repo.getConversation(conversationId);
   if (!conversation) return;
-  await repo.insertMessage({ conversation_id: conversationId, kind: "text", sender_name: senderName, body: body.slice(0, CHAT_LIMITS.maxMessageLength) });
+  await repo.insertMessage({
+    conversation_id: conversationId,
+    kind: "text",
+    sender_name: senderName,
+    body: body.slice(0, CHAT_LIMITS.maxMessageLength),
+    choices: extras?.choices.length ? extras.choices : null,
+    images: extras?.images.length ? extras.images : null,
+  });
   ringConversation(conversation, "message");
   await notifyRecipients([{ type: "client", id: clientId }], { title: senderName, body: body.slice(0, 120), conversationId });
 }

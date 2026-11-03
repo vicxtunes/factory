@@ -6,7 +6,7 @@ products and the app. Runs on OpenAI or Claude (`server/providers.ts`, official 
 (`SUPPORT_OWNER_EMAIL`) picks which on Dashboard → Assistant; the list and prices are `ASSISTANT_MODELS` in `core/rules.ts`.
 
 - **Waking up:** a trigger on `chat_messages` marks a chat waiting when a client writes, and quiet when staff or its
-  designer write. The client app checks every 5 s (`answerWaitingChats`), 4 s after the client's last message. Staff
+  designer write. The client app checks every 2 s (`answerWaitingChats`), 3 s after the client's last message, and shows "Aming assistant is typing" while it works. It can put tappable answers and product photos under a reply (`chat_messages.choices`, `images`). Asking for staff doesn't silence it; a person writing does. Staff
   tap **Hand back** in the chat to return it.
 - **Switch:** Dashboard → Assistant (boss): off, test (only listed clients) or live; daily spending limit; what it did.
   It needs `OPENAI_API_KEY` and/or `ANTHROPIC_API_KEY` in the client app's environment. At the limit or on any failure, it hands to staff.

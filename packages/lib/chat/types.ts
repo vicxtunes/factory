@@ -141,6 +141,9 @@ export interface ChatMessage {
   kind: MessageKind;
   /** Set when kind is "order_card". */
   card: OrderCardKind | null;
+  /** The assistant's offer: answers the client can tap, and product photos. */
+  choices?: string[] | null;
+  images?: { url: string; name: string }[] | null;
   sender: ParticipantRef | null;
   senderName: string | null;
   body: string;

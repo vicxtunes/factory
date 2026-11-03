@@ -3,9 +3,11 @@
 export const ASSISTANT_NAME = "Aming assistant";
 export const MAX_PROMPTS_PER_DAY = 3;
 /** Wait this long after a client's last message, so several in a row get one reply. */
-export const QUIET_BEFORE_ANSWER_MS = 4_000;
+export const QUIET_BEFORE_ANSWER_MS = 3_000;
 /** Messages older than this aren't answered (the assistant was off, or was down). */
 export const TOO_OLD_TO_ANSWER_MS = 30 * 60_000;
+export const MAX_CHOICES = 6;
+export const MAX_IMAGES = 6;
 export const RUN_STALE_MS = 5 * 60_000;
 
 export type AssistantMode = "off" | "test" | "live";
