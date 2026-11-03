@@ -9,6 +9,8 @@ create table assistant_settings (
   mode          text not null default 'off' check (mode in ('off', 'test', 'live')),
   daily_cap_usd numeric(10, 2) not null default 10 check (daily_cap_usd >= 0),
   test_clients  text not null default '',
+  -- Which AI answers (ASSISTANT_MODELS in core/rules.ts). Only the developer changes it.
+  model         text not null default 'gpt-6.1-terra',
   updated_at    timestamptz not null default now()
 );
 insert into assistant_settings default values;

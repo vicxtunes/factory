@@ -4,9 +4,9 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { Button } from "@repo/ui/Button";
-import { Field, TextArea, TextInput } from "@repo/ui/Field";
-import { saveAssistantSettings } from "@repo/lib/assistant/actions";
-import type { AssistantMode } from "@repo/lib/assistant/core/rules";
+import { Field, Select, TextArea, TextInput } from "@repo/ui/Field";
+import { saveAssistantModel, saveAssistantSettings } from "@repo/lib/assistant/actions";
+import { ASSISTANT_MODELS, type AssistantMode } from "@repo/lib/assistant/core/rules";
 
 const MODES: { value: AssistantMode; label: string; hint: string }[] = [
   { value: "off", label: "Off", hint: "Staff answer every chat." },
@@ -14,18 +14,26 @@ const MODES: { value: AssistantMode; label: string; hint: string }[] = [
   { value: "live", label: "Live", hint: "Answers every client." },
 ];
 
-export function AssistantForm({ settings }: { settings: { mode: AssistantMode; dailyCapUsd: number; testClients: string } }) {
+export function AssistantForm({
+  settings,
+  canChooseModel,
+}: {
+  settings: { mode: AssistantMode; dailyCapUsd: number; testClients: string; model: string };
+  canChooseModel: boolean;
+}) {
   const router = useRouter();
   const [mode, setMode] = useState(settings.mode);
   const [cap, setCap] = useState(String(settings.dailyCapUsd));
   const [testClients, setTestClients] = useState(settings.testClients);
+  const [model, setModel] = useState(settings.model);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
   async function save() {
     setBusy(true);
     setMessage(null);
-    const res = await saveAssistantSettings({ mode, dailyCapUsd: Number(cap), testClients });
+    const modelSaved = canChooseModel ? await saveAssistantModel(model) : { ok: true };
+    const res = modelSaved.ok ? await saveAssistantSettings({ mode, dailyCapUsd: Number(cap), testClients }) : modelSaved;
     setBusy(false);
     setMessage(res.ok ? "Saved." : (res.error ?? "Couldn't save."));
     if (res.ok) router.refresh();
@@ -52,6 +60,17 @@ export function AssistantForm({ settings }: { settings: { mode: AssistantMode; d
       <Field label="Daily limit (US$)" hint="At the limit, chats go to staff until tomorrow.">
         <TextInput type="number" min={0} step="1" inputMode="decimal" value={cap} onChange={(e) => setCap(e.target.value)} />
       </Field>
+      {canChooseModel ? (
+        <Field label="Which AI answers" hint="Its API key must be in the client app's environment.">
+          <Select value={model} onChange={(e) => setModel(e.target.value)}>
+            {ASSISTANT_MODELS.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.label}
+              </option>
+            ))}
+          </Select>
+        </Field>
+      ) : null}
       <Button type="button" className="min-h-10 font-semibold" loading={busy} disabled={busy} onClick={save}>
         Save
       </Button>

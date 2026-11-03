@@ -2,17 +2,29 @@
 
 import { revalidatePath } from "next/cache";
 
-import { getDashboardSession, requireRole } from "@repo/lib/auth/session";
+import { getDashboardSession } from "@repo/lib/auth/session";
+import { SUPPORT_OWNER_EMAIL } from "@repo/lib/support/constants";
 import { isManagerRole } from "@repo/lib/types";
 
-import type { AssistantMode } from "./core/rules";
+import { findModel, type AssistantMode } from "./core/rules";
 import * as store from "./server/store";
 
 export async function saveAssistantSettings(input: { mode: AssistantMode; dailyCapUsd: number; testClients: string }): Promise<{ ok: boolean; error?: string }> {
-  await requireRole("boss");
+  const session = await getDashboardSession();
+  if (session?.role !== "boss" && session?.email !== SUPPORT_OWNER_EMAIL) return { ok: false, error: "You don't have access to this." };
   if (!["off", "test", "live"].includes(input.mode)) return { ok: false, error: "Choose a mode." };
   if (!Number.isFinite(input.dailyCapUsd) || input.dailyCapUsd < 0) return { ok: false, error: "Enter a valid daily limit." };
   await store.saveSettings({ mode: input.mode, dailyCapUsd: input.dailyCapUsd, testClients: input.testClients.slice(0, 2000) });
+  revalidatePath("/dashboard/assistant");
+  return { ok: true };
+}
+
+/** Which AI answers is the developer's choice alone. */
+export async function saveAssistantModel(model: string): Promise<{ ok: boolean; error?: string }> {
+  const session = await getDashboardSession();
+  if (session?.email !== SUPPORT_OWNER_EMAIL) return { ok: false, error: "You don't have access to this." };
+  if (!findModel(model)) return { ok: false, error: "Choose a model." };
+  await store.saveModel(model);
   revalidatePath("/dashboard/assistant");
   return { ok: true };
 }

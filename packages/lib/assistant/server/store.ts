@@ -8,6 +8,7 @@ export interface AssistantSettings {
   mode: AssistantMode;
   dailyCapUsd: number;
   testClients: string;
+  model: string;
 }
 
 export interface ThreadRow {
@@ -48,17 +49,21 @@ function must<T>(res: { data: T; error: { message: string } | null }): NonNullab
 }
 
 export async function getSettings(): Promise<AssistantSettings> {
-  const row = must(await createAdminClient().from("assistant_settings").select("mode, daily_cap_usd, test_clients").single());
-  return { mode: row.mode as AssistantMode, dailyCapUsd: Number(row.daily_cap_usd), testClients: row.test_clients };
+  const row = must(await createAdminClient().from("assistant_settings").select("mode, daily_cap_usd, test_clients, model").single());
+  return { mode: row.mode as AssistantMode, dailyCapUsd: Number(row.daily_cap_usd), testClients: row.test_clients, model: row.model };
 }
 
-export async function saveSettings(s: AssistantSettings): Promise<void> {
+export async function saveSettings(s: Omit<AssistantSettings, "model">): Promise<void> {
   must(
     await createAdminClient()
       .from("assistant_settings")
       .update({ mode: s.mode, daily_cap_usd: s.dailyCapUsd, test_clients: s.testClients, updated_at: new Date().toISOString() })
       .eq("id", true),
   );
+}
+
+export async function saveModel(model: string): Promise<void> {
+  must(await createAdminClient().from("assistant_settings").update({ model, updated_at: new Date().toISOString() }).eq("id", true));
 }
 
 /** Forgets messages too old to answer now, and returns the chats ready for an answer. */

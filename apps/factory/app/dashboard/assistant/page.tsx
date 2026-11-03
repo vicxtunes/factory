@@ -1,8 +1,10 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 import { recentRuns, getSettings, spentToday } from "@repo/lib/assistant/server/store";
-import { requireRole } from "@repo/lib/auth/session";
+import { getDashboardSession } from "@repo/lib/auth/session";
 import { chatHref } from "@repo/lib/chat/routes";
+import { SUPPORT_OWNER_EMAIL } from "@repo/lib/support/constants";
 
 import { AssistantForm } from "./assistant-form";
 
@@ -12,7 +14,9 @@ export const metadata = { title: "Assistant" };
 // The boss's switch for the chat assistant (packages/lib/assistant): who it
 // answers, its daily limit, and what it has said and done.
 export default async function AssistantPage() {
-  await requireRole("boss");
+  const session = await getDashboardSession();
+  const developer = session?.email === SUPPORT_OWNER_EMAIL;
+  if (session?.role !== "boss" && !developer) redirect("/dashboard");
   const [settings, spent, runs] = await Promise.all([getSettings(), spentToday(), recentRuns(50)]);
 
   return (
@@ -21,7 +25,7 @@ export default async function AssistantPage() {
         <h1 className="text-lg font-semibold">Assistant</h1>
         <p className="mt-1 text-sm text-muted">Spent today: US${spent.toFixed(2)}</p>
         <div className="mt-4">
-          <AssistantForm settings={settings} />
+          <AssistantForm settings={settings} canChooseModel={developer} />
         </div>
       </section>
       <section className="min-w-0">

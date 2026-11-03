@@ -2,7 +2,6 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 
-import { betaZodTool } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
 
 import { logOrderEvent, type AuditActor } from "@repo/lib/audit/log";
@@ -96,12 +95,24 @@ async function photosToItem(ctx: ToolContext, itemId: string, orderNo: string, o
   }
 }
 
-export function assistantTools(ctx: ToolContext) {
+/** A tool, whichever AI is calling it. */
+export interface AssistantTool {
+  name: string;
+  description: string;
+  inputSchema: z.ZodType;
+  run: (input: never) => Promise<string>;
+}
+
+function tool<S extends z.ZodType>(t: { name: string; description: string; inputSchema: S; run: (input: z.infer<S>) => Promise<string> }): AssistantTool {
+  return t as unknown as AssistantTool;
+}
+
+export function assistantTools(ctx: ToolContext): AssistantTool[] {
   const db = createAdminClient();
   const did = (what: string) => ctx.actions.push(what);
 
   return [
-    betaZodTool({
+    tool({
       name: "get_catalog",
       description: "The products clients can order, with their ids, variants, prices when shown, and the attributes each needs.",
       inputSchema: z.object({}),
@@ -133,7 +144,7 @@ export function assistantTools(ctx: ToolContext) {
       },
     }),
 
-    betaZodTool({
+    tool({
       name: "get_my_orders",
       description: "This client's latest orders: items, progress, total, paid, what's due, and the invoice link.",
       inputSchema: z.object({}),
@@ -168,7 +179,7 @@ export function assistantTools(ctx: ToolContext) {
       },
     }),
 
-    betaZodTool({
+    tool({
       name: "get_my_account",
       description: "This client's wallet balance, unpaid invoices and whether they have a phone number on file.",
       inputSchema: z.object({}),
@@ -181,7 +192,7 @@ export function assistantTools(ctx: ToolContext) {
       },
     }),
 
-    betaZodTool({
+    tool({
       name: "get_my_receipts",
       description: "This client's latest payment receipts with links.",
       inputSchema: z.object({}),
@@ -199,7 +210,7 @@ export function assistantTools(ctx: ToolContext) {
       },
     }),
 
-    betaZodTool({
+    tool({
       name: "get_pay_options",
       description: "Links to pay one of this client's orders: the invoice page (MTN, Airtel, bank), and the order's chat (its card pays from the wallet with their PIN).",
       inputSchema: z.object({ order_id: z.string() }),
@@ -215,7 +226,7 @@ export function assistantTools(ctx: ToolContext) {
       },
     }),
 
-    betaZodTool({
+    tool({
       name: "prepare_order",
       description: "Checks an order and works out its price, then keeps it as this chat's summary to show the client. Doesn't place anything. Replaces any earlier summary.",
       inputSchema: z.object({
@@ -287,7 +298,7 @@ export function assistantTools(ctx: ToolContext) {
       },
     }),
 
-    betaZodTool({
+    tool({
       name: "place_order",
       description: "Places the order in this chat's summary, after the client said yes to it in a new message. Approves and invoices it when every item has a price.",
       inputSchema: z.object({}),
@@ -369,7 +380,7 @@ export function assistantTools(ctx: ToolContext) {
       },
     }),
 
-    betaZodTool({
+    tool({
       name: "create_invoice",
       description: "Generates the invoice for one of this client's orders that reception has confirmed but not yet invoiced.",
       inputSchema: z.object({ order_id: z.string() }),
@@ -389,7 +400,7 @@ export function assistantTools(ctx: ToolContext) {
         }),
     }),
 
-    betaZodTool({
+    tool({
       name: "request_payment",
       description: "Sends an MTN or Airtel payment prompt to the client's phone for one of their invoiced orders, for what's still due or a part of it. Only after they agree. The money counts only once they approve it with their PIN.",
       inputSchema: z.object({
@@ -418,7 +429,7 @@ export function assistantTools(ctx: ToolContext) {
         }),
     }),
 
-    betaZodTool({
+    tool({
       name: "hand_to_staff",
       description: "Passes this chat to the team and stops answering it until they hand it back.",
       inputSchema: z.object({ reason: z.string() }),

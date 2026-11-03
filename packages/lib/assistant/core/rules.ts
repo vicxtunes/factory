@@ -38,7 +38,29 @@ export function mayAnswer(mode: AssistantMode, testClients: string, client: { em
   );
 }
 
-/** US dollars for one call on claude-opus-5-5 ($4 in, $20 out, cache reads $0.20, writes $5 per million). */
-export function costUsd(u: { input: number; output: number; cacheRead: number; cacheWrite: number }): number {
-  return (u.input * 4 + u.output * 20 + u.cacheRead * 0.2 + u.cacheWrite * 5) / 1_000_000;
+/** The AIs that can answer, with their standard prices in US$ per million tokens. */
+export const ASSISTANT_MODELS = [
+  { id: "gpt-6.1-terra", label: "OpenAI GPT-6.1 Terra", provider: "openai", input: 1, output: 5, cacheRead: 0.05, cacheWrite: 0 },
+  { id: "gpt-6.1-sol", label: "OpenAI GPT-6.1 Sol", provider: "openai", input: 2, output: 10, cacheRead: 0.1, cacheWrite: 0 },
+  { id: "gpt-6-luna", label: "OpenAI GPT-6 Luna (cheapest)", provider: "openai", input: 0.1, output: 0.5, cacheRead: 0.01, cacheWrite: 0 },
+  { id: "claude-opus-5-5", label: "Claude Opus 5.5", provider: "anthropic", input: 4, output: 20, cacheRead: 0.2, cacheWrite: 5 },
+  { id: "claude-sonnet-5-5", label: "Claude Sonnet 5.5", provider: "anthropic", input: 2, output: 10, cacheRead: 0.2, cacheWrite: 2.5 },
+] as const;
+
+export type AssistantModel = (typeof ASSISTANT_MODELS)[number];
+
+export function findModel(id: string): AssistantModel | null {
+  return ASSISTANT_MODELS.find((m) => m.id === id) ?? null;
+}
+
+export interface TokenUsage {
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+}
+
+/** US dollars for what a run used. */
+export function costUsd(model: AssistantModel, u: TokenUsage): number {
+  return (u.input * model.input + u.output * model.output + u.cacheRead * model.cacheRead + u.cacheWrite * model.cacheWrite) / 1_000_000;
 }

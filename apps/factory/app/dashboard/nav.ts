@@ -134,7 +134,7 @@ export const NAV_GROUPS: NavGroup[] = [
     id: "help",
     label: "Help & Tools",
     items: [
-      { href: "/dashboard/assistant", label: "Assistant", icon: "support", visible: boss },
+      { href: "/dashboard/assistant", label: "Assistant", icon: "support", visible: (v) => boss(v) || developer(v) },
       { href: "/support", label: "Support", icon: "support", visible: everyone },
       { href: "/dashboard/support", label: "Support Reports", icon: "support", visible: developer },
       // Private component workbench; the room itself 404s for anyone else.

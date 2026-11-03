@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { canAutoApprove, clientConfirmedAfter, costUsd, everyItemHasPhotos, mayAnswer } from "./rules";
+import { canAutoApprove, clientConfirmedAfter, costUsd, everyItemHasPhotos, findModel, mayAnswer } from "./rules";
 
 describe("assistant rules", () => {
   it("approves only when every line has a price", () => {
@@ -29,8 +29,10 @@ describe("assistant rules", () => {
     assert.equal(mayAnswer("test", "b@x.com\n0700000000", client), false);
     assert.equal(mayAnswer("test", "", { email: null, phone: null }), false);
   });
-  it("prices a call", () => {
-    assert.equal(costUsd({ input: 1_000_000, output: 0, cacheRead: 0, cacheWrite: 0 }), 4);
-    assert.ok(Math.abs(costUsd({ input: 0, output: 1000, cacheRead: 1000, cacheWrite: 1000 }) - 0.0252) < 1e-9);
+  it("prices a run by its model", () => {
+    const opus = findModel("claude-opus-5-5")!;
+    assert.equal(costUsd(opus, { input: 1_000_000, output: 0, cacheRead: 0, cacheWrite: 0 }), 4);
+    assert.equal(costUsd(findModel("gpt-6.1-terra")!, { input: 0, output: 1_000_000, cacheRead: 0, cacheWrite: 0 }), 5);
+    assert.equal(findModel("nope"), null);
   });
 });

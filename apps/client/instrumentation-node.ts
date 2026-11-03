@@ -47,6 +47,6 @@ if (process.env.NODE_ENV === "production" && process.env.NEXT_PUBLIC_TEST_COPY !
 }
 
 // The assistant answers clients' chats wherever it has a key, except the test copy.
-if (process.env.ANTHROPIC_API_KEY && process.env.NEXT_PUBLIC_TEST_COPY !== "1") {
+if ((process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY) && process.env.NEXT_PUBLIC_TEST_COPY !== "1") {
   every(ASSISTANT_EVERY_MS, "assistant", answerWaitingChats);
 }
