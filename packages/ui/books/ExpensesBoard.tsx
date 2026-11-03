@@ -19,6 +19,7 @@ import { Card, EmptyState, FigureTile, formatDayTime, useMoney } from "@repo/ui/
 import { ChartCard, RankBars, SERIES } from "@repo/ui/charts/kit";
 import { DAY_PERIOD_PRESETS, type Period } from "@repo/lib/accounting/core/period";
 import { VoidSheet, parseNumber } from "@repo/ui/production/sheets";
+import { localPhone } from "@repo/lib/wallet/policy";
 import { todayHere, useMoneySource } from "@repo/ui/wallet/MoneySourceFields";
 import {
   addExpenseCategory,
@@ -27,6 +28,7 @@ import {
   endExpenseSchedule,
   getExpenseDetail,
   payExpense,
+  sendExpensePayout,
   recordExpense,
   setExpenseApprovalLimit,
   voidExpense,
@@ -36,8 +38,10 @@ import { uploadExpenseDocument } from "@repo/lib/books/expense-documents";
 import {
   EVERY_LABELS,
   EXPENSE_STATUS_LABELS,
+  HIVEPAY_SEND_FEES,
   expenseBalance,
   expenseStatus,
+  hivepaySendFee,
   type ExpenseCategory,
   type ExpenseDetail,
   type ExpenseEvery,
@@ -532,7 +536,7 @@ function ExpenseSheet({ expense: e, today, isBoss, timeZone, onClose }: { expens
   const router = useRouter();
   const [detail, setDetail] = useState<ExpenseDetail | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [mode, setMode] = useState<"view" | "pay" | "void" | "reject">("view");
+  const [mode, setMode] = useState<"view" | "pay" | "send" | "void" | "reject">("view");
   const [voidingPayment, setVoidingPayment] = useState<ExpensePayment | null>(null);
   const [uploading, setUploading] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -569,6 +573,7 @@ function ExpenseSheet({ expense: e, today, isBoss, timeZone, onClose }: { expens
   }
 
   const livePayments = (detail?.payments ?? []).filter((p) => !p.voidedAt);
+  const sending = (detail?.payouts ?? []).some((p) => p.status === "sending");
 
   return (
     <>
@@ -636,11 +641,37 @@ function ExpenseSheet({ expense: e, today, isBoss, timeZone, onClose }: { expens
           {!e.automatic && !closed && left > 0 && (e.approval === "approved" || isBoss) ? (
             mode === "pay" ? (
               <PayForm expense={e} today={today} onDone={refresh} onCancel={() => setMode("view")} />
+            ) : mode === "send" ? (
+              <SendForm expense={e} onDone={refresh} onCancel={() => setMode("view")} />
             ) : (
-              <Button className="w-full" onClick={() => setMode("pay")}>
-                Record a payment
-              </Button>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Button className="flex-1" onClick={() => setMode("pay")} disabled={sending}>
+                  Record a payment
+                </Button>
+                {isBoss && HIVEPAY_SEND_FEES.length > 0 ? (
+                  <Button variant="secondary" className="flex-1" onClick={() => setMode("send")} disabled={sending}>
+                    Send by HivePay
+                  </Button>
+                ) : null}
+              </div>
             )
+          ) : null}
+
+          {detail?.payouts.length ? (
+            <Card title="Sent through HivePay">
+              <ul className="divide-y divide-border text-sm">
+                {detail.payouts.map((p) => (
+                  <li key={p.id} className="py-2">
+                    <p className="font-semibold tnum">
+                      {money(p.amount)} to {localPhone(p.phone)}
+                    </p>
+                    <p className={`text-xs ${p.status === "failed" ? "text-error-600 dark:text-error-400" : "text-muted"}`}>
+                      {p.status === "failed" ? `Didn't go through: ${p.error ?? "no reason given"}` : "On its way. It counts as paid once HivePay confirms it."} · {p.sentBy}, {formatDayTime(p.sentAt, timeZone)}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            </Card>
           ) : null}
 
           {detail === null ? (
@@ -802,6 +833,86 @@ function PayForm({ expense: e, today, onDone, onCancel }: { expense: ExpenseLine
         </Button>
       </div>
     </form>
+  );
+}
+
+/** Real money leaves at once, so it asks a second time, with everything spelled out. */
+function SendForm({ expense: e, onDone, onCancel }: { expense: ExpenseLine; onDone: () => Promise<void>; onCancel: () => void }) {
+  const money = useMoney();
+  const [id] = useState(() => crypto.randomUUID());
+  const left = expenseBalance(e);
+  const [actual, setActual] = useState("");
+  const [amount, setAmount] = useState(e.amountIsEstimate ? "" : String(left));
+  const [phone, setPhone] = useState("");
+  const [sure, setSure] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+  const real = e.amountIsEstimate ? parseNumber(actual) : null;
+  const value = parseNumber(amount || actual);
+  const fee = value > 0 && Number.isInteger(value) ? hivepaySendFee(value) : null;
+  const most = real ?? left;
+  const problem = !(value > 0) ? null : value > most ? `That's more than the ${money(most)} left to pay.` : fee === null ? "That amount isn't on HivePay's price list. Pay in parts or another way." : null;
+  const ready = value > 0 && fee !== null && !problem && phone.trim() !== "" && (!e.amountIsEstimate || real! > 0);
+
+  function send() {
+    setError(null);
+    start(async () => {
+      const res = await sendExpensePayout({ id, expenseId: e.id, amount: value, actual: real, phone });
+      if (!res.ok) {
+        setSure(false);
+        return setError(res.error);
+      }
+      onCancel();
+      await onDone();
+    });
+  }
+
+  return (
+    <div className="space-y-3 rounded-2xl border border-border p-3">
+      <p className="text-sm font-semibold">Send by HivePay</p>
+      {e.amountIsEstimate ? (
+        <Field label="Real amount this time" hint={`Expected about ${money(e.amount)}.`}>
+          <TextInput inputMode="numeric" value={actual} disabled={sure} onChange={(ev) => setActual(ev.target.value)} />
+        </Field>
+      ) : null}
+      <Field label="They receive" hint={e.amountIsEstimate ? "Leave empty if it's the whole amount." : `${money(left)} left. Send less for a part payment.`}>
+        <TextInput inputMode="numeric" value={amount} disabled={sure} onChange={(ev) => setAmount(ev.target.value)} />
+      </Field>
+      <Field label="MTN or Airtel number">
+        <TextInput type="tel" value={phone} disabled={sure} onChange={(ev) => setPhone(ev.target.value)} placeholder="e.g. 0772 000 000" />
+      </Field>
+      {problem ? <p className="text-sm text-error-600 dark:text-error-400">{problem}</p> : null}
+      {ready ? (
+        <p className="text-sm text-muted">
+          HivePay&apos;s fee is {money(fee)}, recorded as its own expense. {money(value + fee)} leaves the HivePay account.
+        </p>
+      ) : null}
+      <ErrorLine error={error} />
+      {sure ? (
+        <div className="space-y-2 rounded-xl bg-warning-50 p-3 dark:bg-warning-500/10">
+          <p className="text-sm font-medium">
+            Send {money(value)} to {phone.trim()}? Real money leaves at once and can&apos;t be pulled back.
+          </p>
+          <div className="flex gap-2">
+            <Button loading={pending} disabled={pending} className="flex-1" onClick={send}>
+              Yes, send {money(value)}
+            </Button>
+            <Button variant="secondary" disabled={pending} onClick={() => setSure(false)}>
+              Change
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex gap-2">
+          <Button className="flex-1" disabled={!ready} onClick={() => setSure(true)}>
+            Continue
+          </Button>
+          <Button variant="secondary" onClick={onCancel}>
+            Cancel
+          </Button>
+        </div>
+      )}
+    </div>
   );
 }
 

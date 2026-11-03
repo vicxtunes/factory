@@ -137,6 +137,11 @@ export async function dailyMoneyReport(title: string, body: string, period: "tod
   await notifyMoneyWatchers({ title, body, url: `/dashboard/accounts/payments?period=${period}` });
 }
 
+/** A bill sent through HivePay didn't arrive. */
+export async function expensePayoutFailed(body: string): Promise<void> {
+  await notifyMoneyWatchers({ title: "Payout failed", body, url: "/dashboard/accounts/expenses" });
+}
+
 /** The morning reminder of what's due (watch.ts). */
 export async function expenseReminder(title: string, body: string): Promise<void> {
   await notifyMoneyWatchers({ title, body, url: "/dashboard/accounts/expenses" });

@@ -238,17 +238,27 @@ export async function addCategory(name: string): Promise<ExpenseCategory> {
 
 export async function detail(expenseId: string): Promise<ExpenseDetail> {
   const db = createAdminClient();
-  const [payments, documents, accounts] = await Promise.all([
+  const [payouts, payments, documents, accounts] = await Promise.all([
+    db.from("expense_payouts").select("id, credit, phone, status, last_error, actor_name, created_at").eq("expense_id", expenseId).neq("status", "paid").order("created_at", { ascending: false }),
     db.from("expense_payments").select("*").eq("expense_id", expenseId).order("paid_on").order("created_at"),
     db.from("expense_documents").select("*").eq("expense_id", expenseId).order("created_at"),
     db.from("money_accounts").select("id, name"),
   ]);
-  for (const r of [payments, documents, accounts]) if (r.error) fail(r.error);
+  for (const r of [payouts, payments, documents, accounts]) if (r.error) fail(r.error);
   const accountName = new Map((accounts.data ?? []).map((a) => [a.id as string, a.name as string]));
   const paths = (documents.data ?? []).map((d) => d.path as string);
   const links = paths.length ? await db.storage.from(EXPENSE_DOCUMENTS_BUCKET).createSignedUrls(paths, LINK_SECONDS) : { data: [] };
   const url = new Map((links.data ?? []).map((l) => [l.path, l.signedUrl]));
   return {
+    payouts: (payouts.data ?? []).map((p) => ({
+      id: p.id,
+      amount: Number(p.credit),
+      phone: p.phone,
+      status: p.status,
+      error: p.last_error,
+      sentBy: p.actor_name,
+      sentAt: p.created_at,
+    })),
     payments: (payments.data ?? []).map((p) => ({
       id: p.id,
       amount: Number(p.amount),
