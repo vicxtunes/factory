@@ -87,11 +87,11 @@ async function runTool(tools: AssistantTool[], name: string, args: string): Prom
 
 async function askOpenAI({ model, context, tools, messages, onUsage }: AskInput): Promise<Answer> {
   const client = new OpenAI({ timeout: TIMEOUT_MS });
-  const definitions = tools.map((t): OpenAI.Chat.ChatCompletionTool => {
+  const definitions = tools.map((t): OpenAI.Responses.FunctionTool => {
     const parameters = { ...z.toJSONSchema(t.inputSchema), $schema: undefined };
-    return { type: "function", function: { name: t.name, description: t.description, parameters } };
+    return { type: "function", name: t.name, description: t.description, parameters, strict: false };
   });
-  const history: OpenAI.Chat.ChatCompletionMessageParam[] = [
+  const input: OpenAI.Responses.ResponseInputItem[] = [
     // The fixed instructions first: OpenAI caches a request's unchanged start by itself.
     { role: "developer", content: SYSTEM_PROMPT },
     { role: "developer", content: context },
@@ -100,28 +100,28 @@ async function askOpenAI({ model, context, tools, messages, onUsage }: AskInput)
   const usage: TokenUsage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
 
   for (let step = 0; step < MAX_STEPS; step++) {
-    const response = await client.chat.completions.create({
+    const response = await client.responses.create({
       model: model.id,
-      max_completion_tokens: MAX_TOKENS,
-      reasoning_effort: "low",
+      max_output_tokens: MAX_TOKENS,
+      reasoning: { effort: "low" },
       tools: definitions,
-      messages: history,
+      input,
     });
-    const cached = response.usage?.prompt_tokens_details?.cached_tokens ?? 0;
-    usage.input += (response.usage?.prompt_tokens ?? 0) - cached;
+    const cached = response.usage?.input_tokens_details?.cached_tokens ?? 0;
+    usage.input += (response.usage?.input_tokens ?? 0) - cached;
     usage.cacheRead += cached;
-    usage.output += response.usage?.completion_tokens ?? 0;
+    usage.output += response.usage?.output_tokens ?? 0;
     onUsage({ ...usage });
 
-    const choice = response.choices[0];
-    if (!choice || choice.message.refusal || choice.finish_reason === "content_filter") return { text: null, refused: true };
-    const calls = choice.message.tool_calls ?? [];
-    if (!calls.length) return { text: choice.message.content?.trim() || null, refused: false };
+    const refused = response.output.some((item) => item.type === "message" && item.content.some((c) => c.type === "refusal"));
+    if (refused || response.incomplete_details?.reason === "content_filter") return { text: null, refused: true };
+    const calls = response.output.filter((item) => item.type === "function_call");
+    if (!calls.length) return { text: response.output_text.trim() || null, refused: false };
 
-    history.push(choice.message);
+    // Everything it produced goes back with the results: its reasoning has to stay with its calls.
+    input.push(...(response.output as OpenAI.Responses.ResponseInputItem[]));
     for (const call of calls) {
-      const content = call.type === "function" ? await runTool(tools, call.function.name, call.function.arguments) : "Refused: unsupported tool.";
-      history.push({ role: "tool", tool_call_id: call.id, content });
+      input.push({ type: "function_call_output", call_id: call.call_id, output: await runTool(tools, call.name, call.arguments) });
     }
   }
   return { text: null, refused: false };
