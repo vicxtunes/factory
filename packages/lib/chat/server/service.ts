@@ -81,8 +81,17 @@ async function ensureMember(viewer: ParticipantRef, access: Access): Promise<voi
 }
 
 /** Rings every active member (and the staff team for team threads), after the response. */
+/** After the response, or straight away for background jobs, which have none. */
+function later(work: () => Promise<void>): void {
+  try {
+    after(work);
+  } catch {
+    void work().catch((err) => console.error("chat background work failed:", err));
+  }
+}
+
 function ringConversation(conversation: repo.ConversationRow, type: ChatSignal["type"], extra: ParticipantRef[] = []): void {
-  after(async () => {
+  later(async () => {
     const members = await repo.listActiveParticipants([conversation.id]);
     await ringPeople(
       [...members.map(toRef), ...extra],
@@ -829,4 +838,13 @@ export async function removeIssueThreadFiles(reportId: string): Promise<void> {
   const conversation = await repo.findIssueConversation(reportId);
   if (!conversation) return;
   await storage.removeObjects(await repo.listAttachmentPaths(conversation.id));
+}
+
+/** The assistant's reply: rings the chat, and pushes to the client only, so staff aren't told of every answer. */
+export async function postAssistantMessage(conversationId: string, clientId: string, senderName: string, body: string): Promise<void> {
+  const conversation = await repo.getConversation(conversationId);
+  if (!conversation) return;
+  await repo.insertMessage({ conversation_id: conversationId, kind: "text", sender_name: senderName, body: body.slice(0, CHAT_LIMITS.maxMessageLength) });
+  ringConversation(conversation, "message");
+  await notifyRecipients([{ type: "client", id: clientId }], { title: senderName, body: body.slice(0, 120), conversationId });
 }

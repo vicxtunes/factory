@@ -1,5 +1,6 @@
 "use client";
 
+import { AssistantHandBack } from "./AssistantHandBack";
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { deleteMessage, markConversationRead, sendMessage } from "@repo/lib/chat/actions";
@@ -319,6 +320,9 @@ export function ConversationView({
             {headerSubtitle(detail, meKey)}
           </span>
         </button>
+        {detail.me.type === "dashboard_user" && (detail.kind === "support" || detail.kind === "client_order") ? (
+          <AssistantHandBack conversationId={detail.id} />
+        ) : null}
         {detail.issue ? (
           detail.permissions.canResolve ? (
             <button

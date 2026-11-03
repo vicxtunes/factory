@@ -236,7 +236,7 @@ export async function preview(
  * sum of the lines, so the invoice total can't move if catalog prices change.
  */
 export async function generate(
-  staff: InvoiceStaff,
+  staff: Pick<InvoiceStaff, "id" | "name">,
   orderId: string,
   input: {
     lines: { itemId: string; unitPrice: number; unit?: string | null }[];

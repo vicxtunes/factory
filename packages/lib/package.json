@@ -2,6 +2,7 @@
   "name": "@repo/lib",
   "private": true,
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.4.0",
     "@supabase/ssr": "^0.12.5",
     "@supabase/supabase-js": "^2.114.0",
     "aws4fetch": "^1.0.20",
