@@ -14,6 +14,9 @@ boss), factory workers, graphics designers, and clients.
 - **Issues**: one private thread per support report ("Raise issue" on `/support`), between the
   person who raised it and the developer, with an Open/Resolved status.
 
+Chat messages notify by push only, not in the notifications list: one per chat at a time, none for the chat on
+screen, and none to staff while the assistant is answering that client (packages/lib/assistant).
+
 Features: realtime delivery, unread badges, read receipts ("Seen"), typing indicators, push
 notifications, voice messages, photo/video/file attachments, replies, edit/delete, mute, member
 management, message search, and order status updates posted into order threads.

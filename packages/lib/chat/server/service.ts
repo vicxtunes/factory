@@ -581,12 +581,16 @@ async function fanOutNewMessage(sender: ChatViewer, conversation: repo.Conversat
 
     await ringPeople(members.map(toRef), { type: "message", conversationId: conversation.id }, isTeam);
 
+    // While the assistant is answering a client, staff aren't told of each
+    // message: it calls them when it needs a person.
+    const assistantAnswers = sender.type === "client" && isTeam && (await directory.assistantIsHandling(conversation.id, sender.id));
     const recipients = members
       .filter((m) => !m.muted && !sameParticipant(toRef(m), sender))
+      .filter((m) => !assistantAnswers || m.participant_type !== "dashboard_user")
       .map(toRef);
     // A client writing into a thread no staff member follows yet must still
     // reach someone: notify the whole team.
-    if (isTeam && !policy.isStaff(sender) && !members.some((m) => m.participant_type === "dashboard_user")) {
+    if (!assistantAnswers && isTeam && !policy.isStaff(sender) && !members.some((m) => m.participant_type === "dashboard_user")) {
       recipients.push(...(await directory.listStaffRefs()));
     }
     if (!recipients.length) return;
