@@ -606,40 +606,6 @@ export async function getOrderAuditLog(orderId: string): Promise<OrderAuditEntry
 }
 
 // ---------------------------------------------------------------------------
-// Agents — sales/referral agents, distinct from production workers.
-// ---------------------------------------------------------------------------
-
-export async function addAgent(name: string): Promise<Result> {
-  await requireManager();
-  const trimmed = name.trim();
-  if (!trimmed) return { ok: false, error: "Name is required." };
-
-  const admin = createAdminClient();
-  const { error } = await admin.from("agents").insert({ name: trimmed });
-  if (error) return { ok: false, error: error.message };
-  revalidatePath("/dashboard/agents");
-  return { ok: true };
-}
-
-export async function deactivateAgent(id: string): Promise<Result> {
-  await requireManager();
-  const admin = createAdminClient();
-  const { error } = await admin.from("agents").update({ active: false }).eq("id", id);
-  if (error) return { ok: false, error: error.message };
-  revalidatePath("/dashboard/agents");
-  return { ok: true };
-}
-
-export async function reactivateAgent(id: string): Promise<Result> {
-  await requireManager();
-  const admin = createAdminClient();
-  const { error } = await admin.from("agents").update({ active: true }).eq("id", id);
-  if (error) return { ok: false, error: error.message };
-  revalidatePath("/dashboard/agents");
-  return { ok: true };
-}
-
-// ---------------------------------------------------------------------------
 // Clients — single add/edit/deactivate, plus CSV bulk import.
 // ---------------------------------------------------------------------------
 

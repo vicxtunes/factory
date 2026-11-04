@@ -25,8 +25,12 @@ import { canOptimizeImage } from "@repo/lib/storage/client";
 import { uploadFileToStorage } from "@repo/lib/storage/upload-client";
 import type { Currency, OrderType, Product, ProductCategory } from "@repo/lib/types";
 
-import { estimateBookPrice, placeOrder } from "./actions";
+import type { AgentPlaceResult } from "@repo/lib/agents/actions";
+
+import { estimateBookPrice, placeOrder, type ClientOrderPayload } from "./actions";
 import { OrderPlaced } from "./order-placed";
+
+type AgentOrderInput = Pick<ClientOrderPayload, "order_type" | "delivery_date" | "order_notes" | "items">;
 
 // Local-only staging for direct photo uploads — mirrors
 // packages/ui/order/OrderForm.tsx's ItemFormState: no order_item row (and so
@@ -111,6 +115,7 @@ export function OrderForm({
   currencies,
   project,
   hasDrive = false,
+  agent,
 }: {
   catalog: ProductCategory[];
   // Set when arriving from the showroom's "Place an order" button — left
@@ -126,6 +131,8 @@ export function OrderForm({
   project?: { id: string; title: string };
   /** The client has a business Drive to pick files from ("From my Drive"). */
   hasDrive?: boolean;
+  /** An agent ordering for a client of theirs (/agents/orders/new): no promo code, and it's placed with their action. */
+  agent?: { clientName: string; place: (input: AgentOrderInput) => Promise<AgentPlaceResult> };
 }) {
   const router = useRouter();
   const [orderType, setOrderType] = useState<OrderType>("normal");
@@ -195,7 +202,7 @@ export function OrderForm({
   function submit() {
     setError(null);
     start(async () => {
-      const res = await placeOrder({
+      const res = await (agent?.place ?? placeOrder)({
         // Non-Photo-Books orders can never actually be "express" — nothing
         // in the UI offers it, but this is the belt-and-braces guarantee.
         order_type: hasPhotobookItem ? orderType : "normal",
@@ -276,6 +283,7 @@ export function OrderForm({
           total={receipt.total}
           needsReview={receipt.needsReview}
           uploadWarnings={uploadWarnings}
+          forAgent={!!agent}
         />
       </>
     );
@@ -290,11 +298,11 @@ export function OrderForm({
       }}
     >
       <Link
-        href={project ? `/studio/projects/${project.id}` : "/showroom"}
+        href={agent ? "/agents/orders" : project ? `/studio/projects/${project.id}` : "/showroom"}
         className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-600 hover:underline"
       >
         <ArrowLeftIcon className="h-4 w-4" />
-        {project ? `Back to ${project.title}` : "Back to showroom"}
+        {agent ? "Back to orders" : project ? `Back to ${project.title}` : "Back to showroom"}
       </Link>
       {project ? (
         <p className="rounded-[var(--radius)] bg-brand-50 px-3 py-2 text-sm text-brand-700 dark:bg-brand-500/15 dark:text-brand-300">
@@ -302,7 +310,7 @@ export function OrderForm({
         </p>
       ) : null}
 
-      <h1 className="mt-3 text-2xl font-bold sm:text-3xl">Place order</h1>
+      <h1 className="mt-3 text-2xl font-bold sm:text-3xl">{agent ? `Order for ${agent.clientName}` : "Place order"}</h1>
 
       <div className="mt-6 flex flex-col-reverse gap-6 lg:grid lg:grid-cols-[1fr_22rem] lg:items-start lg:gap-8">
         <div className="space-y-6">
@@ -410,7 +418,7 @@ export function OrderForm({
           showPrices={showPrices}
           currencies={currencies}
           promo={promo}
-          onPromo={setPromo}
+          onPromo={agent ? undefined : setPromo}
           quotes={quotes}
         />
       </div>
@@ -775,7 +783,8 @@ function OrderSummary({
   showPrices: boolean;
   currencies: Currency[];
   promo: PromoCode | null;
-  onPromo: (promo: PromoCode | null) => void;
+  /** Left out: no promo codes here (an agent's order). */
+  onPromo?: (promo: PromoCode | null) => void;
 }) {
   const currency = useCurrency(currencies);
   const resolved = resolveItems(catalog, items, promo, quotes);
@@ -838,7 +847,7 @@ function OrderSummary({
         </div>
       ) : null}
 
-      <PromoCodeBox promo={promo} onPromo={onPromo} format={currency.format} />
+      {onPromo ? <PromoCodeBox promo={promo} onPromo={onPromo} format={currency.format} /> : null}
 
       {/* Pricing is boss-configurable (dashboard Products page) — see
           Product.price's comment in packages/lib/types.ts. */}
