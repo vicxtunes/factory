@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { canAutoApprove, clientConfirmedAfter, costUsd, everyItemHasPhotos, findModel, mayAnswer, projectMonthTotal, reviewOutcome } from "./rules";
+import { canAutoApprove, clientConfirmedAfter, costUsd, everyItemHasPhotos, findModel, mayAlertStaff, mayAnswer, projectMonthTotal, reviewOutcome } from "./rules";
 
 describe("assistant rules", () => {
   it("approves only when every line has a price", () => {
@@ -40,6 +40,11 @@ describe("assistant rules", () => {
     assert.equal(reviewOutcome(priced, [{ hasPhotos: true }]), "approve");
     assert.equal(reviewOutcome(priced, [{ hasPhotos: true }, { hasPhotos: false }]), "needs_photos");
     assert.equal(reviewOutcome([{ unitPrice: null }], [{ hasPhotos: true }]), "needs_price");
+  });
+  it("alerts staff once in a while", () => {
+    assert.equal(mayAlertStaff([]), true);
+    assert.equal(mayAlertStaff(["Prepared an order summary"]), true);
+    assert.equal(mayAlertStaff(["Asked staff: refund"]), false);
   });
   it("prices a run by its model", () => {
     const opus = findModel("claude-opus-5-5")!;

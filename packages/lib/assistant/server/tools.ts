@@ -21,7 +21,7 @@ import { paidByOrders } from "@repo/lib/wallet/orders";
 import { WalletError } from "@repo/lib/wallet/server/errors";
 import { startOrderPayment } from "@repo/lib/wallet/server/mobile-money";
 
-import { ASSISTANT_NAME, MAX_CHOICES, MAX_IMAGES, MAX_PROMPTS_PER_DAY, canAutoApprove, clientConfirmedAfter, everyItemHasPhotos } from "../core/rules";
+import { ASSISTANT_NAME, MAX_CHOICES, MAX_IMAGES, MAX_ITEM_QTY, MAX_PROMPTS_PER_DAY, STAFF_ALERT_EVERY_MS, mayAlertStaff, canAutoApprove, clientConfirmedAfter, everyItemHasPhotos } from "../core/rules";
 import * as store from "./store";
 import type { PendingItem } from "./store";
 
@@ -295,6 +295,7 @@ export function assistantTools(ctx: ToolContext): AssistantTool[] {
         let total = 0;
         let unknown = false;
         for (const item of items) {
+          if (item.qty > MAX_ITEM_QTY) return `Refused: more than ${MAX_ITEM_QTY} of one item needs the team. Ask if they meant a smaller number; if not, call hand_to_staff.`;
           const { data: product } = await db
             .from("products")
             .select("id, name, category_id, price, active, product_variants(id, name, price, active)")
@@ -507,6 +508,13 @@ export function assistantTools(ctx: ToolContext): AssistantTool[] {
       description: "Tells the team this chat needs a person. You keep answering until one of them writes.",
       inputSchema: z.object({ reason: z.string() }),
       run: async ({ reason }) => {
+        const { data: recent } = await db
+          .from("assistant_runs")
+          .select("actions")
+          .eq("conversation_id", ctx.conversationId)
+          .gte("created_at", new Date(Date.now() - STAFF_ALERT_EVERY_MS).toISOString());
+        const lately = [...ctx.actions, ...(recent ?? []).flatMap((r) => r.actions as string[])];
+        if (!mayAlertStaff(lately)) return "The team was already told about this chat a short while ago. Don't repeat that to the client unless they ask; carry on helping.";
         await tellManagers(`${ctx.client.name} needs a person`, reason, chatHref(ctx.conversationId));
         did(`Asked staff: ${reason}`);
         return "The team has been told. Say someone will reply here, and keep helping with anything else until they do.";
