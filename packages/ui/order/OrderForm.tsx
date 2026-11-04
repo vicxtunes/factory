@@ -179,7 +179,8 @@ export function OrderForm({
       setError("Add at least one item with a product selected.");
       return;
     }
-    const badDiscount = variant === "manager" ? items.findIndex((it) => it.line_discount && validateLineDiscount(it.line_discount).length) : -1;
+    const withDiscounts = variant === "manager" && !general.agentId;
+    const badDiscount = withDiscounts ? items.findIndex((it) => it.line_discount && validateLineDiscount(it.line_discount).length) : -1;
     if (badDiscount >= 0) {
       setError(`Item ${badDiscount + 1}: ${validateLineDiscount(items[badDiscount].line_discount!).join(" ")}`);
       return;
@@ -208,7 +209,7 @@ export function OrderForm({
           qty,
           attributes,
           item_notes,
-          line_discount: variant === "manager" ? (line_discount ?? null) : null,
+          line_discount: withDiscounts ? (line_discount ?? null) : null,
         })),
       };
 
@@ -294,7 +295,7 @@ export function OrderForm({
           onCheckDuplicates={onCheckDuplicates}
         />
       ) : (
-        <ItemsStep items={items} setItems={setItems} patchItem={patchItem} catalog={catalog} discounts={variant === "manager"} />
+        <ItemsStep items={items} setItems={setItems} patchItem={patchItem} catalog={catalog} discounts={variant === "manager"} agentOrder={!!general.agentId} />
       )}
 
       {error ? <p className="text-sm text-[var(--rush)]">{error}</p> : null}
@@ -435,7 +436,7 @@ function GeneralStep({
             ))}
           </Select>
         </Field>
-        <Field label="Agent (optional)" hint="Who brought this client, if anyone">
+        <Field label="Agent (optional)" hint="The order goes on this agent's account and earns them commission">
           <Select
             value={general.agentId}
             onChange={(e) => setGeneral({ ...general, agentId: e.target.value })}
@@ -734,12 +735,14 @@ function ClientPicker({
 function ItemPricing({
   listPrice,
   offer,
+  agentOrder,
   qty,
   discount,
   onChange,
 }: {
   listPrice: number | null;
   offer: Offer | null;
+  agentOrder: boolean;
   qty: number;
   discount: LineDiscount | null;
   onChange: (next: LineDiscount | null) => void;
@@ -750,7 +753,7 @@ function ItemPricing({
     return <p className="mt-4 border-t border-border pt-4 text-xs text-muted">No catalog price — this item is priced with the client.</p>;
   }
   const base = offer ? Number(offer.price) : Math.round(Number(listPrice));
-  const valid = discount && !validateLineDiscount(discount).length;
+  const valid = !agentOrder && discount && !validateLineDiscount(discount).length;
   const unit = valid ? discountedPrice(base, discount.kind, discount.value) : base;
   const count = Number.isFinite(qty) && qty > 0 ? qty : 1;
 
@@ -764,7 +767,9 @@ function ItemPricing({
           <span className="text-muted"> each · {money(unit * count)} total</span>
         </p>
         {offer ? <p className="text-[11px] text-muted">Includes the running offer &ldquo;{offer.name}&rdquo;.</p> : null}
+        {agentOrder ? <p className="text-[11px] text-muted">Agent order: catalog price, no discounts.</p> : null}
       </div>
+      {agentOrder ? null : (
       <Field label="Discount agreed with the client (optional)">
         <div className="flex gap-2">
           <Select
@@ -793,6 +798,7 @@ function ItemPricing({
           ) : null}
         </div>
       </Field>
+      )}
     </div>
   );
 }
@@ -803,6 +809,7 @@ function ItemsStep({
   patchItem,
   catalog,
   discounts,
+  agentOrder,
 }: {
   items: ItemFormState[];
   setItems: (fn: (prev: ItemFormState[]) => ItemFormState[]) => void;
@@ -810,6 +817,8 @@ function ItemsStep({
   catalog: ProductCategory[];
   /** Managers agree discounts while creating the order (their confirmation step). */
   discounts: boolean;
+  /** In an agent's name: the agent earns commission, so no company discounts. */
+  agentOrder: boolean;
 }) {
   return (
     <section>
@@ -832,6 +841,7 @@ function ItemsStep({
             item={item}
             catalog={catalog}
             discounts={discounts}
+            agentOrder={agentOrder}
             onChange={patchItem}
             onRemove={() => setItems((prev) => prev.filter((_, i) => i !== idx))}
             removable={items.length > 1}
@@ -847,6 +857,7 @@ function ItemRow({
   item,
   catalog,
   discounts,
+  agentOrder,
   onChange,
   onRemove,
   removable,
@@ -855,6 +866,7 @@ function ItemRow({
   item: ItemFormState;
   catalog: ProductCategory[];
   discounts: boolean;
+  agentOrder: boolean;
   onChange: (index: number, patch: Partial<ItemFormState>) => void;
   onRemove: () => void;
   removable: boolean;
@@ -943,7 +955,8 @@ function ItemRow({
       {discounts && product ? (
         <ItemPricing
           listPrice={variant?.price ?? product.price}
-          offer={(variant ? variant.offer : product.offer) ?? null}
+          offer={agentOrder ? null : ((variant ? variant.offer : product.offer) ?? null)}
+          agentOrder={agentOrder}
           qty={item.qty}
           discount={item.line_discount ?? null}
           onChange={(line_discount) => onChange(index, { line_discount })}

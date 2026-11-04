@@ -11,8 +11,13 @@ clients pay Aming directly.
   email is already on Aming waits for staff (`/dashboard/agents/clients`), and until then the agent
   sees only what they typed. A client has at most one agent. An agent can edit a client's details
   only while that client has no login of their own.
-- **Orders:** placed with `buildAndInsertOrder` at catalog prices, without discounts or promo codes,
-  into reception's normal queue. Only these earn (`orders.commission_eligible`).
+- **Orders:** placed with `buildAndInsertOrder` at list prices, into reception's normal queue. An order staff or a designer create in an agent's name is theirs
+  too: it shows in their portal and earns the same way. Only orders from before this (2026-11-04)
+  don't earn (`orders.commission_eligible`). It doesn't add the client to the agent's list.
+- **No company discounts:** the agent already earns commission, so an order that earns takes no
+  running discount, promo code or line discount (`item_offer()` and `order_item_set_discount()`,
+  `supabase/migrations/20261217100000_no_discounts_on_agent_orders.sql`). The portal and the staff
+  order form show list prices for them. Older tagged orders keep the discounts they were placed under.
 - **Stages:** `agentStage()` in `core.ts`. An order shows its least advanced line.
 
 ## Commission
