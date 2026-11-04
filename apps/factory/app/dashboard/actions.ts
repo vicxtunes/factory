@@ -1447,6 +1447,7 @@ const LINE_DISCOUNT_MESSAGES: Record<string, string> = {
   cancelled: "This order was cancelled.",
   invoiced: "This order has an invoice — change its prices on the invoice lines.",
   no_price: "This line has no price yet, so it can't be discounted.",
+  agent: "This order is in an agent's name, so it takes no discounts.",
   confirmed: "This order is already confirmed. Discounts are agreed before confirming; an existing one can still be changed or removed.",
 };
 

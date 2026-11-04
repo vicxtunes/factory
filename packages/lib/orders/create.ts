@@ -22,10 +22,10 @@ export interface BuildOrderParams {
   // The client is already resolved by the caller (existing lookup, or
   // resolveOrCreateClient for a new one).
   client: { id: string; name: string; email: string | null; phone: string | null };
+  // Whoever places it, an order in an agent's name is theirs: it shows in their
+  // portal and earns commission, so it takes no company discounts (packages/lib/agents).
   agentId: string | null;
   agentName: string | null;
-  // Placed in the agent portal, so it earns commission (packages/lib/agents).
-  commissionEligible?: boolean;
   // Set when route === "designer"; the caller has verified the designer.
   designer: { id: string; name: string } | null;
   route: OrderRoute;
@@ -130,6 +130,7 @@ export async function buildAndInsertOrder(
 
     const discount = p.allowLineDiscounts ? (item.line_discount ?? null) : null;
     if (discount) {
+      if (p.agentId) return { ok: false, error: `Item ${formIndex + 1}: orders in an agent's name take no discounts.` };
       const errors = validateLineDiscount(discount);
       if (errors.length) return { ok: false, error: `Item ${formIndex + 1}: ${errors.join(" ")}` };
       if ((variant?.price ?? product.price) == null) {
@@ -171,7 +172,7 @@ export async function buildAndInsertOrder(
       client_phone: p.client.phone,
       agent_id: p.agentId,
       agent_name: p.agentName,
-      commission_eligible: p.commissionEligible ?? false,
+      commission_eligible: p.agentId !== null,
       order_type: p.orderType,
       delivery_date: clean(p.deliveryDate),
       // clean(), not the raw string: the client portal never collects a

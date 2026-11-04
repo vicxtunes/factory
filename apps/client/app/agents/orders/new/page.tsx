@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { placeAgentOrder } from "@repo/lib/agents/actions";
 import { agentClient, agentClients } from "@repo/lib/agents/server";
 import { fetchCurrencies, fetchProductCatalog } from "@repo/lib/queries";
+import type { ProductCategory } from "@repo/lib/types";
 
 import { OrderForm } from "../../../order-form";
 import { requireAgent } from "../../agent";
@@ -21,7 +22,7 @@ export default async function AgentNewOrderPage({ searchParams }: { searchParams
   if (clientId) {
     const client = await agentClient(agent.id, clientId).catch(() => null);
     if (client?.status === "active") {
-      const [catalog, currencies] = await Promise.all([fetchProductCatalog(true), fetchCurrencies()]);
+      const [catalog, currencies] = await Promise.all([fetchProductCatalog(true).then(withoutOffers), fetchCurrencies()]);
       return (
         <AgentFrame agent={agent} page="orders">
           <OrderForm catalog={catalog} showPrices currencies={currencies} agent={{ clientName: client.name, place: placeAgentOrder.bind(null, client.clientId) }} />
@@ -55,4 +56,13 @@ export default async function AgentNewOrderPage({ searchParams }: { searchParams
       </div>
     </AgentFrame>
   );
+}
+
+// The agent earns commission, so company discounts don't apply to their orders:
+// show list prices (the database prices the order the same way).
+function withoutOffers(catalog: ProductCategory[]): ProductCategory[] {
+  return catalog.map((c) => ({
+    ...c,
+    products: c.products.map((p) => ({ ...p, offer: null, pending_offer: null, variants: p.variants.map((v) => ({ ...v, offer: null })) })),
+  }));
 }
