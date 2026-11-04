@@ -20,6 +20,7 @@ import * as bonus from "./server/bonus";
 import * as business from "./server/business";
 import * as vendorWallet from "./server/vendor";
 import * as mobileMoney from "./server/mobile-money";
+import * as agentWallet from "./server/agent";
 import { requireUnlocked } from "./server/pin";
 import * as service from "./server/service";
 import * as watch from "./server/watch";
@@ -41,6 +42,7 @@ import type {
 } from "./types";
 import { requireAccountsAccess } from "@repo/lib/accounting/access";
 import { clientPath } from "@repo/lib/client-portal/paths";
+import { agentOfClient } from "@repo/lib/agents/server";
 import { vendors } from "@repo/lib/vendors/server";
 import { studioOfCaller } from "@repo/lib/studios/server";
 
@@ -334,6 +336,57 @@ export async function withdrawFromVendorWallet(amount: number, phone: string): P
     await requireUnlocked(client.id);
     await vendorWallet.requestVendorWithdrawal({ id: vendor.id, name: vendor.name, clientId: client.id }, amount, phone);
     revalidatePath("/vendors", "layout");
+  });
+}
+
+// --- An agent's commission ------------------------------------------------------
+
+/** The signed-in agent withdraws commission (their wallet PIN unlocked): the boss answers. */
+export async function withdrawCommission(amount: number, to: agentWallet.WithdrawalDestination): Promise<WalletResult> {
+  return run(async () => {
+    const client = await requireClient();
+    const agent = await agentOfClient(client.id);
+    if (!agent) throw new WalletError("Sign in as an agent first.");
+    await requireUnlocked(client.id);
+    await agentWallet.requestAgentWithdrawal({ id: agent.id, name: agent.name, clientId: client.id }, amount, to);
+    revalidatePath("/agents", "layout");
+  });
+}
+
+/** Only the boss answers agents' withdrawals. */
+async function requireBoss() {
+  const staff = await requireStaff();
+  if (staff.role !== "boss") throw new WalletError("Only the boss can answer agents' withdrawals.");
+  return staff;
+}
+
+function refreshAgentPages() {
+  refreshMoneyPages();
+  revalidatePath("/agents", "layout");
+  revalidatePath("/dashboard/agents", "layout");
+}
+
+/** Approves a waiting mobile money withdrawal: HivePay sends it. */
+export async function approveAgentWithdrawal(id: string): Promise<WalletResult> {
+  return run(async () => {
+    await agentWallet.approveAgentWithdrawal(await requireBoss(), id);
+    refreshAgentPages();
+  });
+}
+
+/** Refuses a waiting withdrawal (the agent sees `reason`): the money goes back on their balance. */
+export async function refuseAgentWithdrawal(id: string, reason: string): Promise<WalletResult> {
+  return run(async () => {
+    await agentWallet.refuseAgentWithdrawal(await requireBoss(), id, reason);
+    refreshAgentPages();
+  });
+}
+
+/** A bank withdrawal the boss sent by hand: paid, from this account, with this reference. */
+export async function markAgentWithdrawalPaid(id: string, accountId: string, reference: string): Promise<WalletResult> {
+  return run(async () => {
+    await agentWallet.markAgentWithdrawalPaid(await requireBoss(), id, accountId, reference);
+    refreshAgentPages();
   });
 }
 
