@@ -156,9 +156,9 @@ export async function moneyAlert(alert: MoneyAlertRow): Promise<void> {
   await notifyMoneyWatchers({ title: MONEY_ALERT_TITLES[alert.kind], body: alert.detail, url: "/dashboard/accounts" });
 }
 
-/** The evening money report (watch.ts). */
-export async function dailyMoneyReport(title: string, body: string, period: "today" | "yesterday" = "today"): Promise<void> {
-  await notifyMoneyWatchers({ title, body, url: `/dashboard/accounts/payments?period=${period}` });
+/** The money report for the day that just ended (watch.ts). */
+export async function dailyMoneyReport(title: string, body: string): Promise<void> {
+  await notifyMoneyWatchers({ title, body, url: "/dashboard/accounts/payments?period=yesterday" });
 }
 
 /** A bill sent through HivePay didn't arrive. */

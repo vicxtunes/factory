@@ -172,8 +172,6 @@ export async function resolveAlert(id: string, byName: string): Promise<void> {
   await repo.resolveMoneyAlert(id, byName);
 }
 
-/** The evening money report goes out from this hour, local time. */
-const REPORT_HOUR = 20;
 /** Money recorded after the report is reported from this hour the next morning. */
 const LATE_NOTE_HOUR = 7;
 
@@ -186,20 +184,19 @@ const CHANNEL_NAMES: Record<(typeof CHANNELS)[number], string> = {
 };
 
 /**
- * Once a day, from 8 pm in the business's time zone: what came in today (per
- * method and per person who recorded it, as Accounts → Payments shows it) and
- * whether HivePay agrees (no open alerts). Called every few minutes; the day
- * is claimed first (money_reports), so it goes out once even across restarts.
+ * Once a day, as soon as the day has ended in the business's time zone: what
+ * came in that day (per method and per person who recorded it, as Accounts →
+ * Payments shows it) and whether HivePay agrees (no open alerts). Called every
+ * minute; the day is claimed first (money_reports), so it goes out once even
+ * across restarts.
  */
 export async function sendDailyReport(now = new Date()): Promise<boolean> {
   const scope = await resolveTenantScope();
-  const hour = Number(new Intl.DateTimeFormat("en-GB", { hour: "numeric", hourCycle: "h23", timeZone: scope.timeZone }).format(now));
-  if (hour < REPORT_HOUR) return false;
-  if (!(await repo.claimMoneyReport(localDate(now, scope.timeZone)))) return false;
+  const day = addDays(localDate(now, scope.timeZone), -1);
+  if (!(await repo.claimMoneyReport(day))) return false;
 
-  const day = localDate(now, scope.timeZone);
   const [{ totals }, open, other] = await Promise.all([
-    accounting.payments(scope, { preset: "today" }),
+    accounting.payments(scope, { preset: "yesterday" }),
     repo.openMoneyAlerts(),
     otherMoneyIn(scope, { from: day, to: day }),
   ]);
@@ -211,9 +208,10 @@ export async function sendDailyReport(now = new Date()): Promise<boolean> {
     open.length === 0 ? "HivePay agrees with the app." : `${open.length} payment${open.length === 1 ? "" : "s"} need checking (Accounts).`;
   const body =
     totals.count === 0
-      ? `No payments today.${otherNote} ${check}`
+      ? `No payments.${otherNote} ${check}`
       : `${totals.count} payment${totals.count === 1 ? "" : "s"}: ${methods.join(", ")}. Recorded by ${recorders.join(", ")}.${otherNote} ${check}`;
-  await notifier.dailyMoneyReport(`Today's money: ${formatMoney(totals.total)}`, body);
+  const dayName = new Date(`${day}T12:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
+  await notifier.dailyMoneyReport(`Money for ${dayName}: ${formatMoney(totals.total)}`, body);
   return true;
 }
 
@@ -236,7 +234,6 @@ export async function sendLateMoneyNote(now = new Date()): Promise<boolean> {
   await notifier.dailyMoneyReport(
     `After last night's report: ${formatMoney(total)}`,
     late.map((l) => `${l.customerName} ${formatMoney(l.amount)}`).join(", "),
-    "yesterday",
   );
   return true;
 }

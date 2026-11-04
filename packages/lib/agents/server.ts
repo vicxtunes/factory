@@ -300,7 +300,6 @@ export async function placeForClient(agent: Agent, input: PlacedAgentOrder): Pro
     client,
     agentId: agent.id,
     agentName: agent.name,
-    commissionEligible: true,
     designer: null,
     route: "factory",
     orderType: input.order_type,
