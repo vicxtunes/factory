@@ -21,7 +21,7 @@ import { paidByOrders } from "@repo/lib/wallet/orders";
 import { WalletError } from "@repo/lib/wallet/server/errors";
 import { startOrderPayment } from "@repo/lib/wallet/server/mobile-money";
 
-import { ASSISTANT_NAME, MAX_CHOICES, MAX_IMAGES, MAX_PROMPTS_PER_DAY, canAutoApprove, clientConfirmedAfter, everyItemHasPhotos } from "../core/rules";
+import { ASSISTANT_NAME, MAX_CHOICES, MAX_IMAGES, MAX_ITEM_QTY, MAX_PROMPTS_PER_DAY, STAFF_ALERT_EVERY_MS, mayAlertStaff, canAutoApprove, clientConfirmedAfter, everyItemHasPhotos } from "../core/rules";
 import * as store from "./store";
 import type { PendingItem } from "./store";
 
@@ -187,6 +187,33 @@ export function assistantTools(ctx: ToolContext): AssistantTool[] {
     }),
 
     tool({
+      name: "get_prices",
+      description: "A product's real price today for each size or type, with any running offer already taken off. Use for every price question.",
+      inputSchema: z.object({ product_id: z.string() }),
+      run: async ({ product_id }) => {
+        const [product, settings] = await Promise.all([
+          db.from("products").select("id, name, price, active, product_variants(name, price, active)").eq("id", product_id).maybeSingle(),
+          db.from("showroom_settings").select("show_prices").maybeSingle(),
+        ]);
+        if (!product.data?.active) return "Refused: that product isn't in the catalog.";
+        if (!settings.data?.show_prices) return "Prices aren't shown to clients at the moment. Say reception will confirm the price.";
+        const at = new Date().toISOString();
+        const priced = await Promise.all(
+          [...product.data.product_variants.filter((v) => v.active), ...(product.data.product_variants.length ? [] : [{ name: product.data.name, price: product.data.price }])]
+            .filter((v) => v.price != null)
+            .map(async (v) => {
+              const offer = await db.rpc("discount_offer", { p_product: product_id, p_list_price: v.price, p_at: at });
+              const price = Number((offer.data as { price?: number } | null)?.price ?? v.price);
+              return { size: v.name, price, label: `${v.name} – ${formatMoney(price)}` };
+            }),
+        );
+        if (!priced.length) return `${product.data.name} has no set price; it depends on what's chosen. Say reception will confirm it.`;
+        priced.sort((a, b) => a.price - b.price);
+        return JSON.stringify({ product: product.data.name, from: formatMoney(priced[0].price), sizes: priced });
+      },
+    }),
+
+    tool({
       name: "get_my_orders",
       description: "This client's latest orders: items, progress, total, paid, what's due, and the invoice link.",
       inputSchema: z.object({}),
@@ -295,6 +322,7 @@ export function assistantTools(ctx: ToolContext): AssistantTool[] {
         let total = 0;
         let unknown = false;
         for (const item of items) {
+          if (item.qty > MAX_ITEM_QTY) return `Refused: more than ${MAX_ITEM_QTY} of one item needs the team. Ask if they meant a smaller number; if not, call hand_to_staff.`;
           const { data: product } = await db
             .from("products")
             .select("id, name, category_id, price, active, product_variants(id, name, price, active)")
@@ -483,10 +511,37 @@ export function assistantTools(ctx: ToolContext): AssistantTool[] {
     }),
 
     tool({
+      name: "add_photos_to_order",
+      description: "Puts files the client attached in this chat, or a link, on one of their orders that still needs photos. It's then confirmed and invoiced automatically within a minute or two if it's well ordered.",
+      inputSchema: z.object({ order_id: z.string(), attachment_ids: z.array(z.string()), photo_link: z.string().describe("A link, or empty.") }),
+      run: async ({ order_id, attachment_ids, photo_link }) => {
+        const order = await ownOrder(ctx, order_id);
+        if (!order) return "Refused: not this client's order.";
+        const link = photo_link.trim();
+        if (link && !/^https?:\/\/\S+$/.test(link)) return "Refused: that isn't a valid link.";
+        if (!attachment_ids.length && !link) return "Refused: no files or link given.";
+        const { data: items } = await db.from("order_items").select("id, media_link, order_item_media(id)").eq("order_id", order.id);
+        const missing = (items ?? []).filter((i) => !i.media_link && !i.order_item_media.length);
+        for (const item of missing) {
+          await photosToItem(ctx, item.id, order.order_no, order.id, { attachment_ids, photo_link: link || null } as PendingItem);
+        }
+        did(`Added photos to order ${order.order_no}`);
+        return "Added. Tell the client the order will be confirmed and invoiced here shortly if everything's in order.";
+      },
+    }),
+
+    tool({
       name: "hand_to_staff",
       description: "Tells the team this chat needs a person. You keep answering until one of them writes.",
       inputSchema: z.object({ reason: z.string() }),
       run: async ({ reason }) => {
+        const { data: recent } = await db
+          .from("assistant_runs")
+          .select("actions")
+          .eq("conversation_id", ctx.conversationId)
+          .gte("created_at", new Date(Date.now() - STAFF_ALERT_EVERY_MS).toISOString());
+        const lately = [...ctx.actions, ...(recent ?? []).flatMap((r) => r.actions as string[])];
+        if (!mayAlertStaff(lately)) return "The team was already told about this chat a short while ago. Don't repeat that to the client unless they ask; carry on helping.";
         await tellManagers(`${ctx.client.name} needs a person`, reason, chatHref(ctx.conversationId));
         did(`Asked staff: ${reason}`);
         return "The team has been told. Say someone will reply here, and keep helping with anything else until they do.";

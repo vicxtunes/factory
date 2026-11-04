@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { canAutoApprove, clientConfirmedAfter, costUsd, everyItemHasPhotos, findModel, mayAnswer, projectMonthTotal } from "./rules";
+import { canAutoApprove, clientConfirmedAfter, costUsd, everyItemHasPhotos, findModel, mayAlertStaff, mayAnswer, projectMonthTotal, reviewOutcome } from "./rules";
 
 describe("assistant rules", () => {
   it("approves only when every line has a price", () => {
@@ -34,6 +34,17 @@ describe("assistant rules", () => {
     assert.equal(projectMonthTotal(2, "2026-11-01T00:00:00Z", now, 30), 6);
     assert.equal(projectMonthTotal(1, "2026-11-10T23:00:00Z", now, 30), 30);
     assert.equal(projectMonthTotal(0, null, now, 30), 0);
+  });
+  it("reviews a client's own order", () => {
+    const priced = [{ unitPrice: 5000 }];
+    assert.equal(reviewOutcome(priced, [{ hasPhotos: true }]), "approve");
+    assert.equal(reviewOutcome(priced, [{ hasPhotos: true }, { hasPhotos: false }]), "needs_photos");
+    assert.equal(reviewOutcome([{ unitPrice: null }], [{ hasPhotos: true }]), "needs_price");
+  });
+  it("alerts staff once in a while", () => {
+    assert.equal(mayAlertStaff([]), true);
+    assert.equal(mayAlertStaff(["Prepared an order summary"]), true);
+    assert.equal(mayAlertStaff(["Asked staff: refund"]), false);
   });
   it("prices a run by its model", () => {
     const opus = findModel("claude-opus-5-5")!;

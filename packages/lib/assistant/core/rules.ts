@@ -7,6 +7,9 @@ export const QUIET_BEFORE_ANSWER_MS = 3_000;
 /** Messages older than this aren't answered (the assistant was off, or was down). */
 export const TOO_OLD_TO_ANSWER_MS = 30 * 60_000;
 export const MAX_CHOICES = 6;
+/** Bigger than this for one item is a conversation for staff. */
+export const MAX_ITEM_QTY = 1000;
+export const STAFF_ALERT_EVERY_MS = 60 * 60_000;
 export const MAX_IMAGES = 6;
 export const RUN_STALE_MS = 5 * 60_000;
 
@@ -15,6 +18,20 @@ export type AssistantMode = "off" | "test" | "live";
 /** The order can be approved and invoiced by the assistant: every line has a price. */
 export function canAutoApprove(lines: { unitPrice: number | null }[]): boolean {
   return lines.length > 0 && lines.every((l) => l.unitPrice != null && l.unitPrice > 0);
+}
+
+/** How long after an order is placed its uploads may still be going. */
+export const UPLOAD_GRACE_MS = 2 * 60_000;
+
+/** What a client's own order needs next: "approve" when it's well ordered. */
+export function reviewOutcome(lines: { unitPrice: number | null }[], items: { hasPhotos: boolean }[]): "approve" | "needs_price" | "needs_photos" {
+  if (!canAutoApprove(lines)) return "needs_price";
+  return items.length > 0 && items.every((i) => i.hasPhotos) ? "approve" : "needs_photos";
+}
+
+/** Staff hear about a chat once in a while, not at every message: false if it already asked lately. */
+export function mayAlertStaff(recentActions: string[]): boolean {
+  return !recentActions.some((a) => a.startsWith("Asked staff"));
 }
 
 /** Every item has something to print from. */
