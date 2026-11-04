@@ -77,6 +77,30 @@ export async function withdrawalToApprove(businessName: string, amount: number, 
   );
 }
 
+/** An agent asked for their commission: only the boss answers those. */
+export async function agentWithdrawalToApprove(agentName: string, amount: number): Promise<void> {
+  const { data: bosses } = await createAdminClient().from("profiles").select("id").eq("role", "boss");
+  await Promise.all(
+    (bosses ?? []).map((b: { id: string }) =>
+      notifyActor(
+        { type: "dashboard_user", id: b.id },
+        { title: "Agent withdrawal to approve", body: `${agentName} asked to withdraw ${formatMoney(amount)} of commission.`, url: "/dashboard/agents/withdrawals" },
+      ),
+    ),
+  );
+}
+
+/** An agent's withdrawal was paid, or (`reason`) refused or failed and put back. `to`: their bank's name, or their phone. */
+export async function agentWithdrawalAnswered(clientId: string, amount: number, to: string, reason: string | null): Promise<void> {
+  const where = to.startsWith("+") ? localPhone(to) : to;
+  await notifyActor(
+    { type: "client", id: clientId },
+    reason === null
+      ? { title: "Commission sent", body: `${formatMoney(amount)} was sent to ${where}.`, url: "/agents/commission" }
+      : { title: "Withdrawal not sent", body: `${formatMoney(amount)} is back on your balance: ${reason}`, url: "/agents/commission" },
+  );
+}
+
 /** Where a withdrawal comes from: a business's Business card, or a vendor's wallet. */
 type Wallet = "business" | "vendor";
 const walletUrl = (from: Wallet) => (from === "vendor" ? "/vendors/wallet" : "/studio/wallet");

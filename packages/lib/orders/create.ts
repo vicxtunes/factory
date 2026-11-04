@@ -24,6 +24,8 @@ export interface BuildOrderParams {
   client: { id: string; name: string; email: string | null; phone: string | null };
   agentId: string | null;
   agentName: string | null;
+  // Placed in the agent portal, so it earns commission (packages/lib/agents).
+  commissionEligible?: boolean;
   // Set when route === "designer"; the caller has verified the designer.
   designer: { id: string; name: string } | null;
   route: OrderRoute;
@@ -169,6 +171,7 @@ export async function buildAndInsertOrder(
       client_phone: p.client.phone,
       agent_id: p.agentId,
       agent_name: p.agentName,
+      commission_eligible: p.commissionEligible ?? false,
       order_type: p.orderType,
       delivery_date: clean(p.deliveryDate),
       // clean(), not the raw string: the client portal never collects a

@@ -25,6 +25,7 @@ import type { MobileMoneyCollection } from "../types";
 import * as directory from "./directory";
 import { WalletError } from "./errors";
 import type { ClientViewer } from "./identity";
+import { reconcileAgentPayout } from "./agent";
 import { businessTermsAccepted, reconcilePayout } from "./business";
 import * as notifier from "./notifier";
 import * as hivepay from "./providers/hivepay";
@@ -428,7 +429,9 @@ export async function handleWebhook(rawBody: string, signature: string | null): 
   // A withdrawal's payout delivered or failed: settled from HivePay's own status, like a collection.
   const withdrawalId = reference ? fromPayoutReference(reference) : null;
   if (withdrawalId) {
+    // The id is one business's, vendor's or agent's: each only acts on its own.
     await reconcilePayout(withdrawalId);
+    await reconcileAgentPayout(withdrawalId);
     return answer(200);
   }
   // A bill paid through the app, settled the same way.

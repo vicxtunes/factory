@@ -9,6 +9,7 @@ import { getMyOwing } from "@repo/lib/invoices/actions";
 import { isOptionCategory } from "@repo/lib/catalog-options";
 import { fetchClientItems, fetchMarketingSlides, fetchProductCatalog, fetchShowroomSettings } from "@repo/lib/queries";
 import type { ProductCategory } from "@repo/lib/types";
+import { agentOfClient } from "@repo/lib/agents/server";
 import { vendors } from "@repo/lib/vendors/server";
 import { getMyWalletSummary } from "@repo/lib/wallet/actions";
 
@@ -39,6 +40,7 @@ export default async function ClientSidePage({
 
   // A vendor's account opens on its vendor side.
   if (await vendors.mine(session.client_id)) redirect("/vendors");
+  if (await agentOfClient(session.client_id)) redirect("/agents");
 
   return (
     <ClientShell signedIn name={session.name} avatarUrl={session.avatarUrl}>

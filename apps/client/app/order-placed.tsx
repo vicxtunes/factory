@@ -29,11 +29,14 @@ export function OrderPlaced({
   total,
   needsReview,
   uploadWarnings,
+  forAgent = false,
 }: {
   orderNo: string;
   total: number | null;
   needsReview: boolean;
   uploadWarnings: string[];
+  /** Placed by an agent: their client pays Aming, from the order's page. */
+  forAgent?: boolean;
 }) {
   const symbol = useCurrencySymbol();
   const payNow = total != null && !needsReview;
@@ -50,7 +53,9 @@ export function OrderPlaced({
           <p className="text-base font-bold">Order {orderNo} placed!</p>
           <p className="text-xs text-muted">
             {needsReview
-              ? "We'll call you shortly to confirm the details and final price."
+              ? forAgent
+                ? "We'll call your client to confirm the details and final price."
+                : "We'll call you shortly to confirm the details and final price."
               : "We've received it. Track its progress under Orders."}
           </p>
         </div>
@@ -75,21 +80,21 @@ export function OrderPlaced({
               <li key={i}>{w}</li>
             ))}
           </ul>
-          <p className="mt-1 text-warning-600">You can add them again from Orders.</p>
+          <p className="mt-1 text-warning-600">{forAgent ? "Send them to Aming so staff can add them." : "You can add them again from Orders."}</p>
         </div>
       ) : null}
 
-      {payNow ? <PayLater orderNo={orderNo} /> : null}
+      {payNow && !forAgent ? <PayLater orderNo={orderNo} /> : null}
 
       <div className="flex flex-col gap-2 pt-1 sm:flex-row">
         <Link
-          href="/orders"
+          href={forAgent ? "/agents/orders" : "/orders"}
           className="inline-flex min-h-11 flex-1 items-center justify-center rounded-[var(--radius)] bg-brand-600 px-4 text-sm font-semibold text-white hover:bg-brand-700"
         >
-          Track my order
+          {forAgent ? "See my orders" : "Track my order"}
         </Link>
         <Link
-          href="/new"
+          href={forAgent ? "/agents/orders/new" : "/new"}
           className="inline-flex min-h-11 flex-1 items-center justify-center rounded-[var(--radius)] border border-border bg-surface px-4 text-sm font-medium hover:bg-gray-50 dark:hover:bg-white/5"
         >
           Place another order

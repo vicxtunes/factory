@@ -1,9 +1,14 @@
+import Link from "next/link";
+
 import { MoneyWeOweBoard } from "@repo/ui/production/MoneyWeOweBoard";
 import { RowsSkeleton, StatTilesSkeleton } from "@repo/ui/skeletons/blocks";
 import { Loading } from "@repo/ui/skeletons/Loading";
 import { localDate } from "@repo/lib/accounting/core/period";
+import { totalOwedToAgents } from "@repo/lib/agents/server";
 import { requireAccountsAccess } from "@repo/lib/accounting/index.server";
+import { formatMoney } from "@repo/lib/currency/format";
 import { moneyWeOwe } from "@repo/lib/production/server";
+import { fetchBaseCurrencySymbol } from "@repo/lib/queries";
 import { resolveTenantScope } from "@repo/lib/tenancy/server/resolve";
 
 export const dynamic = "force-dynamic";
@@ -33,6 +38,17 @@ export default async function MoneyWeOwePage() {
 async function Owed() {
   const scope = await resolveTenantScope();
   const today = localDate(new Date(), scope.timeZone);
-  const view = await moneyWeOwe.overview(scope, today);
-  return <MoneyWeOweBoard accounts={view.accounts} totals={view.totals} open={view.open} today={today} basePath="/dashboard/accounts/owed" />;
+  const [view, toAgents, symbol] = await Promise.all([moneyWeOwe.overview(scope, today), totalOwedToAgents(), fetchBaseCurrencySymbol()]);
+  return (
+    <div className="space-y-4">
+      <MoneyWeOweBoard accounts={view.accounts} totals={view.totals} open={view.open} today={today} basePath="/dashboard/accounts/owed" />
+      {/* Commission earned and not yet withdrawn: owed, but not a loan. */}
+      {toAgents > 0 ? (
+        <Link href="/dashboard/agents" className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-surface p-4 text-sm shadow-theme-xs hover:bg-background">
+          <span className="font-medium">Agents&apos; commission balances</span>
+          <span className="font-semibold tnum">{formatMoney(toAgents, symbol)}</span>
+        </Link>
+      ) : null}
+    </div>
+  );
 }

@@ -7,10 +7,11 @@
 // (packages/lib/wallet/server/watch.ts). Each morning recurring expenses are
 // created and the boss and supervisors hear what's due.
 
+import { tellAgents } from "@repo/lib/agents/server";
 import { reviewClientOrders } from "@repo/lib/assistant/server/review";
 import { answerWaitingChats } from "@repo/lib/assistant/server/run";
 import { applyStudioPayment } from "@repo/lib/studio-payments/server";
-import { reconcileWaitingHivepay, reconcileExpensePayouts, sendDailyMoneyReport, sendExpenseReminder, sendLateMoneyNote, watchMoney } from "@repo/lib/wallet/webhooks";
+import { reconcileAgentPayouts, reconcileWaitingHivepay, reconcileExpensePayouts, sendDailyMoneyReport, sendExpenseReminder, sendLateMoneyNote, watchMoney } from "@repo/lib/wallet/webhooks";
 
 const EVERY_MS = 2 * 60_000;
 const ASSISTANT_EVERY_MS = 2_000;
@@ -42,6 +43,8 @@ if (process.env.NODE_ENV === "production" && process.env.NEXT_PUBLIC_TEST_COPY !
     for (const id of await reconcileWaitingHivepay()) await applyStudioPayment(id);
   });
   every(EVERY_MS, "hivepay: checking bill payouts", reconcileExpensePayouts);
+  every(EVERY_MS, "hivepay: checking agent payouts", () => reconcileAgentPayouts(null));
+  every(EVERY_MS, "telling agents", tellAgents);
   every(WATCH_EVERY_MS, "money watch", watchMoney);
   every(REPORT_CHECK_EVERY_MS, "daily money report", sendDailyMoneyReport);
   every(REPORT_CHECK_EVERY_MS, "late money note", sendLateMoneyNote);
