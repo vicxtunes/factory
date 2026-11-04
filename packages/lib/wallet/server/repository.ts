@@ -784,7 +784,7 @@ export async function listMoneyAccounts(): Promise<MoneyAccount[]> {
   return data ?? [];
 }
 
-/** Claims yesterday's late check once; null if it's done or the evening report never went out. Returns when the report was sent. */
+/** Claims yesterday's late check once; null if it's done or the day's report never went out. Returns when the report was sent. */
 export async function claimLateMoneyCheck(day: string): Promise<string | null> {
   const { data, error } = await createAdminClient()
     .from("money_reports")
@@ -834,7 +834,7 @@ export async function resolveMoneyAlert(id: string, byName: string): Promise<voi
   if (error) throwDbError(error);
 }
 
-/** Takes the evening money report's turn for a day; false when it has already gone out. */
+/** Takes the daily money report's turn for a day; false when it has already gone out. */
 export async function claimMoneyReport(day: string): Promise<boolean> {
   const { error } = await createAdminClient().from("money_reports").insert({ day });
   if (!error) return true;
