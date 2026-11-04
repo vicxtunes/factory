@@ -7,12 +7,14 @@
 // (packages/lib/wallet/server/watch.ts). Each morning recurring expenses are
 // created and the boss and supervisors hear what's due.
 
+import { reviewClientOrders } from "@repo/lib/assistant/server/review";
 import { answerWaitingChats } from "@repo/lib/assistant/server/run";
 import { applyStudioPayment } from "@repo/lib/studio-payments/server";
 import { reconcileWaitingHivepay, reconcileExpensePayouts, sendDailyMoneyReport, sendExpenseReminder, sendLateMoneyNote, watchMoney } from "@repo/lib/wallet/webhooks";
 
 const EVERY_MS = 2 * 60_000;
 const ASSISTANT_EVERY_MS = 2_000;
+const ASSISTANT_REVIEW_EVERY_MS = 60_000;
 const WATCH_EVERY_MS = 60 * 60_000;
 const REPORT_CHECK_EVERY_MS = 10 * 60_000;
 
@@ -49,4 +51,5 @@ if (process.env.NODE_ENV === "production" && process.env.NEXT_PUBLIC_TEST_COPY !
 // The assistant answers clients' chats wherever it has a key, except the test copy.
 if ((process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY) && process.env.NEXT_PUBLIC_TEST_COPY !== "1") {
   every(ASSISTANT_EVERY_MS, "assistant", answerWaitingChats);
+  every(ASSISTANT_REVIEW_EVERY_MS, "assistant order review", reviewClientOrders);
 }

@@ -60,6 +60,9 @@ function toMessages(rows: ChatRow[]): ChatTurn[] {
 /** What changes from call to call. The chat shows only words, so it says what's waiting behind them. */
 async function contextFor(conversationId: string, clientName: string): Promise<string> {
   const lines = [`Today is ${new Date().toISOString().slice(0, 10)}. You're talking to ${clientName}.`];
+  const { data: chat } = await createAdminClient().from("chat_conversations").select("orders(id, order_no)").eq("id", conversationId).maybeSingle();
+  const order = chat?.orders as unknown as { id: string; order_no: string } | null;
+  if (order) lines.push(`This chat is about order ${order.order_no} (order_id ${order.id}). Anything the client says or sends here is about it unless they say otherwise.`);
   const pending = await store.getPendingOrder(conversationId);
   if (pending?.posted_at) {
     lines.push(`This order summary has been shown to the client and is ready to place:\n${pending.summary}\nIf their latest message agrees to it, call place_order now, without prepare_order. If they change something, call prepare_order again.`);

@@ -13,7 +13,11 @@ products and the app. Runs on OpenAI or Claude (`server/providers.ts`, official 
 - **Enforced in code (`core/rules.ts`, `server/tools.ts`), whatever the model says:** the client comes from the chat,
   never from a tool's input; orders need photos or a link on every item; an order is placed only from a summary the
   client answered in a later message, once; it approves and invoices only when every line has a price (anything else
-  waits for reception); 3 payment prompts a day. It has no tool to mark money paid, spend the wallet, refund, cancel,
+  waits for reception); 3 payment prompts a day; at most 1,000 of one item; one staff alert per chat per hour. It has no tool to mark money paid, spend the wallet, refund, cancel,
   discount or route to production, and it never asks HivePay for status.
 - **Sent to the chosen AI company:** chat text, names, phone on file, order and money figures for that client. Not the photos: it
   sees only file names and ids. Promo codes go to staff.
+
+**Orders from the order form** (`server/review.ts`, every minute, 2 minutes after placing so uploads can finish, for 24 hours): every item
+priced and with photos or a link means approved, invoiced and the client asked to pay in the order's chat. Otherwise it tells the client once
+what's missing: it asks for photos (added from chat, then reviewed again), or says reception will confirm the price. Same off/test/live switch.

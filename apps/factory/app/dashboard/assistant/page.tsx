@@ -13,6 +13,18 @@ export const metadata = { title: "Assistant" };
 
 // The boss's switch for the chat assistant (packages/lib/assistant): who it
 // answers, its daily limit, and what it has said and done.
+const CAPABILITIES = [
+  "Answers clients in support and order chats, and shows when it's typing",
+  "Takes orders from the client's own words and asks for photos or a link",
+  "Approves and invoices orders when every item has a price",
+  "Checks orders from the order form, confirms the well-ordered ones and asks for what's missing",
+  "Asks for payment and sends MTN or Airtel prompts",
+  "Shares invoice and receipt links",
+  "Gives real prices with tappable size buttons, product photos and typical times",
+  "Answers about the client's own orders, wallet and how to use the app",
+  "Calls staff when it needs a person, and goes quiet once a person writes",
+];
+
 export default async function AssistantPage() {
   const session = await getDashboardSession();
   const developer = session?.email === SUPPORT_OWNER_EMAIL;
@@ -22,7 +34,10 @@ export default async function AssistantPage() {
   return (
     <div className="mx-auto grid w-full max-w-6xl gap-6 p-4 lg:grid-cols-[22rem_1fr]">
       <section className="h-fit rounded-xl border border-border bg-surface p-4">
-        <h1 className="text-lg font-semibold">Assistant</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-lg font-semibold">Assistant</h1>
+          <span className="rounded-full border border-border px-2 py-0.5 text-xs font-medium text-muted">v3</span>
+        </div>
         <dl className="mt-2 grid grid-cols-[1fr_auto] gap-x-4 gap-y-1 text-sm">
           <dt className="text-muted">Spent today</dt>
           <dd className="text-right tabular-nums">US${spent.toFixed(2)}</dd>
@@ -37,6 +52,14 @@ export default async function AssistantPage() {
         </dl>
         <div className="mt-4">
           <AssistantForm settings={settings} canChooseModel={developer} />
+        </div>
+        <div className="mt-5 border-t border-border pt-4">
+          <h2 className="text-sm font-semibold">What it can do</h2>
+          <ul className="mt-2 list-disc space-y-1 pl-4 text-sm text-muted">
+            {CAPABILITIES.map((c) => (
+              <li key={c}>{c}</li>
+            ))}
+          </ul>
         </div>
       </section>
       <section className="min-w-0">
