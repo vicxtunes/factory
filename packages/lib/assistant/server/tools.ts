@@ -187,6 +187,33 @@ export function assistantTools(ctx: ToolContext): AssistantTool[] {
     }),
 
     tool({
+      name: "get_prices",
+      description: "A product's real price today for each size or type, with any running offer already taken off. Use for every price question.",
+      inputSchema: z.object({ product_id: z.string() }),
+      run: async ({ product_id }) => {
+        const [product, settings] = await Promise.all([
+          db.from("products").select("id, name, price, active, product_variants(name, price, active)").eq("id", product_id).maybeSingle(),
+          db.from("showroom_settings").select("show_prices").maybeSingle(),
+        ]);
+        if (!product.data?.active) return "Refused: that product isn't in the catalog.";
+        if (!settings.data?.show_prices) return "Prices aren't shown to clients at the moment. Say reception will confirm the price.";
+        const at = new Date().toISOString();
+        const priced = await Promise.all(
+          [...product.data.product_variants.filter((v) => v.active), ...(product.data.product_variants.length ? [] : [{ name: product.data.name, price: product.data.price }])]
+            .filter((v) => v.price != null)
+            .map(async (v) => {
+              const offer = await db.rpc("discount_offer", { p_product: product_id, p_list_price: v.price, p_at: at });
+              const price = Number((offer.data as { price?: number } | null)?.price ?? v.price);
+              return { size: v.name, price, label: `${v.name} – ${formatMoney(price)}` };
+            }),
+        );
+        if (!priced.length) return `${product.data.name} has no set price; it depends on what's chosen. Say reception will confirm it.`;
+        priced.sort((a, b) => a.price - b.price);
+        return JSON.stringify({ product: product.data.name, from: formatMoney(priced[0].price), sizes: priced });
+      },
+    }),
+
+    tool({
       name: "get_my_orders",
       description: "This client's latest orders: items, progress, total, paid, what's due, and the invoice link.",
       inputSchema: z.object({}),
