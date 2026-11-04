@@ -31,7 +31,7 @@ function Withdrawal({ withdrawal: w, accounts }: { withdrawal: Row; accounts: Mo
   const [sheet, setSheet] = useState<"refuse" | "paid" | null>(null);
   const [reason, setReason] = useState("");
   const [reference, setReference] = useState("");
-  const [account, setAccount] = useState(accounts[0]?.id ?? "");
+  const [account, setAccount] = useState((accounts.find((a) => a.kind === "bank") ?? accounts[0])?.id ?? "");
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
@@ -95,54 +95,58 @@ function Withdrawal({ withdrawal: w, accounts }: { withdrawal: Row; accounts: Mo
         </div>
       )}
 
-      <FormSheet open={sheet === "refuse"} onClose={() => setSheet(null)} title="Refuse withdrawal">
-        <form
-          className="space-y-4"
-          onSubmit={(e) => {
-            e.preventDefault();
-            run(() => refuseAgentWithdrawal(w.id, reason));
-          }}
-        >
-          <Field label="Why? The agent sees this">
-            <TextInput value={reason} onChange={(e) => setReason(e.target.value)} required />
-          </Field>
-          <p className="text-xs text-muted">{money(w.amount)} goes back on their balance.</p>
-          {error ? <p className="text-sm text-error-600">{error}</p> : null}
-          <Button type="submit" variant="danger" className="w-full" loading={pending} disabled={pending}>
-            Refuse
-          </Button>
-        </form>
-      </FormSheet>
+      {sheet === "refuse" ? (
+        <FormSheet open onClose={() => setSheet(null)} title="Refuse withdrawal">
+          <form
+            className="space-y-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              run(() => refuseAgentWithdrawal(w.id, reason));
+            }}
+          >
+            <Field label="Why? The agent sees this">
+              <TextInput value={reason} onChange={(e) => setReason(e.target.value)} required />
+            </Field>
+            <p className="text-xs text-muted">{money(w.amount)} goes back on their balance.</p>
+            {error ? <p className="text-sm text-error-600">{error}</p> : null}
+            <Button type="submit" variant="danger" className="w-full" loading={pending} disabled={pending}>
+              Refuse
+            </Button>
+          </form>
+        </FormSheet>
+      ) : null}
 
-      <FormSheet open={sheet === "paid"} onClose={() => setSheet(null)} title="Mark as paid">
-        <form
-          className="space-y-4"
-          onSubmit={(e) => {
-            e.preventDefault();
-            run(() => markAgentWithdrawalPaid(w.id, account, reference));
-          }}
-        >
-          <p className="text-sm text-muted">
-            Send {money(w.amount)} to {w.bankAccountName}, {w.bankName} {w.bankAccountNumber}, then record it here.
-          </p>
-          <Field label="Sent from">
-            <Select value={account} onChange={(e) => setAccount(e.target.value)} required>
-              {accounts.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <Field label="Bank reference">
-            <TextInput value={reference} onChange={(e) => setReference(e.target.value)} required />
-          </Field>
-          {error ? <p className="text-sm text-error-600">{error}</p> : null}
-          <Button type="submit" variant="primary" className="w-full" loading={pending} disabled={pending}>
-            Record payment
-          </Button>
-        </form>
-      </FormSheet>
+      {sheet === "paid" ? (
+        <FormSheet open onClose={() => setSheet(null)} title="Mark as paid">
+          <form
+            className="space-y-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              run(() => markAgentWithdrawalPaid(w.id, account, reference));
+            }}
+          >
+            <p className="text-sm text-muted">
+              Send {money(w.amount)} to {w.bankAccountName}, {w.bankName} {w.bankAccountNumber}, then record it here.
+            </p>
+            <Field label="Sent from">
+              <Select value={account} onChange={(e) => setAccount(e.target.value)} required>
+                {accounts.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Bank reference">
+              <TextInput value={reference} onChange={(e) => setReference(e.target.value)} required />
+            </Field>
+            {error ? <p className="text-sm text-error-600">{error}</p> : null}
+            <Button type="submit" variant="primary" className="w-full" loading={pending} disabled={pending}>
+              Record payment
+            </Button>
+          </form>
+        </FormSheet>
+      ) : null}
     </li>
   );
 }

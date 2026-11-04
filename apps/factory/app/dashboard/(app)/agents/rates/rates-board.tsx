@@ -89,7 +89,9 @@ function RateRow({ rate }: { rate: CategoryRate }) {
         }}
       >
         <span className="min-w-0 flex-1 truncate text-sm font-medium">{rate.categoryName}</span>
-        <TextInput aria-label={`${rate.categoryName} rate, percent`} inputMode="decimal" className="w-20 text-right" value={value} onChange={(e) => setValue(e.target.value)} placeholder="None" />
+        <div className="w-20 shrink-0">
+          <TextInput aria-label={`${rate.categoryName} rate, percent`} inputMode="decimal" className="text-right" value={value} onChange={(e) => setValue(e.target.value)} placeholder="None" />
+        </div>
         <span className="text-sm text-muted">%</span>
         <Button type="submit" variant="secondary" className="min-h-9 text-xs" loading={pending} disabled={pending || !changed}>
           Save
