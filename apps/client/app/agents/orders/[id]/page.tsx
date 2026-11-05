@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { z } from "zod";
 
+import { payFirstWording } from "@repo/lib/agents/core";
 import { agentClient, agentOrder } from "@repo/lib/agents/server";
 import { clientUrl } from "@repo/lib/client-portal/paths";
 import { formatMoney } from "@repo/lib/currency/format";
@@ -73,9 +74,15 @@ export default async function AgentOrderPage({ params }: { params: Promise<{ id:
           <div className="space-y-5">
             <section className="rounded-2xl border border-border bg-surface p-4 shadow-theme-xs sm:p-5">
               <h2 className="text-sm font-semibold">Commission</h2>
-              <p className="mt-2 text-2xl font-bold tnum">{money(order.commission.status === "pending" ? order.commission.amount : order.commission.creditedAmount)}</p>
-              <CommissionStatusText status={order.commission.status} />
-              <p className="mt-1 text-xs text-muted">{COMMISSION_NOTES[order.commission.status]}</p>
+              {order.earns ? (
+                <>
+                  <p className="mt-2 text-2xl font-bold tnum">{money(order.commission.status === "pending" ? order.commission.amount : order.commission.creditedAmount)}</p>
+                  <CommissionStatusText status={order.commission.status} />
+                  <p className="mt-1 text-xs text-muted">{COMMISSION_NOTES[order.commission.status]}</p>
+                </>
+              ) : (
+                <p className="mt-2 text-sm text-muted">No commission: this order was placed before commission started on 4 Nov 2026.</p>
+              )}
             </section>
 
             <section className="space-y-3 rounded-2xl border border-border bg-surface p-4 shadow-theme-xs sm:p-5">
@@ -98,6 +105,7 @@ export default async function AgentOrderPage({ params }: { params: Promise<{ id:
                   </div>
                 </dl>
               )}
+              {order.earns && order.stage !== "cancelled" ? <p className="text-xs font-medium text-warning-700">{payFirstWording(order.price, money)}</p> : null}
               {canPay ? <OrderPayment orderId={order.id} phone={client?.status === "active" ? client.phone : null} invoiceUrl={order.invoiceToken ? clientUrl(`/invoice/${order.invoiceToken}`) : null} /> : null}
             </section>
           </div>

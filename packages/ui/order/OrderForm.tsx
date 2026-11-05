@@ -15,7 +15,9 @@ import { formatMoney } from "@repo/lib/currency/format";
 import type { DiscountKind, LineDiscount, Offer } from "@repo/lib/discounts/core/model";
 import { discountedPrice, validateLineDiscount } from "@repo/lib/discounts/core/rules";
 import { addMediaLink } from "@repo/lib/storage/actions";
+import { enqueueUpload, flushQueuedUploads } from "@repo/lib/offline-queue/enqueue";
 import { uploadFileToStorage } from "@repo/lib/storage/upload-client";
+import { UploadQueueStatus } from "../media/UploadQueueStatus";
 import type {
   ClientDuplicateHit,
   CreateOrderResult,
@@ -147,8 +149,11 @@ export function OrderForm({
     orderNo: string;
     route: "factory" | "designer";
     routedTo: string | null;
+    /** In an agent's name: waits in Client Orders until 80% is paid. */
+    forAgent: boolean;
     notes: string[];
     warnings: string[];
+    uploads: { id: string; name: string }[];
   } | null>(null);
   const [pending, startTransition] = useTransition();
   const [uploadStatus, setUploadStatus] = useState<string | null>(null);
@@ -221,14 +226,22 @@ export function OrderForm({
 
       const notes: string[] = [...res.warnings];
       const warnings: string[] = [];
+      // Photos are kept on this device and uploaded in the background
+      // (packages/lib/offline-queue), so none is lost to a dropped connection.
+      const uploads: { id: string; name: string }[] = [];
       for (const { formIndex, itemId } of res.items) {
         const files = items[formIndex]?.files ?? [];
         for (const file of files) {
-          setUploadStatus(`Uploading "${file.name}"…`);
-          const uploadRes = await uploadFileToStorage(itemId, file, (p) =>
-            setUploadStatus(`Uploading "${file.name}" — ${Math.round(p * 100)}%`),
-          );
-          if (!uploadRes.ok) warnings.push(uploadRes.error);
+          try {
+            uploads.push({ id: await enqueueUpload(itemId, file), name: file.name });
+          } catch {
+            // No storage on this device (private browsing): upload it now instead.
+            setUploadStatus(`Uploading "${file.name}"…`);
+            const uploadRes = await uploadFileToStorage(itemId, file, (p) =>
+              setUploadStatus(`Uploading "${file.name}" — ${Math.round(p * 100)}%`),
+            );
+            if (!uploadRes.ok) warnings.push(uploadRes.error);
+          }
         }
 
         const links = parseLinks(items[formIndex]?.linksText ?? "");
@@ -246,7 +259,8 @@ export function OrderForm({
             ? "you"
             : (designers.find((d) => d.id === general.designerId)?.name ?? "the designer")
           : null;
-      setConfirmed({ orderNo: res.orderNo, route: general.route, routedTo, notes, warnings });
+      setConfirmed({ orderNo: res.orderNo, route: general.route, routedTo, forAgent: !!general.agentId, notes, warnings, uploads });
+      if (uploads.length) void flushQueuedUploads();
       setGeneral(emptyGeneral(variant));
       setItems([emptyItem()]);
       setStep(1);
@@ -260,9 +274,11 @@ export function OrderForm({
         <div className="rounded-[var(--radius)] border border-[var(--normal)]/40 bg-[var(--normal)]/10 p-3 text-sm">
           <p>
             Order <span className="font-semibold tnum">{confirmed.orderNo}</span> created
-            {confirmed.route === "designer"
-              ? ` — kept with ${confirmed.routedTo} for design work.`
-              : " — sent straight to the factory."}
+            {confirmed.forAgent
+              ? " — an agent's order: it waits in Client Orders and goes to production once 80% of the price is paid."
+              : confirmed.route === "designer"
+                ? ` — kept with ${confirmed.routedTo} for design work.`
+                : " — sent straight to the factory."}
           </p>
           {confirmed.notes.length > 0 ? (
             <ul className="mt-2 list-disc space-y-0.5 pl-4 text-xs text-muted">
@@ -270,6 +286,11 @@ export function OrderForm({
                 <li key={i}>{n}</li>
               ))}
             </ul>
+          ) : null}
+          {confirmed.uploads.length ? (
+            <div className="mt-2">
+              <UploadQueueStatus uploads={confirmed.uploads} />
+            </div>
           ) : null}
           {confirmed.warnings.length > 0 ? (
             <ul className="mt-2 list-disc space-y-0.5 pl-4 text-xs text-[var(--rush)]">
@@ -436,7 +457,7 @@ function GeneralStep({
             ))}
           </Select>
         </Field>
-        <Field label="Agent (optional)" hint="The order goes on this agent's account and earns them commission">
+        <Field label="Agent (optional)" hint="The order goes on this agent's account and earns them commission. It waits in Client Orders until 80% is paid">
           <Select
             value={general.agentId}
             onChange={(e) => setGeneral({ ...general, agentId: e.target.value })}

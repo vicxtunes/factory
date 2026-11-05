@@ -13,6 +13,8 @@ export interface QueuedUpload {
   fileName: string;
   file: File;
   createdAt: number;
+  /** The uploader and the office were told it's having trouble (reportUploadTrouble). */
+  reported?: boolean;
 }
 
 function openDb(): Promise<IDBDatabase> {

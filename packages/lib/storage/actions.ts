@@ -7,6 +7,8 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@repo/lib/supabase/admin";
 import { getClientSession, requireMediaUploadAccess } from "@repo/lib/auth/session";
 import { filesCaller } from "@repo/lib/files/access";
+import { clientPath } from "@repo/lib/client-portal/paths";
+import { notifyActor } from "@repo/lib/push/send";
 import { logOrderEvent, resolveActor, type AuditActor } from "@repo/lib/audit/log";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { MEDIA_BUCKET, safeStorageSegment } from "./client";
@@ -115,6 +117,50 @@ async function recordItemMedia(orderItemId: string, path: string, mimeType: stri
   revalidatePath("/dashboard");
   revalidatePath("/factory");
   revalidatePath("/graphics");
+  return { ok: true };
+}
+
+// A photo picked for an order still hasn't uploaded after its retries. It
+// stays queued on the uploader's device (packages/lib/offline-queue) and is
+// tried again whenever the app is open, but nobody should be left guessing:
+// the order's history says so, the uploader is told what happens next, and so
+// is the office, so they can ask for it if it never arrives.
+export async function reportUploadTrouble(orderItemId: string, fileName: string): Promise<Result> {
+  await requireMediaUploadAccess();
+  const admin = createAdminClient();
+  const { data: item } = await admin
+    .from("order_items")
+    .select("order_id, product, order:orders!inner (order_no, client_name)")
+    .eq("id", orderItemId)
+    .maybeSingle<{ order_id: string; product: string; order: { order_no: string; client_name: string | null } }>();
+  if (!item) return { ok: false, error: "Item not found." };
+
+  const actor = await resolveActor();
+  const name = fileName.slice(0, 80);
+  await logOrderEvent({ orderId: item.order_id, orderItemId, actor, action: "photo_upload_trouble", detail: { itemLabel: item.product, fileName: name } });
+
+  const orderNo = item.order.order_no;
+  if (actor && actor.type !== "dashboard_user") {
+    await notifyActor(actor, {
+      title: "Photo not uploaded yet",
+      body: `"${name}" for order ${orderNo} hasn't uploaded. It's kept on this device and will finish next time Aming is open with internet. If it doesn't, add it again on the order.`,
+      url: actor.type === "client" ? clientPath("/orders") : undefined,
+    });
+  }
+  const { data: office } = await admin.from("profiles").select("id").in("role", ["receptionist", "supervisor", "boss"]);
+  const by = actor?.type === "dashboard_user" ? actor.name : (item.order.client_name ?? actor?.name ?? "the client");
+  await Promise.all(
+    (office ?? []).map((p: { id: string }) =>
+      notifyActor(
+        { type: "dashboard_user", id: p.id },
+        {
+          title: `Order ${orderNo}: photo missing`,
+          body: `"${name}" (${item.product}) from ${by} hasn't uploaded yet. It keeps trying from their device; if it doesn't arrive, ask them to send it again.`,
+          url: "/dashboard/orders",
+        },
+      ),
+    ),
+  );
   return { ok: true };
 }
 
