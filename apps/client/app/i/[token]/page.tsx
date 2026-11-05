@@ -1,17 +1,14 @@
-import type { Metadata, Viewport } from "next";
 import { notFound } from "next/navigation";
-import { cache } from "react";
 
 import { DocumentPayBar } from "@repo/ui/billing/DocumentPayBar";
 import { InvoicePdf } from "@repo/ui/billing/DocumentPdf";
 import { InvoiceStatusBadge } from "@repo/ui/billing/StatusBadges";
 import { shareTokenSchema } from "@repo/lib/billing/core";
-import { invoices } from "@repo/lib/billing/server";
 import { businessTermsAccepted } from "@repo/lib/wallet/studio";
 
 import { BrandStyle } from "../../brand-style";
 import { dueOn } from "../../document-due";
-import { studioDocumentMetadata, studioDocumentViewport } from "../../studio-document-head";
+import { load } from "./load";
 
 // A studio's invoice link (client.<domain>/i/<token>), sent to its client.
 // No sign-in: holding the link is the permission, and it shows only this one
@@ -19,25 +16,6 @@ import { studioDocumentMetadata, studioDocumentViewport } from "../../studio-doc
 // summary pinned underneath with "Pay" (by mobile money) while something's left.
 
 export const dynamic = "force-dynamic";
-// Read once per request, for the head and the page.
-const load = cache(async (token: string) => {
-  const parsed = shareTokenSchema.safeParse(token);
-  return parsed.success ? invoices.byLink(parsed.data) : null;
-});
-
-type Params = { params: Promise<{ token: string }> };
-
-// The studio's brand in the tab and the share preview, never Aming's (../../studio-document-head.ts).
-export async function generateMetadata({ params }: Params): Promise<Metadata> {
-  const found = await load((await params).token);
-  return found ? studioDocumentMetadata(found.scope.tenantId, found.issuer, "Invoice") : { title: { absolute: "Invoice" }, robots: { index: false, follow: false } };
-}
-
-export async function generateViewport({ params }: Params): Promise<Viewport> {
-  const found = await load((await params).token);
-  return found ? studioDocumentViewport(found.issuer) : {};
-}
-
 export default async function InvoiceLinkPage({ params }: { params: Promise<{ token: string }> }) {
   const parsed = shareTokenSchema.safeParse((await params).token);
   const found = parsed.success ? await load(parsed.data) : null;

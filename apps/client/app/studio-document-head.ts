@@ -3,7 +3,7 @@ import type { Metadata, Viewport } from "next";
 import type { Issuer } from "@repo/lib/billing/core";
 import { portal } from "@repo/lib/studio-portal/server";
 
-// The head of a studio's document link (/q, /i, /r): the studio's brand,
+// The head of a studio's document link (/q, /i, /r; set in each one's layout, which a 404 keeps): the studio's brand,
 // never Aming's. Its name in the tab, the share preview (WhatsApp…) and the
 // home screen, its icon and install manifest (from its own pages, ./[slug]),
 // and its color as the browser's.
@@ -26,5 +26,19 @@ export async function studioDocumentMetadata(tenantId: string, issuer: Issuer, t
     robots: { index: false, follow: false },
   };
 }
+
+// A dead link: no one's brand (Next drops the page's own head for a 404, so
+// without this Aming's defaults would show).
+export const LINK_GONE_METADATA: Metadata = {
+  title: { absolute: "Link not available" },
+  description: null,
+  applicationName: null,
+  appleWebApp: null,
+  openGraph: null,
+  twitter: null,
+  icons: null,
+  manifest: null,
+  robots: { index: false, follow: false },
+};
 
 export const studioDocumentViewport = (issuer: Issuer): Viewport => ({ themeColor: issuer.color });
