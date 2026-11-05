@@ -480,6 +480,11 @@ export async function forgetThisDevice(): Promise<void> {
   await forgetDevice();
 }
 
+/** Whether this browser is signed in, for the "still using Aming?" reminder (./idle-lock.tsx). */
+export async function isSignedIn(): Promise<boolean> {
+  return !!(await getClientSession());
+}
+
 /**
  * Idle too long (./idle-lock.tsx): signs this browser out, so it opens on the
  * lock screen. Only when it remembers the signed-in account, else the way
