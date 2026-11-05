@@ -4,8 +4,8 @@ import Image from "next/image";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { ActionMenu, type ActionMenuEntry } from "@repo/ui/ActionMenu";
+import { Lightbox } from "@repo/ui/Lightbox";
 import { Spinner } from "@repo/ui/Spinner";
-import { useCloseOnBack } from "@repo/ui/navigation/back";
 
 import { getCurrentActor } from "@repo/lib/notes/actions";
 import { deleteOrderItemMedia, getMyMediaDownloads, markMediaDownloaded, updateMediaLink } from "@repo/lib/storage/actions";
@@ -13,7 +13,7 @@ import { canOptimizeImage } from "@repo/lib/storage/client";
 import { replaceFileInStorage } from "@repo/lib/storage/upload-client";
 import type { OrderItemMedia } from "@repo/lib/types";
 
-import { CheckCircleIcon, CheckIcon, CloseIcon, CloudDownloadIcon, DocumentIcon, DownloadIcon, ExternalIcon, LinkIcon } from "./icons";
+import { CheckCircleIcon, CheckIcon, CloudDownloadIcon, DocumentIcon, DownloadIcon, ExternalIcon, LinkIcon } from "./icons";
 
 // Chromium-only File System Access API — feature-detected. Where it's not
 // available (Firefox/Safari) downloads still work, just via the browser's
@@ -174,7 +174,8 @@ function isPastedLink(file: OrderItemMedia): boolean {
   return !file.storage_path && !file.cloudinary_public_id;
 }
 
-type Preview = { url: string; name: string; downloadHref: string; onSaved?: () => void };
+/** A photo as the viewer shows it, with what its Download and Original buttons need. */
+type ViewerPhoto = { key: string; src: string; thumb: string; alt: string; downloadHref: string; onSaved?: () => void };
 
 /** Whether staff have downloaded a file yet (only where downloads are tracked). */
 /** When the person viewing downloaded it; null = still pending for them. */
@@ -360,6 +361,7 @@ function MediaTile({
   editable,
   actor,
   onSaved,
+  onShow,
   onOpen,
   onChanged,
 }: {
@@ -369,6 +371,8 @@ function MediaTile({
   editable: boolean;
   actor: Viewer | null;
   onSaved?: () => void;
+  /** The photo was revealed with "Show photo" (staff screens). */
+  onShow: () => void;
   onOpen: () => void;
   onChanged?: () => void;
 }) {
@@ -409,6 +413,7 @@ function MediaTile({
         onClick={() => {
           setLoading(true);
           setShown(true);
+          onShow();
         }}
         aria-label={`Show ${name}`}
         className="group/load flex h-full w-full flex-col items-center justify-center gap-1.5 bg-gradient-to-br from-gray-200 via-gray-100 to-gray-300 text-gray-700 dark:from-white/10 dark:via-white/5 dark:to-white/15 dark:text-gray-200"
@@ -573,47 +578,23 @@ function ZipButton({
   );
 }
 
-function Lightbox({ preview, onClose }: { preview: Preview; onClose: () => void }) {
-  const download = useDownload(preview.downloadHref, preview.name, preview.onSaved);
-  useCloseOnBack(true, onClose);
-
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
-    }
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
+// The viewer's buttons for the open photo: save it (as the tile's corner
+// button does, so a staff download counts) and open the original.
+function ViewerActions({ photo }: { photo: ViewerPhoto }) {
+  const download = useDownload(photo.downloadHref, photo.alt, photo.onSaved);
   const barButton =
-    "inline-flex h-9 items-center gap-1.5 rounded-lg bg-white/10 px-3 text-xs font-medium text-white backdrop-blur hover:bg-white/20 disabled:opacity-60";
-
+    "inline-flex size-11 items-center justify-center gap-1.5 rounded-full bg-white/10 text-sm font-medium text-white hover:bg-white/20 disabled:opacity-60 sm:w-auto sm:px-4";
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-black/90" onClick={onClose} role="dialog" aria-modal aria-label={preview.name}>
-      <div className="flex items-center gap-2 px-4 py-3" onClick={(e) => e.stopPropagation()}>
-        <p className="min-w-0 flex-1 truncate text-sm font-medium text-white">{preview.name}</p>
-        <button type="button" onClick={download.start} disabled={download.busy} className={barButton}>
-          {download.busy ? <Spinner className="h-3.5 w-3.5" /> : <DownloadIcon className="h-4 w-4" />}
-          <span className="hidden sm:inline">{download.busy ? "Downloading…" : "Download"}</span>
-        </button>
-        <a href={preview.url} target="_blank" rel="noopener noreferrer" className={barButton}>
-          <ExternalIcon className="h-4 w-4" />
-          <span className="hidden sm:inline">Original</span>
-        </a>
-        <button type="button" onClick={onClose} aria-label="Close" className={barButton}>
-          <CloseIcon className="h-4 w-4" />
-        </button>
-      </div>
-      <div className="flex min-h-0 flex-1 items-center justify-center p-4 pt-0">
-        {/* eslint-disable-next-line @next/next/no-img-element -- arbitrary remote hosts, can't be allowlisted for next/image */}
-        <img
-          src={preview.url}
-          alt={preview.name}
-          className="max-h-full max-w-full rounded-lg object-contain"
-          onClick={(e) => e.stopPropagation()}
-        />
-      </div>
-    </div>
+    <>
+      <button type="button" onClick={download.start} disabled={download.busy} aria-label={`Download ${photo.alt}`} className={barButton}>
+        {download.busy ? <Spinner className="h-4 w-4" /> : <DownloadIcon className="h-4 w-4" />}
+        <span className="hidden sm:inline">{download.busy ? "Downloading…" : "Download"}</span>
+      </button>
+      <a href={photo.src} target="_blank" rel="noopener noreferrer" aria-label="Open the original" className={barButton}>
+        <ExternalIcon className="h-4 w-4" />
+        <span className="hidden sm:inline">Original</span>
+      </a>
+    </>
   );
 }
 
@@ -642,7 +623,11 @@ export function MediaLinks({
   trackDownloads?: boolean;
   onChanged?: () => void;
 }) {
-  const [preview, setPreview] = useState<Preview | null>(null);
+  // The open photo in the viewer (index into `viewerPhotos`), and the photos
+  // revealed with "Show photo" here: the viewer swipes only through photos
+  // already showing, so a hidden one is never opened by accident.
+  const [viewing, setViewing] = useState<number | null>(null);
+  const [revealed, setRevealed] = useState<Set<string>>(() => new Set());
   // Who's viewing, asked once for the whole item (not per tile): it decides
   // who may replace or delete each file.
   const [actor, setActor] = useState<Viewer | null>(null);
@@ -670,12 +655,24 @@ export function MediaLinks({
   }
 
   let content: ReactNode = null;
+  let viewerPhotos: ViewerPhoto[] = [];
 
   if (media.length > 0) {
     const files = media.filter((file) => !isPastedLink(file));
     const pending = trackDownloads ? files.filter((file) => !downloadState(file)) : [];
     const done = files.length - pending.length;
     const showHeader = (trackDownloads && files.length > 0) || files.length > 1;
+    const savedFor = (file: OrderItemMedia) => (trackDownloads ? () => recordDownload([file.id]) : undefined);
+    viewerPhotos = files
+      .filter((file) => isImage(file.secure_url, file.mime_type) && (!trackDownloads || !!downloadState(file) || revealed.has(file.id)))
+      .map((file) => ({
+        key: file.id,
+        src: file.secure_url,
+        thumb: resolveThumbUrl(file),
+        alt: resolveDisplayName(file),
+        downloadHref: resolveDownloadUrl(file),
+        onSaved: savedFor(file),
+      }));
 
     content = (
       <div className="space-y-3">
@@ -729,7 +726,7 @@ export function MediaLinks({
         <div className="grid grid-cols-[repeat(auto-fill,minmax(6.5rem,1fr))] gap-2.5">
           {media.map((file) => {
             const tracked = trackDownloads && !isPastedLink(file);
-            const onSaved = tracked ? () => recordDownload([file.id]) : undefined;
+            const onSaved = tracked ? savedFor(file) : undefined;
             return (
               <MediaTile
                 key={file.id}
@@ -740,14 +737,8 @@ export function MediaLinks({
                 actor={actor}
                 onSaved={onSaved}
                 onChanged={onChanged}
-                onOpen={() =>
-                  setPreview({
-                    url: file.secure_url,
-                    name: resolveDisplayName(file),
-                    downloadHref: resolveDownloadUrl(file),
-                    onSaved,
-                  })
-                }
+                onShow={() => setRevealed((prev) => new Set(prev).add(file.id))}
+                onOpen={() => setViewing(Math.max(0, viewerPhotos.findIndex((photo) => photo.key === file.id)))}
               />
             );
           })}
@@ -755,10 +746,11 @@ export function MediaLinks({
       </div>
     );
   } else if (legacyLink) {
+    if (isImage(legacyLink)) viewerPhotos = [{ key: legacyLink, src: legacyLink, thumb: legacyLink, alt: "Photo", downloadHref: legacyLink }];
     content = isImage(legacyLink) ? (
       <button
         type="button"
-        onClick={() => setPreview({ url: legacyLink, name: "Photo", downloadHref: legacyLink })}
+        onClick={() => setViewing(0)}
         className="block h-28 w-28 overflow-hidden rounded-xl border border-border shadow-theme-xs"
       >
         {/* eslint-disable-next-line @next/next/no-img-element -- arbitrary remote hosts, can't be allowlisted for next/image */}
@@ -782,7 +774,14 @@ export function MediaLinks({
   return (
     <>
       {content}
-      {preview ? <Lightbox preview={preview} onClose={() => setPreview(null)} /> : null}
+      <Lightbox
+        photos={viewerPhotos}
+        // A file deleted while it was open closes the viewer.
+        index={viewing !== null && viewing < viewerPhotos.length ? viewing : null}
+        onIndexChange={setViewing}
+        onClose={() => setViewing(null)}
+        actions={(i) => <ViewerActions key={viewerPhotos[i].key} photo={viewerPhotos[i]} />}
+      />
     </>
   );
 }

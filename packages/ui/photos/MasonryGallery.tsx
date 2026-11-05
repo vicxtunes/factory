@@ -1,41 +1,21 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useState } from "react";
 
 import type { PhotoView } from "@repo/lib/photos/core";
 
-import { useCloseOnBack } from "../navigation/back";
-import { lockPageScroll } from "../scrollLock";
+import { Lightbox } from "../Lightbox";
 
 /**
  * Photos in a Pinterest-style masonry grid (small copies, lazy-loaded), and
- * a full-screen viewer (large copies) with arrows, swipe and keyboard. With
- * `downloads`, each photo can be saved.
+ * the shared full-screen viewer (large copies; smooth swipe, pinch zoom). With
+ * `downloads`, each photo can be saved from the viewer.
  */
 export function MasonryGallery({ photos, downloads = false }: { photos: PhotoView[]; downloads?: boolean }) {
   const [open, setOpen] = useState<number | null>(null);
-  const touchX = useRef<number | null>(null);
-  const close = useCallback(() => setOpen(null), []);
-  useCloseOnBack(open !== null, close);
-  const step = useCallback((d: 1 | -1) => setOpen((i) => (i === null ? i : (i + d + photos.length) % photos.length)), [photos.length]);
-
-  useEffect(() => {
-    if (open === null) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(null);
-      if (e.key === "ArrowRight") step(1);
-      if (e.key === "ArrowLeft") step(-1);
-    };
-    document.addEventListener("keydown", onKey);
-    const unlock = lockPageScroll();
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      unlock();
-    };
-  }, [open, step]);
 
   if (photos.length === 0) return <p className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted">No photos yet.</p>;
-  const current = open === null ? null : photos[open];
+  const viewerPhotos = photos.map((p, i) => ({ key: p.id, src: p.largeUrl, thumb: p.thumbUrl, alt: p.caption ?? `Photo ${i + 1}` }));
 
   return (
     <>
@@ -50,52 +30,21 @@ export function MasonryGallery({ photos, downloads = false }: { photos: PhotoVie
         ))}
       </ul>
 
-      {current ? (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label="Photo"
-          className="fixed inset-0 z-50 flex flex-col bg-black/95 text-white"
-          onTouchStart={(e) => (touchX.current = e.touches[0].clientX)}
-          onTouchEnd={(e) => {
-            if (touchX.current === null) return;
-            const dx = e.changedTouches[0].clientX - touchX.current;
-            if (Math.abs(dx) > 50) step(dx < 0 ? 1 : -1);
-            touchX.current = null;
-          }}
-        >
-          <div className="flex items-center justify-between gap-2 p-3 text-sm">
-            <span className="tnum opacity-70">
-              {open! + 1} / {photos.length}
-            </span>
-            <div className="flex items-center gap-4">
-              {downloads ? (
-                <a href={current.downloadUrl ?? current.largeUrl} download className="hover:underline">
+      <Lightbox
+        photos={viewerPhotos}
+        index={open}
+        onIndexChange={setOpen}
+        onClose={() => setOpen(null)}
+        actions={
+          downloads
+            ? (i) => (
+                <a href={photos[i].downloadUrl ?? photos[i].largeUrl} download className="inline-flex min-h-11 items-center rounded-full bg-white/10 px-4 text-sm font-medium hover:bg-white/20">
                   Download
                 </a>
-              ) : null}
-              <button type="button" onClick={() => setOpen(null)} className="text-lg" aria-label="Close">
-                ✕
-              </button>
-            </div>
-          </div>
-          <div className="relative flex min-h-0 flex-1 items-center justify-center px-2">
-            {/* eslint-disable-next-line @next/next/no-img-element -- signed storage links, already resized */}
-            <img src={current.largeUrl} alt={current.caption ?? ""} className="max-h-full max-w-full object-contain" />
-            {photos.length > 1 ? (
-              <>
-                <button type="button" onClick={() => step(-1)} aria-label="Previous" className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full bg-white/10 px-3 py-2 text-xl hover:bg-white/20">
-                  ‹
-                </button>
-                <button type="button" onClick={() => step(1)} aria-label="Next" className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-white/10 px-3 py-2 text-xl hover:bg-white/20">
-                  ›
-                </button>
-              </>
-            ) : null}
-          </div>
-          {current.caption ? <p className="p-3 text-center text-sm opacity-80">{current.caption}</p> : null}
-        </div>
-      ) : null}
+              )
+            : undefined
+        }
+      />
     </>
   );
 }
