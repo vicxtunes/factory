@@ -36,7 +36,7 @@ export default async function AssistantPage() {
       <section className="h-fit rounded-xl border border-border bg-surface p-4">
         <div className="flex items-center gap-2">
           <h1 className="text-lg font-semibold">Assistant</h1>
-          <span className="rounded-full border border-border px-2 py-0.5 text-xs font-medium text-muted">v3</span>
+          <span className="rounded-full border border-border px-2 py-0.5 text-xs font-medium text-muted">v4</span>
         </div>
         <dl className="mt-2 grid grid-cols-[1fr_auto] gap-x-4 gap-y-1 text-sm">
           <dt className="text-muted">Spent today</dt>

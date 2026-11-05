@@ -1,12 +1,12 @@
-# Aming assistant
+# Alexis (the assistant)
 
-Answers clients in their support and order chats, as "Aming assistant": takes an order from their own words, asks
+Answers clients in their support and order chats, as "Alexis" (until v4 "Aming assistant": `ASSISTANT_NAMES` keeps both its own): takes an order from their own words, asks
 for photos, approves it, invoices it, asks for payment, sends receipts, and answers about their orders, account,
 products and the app. Runs on OpenAI or Claude (`server/providers.ts`, official SDKs, low effort). The developer account
 (`SUPPORT_OWNER_EMAIL`) picks which on Dashboard → Assistant; the list and prices are `ASSISTANT_MODELS` in `core/rules.ts`.
 
 - **Waking up:** a trigger on `chat_messages` marks a chat waiting when a client writes, and quiet when staff or its
-  designer write. The client app checks every 2 s (`answerWaitingChats`), 3 s after the client's last message, and shows "Aming assistant is typing" while it works. It can put tappable answers and product photos under a reply (`chat_messages.choices`, `images`). Asking for staff doesn't silence it; a person writing does. Staff
+  designer write. The client app checks every 2 s (`answerWaitingChats`), 3 s after the client's last message, and shows "Alexis is typing" while it works. It can put tappable answers and product photos under a reply (`chat_messages.choices`, `images`). Asking for staff doesn't silence it; a person writing does. Staff
   tap **Hand back** in the chat to return it.
 - **Switch:** Dashboard → Assistant (boss): off, test (only listed clients) or live; daily spending limit; what it did.
   It needs `OPENAI_API_KEY` and/or `ANTHROPIC_API_KEY` in the client app's environment. At the limit or on any failure, it hands to staff.

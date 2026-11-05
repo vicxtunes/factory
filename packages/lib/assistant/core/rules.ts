@@ -1,6 +1,8 @@
 // The assistant's rules that code enforces, whatever the model says. Pure.
 
-export const ASSISTANT_NAME = "Aming assistant";
+export const ASSISTANT_NAME = "Alexis";
+/** Every name it has gone by: its messages and orders under any of them are still its own. */
+export const ASSISTANT_NAMES = [ASSISTANT_NAME, "Aming assistant"];
 export const MAX_PROMPTS_PER_DAY = 3;
 /** Wait this long after a client's last message, so several in a row get one reply. */
 export const QUIET_BEFORE_ANSWER_MS = 3_000;
