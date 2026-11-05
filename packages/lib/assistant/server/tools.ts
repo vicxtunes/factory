@@ -410,7 +410,7 @@ export function assistantTools(ctx: ToolContext): AssistantTool[] {
           orderType: pending.order_type,
           deliveryDate: pending.delivery_date,
           deadlineAt: "",
-          orderNotes: "Taken in chat by the Aming assistant.",
+          orderNotes: `Taken in chat by ${ASSISTANT_NAME}.`,
           designerBrief: "",
           responsibleWorkerId: null,
           items: pending.items,

@@ -6,7 +6,7 @@ import * as invoices from "@repo/lib/invoices/server/service";
 import { receiveOrder } from "@repo/lib/orders/receive";
 import { createAdminClient } from "@repo/lib/supabase/admin";
 
-import { ASSISTANT_NAME, UPLOAD_GRACE_MS, mayAnswer, reviewOutcome } from "../core/rules";
+import { ASSISTANT_NAME, ASSISTANT_NAMES, UPLOAD_GRACE_MS, mayAnswer, reviewOutcome } from "../core/rules";
 import * as store from "./store";
 import { ASSISTANT_ACTOR, tellManagers } from "./tools";
 
@@ -36,7 +36,7 @@ export async function reviewClientOrders(): Promise<void> {
     .is("cancelled_at", null)
     .is("released_at", null)
     .not("client_id", "is", null)
-    .or(`created_by_name.is.null,created_by_name.neq.${ASSISTANT_NAME}`)
+    .or(`created_by_name.is.null,created_by_name.not.in.(${ASSISTANT_NAMES.map((n) => `"${n}"`).join(",")})`)
     .gte("created_at", new Date(now - LOOK_BACK_MS).toISOString())
     .lt("created_at", new Date(now - UPLOAD_GRACE_MS).toISOString())
     .limit(20);
