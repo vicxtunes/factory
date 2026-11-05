@@ -1,6 +1,6 @@
 "use server";
 
-import { bookListPrice } from "@repo/lib/production/sheets/server";
+import { partsListPrice } from "@repo/lib/production/pricing";
 import { revalidatePath } from "next/cache";
 
 import { createAdminClient } from "@repo/lib/supabase/admin";
@@ -271,8 +271,8 @@ export async function cancelMyOrder(orderId: string, reason: string): Promise<{ 
 }
 
 /** A photo book's estimate on the order form, from the server's own prices. Null: priced on the call. Never its cost. */
-export async function estimateBookPrice(productId: string, attributes: Record<string, string>): Promise<number | null> {
+export async function estimateBookPrice(productId: string, attributes: Record<string, string>, variantId: string | null = null): Promise<number | null> {
   const session = await getClientSession();
   if (!session) return null;
-  return bookListPrice(productId, attributes);
+  return partsListPrice(productId, variantId, attributes);
 }

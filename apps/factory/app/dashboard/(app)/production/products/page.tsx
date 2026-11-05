@@ -3,7 +3,7 @@ import { RowsSkeleton, StatTilesSkeleton } from "@repo/ui/skeletons/blocks";
 import { Loading } from "@repo/ui/skeletons/Loading";
 import { requireProductionAccess } from "@repo/lib/production/access";
 import { costingCatalog } from "@repo/lib/production/catalog";
-import { productCosts } from "@repo/lib/production/core";
+import { PartsCatalog, productCosts } from "@repo/lib/production/core";
 import { production } from "@repo/lib/production/server";
 import { resolveTenantScope } from "@repo/lib/tenancy/server/resolve";
 
@@ -14,7 +14,7 @@ export default async function ProductCostsPage() {
   return (
     <div className="space-y-6">
       <p className="text-sm text-muted">
-        What each product costs to make at today&apos;s material prices, against what it sells for. Give a product a recipe (what one takes) to see it.
+        What each product costs to make at the latest prices paid, against what it sells for. Set a product up (what it&apos;s made of) to see it.
       </p>
       <Loading
         skeleton={
@@ -32,6 +32,6 @@ export default async function ProductCostsPage() {
 
 async function Costs() {
   const scope = await resolveTenantScope();
-  const [catalog, recipes, materials] = await Promise.all([costingCatalog(), production.recipes(scope), production.materials(scope)]);
-  return <ProductCostsBoard products={productCosts(catalog, recipes, materials)} basePath="/dashboard/production/products" />;
+  const [catalog, book] = await Promise.all([costingCatalog(), production.partsBook(scope)]);
+  return <ProductCostsBoard products={productCosts(catalog, new PartsCatalog(book))} basePath="/dashboard/production/products" />;
 }

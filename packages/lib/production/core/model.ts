@@ -6,14 +6,25 @@ export type MaterialKind = "material" | "packaging";
 /** Where money for a purchase came from; on credit: the supplier is paid later (money we owe). */
 export type PurchasePaidFrom = "cash" | "bank_transfer" | "mobile_money" | "other" | "on_credit";
 
+/** A part (see core/parts.ts): bought, with stock and purchases, or made from other parts. */
 export interface Material {
   id: string;
   name: string;
   /** What it's counted in: sheet, pc, m, ml… */
   unit: string;
   kind: MaterialKind;
-  /** The latest purchase's price per unit (or the price it was added with). */
+  /** Made from other parts: no stock or purchases of its own. */
+  made: boolean;
+  /** Bought: the latest purchase's price per unit (or the price it was added with). */
   unitCost: number;
+  /** What the client pays for one inside a product priced by its parts; null: not charged on its own. */
+  clientPrice: number | null;
+  /** Sold on its own as this catalog product (its price is the client price). */
+  productId: string | null;
+  productName: string | null;
+  productPrice: number | null;
+  /** Only this product uses it; null: shared. */
+  ownerProductId: string | null;
   active: boolean;
   /** The sum of its movements; below zero when usage was recorded before the purchase. */
   stock: number;
@@ -137,36 +148,6 @@ export interface LenderAccount extends Lender {
 export interface LenderDetail {
   lender: LenderAccount;
   loans: (Loan & { repayments: Repayment[] })[];
-}
-
-// --- Recipes ----------------------------------------------------------------
-
-/**
- * One line of what a unit of a product takes. `variantId` null: every size.
- * A material line (materialId + qty), optionally per a number detail of the
- * order (perAttributeId, e.g. Pages: qty × that value); or an other cost
- * (label + a fixed amount per unit).
- */
-export interface RecipeLine {
-  variantId: string | null;
-  materialId: string | null;
-  qty: number | null;
-  perAttributeId: string | null;
-  label: string | null;
-  amount: number | null;
-}
-
-/** What one unit of a size costs, split for the screens. */
-export interface UnitCost {
-  materials: number;
-  packaging: number;
-  other: number;
-  /** materials + packaging + other, for the lines that don't depend on a detail. */
-  fixed: number;
-  /** Lines that scale with a number detail: the cost for each 1 of it (e.g. per page). */
-  perDetail: { attributeId: string; perOne: number }[];
-  /** A line's material is gone or has no price yet. */
-  unpriced: boolean;
 }
 
 // --- Production records -----------------------------------------------------

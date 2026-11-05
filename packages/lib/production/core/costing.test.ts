@@ -1,51 +1,15 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { costWith, detailNumber, expectedUsage, margin, mergeUsage, productCosts, usagePlan, recipeFor, recipeInputSchema, unitCost, type RecipeLine } from "./index";
+import { PartsCatalog, copySetupSchema, margin, mergeUsage, partLineSchema, productCosts, setupInputSchema, type PartLine, type PartRow } from "./index";
 
 const A4 = "00000000-0000-4000-8000-0000000000a4";
-const A3 = "00000000-0000-4000-8000-0000000000a3";
-const PAGES = "pages";
+const ID = "00000000-0000-4000-8000-000000000001";
 
-const materials = [
-  { id: "paper", kind: "material" as const, unitCost: 120 },
-  { id: "cover", kind: "material" as const, unitCost: 4_500 },
-  { id: "box", kind: "packaging" as const, unitCost: 2_000 },
-  { id: "film", kind: "material" as const, unitCost: 37.5 },
-];
-
-const line = (over: Partial<RecipeLine>): RecipeLine => ({ variantId: null, materialId: null, qty: null, perAttributeId: null, label: null, amount: null, ...over });
-
-const book: RecipeLine[] = [
-  line({ materialId: "paper", qty: 1, perAttributeId: PAGES }),
-  line({ materialId: "film", qty: 0.5, perAttributeId: PAGES }),
-  line({ materialId: "box", qty: 1 }),
-  line({ variantId: A4, materialId: "cover", qty: 1 }),
-  line({ variantId: A4, label: "Binding", amount: 3_000 }),
-  line({ variantId: A3, materialId: "cover", qty: 2 }),
-];
-
-test("a size's recipe is the shared lines plus its own", () => {
-  assert.equal(recipeFor(book, A4).length, 5);
-  assert.equal(recipeFor(book, A3).length, 4);
-  assert.equal(recipeFor(book, null).length, 3, "a product without sizes: the shared lines");
+const part = (id: string, unitCost: number, over: Partial<PartRow> = {}): PartRow => ({
+  id, name: id, unit: "pc", kind: "material", made: false, unitCost, clientPrice: null, productId: null, productName: null, productPrice: null, ownerProductId: null, active: true, ...over,
 });
-
-test("a unit's cost splits materials, packaging and other costs; per-page lines apart", () => {
-  const cost = unitCost(recipeFor(book, A4), materials);
-  assert.deepEqual(
-    { m: cost.materials, p: cost.packaging, o: cost.other, f: cost.fixed, unpriced: cost.unpriced },
-    { m: 4_500, p: 2_000, o: 3_000, f: 9_500, unpriced: false },
-  );
-  // 120 + 0.5 × 37.5 = 138.75 per page.
-  assert.deepEqual(cost.perDetail, [{ attributeId: PAGES, perOne: 138.75 }]);
-  assert.equal(costWith(cost, { [PAGES]: 40 }), 9_500 + 5_550);
-});
-
-test("a material with no price, or gone, marks the cost unpriced", () => {
-  assert.equal(unitCost([line({ materialId: "paper", qty: 1 })], [{ id: "paper", kind: "material", unitCost: 0 }]).unpriced, true);
-  assert.equal(unitCost([line({ materialId: "gone", qty: 1 })], materials).unpriced, true);
-});
+const line = (over: Partial<PartLine>): PartLine => ({ variantId: null, partId: null, chosenDetail: null, qty: 1, perDetail: null, whenDetail: null, whenValue: null, label: null, amount: null, ...over });
 
 test("profit and margin at the selling price", () => {
   assert.deepEqual(margin(25_000, 15_050), { profit: 9_950, percent: 39.8 });
@@ -53,37 +17,21 @@ test("profit and margin at the selling price", () => {
   assert.equal(margin(null, 5_000), null, "priced on a call: no margin yet");
 });
 
-test("what an order item should use: per-page lines × its pages, × units", () => {
-  const usage = expectedUsage(recipeFor(book, A4), 2, (id) => (id === PAGES ? 40 : 0));
-  assert.deepEqual(usage.materials, [
-    { materialId: "paper", qty: 80 },
-    { materialId: "film", qty: 40 },
-    { materialId: "box", qty: 2 },
-    { materialId: "cover", qty: 2 },
-  ]);
-  assert.equal(usage.otherCost, 6_000);
+test("a line is a part (or the one chosen) with a quantity, or a named cost", () => {
+  assert.ok(setupInputSchema.safeParse({ productId: ID, pricing: "parts", lines: [{ partId: ID, qty: 1.5, perDetail: "NOS" }, { label: "Binding", amount: 3_000 }, { chosenDetail: "Packaging", qty: 1 }] }).success);
+  assert.ok(!partLineSchema.safeParse({ partId: ID, qty: 0 }).success);
+  assert.ok(!partLineSchema.safeParse({ label: " ", amount: 10 }).success);
+  assert.ok(!partLineSchema.safeParse({ partId: ID, chosenDetail: "Packaging", qty: 1 }).success, "a part or the chosen one, not both");
+  assert.ok(!partLineSchema.safeParse({ partId: ID, qty: 1, whenDetail: "Lamination" }).success, "only when needs its value");
+  assert.ok(!copySetupSchema.safeParse({ from: ID, to: ID }).success);
 });
 
-test("a recipe line is a material with a quantity, or a named cost", () => {
-  const productId = "00000000-0000-4000-8000-000000000001";
-  const ok = recipeInputSchema.safeParse({
-    productId,
-    lines: [
-      { variantId: null, materialId: productId, qty: 1.5, perAttributeId: null },
-      { variantId: A4, label: "Binding", amount: 3_000 },
-    ],
-  });
-  assert.ok(ok.success);
-  assert.ok(!recipeInputSchema.safeParse({ productId, lines: [{ variantId: null, materialId: productId, qty: 0, perAttributeId: null }] }).success);
-  assert.ok(!recipeInputSchema.safeParse({ productId, lines: [{ variantId: null, label: " ", amount: 10 }] }).success);
-});
-
-test("each product size with its cost, price and margin; per-page products get no margin", () => {
+test("each product size with its cost, price and margin; per-page products by the page", () => {
   const catalog = [
     {
       id: "c1",
       name: "Photo books",
-      attributes: [{ id: PAGES, name: "Pages", type: "number" }],
+      attributes: [],
       products: [
         { id: "book", name: "Photo book", price: null, unit: "Pc", variants: [{ id: A4, name: "A4", price: 150_000 }] },
         { id: "frame", name: "Frame", price: 25_000, unit: "Pc", variants: [] },
@@ -91,26 +39,21 @@ test("each product size with its cost, price and margin; per-page products get n
       ],
     },
   ];
-  const recipes = new Map([
-    ["book", book],
-    ["frame", [line({ materialId: "cover", qty: 2 }), line({ materialId: "box", qty: 1 })]],
-  ]);
-  const [b, f, m] = productCosts(catalog, recipes, materials);
-  assert.deepEqual(b.sizes[0].perDetail, [{ name: "Pages", perOne: 138.75 }]);
-  assert.equal(b.sizes[0].margin, null);
-  assert.equal(f.sizes[0].name, null, "a product without sizes is one row");
-  assert.deepEqual(f.sizes[0].margin, { profit: 25_000 - 11_000, percent: 56 });
-  assert.equal(m.hasRecipe, false);
-  assert.equal(m.sizes[0].margin, null, "no recipe, no margin");
-});
-
-test("an order item's plan reads its page count by the detail's name", () => {
-  const names = new Map([[PAGES, "Pages"]]);
-  const plan = usagePlan({ variantId: A4, qty: 1, attributes: { Pages: "40" } }, book, names);
-  assert.deepEqual(plan.materials.find((m) => m.materialId === "paper"), { materialId: "paper", qty: 40 });
-  assert.equal(plan.otherCost, 3_000);
-  assert.equal(detailNumber({ Pages: "1,200" }, "Pages"), 1200);
-  assert.equal(detailNumber({}, "Pages"), 0, "missing: per-page lines expect nothing");
+  const parts = new PartsCatalog({
+    parts: [part("paper", 120), part("cover", 4_500), part("box", 2_000)],
+    partLines: new Map(),
+    productLines: new Map([
+      ["book", [line({ partId: "paper", perDetail: "Pages" }), line({ partId: "box" }), line({ variantId: A4, partId: "cover" })]],
+      ["frame", [line({ partId: "cover", qty: 2 }), line({ partId: "box" })]],
+    ]),
+    pricing: new Map(),
+  });
+  const [b, f, m] = productCosts(catalog, parts);
+  assert.deepEqual([b.rows[0].cost, b.rows[0].perDetail], [6_500, [{ name: "Pages", cost: 120, price: 0 }]]);
+  assert.equal(b.rows[0].margin, null, "its cost depends on the pages");
+  assert.equal(f.rows[0].name, null, "a product without sizes is one row");
+  assert.deepEqual(f.rows[0].margin, { profit: 25_000 - 11_000, percent: 56, per: null });
+  assert.deepEqual([m.isSetUp, m.rows], [false, []]);
 });
 
 test("saved lines: everything expected (actual defaults to it) plus extra materials used", () => {
