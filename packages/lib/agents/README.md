@@ -12,18 +12,21 @@ clients pay Aming directly.
   sees only what they typed. A client has at most one agent. An agent can edit a client's details
   only while that client has no login of their own.
 - **Orders:** placed with `buildAndInsertOrder` at list prices, into reception's normal queue. An order staff or a designer create in an agent's name is theirs
-  too: it shows in their portal and earns the same way. Only orders from before this (2026-11-04)
-  don't earn (`orders.commission_eligible`). It doesn't add the client to the agent's list.
+  too: it shows in their portal and earns the same way. Commission starts on 2026-11-01: orders
+  tagged before then don't earn (`orders.commission_eligible`). It doesn't add the client to the agent's list.
 - **80% before production:** an order that earns, whoever placed it, goes to production only once 80%
   of its price is paid (`payBeforeProduction()` in `core.ts`). Office and designer orders in an
   agent's name wait in Client Orders like the agent's own; `routeApprovedOrder` refuses to send one on
   earlier, and the card shows what's paid. The agent (order form, order page, "confirmed" push), the
   client (confirmation message) and the assistant (`get_my_orders`) are told.
-- **Older tagged orders:** listed in the portal with "No commission"; figures count only orders that earn.
+- **Older tagged orders:** those from before 2026-11-01 are listed in the portal with "No commission";
+  figures count only orders that earn. Those from 1 November up to the 2026-11-04 release were brought
+  in later (`supabase/migrations/20261220100000_commission_from_november.sql`): they earn and, with
+  `orders.offers_kept`, keep the discounts they were placed under.
 - **No company discounts:** the agent already earns commission, so an order that earns takes no
   running discount, promo code or line discount (`item_offer()` and `order_item_set_discount()`,
   `supabase/migrations/20261217100000_no_discounts_on_agent_orders.sql`). The portal and the staff
-  order form show list prices for them. Older tagged orders keep the discounts they were placed under.
+  order form show list prices for them. Orders with `offers_kept` (above) keep theirs.
 - **Stages:** `agentStage()` in `core.ts`. An order shows its least advanced line.
 
 ## Commission
