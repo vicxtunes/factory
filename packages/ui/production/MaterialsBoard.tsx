@@ -1,7 +1,8 @@
 "use client";
 
-// Production → Parts: everything production buys or makes. Bought parts with
-// their stock, price and value; made parts with what one costs from its parts.
+// Production → Parts: everything production buys or makes, cost only. Bought
+// parts with their size, stock, price paid and value; made parts with what one
+// costs from its parts. Same-named parts in sizes sort together.
 // Tabs split them; cards on a phone, a table from the container's 3xl; tap one
 // for its page. Below-zero stock (usage recorded before the purchase) shows in red.
 
@@ -15,7 +16,7 @@ import { TextInput } from "@repo/ui/Field";
 import { Tabs } from "@repo/ui/Tabs";
 import { useCurrencySymbol } from "@repo/lib/currency/CurrencySymbolProvider";
 import { formatMoney } from "@repo/lib/currency/format";
-import { KIND_LABELS, formatQty, formatUnitCost, type Material } from "@repo/lib/production/core";
+import { KIND_LABELS, formatQty, formatUnitCost, partLabel, type Material } from "@repo/lib/production/core";
 
 import { MaterialSheet, PurchaseSheet } from "./sheets";
 
@@ -30,6 +31,7 @@ export function MaterialsBoard({
   madeCosts,
   productNames,
   products,
+  sizes,
 }: {
   materials: Material[];
   today: string;
@@ -40,6 +42,8 @@ export function MaterialsBoard({
   productNames: Record<string, string>;
   /** The catalog, for a part that's also sold on its own. */
   products: { id: string; name: string }[];
+  /** The order form's sizes, for parts in a size. */
+  sizes: string[];
 }) {
   const router = useRouter();
   const symbol = useCurrencySymbol();
@@ -51,7 +55,9 @@ export function MaterialsBoard({
 
   const q = query.trim().toLowerCase();
   const inView = materials.filter((m) => view === "all" || (view === "made") === m.made);
-  const shown = inView.filter((m) => (showInactive || m.active) && (!q || m.name.toLowerCase().includes(q)));
+  const shown = inView
+    .filter((m) => (showInactive || m.active) && (!q || `${m.name} ${m.size ?? ""}`.toLowerCase().includes(q)))
+    .sort((a, b) => a.name.localeCompare(b.name) || (a.size ?? "").localeCompare(b.size ?? "", undefined, { numeric: true }));
   const inactive = inView.filter((m) => !m.active).length;
   const value = materials.reduce((sum, m) => sum + Math.max(m.stockValue, 0), 0);
   const belowZero = materials.filter((m) => m.active && !m.made && m.stock < 0).length;
@@ -61,11 +67,6 @@ export function MaterialsBoard({
   const owner = (m: Material) => (m.ownerProductId ? `only ${productNames[m.ownerProductId] ?? "one product"}` : null);
   const sold = (m: Material) => (m.productName ? `sold as ${m.productName}` : null);
   const notes = (m: Material) => [owner(m), sold(m), m.active ? null : "not in use"].filter(Boolean).join(" · ");
-
-  const clientText = (m: Material) => {
-    const own = m.productId ? m.productPrice : m.clientPrice;
-    return own === null ? <span className="text-muted">{m.made ? "from its parts" : "—"}</span> : money(own);
-  };
 
   const columns: DataTableColumn<Material>[] = [
     {
@@ -81,7 +82,7 @@ export function MaterialsBoard({
     { key: "kind", header: "Kind", render: (m) => `${m.made ? "Made" : "Bought"} · ${KIND_LABELS[m.kind]}` },
     { key: "stock", header: "Stock", align: "right", render: (m) => (m.made ? <span className="text-muted">made to order</span> : <span className={stockTone(m)}>{`${formatQty(m.stock)} ${m.unit}`}</span>) },
     { key: "price", header: "Costs us per unit", align: "right", render: (m) => formatUnitCost(m.made ? (madeCosts[m.id] ?? 0) : m.unitCost, symbol) },
-    { key: "client", header: "Client price", align: "right", render: (m) => clientText(m) },
+    { key: "size", header: "Size", render: (m) => m.size ?? <span className="text-muted">any</span> },
     { key: "value", header: "Value", align: "right", render: (m) => (m.made ? "—" : money(m.stockValue)) },
   ];
   return (
@@ -126,7 +127,7 @@ export function MaterialsBoard({
               <li key={m.id}>
                 <Link href={`${basePath}/${m.id}`} className="block rounded-2xl border border-border bg-surface p-4 shadow-theme-xs active:bg-gray-50 dark:active:bg-white/5">
                   <div className="flex items-baseline justify-between gap-3">
-                    <p className="truncate font-medium">{m.name}</p>
+                    <p className="truncate font-medium">{partLabel(m)}</p>
                     {m.made ? (
                       <p className="shrink-0 text-sm font-semibold tnum">{formatUnitCost(madeCosts[m.id] ?? 0, symbol)}</p>
                     ) : (
@@ -158,6 +159,7 @@ export function MaterialsBoard({
         open={sheet === "add"}
         onClose={() => setSheet(null)}
         products={products}
+        sizes={sizes}
         onAdded={(id) => router.push(`${basePath}/${id}`)}
       />
       <PurchaseSheet open={sheet === "purchase"} onClose={() => setSheet(null)} materials={bought} today={today} />

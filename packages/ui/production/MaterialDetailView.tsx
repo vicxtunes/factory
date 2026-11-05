@@ -14,7 +14,7 @@ import { ChartCard, SERIES, TimeLines } from "@repo/ui/charts/kit";
 import { useCurrencySymbol } from "@repo/lib/currency/CurrencySymbolProvider";
 import { formatMoney } from "@repo/lib/currency/format";
 import { voidPurchase } from "@repo/lib/production/actions";
-import { KIND_LABELS, MOVEMENT_LABELS, PAID_FROM_LABELS, formatQty, formatUnitCost, type MaterialDetail, type MaterialPurchase } from "@repo/lib/production/core";
+import { KIND_LABELS, partLabel, MOVEMENT_LABELS, PAID_FROM_LABELS, formatQty, formatUnitCost, type MaterialDetail, type MaterialPurchase } from "@repo/lib/production/core";
 
 import { Tile } from "./MaterialsBoard";
 import { MaterialSheet, PurchaseSheet, StockCountSheet, VoidSheet } from "./sheets";
@@ -23,7 +23,7 @@ import { MaterialSheet, PurchaseSheet, StockCountSheet, VoidSheet } from "./shee
 const day = (iso: string) =>
   new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 
-export function MaterialDetailView({ detail, today, products }: { detail: MaterialDetail; today: string; products: { id: string; name: string }[] }) {
+export function MaterialDetailView({ detail, today, products, sizes }: { detail: MaterialDetail; today: string; products: { id: string; name: string }[]; sizes: string[] }) {
   const { material, movements, purchases } = detail;
   const symbol = useCurrencySymbol();
   const money = (n: number) => formatMoney(n, symbol);
@@ -34,10 +34,10 @@ export function MaterialDetailView({ detail, today, products }: { detail: Materi
     <div className="@container space-y-6">
       <div className="flex flex-col gap-3 @2xl:flex-row @2xl:items-start @2xl:justify-between">
         <div>
-          <h2 className="text-xl font-semibold">{material.name}</h2>
+          <h2 className="text-xl font-semibold">{partLabel(material)}</h2>
           <p className="text-sm text-muted">
             Bought · {KIND_LABELS[material.kind]} · counted in {material.unit}
-            {material.clientPrice !== null && !material.productId ? ` · client price ${money(material.clientPrice)}` : ""}
+            {material.size ? ` · size ${material.size}` : ""}
             {material.productName ? ` · sold as ${material.productName}` : ""}
             {material.active ? "" : " · not in use"}
           </p>
@@ -126,7 +126,7 @@ export function MaterialDetailView({ detail, today, products }: { detail: Materi
         </section>
       </div>
 
-      <MaterialSheet key={`edit-${sheet === "edit"}`} open={sheet === "edit"} onClose={() => setSheet(null)} material={material} products={products} />
+      <MaterialSheet key={`edit-${sheet === "edit"}`} open={sheet === "edit"} onClose={() => setSheet(null)} material={material} products={products} sizes={sizes} />
       <PurchaseSheet open={sheet === "purchase"} onClose={() => setSheet(null)} materials={[material]} materialId={material.id} today={today} />
       <StockCountSheet open={sheet === "count"} onClose={() => setSheet(null)} material={material} />
       {voiding ? (

@@ -1,22 +1,23 @@
-// Parts: everything production buys or makes, and what each product is made
-// of. Pure; safe on client and server.
+// Parts: everything production buys or makes, what each product is made of,
+// and how its price is worked out. Pure; safe on client and server.
 //
 // A part is bought (PVC, paper, ink, film: stock and a price from purchases)
-// or made from other parts (a sheet, a cover, a box). A made part's cost is its
-// lines added up, down to the bought parts, however deep. A product's setup is
-// its own list of lines and how it's priced: fixed per size (the catalog's
-// price) or built from parts (the client prices of its parts added up).
+// or made from other parts (a sheet, a cover, a box). Parts carry cost only: a
+// made part's cost is its lines added up, down to the bought parts, however
+// deep. A part may have a size (PVC 12x12 and PVC 10x10 are two parts named
+// PVC). A product's setup is its own lines; its price is the catalog's: fixed
+// per size, or per sheet (photo books: price per sheet for the size × the
+// number of sheets + the chosen packaging's catalog price).
 //
 // A line is a part × a quantity, optionally × a number on the order (× NOS),
-// only for one size, only when the order chose something (Lamination = Matt),
-// or "the part the order chose" in a detail (Packaging); or an other cost (a
-// fixed amount). The same rules live in parts_usage() in
-// supabase/migrations/20261218100000_parts.sql, which takes stock off at
-// Quality check.
+// in the order's size (the part of that name in the size the order chose),
+// only for one size variant, only when the order chose something (Lamination =
+// Matt), or "the part the order chose" in a detail (Packaging); or an other
+// cost (a fixed amount). The same walk is parts_usage() in
+// supabase/migrations/20261219100000_part_sizes_sheet_prices.sql, which takes
+// stock off at Quality check.
 
 import type { MaterialKind } from "./model";
-
-export type Pricing = "fixed" | "parts";
 
 export interface PartRow {
   id: string;
@@ -26,11 +27,11 @@ export interface PartRow {
   kind: MaterialKind;
   /** Made from other parts (no stock or purchases of its own); else bought. */
   made: boolean;
+  /** One of the order form's sizes (12x12); null: any size. */
+  size: string | null;
   /** Bought: the latest purchase's price per unit. */
   unitCost: number;
-  /** What the client pays for one inside a product priced by its parts; null: not charged on its own (a made part: its parts' prices). */
-  clientPrice: number | null;
-  /** Sold on its own too: the catalog product it is (its price is the client price, everywhere). */
+  /** Sold on its own as this catalog product (e.g. a box chosen as packaging). */
   productId: string | null;
   productName: string | null;
   productPrice: number | null;
@@ -40,9 +41,11 @@ export interface PartRow {
 }
 
 export interface PartLine {
-  /** Product lines only: just for this size; null: every size. */
+  /** Product lines only: just for this size variant; null: every size. */
   variantId: string | null;
   partId: string | null;
+  /** Use the part of partId's name in the size the order chose. */
+  byOrderSize: boolean;
   /** The part the order chose in this detail (e.g. Packaging), matched by name. */
   chosenDetail: string | null;
   /** Part and chosen lines: how many. */
@@ -57,20 +60,29 @@ export interface PartLine {
   amount: number | null;
 }
 
-/** Everything parts need, read once. */
+/** One size's price per sheet (photo books), from the catalog. */
+export interface SheetPrice {
+  size: string;
+  price: number;
+}
+
+/** Everything parts and prices need, read once. */
 export interface PartsBook {
   parts: PartRow[];
   /** A made part's lines, by its id. */
   partLines: Map<string, PartLine[]>;
   /** A product's setup lines, by product id. */
   productLines: Map<string, PartLine[]>;
-  /** How a product is priced; missing: fixed. */
-  pricing: Map<string, Pricing>;
+  /** Products priced per sheet: their price per sheet by size. */
+  sheetPrices: Map<string, SheetPrice[]>;
+  /** The Packaging category's products and their catalog prices, chosen on an order by name. */
+  packaging: { name: string; price: number }[];
 }
 
-/** What an order item chose: its size and its details by name. */
+/** What an order item chose: its size variant (and its name) and its details by name. */
 export interface OrderChoice {
   variantId: string | null;
+  variantName?: string | null;
   details: Record<string, string | number>;
 }
 
@@ -80,15 +92,13 @@ export interface Evaluation {
   cost: number;
   /** Bought parts with no price yet: the cost is short by them. */
   unpriced: string[];
-  /** The client prices of its parts, added up. */
-  partsPrice: number;
-  /** What the order lacks for a price (NOS, Lamination: Satin…); empty when complete. */
+  /** What the order lacks for the full cost (a part in its size, the packaging it chose…). */
   missing: string[];
   /** Bought parts one unit uses (not rounded: usage() rounds the total, as the database does). */
   usage: { partId: string; qty: number }[];
   otherCost: number;
   /** Each top-level line's share. */
-  lines: { name: string; qty: number; cost: number; price: number }[];
+  lines: { name: string; qty: number; cost: number }[];
 }
 
 // --- Details ---------------------------------------------------------------
@@ -116,6 +126,16 @@ export function detailAmount(details: Record<string, string | number>, name: str
   return m ? Number(m[1]) : 0;
 }
 
+/** The size an order chose: its Size detail, else its size variant's name. As parts_order_size(). */
+export function orderSize(order: OrderChoice): string {
+  return detailText(order.details, "Size") || (order.variantName ?? "").trim();
+}
+
+/** The detail that counts an order's sheets (NOS, Sheets, Number of sheets), among a category's. */
+export function sheetsDetail(names: string[]): string | null {
+  return names.find((n) => /^(nos|sheets|number of sheets)\b/i.test(n.trim())) ?? null;
+}
+
 const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
 
 // --- Parts -----------------------------------------------------------------
@@ -123,67 +143,51 @@ const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLow
 /** What a walk through the lines adds up. */
 export class Tally {
   cost = 0;
-  price = 0;
   other = 0;
   usage = new Map<string, number>();
   unpriced = new Set<string>();
   missing = new Set<string>();
 }
 
-/** Anything a line can use: it knows its own cost, its price and what it uses up. */
+/** Anything a line can use: it knows what a quantity of it costs and uses up. */
 export interface Component {
   readonly row: PartRow;
-  /** Its client price set on it (a product's price when it's sold on its own); null: not set. */
-  ownPrice(): number | null;
-  /** Adds `qty` of it to the tally; `charge`: its price still counts here. */
-  addTo(tally: Tally, qty: number, order: OrderChoice, charge: boolean, path: string[]): void;
+  addTo(tally: Tally, qty: number, order: OrderChoice, path: string[]): void;
 }
 
-abstract class Part implements Component {
+export class BoughtPart implements Component {
   constructor(readonly row: PartRow) {}
 
-  ownPrice(): number | null {
-    if (this.row.productId) return this.row.productPrice;
-    return this.row.clientPrice;
-  }
-
-  abstract addTo(tally: Tally, qty: number, order: OrderChoice, charge: boolean, path: string[]): void;
-}
-
-export class BoughtPart extends Part {
-  addTo(tally: Tally, qty: number, _order: OrderChoice, charge: boolean): void {
+  addTo(tally: Tally, qty: number): void {
     tally.usage.set(this.row.id, (tally.usage.get(this.row.id) ?? 0) + qty);
     if (this.row.unitCost > 0) tally.cost += qty * this.row.unitCost;
-    else tally.unpriced.add(this.row.name);
-    if (charge) tally.price += qty * (this.ownPrice() ?? 0);
+    else tally.unpriced.add(partLabel(this.row));
   }
 }
 
-export class MadePart extends Part {
+export class MadePart implements Component {
   constructor(
-    row: PartRow,
+    readonly row: PartRow,
     private readonly catalog: PartsCatalog,
-  ) {
-    super(row);
-  }
+  ) {}
 
   get lines(): PartLine[] {
     return this.catalog.linesOf(this.row.id);
   }
 
-  addTo(tally: Tally, qty: number, order: OrderChoice, charge: boolean, path: string[]): void {
+  addTo(tally: Tally, qty: number, order: OrderChoice, path: string[]): void {
     if (path.includes(this.row.id)) {
       tally.missing.add(`${this.row.name} is inside itself`);
       return;
     }
-    const own = this.ownPrice();
-    if (charge && own !== null) tally.price += qty * own;
-    this.catalog.walk(this.lines, tally, qty, order, charge && own === null, [...path, this.row.id], this.row.ownerProductId);
+    this.catalog.walk(this.lines, tally, qty, order, [...path, this.row.id], this.row.ownerProductId);
   }
 }
 
-/** A part a line names, or the one an order chose; null when there's none. */
-type Resolved = { part: Component } | { other: number } | { missing: string } | null;
+/** "PVC 12x12": a part's name with its size. */
+export function partLabel(p: Pick<PartRow, "name" | "size">): string {
+  return p.size ? `${p.name} ${p.size}` : p.name;
+}
 
 /** All the parts, and the rules that walk their lines. */
 export class PartsCatalog {
@@ -213,8 +217,26 @@ export class PartsCatalog {
     return row ? this.parts.get(row.id) : undefined;
   }
 
+  /** The part of this one's name in a size, among those `productId` may use (an active one first). */
+  inSize(partId: string, size: string, productId: string | null): Component | undefined {
+    const named = this.parts.get(partId)?.row;
+    if (!named || !size) return undefined;
+    const rows = this.usableBy(productId).filter((p) => same(p.name, named.name) && p.size !== null && same(p.size, size));
+    const row = rows.find((p) => p.active) ?? rows[0];
+    return row ? this.parts.get(row.id) : undefined;
+  }
+
+  /** The sizes a part's name comes in ("PVC": 12x12, 10x10). */
+  sizesOf(partId: string, productId: string | null): string[] {
+    const named = this.parts.get(partId)?.row;
+    if (!named) return [];
+    return this.usableBy(productId).filter((p) => same(p.name, named.name) && p.size).map((p) => p.size!);
+  }
+
   setup(productId: string): ProductSetup {
-    return new ProductSetup(productId, this.book.productLines.get(productId) ?? [], this.book.pricing.get(productId) ?? "fixed", this);
+    const rates = this.book.sheetPrices.get(productId) ?? [];
+    const pricing: PricingMethod = rates.length ? new PerSheet(rates, this.book.packaging) : new FixedPerSize();
+    return new ProductSetup(productId, this.book.productLines.get(productId) ?? [], pricing, this);
   }
 
   /** One unit of a made part (as if ordered with these details). */
@@ -225,13 +247,15 @@ export class PartsCatalog {
 
   /**
    * The order details these lines depend on, at any depth: numbers they're ×
-   * (NOS), choices they're only for (Lamination: Matt, Glossy) and details a
-   * part is chosen by (Packaging). For trying an order out.
+   * (NOS), choices they're only for (Lamination: Matt, Glossy), details a part
+   * is chosen by (Packaging), and whether a line follows the order's size.
+   * For trying an order out.
    */
-  detailsUsed(lines: PartLine[]): { numbers: string[]; choices: { name: string; values: string[] }[]; chosen: string[] } {
+  detailsUsed(lines: PartLine[]): { numbers: string[]; choices: { name: string; values: string[] }[]; chosen: string[]; sizes: string[] } {
     const numbers = new Map<string, string>();
     const choices = new Map<string, { name: string; values: Set<string> }>();
     const chosen = new Map<string, string>();
+    const sizes = new Set<string>();
     const seen = new Set<string>();
     const visit = (ls: PartLine[]) => {
       for (const l of ls) {
@@ -242,19 +266,25 @@ export class PartsCatalog {
           choices.set(detailKey(l.whenDetail), c);
         }
         if (l.chosenDetail) chosen.set(detailKey(l.chosenDetail), l.chosenDetail);
-        if (l.partId && !seen.has(l.partId)) {
-          seen.add(l.partId);
-          visit(this.linesOf(l.partId));
+        const name = l.partId && l.byOrderSize ? this.parts.get(l.partId)?.row.name : undefined;
+        if (name) for (const p of this.book.parts) if (p.size && same(p.name, name)) sizes.add(p.size);
+        const ids = l.partId ? (l.byOrderSize ? this.book.parts.filter((p) => same(p.name, this.parts.get(l.partId!)?.row.name ?? "")).map((p) => p.id) : [l.partId]) : [];
+        for (const id of ids) {
+          if (seen.has(id)) continue;
+          seen.add(id);
+          visit(this.linesOf(id));
         }
       }
     };
     visit(lines);
-    return { numbers: [...numbers.values()], choices: [...choices.values()].map((c) => ({ name: c.name, values: [...c.values] })), chosen: [...chosen.values()] };
+    return { numbers: [...numbers.values()], choices: [...choices.values()].map((c) => ({ name: c.name, values: [...c.values] })), chosen: [...chosen.values()], sizes: [...sizes] };
   }
 
-  /** The products and made parts whose own lines use this part. */
+  /** The products and made parts whose own lines use this part (by itself, or by its name in the order's size). */
   usedBy(partId: string): { products: string[]; parts: string[] } {
-    const uses = (lines: PartLine[]) => lines.some((l) => l.partId === partId);
+    const row = this.parts.get(partId)?.row;
+    const uses = (lines: PartLine[]) =>
+      lines.some((l) => l.partId === partId || (row && l.byOrderSize && l.partId && same(this.parts.get(l.partId)?.row.name ?? "", row.name)));
     return {
       products: [...this.book.productLines].filter(([, ls]) => uses(ls)).map(([id]) => id),
       parts: [...this.book.partLines].filter(([, ls]) => uses(ls)).map(([id]) => id),
@@ -279,17 +309,15 @@ export class PartsCatalog {
     const tally = new Tally();
     const shares: Evaluation["lines"] = [];
     for (const line of lines) {
-      const before = { cost: tally.cost, price: tally.price, other: tally.other };
-      this.walk([line], tally, 1, order, true, [], productId, false);
+      if (!this.applies(line, order)) continue;
+      const before = tally.cost + tally.other;
+      this.walk([line], tally, 1, order, [], productId);
       const name = this.lineName(line, order, productId);
-      if (name === null) continue;
-      shares.push({ name, qty: this.lineQty(line, order), cost: tally.cost - before.cost + tally.other - before.other, price: tally.price - before.price });
+      if (name !== null) shares.push({ name, qty: this.lineQty(line, order), cost: tally.cost + tally.other - before });
     }
-    this.checkChoices(lines, order, tally);
     return {
       cost: Math.round(tally.cost + tally.other),
       unpriced: [...tally.unpriced],
-      partsPrice: Math.round(tally.price),
       missing: [...tally.missing],
       usage: [...tally.usage].filter(([, q]) => q > 0).map(([partId, qty]) => ({ partId, qty })),
       otherCost: Math.round(tally.other),
@@ -297,7 +325,7 @@ export class PartsCatalog {
     };
   }
 
-  /** Whether a line counts for this order: its size, and its condition. */
+  /** Whether a line counts for this order: its size variant, and its condition. */
   applies(line: PartLine, order: OrderChoice): boolean {
     if (line.variantId && line.variantId !== order.variantId) return false;
     if (line.whenDetail && !same(detailText(order.details, line.whenDetail), line.whenValue ?? "")) return false;
@@ -311,16 +339,16 @@ export class PartsCatalog {
   }
 
   private lineName(line: PartLine, order: OrderChoice, productId: string | null): string | null {
-    if (!this.applies(line, order)) return null;
     if (line.label !== null) return line.label;
-    if (line.chosenDetail) {
-      const value = detailText(order.details, line.chosenDetail);
-      return value ? (this.chosen(value, productId)?.row.name ?? value) : null;
-    }
-    return line.partId ? (this.parts.get(line.partId)?.row.name ?? "A removed part") : null;
+    const resolved = this.resolve(line, order, productId);
+    if (resolved && "part" in resolved) return partLabel(resolved.part.row);
+    if (line.chosenDetail) return detailText(order.details, line.chosenDetail) || null;
+    const named = line.partId ? this.parts.get(line.partId)?.row : undefined;
+    return named ? (line.byOrderSize ? `${named.name} (order's size)` : partLabel(named)) : "A removed part";
   }
 
-  private resolve(line: PartLine, order: OrderChoice, productId: string | null): Resolved {
+  /** A line's part for an order: itself, the one of its name in the order's size, or the one chosen. As parts_line_part(). */
+  private resolve(line: PartLine, order: OrderChoice, productId: string | null): { part: Component } | { other: number } | { missing: string } | null {
     if (line.label !== null) return { other: line.amount ?? 0 };
     if (line.chosenDetail) {
       const value = detailText(order.details, line.chosenDetail);
@@ -329,11 +357,15 @@ export class PartsCatalog {
       return part ? { part } : { missing: `${line.chosenDetail}: ${value}` };
     }
     const part = line.partId ? this.parts.get(line.partId) : undefined;
-    return part ? { part } : { missing: "A removed part" };
+    if (!part) return { missing: "A removed part" };
+    if (!line.byOrderSize) return { part };
+    const size = orderSize(order);
+    const sized = this.inSize(part.row.id, size, productId);
+    return sized ? { part: sized } : { missing: size ? `${part.row.name} in ${size}` : `the size, for ${part.row.name}` };
   }
 
-  /** Adds lines × `qty` to the tally (used by made parts for their own lines). */
-  walk(lines: PartLine[], tally: Tally, qty: number, order: OrderChoice, charge: boolean, path: string[], productId: string | null, checkChoices = true): void {
+  /** Adds lines × `qty` to the tally (made parts use it for their own lines). */
+  walk(lines: PartLine[], tally: Tally, qty: number, order: OrderChoice, path: string[], productId: string | null): void {
     for (const line of lines) {
       if (!this.applies(line, order)) continue;
       const resolved = this.resolve(line, order, productId);
@@ -347,74 +379,73 @@ export class PartsCatalog {
         continue;
       }
       if (line.perDetail && detailAmount(order.details, line.perDetail) <= 0) tally.missing.add(line.perDetail);
-      resolved.part.addTo(tally, qty * this.lineQty(line, order), order, charge, path);
-    }
-    if (checkChoices) this.checkChoices(lines, order, tally);
-  }
-
-  /**
-   * A detail whose lines change the price (Lamination = Matt, = Glossy) with
-   * no line for the order's value: the price would be short, so it's missing.
-   * A detail that only adds a cost (Cover = Hard) needs no line for the others.
-   */
-  private checkChoices(lines: PartLine[], order: OrderChoice, tally: Tally): void {
-    const details = new Map<string, string>();
-    for (const l of lines) {
-      if (!l.whenDetail || (l.variantId && l.variantId !== order.variantId)) continue;
-      const asChosen = { ...order, details: { ...order.details, [l.whenDetail]: l.whenValue ?? "" } };
-      const alone = new Tally();
-      this.walk([l], alone, 1, asChosen, true, [], null, false);
-      if (alone.price > 0) details.set(detailKey(l.whenDetail), l.whenDetail);
-    }
-    for (const [, name] of details) {
-      const value = detailText(order.details, name);
-      const matched = lines.some((l) => l.whenDetail && detailKey(l.whenDetail) === detailKey(name) && this.applies(l, order));
-      if (!matched) tally.missing.add(value ? `${name}: ${value}` : name);
+      resolved.part.addTo(tally, qty * this.lineQty(line, order), order, path);
     }
   }
 }
 
 // --- Pricing ---------------------------------------------------------------
 
-/** How a product's price is worked out. A new way of pricing is one more of these. */
+/** How a product's client price is worked out, from the catalog. A new way of pricing is one more of these. */
 export interface PricingMethod {
-  readonly key: Pricing;
+  readonly key: "fixed" | "per_sheet";
   readonly label: string;
-  /** One unit's price for an order; null: priced on the call. */
-  price(evaluation: Evaluation, listPrice: number | null): number | null;
+  /** One unit's client price for an order; `listPrice` is the catalog's (the size's, else the product's). Null, with why, when priced on the call. */
+  quote(order: OrderChoice, listPrice: number | null): { price: number | null; missing: string[] };
 }
 
 export class FixedPerSize implements PricingMethod {
   readonly key = "fixed";
-  readonly label = "Fixed per size";
-  price(_evaluation: Evaluation, listPrice: number | null): number | null {
-    return listPrice;
+  readonly label = "Catalog price per size";
+  quote(_order: OrderChoice, listPrice: number | null) {
+    return { price: listPrice, missing: listPrice === null ? ["a catalog price"] : [] };
   }
 }
 
-export class BuiltFromParts implements PricingMethod {
-  readonly key = "parts";
-  readonly label = "Built from parts";
-  /** Never a wrong price: with anything missing, it's left for the call. */
-  price(evaluation: Evaluation): number | null {
-    return evaluation.missing.length === 0 && evaluation.partsPrice > 0 ? evaluation.partsPrice : null;
+/**
+ * Photo books: the price per sheet for the order's size × its number of
+ * sheets, + the chosen packaging's catalog price. Never a wrong price: with
+ * anything missing, it's left for the call.
+ */
+export class PerSheet implements PricingMethod {
+  readonly key = "per_sheet";
+  readonly label = "Price per sheet";
+
+  constructor(
+    readonly rates: SheetPrice[],
+    private readonly packaging: { name: string; price: number }[],
+  ) {}
+
+  rateFor(size: string): number | null {
+    return this.rates.find((r) => same(r.size, size))?.price ?? null;
+  }
+
+  quote(order: OrderChoice) {
+    const missing: string[] = [];
+    const size = orderSize(order);
+    const rate = size ? this.rateFor(size) : null;
+    if (!size) missing.push("Size");
+    else if (rate === null) missing.push(`a price per sheet for ${size}`);
+    const sheetsName = sheetsDetail(Object.keys(order.details));
+    const sheets = sheetsName ? Math.floor(detailAmount(order.details, sheetsName)) : 0;
+    if (sheets <= 0) missing.push("Number of sheets");
+    const packName = Object.keys(order.details).find((k) => /^packag/i.test(k.trim()));
+    const chosen = packName ? detailText(order.details, packName) : "";
+    const pack = chosen ? this.packaging.find((p) => same(p.name, chosen)) : undefined;
+    if (chosen && !pack) missing.push(`Packaging: ${chosen}`);
+    if (missing.length || rate === null) return { price: null, missing };
+    return { price: rate * sheets + (pack?.price ?? 0), missing };
   }
 }
 
-export const PRICING: Record<Pricing, PricingMethod> = { fixed: new FixedPerSize(), parts: new BuiltFromParts() };
-
-/** A product's own settings: its lines and how it's priced. */
+/** A product's own settings: what it's made of, and how its catalog price works. */
 export class ProductSetup {
-  readonly pricing: PricingMethod;
-
   constructor(
     readonly productId: string,
     readonly lines: PartLine[],
-    pricing: Pricing,
+    readonly pricing: PricingMethod,
     private readonly catalog: PartsCatalog,
-  ) {
-    this.pricing = PRICING[pricing];
-  }
+  ) {}
 
   get isSetUp(): boolean {
     return this.lines.length > 0;
@@ -424,9 +455,9 @@ export class ProductSetup {
     return this.catalog.evaluate(this.lines, order, this.productId);
   }
 
-  /** One unit's price for an order; `listPrice` is the catalog's (the size's, else the product's). */
+  /** One unit's client price for an order (null: priced on the call). */
   price(order: OrderChoice, listPrice: number | null): number | null {
-    return this.pricing.price(this.evaluate(order), listPrice);
+    return this.pricing.quote(order, listPrice).price;
   }
 
   /** What `units` of an order item use from stock, and its other costs. */
@@ -438,65 +469,58 @@ export class ProductSetup {
     };
   }
 
-  /** The number details its lines are × (NOS, Pages), by name. */
+  /** The number details its lines are × (NOS, Pages), by name, at any depth. */
   perDetails(): string[] {
-    const seen = new Map<string, string>();
-    const visit = (lines: PartLine[], depth: number) => {
-      for (const l of lines) {
-        if (l.perDetail) seen.set(detailKey(l.perDetail), l.perDetail);
-        if (l.partId && depth < 20) visit(this.catalog.linesOf(l.partId), depth + 1);
-      }
-    };
-    visit(this.lines, 0);
-    return [...seen.values()];
+    return this.catalog.detailsUsed(this.lines).numbers;
   }
 
   /**
-   * The rows a costs list shows: each size, or each value of the detail its
-   * top lines are chosen by (Size = 12x12, 10x10); per number detail, what
-   * each 1 of it adds (per sheet).
+   * The rows a costs list shows: per sheet, each size with a price per sheet;
+   * else each size variant (or one row). Per number detail, what each 1 of it
+   * adds to the cost (per sheet, per page).
    */
   rows(sizes: { id: string; name: string; price: number | null }[], productPrice: number | null): CostRow[] {
-    const when = this.lines.find((l) => l.whenDetail)?.whenDetail ?? null;
-    const values = when ? [...new Set(this.lines.filter((l) => l.whenDetail === when).map((l) => l.whenValue ?? ""))] : [];
-    const base: { key: string; name: string | null; variantId: string | null; details: Record<string, string>; listPrice: number | null }[] = sizes.length
-      ? sizes.map((s) => ({ key: s.id, name: s.name, variantId: s.id, details: {}, listPrice: s.price ?? productPrice }))
-      : values.length && when
-        ? values.map((v) => ({ key: v, name: v, variantId: null, details: { [when]: v }, listPrice: productPrice }))
-        : [{ key: "one", name: null, variantId: null, details: {}, listPrice: productPrice }];
     const per = this.perDetails();
+    const sheetRates = this.pricing instanceof PerSheet ? this.pricing.rates : [];
+    const base: { key: string; name: string | null; order: OrderChoice; listPrice: number | null; perSheet: number | null }[] = sheetRates.length
+      ? sheetRates.map((r) => ({ key: r.size, name: r.size, order: { variantId: null, details: { Size: r.size } }, listPrice: null, perSheet: r.price }))
+      : sizes.length
+        ? sizes.map((s) => ({ key: s.id, name: s.name, order: { variantId: s.id, variantName: s.name, details: {} }, listPrice: s.price ?? productPrice, perSheet: null }))
+        : [{ key: "one", name: null, order: { variantId: null, details: {} }, listPrice: productPrice, perSheet: null }];
     return base.map((b) => {
-      const at = (extra: Record<string, string>) => this.evaluate({ variantId: b.variantId, details: { ...b.details, ...extra } });
-      const zero = at(Object.fromEntries(per.map((d) => [d, "0"])));
-      const perOne = per.map((d) => {
-        const one = at({ ...Object.fromEntries(per.map((x) => [x, "0"])), [d]: "1" });
-        return { name: d, cost: one.cost - zero.cost, price: one.partsPrice - zero.partsPrice };
-      });
-      const price = this.pricing.key === "parts" ? (per.length ? zero.partsPrice : this.pricing.price(zero, b.listPrice)) : b.listPrice;
-      return { key: b.key, name: b.name, cost: zero.cost, price, perDetail: perOne, unpriced: zero.unpriced };
+      const at = (values: Record<string, string>) => this.evaluate({ ...b.order, details: { ...b.order.details, ...values } });
+      const zeros = Object.fromEntries(per.map((d) => [d, "0"]));
+      const zero = at(zeros);
+      const perOne = per.map((d) => ({ name: d, cost: at({ ...zeros, [d]: "1" }).cost - zero.cost }));
+      return { key: b.key, name: b.name, cost: zero.cost, price: b.listPrice, perSheet: b.perSheet, perDetail: perOne, unpriced: zero.unpriced, missing: zero.missing.filter((m) => !per.includes(m)) };
     });
   }
 }
 
 export interface CostRow {
   key: string;
-  /** The size's name (or the chosen value); null for a product with one kind. */
+  /** The size's name; null for a product with one kind. */
   name: string | null;
   /** One unit with every number detail at 0. */
   cost: number;
-  /** Its price: the catalog's, or from its parts; null when priced on the call. */
+  /** The catalog's price for one; null when priced per sheet or on the call. */
   price: number | null;
-  /** What each 1 of a number detail adds (per sheet, per page). */
-  perDetail: { name: string; cost: number; price: number }[];
+  /** Priced per sheet: the catalog's price per sheet for this size. */
+  perSheet: number | null;
+  /** What each 1 of a number detail adds to the cost (per sheet, per page). */
+  perDetail: { name: string; cost: number }[];
   unpriced: string[];
+  missing: string[];
 }
 
-/** Profit and margin per row: on the fixed figures, or per one of the single number detail. */
-export function rowMargin(row: CostRow, pricing: Pricing): { profit: number; percent: number; per: string | null } | null {
-  if (row.perDetail.length === 1 && pricing === "parts") {
-    const d = row.perDetail[0];
-    if (d.price <= 0) return null;
-    return { profit: d.price - d.cost, percent: Math.round(((d.price - d.cost) / d.price) * 1000) / 10, per: d.name };
+/** Profit and margin of a row: per sheet when priced per sheet, else on one at its catalog price. */
+export function rowMargin(row: CostRow): { profit: number; percent: number; per: string | null } | null {
+  if (row.perSheet !== null) {
+    const sheet = row.perDetail.find((d) => /^(nos|sheets|number of sheets)\b/i.test(d.name.trim()));
+    if (!sheet || row.perSheet <= 0) return null;
+    // A sheet's share: its own cost; what the book costs anyway (binding, cover) isn't per sheet.
+    const profit = row.perSheet - sheet.cost;
+    return { profit, percent: Math.round((profit / row.perSheet) * 1000) / 10, per: "sheet" };
   }
   if (row.perDetail.length || row.price === null || row.price <= 0) return null;
   return { profit: row.price - row.cost, percent: Math.round(((row.price - row.cost) / row.price) * 1000) / 10, per: null };
@@ -507,13 +531,14 @@ export interface PlainBook {
   parts: PartRow[];
   partLines: [string, PartLine[]][];
   productLines: [string, PartLine[]][];
-  pricing: [string, Pricing][];
+  sheetPrices: [string, SheetPrice[]][];
+  packaging: { name: string; price: number }[];
 }
 
 export function toPlainBook(book: PartsBook): PlainBook {
-  return { parts: book.parts, partLines: [...book.partLines], productLines: [...book.productLines], pricing: [...book.pricing] };
+  return { parts: book.parts, partLines: [...book.partLines], productLines: [...book.productLines], sheetPrices: [...book.sheetPrices], packaging: book.packaging };
 }
 
 export function fromPlainBook(plain: PlainBook): PartsBook {
-  return { parts: plain.parts, partLines: new Map(plain.partLines), productLines: new Map(plain.productLines), pricing: new Map(plain.pricing) };
+  return { parts: plain.parts, partLines: new Map(plain.partLines), productLines: new Map(plain.productLines), sheetPrices: new Map(plain.sheetPrices), packaging: plain.packaging };
 }

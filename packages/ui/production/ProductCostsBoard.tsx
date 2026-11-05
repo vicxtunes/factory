@@ -1,9 +1,9 @@
 "use client";
 
 // Production → Product costs: each product size's cost at the latest prices
-// paid, its price, the profit and the margin, from its setup. A product whose
-// cost depends on a number (pages, sheets) shows it per one; priced by its
-// parts, its margin is per one too. Cards on a phone, aligned rows from the
+// paid (from its setup), its catalog price, the profit and the margin. A
+// product whose cost depends on a number (pages, sheets) shows it per one;
+// priced per sheet, its price and margin are per sheet too. Cards on a phone, aligned rows from the
 // container's 3xl; tap a product for how it's doing (or, not set up yet, to
 // set it up).
 
@@ -13,7 +13,7 @@ import { useState } from "react";
 import { TextInput } from "@repo/ui/Field";
 import { useCurrencySymbol } from "@repo/lib/currency/CurrencySymbolProvider";
 import { formatMoney } from "@repo/lib/currency/format";
-import { PRICING, formatUnitCost, type ProductCost } from "@repo/lib/production/core";
+import { formatUnitCost, type ProductCost } from "@repo/lib/production/core";
 
 import { Tile } from "./MaterialsBoard";
 
@@ -30,21 +30,16 @@ export function ProductCostsBoard({ products, basePath }: { products: ProductCos
   const lowLoss = products.flatMap((p) => p.rows.filter((r) => r.margin && r.margin.profit < 0)).length;
 
   type Row = ProductCost["rows"][number];
-  const per = (name: string) => `per ${name.replace(/\s*\(.*\)\s*$/, "").toLowerCase().replace(/s$/, "")}`;
+  const per = (name: string) => (/^(nos|sheets?|number of sheets)\b/i.test(name.trim()) ? "per sheet" : `per ${name.replace(/\s*\(.*\)\s*$/, "").toLowerCase().replace(/s$/, "")}`);
   const costText = (r: Row) => `${r.cost || !r.perDetail.length ? money(r.cost) : ""}${r.perDetail.map((d) => `${r.cost ? " + " : ""}${formatUnitCost(d.cost, symbol)} ${per(d.name)}`).join("")}`;
-  const priceText = (r: Row) =>
-    r.perDetail.length && r.perDetail.some((d) => d.price > 0)
-      ? r.perDetail.map((d) => `${formatUnitCost(d.price, symbol)} ${per(d.name)}`).join(" + ") + (r.price ? ` + ${money(r.price)}` : "")
-      : r.price !== null
-        ? money(r.price)
-        : "—";
+  const priceText = (r: Row) => (r.perSheet !== null ? `${money(r.perSheet)} per sheet` : r.price !== null ? money(r.price) : "—");
   const marginText = (r: Row) =>
     r.margin ? (
       <span className={r.margin.profit < 0 ? "text-error-600 dark:text-error-400" : r.margin.percent < 20 ? "text-warning-600 dark:text-warning-500" : "text-success-600 dark:text-success-500"}>
         {r.margin.percent}%{r.margin.per ? ` ${per(r.margin.per)}` : ""}
       </span>
     ) : (
-      <span className="text-muted">{r.price === null && !r.perDetail.length ? "priced on call" : r.perDetail.length ? `by ${r.perDetail[0].name.replace(/\s*\(.*\)\s*$/, "").toLowerCase()}` : "—"}</span>
+      <span className="text-muted">{r.price === null && r.perSheet === null && !r.perDetail.length ? "priced on call" : r.perDetail.length ? `by ${per(r.perDetail[0].name).slice(4)}` : "—"}</span>
     );
 
   // Products by category, in catalog order.
@@ -79,7 +74,7 @@ export function ProductCostsBoard({ products, basePath }: { products: ProductCos
                     <div className="flex items-baseline justify-between gap-3">
                       <p className="truncate font-medium">{p.name}</p>
                       {p.isSetUp ? (
-                        <span className="shrink-0 text-xs text-muted">{PRICING[p.pricing].label} · How it&apos;s doing →</span>
+                        <span className="shrink-0 text-xs text-muted">{p.pricing === "per_sheet" ? "Priced per sheet" : "Catalog price"} · How it&apos;s doing →</span>
                       ) : (
                         <span className="shrink-0 text-xs font-medium text-brand-600">Set it up →</span>
                       )}
@@ -98,7 +93,9 @@ export function ProductCostsBoard({ products, basePath }: { products: ProductCos
                           <div key={r.key} className="grid grid-cols-[1fr_auto] gap-x-3 text-sm @3xl:grid-cols-[1fr_15rem_15rem_7rem_8rem]">
                             <span className="truncate text-muted @3xl:text-foreground">
                               {r.name ?? "Each"}
-                              {r.unpriced.length ? <span className="ml-2 text-xs text-warning-600 dark:text-warning-500">cost short: {r.unpriced.length} not bought yet</span> : null}
+                              {r.unpriced.length || r.missing.length ? (
+                                <span className="ml-2 text-xs text-warning-600 dark:text-warning-500">cost short: {[...r.unpriced.map((u) => `${u} not bought yet`), ...r.missing.map((m) => `no ${m}`)].join(", ")}</span>
+                              ) : null}
                             </span>
                             <span className="text-right tnum @3xl:order-last">{marginText(r)}</span>
                             <span className="col-span-2 text-xs text-muted @3xl:col-span-1 @3xl:text-right @3xl:text-sm @3xl:text-foreground tnum">

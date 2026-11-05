@@ -515,7 +515,7 @@ export async function updateOrderItem(input: UpdateOrderItemInput): Promise<Resu
   const newQty = Number.isFinite(input.qty) && input.qty > 0 ? Math.floor(input.qty) : 1;
   const newProductType = variant?.name ?? null;
 
-  // A book priced by its parts follows its details while the order's still being
+  // A book priced per sheet follows its details while the order's still being
   // confirmed: more sheets, a bigger size. A price agreed on the call stands
   // until the details change. A confirmed order's price never moves here.
   const detailsChanged = JSON.stringify(sortedEntries(item.attributes)) !== JSON.stringify(sortedEntries(attributes)) || item.product_id !== input.product_id;
@@ -974,10 +974,19 @@ export async function setProductPrice(id: string, price: string): Promise<Result
   }
 
   const admin = createAdminClient();
+  // A photo book priced per sheet has no price of its own: it would win on invoices.
+  if (value !== null && (await hasSheetPrices(id))) {
+    return { ok: false, error: "This product is priced per sheet. Clear its prices per sheet first, or leave its price empty." };
+  }
   const { error } = await admin.from("products").update({ price: value }).eq("id", id);
   if (error) return { ok: false, error: error.message };
   catalogChanged();
   return { ok: true };
+}
+
+async function hasSheetPrices(productId: string): Promise<boolean> {
+  const { count } = await createAdminClient().from("product_sheet_prices").select("id", { count: "exact", head: true }).eq("product_id", productId);
+  return (count ?? 0) > 0;
 }
 
 // The unit shown on invoices ("Pc", "Sheet", "Service"); copied onto an
@@ -1183,6 +1192,12 @@ export async function setVariantPrice(id: string, price: string): Promise<Result
   }
 
   const admin = createAdminClient();
+  if (value !== null) {
+    const { data: variant } = await admin.from("product_variants").select("product_id").eq("id", id).maybeSingle();
+    if (variant && (await hasSheetPrices(variant.product_id as string))) {
+      return { ok: false, error: "This product is priced per sheet. Clear its prices per sheet first, or leave its sizes' prices empty." };
+    }
+  }
   const { error } = await admin.from("product_variants").update({ price: value }).eq("id", id);
   if (error) return { ok: false, error: error.message };
   catalogChanged();

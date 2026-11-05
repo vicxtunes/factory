@@ -4,6 +4,8 @@ import { useRef, useState, useTransition } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 
+import { setSheetPrice } from "@repo/lib/production/actions";
+import { sheetsDetail } from "@repo/lib/production/core";
 import { Button } from "@repo/ui/Button";
 import { Drawer } from "@repo/ui/Drawer";
 import { ExportButtons } from "@repo/ui/ExportButtons";
@@ -51,6 +53,8 @@ import { CopyLinkButton } from "./share-link";
 import { clientPath } from "@repo/lib/client-portal/paths";
 
 type MutationResult = { ok: boolean; error?: string };
+/** Each product's price per sheet, by size in lower case. */
+export type SheetPrices = Record<string, Record<string, number>>;
 
 const ATTRIBUTE_TYPES: AttributeType[] = ["text", "number", "select"];
 
@@ -155,11 +159,14 @@ export function ProductPanel({
   showroomSettings,
   currencies,
   canManage = true,
+  sheetPrices = {},
 }: {
   categories: ProductCategory[];
   showroomSettings: ShowroomSettings;
   currencies: Currency[];
   canManage?: boolean;
+  /** Photo books: each product's price per sheet, by size. */
+  sheetPrices?: SheetPrices;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -351,7 +358,7 @@ export function ProductPanel({
 
       <Drawer open={openCategory != null} onClose={() => setOpenCategoryId(null)} title={openCategory?.name}>
         {openCategory ? (
-          <CategoryDetail category={openCategory} run={run} pending={pending} canManage={canManage} />
+          <CategoryDetail category={openCategory} run={run} pending={pending} canManage={canManage} sheetPrices={sheetPrices} />
         ) : null}
       </Drawer>
     </div>
@@ -363,11 +370,13 @@ function CategoryDetail({
   run,
   pending,
   canManage,
+  sheetPrices,
 }: {
   category: ProductCategory;
   run: (fn: () => Promise<MutationResult>) => void;
   pending: boolean;
   canManage: boolean;
+  sheetPrices: SheetPrices;
 }) {
   const [tab, setTab] = useState<"products" | "fields">("products");
 
@@ -393,7 +402,7 @@ function CategoryDetail({
       </div>
 
       {tab === "products" ? (
-        <ProductsTab category={category} run={run} pending={pending} canManage={canManage} />
+        <ProductsTab category={category} run={run} pending={pending} canManage={canManage} sheetPrices={sheetPrices} />
       ) : (
         <AttributesTab category={category} run={run} pending={pending} canManage={canManage} />
       )}
@@ -406,13 +415,19 @@ function ProductsTab({
   run,
   pending,
   canManage,
+  sheetPrices,
 }: {
   category: ProductCategory;
   run: (fn: () => Promise<MutationResult>) => void;
   pending: boolean;
   canManage: boolean;
+  sheetPrices: SheetPrices;
 }) {
   const [newName, setNewName] = useState("");
+  // A category with a number of sheets and a Size choice is priced per sheet (photo books).
+  const sheetSizes = sheetsDetail(category.attributes.map((a) => a.name))
+    ? (category.attributes.find((a) => a.name.trim().toLowerCase() === "size")?.options ?? [])
+    : [];
 
   return (
     <div className="space-y-3">
@@ -442,7 +457,7 @@ function ProductsTab({
 
       <div className="space-y-3">
         {category.products.map((p) => (
-          <ProductCard key={p.id} product={p} run={run} pending={pending} canManage={canManage} />
+          <ProductCard key={p.id} product={p} run={run} pending={pending} canManage={canManage} sheetSizes={sheetSizes} sheetPrices={sheetPrices[p.id] ?? {}} />
         ))}
         {category.products.length === 0 ? (
           <p className="text-sm text-muted">No products in this category yet.</p>
@@ -457,11 +472,16 @@ function ProductCard({
   run,
   pending,
   canManage,
+  sheetSizes,
+  sheetPrices,
 }: {
   product: Product;
   run: (fn: () => Promise<MutationResult>) => void;
   pending: boolean;
   canManage: boolean;
+  /** The sizes it can be priced per sheet in; none: not a photo book. */
+  sheetSizes: string[];
+  sheetPrices: Record<string, number>;
 }) {
   const [renaming, setRenaming] = useState(false);
   const [newVariant, setNewVariant] = useState("");
@@ -567,6 +587,37 @@ function ProductCard({
             <option value="Service" />
             <option value="Set" />
           </datalist>
+        </div>
+      ) : null}
+
+      {canManage && sheetSizes.length ? (
+        // A photo book: the order comes to this × its sheets + the packaging's price (see packages/lib/production).
+        <div className="mt-1.5 text-xs text-muted">
+          <span>Price per sheet</span>
+          <span className="ml-1">(× the number of sheets, + the packaging&apos;s price; leave Price above empty):</span>
+          <div className="mt-1 flex flex-wrap gap-2">
+            {sheetSizes.map((size) => (
+              <label key={size} className="flex items-center gap-1">
+                <span>{size}</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  defaultValue={sheetPrices[size.toLowerCase()] ?? ""}
+                  placeholder="—"
+                  className="min-h-7 w-24 rounded-[var(--radius)] border border-border bg-surface px-2 text-xs"
+                  onBlur={(e) => {
+                    const raw = e.target.value.trim();
+                    if (raw === String(sheetPrices[size.toLowerCase()] ?? "")) return;
+                    run(() => setSheetPrice({ productId: product.id, size, price: raw ? Number(raw) : null }));
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") e.currentTarget.blur();
+                  }}
+                />
+              </label>
+            ))}
+          </div>
         </div>
       ) : null}
 
