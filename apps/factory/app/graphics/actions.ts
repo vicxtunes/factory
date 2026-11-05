@@ -492,7 +492,8 @@ export async function createDesignerOrder(
     designerBrief: "",
     responsibleWorkerId: input.responsible_worker_id,
     items: input.items,
-    releaseImmediately: true,
+    // An agent's order waits in Client Orders until 80% is paid (packages/lib/agents).
+    releaseImmediately: !input.agent_id,
   });
   if (!res.ok) return res;
 

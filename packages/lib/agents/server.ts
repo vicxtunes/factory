@@ -21,6 +21,7 @@ import {
   agentFigures,
   agentStage,
   isFinalStage,
+  payBeforeProduction,
   type AgentFigures,
   type AgentStage,
   type CommissionStatus,
@@ -168,6 +169,8 @@ export interface AgentOrder {
   deliveryDate: string | null;
   lines: AgentOrderLine[];
   commission: { status: CommissionStatus; amount: number; creditedAmount: number; creditedAt: string | null };
+  /** Earns commission (orders.commission_eligible). Orders tagged before 2026-11-04 show, but don't. */
+  earns: boolean;
   /** The invoice's share link token, once staff generated it. */
   invoiceToken: string | null;
 }
@@ -178,6 +181,7 @@ interface OrderRow {
   client_id: string | null;
   client_name: string;
   quoted_price: number | string | null;
+  commission_eligible: boolean;
   approval_status: string;
   cancelled_at: string | null;
   created_at: string;
@@ -187,7 +191,7 @@ interface OrderRow {
   invoice: { share_token: string } | { share_token: string }[] | null;
 }
 
-const ORDER_COLUMNS = `id, order_no, client_id, client_name, quoted_price, approval_status, cancelled_at, created_at, delivery_date,
+const ORDER_COLUMNS = `id, order_no, client_id, client_name, quoted_price, commission_eligible, approval_status, cancelled_at, created_at, delivery_date,
   items:order_items (id, product, qty, unit_price, production_status, stage),
   commission:agent_commissions (status, amount, credited_amount, credited_at),
   invoice:invoices (share_token)`;
@@ -213,22 +217,31 @@ async function toOrders(rows: OrderRow[]): Promise<AgentOrder[]> {
         creditedAmount: Number(r.commission?.credited_amount ?? 0),
         creditedAt: r.commission?.credited_at ?? null,
       },
+      earns: r.commission_eligible,
       invoiceToken: invoice?.share_token ?? null,
     };
   });
 }
 
-/** An agent's portal orders, newest first; `clientId`: those for one client. */
+/** An agent's orders, newest first, including older tagged ones that don't earn; `clientId`: those for one client. */
 export async function agentOrders(agentId: string, clientId?: string): Promise<AgentOrder[]> {
-  let query = createAdminClient().from("orders").select(ORDER_COLUMNS).eq("agent_id", agentId).eq("commission_eligible", true);
+  let query = createAdminClient().from("orders").select(ORDER_COLUMNS).eq("agent_id", agentId);
   if (clientId) query = query.eq("client_id", clientId);
   return toOrders(must(await query.order("created_at", { ascending: false }).returns<OrderRow[]>()) ?? []);
 }
 
 /** One of this agent's orders, or null: an agent never opens another's. */
 export async function agentOrder(agentId: string, orderId: string): Promise<AgentOrder | null> {
-  const row = must(await createAdminClient().from("orders").select(ORDER_COLUMNS).eq("id", orderId).eq("agent_id", agentId).eq("commission_eligible", true).maybeSingle<OrderRow>());
+  const row = must(await createAdminClient().from("orders").select(ORDER_COLUMNS).eq("id", orderId).eq("agent_id", agentId).maybeSingle<OrderRow>());
   return row ? (await toOrders([row]))[0] : null;
+}
+
+/** For staff: among these orders, the agents' ones, with what's paid and the 80% needed before production (null until priced). */
+export async function agentPaymentsFor(orderIds: string[]): Promise<Record<string, { paid: number; needed: number | null }>> {
+  if (!orderIds.length) return {};
+  const rows = must(await createAdminClient().from("orders").select("id, quoted_price").in("id", orderIds).eq("commission_eligible", true).returns<{ id: string; quoted_price: number | string | null }[]>()) ?? [];
+  const paid = await paidByOrders(rows.map((r) => r.id));
+  return Object.fromEntries(rows.map((r) => [r.id, { paid: paid[r.id] ?? 0, needed: r.quoted_price === null ? null : payBeforeProduction(Number(r.quoted_price)) }]));
 }
 
 /** A commission the triggers couldn't work out is tried again whenever the agent looks. */
@@ -248,9 +261,11 @@ export async function figuresFor(agentId: string): Promise<AgentFigures & { orde
     db.from("agent_wallets").select("balance").eq("agent_id", agentId).maybeSingle<{ balance: number | string }>(),
     db.from("agent_withdrawals").select("amount").eq("agent_id", agentId).eq("status", "paid"),
   ]);
+  // Figures count the orders that earn; older tagged ones are only listed.
+  const earning = orders.filter((o) => o.earns);
   const figures = agentFigures({
-    stages: orders.map((o) => o.stage),
-    commissions: orders.map((o) => ({ status: o.commission.status, amount: o.commission.amount, credited_amount: o.commission.creditedAmount })),
+    stages: earning.map((o) => o.stage),
+    commissions: earning.map((o) => ({ status: o.commission.status, amount: o.commission.amount, credited_amount: o.commission.creditedAmount })),
     balance: Number(must(wallet)?.balance ?? 0),
     withdrawn: (must(withdrawn) ?? []).reduce((sum, w) => sum + Number(w.amount), 0),
   });
@@ -269,7 +284,7 @@ export async function listAgentsWithFigures(): Promise<AgentListRow[]> {
   return Promise.all(
     rows.map(async (r) => {
       const { orders, ...figures } = await figuresFor(r.id);
-      return { ...toAgent(r), figures, salesValue: orders.filter((o) => o.stage === "delivered").reduce((sum, o) => sum + (o.price ?? 0), 0) };
+      return { ...toAgent(r), figures, salesValue: orders.filter((o) => o.earns && o.stage === "delivered").reduce((sum, o) => sum + (o.price ?? 0), 0) };
     }),
   );
 }
@@ -527,7 +542,7 @@ export async function tellAgents(): Promise<void> {
     if (stage === "submitted") continue;
     await notifyActor(
       { type: "client", id: o.agent.client_id },
-      { title: `Order ${o.order_no}: ${AGENT_STAGE_LABELS[stage]}`, body: stage === "cancelled" ? "This order was cancelled." : `Your order is now ${AGENT_STAGE_LABELS[stage].toLowerCase()}.`, url: `/agents/orders/${o.id}` },
+      { title: `Order ${o.order_no}: ${AGENT_STAGE_LABELS[stage]}`, body: stage === "cancelled" ? "This order was cancelled." : stage === "confirmed" ? "Your order is confirmed. Production starts once your client has paid 80% of the price." : `Your order is now ${AGENT_STAGE_LABELS[stage].toLowerCase()}.`, url: `/agents/orders/${o.id}` },
     ).catch((err) => console.error("agents: push failed:", err));
   }
 

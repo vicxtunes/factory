@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 
+import { UploadQueueStatus } from "@repo/ui/media/UploadQueueStatus";
 import { PriceHero } from "@repo/ui/order/OrderSummary";
 import { PayLater } from "@repo/ui/payments/OrderPayButton";
 import { useCurrencySymbol } from "@repo/lib/currency/CurrencySymbolProvider";
@@ -29,12 +30,15 @@ export function OrderPlaced({
   total,
   needsReview,
   uploadWarnings,
+  uploads,
   forAgent = false,
 }: {
   orderNo: string;
   total: number | null;
   needsReview: boolean;
   uploadWarnings: string[];
+  /** Photos uploading in the background from this device's queue. */
+  uploads: { id: string; name: string }[];
   /** Placed by an agent: their client pays Aming, from the order's page. */
   forAgent?: boolean;
 }) {
@@ -72,15 +76,22 @@ export function OrderPlaced({
         />
       )}
 
+      {forAgent ? (
+        <p className="rounded-[var(--radius)] border border-warning-100 bg-warning-50 p-3 text-sm text-warning-700">
+          Production starts once your client has paid 80% of the confirmed price. Share the payment details with them from the order.
+        </p>
+      ) : null}
+
+      <UploadQueueStatus uploads={uploads} />
+
       {uploadWarnings.length > 0 ? (
         <div className="rounded-[var(--radius)] border border-warning-100 bg-warning-50 p-3 text-sm text-warning-700">
-          <p className="font-medium">The order went through, but some photos didn&apos;t upload:</p>
+          <p className="font-medium">The order went through. Please note:</p>
           <ul className="mt-1 list-disc space-y-0.5 pl-4">
             {uploadWarnings.map((w, i) => (
               <li key={i}>{w}</li>
             ))}
           </ul>
-          <p className="mt-1 text-warning-600">{forAgent ? "Send them to Aming so staff can add them." : "You can add them again from Orders."}</p>
         </div>
       ) : null}
 

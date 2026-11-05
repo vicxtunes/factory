@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 
 import { CardGridSkeleton, ChipRowSkeleton } from "@repo/ui/skeletons/blocks";
 import { Loading } from "@repo/ui/skeletons/Loading";
+import { agentPaymentsFor } from "@repo/lib/agents/server";
 import { getDashboardSession } from "@repo/lib/auth/session";
 import { fetchApprovalQueueItems, fetchDesigners, fetchProductCatalog } from "@repo/lib/queries";
 import { isPhotobookCategory } from "@repo/lib/orders/photobook";
@@ -36,5 +37,6 @@ async function Queue({ canCancel }: { canCancel: boolean }) {
     fetchProductCatalog(),
   ]);
   const photobookCategoryIds = catalog.filter((c) => isPhotobookCategory(c.name)).map((c) => c.id);
-  return <OrderApprovalQueue items={items} designers={designers} photobookCategoryIds={photobookCategoryIds} canCancel={canCancel} />;
+  const agentPayments = await agentPaymentsFor([...new Set(items.map((i) => i.order_id))]);
+  return <OrderApprovalQueue items={items} designers={designers} photobookCategoryIds={photobookCategoryIds} agentPayments={agentPayments} canCancel={canCancel} />;
 }

@@ -20,6 +20,7 @@ const ACTION_TEMPLATES: Record<string, (d: Record<string, unknown>) => string> =
   order_details_updated: (d) => `updated the order's ${str(d.field)} to "${str(d.to)}"`,
   item_details_updated: (d) => `updated ${str(d.itemLabel)}'s ${str(d.field)} to "${str(d.to)}"`,
   photo_uploaded: (d) => `added a photo to ${str(d.itemLabel)}${d.fileName ? ` (${str(d.fileName)})` : ""}`,
+  photo_upload_trouble: (d) => `couldn't upload a photo to ${str(d.itemLabel)}${d.fileName ? ` (${str(d.fileName)})` : ""}; it's kept on their device and keeps trying`,
   link_added: (d) => `added a link to ${str(d.itemLabel)}`,
   drive_attached: (d) => {
     const names = [...(Array.isArray(d.folders) ? d.folders.map((f) => `the folder "${str(f)}"`) : []), ...(Array.isArray(d.files) ? d.files.map(str) : [])];

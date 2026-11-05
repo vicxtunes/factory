@@ -38,7 +38,8 @@ import type {
 } from "@repo/lib/orders/types";
 import { pushOnlyOrderItem, notifyOrderItem } from "@repo/lib/notifications/notify";
 import { formatMoney } from "@repo/lib/currency/format";
-import { walletErrorMessage } from "@repo/lib/wallet/orders";
+import { payBeforeProduction } from "@repo/lib/agents/core";
+import { paidByOrders, walletErrorMessage } from "@repo/lib/wallet/orders";
 import { isOrderInvoiced } from "@repo/lib/invoices/orders";
 import { lineDiscountOf, validateLineDiscount, type LineDiscount, type LineDiscountChange } from "@repo/lib/discounts/core";
 import {
@@ -1389,7 +1390,8 @@ export async function createOrder(input: OrderFormPayload): Promise<CreateOrderR
     designerBrief: input.designer_brief,
     responsibleWorkerId: input.responsible_worker_id,
     items: input.items,
-    releaseImmediately: true,
+    // An agent's order waits in Client Orders until 80% is paid (packages/lib/agents).
+    releaseImmediately: !input.agent_id,
     allowLineDiscounts: true,
   });
   if (!res.ok) return res;
@@ -1609,7 +1611,7 @@ export async function routeApprovedOrder(
   const admin = createAdminClient();
   const { data: order } = await admin
     .from("orders")
-    .select("id, approval_status, released_at, order_no, cancelled_at")
+    .select("id, approval_status, released_at, order_no, cancelled_at, commission_eligible, quoted_price")
     .eq("id", orderId)
     .maybeSingle();
   if (!order) return { ok: false, error: "Order not found." };
@@ -1617,6 +1619,16 @@ export async function routeApprovedOrder(
   if (order.approval_status !== "approved") return { ok: false, error: "Confirm this order before routing it." };
   if (order.released_at) return { ok: false, error: "This order was already sent to production." };
   if (!(await isOrderInvoiced(orderId))) return { ok: false, error: "Generate the invoice before routing this order." };
+  // An agent's order goes to production only once 80% is paid (packages/lib/agents).
+  if (order.commission_eligible) {
+    if (order.quoted_price == null) return { ok: false, error: "This agent order has no price yet." };
+    const needed = payBeforeProduction(Number(order.quoted_price));
+    const paid = (await paidByOrders([orderId]))[orderId] ?? 0;
+    if (paid < needed) {
+      const symbol = await fetchBaseCurrencySymbol();
+      return { ok: false, error: `Agent order: ${formatMoney(needed, symbol)} (80%) must be paid before production. Paid so far: ${formatMoney(paid, symbol)}.` };
+    }
+  }
 
   let designer: { id: string; name: string } | null = null;
   if (route === "designer") {

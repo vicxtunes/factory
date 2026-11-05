@@ -50,11 +50,14 @@ export function OrderApprovalQueue({
   items,
   designers,
   photobookCategoryIds,
+  agentPayments,
   canCancel = false,
 }: {
   items: OrderItemWithOrder[];
   designers: DesignerPublic[];
   photobookCategoryIds: string[];
+  /** Agents' orders: paid so far and the 80% needed before production (packages/lib/agents). */
+  agentPayments: Record<string, { paid: number; needed: number | null }>;
   canCancel?: boolean;
 }) {
   const groups = useMemo(() => groupByOrder(items), [items]);
@@ -73,6 +76,7 @@ export function OrderApprovalQueue({
             group={g}
             designers={designers}
             call={g.items.some((i) => i.category_id && photobookIds.has(i.category_id))}
+            agentPayment={agentPayments[g.orderId] ?? null}
             canCancel={canCancel}
           />
         ))}
@@ -233,10 +237,12 @@ function RouteCard({
   group,
   designers,
   call = false,
+  agentPayment,
   canCancel = false,
 }: {
   group: OrderGroup;
   designers: DesignerPublic[];
+  agentPayment: { paid: number; needed: number | null } | null;
   // Photo-book order: confirming needs the price agreed on a call with the
   // client — photo books have no catalog price (see ./order-confirmation.tsx).
   call?: boolean;
@@ -251,6 +257,7 @@ function RouteCard({
   const [invoiceReady, setInvoiceReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const confirmed = group.order.approval_status === "approved";
+  const paidEnough = !agentPayment || (agentPayment.needed !== null && agentPayment.paid >= agentPayment.needed);
 
   function send(route: "factory" | "designer") {
     setError(null);
@@ -288,7 +295,13 @@ function RouteCard({
             onChanged={() => router.refresh()}
             onInvoiceStatusChange={setInvoiceReady}
           />
-          <Button variant="primary" disabled={!invoiceReady || sending} onClick={() => setOpen(true)}>
+          {agentPayment ? (
+            <p className={`text-xs ${paidEnough ? "text-muted" : "font-medium text-[var(--rush)]"}`}>
+              Agent order: {agentPayment.needed === null ? "80% of the price" : formatMoney(agentPayment.needed, symbol)} (80%) must be paid before production. Paid so far:{" "}
+              {formatMoney(agentPayment.paid, symbol)}.
+            </p>
+          ) : null}
+          <Button variant="primary" disabled={!invoiceReady || !paidEnough || sending} onClick={() => setOpen(true)}>
             Route order
           </Button>
           {!invoiceReady ? <p className="text-xs text-muted">Generate the invoice before sending this order to production.</p> : null}
