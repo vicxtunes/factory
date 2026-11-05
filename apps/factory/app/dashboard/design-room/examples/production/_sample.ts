@@ -1,18 +1,20 @@
 import type { ProductPerformance, ProductionOverview, QueuedItem, SpeedView } from "@repo/lib/production/service";
-import { PartsCatalog, productCosts, toPlainBook, type CostingCategory, type ProductionRecord, type LenderAccount, type LenderDetail, type Loan, type Material, type MaterialDetail, type PartLine, type PartsBook } from "@repo/lib/production/core";
+import { PartsCatalog, orderSizes, productCosts, toPlainBook, type CostingCategory, type ProductionRecord, type LenderAccount, type LenderDetail, type Loan, type Material, type MaterialDetail, type PartLine, type PartsBook } from "@repo/lib/production/core";
 
 // Sample parts for the Production examples: bought ones with stock, and made
 // ones (a 12x12 sheet, a box that's also sold on its own).
-const bought = { made: false, clientPrice: null, productId: null, productName: null, productPrice: null, ownerProductId: null } as const;
+const bought = { made: false, size: null, productId: null, productName: null, productPrice: null, ownerProductId: null } as const;
 export const MATERIALS: Material[] = [
-  { ...bought, id: "m1", name: "Photo paper & ink 12x12", unit: "sheet", kind: "material", unitCost: 2_000, clientPrice: 5_000, active: true, stock: 646, stockValue: 1_292_000, createdAt: "2026-10-01T08:00:00Z" },
-  { ...bought, id: "m2", name: "PVC 12x12", unit: "sheet", kind: "material", unitCost: 1_500, clientPrice: 4_000, active: true, stock: 380, stockValue: 570_000, createdAt: "2026-10-01T08:00:00Z" },
-  { ...bought, id: "m3", name: "Matt film 12x12", unit: "sheet", kind: "material", unitCost: 500, clientPrice: 3_000, active: true, stock: -12, stockValue: -6_000, createdAt: "2026-10-02T08:00:00Z" },
-  { ...bought, id: "m6", name: "Glossy film 12x12", unit: "sheet", kind: "material", unitCost: 600, clientPrice: 3_500, active: true, stock: 90, stockValue: 54_000, createdAt: "2026-10-02T08:00:00Z" },
+  { ...bought, id: "m1", name: "Paper & Ink", size: "12x12", unit: "sheet", kind: "material", unitCost: 2_000, active: true, stock: 646, stockValue: 1_292_000, createdAt: "2026-10-01T08:00:00Z" },
+  { ...bought, id: "m8", name: "Paper & Ink", size: "10x10", unit: "sheet", kind: "material", unitCost: 1_400, active: true, stock: 300, stockValue: 420_000, createdAt: "2026-10-01T08:00:00Z" },
+  { ...bought, id: "m2", name: "PVC", size: "12x12", unit: "sheet", kind: "material", unitCost: 1_500, active: true, stock: 380, stockValue: 570_000, createdAt: "2026-10-01T08:00:00Z" },
+  { ...bought, id: "m9", name: "PVC", size: "10x10", unit: "sheet", kind: "material", unitCost: 1_000, active: true, stock: 210, stockValue: 210_000, createdAt: "2026-10-01T08:00:00Z" },
+  { ...bought, id: "m3", name: "Matt film", unit: "sheet", kind: "material", unitCost: 500, active: true, stock: -12, stockValue: -6_000, createdAt: "2026-10-02T08:00:00Z" },
+  { ...bought, id: "m6", name: "Glossy film", unit: "sheet", kind: "material", unitCost: 600, active: true, stock: 90, stockValue: 54_000, createdAt: "2026-10-02T08:00:00Z" },
   { ...bought, id: "m4", name: "Box board", unit: "pc", kind: "packaging", unitCost: 3_000, active: true, stock: 120, stockValue: 360_000, createdAt: "2026-10-03T08:00:00Z" },
   { ...bought, id: "m7", name: "Hard cover board", unit: "pc", kind: "material", unitCost: 4_500, ownerProductId: "book", active: true, stock: 38, stockValue: 171_000, createdAt: "2026-10-03T08:00:00Z" },
   { ...bought, id: "m5", name: "Old frame moulding", unit: "m", kind: "material", unitCost: 8_000, active: false, stock: 0, stockValue: 0, createdAt: "2026-09-20T08:00:00Z" },
-  { ...bought, id: "s1", name: "Sheet 12x12", unit: "sheet", kind: "material", made: true, unitCost: 0, active: true, stock: 0, stockValue: 0, createdAt: "2026-11-05T08:00:00Z" },
+  { ...bought, id: "s1", name: "Sheet", unit: "sheet", kind: "material", made: true, unitCost: 0, active: true, stock: 0, stockValue: 0, createdAt: "2026-11-05T08:00:00Z" },
   { ...bought, id: "s2", name: "Box A", unit: "pc", kind: "packaging", made: true, unitCost: 0, productId: "boxA", productName: "Box A", productPrice: 25_000, active: true, stock: 0, stockValue: 0, createdAt: "2026-11-05T08:00:00Z" },
 ];
 
@@ -62,13 +64,14 @@ export const SACCO: LenderDetail = {
   ],
 };
 
-// Sample setups: a photo book priced by its parts (sheet × NOS, Matt or Glossy, the box the order chose), a frame and a crystal board priced fixed, a mug not set up yet.
-const line = (over: Partial<PartLine>): PartLine => ({ variantId: null, partId: null, chosenDetail: null, qty: 1, perDetail: null, whenDetail: null, whenValue: null, label: null, amount: null, ...over });
+// Sample setups: a photo book priced per sheet (a sheet of PVC and paper & ink in the order's size, Matt or Glossy, × NOS, the box the order chose), a frame and a crystal board at their catalog prices, a mug not set up yet.
+const line = (over: Partial<PartLine>): PartLine => ({ variantId: null, partId: null, byOrderSize: false, chosenDetail: null, qty: 1, perDetail: null, whenDetail: null, whenValue: null, label: null, amount: null, ...over });
 
 export const BOOK_CATEGORY: CostingCategory = {
   id: "c1",
   name: "Photo books",
   attributes: [
+    { id: "size", name: "Size", type: "select", options: ["12x12", "10x10"] },
     { id: "nos", name: "NOS (Number of Sheets)", type: "number", options: [] },
     { id: "lam", name: "Lamination", type: "select", options: ["Matt", "Glossy"] },
     { id: "cover", name: "Cover", type: "select", options: ["Soft", "Hard"] },
@@ -105,8 +108,8 @@ export const PARTS_BOOK: PartsBook = {
     [
       "s1",
       [
-        line({ partId: "m2" }),
-        line({ partId: "m1" }),
+        line({ partId: "m2", byOrderSize: true }),
+        line({ partId: "m1", byOrderSize: true }),
         line({ partId: "m3", whenDetail: "Lamination", whenValue: "Matt" }),
         line({ partId: "m6", whenDetail: "Lamination", whenValue: "Glossy" }),
       ],
@@ -119,7 +122,8 @@ export const PARTS_BOOK: PartsBook = {
     ["crystal", [line({ partId: "m4", qty: 2 }), line({ label: "Engraving", amount: 20_000 })]],
     ["boxA", [line({ partId: "s2" })]],
   ]),
-  pricing: new Map([["book", "parts"]]),
+  sheetPrices: new Map([["book", [{ size: "12x12", price: 12_000 }, { size: "10x10", price: 10_000 }]]]),
+  packaging: [{ name: "Box A", price: 25_000 }],
 };
 
 export const PLAIN_BOOK = toPlainBook(PARTS_BOOK);
@@ -127,6 +131,7 @@ const PARTS = new PartsCatalog(PARTS_BOOK);
 export const PRODUCTS = CATALOG.flatMap((c) => c.products.map((p) => ({ id: p.id, name: p.name, isSetUp: PARTS.setup(p.id).isSetUp })));
 export const MADE_COSTS = Object.fromEntries(MATERIALS.filter((m) => m.made).map((m) => [m.id, PARTS.evaluatePart(m.id, { variantId: null, details: {} }).cost]));
 export const ALL_DETAILS = CATALOG.flatMap((c) => c.attributes);
+export const SIZES = orderSizes(CATALOG);
 export const PRODUCT_COSTS = productCosts(CATALOG, PARTS);
 
 // Sample usage: a photo book made before automatic recording and a mug not set up, not recorded; two records, one corrected (over its setup), one automatic.

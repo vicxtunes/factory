@@ -94,6 +94,7 @@ export function MaterialSheet({
   ownerProductId = null,
   ownerName,
   products = [],
+  sizes = [],
   onAdded,
 }: {
   open: boolean;
@@ -102,6 +103,8 @@ export function MaterialSheet({
   ownerProductId?: string | null;
   ownerName?: string;
   products?: { id: string; name: string }[];
+  /** The order form's sizes (12x12, 10x10…), for a part made or bought in one size. */
+  sizes?: string[];
   onAdded?: (id: string) => void;
 }) {
   const symbol = useCurrencySymbol();
@@ -111,16 +114,15 @@ export function MaterialSheet({
   const [kind, setKind] = useState<MaterialKind>(material?.kind ?? "material");
   const [active, setActive] = useState(material?.active ?? true);
   const [cost, setCost] = useState("");
-  const [clientPrice, setClientPrice] = useState(material?.clientPrice != null ? String(material.clientPrice) : "");
+  const [size, setSize] = useState(material?.size ?? "");
   const [productId, setProductId] = useState(material?.productId ?? "");
   const [shared, setShared] = useState(material ? material.ownerProductId === null : ownerProductId === null);
-  const { error, pending, submit, setError } = useSubmit(onClose);
+  const { error, pending, submit } = useSubmit(onClose);
   const price = parseNumber(cost);
-  const charge = parseNumber(clientPrice);
+  const sizeChoices = [...new Set([...sizes, ...(material?.size ? [material.size] : [])])];
 
   function save() {
-    if (clientPrice.trim() && !(Number.isInteger(charge) && charge >= 0)) return setError("Enter the client price in whole shillings, or leave it empty.");
-    const common = { name, unit, kind, clientPrice: clientPrice.trim() ? charge : null, productId: productId || null };
+    const common = { name, unit, kind, size: size || null, productId: productId || null };
     submit(async () => {
       if (material) return updateMaterial({ ...common, id: material.id, active, ownerProductId: shared ? null : material.ownerProductId });
       const res = await addMaterial({ ...common, made, unitCost: !made && Number.isFinite(price) ? price : undefined, ownerProductId: shared ? null : ownerProductId });
@@ -153,7 +155,17 @@ export function MaterialSheet({
           </div>
         )}
         <Field label="Name">
-          <TextInput value={name} onChange={(e) => setName(e.target.value)} placeholder={made ? "e.g. Sheet 12x12" : "e.g. PVC 12x12"} required />
+          <TextInput value={name} onChange={(e) => setName(e.target.value)} placeholder={made ? "e.g. Sheet" : "e.g. PVC"} required />
+        </Field>
+        <Field label="Size" hint="One part per size: PVC in 12x12 and PVC in 10x10 are two parts named PVC. A setup line can then use the order's size.">
+          <Select value={size} onChange={(e) => setSize(e.target.value)}>
+            <option value="">Any size (not sized)</option>
+            {sizeChoices.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </Select>
         </Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Counted in" hint="sheet, pc, m, ml…">
@@ -174,16 +186,8 @@ export function MaterialSheet({
             <TextInput inputMode="decimal" value={cost} onChange={(e) => setCost(e.target.value)} placeholder={`e.g. ${symbol} 120`} />
           </Field>
         ) : null}
-        {productId ? null : (
-          <Field
-            label="Client price for one (optional)"
-            hint={made ? "For products priced by their parts. Leave empty to add up its parts' client prices." : "For products priced by their parts. Leave empty if it isn't charged on its own."}
-          >
-            <TextInput inputMode="numeric" value={clientPrice} onChange={(e) => setClientPrice(e.target.value)} placeholder={`e.g. ${symbol} 4,000`} />
-          </Field>
-        )}
         {products.length ? (
-          <Field label="Also sold on its own as" hint="Its catalog price is then its client price, everywhere (e.g. a box).">
+          <Field label="Also sold on its own as" hint="The catalog product it is (e.g. a box chosen as packaging), so a book that includes it counts its cost.">
             <Select value={productId} onChange={(e) => setProductId(e.target.value)}>
               <option value="">Not sold on its own</option>
               {products.map((p) => (

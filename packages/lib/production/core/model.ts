@@ -17,9 +17,9 @@ export interface Material {
   made: boolean;
   /** Bought: the latest purchase's price per unit (or the price it was added with). */
   unitCost: number;
-  /** What the client pays for one inside a product priced by its parts; null: not charged on its own. */
-  clientPrice: number | null;
-  /** Sold on its own as this catalog product (its price is the client price). */
+  /** One of the order form's sizes (12x12); null: any size. */
+  size: string | null;
+  /** Sold on its own as this catalog product (e.g. a box chosen as packaging). */
   productId: string | null;
   productName: string | null;
   productPrice: number | null;

@@ -14,7 +14,7 @@ import { Button } from "@repo/ui/Button";
 import { Field, Select, TextInput } from "@repo/ui/Field";
 import { useCurrencySymbol } from "@repo/lib/currency/CurrencySymbolProvider";
 import { formatMoney } from "@repo/lib/currency/format";
-import { formatQty, type Evaluation, type PartLine, type PartRow, type PartsCatalog } from "@repo/lib/production/core";
+import { formatQty, sheetsDetail, type Evaluation, type OrderChoice, type PartLine, type PartRow, type PartsCatalog } from "@repo/lib/production/core";
 
 import { parseNumber } from "./sheets";
 
@@ -30,6 +30,8 @@ export interface LineDraft {
   kind: "part" | "chosen" | "other";
   variantId: string;
   partId: string;
+  /** Use the part of partId's name in the size the order chose. */
+  byOrderSize: boolean;
   chosenDetail: string;
   qty: string;
   perDetail: string;
@@ -47,6 +49,7 @@ export function toDraft(l: PartLine): LineDraft {
     kind: l.label !== null ? "other" : l.chosenDetail ? "chosen" : "part",
     variantId: l.variantId ?? "",
     partId: l.partId ?? "",
+    byOrderSize: l.byOrderSize,
     chosenDetail: l.chosenDetail ?? "",
     qty: l.qty !== null ? String(l.qty) : "",
     perDetail: l.perDetail ?? "",
@@ -58,18 +61,19 @@ export function toDraft(l: PartLine): LineDraft {
 }
 
 export function newDraft(kind: LineDraft["kind"], over: Partial<LineDraft> = {}): LineDraft {
-  return { key: nextKey++, kind, variantId: "", partId: "", chosenDetail: "", qty: kind === "other" ? "" : "1", perDetail: "", whenDetail: "", whenValue: "", label: "", amount: "", ...over };
+  return { key: nextKey++, kind, variantId: "", partId: "", byOrderSize: false, chosenDetail: "", qty: kind === "other" ? "" : "1", perDetail: "", whenDetail: "", whenValue: "", label: "", amount: "", ...over };
 }
 
 /** A draft as a line, for trying out and saving (numbers as typed; the server checks them again). */
 export function toLine(d: LineDraft): PartLine {
   const when = d.whenDetail ? { whenDetail: d.whenDetail, whenValue: d.whenValue } : { whenDetail: null, whenValue: null };
   if (d.kind === "other") {
-    return { variantId: d.variantId || null, partId: null, chosenDetail: null, qty: null, perDetail: null, ...when, label: d.label.trim(), amount: Number.isFinite(parseNumber(d.amount)) ? parseNumber(d.amount) : null };
+    return { variantId: d.variantId || null, partId: null, byOrderSize: false, chosenDetail: null, qty: null, perDetail: null, ...when, label: d.label.trim(), amount: Number.isFinite(parseNumber(d.amount)) ? parseNumber(d.amount) : null };
   }
   return {
     variantId: d.variantId || null,
     partId: d.kind === "part" ? d.partId || null : null,
+    byOrderSize: d.kind === "part" && d.byOrderSize,
     chosenDetail: d.kind === "chosen" ? d.chosenDetail || null : null,
     qty: parseNumber(d.qty) > 0 ? parseNumber(d.qty) : null,
     perDetail: d.perDetail || null,
@@ -96,6 +100,8 @@ export function draftsProblem(drafts: LineDraft[]): string | null {
 }
 
 const NEW_PART = "__new";
+/** A part select's value for "this part's name, in the order's size". */
+const BY_SIZE = "size:";
 
 export function PartLinesEditor({
   drafts,
@@ -119,6 +125,8 @@ export function PartLinesEditor({
   const choices = details.filter((d) => d.type !== "number");
   const own = parts.filter((p) => p.ownerProductId !== null);
   const shared = parts.filter((p) => p.ownerProductId === null);
+  // Names that come in sizes (PVC 12x12, PVC 10x10): one choice picks by the order's size.
+  const sizedNames = [...new Map(parts.filter((p) => p.size).map((p) => [p.name.trim().toLowerCase(), p] as const)).values()];
 
   const set = (key: number, patch: Partial<LineDraft>) => onChange(drafts.map((d) => (d.key === key ? { ...d, ...patch } : d)));
   const remove = (key: number) => onChange(drafts.filter((d) => d.key !== key));
@@ -133,10 +141,23 @@ export function PartLinesEditor({
 
   const option = (p: PartRow) => (
     <option key={p.id} value={p.id}>
-      {p.name} ({p.unit}){p.made ? " · made" : ""}
+      {p.name}
+      {p.size ? ` ${p.size}` : ""} ({p.unit}){p.made ? " · made" : ""}
       {p.active ? "" : " · not in use"}
     </option>
   );
+  const choosePart = (key: number, value: string) => {
+    if (value === NEW_PART) return onNewPart?.(key);
+    if (value.startsWith(BY_SIZE)) return set(key, { partId: value.slice(BY_SIZE.length), byOrderSize: true });
+    set(key, { partId: value, byOrderSize: false });
+  };
+  /** A line by the order's size shows as its name's choice, whichever size it was saved with. */
+  const partValue = (d: LineDraft) => {
+    if (!d.byOrderSize) return d.partId;
+    const name = parts.find((p) => p.id === d.partId)?.name.trim().toLowerCase();
+    const first = sizedNames.find((p) => p.name.trim().toLowerCase() === name);
+    return `${BY_SIZE}${first?.id ?? d.partId}`;
+  };
 
   return (
     <div className="@container space-y-3">
@@ -150,11 +171,17 @@ export function PartLinesEditor({
               <div className="col-span-2 @3xl:col-span-1">
                 {d.kind === "part" ? (
                   <Field label="Part">
-                    <Select
-                      value={d.partId}
-                      onChange={(e) => (e.target.value === NEW_PART ? onNewPart?.(d.key) : set(d.key, { partId: e.target.value }))}
-                    >
+                    <Select value={partValue(d)} onChange={(e) => choosePart(d.key, e.target.value)}>
                       <option value="">Choose…</option>
+                      {sizedNames.length ? (
+                        <optgroup label="In the order's size">
+                          {sizedNames.map((p) => (
+                            <option key={p.id} value={`${BY_SIZE}${p.id}`}>
+                              {p.name}: the order&apos;s size
+                            </option>
+                          ))}
+                        </optgroup>
+                      ) : null}
                       {own.length ? <optgroup label="Only this product">{own.map(option)}</optgroup> : null}
                       <optgroup label="Shared">{shared.map(option)}</optgroup>
                       {onNewPart ? <option value={NEW_PART}>+ New part…</option> : null}
@@ -292,28 +319,34 @@ function IconButton({ label, onClick, disabled, danger, children }: { label: str
 
 /**
  * Try an order: its size and the details the lines depend on, and what one
- * comes to: each line's cost and client price, the totals and the profit.
- * `evaluate` works it out from the lines on screen.
+ * comes to: each line's cost, the total cost, and (for a product) the client
+ * price from the catalog and the profit. `evaluate` works it out from the
+ * lines on screen.
  */
 export function TryOrder({
   catalog,
   lines,
   details,
   sizes = [],
+  sizeOptions = [],
   evaluate,
-  price,
+  quote,
 }: {
   catalog: PartsCatalog;
   lines: PartLine[];
   details: DetailOption[];
+  /** A product's size variants. */
   sizes?: { id: string; name: string }[];
-  evaluate: (order: { variantId: string | null; details: Record<string, string> }) => Evaluation;
-  /** The client price for an order (the product's pricing); omitted for a made part: its parts' prices. */
-  price?: (evaluation: Evaluation, variantId: string | null) => number | null;
+  /** Sizes chosen on the order form (12x12…), e.g. the sizes priced per sheet. */
+  sizeOptions?: string[];
+  evaluate: (order: OrderChoice) => Evaluation;
+  /** The client price for an order, from the catalog; omitted for a made part. */
+  quote?: (order: OrderChoice) => { price: number | null; missing: string[] };
 }) {
   const symbol = useCurrencySymbol();
   const money = (n: number) => formatMoney(Math.round(n), symbol);
   const used = catalog.detailsUsed(lines);
+  const sizeChoices = [...new Set([...sizeOptions, ...(details.find((d) => d.name.trim().toLowerCase() === "size")?.options ?? []), ...used.sizes])];
   const [variantId, setVariantId] = useState(sizes[0]?.id ?? "");
   const [values, setValues] = useState<Record<string, string>>({});
   const optionsOf = (name: string, fallback: string[]) => {
@@ -322,19 +355,38 @@ export function TryOrder({
   };
   const chosenOptions = (name: string) => {
     const found = optionsOf(name, []);
-    return found.length ? found : catalog.book.parts.filter((p) => p.productName).map((p) => p.productName!);
+    return found.length ? found : catalog.book.packaging.map((p) => p.name);
   };
   const valueOf = (name: string, options: string[]) => values[name] ?? (options[0] ?? "");
-  const order = {
+  // A product priced per sheet needs its count even when no line is × it.
+  const sheets = sheetsDetail(details.map((d) => d.name));
+  const numbers = [...new Set([...used.numbers, ...(quote && sizeOptions.length && sheets ? [sheets] : [])])];
+  const chosenDetails = [...new Set([...used.chosen, ...(quote && sizeOptions.length ? details.filter((d) => /^packag/i.test(d.name.trim())).map((d) => d.name) : [])])];
+  const order: OrderChoice = {
     variantId: variantId || null,
+    variantName: sizes.find((s) => s.id === variantId)?.name ?? null,
     details: Object.fromEntries([
-      ...used.numbers.map((n) => [n, values[n] ?? "10"]),
-      ...used.choices.map((c) => [c.name, valueOf(c.name, optionsOf(c.name, c.values))]),
-      ...used.chosen.map((c) => [c, valueOf(c, chosenOptions(c))]),
+      ...(sizeChoices.length ? [["Size", valueOf("Size", sizeChoices)]] : []),
+      ...numbers.map((n) => [n, values[n] ?? "10"]),
+      ...used.choices.filter((c) => c.name.trim().toLowerCase() !== "size").map((c) => [c.name, valueOf(c.name, optionsOf(c.name, c.values))]),
+      ...chosenDetails.map((c) => [c, valueOf(c, chosenOptions(c))]),
     ]),
   };
   const e = evaluate(order);
-  const clientPays = price ? price(e, order.variantId) : e.missing.length ? null : e.partsPrice;
+  const q = quote?.(order);
+
+  const select = (name: string, options: string[], none = true) => (
+    <Field key={name} label={name}>
+      <Select value={valueOf(name, options)} onChange={(ev) => setValues((v) => ({ ...v, [name]: ev.target.value }))}>
+        {options.map((o) => (
+          <option key={o} value={o}>
+            {o}
+          </option>
+        ))}
+        {none ? <option value="">None</option> : null}
+      </Select>
+    </Field>
+  );
 
   return (
     <section className="space-y-3 rounded-2xl border border-border bg-surface p-4 shadow-theme-xs">
@@ -350,24 +402,16 @@ export function TryOrder({
               ))}
             </Select>
           </Field>
+        ) : sizeChoices.length ? (
+          select("Size", sizeChoices, false)
         ) : null}
-        {used.numbers.map((n) => (
+        {numbers.map((n) => (
           <Field key={n} label={n}>
             <TextInput inputMode="numeric" value={values[n] ?? "10"} onChange={(ev) => setValues((v) => ({ ...v, [n]: ev.target.value }))} />
           </Field>
         ))}
-        {[...used.choices.map((c) => ({ name: c.name, options: optionsOf(c.name, c.values) })), ...used.chosen.map((c) => ({ name: c, options: chosenOptions(c) }))].map((c) => (
-          <Field key={c.name} label={c.name}>
-            <Select value={valueOf(c.name, c.options)} onChange={(ev) => setValues((v) => ({ ...v, [c.name]: ev.target.value }))}>
-              {c.options.map((o) => (
-                <option key={o} value={o}>
-                  {o}
-                </option>
-              ))}
-              <option value="">None</option>
-            </Select>
-          </Field>
-        ))}
+        {used.choices.filter((c) => c.name.trim().toLowerCase() !== "size").map((c) => select(c.name, optionsOf(c.name, c.values)))}
+        {chosenDetails.map((c) => select(c, chosenOptions(c)))}
       </div>
 
       {e.lines.length ? (
@@ -376,7 +420,6 @@ export function TryOrder({
             <tr className="text-left text-[0.7rem] uppercase tracking-wide text-muted">
               <th className="py-1 font-medium">Line</th>
               <th className="py-1 text-right font-medium">Costs us</th>
-              <th className="py-1 text-right font-medium">Client</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
@@ -387,7 +430,6 @@ export function TryOrder({
                   {l.qty !== 1 ? <span className="text-muted"> × {formatQty(l.qty)}</span> : null}
                 </td>
                 <td className="py-1.5 text-right tnum">{money(l.cost)}</td>
-                <td className="py-1.5 text-right tnum">{l.price ? money(l.price) : "—"}</td>
               </tr>
             ))}
           </tbody>
@@ -401,23 +443,26 @@ export function TryOrder({
           <dt className="text-muted">Costs us</dt>
           <dd className="tnum">{money(e.cost)}</dd>
         </div>
-        <div className="flex justify-between gap-3">
-          <dt className="text-muted">Client pays</dt>
-          <dd className="tnum">{clientPays === null ? "priced on the call" : money(clientPays)}</dd>
-        </div>
-        {clientPays !== null && clientPays > 0 ? (
+        {q ? (
+          <div className="flex justify-between gap-3">
+            <dt className="text-muted">Client pays (catalog)</dt>
+            <dd className="tnum">{q.price === null ? "priced on the call" : money(q.price)}</dd>
+          </div>
+        ) : null}
+        {q && q.price !== null && q.price > 0 ? (
           <div className="flex justify-between gap-3 font-semibold">
             <dt>Profit</dt>
-            <dd className={`tnum ${clientPays - e.cost < 0 ? "text-error-600 dark:text-error-400" : "text-success-600 dark:text-success-500"}`}>
-              {money(clientPays - e.cost)} · {Math.round(((clientPays - e.cost) / clientPays) * 1000) / 10}%
+            <dd className={`tnum ${q.price - e.cost < 0 ? "text-error-600 dark:text-error-400" : "text-success-600 dark:text-success-500"}`}>
+              {money(q.price - e.cost)} · {Math.round(((q.price - e.cost) / q.price) * 1000) / 10}%
             </dd>
           </div>
         ) : null}
       </dl>
-      {e.missing.length ? <p className="text-xs text-warning-700 dark:text-warning-500">Missing for a price: {e.missing.join(", ")}.</p> : null}
+      {q && q.price === null && q.missing.length ? <p className="text-xs text-warning-700 dark:text-warning-500">No price yet: needs {q.missing.join(", ")}.</p> : null}
+      {e.missing.length ? <p className="text-xs text-warning-700 dark:text-warning-500">Cost is short: no {e.missing.join(", no ")}.</p> : null}
       {e.unpriced.length ? (
         <p className="text-xs text-warning-700 dark:text-warning-500">
-          No price yet for {e.unpriced.join(", ")}: record a purchase, so the cost isn&apos;t short.
+          No price paid yet for {e.unpriced.join(", ")}: record a purchase, so the cost isn&apos;t short.
         </p>
       ) : null}
       <p className="text-xs text-muted">Costs are at the latest price paid for each bought part.</p>

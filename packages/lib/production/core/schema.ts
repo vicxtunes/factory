@@ -16,7 +16,7 @@ const quantity = z.number().finite().refine((n) => Math.round(n * 1000) === n * 
 
 export const idSchema = z.string().uuid();
 
-const clientPrice = z.number().int("Enter whole shillings.").min(0, "A price can't be negative.").nullish().transform((v) => v ?? null);
+const size = optionalText(40);
 const optionalId = idSchema.nullish().transform((v) => v ?? null);
 
 export const materialInputSchema = z.object({
@@ -25,9 +25,10 @@ export const materialInputSchema = z.object({
   kind: z.enum(["material", "packaging"]),
   /** Made from other parts; else bought. */
   made: z.boolean().default(false),
+  /** One of the order form's sizes (12x12); none: any size. */
+  size,
   /** Only when adding a bought part: its price per unit before any purchase is recorded. */
   unitCost: z.number().finite().min(0).optional(),
-  clientPrice,
   /** Sold on its own as this catalog product. */
   productId: optionalId,
   /** Only this product uses it; null: shared. */
@@ -41,7 +42,7 @@ export const materialUpdateSchema = z.object({
   unit: text(20).min(1, "Say what it's counted in (sheet, pc, m…)."),
   kind: z.enum(["material", "packaging"]),
   active: z.boolean(),
-  clientPrice,
+  size,
   productId: optionalId,
   /** Unchanged, or null to share it with every product. */
   ownerProductId: optionalId,
@@ -126,6 +127,8 @@ export const partLineSchema = z
   .object({
     variantId: optionalId,
     partId: optionalId,
+    /** Use the part of partId's name in the size the order chose. */
+    byOrderSize: z.boolean().default(false),
     chosenDetail: optionalText(80),
     qty: quantity.positive("Enter how many it takes.").nullish().transform((v) => v ?? null),
     perDetail: optionalText(80),
@@ -144,13 +147,13 @@ export const partLineSchema = z
       return;
     }
     if (!l.partId === !l.chosenDetail) fail("Choose a part on each line, or remove the line.");
+    if (l.byOrderSize && !l.partId) fail("Choose the part to use in the order's size.");
     if (l.qty === null) fail("Enter how many each line takes.");
   });
 export type PartLineInput = z.output<typeof partLineSchema>;
 
 export const setupInputSchema = z.object({
   productId: idSchema,
-  pricing: z.enum(["fixed", "parts"]),
   lines: z.array(partLineSchema).max(100),
 });
 export type SetupInput = z.output<typeof setupInputSchema>;
@@ -160,6 +163,14 @@ export const partLinesInputSchema = z.object({
   lines: z.array(partLineSchema.refine((l) => l.variantId === null, "A part's lines are the same for every size.")).max(100),
 });
 export type PartLinesInput = z.output<typeof partLinesInputSchema>;
+
+/** A photo book's price per sheet for one size, set by the boss in the catalog; null clears it. */
+export const sheetPriceSchema = z.object({
+  productId: idSchema,
+  size: text(40).min(1, "Choose the size."),
+  price: z.number().int("Enter whole shillings.").min(0, "A price can't be negative.").nullable(),
+});
+export type SheetPriceInput = z.output<typeof sheetPriceSchema>;
 
 export const copySetupSchema = z.object({ from: idSchema, to: idSchema }).refine((c) => c.from !== c.to, "Choose another product to copy from.");
 export type CopySetupInput = z.output<typeof copySetupSchema>;

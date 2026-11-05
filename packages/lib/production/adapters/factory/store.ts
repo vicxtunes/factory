@@ -8,7 +8,7 @@ import { DAY_CLOSED_MESSAGE } from "@repo/lib/books/model";
 import { createAdminClient } from "@repo/lib/supabase/admin";
 
 import type { Lender, Loan, Material, MaterialMovement, MaterialPurchase, ProductionRecord, Repayment, UsageItem } from "../../core/model";
-import type { PartLine, PartsBook, Pricing } from "../../core/parts";
+import type { PartLine, PartsBook, SheetPrice } from "../../core/parts";
 import type { PartLineInput } from "../../core/schema";
 import type { MaterialFigure, SoldOrder } from "../../core/overview";
 import type { ItemJourney } from "../../core/speed";
@@ -116,8 +116,8 @@ interface MaterialRow {
   unit: string;
   kind: Material["kind"];
   made: boolean;
+  size: string | null;
   unit_cost: number | string;
-  client_price: number | string | null;
   product_id: string | null;
   product_name: string | null;
   product_price: number | string | null;
@@ -129,7 +129,7 @@ interface MaterialRow {
 }
 
 const MATERIAL_COLUMNS =
-  "id, name, unit, kind, made, unit_cost, client_price, product_id, product_name, product_price, owner_product_id, active, stock, stock_value, created_at";
+  "id, name, unit, kind, made, size, unit_cost, product_id, product_name, product_price, owner_product_id, active, stock, stock_value, created_at";
 
 const toMaterial = (r: MaterialRow): Material => ({
   id: r.id,
@@ -137,8 +137,8 @@ const toMaterial = (r: MaterialRow): Material => ({
   unit: r.unit,
   kind: r.kind,
   made: r.made,
+  size: r.size,
   unitCost: Number(r.unit_cost),
-  clientPrice: r.client_price === null ? null : Number(r.client_price),
   productId: r.product_id,
   productName: r.product_name,
   productPrice: r.product_price === null ? null : Number(r.product_price),
@@ -154,6 +154,7 @@ interface PartLineRow {
   part_of: string | null;
   variant_id: string | null;
   part_id: string | null;
+  by_order_size: boolean;
   chosen_detail: string | null;
   qty: number | string | null;
   per_detail: string | null;
@@ -166,6 +167,7 @@ interface PartLineRow {
 const toPartLine = (r: PartLineRow): PartLine => ({
   variantId: r.variant_id,
   partId: r.part_id,
+  byOrderSize: r.by_order_size,
   chosenDetail: r.chosen_detail,
   qty: r.qty === null ? null : Number(r.qty),
   perDetail: r.per_detail,
@@ -180,6 +182,7 @@ const linesOut = (lines: PartLineInput[]) =>
   lines.map((l) => ({
     variant_id: l.variantId,
     part_id: l.partId,
+    by_order_size: l.byOrderSize,
     chosen_detail: l.chosenDetail,
     qty: l.qty,
     per_detail: l.perDetail,
@@ -240,7 +243,7 @@ const MESSAGES: Record<string, string> = {
   not_made: "Only a made part has parts of its own.",
   loop: "That would put the part inside itself. Choose different parts.",
   same_product: "Choose another product to copy from.",
-  has_catalog_price: "This product has a catalog price, which would win over its parts. Clear its price (and its sizes' prices) in the catalog first.",
+  has_catalog_price: "This product has a price of its own, which would win on invoices. Clear its price (and its sizes' prices) first: a photo book's price comes from its sheets.",
   no_purchase: "That purchase no longer exists.",
   already_voided: "That's already been voided.",
   has_repayments: "Part of this has been paid back to the supplier. Void those repayments first.",
@@ -265,7 +268,7 @@ const MESSAGES: Record<string, string> = {
 };
 
 function fail(error: { message: string; code?: string }): never {
-  if (error.code === "23505") throw new ProductionError("There's already a part with that name. Shared parts need different names; a product's own parts too.");
+  if (error.code === "23505") throw new ProductionError("There's already a part with that name and size. Shared parts need different names or sizes; a product's own parts too.");
   if (error.message.includes("DAYBOOK:day_closed")) throw new ProductionError(DAY_CLOSED_MESSAGE);
   const code = /PRODUCTION:(\w+)/.exec(error.message)?.[1];
   if (code && MESSAGES[code]) throw new ProductionError(MESSAGES[code]);
@@ -353,8 +356,8 @@ export const factoryStore: ProductionStore = {
         unit: input.unit,
         kind: input.kind,
         made: input.made,
+        size: input.size,
         unit_cost: input.made ? 0 : (input.unitCost ?? 0),
-        client_price: input.clientPrice,
         product_id: input.productId,
         owner_product_id: input.ownerProductId,
         created_by_name: actor.name,
@@ -369,7 +372,7 @@ export const factoryStore: ProductionStore = {
     const { error, count } = await createAdminClient()
       .from("materials")
       .update(
-        { name: input.name, unit: input.unit, kind: input.kind, active: input.active, client_price: input.clientPrice, product_id: input.productId, owner_product_id: input.ownerProductId },
+        { name: input.name, unit: input.unit, kind: input.kind, active: input.active, size: input.size, product_id: input.productId, owner_product_id: input.ownerProductId },
         { count: "exact" },
       )
       .eq("tenant_id", scope.tenantId)
@@ -524,25 +527,41 @@ export const factoryStore: ProductionStore = {
 
   async partsBook(scope) {
     const db = createAdminClient();
-    const [parts, lines, pricing] = await Promise.all([
+    const [parts, lines, sheets, packaging] = await Promise.all([
       db.from("production_materials").select(MATERIAL_COLUMNS).eq("tenant_id", scope.tenantId).order("name").returns<MaterialRow[]>(),
       db
         .from("part_lines")
-        .select("product_id, part_of, variant_id, part_id, chosen_detail, qty, per_detail, when_detail, when_value, label, amount")
+        .select("product_id, part_of, variant_id, part_id, by_order_size, chosen_detail, qty, per_detail, when_detail, when_value, label, amount")
         .eq("tenant_id", scope.tenantId)
         .order("sort_order")
         .returns<PartLineRow[]>(),
-      db.from("products").select("id, pricing").eq("pricing", "parts").returns<{ id: string; pricing: Pricing }[]>(),
+      db.from("product_sheet_prices").select("product_id, size, price").order("size").returns<{ product_id: string; size: string; price: number | string }[]>(),
+      db
+        .from("products")
+        .select("name, price, category:product_categories!inner (name)")
+        .eq("active", true)
+        .ilike("category.name", "packaging")
+        .returns<{ name: string; price: number | string | null }[]>(),
     ]);
     if (parts.error) fail(parts.error);
     if (lines.error) fail(lines.error);
-    if (pricing.error) fail(pricing.error);
-    const book: PartsBook = { parts: (parts.data ?? []).map(toMaterial), partLines: new Map(), productLines: new Map(), pricing: new Map() };
+    if (sheets.error) fail(sheets.error);
+    if (packaging.error) fail(packaging.error);
+    const book: PartsBook = {
+      parts: (parts.data ?? []).map(toMaterial),
+      partLines: new Map(),
+      productLines: new Map(),
+      sheetPrices: new Map(),
+      packaging: (packaging.data ?? []).map((p) => ({ name: p.name, price: Math.round(Number(p.price ?? 0)) })),
+    };
     for (const r of lines.data ?? []) {
       const [map, key] = r.product_id ? [book.productLines, r.product_id] : [book.partLines, r.part_of!];
       map.set(key, [...(map.get(key) ?? []), toPartLine(r)]);
     }
-    for (const p of pricing.data ?? []) book.pricing.set(p.id, p.pricing);
+    for (const r of sheets.data ?? []) {
+      const rate: SheetPrice = { size: r.size, price: Number(r.price) };
+      book.sheetPrices.set(r.product_id, [...(book.sheetPrices.get(r.product_id) ?? []), rate]);
+    }
     return book;
   },
 
@@ -550,7 +569,6 @@ export const factoryStore: ProductionStore = {
     const { error } = await createAdminClient().rpc("parts_save_product", {
       p_tenant: scope.tenantId,
       p_product: input.productId,
-      p_pricing: input.pricing,
       p_lines: linesOut(input.lines),
       p_actor_id: actor.id,
       p_actor_name: actor.name,
@@ -566,6 +584,11 @@ export const factoryStore: ProductionStore = {
       p_actor_id: actor.id,
       p_actor_name: actor.name,
     });
+    if (error) fail(error);
+  },
+
+  async setSheetPrice(_scope, input) {
+    const { error } = await createAdminClient().rpc("product_set_sheet_price", { p_product: input.productId, p_size: input.size, p_price: input.price });
     if (error) fail(error);
   },
 
@@ -710,12 +733,12 @@ export const factoryStore: ProductionStore = {
         quoted_price: number | string | null;
         cancelled_at: string | null;
         client_name: string;
-        items: { id: string; product: string; product_id: string | null; variant_id: string | null; qty: number; unit_price: number | string | null; attributes: Record<string, string | number> | null }[];
+        items: { id: string; product: string; product_id: string | null; variant_id: string | null; product_type: string | null; qty: number; unit_price: number | string | null; attributes: Record<string, string | number> | null }[];
       };
     }>((from, to) => {
       let q = createAdminClient()
         .from("invoices")
-        .select("issued_at, order:orders!inner (quoted_price, cancelled_at, client_name, items:order_items (id, product, product_id, variant_id, qty, unit_price, attributes))")
+        .select("issued_at, order:orders!inner (quoted_price, cancelled_at, client_name, items:order_items (id, product, product_id, variant_id, product_type, qty, unit_price, attributes))")
         .is("order.cancelled_at", null);
       if (range.from) q = q.gte("issued_at", range.from);
       if (range.to) q = q.lt("issued_at", range.to);
@@ -731,6 +754,7 @@ export const factoryStore: ProductionStore = {
           productId: i.product_id,
           product: i.product,
           variantId: i.variant_id,
+          variantName: i.product_type,
           qty: i.qty,
           unitPrice: i.unit_price === null ? null : Number(i.unit_price),
           attributes: i.attributes ?? {},

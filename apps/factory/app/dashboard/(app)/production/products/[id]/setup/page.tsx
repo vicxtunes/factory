@@ -6,7 +6,7 @@ import { FormSkeleton, TitleRowSkeleton } from "@repo/ui/skeletons/blocks";
 import { Loading } from "@repo/ui/skeletons/Loading";
 import { requireProductionAccess } from "@repo/lib/production/access";
 import { costingCatalog } from "@repo/lib/production/catalog";
-import { toPlainBook } from "@repo/lib/production/core";
+import { orderSizes, toPlainBook } from "@repo/lib/production/core";
 import { production } from "@repo/lib/production/server";
 import { resolveTenantScope } from "@repo/lib/tenancy/server/resolve";
 
@@ -54,11 +54,11 @@ async function Setup({ id }: { id: string }) {
           unit: product.unit,
           price: product.price,
           sizes: product.variants,
-          pricing: book.pricing.get(id) ?? "fixed",
           lines: book.productLines.get(id) ?? [],
         }}
         details={category.attributes}
         book={toPlainBook(book)}
+        sizes={orderSizes(catalog)}
         products={catalog.flatMap((c) => c.products.map((p) => ({ id: p.id, name: p.name, isSetUp: (book.productLines.get(p.id)?.length ?? 0) > 0 })))}
       />
     </div>

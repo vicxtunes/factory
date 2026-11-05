@@ -1,7 +1,7 @@
 // What each product costs to make, from its setup (core/parts.ts) and today's
 // prices, and what it earns at its selling price. Pure.
 
-import { PartsCatalog, rowMargin, type CostRow, type Pricing } from "./parts";
+import { PartsCatalog, rowMargin, type CostRow, type PricingMethod } from "./parts";
 
 /** Profit and margin at a selling price; null when there's no price. */
 export function margin(price: number | null, cost: number): { profit: number; percent: number } | null {
@@ -24,7 +24,7 @@ export interface ProductCost {
   name: string;
   categoryName: string;
   unit: string | null;
-  pricing: Pricing;
+  pricing: PricingMethod["key"];
   isSetUp: boolean;
   rows: (CostRow & { margin: ReturnType<typeof rowMargin> })[];
 }
@@ -41,10 +41,17 @@ export function productCosts(catalog: CostingCategory[], parts: PartsCatalog): P
         unit: product.unit,
         pricing: setup.pricing.key,
         isSetUp: setup.isSetUp,
-        rows: setup.isSetUp ? setup.rows(product.variants, product.price).map((r) => ({ ...r, margin: rowMargin(r, setup.pricing.key) })) : [],
+        rows: setup.isSetUp ? setup.rows(product.variants, product.price).map((r) => ({ ...r, margin: rowMargin(r) })) : [],
       };
     }),
   );
+}
+
+/** The sizes an order can choose (each category's Size options, then size variants), for parts in a size. */
+export function orderSizes(catalog: CostingCategory[]): string[] {
+  const fromDetails = catalog.flatMap((c) => c.attributes.filter((a) => a.name.trim().toLowerCase() === "size").flatMap((a) => a.options));
+  const fromVariants = catalog.flatMap((c) => c.products.flatMap((p) => p.variants.map((v) => v.name)));
+  return [...new Set([...fromDetails, ...fromVariants].map((s) => s.trim()).filter(Boolean))];
 }
 
 /**
