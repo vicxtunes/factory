@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
+import { Lightbox } from "@repo/ui/Lightbox";
 import { Avatar } from "@repo/ui/profile/Avatar";
 import { Linkify } from "@repo/ui/Linkify";
 import type { ChatAttachment, ChatMessage } from "@repo/lib/chat/types";
@@ -11,7 +13,7 @@ import { FileIcon } from "./icons";
 import { MessageMenu, type MessageMenuItem } from "./MessageMenu";
 import { VoicePlayer } from "./VoicePlayer";
 
-function AttachmentView({ a, mine }: { a: ChatAttachment; mine: boolean }) {
+function AttachmentView({ a, mine, onOpen }: { a: ChatAttachment; mine: boolean; onOpen: () => void }) {
   if (!a.url) {
     return <p className="text-xs italic opacity-70">{a.fileName} (unavailable)</p>;
   }
@@ -19,7 +21,7 @@ function AttachmentView({ a, mine }: { a: ChatAttachment; mine: boolean }) {
   switch (a.kind) {
     case "image":
       return (
-        <a href={a.url} target="_blank" rel="noopener noreferrer" className="block">
+        <button type="button" onClick={onOpen} aria-label={`View ${a.fileName}`} className="block">
           {/* eslint-disable-next-line @next/next/no-img-element -- short-lived signed Storage URL */}
           <img
             src={a.url}
@@ -29,7 +31,7 @@ function AttachmentView({ a, mine }: { a: ChatAttachment; mine: boolean }) {
             loading="lazy"
             className="max-h-72 w-auto max-w-full rounded-lg object-cover"
           />
-        </a>
+        </button>
       );
     case "video":
       return <video src={a.url} controls preload="metadata" className="max-h-72 max-w-full rounded-lg" />;
@@ -103,6 +105,13 @@ export function MessageBubble({
   const closeMenu = useCallback(() => setMenu(null), []);
   const deleted = !!message.deletedAt;
   const name = message.senderName ?? "Unknown";
+  // A tapped photo opens in the photo viewer, which swipes through this message's photos.
+  const [viewing, setViewing] = useState<number | null>(null);
+  const photos = [
+    ...message.attachments.flatMap((a) => (a.kind === "image" && a.url ? [{ key: a.id, src: a.url, alt: a.fileName }] : [])),
+    ...(message.images ?? []).map((image) => ({ key: image.url, src: image.url, alt: image.name })),
+  ];
+  const openPhoto = (key: string) => setViewing(photos.findIndex((p) => p.key === key));
 
   const items: MessageMenuItem[] = deleted
     ? []
@@ -185,17 +194,17 @@ export function MessageBubble({
               {message.attachments.length ? (
                 <div className="space-y-1.5">
                   {message.attachments.map((a) => (
-                    <AttachmentView key={a.id} a={a} mine={mine} />
+                    <AttachmentView key={a.id} a={a} mine={mine} onOpen={() => openPhoto(a.id)} />
                   ))}
                 </div>
               ) : null}
               {message.images?.length ? (
                 <div className="mb-1.5 grid grid-cols-2 gap-1.5">
                   {message.images.map((image) => (
-                    <a key={image.url} href={image.url} target="_blank" rel="noreferrer" title={image.name}>
+                    <button key={image.url} type="button" onClick={() => openPhoto(image.url)} title={image.name} aria-label={`View ${image.name}`}>
                       {/* eslint-disable-next-line @next/next/no-img-element -- stored product photos, any shape */}
                       <img src={image.url} alt={image.name} loading="lazy" className="aspect-square w-full rounded-lg object-cover" />
-                    </a>
+                    </button>
                   ))}
                 </div>
               ) : null}
@@ -217,6 +226,24 @@ export function MessageBubble({
         </div>
 
         {menu ? <MessageMenu x={menu.x} y={menu.y} items={items} onClose={closeMenu} /> : null}
+        {/* On the page itself, so a drawer around the chat can't box it in. */}
+        {viewing !== null && photos[viewing]
+          ? createPortal(
+              <Lightbox
+                photos={photos}
+                index={viewing}
+                onIndexChange={setViewing}
+                onClose={() => setViewing(null)}
+                // What tapping the photo used to do: the original in a new tab, to save it from there.
+                actions={(i) => (
+                  <a href={photos[i].src} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center rounded-full bg-white/10 px-4 text-sm font-medium hover:bg-white/20">
+                    Original
+                  </a>
+                )}
+              />,
+              document.body,
+            )
+          : null}
       </div>
     </div>
   );

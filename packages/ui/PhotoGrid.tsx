@@ -14,6 +14,8 @@ export interface GalleryPhoto {
   key: string;
   src: string;
   alt: string;
+  /** A small copy for thumbnails; `src` when there isn't one. */
+  thumb?: string;
 }
 
 export interface PhotoSelection {

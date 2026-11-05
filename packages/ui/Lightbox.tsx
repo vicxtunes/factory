@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import type { Swiper as Slider } from "swiper";
 import { Virtual, Zoom } from "swiper/modules";
 import { Swiper, SwiperSlide } from "swiper/react";
@@ -10,13 +10,16 @@ import "swiper/css/virtual";
 import "swiper/css/zoom";
 
 import type { GalleryPhoto, PhotoSelection } from "./PhotoGrid";
+import { useCloseOnBack } from "./navigation/back";
 import { lockPageScroll } from "./scrollLock";
 
 // Full-screen photo viewer: the photo fitted to the screen, prev / next
 // (buttons, ← / → keys, or a swipe), "3 / 12", the caption, and a strip of
 // thumbnails to jump with. Escape or ✕ closes and focus goes back to
-// whatever opened it; Tab stays inside while it's open. With `selection`
-// it also shows a Pick toggle, so photos can be picked while viewing them.
+// whatever opened it (the phone's back does too); Tab stays inside while
+// it's open. With `selection` it also shows a Pick toggle, so photos can be
+// picked while viewing them; `actions` adds buttons for the open photo (like
+// Download) beside ✕.
 // The caller owns which photo is open (`index`, null = closed).
 //
 // Swiper (as the Drive's viewer): the photo follows the finger and snaps to
@@ -30,6 +33,7 @@ export function Lightbox({
   onIndexChange,
   onClose,
   selection,
+  actions,
 }: {
   photos: GalleryPhoto[];
   /** Open photo, or null when closed. */
@@ -37,6 +41,8 @@ export function Lightbox({
   onIndexChange: (index: number) => void;
   onClose: () => void;
   selection?: PhotoSelection;
+  /** Extra buttons for the open photo, shown beside ✕. */
+  actions?: (index: number) => ReactNode;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -44,6 +50,7 @@ export function Lightbox({
   const slider = useRef<Slider | null>(null);
   const open = index !== null;
   const count = photos.length;
+  useCloseOnBack(open, onClose);
 
   // While open: lock page scroll, focus ✕, and give focus back on close.
   useEffect(() => {
@@ -121,6 +128,7 @@ export function Lightbox({
               {pick ? `Picked #${pick}` : full ? "Limit reached" : "Pick"}
             </button>
           ) : null}
+          {actions?.(index)}
           <button ref={closeRef} type="button" onClick={onClose} aria-label="Close viewer" className={navButton}>
             ✕
           </button>
@@ -161,7 +169,7 @@ export function Lightbox({
         ) : null}
       </div>
 
-      <div ref={stripRef} className="flex gap-1.5 overflow-x-auto px-4 py-3" style={{ scrollbarWidth: "none" }}>
+      <div ref={stripRef} className={`flex gap-1.5 overflow-x-auto px-4 py-3 ${count > 1 ? "" : "hidden"}`} style={{ scrollbarWidth: "none" }}>
         {photos.map((p, i) => (
           <button
             key={p.key}
@@ -173,7 +181,7 @@ export function Lightbox({
             className={`size-14 shrink-0 overflow-hidden rounded-md transition-opacity ${i === index ? "ring-2 ring-white" : "opacity-50 hover:opacity-80"}`}
           >
             {/* eslint-disable-next-line @next/next/no-img-element -- arbitrary photo hosts, can't be allowlisted for next/image */}
-            <img src={p.src} alt="" loading="lazy" className="size-full object-cover" />
+            <img src={p.thumb ?? p.src} alt="" loading="lazy" className="size-full object-cover" />
           </button>
         ))}
       </div>
