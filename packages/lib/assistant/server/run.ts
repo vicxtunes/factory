@@ -4,7 +4,7 @@ import { announceTyping, postAssistantMessage } from "@repo/lib/chat/assistant";
 import { chatHref } from "@repo/lib/chat/routes";
 import { createAdminClient } from "@repo/lib/supabase/admin";
 
-import { ASSISTANT_NAME, costUsd, findModel, mayAnswer, type TokenUsage } from "../core/rules";
+import { ASSISTANT_NAME, ASSISTANT_NAMES, costUsd, findModel, mayAnswer, type TokenUsage } from "../core/rules";
 import { askModel, type ChatTurn } from "./providers";
 import * as store from "./store";
 import { assistantTools, tellManagers, type ToolContext } from "./tools";
@@ -39,7 +39,7 @@ async function readChat(conversationId: string): Promise<ChatRow[]> {
 function toMessages(rows: ChatRow[]): ChatTurn[] {
   const messages: ChatTurn[] = [];
   for (const row of rows) {
-    if (!row.sender_type && row.sender_name === ASSISTANT_NAME && row.kind === "text") {
+    if (!row.sender_type && ASSISTANT_NAMES.includes(row.sender_name ?? "") && row.kind === "text") {
       if (messages.length) messages.push({ role: "assistant", content: row.body });
       continue;
     }
