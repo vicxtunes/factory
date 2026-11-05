@@ -13,6 +13,8 @@ export interface SoldItem {
   productId: string | null;
   product: string;
   variantId: string | null;
+  /** The size variant's name, for parts in the order's size. */
+  variantName?: string | null;
   qty: number;
   unitPrice: number | null;
   attributes: Record<string, string | number>;

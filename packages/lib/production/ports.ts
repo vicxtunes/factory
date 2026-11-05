@@ -8,7 +8,7 @@ import type { Lender, Loan, Material, MaterialDetail, ProductionRecord, Repaymen
 import type { PartsBook } from "./core/parts";
 import type { MaterialFigure, SoldOrder } from "./core/overview";
 import type { ItemJourney } from "./core/speed";
-import type { CopySetupInput, CorrectionInput, LoanInput, MaterialInput, MaterialUpdate, PartLinesInput, PurchaseInput, RepaymentInput, SetupInput, StockCountInput, VoidInput } from "./core/schema";
+import type { CopySetupInput, CorrectionInput, LoanInput, MaterialInput, MaterialUpdate, PartLinesInput, PurchaseInput, RepaymentInput, SetupInput, SheetPriceInput, StockCountInput, VoidInput } from "./core/schema";
 
 export interface ProductionActor {
   id: string | null;
@@ -39,7 +39,9 @@ export interface ProductionStore {
 
   /** Every part, every made part's lines, and every product's setup and pricing. */
   partsBook(scope: TenantScope): Promise<PartsBook>;
-  /** Replaces a product's whole setup (every size) and how it's priced. */
+  /** A photo book's price per sheet for one size (null clears it); refused while it has a catalog price. */
+  setSheetPrice(scope: TenantScope, input: SheetPriceInput): Promise<void>;
+  /** Replaces a product's whole setup (what it's made of, every size). */
   saveSetup(scope: TenantScope, input: SetupInput, actor: ProductionActor): Promise<void>;
   /** Replaces what a made part is made of; refused if it would end up inside itself. */
   savePartLines(scope: TenantScope, input: PartLinesInput, actor: ProductionActor): Promise<void>;

@@ -8,7 +8,7 @@ import { Loading } from "@repo/ui/skeletons/Loading";
 import { localDate } from "@repo/lib/accounting/core/period";
 import { requireProductionAccess } from "@repo/lib/production/access";
 import { costingCatalog } from "@repo/lib/production/catalog";
-import { detailKey, toPlainBook } from "@repo/lib/production/core";
+import { detailKey, orderSizes, toPlainBook } from "@repo/lib/production/core";
 import { production } from "@repo/lib/production/server";
 import { resolveTenantScope } from "@repo/lib/tenancy/server/resolve";
 
@@ -45,7 +45,7 @@ async function Material({ id }: { id: string }) {
   if (!detail.material.made) {
     return (
       <div className="mt-1">
-        <MaterialDetailView detail={detail} today={localDate(new Date(), scope.timeZone)} products={products} />
+        <MaterialDetailView detail={detail} today={localDate(new Date(), scope.timeZone)} products={products} sizes={orderSizes(catalog)} />
       </div>
     );
   }
@@ -54,7 +54,7 @@ async function Material({ id }: { id: string }) {
   const book = await production.partsBook(scope);
   return (
     <div className="mt-1">
-      <MadePartView part={detail.material} book={toPlainBook(book)} details={details} products={products} partsPath="/dashboard/production/materials" productsPath="/dashboard/production/products" />
+      <MadePartView part={detail.material} book={toPlainBook(book)} details={details} products={products} sizes={orderSizes(catalog)} partsPath="/dashboard/production/materials" productsPath="/dashboard/production/products" />
     </div>
   );
 }

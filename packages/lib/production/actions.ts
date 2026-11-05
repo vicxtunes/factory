@@ -6,6 +6,7 @@
 import { revalidatePath } from "next/cache";
 
 import { getDashboardSession } from "@repo/lib/auth/session";
+import { catalogChanged } from "@repo/lib/catalog-cache";
 import { parseInput, type Result } from "@repo/lib/kernel/core";
 import { runAction } from "@repo/lib/kernel/server/action";
 import { resolveTenantScope } from "@repo/lib/tenancy/server/resolve";
@@ -18,6 +19,7 @@ import {
   copySetupSchema,
   partLinesInputSchema,
   setupInputSchema,
+  sheetPriceSchema,
   repaymentInputSchema,
   correctionInputSchema,
   stockCountSchema,
@@ -128,6 +130,17 @@ export async function saveSetup(input: unknown): Promise<Result> {
   return runAction("production", async () => {
     const { scope, actor } = await staff();
     await production.saveSetup(scope, parseInput(setupInputSchema, input), actor);
+    revalidatePath(PRODUCTS, "layout");
+  });
+}
+
+/** A photo book's price per sheet for one size (null clears it). Prices are the catalog's: the boss only. */
+export async function setSheetPrice(input: unknown): Promise<Result> {
+  return runAction("production", async () => {
+    const session = await getDashboardSession();
+    if (!session || session.role !== "boss") throw new ProductionError("Only the boss sets prices.");
+    await production.setSheetPrice(await resolveTenantScope(), parseInput(sheetPriceSchema, input));
+    catalogChanged();
     revalidatePath(PRODUCTS, "layout");
   });
 }

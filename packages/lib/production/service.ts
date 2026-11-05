@@ -72,7 +72,7 @@ export interface QueuedItem extends UsageItem {
 function planFor(parts: PartsCatalog, item: UsageItem) {
   const setup = item.productId ? parts.setup(item.productId) : null;
   if (!setup?.isSetUp) return { isSetUp: false, materials: [], otherCost: 0 };
-  return { isSetUp: true, ...setup.usage({ variantId: item.variantId, details: item.attributes }, item.qty) };
+  return { isSetUp: true, ...setup.usage({ variantId: item.variantId, variantName: item.sizeName, details: item.attributes }, item.qty) };
 }
 
 /**
@@ -108,7 +108,7 @@ export function createUsage(store: ProductionStore, clock: () => Date = () => ne
 function estimator(parts: PartsCatalog) {
   return (item: SoldItem): number | null => {
     const setup = item.productId ? parts.setup(item.productId) : null;
-    return setup?.isSetUp ? setup.evaluate({ variantId: item.variantId, details: item.attributes }).cost : null;
+    return setup?.isSetUp ? setup.evaluate({ variantId: item.variantId, variantName: item.variantName, details: item.attributes }).cost : null;
   };
 }
 

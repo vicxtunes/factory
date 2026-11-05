@@ -12,7 +12,7 @@ import { Button } from "@repo/ui/Button";
 import { useCurrencySymbol } from "@repo/lib/currency/CurrencySymbolProvider";
 import { formatMoney } from "@repo/lib/currency/format";
 import { savePartLines } from "@repo/lib/production/actions";
-import { KIND_LABELS, PartsCatalog, formatUnitCost, fromPlainBook, type Material, type PlainBook } from "@repo/lib/production/core";
+import { KIND_LABELS, PartsCatalog, formatUnitCost, fromPlainBook, partLabel, type Material, type PlainBook } from "@repo/lib/production/core";
 
 import { Tile } from "./MaterialsBoard";
 import { PartLinesEditor, TryOrder, draftsProblem, toDraft, toLine, type DetailOption, type LineDraft } from "./PartLinesEditor";
@@ -23,6 +23,7 @@ export function MadePartView({
   book: plain,
   details,
   products,
+  sizes,
   partsPath,
   productsPath,
 }: {
@@ -31,6 +32,8 @@ export function MadePartView({
   /** Every category's order details, as a shared part may be in any product. */
   details: DetailOption[];
   products: { id: string; name: string }[];
+  /** The order form's sizes, for parts in a size. */
+  sizes: string[];
   partsPath: string;
   productsPath: string;
 }) {
@@ -57,7 +60,6 @@ export function MadePartView({
   const plainCost = catalog.evaluatePart(part.id, { variantId: null, details: {} });
   const used = catalog.usedBy(part.id);
   const name = (id: string) => products.find((p) => p.id === id)?.name ?? book.parts.find((p) => p.id === id)?.name ?? "Removed";
-  const ownPrice = part.productId ? part.productPrice : part.clientPrice;
   const usable = catalog.usableBy(part.ownerProductId).filter((p) => p.id !== part.id);
 
   function save() {
@@ -76,9 +78,10 @@ export function MadePartView({
     <div className="@container space-y-6">
       <div className="flex flex-col gap-3 @2xl:flex-row @2xl:items-start @2xl:justify-between">
         <div>
-          <h2 className="text-xl font-semibold">{part.name}</h2>
+          <h2 className="text-xl font-semibold">{partLabel(part)}</h2>
           <p className="text-sm text-muted">
             Made · {KIND_LABELS[part.kind]} · counted in {part.unit}
+            {part.size ? ` · size ${part.size}` : ""}
             {part.ownerProductId ? ` · only for ${name(part.ownerProductId)}` : " · shared"}
             {part.productName ? ` · sold as ${part.productName}` : ""}
             {part.active ? "" : " · not in use"}
@@ -91,15 +94,14 @@ export function MadePartView({
 
       <div className="grid grid-cols-3 gap-3">
         <Tile label={`Costs us per ${part.unit}`} value={formatUnitCost(plainCost.cost, symbol)} />
-        <Tile label="Client price" value={ownPrice === null ? (plainCost.partsPrice ? money(plainCost.partsPrice) : "—") : money(ownPrice)} />
+        <Tile label={part.productName ? `Sells as ${part.productName}` : "Sold on its own"} value={part.productPrice !== null ? money(part.productPrice) : "—"} />
         <Tile label="Used in" value={String(used.products.length + used.parts.length)} />
       </div>
-      {ownPrice === null ? <p className="-mt-3 text-xs text-muted">Its client price is its parts&apos; client prices added up{plainCost.partsPrice ? "" : " (none set yet)"}.</p> : null}
 
       <div className="grid gap-6 @5xl:grid-cols-[1fr_24rem]">
         <section className="rounded-2xl border border-border bg-surface p-4 shadow-theme-xs">
           <h3 className="font-semibold">What one {part.unit} is made of</h3>
-          <p className="mb-3 text-xs text-muted">Every product using it follows. A line can depend on the order (only when Lamination is Matt; × NOS).</p>
+          <p className="mb-3 text-xs text-muted">What we pay for one, from its parts. Every product using it follows. A line can depend on the order (only when Lamination is Matt; the order&apos;s size).</p>
           <PartLinesEditor
             drafts={drafts}
             onChange={(next) => {
@@ -112,7 +114,7 @@ export function MadePartView({
           />
         </section>
         <aside className="space-y-3 @5xl:sticky @5xl:top-20 @5xl:self-start">
-          <TryOrder catalog={catalog} lines={lines} details={details} evaluate={(order) => catalog.evaluatePart(part.id, order)} price={(e) => (ownPrice ?? (e.missing.length ? null : e.partsPrice)) || null} />
+          <TryOrder catalog={catalog} lines={lines} details={details} evaluate={(order) => catalog.evaluatePart(part.id, order)} />
           {error ? <p className="text-sm text-error-600 dark:text-error-400">{error}</p> : null}
           <Button type="button" className="w-full" onClick={save} loading={pending} disabled={pending}>
             {done ? "Saved" : "Save"}
@@ -144,7 +146,7 @@ export function MadePartView({
         )}
       </section>
 
-      <MaterialSheet key={`edit-${sheet === "edit"}`} open={sheet === "edit"} onClose={() => setSheet(null)} material={part} products={products} ownerName={part.ownerProductId ? name(part.ownerProductId) : undefined} />
+      <MaterialSheet key={`edit-${sheet === "edit"}`} open={sheet === "edit"} onClose={() => setSheet(null)} material={part} products={products} sizes={sizes} ownerName={part.ownerProductId ? name(part.ownerProductId) : undefined} />
       <MaterialSheet
         key={`new-${newPartFor}`}
         open={newPartFor !== null}
@@ -152,6 +154,7 @@ export function MadePartView({
         ownerProductId={part.ownerProductId}
         ownerName={part.ownerProductId ? name(part.ownerProductId) : undefined}
         products={products}
+        sizes={sizes}
         onAdded={(id) => setDrafts(drafts.map((d) => (d.key === newPartFor ? { ...d, partId: id } : d)))}
       />
     </div>

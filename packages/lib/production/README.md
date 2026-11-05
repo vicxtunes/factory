@@ -32,24 +32,27 @@ Screens:
 - **A purchase** adds stock, sets the material's price (the latest purchase's), and is a **materials expense**
   (`expenses`, the first kind of money going out). **On credit**, the supplier becomes a lender and the purchase a
   loan from them, received as materials.
-- **Parts** (`core/parts.ts`, the `materials` table): a part is **bought** (stock, purchases, a price from the
-  latest one) or **made** from other parts (`part_lines.part_of`, any depth, never inside itself; no stock of its
-  own, refused by a trigger). A part may be **sold on its own** (`product_id`: its catalog price is its client
-  price, everywhere, e.g. a box) and may belong to **one product only** (`owner_product_id`; set when it's added,
-  only ever changed to shared). Shared names are unique; a product's own parts only among themselves.
-- **A product's setup** is its own lines (`part_lines.product_id`) and how it's priced (`products.pricing`):
-  **fixed per size** (the catalog's price) or **built from parts** (the client prices of its parts added up; such a
-  product has no catalog price, as the catalog's price wins everywhere downstream). A line is a part × how many,
-  optionally × a number on the order (× NOS), for one size, only when the order chose something (Lamination =
-  Matt), or **the part the order chose** in a detail (Packaging: a part by its product's name, else its own); or
-  an **other cost** (a fixed amount). Order details match by name without a note in brackets ("NOS (Number of
-  Sheets)" = "NOS"). A made part's client price is its own, else its parts' added up. A price is never guessed:
-  a missing number, or a choice that changes the price with no line for it, leaves the order priced on the call.
-  **Copy from** another product copies its pricing and lines (size lines by size name) and makes the parts it
-  uses shared. Every save is kept in `part_setup_history`. Labour isn't costed (decided 2026-11-02).
-- The classes: `BoughtPart` and `MadePart` (a `Component`: own price, and what a quantity of it adds),
-  `PartsCatalog` (all parts; walks lines), `ProductSetup` (lines + a `PricingMethod`: `FixedPerSize`,
-  `BuiltFromParts`). A new way of pricing is one more `PricingMethod`.
+- **Parts** (`core/parts.ts`, the `materials` table) carry **cost only**: a part is **bought** (stock, purchases, a
+  price from the latest one) or **made** from other parts (`part_lines.part_of`, any depth, never inside itself; no
+  stock of its own, refused by a trigger). A part may have a **size** (one of the order form's sizes: PVC 12x12 and
+  PVC 10x10 are two parts named PVC), may be the catalog product it's **sold as** (`product_id`, e.g. a box chosen as
+  packaging) and may belong to **one product only** (`owner_product_id`; set when it's added, only ever changed to
+  shared). Names are unique per size; a product's own parts only among themselves.
+- **A product's setup** is its own lines (`part_lines.product_id`): a part × how many, optionally × a number on the
+  order (× NOS), **in the order's size** (`by_order_size`: the part of that name in the size the order chose, its
+  Size detail else its size variant), for one size variant, only when the order chose something (Lamination =
+  Matt), or **the part the order chose** in a detail (Packaging: a part by its product's name, else its own); or an
+  **other cost** (a fixed amount). Order details match by name without a note in brackets ("NOS (Number of
+  Sheets)" = "NOS"). **Copy from** another product copies its lines (size lines by size name) and makes the parts
+  it uses shared. Every save is kept in `part_setup_history`. Labour isn't costed (decided 2026-11-02).
+- **Client prices are the catalog's** (decided 2026-11-05): a product's catalog price per size, or, for a photo book,
+  its **price per sheet** for each size (`product_sheet_prices`, the boss sets it in Products): an order comes to that
+  × its number of sheets + the chosen packaging's catalog price, and with anything missing it's left for the call. A
+  product priced per sheet has no catalog price of its own (it would win on invoices; both sides refuse). Profit is
+  the client price less the parts' cost.
+- The classes: `BoughtPart` and `MadePart` (a `Component`: what a quantity of it costs and uses), `PartsCatalog`
+  (all parts; walks lines), `ProductSetup` (lines + a `PricingMethod`: `FixedPerSize`, `PerSheet`). A new way of
+  pricing is one more `PricingMethod`.
 - **Recording usage is automatic** (chosen 2026-11-02): when an item reaches Quality check (or later, from
   before), a trigger records it from its product's setup, down to the bought parts, as if it went exactly to plan
   (`production_auto_record` → `parts_usage()`, the same walk as `ProductSetup.usage()`) and their stock comes off.
@@ -59,7 +62,7 @@ Screens:
   so wastage nobody reports stays invisible. When recording by hand, what an item should have used comes from its
   setup on the server (`createUsage` in `service.ts`); the browser only sends what was actually used. Costs are at
   the parts' prices when it's saved.
-- **Order prices** for products built from parts: `partsListPrice` in `pricing.ts`, worked out on the server and
+- **Order prices** for photo books priced per sheet: `partsListPrice` in `pricing.ts`, worked out on the server and
   stored as the line's list price when an order is placed (and when staff change details before it's confirmed).
 - **Profit** (`core/overview.ts`): sales as Accounts counts them (live orders, on the invoice's issue date, at the
   order's agreed total, shared over its lines by their confirmed prices); an item's cost is its record's actual cost,
@@ -91,4 +94,5 @@ supabase/migrations/20261218090000_clear_materials.sql   The clean start: old ma
                                                         sheet prices deleted (refused if any purchase exists)
 supabase/migrations/20261218100000_parts.sql   Parts and setups (the old recipe and sheet tables stay, empty and
                                                unused, so a rolled-back app still runs)
+supabase/migrations/20261219100000_part_sizes_sheet_prices.sql   Parts in sizes, cost only; prices per sheet
 ```

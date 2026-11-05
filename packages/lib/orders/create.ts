@@ -138,7 +138,7 @@ export async function buildAndInsertOrder(
       }
     }
 
-    // Priced by its parts (photo books): worked out here, never from the browser.
+    // Priced per sheet (photo books): worked out here, never from the browser.
     // It's the line's list price, so discounts, invoices and the call all follow.
     const hasCatalogPrice = (variant?.price ?? product.price) != null;
     const sheetTotal = hasCatalogPrice ? null : await partsListPrice(item.product_id, item.variant_id || null, attributes);

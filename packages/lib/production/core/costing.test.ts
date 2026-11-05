@@ -7,9 +7,9 @@ const A4 = "00000000-0000-4000-8000-0000000000a4";
 const ID = "00000000-0000-4000-8000-000000000001";
 
 const part = (id: string, unitCost: number, over: Partial<PartRow> = {}): PartRow => ({
-  id, name: id, unit: "pc", kind: "material", made: false, unitCost, clientPrice: null, productId: null, productName: null, productPrice: null, ownerProductId: null, active: true, ...over,
+  id, name: id, unit: "pc", kind: "material", made: false, size: null, unitCost, productId: null, productName: null, productPrice: null, ownerProductId: null, active: true, ...over,
 });
-const line = (over: Partial<PartLine>): PartLine => ({ variantId: null, partId: null, chosenDetail: null, qty: 1, perDetail: null, whenDetail: null, whenValue: null, label: null, amount: null, ...over });
+const line = (over: Partial<PartLine>): PartLine => ({ variantId: null, partId: null, byOrderSize: false, chosenDetail: null, qty: 1, perDetail: null, whenDetail: null, whenValue: null, label: null, amount: null, ...over });
 
 test("profit and margin at the selling price", () => {
   assert.deepEqual(margin(25_000, 15_050), { profit: 9_950, percent: 39.8 });
@@ -18,7 +18,7 @@ test("profit and margin at the selling price", () => {
 });
 
 test("a line is a part (or the one chosen) with a quantity, or a named cost", () => {
-  assert.ok(setupInputSchema.safeParse({ productId: ID, pricing: "parts", lines: [{ partId: ID, qty: 1.5, perDetail: "NOS" }, { label: "Binding", amount: 3_000 }, { chosenDetail: "Packaging", qty: 1 }] }).success);
+  assert.ok(setupInputSchema.safeParse({ productId: ID, lines: [{ partId: ID, qty: 1.5, perDetail: "NOS" }, { label: "Binding", amount: 3_000 }, { chosenDetail: "Packaging", qty: 1 }] }).success);
   assert.ok(!partLineSchema.safeParse({ partId: ID, qty: 0 }).success);
   assert.ok(!partLineSchema.safeParse({ label: " ", amount: 10 }).success);
   assert.ok(!partLineSchema.safeParse({ partId: ID, chosenDetail: "Packaging", qty: 1 }).success, "a part or the chosen one, not both");
@@ -46,10 +46,10 @@ test("each product size with its cost, price and margin; per-page products by th
       ["book", [line({ partId: "paper", perDetail: "Pages" }), line({ partId: "box" }), line({ variantId: A4, partId: "cover" })]],
       ["frame", [line({ partId: "cover", qty: 2 }), line({ partId: "box" })]],
     ]),
-    pricing: new Map(),
+    sheetPrices: new Map(), packaging: [],
   });
   const [b, f, m] = productCosts(catalog, parts);
-  assert.deepEqual([b.rows[0].cost, b.rows[0].perDetail], [6_500, [{ name: "Pages", cost: 120, price: 0 }]]);
+  assert.deepEqual([b.rows[0].cost, b.rows[0].perDetail], [6_500, [{ name: "Pages", cost: 120 }]]);
   assert.equal(b.rows[0].margin, null, "its cost depends on the pages");
   assert.equal(f.rows[0].name, null, "a product without sizes is one row");
   assert.deepEqual(f.rows[0].margin, { profit: 25_000 - 11_000, percent: 56, per: null });
