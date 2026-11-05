@@ -22,6 +22,7 @@ import { isPhotobookCategory } from "@repo/lib/orders/photobook";
 import type { OrderItemInput } from "@repo/lib/orders/types";
 import { attachDriveToItem } from "@repo/lib/storage/actions";
 import { canOptimizeImage } from "@repo/lib/storage/client";
+import { enqueueUpload, flushQueuedUploads } from "@repo/lib/offline-queue/enqueue";
 import { uploadFileToStorage } from "@repo/lib/storage/upload-client";
 import type { Currency, OrderType, Product, ProductCategory } from "@repo/lib/types";
 
@@ -149,6 +150,7 @@ export function OrderForm({
   );
   const [uploadStatus, setUploadStatus] = useState<string | null>(null);
   const [uploadWarnings, setUploadWarnings] = useState<string[]>([]);
+  const [queuedUploads, setQueuedUploads] = useState<{ id: string; name: string }[]>([]);
   const [promo, setPromo] = useState<PromoCode | null>(null);
   const [pending, start] = useTransition();
   const quotes = useBookQuotes(catalog, items);
@@ -232,18 +234,22 @@ export function OrderForm({
         return;
       }
 
-      // Staged files have no upload target until the items actually exist
-      // — upload them now that placeOrder handed back real item ids,
-      // same order as packages/ui/order/OrderForm.tsx's staff-side flow.
+      // Staged files have no upload target until the items actually exist.
+      // Now that they do, each photo is kept on this device (offline queue)
+      // and uploaded in the background, so the order shows as placed at once
+      // and a dropped connection never loses a photo.
       const warnings: string[] = [...res.warnings];
+      const queued: { id: string; name: string }[] = [];
       for (const { formIndex, itemId } of res.items) {
-        const files = items[formIndex]?.files ?? [];
-        for (const file of files) {
-          setUploadStatus(`Uploading "${file.name}"…`);
-          const uploadRes = await uploadFileToStorage(itemId, file, (p) =>
-            setUploadStatus(`Uploading "${file.name}" — ${Math.round(p * 100)}%`),
-          );
-          if (!uploadRes.ok) warnings.push(uploadRes.error);
+        for (const file of items[formIndex]?.files ?? []) {
+          try {
+            queued.push({ id: await enqueueUpload(itemId, file), name: file.name });
+          } catch {
+            // No storage on this device (private browsing): upload it now instead.
+            setUploadStatus(`Uploading "${file.name}"…`);
+            const uploadRes = await uploadFileToStorage(itemId, file, (p) => setUploadStatus(`Uploading "${file.name}" — ${Math.round(p * 100)}%`));
+            if (!uploadRes.ok) warnings.push(`${uploadRes.error} Add it again on the order.`);
+          }
         }
         const fromDrive = items[formIndex]?.driveFiles ?? [];
         if (fromDrive.length) {
@@ -255,6 +261,8 @@ export function OrderForm({
           if (!attachRes.ok) warnings.push(attachRes.error);
         }
       }
+      setQueuedUploads(queued);
+      if (queued.length) void flushQueuedUploads();
       setUploadStatus(null);
       setUploadWarnings(warnings);
 
@@ -283,6 +291,7 @@ export function OrderForm({
           total={receipt.total}
           needsReview={receipt.needsReview}
           uploadWarnings={uploadWarnings}
+          uploads={queuedUploads}
           forAgent={!!agent}
         />
       </>
@@ -311,6 +320,7 @@ export function OrderForm({
       ) : null}
 
       <h1 className="mt-3 text-2xl font-bold sm:text-3xl">{agent ? `Order for ${agent.clientName}` : "Place order"}</h1>
+      {agent ? <p className="mt-1 text-sm text-muted">List prices, no discounts. Production starts once 80% of the confirmed price is paid.</p> : null}
 
       <div className="mt-6 flex flex-col-reverse gap-6 lg:grid lg:grid-cols-[1fr_22rem] lg:items-start lg:gap-8">
         <div className="space-y-6">

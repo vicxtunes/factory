@@ -67,10 +67,14 @@ export async function OrderGrid({ orders, empty }: { orders: AgentOrder[]; empty
             <p className="mt-3 truncate text-sm text-muted">{o.lines.map((l) => `${l.qty} × ${l.product}`).join(", ")}</p>
             <div className="mt-3 flex items-end justify-between gap-2 border-t border-border pt-3 text-sm">
               <span className="tnum">{o.price === null ? "Price to confirm" : formatMoney(o.price, symbol)}</span>
-              <span className="text-right">
-                <span className="block font-semibold tnum">{formatMoney(o.commission.status === "pending" ? o.commission.amount : o.commission.creditedAmount, symbol)}</span>
-                <CommissionStatusText status={o.commission.status} />
-              </span>
+              {o.earns ? (
+                <span className="text-right">
+                  <span className="block font-semibold tnum">{formatMoney(o.commission.status === "pending" ? o.commission.amount : o.commission.creditedAmount, symbol)}</span>
+                  <CommissionStatusText status={o.commission.status} />
+                </span>
+              ) : (
+                <span className="text-right text-xs text-muted">No commission</span>
+              )}
             </div>
           </Link>
         </li>

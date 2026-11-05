@@ -24,7 +24,7 @@ export async function receiveOrder(
   const admin = createAdminClient();
   const { data: order } = await admin
     .from("orders")
-    .select("id, approval_status, released_at, order_no, client_id, cancelled_at")
+    .select("id, approval_status, released_at, order_no, client_id, cancelled_at, commission_eligible")
     .eq("id", orderId)
     .maybeSingle();
   if (!order) return { ok: false, error: "Order not found." };
@@ -52,13 +52,15 @@ export async function receiveOrder(
       .limit(1)
       .maybeSingle();
     if (firstItem) {
+      // An agent's order goes to production once 80% is paid (packages/lib/agents).
+      const payFirst = order.commission_eligible ? " Production starts once 80% of the price is paid." : "";
       await notifyOrderItem({
         orderItemId: firstItem.id,
         eventType: "quote_ready",
         message:
           price !== undefined
-            ? `Order ${order.order_no} is confirmed — ${formatMoney(price, await fetchBaseCurrencySymbol())}. Open it to see how to pay.`
-            : `Order ${order.order_no} has been received. Open it to see how to pay.`,
+            ? `Order ${order.order_no} is confirmed — ${formatMoney(price, await fetchBaseCurrencySymbol())}. Open it to see how to pay.${payFirst}`
+            : `Order ${order.order_no} has been received. Open it to see how to pay.${payFirst}`,
         recipient: { type: "client", id: order.client_id },
         pushTitle: "Order confirmed",
         url: clientPath(conversationId ? chatHref(conversationId) : "/orders"),

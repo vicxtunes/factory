@@ -11,6 +11,7 @@ import { clientPath, clientUrl } from "@repo/lib/client-portal/paths";
 import { formatMoney } from "@repo/lib/currency/format";
 import { InvoiceError } from "@repo/lib/invoices/server/errors";
 import * as invoices from "@repo/lib/invoices/server/service";
+import { payBeforeProduction } from "@repo/lib/agents/core";
 import { buildAndInsertOrder } from "@repo/lib/orders/create";
 import { receiveOrder } from "@repo/lib/orders/receive";
 import { bookListPrice } from "@repo/lib/production/sheets/server";
@@ -215,12 +216,12 @@ export function assistantTools(ctx: ToolContext): AssistantTool[] {
 
     tool({
       name: "get_my_orders",
-      description: "This client's latest orders: items, progress, total, paid, what's due, and the invoice link.",
+      description: "This client's latest orders: items, progress, total, paid, what's due, the invoice link, and for an order placed through a sales agent, what must be paid before production.",
       inputSchema: z.object({}),
       run: async () => {
         const { data, error } = await db
           .from("orders")
-          .select("id, order_no, approval_status, quoted_price, cancelled_at, delivery_date, created_at, order_items(product, product_type, qty, production_status, stage), invoices(invoice_no, share_token)")
+          .select("id, order_no, approval_status, quoted_price, commission_eligible, released_at, cancelled_at, delivery_date, created_at, order_items(product, product_type, qty, production_status, stage), invoices(invoice_no, share_token)")
           .eq("client_id", ctx.client.id)
           .order("created_at", { ascending: false })
           .limit(15);
@@ -240,6 +241,10 @@ export function assistantTools(ctx: ToolContext): AssistantTool[] {
               total,
               paid: paid[o.id] ?? 0,
               due: total == null ? null : Math.max(total - (paid[o.id] ?? 0), 0),
+              // Through a sales agent: production starts once 80% is paid (packages/lib/agents).
+              ...(o.commission_eligible && !o.released_at
+                ? { through_agent: true, pay_before_production: total == null ? "80% of the price, once confirmed" : payBeforeProduction(total) }
+                : {}),
               invoice_no: invoice?.invoice_no ?? null,
               invoice_url: invoice ? invoiceLink(invoice.share_token) : null,
             };

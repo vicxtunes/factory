@@ -64,6 +64,25 @@ export const AGENT_WALLET_KIND_LABELS: Record<AgentWalletKind, string> = {
   fee_credit: "Sending fee, paid by Aming",
 };
 
+/**
+ * An order that earns an agent commission goes to production only once this
+ * share of its price is paid (the owner's rule, 2026-11-05). Checked when
+ * staff send it on (routeApprovedOrder); agents, clients and the assistant
+ * are told it.
+ */
+export const PAY_BEFORE_PRODUCTION = 0.8;
+
+/** What must be paid before production, for an order of this price. */
+export function payBeforeProduction(price: number): number {
+  return Math.ceil(price * PAY_BEFORE_PRODUCTION);
+}
+
+/** The rule in words, with the amount when the price is known. */
+export function payFirstWording(price: number | null, money: (n: number) => string): string {
+  const amount = price === null ? "80% of the price" : `80% of the price (${money(payBeforeProduction(price))})`;
+  return `Production starts once ${amount} is paid.`;
+}
+
 export type FeePaidBy = "agent" | "aming";
 export type WithdrawalMethod = "mobile_money" | "bank";
 
