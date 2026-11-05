@@ -41,4 +41,7 @@ export const LINK_GONE_METADATA: Metadata = {
   robots: { index: false, follow: false },
 };
 
+// ...and a plain white browser bar instead of Aming's orange.
+export const LINK_GONE_VIEWPORT: Viewport = { themeColor: "#ffffff" };
+
 export const studioDocumentViewport = (issuer: Issuer): Viewport => ({ themeColor: issuer.color });
