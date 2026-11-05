@@ -1,4 +1,6 @@
+import type { Metadata, Viewport } from "next";
 import { notFound } from "next/navigation";
+import { cache } from "react";
 
 import { DocumentPayBar } from "@repo/ui/billing/DocumentPayBar";
 import { QuotationPdf } from "@repo/ui/billing/DocumentPdf";
@@ -8,7 +10,9 @@ import { QuotationStatusBadge } from "@repo/ui/billing/StatusBadges";
 import { quotations } from "@repo/lib/billing/server";
 import { businessTermsAccepted } from "@repo/lib/wallet/studio";
 
+import { BrandStyle } from "../../brand-style";
 import { dueOn } from "../../document-due";
+import { studioDocumentMetadata, studioDocumentViewport } from "../../studio-document-head";
 
 // A studio's quotation link (client.<domain>/q/<token>), sent to its client.
 // No sign-in: holding the link is the permission, and it shows only this one
@@ -17,13 +21,29 @@ import { dueOn } from "../../document-due";
 // accepting without paying or declining. Standalone, without portal chrome.
 
 export const dynamic = "force-dynamic";
-// Private to whoever holds the link: keep it out of search engines.
-export const metadata = { title: "Quotation", robots: { index: false, follow: false } };
+// Read once per request, for the head and the page.
+const load = cache(async (token: string) => {
+  const parsed = shareTokenSchema.safeParse(token);
+  return parsed.success ? quotations.byLink(parsed.data) : null;
+});
+
+type Params = { params: Promise<{ token: string }> };
+
+// The studio's brand in the tab and the share preview, never Aming's (../../studio-document-head.ts).
+export async function generateMetadata({ params }: Params): Promise<Metadata> {
+  const found = await load((await params).token);
+  return found ? studioDocumentMetadata(found.scope.tenantId, found.issuer, "Quotation") : { title: { absolute: "Quotation" }, robots: { index: false, follow: false } };
+}
+
+export async function generateViewport({ params }: Params): Promise<Viewport> {
+  const found = await load((await params).token);
+  return found ? studioDocumentViewport(found.issuer) : {};
+}
 
 export default async function QuotationLinkPage({ params }: { params: Promise<{ token: string }> }) {
   const parsed = shareTokenSchema.safeParse((await params).token);
   const token = parsed.success ? parsed.data : null;
-  const found = token ? await quotations.byLink(token) : null;
+  const found = token ? await load(token) : null;
   if (!token || !found) notFound();
   const { quotation, issuer } = found;
   const { currency, locale, timeZone } = found.scope;
@@ -31,33 +51,36 @@ export default async function QuotationLinkPage({ params }: { params: Promise<{ 
   const payOnline = canRespondToQuotation(quotation.status) && quotation.total > 0 && (await businessTermsAccepted(found.scope.tenantId));
 
   return (
-    <main className="mx-auto w-full max-w-3xl space-y-4 px-4 py-6 sm:py-10">
-      <QuotationPdf quotation={quotation} issuer={issuer} scope={{ currency, locale, timeZone }} />
-      {quotation.status === "declined" ? (
-        <p className="text-center text-sm text-muted">
-          Declined{quotation.declineReason ? `: ${quotation.declineReason}` : "."}
-        </p>
-      ) : null}
-      {quotation.status === "accepted" ? (
-        <p className="text-center text-sm text-muted">Accepted. {issuer.name} will be in touch with the next steps.</p>
-      ) : null}
-      {quotation.status === "expired" ? (
-        <p className="text-center text-sm text-muted">This quotation has expired. Ask {issuer.name} for an updated one.</p>
-      ) : null}
-      <DocumentPayBar
-        kind="quotation"
-        token={token}
-        number={quotation.number}
-        status={<QuotationStatusBadge status={quotation.status} />}
-        from={issuer.name}
-        to={quotation.billTo.name}
-        amount={quotation.total}
-        amountLabel="Total"
-        due={dueOn(found.scope, "Valid until", quotation.validUntil, quotation.status !== "open")}
-        payable={payOnline}
-        more={canRespondToQuotation(quotation.status) ? <QuotationAnswer token={token} studioName={issuer.name} /> : undefined}
-        scope={{ currency, locale }}
-      />
-    </main>
+    <>
+      <BrandStyle color={found.issuer.color} />
+      <main className="mx-auto w-full max-w-3xl space-y-4 px-4 py-6 sm:py-10">
+        <QuotationPdf quotation={quotation} issuer={issuer} scope={{ currency, locale, timeZone }} />
+        {quotation.status === "declined" ? (
+          <p className="text-center text-sm text-muted">
+            Declined{quotation.declineReason ? `: ${quotation.declineReason}` : "."}
+          </p>
+        ) : null}
+        {quotation.status === "accepted" ? (
+          <p className="text-center text-sm text-muted">Accepted. {issuer.name} will be in touch with the next steps.</p>
+        ) : null}
+        {quotation.status === "expired" ? (
+          <p className="text-center text-sm text-muted">This quotation has expired. Ask {issuer.name} for an updated one.</p>
+        ) : null}
+        <DocumentPayBar
+          kind="quotation"
+          token={token}
+          number={quotation.number}
+          status={<QuotationStatusBadge status={quotation.status} />}
+          from={issuer.name}
+          to={quotation.billTo.name}
+          amount={quotation.total}
+          amountLabel="Total"
+          due={dueOn(found.scope, "Valid until", quotation.validUntil, quotation.status !== "open")}
+          payable={payOnline}
+          more={canRespondToQuotation(quotation.status) ? <QuotationAnswer token={token} studioName={issuer.name} /> : undefined}
+          scope={{ currency, locale }}
+        />
+      </main>
+    </>
   );
 }
