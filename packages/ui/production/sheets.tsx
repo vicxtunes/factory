@@ -1,7 +1,7 @@
 "use client";
 
 // Production's forms, each in a FormSheet (a sheet on a phone, a side panel
-// on a desktop): add or edit a material, record a purchase, count the stock,
+// on a desktop): add or edit a part, record a purchase, count the stock,
 // void a purchase, a loan or a repayment; record money borrowed and repayments. Components in packages/ui/production talk only to
 // packages/lib/production/{actions,core}.
 
@@ -81,34 +81,83 @@ function Form({ onSubmit, children }: { onSubmit: () => void; children: ReactNod
   );
 }
 
-/** Add a material, or edit one (`material`). */
-export function MaterialSheet({ open, onClose, material }: { open: boolean; onClose: () => void; material?: Material }) {
+/**
+ * Add a part, or edit one (`material`). Bought parts have stock and a price
+ * from purchases; made ones are made of other parts (their lines are on their
+ * page). `ownerProductId`: added from a product's setup, only for it.
+ * `products`: the catalog, for a part that's also sold on its own.
+ */
+export function MaterialSheet({
+  open,
+  onClose,
+  material,
+  ownerProductId = null,
+  ownerName,
+  products = [],
+  onAdded,
+}: {
+  open: boolean;
+  onClose: () => void;
+  material?: Material;
+  ownerProductId?: string | null;
+  ownerName?: string;
+  products?: { id: string; name: string }[];
+  onAdded?: (id: string) => void;
+}) {
   const symbol = useCurrencySymbol();
+  const [made, setMade] = useState(material?.made ?? false);
   const [name, setName] = useState(material?.name ?? "");
   const [unit, setUnit] = useState(material?.unit ?? "");
   const [kind, setKind] = useState<MaterialKind>(material?.kind ?? "material");
   const [active, setActive] = useState(material?.active ?? true);
   const [cost, setCost] = useState("");
-  const { error, pending, submit } = useSubmit(onClose);
+  const [clientPrice, setClientPrice] = useState(material?.clientPrice != null ? String(material.clientPrice) : "");
+  const [productId, setProductId] = useState(material?.productId ?? "");
+  const [shared, setShared] = useState(material ? material.ownerProductId === null : ownerProductId === null);
+  const { error, pending, submit, setError } = useSubmit(onClose);
   const price = parseNumber(cost);
+  const charge = parseNumber(clientPrice);
+
+  function save() {
+    if (clientPrice.trim() && !(Number.isInteger(charge) && charge >= 0)) return setError("Enter the client price in whole shillings, or leave it empty.");
+    const common = { name, unit, kind, clientPrice: clientPrice.trim() ? charge : null, productId: productId || null };
+    submit(async () => {
+      if (material) return updateMaterial({ ...common, id: material.id, active, ownerProductId: shared ? null : material.ownerProductId });
+      const res = await addMaterial({ ...common, made, unitCost: !made && Number.isFinite(price) ? price : undefined, ownerProductId: shared ? null : ownerProductId });
+      if (res.ok) onAdded?.(res.data);
+      return res;
+    });
+  }
 
   return (
-    <FormSheet open={open} onClose={onClose} title={material ? `Edit ${material.name}` : "Add a material"}>
-      <Form
-        onSubmit={() =>
-          submit(() =>
-            material
-              ? updateMaterial({ id: material.id, name, unit, kind, active })
-              : addMaterial({ name, unit, kind, unitCost: Number.isFinite(price) ? price : undefined }),
-          )
-        }
-      >
+    <FormSheet open={open} onClose={onClose} title={material ? `Edit ${material.name}` : "Add a part"}>
+      <Form onSubmit={save}>
+        {material ? null : (
+          <div role="radiogroup" aria-label="Bought or made" className="grid grid-cols-2 gap-2">
+            {[
+              { value: false, title: "Bought", hint: "PVC, paper, ink, film: we buy it and keep stock." },
+              { value: true, title: "Made", hint: "A sheet, a cover, a box: made from other parts." },
+            ].map((o) => (
+              <button
+                key={o.title}
+                type="button"
+                role="radio"
+                aria-checked={made === o.value}
+                onClick={() => setMade(o.value)}
+                className={`rounded-xl border p-3 text-left text-sm ${made === o.value ? "border-brand-500 bg-brand-50 dark:bg-brand-500/10" : "border-border"}`}
+              >
+                <span className="font-medium">{o.title}</span>
+                <span className="mt-0.5 block text-xs text-muted">{o.hint}</span>
+              </button>
+            ))}
+          </div>
+        )}
         <Field label="Name">
-          <TextInput value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. A4 photo paper" required />
+          <TextInput value={name} onChange={(e) => setName(e.target.value)} placeholder={made ? "e.g. Sheet 12x12" : "e.g. PVC 12x12"} required />
         </Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Counted in" hint="sheet, pc, m, ml…">
-            <TextInput value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="sheet" required />
+            <TextInput value={unit} onChange={(e) => setUnit(e.target.value)} placeholder={made ? "pc" : "sheet"} required />
           </Field>
           <Field label="Kind">
             <Select value={kind} onChange={(e) => setKind(e.target.value as MaterialKind)}>
@@ -120,19 +169,46 @@ export function MaterialSheet({ open, onClose, material }: { open: boolean; onCl
             </Select>
           </Field>
         </div>
+        {!material && !made ? (
+          <Field label={`Price per ${unit || "unit"} (optional)`} hint="What we pay, until the first purchase is recorded. Purchases set it from then on.">
+            <TextInput inputMode="decimal" value={cost} onChange={(e) => setCost(e.target.value)} placeholder={`e.g. ${symbol} 120`} />
+          </Field>
+        ) : null}
+        {productId ? null : (
+          <Field
+            label="Client price for one (optional)"
+            hint={made ? "For products priced by their parts. Leave empty to add up its parts' client prices." : "For products priced by their parts. Leave empty if it isn't charged on its own."}
+          >
+            <TextInput inputMode="numeric" value={clientPrice} onChange={(e) => setClientPrice(e.target.value)} placeholder={`e.g. ${symbol} 4,000`} />
+          </Field>
+        )}
+        {products.length ? (
+          <Field label="Also sold on its own as" hint="Its catalog price is then its client price, everywhere (e.g. a box).">
+            <Select value={productId} onChange={(e) => setProductId(e.target.value)}>
+              <option value="">Not sold on its own</option>
+              {products.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        ) : null}
+        {(material?.ownerProductId ?? ownerProductId) ? (
+          <label className="flex min-h-11 items-center gap-3 text-sm">
+            <input type="checkbox" checked={shared} onChange={(e) => setShared(e.target.checked)} disabled={!!material && material.ownerProductId === null} className="size-4 accent-brand-500" />
+            Share with every product{ownerName && !shared ? ` (now only for ${ownerName})` : ""}
+          </label>
+        ) : null}
         {material ? (
           <label className="flex min-h-11 items-center gap-3 text-sm">
             <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} className="size-4 accent-brand-500" />
-            In use (unticked, it&apos;s hidden from recipes and purchases)
+            In use (unticked, it&apos;s hidden from setups and purchases)
           </label>
-        ) : (
-          <Field label={`Price per ${unit || "unit"} (optional)`} hint="Until the first purchase is recorded. Purchases set it from then on.">
-            <TextInput inputMode="decimal" value={cost} onChange={(e) => setCost(e.target.value)} placeholder={`e.g. ${symbol} 120`} />
-          </Field>
-        )}
+        ) : null}
         <ErrorLine error={error} />
         <Button type="submit" className="w-full" loading={pending} disabled={pending}>
-          {material ? "Save" : "Add material"}
+          {material ? "Save" : "Add part"}
         </Button>
       </Form>
     </FormSheet>
@@ -155,7 +231,7 @@ export function PurchaseSheet({
   today: string;
 }) {
   const symbol = useCurrencySymbol();
-  const usable = materials.filter((m) => m.active || m.id === materialId);
+  const usable = materials.filter((m) => !m.made && (m.active || m.id === materialId));
   const [material, setMaterial] = useState(materialId ?? usable[0]?.id ?? "");
   const [qty, setQty] = useState("");
   const [total, setTotal] = useState("");

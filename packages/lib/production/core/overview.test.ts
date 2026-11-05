@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { monthlyFigures, ordersWhere, periodFigures, shareRevenue, wastageByMaterial, type RecipeLine, type SoldItem, type SoldOrder } from "./index";
+import { PartsCatalog, monthlyFigures, ordersWhere, periodFigures, shareRevenue, wastageByMaterial, type SoldItem, type SoldOrder } from "./index";
 
 const item = (over: Partial<SoldItem>): SoldItem => ({ itemId: "i", productId: null, product: "Thing", variantId: null, qty: 1, unitPrice: null, attributes: {}, ...over });
 
@@ -17,22 +17,23 @@ test("an order's total is shared over its lines by their prices, adding up exact
   assert.deepEqual([...shareRevenue({ issuedAt: "", clientName: "", total: 9_000, items: [item({ itemId: "a" }), item({ itemId: "b", qty: 2 })] }).values()], [3_000, 6_000]);
 });
 
-const materials = [
-  { id: "paper", kind: "material" as const, unitCost: 120 },
-  { id: "box", kind: "packaging" as const, unitCost: 2_000 },
-];
-const recipes = new Map<string, RecipeLine[]>([
-  [
-    "book",
-    [
-      { variantId: null, materialId: "paper", qty: 1, perAttributeId: "pages", label: null, amount: null },
-      { variantId: null, materialId: "box", qty: 1, perAttributeId: null, label: null, amount: null },
-    ],
-  ],
-]);
-const names = new Map([["pages", "Pages"]]);
+const part = (id: string, unitCost: number) => ({
+  id, name: id, unit: "pc", kind: "material" as const, made: false, unitCost, clientPrice: null, productId: null, productName: null, productPrice: null, ownerProductId: null, active: true,
+});
+const line = (partId: string, perDetail: string | null = null) => ({ variantId: null, partId, chosenDetail: null, qty: 1, perDetail, whenDetail: null, whenValue: null, label: null, amount: null });
+const parts = new PartsCatalog({
+  parts: [part("paper", 120), part("box", 2_000)],
+  partLines: new Map(),
+  productLines: new Map([["book", [line("paper", "Pages"), line("box")]]]),
+  pricing: new Map(),
+});
+/** As the service does it: a set-up product's estimate, else unknown. */
+const estimate = (i: SoldItem) => {
+  const setup = i.productId ? parts.setup(i.productId) : null;
+  return setup?.isSetUp ? setup.evaluate({ variantId: i.variantId, details: i.attributes }).cost : null;
+};
 
-test("costs: recorded when there's a record, else the recipe's estimate, else unknown (and shown)", () => {
+test("costs: recorded when there's a record, else the setup's estimate, else unknown (and shown)", () => {
   const figures = periodFigures(
     [
       {
@@ -47,19 +48,17 @@ test("costs: recorded when there's a record, else the recipe's estimate, else un
       { issuedAt: "", clientName: "", total: 15_000, items: [item({ itemId: "m1", productId: "mug", product: "Mug", unitPrice: 15_000 })] },
     ],
     new Map([["b1", 7_500]]),
-    recipes,
-    materials,
-    names,
+    estimate,
   );
-  // b1 recorded at 7,500; b2 estimated at 40 × 120 + 2,000 = 6,800; the mug has no recipe.
+  // b1 recorded at 7,500; b2 estimated at 40 × 120 + 2,000 = 6,800; the mug isn't set up.
   assert.equal(figures.costRecorded, 7_500);
   assert.equal(figures.costEstimated, 6_800);
-  assert.equal(figures.revenueWithoutRecipe, 15_000);
+  assert.equal(figures.revenueNotSetUp, 15_000);
   assert.equal(figures.revenue, 315_000);
-  assert.equal(figures.profit, 300_000 - 14_300, "the mug, with no recipe, isn't counted as profit");
+  assert.equal(figures.profit, 300_000 - 14_300, "the mug, not set up, isn't counted as profit");
   const [book, mug] = figures.products;
   assert.deepEqual([book.name, book.units, book.cost, book.estimated, book.marginPercent], ["Photo book", 2, 14_300, true, 95.2]);
-  assert.deepEqual([mug.name, mug.noRecipe, mug.marginPercent], ["Mug", true, null]);
+  assert.deepEqual([mug.name, mug.notSetUp, mug.marginPercent], ["Mug", true, null]);
 });
 
 test("wastage by material: beyond what was expected, net of savings, most first", () => {
@@ -85,7 +84,7 @@ test("month by month, oldest first, empty months as zeros", () => {
     order({ total: 50_000, issuedAt: "2026-09-10T10:00:00Z", items: [item({ itemId: "a", productId: "mug", qty: 2 })] }),
     order({ total: 30_000, issuedAt: "2026-11-01T08:00:00Z", items: [item({ itemId: "b", productId: "mug", qty: 1 })] }),
   ];
-  const months = monthlyFigures(orders, ["2026-09", "2026-10", "2026-11"], (iso) => iso.slice(0, 7), new Map(), new Map(), [], new Map());
+  const months = monthlyFigures(orders, ["2026-09", "2026-10", "2026-11"], (iso) => iso.slice(0, 7), new Map(), () => null);
   assert.deepEqual(
     months.map((m) => [m.month, m.revenue, m.units]),
     [
@@ -111,7 +110,7 @@ test("one product's lines keep their share of each order's total", () => {
 
 test("margin counts only sales whose cost is known; none known, no margin", () => {
   const mug = { issuedAt: "", clientName: "", total: 15_000, items: [item({ itemId: "m", productId: "mug", product: "Mug", unitPrice: 15_000 })] };
-  assert.equal(periodFigures([mug], new Map(), new Map(), [], new Map()).marginPercent, null, "no recipe anywhere: not 100%");
+  assert.equal(periodFigures([mug], new Map(), () => null).marginPercent, null, "nothing set up: not 100%");
   const book = { issuedAt: "", clientName: "", total: 10_000, items: [item({ itemId: "b", productId: "book", product: "Book", unitPrice: 10_000 })] };
-  assert.equal(periodFigures([mug, book], new Map([["b", 4_000]]), new Map(), [], new Map()).marginPercent, 60, "the mug's sales left out");
+  assert.equal(periodFigures([mug, book], new Map([["b", 4_000]]), () => null).marginPercent, 60, "the mug's sales left out");
 });

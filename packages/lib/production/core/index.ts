@@ -5,6 +5,7 @@ export * from "./costing";
 export * from "./loans";
 export * from "./model";
 export * from "./overview";
+export * from "./parts";
 export * from "./rules";
 export * from "./schema";
 export * from "./speed";

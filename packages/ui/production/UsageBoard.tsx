@@ -1,10 +1,10 @@
 "use client";
 
-// Production → Record usage. An item with a recipe is recorded by itself when
+// Production → Record usage. An item of a set-up product is recorded by itself when
 // it reaches Quality check, as if it went exactly to plan (the database does
 // it: production_auto_record). Here the supervisor corrects a record when the
 // item used something different (that difference is the wastage), and
-// records by hand the items that weren't recorded: no recipe, or made before
+// records by hand the items that weren't recorded: not set up, or made before
 // automatic recording. Records can be voided with a reason (stock goes back).
 
 import { useRouter } from "next/navigation";
@@ -40,7 +40,7 @@ export function UsageBoard({ queue, records, materials, sinceDays }: { queue: Qu
   return (
     <div className="@container space-y-6">
       <div className="grid grid-cols-2 gap-3 @2xl:grid-cols-3">
-        <Tile label={`Used beyond the recipe (latest ${live.length})`} value={money(wasted)} tone={wasted ? "error" : undefined} wide />
+        <Tile label={`Used beyond the setup (latest ${live.length})`} value={money(wasted)} tone={wasted ? "error" : undefined} wide />
         <Tile label={`Recorded automatically (latest ${live.length})`} value={String(automatic)} />
         <Tile label="Not recorded" value={String(queue.length)} tone={queue.length ? "error" : undefined} />
       </div>
@@ -48,7 +48,7 @@ export function UsageBoard({ queue, records, materials, sinceDays }: { queue: Qu
       <section className="space-y-2">
         <h3 className="text-sm font-semibold">Not recorded</h3>
         <p className="text-xs text-muted">
-          Made in the last {sinceDays} days with nothing recorded: products with no recipe (give them one to record them by themselves), or items made
+          Made in the last {sinceDays} days with nothing recorded: products not set up (set them up to record them by themselves), or items made
           before automatic recording.
         </p>
         {queue.length === 0 ? (
@@ -73,7 +73,7 @@ export function UsageBoard({ queue, records, materials, sinceDays }: { queue: Qu
                       .map(([k, v]) => ` · ${v} ${k.toLowerCase()}`)
                       .join("")}
                   </p>
-                  {q.hasRecipe ? null : <p className="mt-1 text-xs text-warning-600 dark:text-warning-500">No recipe: enter what it used by hand.</p>}
+                  {q.isSetUp ? null : <p className="mt-1 text-xs text-warning-600 dark:text-warning-500">Not set up: enter what it used by hand.</p>}
                 </button>
               </li>
             ))}
@@ -83,7 +83,7 @@ export function UsageBoard({ queue, records, materials, sinceDays }: { queue: Qu
 
       <section className="space-y-2">
         <h3 className="text-sm font-semibold">Recorded lately</h3>
-        <p className="text-xs text-muted">Correct one when it used something different from its recipe: reprints, a spoiled cover, extra film.</p>
+        <p className="text-xs text-muted">Correct one when it used something different from its setup: reprints, a spoiled cover, extra film.</p>
         {records.length === 0 ? (
           <p className="text-sm text-muted">Nothing recorded yet.</p>
         ) : (
@@ -96,13 +96,13 @@ export function UsageBoard({ queue, records, materials, sinceDays }: { queue: Qu
                     <div className="min-w-0">
                       <p className={`font-medium ${r.voidedAt ? "line-through" : ""}`}>{itemTitle(r.item)}</p>
                       <p className="mt-0.5 text-xs text-muted">
-                        #{r.item.orderNo} · {r.item.clientName} · {r.automatic ? "automatic, from the recipe" : r.actorName}
+                        #{r.item.orderNo} · {r.item.clientName} · {r.automatic ? "automatic, from the setup" : r.actorName}
                       </p>
                     </div>
                     <div className="shrink-0 text-right">
                       <p className="text-sm font-semibold tnum">{money(r.actualCost)}</p>
                       <p className={`text-xs tnum ${diff > 0 ? "text-error-600 dark:text-error-400" : diff < 0 ? "text-success-600 dark:text-success-500" : "text-muted"}`}>
-                        {diff === 0 ? "as the recipe" : `${diff > 0 ? "+" : "−"}${money(Math.abs(diff))} vs recipe`}
+                        {diff === 0 ? "as the setup" : `${diff > 0 ? "+" : "−"}${money(Math.abs(diff))} vs setup`}
                       </p>
                     </div>
                   </div>
@@ -142,7 +142,7 @@ export function UsageBoard({ queue, records, materials, sinceDays }: { queue: Qu
           item={open}
           rows={open.expected.map((e) => ({ materialId: e.materialId, expected: e.qty, actual: String(e.qty) }))}
           otherCost={open.otherCost}
-          empty={open.hasRecipe ? "Its recipe uses no materials." : "No recipe: add each material it used."}
+          empty={open.isSetUp ? "Its setup uses no parts from stock." : "Not set up: add each part it used."}
           materials={materials}
           onClose={() => setOpen(null)}
           save={(actual, note) => recordUsage({ itemId: open.itemId, actual, note })}
@@ -243,7 +243,7 @@ function UsageSheet({
               <li key={r.materialId} className="grid grid-cols-[1fr_8rem] items-end gap-3">
                 <div className="min-w-0 pb-2">
                   <p className="truncate text-sm font-medium">{m?.name ?? "Material"}</p>
-                  <p className="text-xs text-muted">{r.expected ? `${formatQty(r.expected)} ${m?.unit ?? ""} expected` : "not in the recipe"}</p>
+                  <p className="text-xs text-muted">{r.expected ? `${formatQty(r.expected)} ${m?.unit ?? ""} expected` : "not in the setup"}</p>
                 </div>
                 <Field label={`Used (${m?.unit ?? ""})`}>
                   <TextInput
@@ -276,7 +276,7 @@ function UsageSheet({
         </Field>
         <div className="rounded-xl bg-gray-50 p-3 text-sm dark:bg-white/5">
           <div className="flex justify-between">
-            <span className="text-muted">Recipe says</span>
+            <span className="text-muted">Setup says</span>
             <span className="tnum">{money(expected)}</span>
           </div>
           <div className="flex justify-between font-medium">

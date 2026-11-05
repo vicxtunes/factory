@@ -23,7 +23,7 @@ import { MaterialSheet, PurchaseSheet, StockCountSheet, VoidSheet } from "./shee
 const day = (iso: string) =>
   new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 
-export function MaterialDetailView({ detail, today }: { detail: MaterialDetail; today: string }) {
+export function MaterialDetailView({ detail, today, products }: { detail: MaterialDetail; today: string; products: { id: string; name: string }[] }) {
   const { material, movements, purchases } = detail;
   const symbol = useCurrencySymbol();
   const money = (n: number) => formatMoney(n, symbol);
@@ -36,7 +36,9 @@ export function MaterialDetailView({ detail, today }: { detail: MaterialDetail; 
         <div>
           <h2 className="text-xl font-semibold">{material.name}</h2>
           <p className="text-sm text-muted">
-            {KIND_LABELS[material.kind]} · counted in {material.unit}
+            Bought · {KIND_LABELS[material.kind]} · counted in {material.unit}
+            {material.clientPrice !== null && !material.productId ? ` · client price ${money(material.clientPrice)}` : ""}
+            {material.productName ? ` · sold as ${material.productName}` : ""}
             {material.active ? "" : " · not in use"}
           </p>
         </div>
@@ -124,7 +126,7 @@ export function MaterialDetailView({ detail, today }: { detail: MaterialDetail; 
         </section>
       </div>
 
-      <MaterialSheet key={`edit-${sheet === "edit"}`} open={sheet === "edit"} onClose={() => setSheet(null)} material={material} />
+      <MaterialSheet key={`edit-${sheet === "edit"}`} open={sheet === "edit"} onClose={() => setSheet(null)} material={material} products={products} />
       <PurchaseSheet open={sheet === "purchase"} onClose={() => setSheet(null)} materials={[material]} materialId={material.id} today={today} />
       <StockCountSheet open={sheet === "count"} onClose={() => setSheet(null)} material={material} />
       {voiding ? (

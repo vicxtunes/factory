@@ -144,12 +144,12 @@ import ProductionMaterialDetail from "./examples/production/material-detail";
 import ProductionMoneyWeOwe from "./examples/production/money-we-owe";
 import ProductionLender from "./examples/production/lender";
 import ProductionProductCosts from "./examples/production/product-costs";
-import ProductionRecipe from "./examples/production/recipe";
+import ProductionSetup from "./examples/production/setup";
+import ProductionMadePart from "./examples/production/made-part";
 import ProductionUsage from "./examples/production/usage";
 import ProductionOverviewExample from "./examples/production/overview";
 import ProductionProduct from "./examples/production/product";
 import ProductionSpeed from "./examples/production/speed";
-import ProductionSheetPrices from "./examples/production/sheet-prices";
 import BooksDayBook from "./examples/books/day-book";
 import BooksExpenses from "./examples/books/expenses";
 
@@ -257,14 +257,15 @@ export const COMPONENTS: RoomComponent[] = [
   },
   {
     slug: "production-materials",
-    name: "Production materials",
+    name: "Production parts",
     category: "Flows",
     status: "live",
     source: "packages/ui/production/MaterialsBoard.tsx",
-    summary: "What production uses: stock, price per unit and value for each material, cards on a phone and a table from md up; below-zero stock in red. Add material and Record purchase open in a form sheet; a purchase sets the price and counts as money spent, or as money we owe the supplier when on credit. One material shows its purchases (each can be voided with a reason) beside its stock history.",
+    summary: "Everything production buys or makes, tabbed All, Bought and Made; cards on a phone, a table from the container's 3xl. A bought part has stock, price per unit and value (below zero in red); Record purchase sets its price and counts as money spent, or as money we owe the supplier on credit. A made part (a sheet, a box) is made of other parts at any depth, so its cost follows theirs; its client price is its own, its product's when it's also sold on its own, or its parts' added up. Add part opens in a form sheet (bought or made). One bought part shows purchases (voidable) beside its stock history; one made part edits its lines beside an order to try, and lists what uses it.",
     examples: [
-      { title: "Materials", file: "production/materials.tsx", Demo: ProductionMaterials },
-      { title: "One material", file: "production/material-detail.tsx", Demo: ProductionMaterialDetail },
+      { title: "Parts", file: "production/materials.tsx", Demo: ProductionMaterials },
+      { title: "One bought part", file: "production/material-detail.tsx", Demo: ProductionMaterialDetail },
+      { title: "One made part", file: "production/made-part.tsx", Demo: ProductionMadePart },
     ],
   },
   {
@@ -299,24 +300,15 @@ export const COMPONENTS: RoomComponent[] = [
   },
   {
     slug: "product-costs",
-    name: "Product costs",
+    name: "Product costs and setups",
     category: "Flows",
     status: "live",
     source: "packages/ui/production/ProductCostsBoard.tsx",
-    summary: "What each product size costs to make at today's material prices, its price, profit and margin (red at a loss, amber under 20%), by category; per-page products show the cost per page instead of a margin. A product's recipe: lines for every size and each size's own, materials per unit or per a number detail (pages), other costs as fixed amounts; each size's cost, price and margin beside it, with a page count to try.",
+    summary: "What each product size costs to make at the latest prices paid, its price, profit and margin (red at a loss, amber under 20%), by category; a product whose cost depends on a number shows it per sheet or page. A product's own setup (SetupEditor): priced fixed per size or built from its parts, and its lines: a part × how many or × a number on the order, for one size, only when the order chose something, the part the order chose (packaging), or an other cost. New part on a line adds one only for that product; Copy from another product starts from its setup. An order to try sits beside it (below on a phone) with each line's cost and client price and the profit.",
     examples: [
       { title: "Product costs", file: "production/product-costs.tsx", Demo: ProductionProductCosts },
-      { title: "A recipe", file: "production/recipe.tsx", Demo: ProductionRecipe },
+      { title: "A product's setup", file: "production/setup.tsx", Demo: ProductionSetup },
     ],
-  },
-  {
-    slug: "sheet-prices",
-    name: "Sheet prices",
-    category: "Flows",
-    status: "live",
-    source: "packages/ui/production/SheetPricesEditor.tsx",
-    summary: "A product priced by the sheet (photo books). Client price per sheet: components, each for a size or every size and a choice like Matt or Glossy; a size's own line beats the every-size one. What one sheet uses from stock gives the real cost. A table works out each size and choice live, and Try a book adds sheets and packaging. Rows are cards on a phone, a row of fields from md.",
-    examples: [{ title: "Sheet prices", file: "production/sheet-prices.tsx", Demo: ProductionSheetPrices }],
   },
   {
     slug: "record-usage",

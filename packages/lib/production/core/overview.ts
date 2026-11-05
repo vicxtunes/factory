@@ -5,11 +5,8 @@
 // invoice's issue date, at the order's agreed total), so the two agree; an
 // order's total is shared out over its lines by their confirmed prices. An
 // item's cost is its production record's actual cost when one exists, else
-// its recipe's estimate at today's prices; an item with no recipe costs 0
-// and is shown as such, so the gap is visible rather than hidden.
-
-import { costWith, detailNumber, recipeFor, unitCost } from "./costing";
-import type { Material, RecipeLine } from "./model";
+// its setup's estimate at today's prices; an item whose product isn't set up
+// costs 0 and is shown as such, so the gap is visible rather than hidden.
 
 export interface SoldItem {
   itemId: string;
@@ -36,30 +33,30 @@ export interface ProductFigures {
   units: number;
   revenue: number;
   cost: number;
-  /** Over the sales whose cost is known, like the margin: a sale with no recipe isn't counted as profit. */
+  /** Over the sales whose cost is known, like the margin: a sale whose product isn't set up isn't counted as profit. */
   profit: number;
   /** null without revenue. */
   marginPercent: number | null;
-  /** Part of the cost is a recipe estimate (no usage recorded). */
+  /** Part of the cost is a setup estimate (no usage recorded). */
   estimated: boolean;
-  /** No recipe: its cost isn't known. */
-  noRecipe: boolean;
+  /** Not set up: its cost isn't known. */
+  notSetUp: boolean;
 }
 
 export interface PeriodFigures {
   revenue: number;
   cost: number;
-  /** Over the sales whose cost is known, like the margin: a sale with no recipe isn't counted as profit. */
+  /** Over the sales whose cost is known, like the margin: a sale whose product isn't set up isn't counted as profit. */
   profit: number;
   /**
-   * Over the sales whose cost is known (recorded or from a recipe): sales
-   * with no recipe would count as all margin. Null when no sale's cost is known.
+   * Over the sales whose cost is known (recorded or from a setup): sales
+   * not set up would count as all margin. Null when no sale's cost is known.
    */
   marginPercent: number | null;
-  /** How the cost is known: from recorded usage, from recipes, or not at all (revenue with no recipe). */
+  /** How the cost is known: from recorded usage, from setups, or not at all (revenue not set up). */
   costRecorded: number;
   costEstimated: number;
-  revenueWithoutRecipe: number;
+  revenueNotSetUp: number;
   products: ProductFigures[];
 }
 
@@ -94,63 +91,59 @@ export function periodFigures(
   orders: SoldOrder[],
   /** Live production records' actual cost, by item. */
   recorded: Map<string, number>,
-  recipes: Map<string, RecipeLine[]>,
-  materials: Pick<Material, "id" | "kind" | "unitCost">[],
-  /** A number detail's name by id (recipes refer to ids, items carry names). */
-  detailNames: Map<string, string>,
+  /** What one unit of an item costs from its product's setup; null when it isn't set up. */
+  estimate: (item: SoldItem) => number | null,
 ): PeriodFigures {
   const byProduct = new Map<string, ProductFigures>();
   let costRecorded = 0;
   let costEstimated = 0;
-  let revenueWithoutRecipe = 0;
+  let revenueNotSetUp = 0;
 
   for (const order of orders) {
     const shares = shareRevenue(order);
     for (const item of order.items) {
       const revenue = shares.get(item.itemId) ?? 0;
-      const lines = (item.productId && recipes.get(item.productId)) || [];
       let cost = 0;
+      let unit: number | null;
       let estimated = false;
-      let noRecipe = false;
+      let notSetUp = false;
       if (recorded.has(item.itemId)) {
         cost = recorded.get(item.itemId) ?? 0;
         costRecorded += cost;
-      } else if (lines.length) {
-        const unit = unitCost(recipeFor(lines, item.variantId), materials);
-        const values = Object.fromEntries(unit.perDetail.map((d) => [d.attributeId, detailNumber(item.attributes, detailNames.get(d.attributeId) ?? "")]));
-        cost = costWith(unit, values) * item.qty;
+      } else if ((unit = estimate(item)) !== null) {
+        cost = unit * item.qty;
         costEstimated += cost;
         estimated = true;
       } else {
-        noRecipe = true;
-        revenueWithoutRecipe += revenue;
+        notSetUp = true;
+        revenueNotSetUp += revenue;
       }
 
       const key = item.productId ?? `name:${item.product}`;
-      const p = byProduct.get(key) ?? { key, name: item.product, units: 0, revenue: 0, cost: 0, profit: 0, marginPercent: null, estimated: false, noRecipe: false };
+      const p = byProduct.get(key) ?? { key, name: item.product, units: 0, revenue: 0, cost: 0, profit: 0, marginPercent: null, estimated: false, notSetUp: false };
       p.units += item.qty;
       p.revenue += revenue;
       p.cost += cost;
       p.estimated ||= estimated;
-      p.noRecipe ||= noRecipe;
+      p.notSetUp ||= notSetUp;
       byProduct.set(key, p);
     }
   }
 
   const products = [...byProduct.values()]
-    // A product with no recipe has no known profit: 0 here, shown as "—", and it sorts last.
-    .map((p) => ({ ...p, profit: p.noRecipe ? 0 : p.revenue - p.cost, marginPercent: p.noRecipe ? null : percent(p.revenue - p.cost, p.revenue) }))
+    // A product not set up has no known profit: 0 here, shown as "—", and it sorts last.
+    .map((p) => ({ ...p, profit: p.notSetUp ? 0 : p.revenue - p.cost, marginPercent: p.notSetUp ? null : percent(p.revenue - p.cost, p.revenue) }))
     .sort((a, b) => b.profit - a.profit || b.revenue - a.revenue);
   const revenue = products.reduce((s, p) => s + p.revenue, 0);
   const cost = costRecorded + costEstimated;
   return {
     revenue,
     cost,
-    profit: revenue - revenueWithoutRecipe - cost,
-    marginPercent: percent(revenue - revenueWithoutRecipe - cost, revenue - revenueWithoutRecipe),
+    profit: revenue - revenueNotSetUp - cost,
+    marginPercent: percent(revenue - revenueNotSetUp - cost, revenue - revenueNotSetUp),
     costRecorded,
     costEstimated,
-    revenueWithoutRecipe,
+    revenueNotSetUp,
     products,
   };
 }
@@ -192,9 +185,7 @@ export function monthlyFigures(
   months: string[],
   monthOf: (instant: string) => string,
   costs: Parameters<typeof periodFigures>[1],
-  recipes: Parameters<typeof periodFigures>[2],
-  materials: Parameters<typeof periodFigures>[3],
-  detailNames: Parameters<typeof periodFigures>[4],
+  estimate: Parameters<typeof periodFigures>[2],
 ): MonthFigures[] {
   const byMonth = new Map<string, SoldOrder[]>();
   for (const o of orders) {
@@ -202,7 +193,7 @@ export function monthlyFigures(
     byMonth.set(m, [...(byMonth.get(m) ?? []), o]);
   }
   return months.map((month) => {
-    const f = periodFigures(byMonth.get(month) ?? [], costs, recipes, materials, detailNames);
+    const f = periodFigures(byMonth.get(month) ?? [], costs, estimate);
     return { month, revenue: f.revenue, cost: f.cost, profit: f.profit, marginPercent: f.marginPercent, units: f.products.reduce((s, p) => s + p.units, 0) };
   });
 }

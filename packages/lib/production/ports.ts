@@ -4,10 +4,11 @@
 import { AppError } from "@repo/lib/kernel/core";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
-import type { Lender, Loan, Material, MaterialDetail, ProductionRecord, RecipeLine, Repayment, UsageItem } from "./core/model";
+import type { Lender, Loan, Material, MaterialDetail, ProductionRecord, Repayment, UsageItem } from "./core/model";
+import type { PartsBook } from "./core/parts";
 import type { MaterialFigure, SoldOrder } from "./core/overview";
 import type { ItemJourney } from "./core/speed";
-import type { CorrectionInput, LoanInput, MaterialInput, MaterialUpdate, PurchaseInput, RecipeInput, RepaymentInput, StockCountInput, VoidInput } from "./core/schema";
+import type { CopySetupInput, CorrectionInput, LoanInput, MaterialInput, MaterialUpdate, PartLinesInput, PurchaseInput, RepaymentInput, SetupInput, StockCountInput, VoidInput } from "./core/schema";
 
 export interface ProductionActor {
   id: string | null;
@@ -36,17 +37,19 @@ export interface ProductionStore {
   voidLoan(scope: TenantScope, input: VoidInput, actor: ProductionActor): Promise<void>;
   voidRepayment(scope: TenantScope, input: VoidInput, actor: ProductionActor): Promise<void>;
 
-  /** Every product's recipe lines, by product id (one product's when `productId` is given). */
-  recipes(scope: TenantScope, productId?: string): Promise<Map<string, RecipeLine[]>>;
-  /** Products whose cost comes from what a sheet uses, even with no recipe of their own. */
-  sheetCostedProducts(): Promise<Set<string>>;
-  /** Replaces a product's whole recipe (every size). */
-  saveRecipe(scope: TenantScope, input: RecipeInput): Promise<void>;
+  /** Every part, every made part's lines, and every product's setup and pricing. */
+  partsBook(scope: TenantScope): Promise<PartsBook>;
+  /** Replaces a product's whole setup (every size) and how it's priced. */
+  saveSetup(scope: TenantScope, input: SetupInput, actor: ProductionActor): Promise<void>;
+  /** Replaces what a made part is made of; refused if it would end up inside itself. */
+  savePartLines(scope: TenantScope, input: PartLinesInput, actor: ProductionActor): Promise<void>;
+  /** Starts a product's setup from another's; returns how many size lines had no size of the same name. */
+  copySetup(scope: TenantScope, input: CopySetupInput, actor: ProductionActor): Promise<number>;
 
   /**
    * Items at Quality check or later, changed since `since`, of live orders, with no live record yet;
-   * oldest first. Items with a recipe are recorded by themselves at Quality check, so these are mostly
-   * products with no recipe.
+   * oldest first. Items of set-up products are recorded by themselves at Quality check, so these are mostly
+   * products not set up.
    */
   usageQueue(scope: TenantScope, since: string): Promise<UsageItem[]>;
   usageItem(scope: TenantScope, itemId: string): Promise<UsageItem | null>;

@@ -41,7 +41,7 @@ function Stat({ label, value, delta, hint, tone }: { label: string; value: strin
   );
 }
 
-export function ProductPerformanceView({ view, recipeHref, sheetsHref }: { view: ProductPerformance; recipeHref: string; sheetsHref?: string }) {
+export function ProductPerformanceView({ view, setupHref }: { view: ProductPerformance; setupHref: string }) {
   const symbol = useCurrencySymbol();
   const money = (n: number) => formatMoney(n, symbol);
   const { product, figures: f, before, months, sizes, clients, wastage } = view;
@@ -65,20 +65,15 @@ export function ProductPerformanceView({ view, recipeHref, sheetsHref }: { view:
             {product.categoryName} · {f.orders} {f.orders === 1 ? "order" : "orders"} in this period
           </p>
         </div>
-        {sheetsHref ? (
-          <Link href={sheetsHref} className={buttonClass("secondary", "sm")}>
-            Sheet prices
-          </Link>
-        ) : null}
-        <Link href={recipeHref} className={buttonClass("secondary", "sm")}>
-          {f.noRecipe ? "Add a recipe" : "Edit recipe"}
+        <Link href={setupHref} className={buttonClass("secondary", "sm")}>
+          {f.notSetUp ? "Set it up" : "Edit setup"}
         </Link>
       </div>
 
       <PeriodPicker period={view.period} />
 
       <div className="grid grid-cols-2 gap-3 @4xl:grid-cols-4">
-        <Stat tone="brand" label="Gross profit" value={f.noRecipe ? "—" : money(f.profit)} delta={f.noRecipe ? null : change(f.profit, before?.profit)} hint={f.noRecipe ? "needs a recipe" : `on ${money(f.revenue)} of sales`} />
+        <Stat tone="brand" label="Gross profit" value={f.notSetUp ? "—" : money(f.profit)} delta={f.notSetUp ? null : change(f.profit, before?.profit)} hint={f.notSetUp ? "needs its setup" : `on ${money(f.revenue)} of sales`} />
         <Stat label="Sales" value={money(f.revenue)} delta={change(f.revenue, before?.revenue)} />
         <Stat label="Units sold" value={String(f.units)} delta={change(f.units, before?.units)} hint={product.unit ? `in ${product.unit.toLowerCase()}` : undefined} />
         <Stat
@@ -87,14 +82,14 @@ export function ProductPerformanceView({ view, recipeHref, sheetsHref }: { view:
           hint={before?.marginPercent !== null && before?.marginPercent !== undefined ? `${percent(before.marginPercent)} the period before` : undefined}
         />
       </div>
-      {f.noRecipe ? (
+      {f.notSetUp ? (
         <p className="text-sm text-warning-600 dark:text-warning-500">
-          This product has no recipe, so what it costs to make isn&apos;t known and its profit can&apos;t be shown. Add one to see it.
+          This product isn&apos;t set up, so what it costs to make isn&apos;t known and its profit can&apos;t be shown. Set it up to see it.
         </p>
       ) : f.revenue > 0 ? (
         <p className="text-xs text-muted">
           Cost from recorded usage {money(f.costRecorded)}
-          {f.costEstimated ? `, estimated from the recipe ${money(f.costEstimated)}` : ""}.
+          {f.costEstimated ? `, estimated from its setup ${money(f.costEstimated)}` : ""}.
         </p>
       ) : null}
 
@@ -122,8 +117,8 @@ export function ProductPerformanceView({ view, recipeHref, sheetsHref }: { view:
             {(w) => (
               <GroupedColumns
                 width={w}
-                data={months.map((m, i) => ({ key: m.month, label: monthLabel(m.month, i === 0), values: f.noRecipe ? [m.revenue] : [m.revenue, m.cost] }))}
-                series={f.noRecipe ? [{ label: "Sales", color: SERIES[0] }] : [
+                data={months.map((m, i) => ({ key: m.month, label: monthLabel(m.month, i === 0), values: f.notSetUp ? [m.revenue] : [m.revenue, m.cost] }))}
+                series={f.notSetUp ? [{ label: "Sales", color: SERIES[0] }] : [
                   { label: "Sales", color: SERIES[0] },
                   { label: "Production cost", color: SERIES[1] },
                 ]}
@@ -131,7 +126,7 @@ export function ProductPerformanceView({ view, recipeHref, sheetsHref }: { view:
                 axisFormat={compactNumber}
                 extra={(i) => [
                   { label: "Units", value: String(months[i].units) },
-                  ...(f.noRecipe ? [] : [{ label: "Gross profit", value: money(months[i].profit) }]),
+                  ...(f.notSetUp ? [] : [{ label: "Gross profit", value: money(months[i].profit) }]),
                 ]}
               />
             )}
@@ -158,7 +153,7 @@ export function ProductPerformanceView({ view, recipeHref, sheetsHref }: { view:
         <ChartCard
           title="What one cost to make"
           subtitle="By month; rising when materials cost more or more is wasted"
-          empty={unitCost.length >= 2 ? null : f.noRecipe ? "Needs a recipe." : "Needs at least two months of sales."}
+          empty={unitCost.length >= 2 ? null : f.notSetUp ? "Needs its setup." : "Needs at least two months of sales."}
           table={{ columns: [{ key: "month", label: "Month" }, { key: "each", label: "Cost of one", align: "right" }], rows: monthRows }}
         >
           {(w) => (
@@ -234,7 +229,7 @@ export function ProductPerformanceView({ view, recipeHref, sheetsHref }: { view:
 
         <ChartCard
           title="Wastage"
-          subtitle="Used beyond its recipe in this period (from corrected records)"
+          subtitle="Used beyond its setup in this period (from corrected records)"
           empty={wastage.length ? null : "No wastage recorded for it in this period."}
           table={{
             columns: [
