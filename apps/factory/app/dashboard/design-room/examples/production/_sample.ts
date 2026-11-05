@@ -1,13 +1,19 @@
 import type { ProductPerformance, ProductionOverview, QueuedItem, SpeedView } from "@repo/lib/production/service";
-import { productCosts, type CostingCategory, type ProductionRecord, type LenderAccount, type LenderDetail, type Loan, type Material, type MaterialDetail, type RecipeLine } from "@repo/lib/production/core";
+import { PartsCatalog, productCosts, toPlainBook, type CostingCategory, type ProductionRecord, type LenderAccount, type LenderDetail, type Loan, type Material, type MaterialDetail, type PartLine, type PartsBook } from "@repo/lib/production/core";
 
-// Sample materials for the Production examples.
+// Sample parts for the Production examples: bought ones with stock, and made
+// ones (a 12x12 sheet, a box that's also sold on its own).
+const bought = { made: false, clientPrice: null, productId: null, productName: null, productPrice: null, ownerProductId: null } as const;
 export const MATERIALS: Material[] = [
-  { id: "m1", name: "A4 photo paper", unit: "sheet", kind: "material", unitCost: 120, active: true, stock: 646, stockValue: 77_520, createdAt: "2026-10-01T08:00:00Z" },
-  { id: "m2", name: "Hard cover A4", unit: "pc", kind: "material", unitCost: 4_500, active: true, stock: 38, stockValue: 171_000, createdAt: "2026-10-01T08:00:00Z" },
-  { id: "m3", name: "Lamination film", unit: "m", kind: "material", unitCost: 37.5, active: true, stock: -12, stockValue: -450, createdAt: "2026-10-02T08:00:00Z" },
-  { id: "m4", name: "Gift box (large)", unit: "pc", kind: "packaging", unitCost: 2_000, active: true, stock: 120, stockValue: 240_000, createdAt: "2026-10-03T08:00:00Z" },
-  { id: "m5", name: "Old frame moulding", unit: "m", kind: "material", unitCost: 8_000, active: false, stock: 0, stockValue: 0, createdAt: "2026-09-20T08:00:00Z" },
+  { ...bought, id: "m1", name: "Photo paper & ink 12x12", unit: "sheet", kind: "material", unitCost: 2_000, clientPrice: 5_000, active: true, stock: 646, stockValue: 1_292_000, createdAt: "2026-10-01T08:00:00Z" },
+  { ...bought, id: "m2", name: "PVC 12x12", unit: "sheet", kind: "material", unitCost: 1_500, clientPrice: 4_000, active: true, stock: 380, stockValue: 570_000, createdAt: "2026-10-01T08:00:00Z" },
+  { ...bought, id: "m3", name: "Matt film 12x12", unit: "sheet", kind: "material", unitCost: 500, clientPrice: 3_000, active: true, stock: -12, stockValue: -6_000, createdAt: "2026-10-02T08:00:00Z" },
+  { ...bought, id: "m6", name: "Glossy film 12x12", unit: "sheet", kind: "material", unitCost: 600, clientPrice: 3_500, active: true, stock: 90, stockValue: 54_000, createdAt: "2026-10-02T08:00:00Z" },
+  { ...bought, id: "m4", name: "Box board", unit: "pc", kind: "packaging", unitCost: 3_000, active: true, stock: 120, stockValue: 360_000, createdAt: "2026-10-03T08:00:00Z" },
+  { ...bought, id: "m7", name: "Hard cover board", unit: "pc", kind: "material", unitCost: 4_500, ownerProductId: "book", active: true, stock: 38, stockValue: 171_000, createdAt: "2026-10-03T08:00:00Z" },
+  { ...bought, id: "m5", name: "Old frame moulding", unit: "m", kind: "material", unitCost: 8_000, active: false, stock: 0, stockValue: 0, createdAt: "2026-09-20T08:00:00Z" },
+  { ...bought, id: "s1", name: "Sheet 12x12", unit: "sheet", kind: "material", made: true, unitCost: 0, active: true, stock: 0, stockValue: 0, createdAt: "2026-11-05T08:00:00Z" },
+  { ...bought, id: "s2", name: "Box A", unit: "pc", kind: "packaging", made: true, unitCost: 0, productId: "boxA", productName: "Box A", productPrice: 25_000, active: true, stock: 0, stockValue: 0, createdAt: "2026-11-05T08:00:00Z" },
 ];
 
 export const PAPER: MaterialDetail = {
@@ -56,14 +62,19 @@ export const SACCO: LenderDetail = {
   ],
 };
 
-// Sample recipes: a photo book costed per page (no margin until the pages are known), a frame, a mug with no recipe yet.
-const line = (over: Partial<RecipeLine>): RecipeLine => ({ variantId: null, materialId: null, qty: null, perAttributeId: null, label: null, amount: null, ...over });
+// Sample setups: a photo book priced by its parts (sheet × NOS, Matt or Glossy, the box the order chose), a frame and a crystal board priced fixed, a mug not set up yet.
+const line = (over: Partial<PartLine>): PartLine => ({ variantId: null, partId: null, chosenDetail: null, qty: 1, perDetail: null, whenDetail: null, whenValue: null, label: null, amount: null, ...over });
 
 export const BOOK_CATEGORY: CostingCategory = {
   id: "c1",
   name: "Photo books",
-  attributes: [{ id: "pages", name: "Pages", type: "number" }],
-  products: [{ id: "book", name: "Layflat photo book", price: null, unit: "Pc", variants: [{ id: "a4", name: "A4", price: 150_000 }, { id: "a3", name: "A3", price: 220_000 }] }],
+  attributes: [
+    { id: "nos", name: "NOS (Number of Sheets)", type: "number", options: [] },
+    { id: "lam", name: "Lamination", type: "select", options: ["Matt", "Glossy"] },
+    { id: "cover", name: "Cover", type: "select", options: ["Soft", "Hard"] },
+    { id: "pack", name: "Packaging", type: "select", options: ["Box A", "None"] },
+  ],
+  products: [{ id: "book", name: "Photo book 12x12", price: null, unit: "Pc", variants: [] }],
 };
 
 const CATALOG: CostingCategory[] = [
@@ -78,30 +89,50 @@ const CATALOG: CostingCategory[] = [
       { id: "mug", name: "Photo mug", price: 15_000, unit: "Pc", variants: [] },
     ],
   },
+  { id: "c3", name: "Packaging", attributes: [], products: [{ id: "boxA", name: "Box A", price: 25_000, unit: "Pc", variants: [] }] },
 ];
 
-export const BOOK_RECIPE: RecipeLine[] = [
-  line({ materialId: "m1", qty: 1, perAttributeId: "pages" }),
-  line({ materialId: "m3", qty: 0.5, perAttributeId: "pages" }),
-  line({ materialId: "m4", qty: 1 }),
-  line({ variantId: "a4", materialId: "m2", qty: 1 }),
-  line({ variantId: "a4", label: "Binding", amount: 3_000 }),
-  line({ variantId: "a3", materialId: "m2", qty: 2 }),
-  line({ variantId: "a3", label: "Binding", amount: 4_500 }),
+export const BOOK_LINES: PartLine[] = [
+  line({ partId: "s1", perDetail: "NOS (Number of Sheets)" }),
+  line({ partId: "m7", qty: 2, whenDetail: "Cover", whenValue: "Hard" }),
+  line({ label: "Binding", amount: 3_000 }),
+  line({ chosenDetail: "Packaging" }),
 ];
 
-const RECIPES = new Map<string, RecipeLine[]>([
-  ["book", BOOK_RECIPE],
-  ["frame", [line({ materialId: "m5", qty: 1.2 }), line({ variantId: "f2", materialId: "m5", qty: 0.6 }), line({ materialId: "m4", qty: 1 })]],
-  ["crystal", [line({ materialId: "m2", qty: 2 }), line({ label: "Engraving", amount: 20_000 })]],
-]);
+export const PARTS_BOOK: PartsBook = {
+  parts: MATERIALS,
+  partLines: new Map([
+    [
+      "s1",
+      [
+        line({ partId: "m2" }),
+        line({ partId: "m1" }),
+        line({ partId: "m3", whenDetail: "Lamination", whenValue: "Matt" }),
+        line({ partId: "m6", whenDetail: "Lamination", whenValue: "Glossy" }),
+      ],
+    ],
+    ["s2", [line({ partId: "m4", qty: 2 })]],
+  ]),
+  productLines: new Map([
+    ["book", BOOK_LINES],
+    ["frame", [line({ partId: "m5", qty: 1.2 }), line({ variantId: "f2", partId: "m5", qty: 0.6 })]],
+    ["crystal", [line({ partId: "m4", qty: 2 }), line({ label: "Engraving", amount: 20_000 })]],
+    ["boxA", [line({ partId: "s2" })]],
+  ]),
+  pricing: new Map([["book", "parts"]]),
+};
 
-export const PRODUCT_COSTS = productCosts(CATALOG, RECIPES, MATERIALS);
+export const PLAIN_BOOK = toPlainBook(PARTS_BOOK);
+const PARTS = new PartsCatalog(PARTS_BOOK);
+export const PRODUCTS = CATALOG.flatMap((c) => c.products.map((p) => ({ id: p.id, name: p.name, isSetUp: PARTS.setup(p.id).isSetUp })));
+export const MADE_COSTS = Object.fromEntries(MATERIALS.filter((m) => m.made).map((m) => [m.id, PARTS.evaluatePart(m.id, { variantId: null, details: {} }).cost]));
+export const ALL_DETAILS = CATALOG.flatMap((c) => c.attributes);
+export const PRODUCT_COSTS = productCosts(CATALOG, PARTS);
 
-// Sample usage: a photo book made before automatic recording and a mug with no recipe, not recorded; two records, one corrected (over its recipe), one automatic.
+// Sample usage: a photo book made before automatic recording and a mug not set up, not recorded; two records, one corrected (over its setup), one automatic.
 export const USAGE_QUEUE: QueuedItem[] = [
-  { itemId: "i1", orderNo: "2026-4012", clientName: "Grace Nakato", product: "Layflat photo book", productId: "book", variantId: "a4", sizeName: "A4", qty: 1, attributes: { Pages: 40 }, status: "quality_check", updatedAt: "2026-11-02T08:00:00Z", hasRecipe: true, expected: [{ materialId: "m1", qty: 40 }, { materialId: "m3", qty: 20 }, { materialId: "m4", qty: 1 }, { materialId: "m2", qty: 1 }], otherCost: 3_000 },
-  { itemId: "i2", orderNo: "2026-4010", clientName: "Okello Prints Ltd", product: "Photo mug", productId: "mug", variantId: null, sizeName: null, qty: 6, attributes: {}, status: "ready_for_pickup", updatedAt: "2026-11-01T15:00:00Z", hasRecipe: false, expected: [], otherCost: 0 },
+  { itemId: "i1", orderNo: "2026-4012", clientName: "Grace Nakato", product: "Layflat photo book", productId: "book", variantId: "a4", sizeName: "A4", qty: 1, attributes: { Pages: 40 }, status: "quality_check", updatedAt: "2026-11-02T08:00:00Z", isSetUp: true, expected: [{ materialId: "m1", qty: 40 }, { materialId: "m3", qty: 20 }, { materialId: "m4", qty: 1 }, { materialId: "m2", qty: 1 }], otherCost: 3_000 },
+  { itemId: "i2", orderNo: "2026-4010", clientName: "Okello Prints Ltd", product: "Photo mug", productId: "mug", variantId: null, sizeName: null, qty: 6, attributes: {}, status: "ready_for_pickup", updatedAt: "2026-11-01T15:00:00Z", isSetUp: false, expected: [], otherCost: 0 },
 ];
 
 export const RECORDS: ProductionRecord[] = [
@@ -141,7 +172,7 @@ export const RECORDS: ProductionRecord[] = [
   },
 ];
 
-// A month of production: photo books mostly recorded, frames estimated from recipes, mugs with no recipe.
+// A month of production: photo books mostly recorded, frames estimated from setups, mugs not set up.
 export const OVERVIEW: ProductionOverview = {
   period: { preset: "this_month", from: "2026-10-31T21:00:00Z", to: null, fromDate: "2026-11-01", toDate: "2026-11-30" },
   figures: {
@@ -151,12 +182,12 @@ export const OVERVIEW: ProductionOverview = {
     marginPercent: 69.1,
     costRecorded: 1_402_000,
     costEstimated: 584_000,
-    revenueWithoutRecipe: 360_000,
+    revenueNotSetUp: 360_000,
     products: [
-      { key: "book", name: "Layflat photo book", units: 24, revenue: 4_050_000, cost: 1_210_000, profit: 2_840_000, marginPercent: 70.1, estimated: true, noRecipe: false },
-      { key: "crystal", name: "Crystal board", units: 14, revenue: 1_190_000, cost: 406_000, profit: 784_000, marginPercent: 65.9, estimated: false, noRecipe: false },
-      { key: "frame", name: "Wooden frame", units: 31, revenue: 820_000, cost: 370_000, profit: 450_000, marginPercent: 54.9, estimated: true, noRecipe: false },
-      { key: "mug", name: "Photo mug", units: 24, revenue: 360_000, cost: 0, profit: 360_000, marginPercent: null, estimated: false, noRecipe: true },
+      { key: "book", name: "Layflat photo book", units: 24, revenue: 4_050_000, cost: 1_210_000, profit: 2_840_000, marginPercent: 70.1, estimated: true, notSetUp: false },
+      { key: "crystal", name: "Crystal board", units: 14, revenue: 1_190_000, cost: 406_000, profit: 784_000, marginPercent: 65.9, estimated: false, notSetUp: false },
+      { key: "frame", name: "Wooden frame", units: 31, revenue: 820_000, cost: 370_000, profit: 450_000, marginPercent: 54.9, estimated: true, notSetUp: false },
+      { key: "mug", name: "Photo mug", units: 24, revenue: 360_000, cost: 0, profit: 360_000, marginPercent: null, estimated: false, notSetUp: true },
     ],
   },
   before: { revenue: 5_800_000, cost: 1_920_000, profit: 3_880_000, marginPercent: 66.9 },
@@ -216,7 +247,7 @@ export const OVERVIEW: ProductionOverview = {
 export const BOOK_PERFORMANCE: ProductPerformance = {
   period: { preset: "this_month", from: "2026-10-31T21:00:00Z", to: null, fromDate: "2026-11-01", toDate: "2026-11-30" },
   product: { id: "book", name: "Layflat photo book", categoryName: "Photo books", unit: "Pc" },
-  figures: { revenue: 4_050_000, cost: 1_210_000, profit: 2_840_000, marginPercent: 70.1, costRecorded: 860_000, costEstimated: 350_000, units: 24, noRecipe: false, orders: 19 },
+  figures: { revenue: 4_050_000, cost: 1_210_000, profit: 2_840_000, marginPercent: 70.1, costRecorded: 860_000, costEstimated: 350_000, units: 24, notSetUp: false, orders: 19 },
   before: { revenue: 3_600_000, profit: 2_590_000, units: 22, marginPercent: 71.9 },
   months: [
     ["2025-12", 5_200_000, 1_400_000, 32],

@@ -10,12 +10,12 @@ import {
   lenderAccounts,
   mergeUsage,
   monthlyFigures,
+  PartsCatalog,
   arrivals,
   itemFlow,
   ordersWhere,
   periodFigures,
   speedFigures,
-  usagePlan,
   wastageByMaterial,
   weOwe,
   type CostingCategory,
@@ -26,6 +26,7 @@ import {
   type MaterialFigure,
   type MonthFigures,
   type PeriodFigures,
+  type SoldItem,
   type SoldOrder,
   type SpeedFigures,
   type UsageInput,
@@ -60,46 +61,54 @@ export function createMoneyWeOwe(store: ProductionStore) {
   };
 }
 
-/** An item waiting for its usage, with what its recipe expects. */
+/** An item waiting for its usage, with what its product's setup expects. */
 export interface QueuedItem extends UsageItem {
-  hasRecipe: boolean;
+  isSetUp: boolean;
   expected: { materialId: string; qty: number }[];
   otherCost: number;
 }
 
-/** Every number detail's name by its id (recipe lines refer to ids, order items carry names). */
-function detailNames(catalog: CostingCategory[]): Map<string, string> {
-  return new Map(catalog.flatMap((c) => c.attributes.map((a) => [a.id, a.name] as const)));
+/** What an item should use by its product's setup (nothing when it isn't set up). */
+function planFor(parts: PartsCatalog, item: UsageItem) {
+  const setup = item.productId ? parts.setup(item.productId) : null;
+  if (!setup?.isSetUp) return { isSetUp: false, materials: [], otherCost: 0 };
+  return { isSetUp: true, ...setup.usage({ variantId: item.variantId, details: item.attributes }, item.qty) };
 }
 
 /**
  * Recording what items used. What an item should have used, and its other
- * costs, always come from its recipe here on the server; the browser only
- * says what was actually used.
+ * costs, always come from its product's setup here on the server; the browser
+ * only says what was actually used.
  */
 export function createUsage(store: ProductionStore, clock: () => Date = () => new Date()) {
   return {
     /** Items made in the last `days` days waiting for their usage; earlier ones are left out rather than flooding it. */
-    async queue(scope: TenantScope, catalog: CostingCategory[], days: number): Promise<QueuedItem[]> {
+    async queue(scope: TenantScope, days: number): Promise<QueuedItem[]> {
       const since = new Date(clock().getTime() - days * 86_400_000).toISOString();
-      const [items, recipes] = await Promise.all([store.usageQueue(scope, since), store.recipes(scope)]);
-      const names = detailNames(catalog);
+      const [items, book] = await Promise.all([store.usageQueue(scope, since), store.partsBook(scope)]);
+      const parts = new PartsCatalog(book);
       return items.map((item) => {
-        const lines = (item.productId && recipes.get(item.productId)) || [];
-        const plan = usagePlan(item, lines, names);
-        return { ...item, hasRecipe: lines.length > 0, expected: plan.materials, otherCost: plan.otherCost };
+        const plan = planFor(parts, item);
+        return { ...item, isSetUp: plan.isSetUp, expected: plan.materials, otherCost: plan.otherCost };
       });
     },
 
-    async record(scope: TenantScope, catalog: CostingCategory[], input: UsageInput, actor: ProductionActor): Promise<string> {
+    async record(scope: TenantScope, input: UsageInput, actor: ProductionActor): Promise<string> {
       const item = await store.usageItem(scope, input.itemId);
       if (!item) throw new ProductionError("That item no longer exists, or its order was cancelled.");
-      const lines = item.productId ? ((await store.recipes(scope, item.productId)).get(item.productId) ?? []) : [];
-      const plan = usagePlan(item, lines, detailNames(catalog));
+      const plan = planFor(new PartsCatalog(await store.partsBook(scope)), item);
       const merged = mergeUsage(plan.materials, input.actual);
-      if (merged.length === 0 && plan.otherCost === 0) throw new ProductionError("Nothing to record: add the materials it used.");
+      if (merged.length === 0 && plan.otherCost === 0) throw new ProductionError("Nothing to record: add the parts it used.");
       return store.recordUsage(scope, { itemId: item.itemId, lines: merged, otherCost: plan.otherCost, note: input.note }, actor);
     },
+  };
+}
+
+/** One unit's estimated cost from its product's setup; null when it isn't set up. */
+function estimator(parts: PartsCatalog) {
+  return (item: SoldItem): number | null => {
+    const setup = item.productId ? parts.setup(item.productId) : null;
+    return setup?.isSetUp ? setup.evaluate({ variantId: item.variantId, details: item.attributes }).cost : null;
   };
 }
 
@@ -116,7 +125,7 @@ export interface ProductionOverview {
   months: MonthFigures[];
   /** Each day's sales over the last 12 months (yyyy-mm-dd), days with none left out. */
   days: { date: string; revenue: number }[];
-  /** The period's sales by category and product, with each product's margin (null: no recipe). */
+  /** The period's sales by category and product, with each product's margin (null: not set up). */
   categories: { name: string; products: { key: string; name: string; revenue: number; marginPercent: number | null }[] }[];
 }
 
@@ -124,7 +133,7 @@ export interface ProductionOverview {
 export interface ProductPerformance {
   period: Period;
   product: { id: string; name: string; categoryName: string; unit: string | null };
-  figures: Pick<PeriodFigures, "revenue" | "cost" | "profit" | "marginPercent" | "costRecorded" | "costEstimated"> & { units: number; noRecipe: boolean; orders: number };
+  figures: Pick<PeriodFigures, "revenue" | "cost" | "profit" | "marginPercent" | "costRecorded" | "costEstimated"> & { units: number; notSetUp: boolean; orders: number };
   before: { revenue: number; profit: number; units: number; marginPercent: number | null } | null;
   months: MonthFigures[];
   /** Each size in the period, most sold first; a product without sizes has one, "Each". */
@@ -184,11 +193,11 @@ export function createProductionOverview(store: ProductionStore, clock: () => Da
       const now = clock();
       const period = resolvePeriod(input, now, scope.timeZone);
       const earlier = previousPeriod(period, now, scope.timeZone);
-      const names = detailNames(catalog);
-      const [recipes, materials] = await Promise.all([store.recipes(scope), store.materials(scope)]);
+      const [book, materials] = await Promise.all([store.partsBook(scope), store.materials(scope)]);
+      const estimate = estimator(new PartsCatalog(book));
       const figures = async (p: Period) => {
         const orders = await store.soldOrders(scope, { from: p.from, to: p.to });
-        return periodFigures(orders, await costs(scope, orders), recipes, materials, names);
+        return periodFigures(orders, await costs(scope, orders), estimate);
       };
       const dates = (p: Period) => ({ from: p.fromDate, to: p.toDate });
       const [current, prior, usedNow, usedBefore, lines, t] = await Promise.all([
@@ -206,7 +215,7 @@ export function createProductionOverview(store: ProductionStore, clock: () => Da
         materialsUsed: { now: usedNow, before: usedBefore ? usedBefore.reduce((s, m) => s + m.value, 0) : null },
         wastage: wastageByMaterial(lines),
         stockValue: materials.reduce((s, m) => s + Math.max(m.stockValue, 0), 0),
-        months: monthlyFigures(t.orders, t.months, t.monthOf, await costs(scope, t.orders), recipes, materials, names),
+        months: monthlyFigures(t.orders, t.months, t.monthOf, await costs(scope, t.orders), estimate),
         days: dailySales(t.orders, scope.timeZone),
         categories: byCategory(current, catalog),
       };
@@ -219,11 +228,9 @@ export function createProductionOverview(store: ProductionStore, clock: () => Da
       const now = clock();
       const period = resolvePeriod(input, now, scope.timeZone);
       const earlier = previousPeriod(period, now, scope.timeZone);
-      const names = detailNames(catalog);
       const mine = (orders: SoldOrder[]) => ordersWhere(orders, (i) => i.productId === productId);
-      const [recipes, materials, nowOrders, beforeOrders, t] = await Promise.all([
-        store.recipes(scope, productId),
-        store.materials(scope),
+      const [book, nowOrders, beforeOrders, t] = await Promise.all([
+        store.partsBook(scope),
         store.soldOrders(scope, { from: period.from, to: period.to }).then(mine),
         earlier ? store.soldOrders(scope, { from: earlier.from, to: earlier.to }).then(mine) : null,
         trend(scope, now),
@@ -234,11 +241,12 @@ export function createProductionOverview(store: ProductionStore, clock: () => Da
         beforeOrders ? costs(scope, beforeOrders) : new Map<string, number>(),
         costs(scope, trendOrders),
       ]);
-      const fig = (orders: SoldOrder[], c: Map<string, number>) => periodFigures(orders, c, recipes, materials, names);
+      const parts = new PartsCatalog(book);
+      const estimate = estimator(parts);
+      const fig = (orders: SoldOrder[], c: Map<string, number>) => periodFigures(orders, c, estimate);
       const units = (f: PeriodFigures) => f.products.reduce((s, p) => s + p.units, 0);
-      // A book priced by the sheet gets its cost from what a sheet uses, recipe or not.
-      const noRecipe = !recipes.get(productId)?.length && !(await store.sheetCostedProducts()).has(productId);
-      const marginOf = (f: PeriodFigures) => (noRecipe ? null : f.marginPercent);
+      const notSetUp = !parts.setup(productId).isSetUp;
+      const marginOf = (f: PeriodFigures) => (notSetUp ? null : f.marginPercent);
       const current = fig(nowOrders, nowCosts);
       const prior = beforeOrders ? fig(beforeOrders, beforeCosts) : null;
 
@@ -271,11 +279,11 @@ export function createProductionOverview(store: ProductionStore, clock: () => Da
           costRecorded: current.costRecorded,
           costEstimated: current.costEstimated,
           units: units(current),
-          noRecipe,
+          notSetUp,
           orders: nowOrders.length,
         },
         before: prior && { revenue: prior.revenue, profit: prior.profit, units: units(prior), marginPercent: marginOf(prior) },
-        months: monthlyFigures(trendOrders, t.months, t.monthOf, trendCosts, recipes, materials, names),
+        months: monthlyFigures(trendOrders, t.months, t.monthOf, trendCosts, estimate),
         sizes,
         clients: [...byClient.values()].sort((a, b) => b.revenue - a.revenue).slice(0, 8),
         wastage: wastageByMaterial(await store.recordLinesOf(scope, nowOrders.flatMap((o) => o.items.map((i) => i.itemId)))),

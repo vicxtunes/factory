@@ -2,7 +2,6 @@ import { UsageBoard } from "@repo/ui/production/UsageBoard";
 import { RowsSkeleton, StatTilesSkeleton } from "@repo/ui/skeletons/blocks";
 import { Loading } from "@repo/ui/skeletons/Loading";
 import { requireProductionAccess } from "@repo/lib/production/access";
-import { costingCatalog } from "@repo/lib/production/catalog";
 import { production, usage } from "@repo/lib/production/server";
 import { resolveTenantScope } from "@repo/lib/tenancy/server/resolve";
 
@@ -16,7 +15,7 @@ export default async function UsagePage() {
   return (
     <div className="space-y-6">
       <p className="text-sm text-muted">
-        An item with a recipe is recorded by itself when it reaches Quality check. Correct it when it used something different: that difference is
+        An item of a set-up product is recorded by itself when it reaches Quality check. Correct it when it used something different: that difference is
         the wastage.
       </p>
       <Loading
@@ -35,7 +34,6 @@ export default async function UsagePage() {
 
 async function Usage() {
   const scope = await resolveTenantScope();
-  const catalog = await costingCatalog();
-  const [queue, records, materials] = await Promise.all([usage.queue(scope, catalog, SINCE_DAYS), production.records(scope, 50), production.materials(scope)]);
+  const [queue, records, materials] = await Promise.all([usage.queue(scope, SINCE_DAYS), production.records(scope, 50), production.materials(scope)]);
   return <UsageBoard queue={queue} records={records} materials={materials} sinceDays={SINCE_DAYS} />;
 }

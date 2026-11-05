@@ -1,7 +1,7 @@
 import "server-only";
 
 // The live catalog as costing needs it: active products and sizes with their
-// list prices, and each category's number details (e.g. Pages).
+// list prices, and each category's details (Pages, NOS, Lamination…).
 
 import { fetchProductCatalog } from "@repo/lib/queries";
 
@@ -12,7 +12,7 @@ export async function costingCatalog(): Promise<CostingCategory[]> {
   return catalog.map((c) => ({
     id: c.id,
     name: c.name,
-    attributes: c.attributes.filter((a) => a.type === "number").map((a) => ({ id: a.id, name: a.name, type: a.type })),
+    attributes: c.attributes.map((a) => ({ id: a.id, name: a.name, type: a.type, options: a.options ?? [] })),
     products: c.products.map((p) => ({
       id: p.id,
       name: p.name,

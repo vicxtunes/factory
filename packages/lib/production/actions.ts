@@ -15,7 +15,9 @@ import {
   materialInputSchema,
   materialUpdateSchema,
   purchaseInputSchema,
-  recipeInputSchema,
+  copySetupSchema,
+  partLinesInputSchema,
+  setupInputSchema,
   repaymentInputSchema,
   correctionInputSchema,
   stockCountSchema,
@@ -24,7 +26,6 @@ import {
 } from "./core/schema";
 import { canManageProduction } from "./policy";
 import { ProductionError } from "./ports";
-import { costingCatalog } from "./catalog";
 import { production, usage } from "./server";
 
 const MATERIALS = "/dashboard/production/materials";
@@ -120,12 +121,35 @@ export async function voidRepayment(input: unknown): Promise<Result> {
   });
 }
 
-/** Replaces a product's whole recipe. */
-export async function saveRecipe(input: unknown): Promise<Result> {
+const PRODUCTS = "/dashboard/production/products";
+
+/** Replaces a product's whole setup (its lines for every size, and how it's priced). */
+export async function saveSetup(input: unknown): Promise<Result> {
   return runAction("production", async () => {
-    const { scope } = await staff();
-    await production.saveRecipe(scope, parseInput(recipeInputSchema, input));
-    revalidatePath("/dashboard/production/products", "layout");
+    const { scope, actor } = await staff();
+    await production.saveSetup(scope, parseInput(setupInputSchema, input), actor);
+    revalidatePath(PRODUCTS, "layout");
+  });
+}
+
+/** Replaces what a made part is made of: every product using it follows. */
+export async function savePartLines(input: unknown): Promise<Result> {
+  return runAction("production", async () => {
+    const { scope, actor } = await staff();
+    await production.savePartLines(scope, parseInput(partLinesInputSchema, input), actor);
+    revalidatePath(MATERIALS, "layout");
+    revalidatePath(PRODUCTS, "layout");
+  });
+}
+
+/** Starts a product's setup from another's; returns how many size lines were left out. */
+export async function copySetup(input: unknown): Promise<Result<number>> {
+  return runAction("production", async () => {
+    const { scope, actor } = await staff();
+    const leftOut = await production.copySetup(scope, parseInput(copySetupSchema, input), actor);
+    revalidatePath(PRODUCTS, "layout");
+    revalidatePath(MATERIALS, "layout");
+    return leftOut;
   });
 }
 
@@ -135,7 +159,7 @@ const USAGE = "/dashboard/production/usage";
 export async function recordUsage(input: unknown): Promise<Result> {
   return runAction("production", async () => {
     const { scope, actor } = await staff();
-    await usage.record(scope, await costingCatalog(), parseInput(usageInputSchema, input), actor);
+    await usage.record(scope, parseInput(usageInputSchema, input), actor);
     revalidatePath(USAGE);
     revalidatePath(MATERIALS, "layout");
   });

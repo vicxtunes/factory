@@ -16,7 +16,7 @@ export default async function ProductionPage({ searchParams }: { searchParams: S
   return (
     <div className="space-y-6">
       <p className="text-sm text-muted">
-        What making what was sold cost, and what it earned: sales as in Accounts, costs from recorded usage, or from recipes where nothing was recorded.
+        What making what was sold cost, and what it earned: sales as in Accounts, costs from recorded usage, or from product setups where nothing was recorded.
       </p>
       <Loading
         skeleton={

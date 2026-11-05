@@ -1,6 +1,6 @@
 import "server-only";
 
-import { bookListPrice } from "@repo/lib/production/sheets/server";
+import { partsListPrice } from "@repo/lib/production/pricing";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { logOrderEvent, resolveActor, type AuditActor } from "@repo/lib/audit/log";
@@ -138,10 +138,10 @@ export async function buildAndInsertOrder(
       }
     }
 
-    // Priced by the sheet (photo books): worked out here, never from the browser.
+    // Priced by its parts (photo books): worked out here, never from the browser.
     // It's the line's list price, so discounts, invoices and the call all follow.
     const hasCatalogPrice = (variant?.price ?? product.price) != null;
-    const sheetTotal = hasCatalogPrice ? null : await bookListPrice(item.product_id, attributes);
+    const sheetTotal = hasCatalogPrice ? null : await partsListPrice(item.product_id, item.variant_id || null, attributes);
 
     rows.push({
       category_id: item.category_id,

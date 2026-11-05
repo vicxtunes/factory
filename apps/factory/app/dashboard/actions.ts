@@ -1,6 +1,6 @@
 "use server";
 
-import { bookListPrice } from "@repo/lib/production/sheets/server";
+import { partsListPrice } from "@repo/lib/production/pricing";
 import { randomBytes } from "crypto";
 
 import Papa from "papaparse";
@@ -515,11 +515,11 @@ export async function updateOrderItem(input: UpdateOrderItemInput): Promise<Resu
   const newQty = Number.isFinite(input.qty) && input.qty > 0 ? Math.floor(input.qty) : 1;
   const newProductType = variant?.name ?? null;
 
-  // A book priced by the sheet follows its details while the order's still being
+  // A book priced by its parts follows its details while the order's still being
   // confirmed: more sheets, a bigger size. A price agreed on the call stands
   // until the details change. A confirmed order's price never moves here.
   const detailsChanged = JSON.stringify(sortedEntries(item.attributes)) !== JSON.stringify(sortedEntries(attributes)) || item.product_id !== input.product_id;
-  const sheetTotal = detailsChanged && order.approval_status !== "approved" ? await bookListPrice(input.product_id, attributes) : null;
+  const sheetTotal = detailsChanged && order.approval_status !== "approved" ? await partsListPrice(input.product_id, input.variant_id || null, attributes) : null;
 
   const { error: itemError } = await admin
     .from("order_items")

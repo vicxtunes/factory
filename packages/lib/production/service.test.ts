@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import type { RecipeLine, UsageItem } from "./core";
+import type { PartLine, PartsBook, UsageItem } from "./core";
 import type { ProductionStore } from "./ports";
 import { createUsage } from "./service";
 
@@ -25,19 +25,20 @@ const item: UsageItem = {
   updatedAt: "2026-11-02T08:00:00Z",
 };
 
-const recipe: RecipeLine[] = [
-  { variantId: null, materialId: PAPER, qty: 1, perAttributeId: "pages", label: null, amount: null },
-  { variantId: "a4", materialId: null, qty: null, perAttributeId: null, label: "Binding", amount: 3_000 },
-];
+const line = (over: Partial<PartLine>): PartLine => ({ variantId: null, partId: null, chosenDetail: null, qty: 1, perDetail: null, whenDetail: null, whenValue: null, label: null, amount: null, ...over });
 
-const catalog = [{ id: "c", name: "Photo books", attributes: [{ id: "pages", name: "Pages", type: "number" }], products: [] }];
+const book: PartsBook = {
+  parts: [{ id: PAPER, name: "Paper", unit: "sheet", kind: "material", made: false, unitCost: 120, clientPrice: null, productId: null, productName: null, productPrice: null, ownerProductId: null, active: true }],
+  partLines: new Map(),
+  productLines: new Map([["book", [line({ partId: PAPER, perDetail: "Pages" }), line({ variantId: "a4", qty: null, label: "Binding", amount: 3_000 })]]]),
+  pricing: new Map(),
+};
 
 function fakeStore(saved: unknown[]): ProductionStore {
   return {
     usageItem: async (_s, id) => (id === ITEM ? item : null),
     usageQueue: async () => [item],
-    recipes: async () => new Map([["book", recipe]]),
-    sheetCostedProducts: async () => new Set<string>(),
+    partsBook: async () => book,
     recordUsage: async (_s, input) => {
       saved.push(input);
       return "r1";
@@ -45,14 +46,14 @@ function fakeStore(saved: unknown[]): ProductionStore {
   } as Partial<ProductionStore> as ProductionStore;
 }
 
-test("what an item should use and its other costs come from its recipe, not the browser", async () => {
+test("what an item should use and its other costs come from its setup, not the browser", async () => {
   const saved: unknown[] = [];
   const usage = createUsage(fakeStore(saved));
-  await usage.record(scope, catalog, { itemId: ITEM, actual: [{ materialId: PAPER, qty: 85 }, { materialId: GLUE, qty: 0.2 }], note: null }, actor);
+  await usage.record(scope, { itemId: ITEM, actual: [{ materialId: PAPER, qty: 85 }, { materialId: GLUE, qty: 0.2 }], note: null }, actor);
   assert.deepEqual(saved, [
     {
       itemId: ITEM,
-      // 2 books × 40 pages expected; 85 sheets used; glue not in the recipe.
+      // 2 books × 40 pages expected; 85 sheets used; glue not in the setup.
       lines: [
         { materialId: PAPER, expectedQty: 80, actualQty: 85 },
         { materialId: GLUE, expectedQty: 0, actualQty: 0.2 },
@@ -64,13 +65,13 @@ test("what an item should use and its other costs come from its recipe, not the 
 });
 
 test("the queue shows each item's expected usage", async () => {
-  const [queued] = await createUsage(fakeStore([])).queue(scope, catalog, 30);
-  assert.equal(queued.hasRecipe, true);
+  const [queued] = await createUsage(fakeStore([])).queue(scope, 30);
+  assert.equal(queued.isSetUp, true);
   assert.deepEqual(queued.expected, [{ materialId: PAPER, qty: 80 }]);
   assert.equal(queued.otherCost, 6_000);
 });
 
 test("an item that's gone or cancelled is refused", async () => {
   const usage = createUsage(fakeStore([]));
-  await assert.rejects(usage.record(scope, catalog, { itemId: "00000000-0000-4000-8000-000000000009", actual: [], note: null }, actor), /no longer exists/);
+  await assert.rejects(usage.record(scope, { itemId: "00000000-0000-4000-8000-000000000009", actual: [], note: null }, actor), /no longer exists/);
 });
