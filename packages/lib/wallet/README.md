@@ -22,6 +22,9 @@ Clients who pay upfront keep a balance with us and spend it on orders.
   like discounts, a started one can only be ended. Aming card money never leaves as cash, so a bonus
   can't be withdrawn. If a deposit is later corrected, correct its bonus too. Accounts count a bonus
   as a correction of what's held. Clients see the running bonus where they add funds.
+- **Wallet credited.** Every top-up (mobile money, or a deposit staff record or confirm) tells the client
+  "Wallet credited": the amount added and the new balance (any top-up bonus included), as a push and in
+  their notifications (`notifier.walletCredited`).
 - **History.** Every movement, who did it, and the balance after it, for the client and staff.
 
 Screens: `/payment` in the client app (client, "Wallet" in the menu), `/dashboard/wallets` (staff),
