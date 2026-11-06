@@ -14,11 +14,12 @@ clients pay Aming directly.
 - **Orders:** placed with `buildAndInsertOrder` at list prices, into reception's normal queue. An order staff or a designer create in an agent's name is theirs
   too: it shows in their portal and earns the same way. Commission starts on 2026-11-01: orders
   tagged before then don't earn (`orders.commission_eligible`). It doesn't add the client to the agent's list.
-- **80% before production:** an order that earns, whoever placed it, goes to production only once 80%
-  of its price is paid (`payBeforeProduction()` in `core.ts`). Office and designer orders in an
-  agent's name wait in Client Orders like the agent's own; `routeApprovedOrder` refuses to send one on
-  earlier, and the card shows what's paid. The agent (order form, order page, "confirmed" push), the
-  client (confirmation message) and the assistant (`get_my_orders`) are told.
+- **80% before production:** only an order the agent places from their own login (`orders.placed_by_agent`)
+  goes to production once 80% of its price is paid (`payBeforeProduction()` in `core.ts`): it waits in Client
+  Orders, `routeApprovedOrder` refuses to send it on earlier, and the card shows what's paid. The agent (order
+  form, order page, "confirmed" push), the client (confirmation message) and the assistant (`get_my_orders`) are
+  told. An order staff or a designer create in an agent's name earns the same but flows as any other order:
+  released at once, no payment check (owner, 2026-11-06).
 - **Older tagged orders:** those from before 2026-11-01 are listed in the portal with "No commission";
   figures count only orders that earn. Those from 1 November up to the 2026-11-04 release were brought
   in later (`supabase/migrations/20261220100000_commission_from_november.sql`): they earn and, with
