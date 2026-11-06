@@ -41,7 +41,7 @@ const optionTab = (catalog: ProductCategory[], kind: OptionKind, label: string, 
 // The factory's catalog in the showroom: a Product tab with a row per
 // category, leading with whichever has the most to show rather than
 // whatever order the catalog admin panel happens to list them in; and
-// Packaging and Lamination in tabs of their own (packages/lib/catalog-options.ts).
+// Packaging, Lamination and Cover type in tabs of their own (packages/lib/catalog-options.ts).
 function showroomTabs(catalog: ProductCategory[], money: Money): ShowroomTab[] {
   return [
     {
@@ -55,6 +55,7 @@ function showroomTabs(catalog: ProductCategory[], money: Money): ShowroomTab[] {
     },
     optionTab(catalog, "packaging", "Packaging", money),
     optionTab(catalog, "lamination", "Lamination", money),
+    optionTab(catalog, "cover type", "Cover type", money),
   ];
 }
 

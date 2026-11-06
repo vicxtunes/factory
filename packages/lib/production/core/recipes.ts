@@ -6,8 +6,9 @@
 // materials (each a quantity × its cost, or a total typed for each size). A
 // recipe line is a material × a quantity, × the number of sheets on a photo
 // book, only for some sizes and only when the order chose something. Add-ons
-// are the catalog's Lamination and Packaging products the order chose: their
-// catalog price, and their own recipe's cost, once per book.
+// are the catalog's Lamination, Packaging and Cover Type products the order
+// chose: their catalog price (their size's, when it has sizes), and their own
+// recipe's cost, once per book.
 //
 // Every product but a photo book is priced by the catalog. A photo book can be
 // priced from its recipe, as the boss chooses: from the margin (on the whole
@@ -134,7 +135,7 @@ export interface Quote {
 // --- Details ---------------------------------------------------------------
 
 /** The catalog categories whose products are add-ons, matched with the order detail of the same name. */
-export const ADD_ON_KINDS = ["Lamination", "Packaging"] as const;
+export const ADD_ON_KINDS = ["Lamination", "Packaging", "Cover Type"] as const;
 
 const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
 
@@ -304,7 +305,7 @@ export class Costing {
     return { lines, cost: lines.reduce((s, l) => s + l.cost, 0), missing: [...missing] };
   }
 
-  /** The add-ons an order chose: each Lamination and Packaging product it names. */
+  /** The add-ons an order chose: each Lamination, Packaging and Cover Type product it names, at its size's price when it has one. */
   addOns(order: OrderChoice): AddOn[] {
     const out: AddOn[] = [];
     const size = orderSize(order);
