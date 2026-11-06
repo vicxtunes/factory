@@ -149,8 +149,6 @@ export function OrderForm({
     orderNo: string;
     route: "factory" | "designer";
     routedTo: string | null;
-    /** In an agent's name: waits in Client Orders until 80% is paid. */
-    forAgent: boolean;
     notes: string[];
     warnings: string[];
     uploads: { id: string; name: string }[];
@@ -259,7 +257,7 @@ export function OrderForm({
             ? "you"
             : (designers.find((d) => d.id === general.designerId)?.name ?? "the designer")
           : null;
-      setConfirmed({ orderNo: res.orderNo, route: general.route, routedTo, forAgent: !!general.agentId, notes, warnings, uploads });
+      setConfirmed({ orderNo: res.orderNo, route: general.route, routedTo, notes, warnings, uploads });
       if (uploads.length) void flushQueuedUploads();
       setGeneral(emptyGeneral(variant));
       setItems([emptyItem()]);
@@ -274,9 +272,7 @@ export function OrderForm({
         <div className="rounded-[var(--radius)] border border-[var(--normal)]/40 bg-[var(--normal)]/10 p-3 text-sm">
           <p>
             Order <span className="font-semibold tnum">{confirmed.orderNo}</span> created
-            {confirmed.forAgent
-              ? " — an agent's order: it waits in Client Orders and goes to production once 80% of the price is paid."
-              : confirmed.route === "designer"
+            {confirmed.route === "designer"
                 ? ` — kept with ${confirmed.routedTo} for design work.`
                 : " — sent straight to the factory."}
           </p>
@@ -457,7 +453,7 @@ function GeneralStep({
             ))}
           </Select>
         </Field>
-        <Field label="Agent (optional)" hint="The order goes on this agent's account and earns them commission. It waits in Client Orders until 80% is paid">
+        <Field label="Agent (optional)" hint="The order goes on this agent's account and earns them commission.">
           <Select
             value={general.agentId}
             onChange={(e) => setGeneral({ ...general, agentId: e.target.value })}

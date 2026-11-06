@@ -221,7 +221,7 @@ export function assistantTools(ctx: ToolContext): AssistantTool[] {
       run: async () => {
         const { data, error } = await db
           .from("orders")
-          .select("id, order_no, approval_status, quoted_price, commission_eligible, released_at, cancelled_at, delivery_date, created_at, order_items(product, product_type, qty, production_status, stage), invoices(invoice_no, share_token)")
+          .select("id, order_no, approval_status, quoted_price, placed_by_agent, released_at, cancelled_at, delivery_date, created_at, order_items(product, product_type, qty, production_status, stage), invoices(invoice_no, share_token)")
           .eq("client_id", ctx.client.id)
           .order("created_at", { ascending: false })
           .limit(15);
@@ -242,7 +242,7 @@ export function assistantTools(ctx: ToolContext): AssistantTool[] {
               paid: paid[o.id] ?? 0,
               due: total == null ? null : Math.max(total - (paid[o.id] ?? 0), 0),
               // Through a sales agent: production starts once 80% is paid (packages/lib/agents).
-              ...(o.commission_eligible && !o.released_at
+              ...(o.placed_by_agent && !o.released_at
                 ? { through_agent: true, pay_before_production: total == null ? "80% of the price, once confirmed" : payBeforeProduction(total) }
                 : {}),
               invoice_no: invoice?.invoice_no ?? null,

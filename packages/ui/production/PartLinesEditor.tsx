@@ -5,16 +5,17 @@
 // on the order, like NOS), a part in the order's size, an attached catalog
 // product (a box) whose price can add to the client's, or an other cost. Any
 // line can be for some sizes only (the sizes pop-up) and only when the order
-// chose something (Packaging = Box A). Each line is a card on a phone and a
-// row of fields from the container's 3xl. Controlled: the screen holds the
-// drafts and saves them (SetupEditor, MadePartView, the part form).
+// chose something (Packaging = Box A). Each line is a row in a list; tapping
+// it opens a pop-up to edit it (in place, inside another form). Controlled: the screen holds the drafts and saves them
+// (SetupEditor, MadePartView, the part form).
 
 import { useState } from "react";
 
 import { Button } from "@repo/ui/Button";
 import { Field, Select, TextInput } from "@repo/ui/Field";
+import { FormSheet } from "@repo/ui/FormSheet";
 import { Popover } from "@repo/ui/Popover";
-import { useCurrencySymbol } from "@repo/lib/currency/CurrencySymbolProvider";
+import { useCurrencySymbol, useFormatMoney } from "@repo/lib/currency/CurrencySymbolProvider";
 import { formatMoney } from "@repo/lib/currency/format";
 import { formatQty, partLabel, sheetsDetail, type CatalogProduct, type Evaluation, type OrderChoice, type PartLine, type PartRow, type PartsCatalog } from "@repo/lib/production/core";
 
@@ -160,6 +161,181 @@ function SizesPicker({ sizes, value, onChange }: { sizes: string[]; value: strin
   );
 }
 
+interface LinesContext {
+  parts: PartRow[];
+  details: DetailOption[];
+  sizes: string[];
+  products: CatalogProduct[];
+  onNewPart?: (lineKey: number) => void;
+}
+
+/** One line in words, for the list: "PVC (the order's size) × 1 per NOS · 12x12 · when Lamination is Matt". */
+function lineSummary(d: LineDraft, ctx: LinesContext, money: (n: number) => string): { title: string; detail: string } {
+  const bits: string[] = [];
+  let title: string;
+  if (d.kind === "other") {
+    title = d.label.trim() || "Other cost";
+    bits.push(d.amount.trim() ? money(parseNumber(d.amount) || 0) : "no amount yet");
+  } else {
+    if (d.kind === "product") {
+      const p = ctx.products.find((x) => x.id === d.productPartId);
+      title = p?.name ?? "Choose a product";
+      if (d.addsPrice) bits.push(p?.price != null ? `adds ${money(p.price)}` : "adds its price");
+      else bits.push("included, cost only");
+    } else {
+      const p = ctx.parts.find((x) => x.id === d.partId);
+      title = p ? (d.byOrderSize ? `${p.name} (the order's size)` : partLabel(p)) : "Choose a part";
+    }
+    bits.unshift(`× ${d.qty || "?"}${d.perDetail ? ` per ${d.perDetail}` : ""}`);
+  }
+  if (d.sizes.length) bits.push(d.sizes.join(", "));
+  if (d.whenDetail) bits.push(`when ${d.whenDetail} is ${d.whenValue || "…"}`);
+  return { title, detail: bits.join(" · ") };
+}
+
+/** The fields of one line, stacked for a pop-up (or opened in place). */
+function LineFields({ d, set, ctx }: { d: LineDraft; set: (patch: Partial<LineDraft>) => void; ctx: LinesContext }) {
+  const symbol = useCurrencySymbol();
+  const numbers = ctx.details.filter((x) => x.type === "number");
+  const choices = ctx.details.filter((x) => x.type !== "number");
+  const own = ctx.parts.filter((p) => p.ownerProductId !== null);
+  const shared = ctx.parts.filter((p) => p.ownerProductId === null);
+  // Names that come in sizes (PVC 12x12, PVC 10x10): one choice picks by the order's size.
+  const sizedNames = [...new Map(ctx.parts.filter((p) => p.size).map((p) => [p.name.trim().toLowerCase(), p] as const)).values()];
+  const values = choices.find((c) => c.name === d.whenDetail)?.options ?? [];
+  const unit = d.kind === "part" ? ctx.parts.find((p) => p.id === d.partId)?.unit : undefined;
+  const product = d.kind === "product" ? ctx.products.find((p) => p.id === d.productPartId) : undefined;
+
+  const option = (p: PartRow) => (
+    <option key={p.id} value={p.id}>
+      {partLabel(p)} ({p.unit}){p.made ? " · made" : ""}
+      {p.active ? "" : " · not in use"}
+    </option>
+  );
+  const partValue = () => {
+    if (!d.byOrderSize) return d.partId;
+    const name = ctx.parts.find((p) => p.id === d.partId)?.name.trim().toLowerCase();
+    const first = sizedNames.find((p) => p.name.trim().toLowerCase() === name);
+    return `${BY_SIZE}${first?.id ?? d.partId}`;
+  };
+  const choosePart = (value: string) => {
+    if (value === NEW_PART) return ctx.onNewPart?.(d.key);
+    if (value.startsWith(BY_SIZE)) return set({ partId: value.slice(BY_SIZE.length), byOrderSize: true });
+    set({ partId: value, byOrderSize: false });
+  };
+
+  return (
+    <div className="grid grid-cols-2 gap-3">
+      <div className="col-span-2">
+        {d.kind === "part" ? (
+          <Field label="Part">
+            <Select value={partValue()} onChange={(e) => choosePart(e.target.value)}>
+              <option value="">Choose…</option>
+              {sizedNames.length ? (
+                <optgroup label="In the order's size">
+                  {sizedNames.map((p) => (
+                    <option key={p.id} value={`${BY_SIZE}${p.id}`}>
+                      {p.name}: the order&apos;s size
+                    </option>
+                  ))}
+                </optgroup>
+              ) : null}
+              {own.length ? <optgroup label="Only this product">{own.map(option)}</optgroup> : null}
+              <optgroup label="Shared">{shared.map(option)}</optgroup>
+              {ctx.onNewPart ? <option value={NEW_PART}>+ New part…</option> : null}
+            </Select>
+          </Field>
+        ) : d.kind === "product" ? (
+          <Field label="Product">
+            <Select value={d.productPartId} onChange={(e) => set({ productPartId: e.target.value })}>
+              <option value="">Choose…</option>
+              {ctx.products.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                  {p.price !== null ? ` · ${formatMoney(p.price, symbol)}` : ""}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        ) : (
+          <Field label="Other cost">
+            <TextInput value={d.label} onChange={(e) => set({ label: e.target.value })} placeholder="e.g. Binding" maxLength={80} />
+          </Field>
+        )}
+      </div>
+      {d.kind === "other" ? (
+        <div className="col-span-2">
+          <Field label="Amount">
+            <TextInput inputMode="numeric" value={d.amount} onChange={(e) => set({ amount: e.target.value })} placeholder="0" />
+          </Field>
+        </div>
+      ) : (
+        <>
+          <Field label="How many">
+            <TextInput inputMode="decimal" value={d.qty} onChange={(e) => set({ qty: e.target.value })} placeholder={unit ?? "1"} />
+          </Field>
+          <Field label="Per">
+            <Select value={d.perDetail} onChange={(e) => set({ perDetail: e.target.value })}>
+              <option value="">each</option>
+              {numbers.map((n) => (
+                <option key={n.name} value={n.name}>
+                  × {n.name}
+                </option>
+              ))}
+              {d.perDetail && !numbers.some((n) => n.name === d.perDetail) ? <option value={d.perDetail}>× {d.perDetail} (not on the form)</option> : null}
+            </Select>
+          </Field>
+        </>
+      )}
+      <div>
+        <span className="mb-1 block text-xs font-medium text-muted">Sizes</span>
+        {ctx.sizes.length ? <SizesPicker sizes={ctx.sizes} value={d.sizes} onChange={(next) => set({ sizes: next })} /> : <p className="min-h-11 py-3 text-sm text-muted">All sizes</p>}
+      </div>
+      <Field label="Only when">
+        <div className="flex gap-1">
+          <Select aria-label="Only when the order's" value={d.whenDetail} onChange={(e) => set({ whenDetail: e.target.value, whenValue: "" })}>
+            <option value="">Always</option>
+            {choices.map((c) => (
+              <option key={c.name} value={c.name}>
+                {c.name} is
+              </option>
+            ))}
+            {d.whenDetail && !choices.some((c) => c.name === d.whenDetail) ? <option value={d.whenDetail}>{d.whenDetail} (not on the form)</option> : null}
+          </Select>
+          {d.whenDetail ? (
+            values.length ? (
+              <Select aria-label={`Which ${d.whenDetail}`} value={d.whenValue} onChange={(e) => set({ whenValue: e.target.value })}>
+                <option value="">…</option>
+                {values.map((v) => (
+                  <option key={v} value={v}>
+                    {v}
+                  </option>
+                ))}
+                {d.whenValue && !values.includes(d.whenValue) ? <option value={d.whenValue}>{d.whenValue}</option> : null}
+              </Select>
+            ) : (
+              <TextInput aria-label={`Which ${d.whenDetail}`} value={d.whenValue} onChange={(e) => set({ whenValue: e.target.value })} placeholder="value" />
+            )
+          ) : null}
+        </div>
+      </Field>
+      {d.kind === "product" ? (
+        <label className="col-span-2 flex min-h-11 flex-wrap items-center gap-x-2 text-sm">
+          <input type="checkbox" className="size-4 accent-brand-500" checked={d.addsPrice} onChange={(e) => set({ addsPrice: e.target.checked })} />
+          Add its price to what the client pays
+          {product ? <span className="text-muted">({product.price !== null ? formatMoney(product.price, symbol) : "no catalog price yet"} each)</span> : null}
+          <span className="w-full text-xs text-muted">Unticked: included, its cost only.</span>
+        </label>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * The lines as a list; tapping one (or adding one) opens it in a pop-up
+ * (FormSheet) with Done and Remove. `inline`: inside another form, a line opens
+ * in place instead of a pop-up over it.
+ */
 export function PartLinesEditor({
   drafts,
   onChange,
@@ -168,6 +344,7 @@ export function PartLinesEditor({
   sizes = [],
   products = [],
   onNewPart,
+  inline = false,
 }: {
   drafts: LineDraft[];
   onChange: (drafts: LineDraft[]) => void;
@@ -180,17 +357,45 @@ export function PartLinesEditor({
   products?: CatalogProduct[];
   /** "New part…" on a line: add one, then the line uses it. */
   onNewPart?: (lineKey: number) => void;
+  inline?: boolean;
 }) {
-  const symbol = useCurrencySymbol();
-  const numbers = details.filter((d) => d.type === "number");
-  const choices = details.filter((d) => d.type !== "number");
-  const own = parts.filter((p) => p.ownerProductId !== null);
-  const shared = parts.filter((p) => p.ownerProductId === null);
-  // Names that come in sizes (PVC 12x12, PVC 10x10): one choice picks by the order's size.
-  const sizedNames = [...new Map(parts.filter((p) => p.size).map((p) => [p.name.trim().toLowerCase(), p] as const)).values()];
+  const money = useFormatMoney();
+  const ctx: LinesContext = { parts, details, sizes, products, onNewPart };
+  // The line open for editing, and whether it was just added (Cancel then drops it).
+  const [openKey, setOpenKey] = useState<number | null>(null);
+  const [isNew, setIsNew] = useState(false);
+  const [draft, setDraft] = useState<LineDraft | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
 
-  const set = (key: number, patch: Partial<LineDraft>) => onChange(drafts.map((d) => (d.key === key ? { ...d, ...patch } : d)));
-  const remove = (key: number) => onChange(drafts.filter((d) => d.key !== key));
+  const open = (d: LineDraft, fresh: boolean) => {
+    setOpenKey(d.key);
+    setIsNew(fresh);
+    setDraft({ ...d });
+    setProblem(null);
+  };
+  const add = (kind: LineDraft["kind"]) => {
+    const d = newDraft(kind);
+    onChange([...drafts, d]);
+    open(d, true);
+  };
+  const close = () => {
+    if (isNew && openKey !== null) onChange(drafts.filter((d) => d.key !== openKey));
+    setOpenKey(null);
+    setDraft(null);
+  };
+  const done = () => {
+    if (!draft) return;
+    const p = draftsProblem([draft]);
+    if (p) return setProblem(p);
+    onChange(drafts.map((d) => (d.key === draft.key ? draft : d)));
+    setOpenKey(null);
+    setDraft(null);
+  };
+  const remove = () => {
+    onChange(drafts.filter((d) => d.key !== openKey));
+    setOpenKey(null);
+    setDraft(null);
+  };
   const move = (key: number, by: number) => {
     const i = drafts.findIndex((d) => d.key === key);
     const j = i + by;
@@ -199,167 +404,81 @@ export function PartLinesEditor({
     [next[i], next[j]] = [next[j], next[i]];
     onChange(next);
   };
+  // A part added from "New part…" lands on the open line.
+  const shown = draft && openKey !== null ? { ...draft, ...pickPart(drafts.find((d) => d.key === openKey), draft) } : null;
 
-  const option = (p: PartRow) => (
-    <option key={p.id} value={p.id}>
-      {partLabel(p)} ({p.unit}){p.made ? " · made" : ""}
-      {p.active ? "" : " · not in use"}
-    </option>
-  );
-  const choosePart = (key: number, value: string) => {
-    if (value === NEW_PART) return onNewPart?.(key);
-    if (value.startsWith(BY_SIZE)) return set(key, { partId: value.slice(BY_SIZE.length), byOrderSize: true });
-    set(key, { partId: value, byOrderSize: false });
-  };
-  /** A line by the order's size shows as its name's choice, whichever size it was saved with. */
-  const partValue = (d: LineDraft) => {
-    if (!d.byOrderSize) return d.partId;
-    const name = parts.find((p) => p.id === d.partId)?.name.trim().toLowerCase();
-    const first = sizedNames.find((p) => p.name.trim().toLowerCase() === name);
-    return `${BY_SIZE}${first?.id ?? d.partId}`;
-  };
+  const form = shown ? (
+    <div className="space-y-4">
+      <LineFields d={shown} set={(patch) => setDraft({ ...shown, ...patch })} ctx={ctx} />
+      {problem ? <p className="text-sm text-error-600 dark:text-error-400">{problem}</p> : null}
+      <div className="flex gap-2">
+        <Button type="button" className="flex-1" onClick={done}>
+          Done
+        </Button>
+        {isNew ? (
+          <Button type="button" variant="secondary" onClick={close}>
+            Cancel
+          </Button>
+        ) : (
+          <Button type="button" variant="secondary" onClick={remove}>
+            Remove
+          </Button>
+        )}
+      </div>
+    </div>
+  ) : null;
 
   return (
-    <div className="@container space-y-3">
+    <div className="space-y-3">
       {drafts.length === 0 ? <p className="rounded-2xl border border-dashed border-border p-4 text-sm text-muted">No lines yet. Add what it&apos;s made of.</p> : null}
-      <ul className="space-y-2">
+      <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface">
         {drafts.map((d, i) => {
-          const values = choices.find((c) => c.name === d.whenDetail)?.options ?? [];
-          const unit = d.kind === "part" ? parts.find((p) => p.id === d.partId)?.unit : undefined;
-          const product = d.kind === "product" ? products.find((p) => p.id === d.productPartId) : undefined;
+          const sum = lineSummary(d, ctx, money);
           return (
-            <li key={d.key} className="grid grid-cols-2 gap-2 rounded-xl border border-border bg-surface p-3 @3xl:grid-cols-[minmax(0,2fr)_6rem_9rem_9rem_minmax(0,1.4fr)_auto] @3xl:items-end">
-              <div className="col-span-2 @3xl:col-span-1">
-                {d.kind === "part" ? (
-                  <Field label="Part">
-                    <Select value={partValue(d)} onChange={(e) => choosePart(d.key, e.target.value)}>
-                      <option value="">Choose…</option>
-                      {sizedNames.length ? (
-                        <optgroup label="In the order's size">
-                          {sizedNames.map((p) => (
-                            <option key={p.id} value={`${BY_SIZE}${p.id}`}>
-                              {p.name}: the order&apos;s size
-                            </option>
-                          ))}
-                        </optgroup>
-                      ) : null}
-                      {own.length ? <optgroup label="Only this product">{own.map(option)}</optgroup> : null}
-                      <optgroup label="Shared">{shared.map(option)}</optgroup>
-                      {onNewPart ? <option value={NEW_PART}>+ New part…</option> : null}
-                    </Select>
-                  </Field>
-                ) : d.kind === "product" ? (
-                  <Field label="Product">
-                    <Select value={d.productPartId} onChange={(e) => set(d.key, { productPartId: e.target.value })}>
-                      <option value="">Choose…</option>
-                      {products.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.name}
-                          {p.price !== null ? ` · ${formatMoney(p.price, symbol)}` : ""}
-                        </option>
-                      ))}
-                    </Select>
-                  </Field>
-                ) : (
-                  <Field label="Other cost">
-                    <TextInput value={d.label} onChange={(e) => set(d.key, { label: e.target.value })} placeholder="e.g. Binding" maxLength={80} />
-                  </Field>
-                )}
-              </div>
-              {d.kind === "other" ? (
-                <Field label="Amount">
-                  <TextInput inputMode="numeric" value={d.amount} onChange={(e) => set(d.key, { amount: e.target.value })} placeholder="0" />
-                </Field>
-              ) : (
-                <Field label="How many">
-                  <TextInput inputMode="decimal" value={d.qty} onChange={(e) => set(d.key, { qty: e.target.value })} placeholder={unit ?? "1"} />
-                </Field>
-              )}
-              {d.kind === "other" ? (
-                <span className="hidden @3xl:block" />
-              ) : (
-                <Field label="Per">
-                  <Select value={d.perDetail} onChange={(e) => set(d.key, { perDetail: e.target.value })}>
-                    <option value="">each</option>
-                    {numbers.map((n) => (
-                      <option key={n.name} value={n.name}>
-                        × {n.name}
-                      </option>
-                    ))}
-                    {d.perDetail && !numbers.some((n) => n.name === d.perDetail) ? <option value={d.perDetail}>× {d.perDetail} (not on the form)</option> : null}
-                  </Select>
-                </Field>
-              )}
-              <div>
-                <span className="mb-1 block text-xs font-medium text-muted">Sizes</span>
-                {sizes.length ? <SizesPicker sizes={sizes} value={d.sizes} onChange={(next) => set(d.key, { sizes: next })} /> : <p className="min-h-11 py-3 text-sm text-muted">All sizes</p>}
-              </div>
-              <Field label="Only when">
-                <div className="flex gap-1">
-                  <Select aria-label="Only when the order's" value={d.whenDetail} onChange={(e) => set(d.key, { whenDetail: e.target.value, whenValue: "" })}>
-                    <option value="">Always</option>
-                    {choices.map((c) => (
-                      <option key={c.name} value={c.name}>
-                        {c.name} is
-                      </option>
-                    ))}
-                    {d.whenDetail && !choices.some((c) => c.name === d.whenDetail) ? <option value={d.whenDetail}>{d.whenDetail} (not on the form)</option> : null}
-                  </Select>
-                  {d.whenDetail ? (
-                    values.length ? (
-                      <Select aria-label={`Which ${d.whenDetail}`} value={d.whenValue} onChange={(e) => set(d.key, { whenValue: e.target.value })}>
-                        <option value="">…</option>
-                        {values.map((v) => (
-                          <option key={v} value={v}>
-                            {v}
-                          </option>
-                        ))}
-                        {d.whenValue && !values.includes(d.whenValue) ? <option value={d.whenValue}>{d.whenValue}</option> : null}
-                      </Select>
-                    ) : (
-                      <TextInput aria-label={`Which ${d.whenDetail}`} value={d.whenValue} onChange={(e) => set(d.key, { whenValue: e.target.value })} placeholder="value" />
-                    )
-                  ) : null}
-                </div>
-              </Field>
-              <div className="col-span-2 flex items-center justify-end gap-1 @3xl:col-span-1">
+            <li key={d.key}>
+              <div className="flex items-center gap-1">
+                <button type="button" onClick={() => open(d, false)} className="min-h-14 min-w-0 flex-1 px-3 py-2 text-left hover:bg-gray-50 dark:hover:bg-white/5">
+                  <span className="block truncate text-sm font-medium">{sum.title}</span>
+                  <span className="block truncate text-xs text-muted">{sum.detail}</span>
+                </button>
                 <IconButton label="Move up" onClick={() => move(d.key, -1)} disabled={i === 0}>
                   ↑
                 </IconButton>
                 <IconButton label="Move down" onClick={() => move(d.key, 1)} disabled={i === drafts.length - 1}>
                   ↓
                 </IconButton>
-                <IconButton label="Remove line" onClick={() => remove(d.key)} danger>
-                  ✕
-                </IconButton>
               </div>
-              {d.kind === "product" ? (
-                <label className="col-span-2 flex min-h-11 flex-wrap items-center gap-x-2 text-sm @3xl:col-span-6">
-                  <input type="checkbox" className="size-4 accent-brand-500" checked={d.addsPrice} onChange={(e) => set(d.key, { addsPrice: e.target.checked })} />
-                  Add its price to what the client pays
-                  {product ? <span className="text-muted">({product.price !== null ? formatMoney(product.price, symbol) : "no catalog price yet"} each)</span> : null}
-                  <span className="text-muted">· unticked: included, its cost only</span>
-                </label>
-              ) : null}
+              {inline && openKey === d.key ? <div className="border-t border-border bg-gray-50 p-3 dark:bg-white/5">{form}</div> : null}
             </li>
           );
         })}
       </ul>
       <div className="flex flex-wrap gap-2">
-        <Button type="button" variant="secondary" size="sm" onClick={() => onChange([...drafts, newDraft("part")])}>
+        <Button type="button" variant="secondary" size="sm" onClick={() => add("part")}>
           + Part
         </Button>
         {products.length ? (
-          <Button type="button" variant="secondary" size="sm" onClick={() => onChange([...drafts, newDraft("product")])}>
+          <Button type="button" variant="secondary" size="sm" onClick={() => add("product")}>
             + Product
           </Button>
         ) : null}
-        <Button type="button" variant="secondary" size="sm" onClick={() => onChange([...drafts, newDraft("other")])}>
+        <Button type="button" variant="secondary" size="sm" onClick={() => add("other")}>
           + Other cost
         </Button>
       </div>
+      {inline ? null : (
+        <FormSheet open={shown !== null} onClose={close} title={isNew ? "Add a line" : "Edit line"}>
+          {form ?? <span />}
+        </FormSheet>
+      )}
     </div>
   );
+}
+
+/** The part a "New part…" put on the line meanwhile (the screen sets it on the saved drafts). */
+function pickPart(saved: LineDraft | undefined, draft: LineDraft): Partial<LineDraft> {
+  if (!saved || saved.partId === draft.partId || !saved.partId) return {};
+  return { partId: saved.partId, byOrderSize: saved.byOrderSize };
 }
 
 function IconButton({ label, onClick, disabled, danger, children }: { label: string; onClick: () => void; disabled?: boolean; danger?: boolean; children: string }) {
