@@ -37,6 +37,7 @@ import {
   renameProduct,
   renameVariant,
   setCategoryActive,
+  setCategoryInShowroom,
   setCurrencyActive,
   updateCurrency,
   setProductActive,
@@ -366,6 +367,7 @@ export function ProductPanel({
                     >
                       {c.active ? "Active" : "Inactive"}
                     </span>
+                    {c.in_showroom ? null : <span className="ml-2 text-xs text-muted">Not in the showroom</span>}
                   </td>
                   <td className="px-5 py-3">
                     <div className="flex items-center gap-2">
@@ -384,6 +386,15 @@ export function ProductPanel({
                             onClick={() => setRenamingId(c.id)}
                           >
                             Rename
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            className="min-h-9 text-xs"
+                            loading={pending}
+                            disabled={pending}
+                            onClick={() => run(() => setCategoryInShowroom(c.id, !c.in_showroom))}
+                          >
+                            {c.in_showroom ? "Hide from showroom" : "Show in showroom"}
                           </Button>
                           {c.active ? (
                             <Button

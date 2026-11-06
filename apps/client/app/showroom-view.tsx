@@ -31,17 +31,18 @@ function discountBadge(product: Product, money: Money): string | null {
   return offer ? offerBadge(offer, money) : null;
 }
 
-const optionTab = (catalog: ProductCategory[], kind: OptionKind, label: string, money: Money): ShowroomTab => ({
-  key: kind,
-  label,
-  emptyText: `No ${kind} options listed yet.`,
-  cards: (optionCategory(catalog, kind)?.products ?? []).map((p) => card(p, money)),
-});
+/** An option category's tab; none when the boss keeps it off the showroom. */
+const optionTab = (catalog: ProductCategory[], kind: OptionKind, label: string, money: Money): ShowroomTab[] => {
+  const category = optionCategory(catalog, kind);
+  if (category && !category.in_showroom) return [];
+  return [{ key: kind, label, emptyText: `No ${kind} options listed yet.`, cards: (category?.products ?? []).map((p) => card(p, money)) }];
+};
 
 // The factory's catalog in the showroom: a Product tab with a row per
 // category, leading with whichever has the most to show rather than
 // whatever order the catalog admin panel happens to list them in; and
-// Packaging, Lamination and Cover type in tabs of their own (packages/lib/catalog-options.ts).
+// Packaging, Lamination and Cover type in tabs of their own (packages/lib/catalog-options.ts);
+// a category the boss keeps off the showroom (in_showroom) isn't shown at all.
 function showroomTabs(catalog: ProductCategory[], money: Money): ShowroomTab[] {
   return [
     {
@@ -49,13 +50,13 @@ function showroomTabs(catalog: ProductCategory[], money: Money): ShowroomTab[] {
       label: "Product",
       emptyText: "Nothing in the showroom yet.",
       sections: catalog
-        .filter((c) => !isOptionCategory(c))
+        .filter((c) => c.in_showroom && !isOptionCategory(c))
         .sort((a, b) => b.products.length - a.products.length)
         .map((c) => ({ id: c.id, title: c.name, cards: c.products.map((p) => card(p, money)), emptyText: "No products listed yet." })),
     },
-    optionTab(catalog, "packaging", "Packaging", money),
-    optionTab(catalog, "lamination", "Lamination", money),
-    optionTab(catalog, "cover type", "Cover type", money),
+    ...optionTab(catalog, "packaging", "Packaging", money),
+    ...optionTab(catalog, "lamination", "Lamination", money),
+    ...optionTab(catalog, "cover type", "Cover type", money),
   ];
 }
 
