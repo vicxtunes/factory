@@ -1,6 +1,6 @@
 "use server";
 
-import { partsListPrice } from "@repo/lib/production/pricing";
+import { recipeListPrice } from "@repo/lib/production/pricing";
 import { clientCurrency } from "@repo/lib/currency/server";
 import { revalidatePath } from "next/cache";
 
@@ -276,5 +276,5 @@ export async function cancelMyOrder(orderId: string, reason: string): Promise<{ 
 export async function estimateBookPrice(productId: string, attributes: Record<string, string>, variantId: string | null = null): Promise<number | null> {
   const session = await getClientSession();
   if (!session) return null;
-  return partsListPrice(productId, variantId, attributes);
+  return recipeListPrice(productId, variantId, attributes);
 }

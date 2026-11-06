@@ -2,11 +2,11 @@
 
 // Production → Overview: for a period, what making what was sold cost, the
 // gross profit and margin (each against the period before), and how the cost
-// is known (recorded usage, setup estimates, or not set up at all); the
+// is known (recorded usage, recipe estimates, or no recipe at all); the
 // a year of sales against the cost of making them, the margin month by month,
 // a product map (sales against margin) that says what to do with each
 // product; products by profit, with Excel/PDF export, each opening its own
-// page; wastage by material and materials used; the stock's value now. Lays
+// page; wastage by material and materials used. Lays
 // out by its own width.
 
 import Link from "next/link";
@@ -62,7 +62,7 @@ export function ProductionOverviewView({ view, productHref }: { view: Production
     cost: p.cost,
     profit: p.notSetUp ? "" : p.profit,
     margin: p.marginPercent === null ? "" : `${p.marginPercent}%`,
-    costFrom: p.notSetUp ? "not set up" : p.estimated ? "partly setup estimate" : "recorded usage",
+    costFrom: p.notSetUp ? "no recipe" : p.estimated ? "partly recipe estimate" : "recorded usage",
   }));
 
   return (
@@ -75,7 +75,7 @@ export function ProductionOverviewView({ view, productHref }: { view: Production
           title="Gross profit"
           value={money(f.profit)}
           delta={change(f.profit, before?.profit)}
-          hint={f.revenueNotSetUp ? `on ${money(f.revenue - f.revenueNotSetUp)} of sales of set-up products` : `on ${money(f.revenue)} of sales`}
+          hint={f.revenueNotSetUp ? `on ${money(f.revenue - f.revenueNotSetUp)} of sales of products with a recipe` : `on ${money(f.revenue)} of sales`}
         />
         <Card title="Production cost" value={money(f.cost)} delta={change(f.cost, before?.cost)} hint="what making what was sold cost" />
         <Card
@@ -83,7 +83,7 @@ export function ProductionOverviewView({ view, productHref }: { view: Production
           value={f.marginPercent === null ? "—" : `${f.marginPercent}%`}
           hint={before?.marginPercent !== null && before?.marginPercent !== undefined ? `${before.marginPercent}% the period before` : undefined}
         />
-        <Card title="Materials used" value={money(used)} delta={change(used, materialsUsed.before)} hint={`stock now worth ${money(view.stockValue)}`} />
+        <Card title="Materials used" value={money(used)} delta={change(used, materialsUsed.before)} hint="taken off stock" />
       </div>
 
       {f.revenue > 0 ? (
@@ -91,7 +91,7 @@ export function ProductionOverviewView({ view, productHref }: { view: Production
           Cost from recorded usage {money(f.costRecorded)}, estimated from setups {money(f.costEstimated)}
           {f.revenueNotSetUp > 0 ? (
             <span className="text-warning-600 dark:text-warning-500">
-              ; {money(f.revenueNotSetUp)} of sales are of products not set up, so they&apos;re left out of the profit and margin until they are
+              ; {money(f.revenueNotSetUp)} of sales are of products with no recipe, so they&apos;re left out of the profit and margin until they are
             </span>
           ) : null}
           .
@@ -139,7 +139,7 @@ export function ProductionOverviewView({ view, productHref }: { view: Production
                   ) : (
                     p.name
                   )}
-                  {p.notSetUp ? <span className="ml-2 text-xs font-normal text-warning-600 dark:text-warning-500">not set up</span> : p.estimated ? <span className="ml-2 text-xs font-normal text-muted">estimated</span> : null}
+                  {p.notSetUp ? <span className="ml-2 text-xs font-normal text-warning-600 dark:text-warning-500">no recipe</span> : p.estimated ? <span className="ml-2 text-xs font-normal text-muted">estimated</span> : null}
                 </span>
                 <span className={`text-right font-semibold tnum @3xl:order-last @3xl:font-normal ${p.profit < 0 ? "text-error-600 dark:text-error-400" : ""}`}>
                   {p.marginPercent === null ? "—" : `${p.marginPercent}%`}
@@ -338,9 +338,9 @@ function YearCharts({ view, money }: { view: ProductionOverview; money: (n: numb
                 groups={categories.map((c) => ({ key: c.name, label: c.name, items: c.products.map((p) => ({ key: p.key, label: p.name, value: p.revenue, shade: p.marginPercent })) }))}
                 format={money}
                 shadeOf={(m) => m / 100}
-                shadeLabel={(m) => (m === null ? "not set up: margin unknown" : `${percent(m)} margin`)}
+                shadeLabel={(m) => (m === null ? "no recipe: margin unknown" : `${percent(m)} margin`)}
               />
-              <ShadeLegend low="Low margin" high="High margin" none="Not set up" />
+              <ShadeLegend low="Low margin" high="High margin" none="No recipe" />
             </>
           )}
         </ChartCard>

@@ -4,8 +4,6 @@ import { useRef, useState, useTransition } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 
-import { setSheetPrice } from "@repo/lib/production/actions";
-import { sheetsDetail } from "@repo/lib/production/core";
 import { Button } from "@repo/ui/Button";
 import { Drawer } from "@repo/ui/Drawer";
 import { FormSheet } from "@repo/ui/FormSheet";
@@ -56,7 +54,6 @@ import { clientPath } from "@repo/lib/client-portal/paths";
 
 type MutationResult = { ok: boolean; error?: string };
 /** Each product's price per sheet, by size in lower case. */
-export type SheetPrices = Record<string, Record<string, number>>;
 
 const ATTRIBUTE_TYPES: AttributeType[] = ["text", "number", "select"];
 
@@ -225,88 +222,17 @@ function CurrenciesCard({
   );
 }
 
-// A photo book's price per sheet for each size: a button on its card, the
-// sizes in a pop-up. An order comes to this × its sheets, + any attached
-// product that adds its price (see packages/lib/production); the book has no
-// price of its own.
-function SheetPricesButton({
-  productId,
-  productName,
-  sizes,
-  prices,
-  run,
-  pending,
-}: {
-  productId: string;
-  productName: string;
-  sizes: string[];
-  prices: Record<string, number>;
-  run: (fn: () => Promise<MutationResult>) => void;
-  pending: boolean;
-}) {
-  const [open, setOpen] = useState(false);
-  const [values, setValues] = useState<Record<string, string>>({});
-  const set = sizes.filter((size) => prices[size.toLowerCase()] != null);
-
-  function start() {
-    setValues(Object.fromEntries(sizes.map((size) => [size, prices[size.toLowerCase()] != null ? String(prices[size.toLowerCase()]) : ""])));
-    setOpen(true);
-  }
-  function save() {
-    const changed = sizes.filter((size) => values[size].trim() !== String(prices[size.toLowerCase()] ?? ""));
-    run(async () => {
-      for (const size of changed) {
-        const raw = values[size].trim();
-        const res = await setSheetPrice({ productId, size, price: raw ? Number(raw) : null });
-        if (!res.ok) return res;
-      }
-      return { ok: true };
-    });
-    setOpen(false);
-  }
-
-  return (
-    <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-muted">
-      <span>Price per sheet: {set.length ? set.map((size) => `${size} ${prices[size.toLowerCase()].toLocaleString("en-UG")}`).join(" · ") : "not set"}</span>
-      <Button variant="secondary" className="min-h-8 text-xs" onClick={start}>
-        {set.length ? "Edit" : "Set prices per sheet"}
-      </Button>
-      <FormSheet open={open} onClose={() => setOpen(false)} title={`${productName}: price per sheet`}>
-        <form
-          className="space-y-4"
-          onSubmit={(e) => {
-            e.preventDefault();
-            save();
-          }}
-        >
-          <p className="text-sm text-muted">An order comes to the price per sheet for its size × its number of sheets, plus any attached product that adds its price. Leave a size empty to price it on the call, and leave the product&apos;s own Price empty.</p>
-          {sizes.map((size) => (
-            <Field key={size} label={`${size} (UGX per sheet)`}>
-              <TextInput inputMode="numeric" value={values[size] ?? ""} onChange={(e) => setValues((v) => ({ ...v, [size]: e.target.value }))} placeholder="Not set" />
-            </Field>
-          ))}
-          <Button type="submit" className="w-full" loading={pending} disabled={pending}>
-            Save
-          </Button>
-        </form>
-      </FormSheet>
-    </div>
-  );
-}
-
 export function ProductPanel({
   categories,
   showroomSettings,
   currencies,
   canManage = true,
-  sheetPrices = {},
 }: {
   categories: ProductCategory[];
   showroomSettings: ShowroomSettings;
   currencies: Currency[];
   canManage?: boolean;
   /** Photo books: each product's price per sheet, by size. */
-  sheetPrices?: SheetPrices;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -498,7 +424,7 @@ export function ProductPanel({
 
       <Drawer open={openCategory != null} onClose={() => setOpenCategoryId(null)} title={openCategory?.name}>
         {openCategory ? (
-          <CategoryDetail category={openCategory} run={run} pending={pending} canManage={canManage} sheetPrices={sheetPrices} />
+          <CategoryDetail category={openCategory} run={run} pending={pending} canManage={canManage} />
         ) : null}
       </Drawer>
     </div>
@@ -510,13 +436,11 @@ function CategoryDetail({
   run,
   pending,
   canManage,
-  sheetPrices,
 }: {
   category: ProductCategory;
   run: (fn: () => Promise<MutationResult>) => void;
   pending: boolean;
   canManage: boolean;
-  sheetPrices: SheetPrices;
 }) {
   const [tab, setTab] = useState<"products" | "fields">("products");
 
@@ -542,7 +466,7 @@ function CategoryDetail({
       </div>
 
       {tab === "products" ? (
-        <ProductsTab category={category} run={run} pending={pending} canManage={canManage} sheetPrices={sheetPrices} />
+        <ProductsTab category={category} run={run} pending={pending} canManage={canManage} />
       ) : (
         <AttributesTab category={category} run={run} pending={pending} canManage={canManage} />
       )}
@@ -555,19 +479,13 @@ function ProductsTab({
   run,
   pending,
   canManage,
-  sheetPrices,
 }: {
   category: ProductCategory;
   run: (fn: () => Promise<MutationResult>) => void;
   pending: boolean;
   canManage: boolean;
-  sheetPrices: SheetPrices;
 }) {
   const [newName, setNewName] = useState("");
-  // A category with a number of sheets and a Size choice is priced per sheet (photo books).
-  const sheetSizes = sheetsDetail(category.attributes.map((a) => a.name))
-    ? (category.attributes.find((a) => a.name.trim().toLowerCase() === "size")?.options ?? [])
-    : [];
 
   return (
     <div className="space-y-3">
@@ -597,7 +515,7 @@ function ProductsTab({
 
       <div className="space-y-3">
         {category.products.map((p) => (
-          <ProductCard key={p.id} product={p} run={run} pending={pending} canManage={canManage} sheetSizes={sheetSizes} sheetPrices={sheetPrices[p.id] ?? {}} />
+          <ProductCard key={p.id} product={p} run={run} pending={pending} canManage={canManage} />
         ))}
         {category.products.length === 0 ? (
           <p className="text-sm text-muted">No products in this category yet.</p>
@@ -612,16 +530,12 @@ function ProductCard({
   run,
   pending,
   canManage,
-  sheetSizes,
-  sheetPrices,
 }: {
   product: Product;
   run: (fn: () => Promise<MutationResult>) => void;
   pending: boolean;
   canManage: boolean;
   /** The sizes it can be priced per sheet in; none: not a photo book. */
-  sheetSizes: string[];
-  sheetPrices: Record<string, number>;
 }) {
   const [renaming, setRenaming] = useState(false);
   const [newVariant, setNewVariant] = useState("");
@@ -730,7 +644,6 @@ function ProductCard({
         </div>
       ) : null}
 
-      {canManage && sheetSizes.length ? <SheetPricesButton productId={product.id} productName={product.name} sizes={sheetSizes} prices={sheetPrices} run={run} pending={pending} /> : null}
 
       {canManage ? (
         <div className="mt-1.5 text-xs text-muted">

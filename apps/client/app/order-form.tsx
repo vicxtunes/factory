@@ -720,7 +720,7 @@ function resolveItems(catalog: ProductCategory[], items: OrderItemInput[], promo
     // ProductVariant.price's comment in packages/lib/types.ts. A running discount
     // (packages/lib/discounts) replaces either; the same one the order will get.
     // A promo code applies instead when it gives the lower price (never both).
-    // A photo book priced per sheet is an estimate until the call.
+    // A photo book priced from its recipe is an estimate until the call.
     const quote = quotes[quoteKey(item)] ?? null;
     const listPrice = variant?.price ?? product?.price ?? quote;
     const pending = product?.pending_offer ?? null;
@@ -746,7 +746,7 @@ function hasNoCatalogPrice(catalog: ProductCategory[], item: OrderItemInput): bo
   return (product.variants.find((v) => v.id === item.variant_id)?.price ?? product.price) == null;
 }
 
-/** Asks the server what each photo book priced per sheet comes to as its details are filled in. */
+/** Asks the server what each photo book priced from its recipe comes to as its details are filled in. */
 function useBookQuotes(catalog: ProductCategory[], items: OrderItemInput[]): BookQuotes {
   const [quotes, setQuotes] = useState<BookQuotes>({});
   const books = items.filter((i) => i.product_id && hasNoCatalogPrice(catalog, i));
