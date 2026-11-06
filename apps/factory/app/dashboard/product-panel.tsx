@@ -8,6 +8,7 @@ import { setSheetPrice } from "@repo/lib/production/actions";
 import { sheetsDetail } from "@repo/lib/production/core";
 import { Button } from "@repo/ui/Button";
 import { Drawer } from "@repo/ui/Drawer";
+import { FormSheet } from "@repo/ui/FormSheet";
 import { ExportButtons } from "@repo/ui/ExportButtons";
 import { Field, Select, TextInput } from "@repo/ui/Field";
 import { UploadRow } from "@repo/ui/UploadRow";
@@ -124,7 +125,8 @@ function ShowroomSettingsCard({
 // The currencies clients can switch the app to (top bar). Every price is
 // stored in UGX; each other currency's rate is typed as people say it,
 // "1 KES = 28 UGX", and kept as units per 1 UGX. A currency shows in the top
-// bar once it's on; turn one on only after checking its rate.
+// bar once it's on; turn one on only after checking its rate. A button on the
+// page; the list and each currency's form open in a pop-up.
 function CurrenciesCard({
   currencies,
   run,
@@ -134,53 +136,160 @@ function CurrenciesCard({
   run: (fn: () => Promise<MutationResult>) => void;
   pending: boolean;
 }) {
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<Currency | null>(null);
+  const [rate, setRate] = useState("");
+  const [on, setOn] = useState(false);
   const others = currencies.filter((c) => !c.is_base);
   const perOne = (c: Currency) => Math.round((1 / Number(c.rate)) * 10_000) / 10_000;
+  const live = others.filter((c) => c.active).map((c) => c.code);
+
+  function edit(c: Currency) {
+    setEditing(c);
+    setRate(String(perOne(c)));
+    setOn(c.active);
+  }
+  function save() {
+    if (!editing) return;
+    const ugx = Number(rate);
+    if (!(ugx > 0)) return;
+    const c = editing;
+    run(async () => {
+      if (ugx !== perOne(c)) {
+        const res = await updateCurrency(c.id, { label: c.label, symbol: c.symbol, rate: String(1 / ugx) });
+        if (!res.ok) return res;
+      }
+      return on !== c.active ? setCurrencyActive(c.id, on) : { ok: true };
+    });
+    setEditing(null);
+  }
+
   return (
-    <div className="rounded-2xl border border-border bg-surface p-4 shadow-theme-xs">
-      <p className="text-xs font-semibold uppercase tracking-wide text-muted">Currencies</p>
-      <p className="mt-1 text-xs text-muted">
-        Prices are kept in UGX. Clients pick a currency in the top bar and see every amount at these rates; an invoice keeps its rate from the day it&apos;s issued. Check a rate before turning a currency on.
-      </p>
-      <ul className="mt-3 divide-y divide-border">
-        {others.map((c) => (
-          <li key={c.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 py-2 text-sm">
-            <span className="w-40 font-medium">
-              {c.code} <span className="font-normal text-muted">{c.label}</span>
-            </span>
-            <label className="flex items-center gap-1.5">
-              <span className="text-muted">1 {c.code} =</span>
-              <input
-                key={`${c.id}-${c.rate}`}
-                type="number"
-                min="0"
-                step="any"
-                defaultValue={perOne(c)}
-                disabled={pending}
-                aria-label={`UGX per 1 ${c.code}`}
-                className="min-h-9 w-28 rounded-[var(--radius)] border border-border bg-surface px-2 text-sm"
-                onBlur={(e) => {
-                  const ugx = Number(e.target.value);
-                  if (!(ugx > 0) || ugx === perOne(c)) return;
-                  run(() => updateCurrency(c.id, { label: c.label, symbol: c.symbol, rate: String(1 / ugx) }));
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") e.currentTarget.blur();
-                }}
-              />
-              <span className="text-muted">UGX</span>
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-surface p-4 shadow-theme-xs">
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted">Currencies</p>
+        <p className="mt-1 text-sm">UGX{live.length ? `, ${live.join(", ")}` : ""} <span className="text-muted">in the client top bar</span></p>
+      </div>
+      <Button variant="secondary" onClick={() => setOpen(true)}>
+        Currencies and rates
+      </Button>
+      <FormSheet open={open} onClose={() => (editing ? setEditing(null) : setOpen(false))} title={editing ? `${editing.code} · ${editing.label}` : "Currencies"}>
+        {editing ? (
+          <form
+            className="space-y-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              save();
+            }}
+          >
+            <Field label={`1 ${editing.code} is how many UGX?`} hint="Prices are kept in UGX and shown at this rate. An invoice keeps the rate of the day it's issued.">
+              <TextInput type="number" min="0" step="any" value={rate} onChange={(e) => setRate(e.target.value)} required />
+            </Field>
+            <label className="flex min-h-11 items-center gap-3 text-sm">
+              <input type="checkbox" checked={on} onChange={(e) => setOn(e.target.checked)} className="size-4 accent-brand-500" />
+              Clients can pick {editing.code} in the top bar
             </label>
-            <Button
-              variant={c.active ? "secondary" : "primary"}
-              className="ml-auto min-h-9 text-xs"
-              disabled={pending}
-              onClick={() => run(() => setCurrencyActive(c.id, !c.active))}
-            >
-              {c.active ? "On · turn off" : "Turn on"}
-            </Button>
-          </li>
-        ))}
-      </ul>
+            <div className="flex gap-2">
+              <Button type="submit" className="flex-1" loading={pending} disabled={pending}>
+                Save
+              </Button>
+              <Button type="button" variant="secondary" onClick={() => setEditing(null)}>
+                Back
+              </Button>
+            </div>
+          </form>
+        ) : (
+          <div className="space-y-3">
+            <p className="text-sm text-muted">Prices are kept in UGX. Check a rate before turning a currency on.</p>
+            <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border">
+              {others.map((c) => (
+                <li key={c.id}>
+                  <button type="button" onClick={() => edit(c)} className="flex min-h-14 w-full items-center justify-between gap-3 px-3 text-left hover:bg-gray-50 dark:hover:bg-white/5">
+                    <span>
+                      <span className="block text-sm font-medium">
+                        {c.code} <span className="font-normal text-muted">{c.label}</span>
+                      </span>
+                      <span className="block text-xs text-muted tnum">1 {c.code} = {perOne(c).toLocaleString("en-UG")} UGX</span>
+                    </span>
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${c.active ? "bg-success-50 text-success-700 dark:bg-success-500/15 dark:text-success-500" : "bg-gray-100 text-muted dark:bg-white/5"}`}>
+                      {c.active ? "On" : "Off"}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </FormSheet>
+    </div>
+  );
+}
+
+// A photo book's price per sheet for each size: a button on its card, the
+// sizes in a pop-up. An order comes to this × its sheets, + any attached
+// product that adds its price (see packages/lib/production); the book has no
+// price of its own.
+function SheetPricesButton({
+  productId,
+  productName,
+  sizes,
+  prices,
+  run,
+  pending,
+}: {
+  productId: string;
+  productName: string;
+  sizes: string[];
+  prices: Record<string, number>;
+  run: (fn: () => Promise<MutationResult>) => void;
+  pending: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [values, setValues] = useState<Record<string, string>>({});
+  const set = sizes.filter((size) => prices[size.toLowerCase()] != null);
+
+  function start() {
+    setValues(Object.fromEntries(sizes.map((size) => [size, prices[size.toLowerCase()] != null ? String(prices[size.toLowerCase()]) : ""])));
+    setOpen(true);
+  }
+  function save() {
+    const changed = sizes.filter((size) => values[size].trim() !== String(prices[size.toLowerCase()] ?? ""));
+    run(async () => {
+      for (const size of changed) {
+        const raw = values[size].trim();
+        const res = await setSheetPrice({ productId, size, price: raw ? Number(raw) : null });
+        if (!res.ok) return res;
+      }
+      return { ok: true };
+    });
+    setOpen(false);
+  }
+
+  return (
+    <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-muted">
+      <span>Price per sheet: {set.length ? set.map((size) => `${size} ${prices[size.toLowerCase()].toLocaleString("en-UG")}`).join(" · ") : "not set"}</span>
+      <Button variant="secondary" className="min-h-8 text-xs" onClick={start}>
+        {set.length ? "Edit" : "Set prices per sheet"}
+      </Button>
+      <FormSheet open={open} onClose={() => setOpen(false)} title={`${productName}: price per sheet`}>
+        <form
+          className="space-y-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            save();
+          }}
+        >
+          <p className="text-sm text-muted">An order comes to the price per sheet for its size × its number of sheets, plus any attached product that adds its price. Leave a size empty to price it on the call, and leave the product&apos;s own Price empty.</p>
+          {sizes.map((size) => (
+            <Field key={size} label={`${size} (UGX per sheet)`}>
+              <TextInput inputMode="numeric" value={values[size] ?? ""} onChange={(e) => setValues((v) => ({ ...v, [size]: e.target.value }))} placeholder="Not set" />
+            </Field>
+          ))}
+          <Button type="submit" className="w-full" loading={pending} disabled={pending}>
+            Save
+          </Button>
+        </form>
+      </FormSheet>
     </div>
   );
 }
@@ -621,36 +730,7 @@ function ProductCard({
         </div>
       ) : null}
 
-      {canManage && sheetSizes.length ? (
-        // A photo book: the order comes to this × its sheets + the packaging's price (see packages/lib/production).
-        <div className="mt-1.5 text-xs text-muted">
-          <span>Price per sheet</span>
-          <span className="ml-1">(× the number of sheets, + the packaging&apos;s price; leave Price above empty):</span>
-          <div className="mt-1 flex flex-wrap gap-2">
-            {sheetSizes.map((size) => (
-              <label key={size} className="flex items-center gap-1">
-                <span>{size}</span>
-                <input
-                  type="number"
-                  min="0"
-                  step="1"
-                  defaultValue={sheetPrices[size.toLowerCase()] ?? ""}
-                  placeholder="—"
-                  className="min-h-7 w-24 rounded-[var(--radius)] border border-border bg-surface px-2 text-xs"
-                  onBlur={(e) => {
-                    const raw = e.target.value.trim();
-                    if (raw === String(sheetPrices[size.toLowerCase()] ?? "")) return;
-                    run(() => setSheetPrice({ productId: product.id, size, price: raw ? Number(raw) : null }));
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") e.currentTarget.blur();
-                  }}
-                />
-              </label>
-            ))}
-          </div>
-        </div>
-      ) : null}
+      {canManage && sheetSizes.length ? <SheetPricesButton productId={product.id} productName={product.name} sizes={sheetSizes} prices={sheetPrices} run={run} pending={pending} /> : null}
 
       {canManage ? (
         <div className="mt-1.5 text-xs text-muted">

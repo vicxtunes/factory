@@ -318,7 +318,7 @@ export function MaterialSheet({
           <section className="space-y-2 rounded-xl border border-border p-3">
             <h3 className="text-sm font-semibold">Made of</h3>
             <p className="text-xs text-muted">The parts one is made of. Only what&apos;s here counts: its parts aren&apos;t counted again on their own.</p>
-            <PartLinesEditor drafts={lines} onChange={setLines} parts={usable} details={details} sizes={sizes} />
+            <PartLinesEditor drafts={lines} onChange={setLines} parts={usable} details={details} sizes={sizes} inline />
           </section>
         ) : null}
 

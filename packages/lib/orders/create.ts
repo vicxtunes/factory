@@ -57,6 +57,10 @@ export interface BuildOrderParams {
   allowLineDiscounts?: boolean;
   // Who's placing it, when no one is signed in (the assistant).
   actor?: AuditActor;
+  // Placed by the agent from their own login (the agent portal): it goes to
+  // production only once 80% is paid (packages/lib/agents). Staff and designer
+  // orders in an agent's name earn the same but flow as any other order.
+  placedByAgent?: boolean;
   // The currency the client was looking at (the client app's top bar); its
   // invoice is issued in it. UGX when not given. Amounts are always UGX.
   currency?: string;
@@ -177,6 +181,7 @@ export async function buildAndInsertOrder(
       currency: p.currency ?? "UGX",
       agent_name: p.agentName,
       commission_eligible: p.agentId !== null,
+      placed_by_agent: p.agentId !== null && (p.placedByAgent ?? false),
       order_type: p.orderType,
       delivery_date: clean(p.deliveryDate),
       // clean(), not the raw string: the client portal never collects a

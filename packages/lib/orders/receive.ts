@@ -24,7 +24,7 @@ export async function receiveOrder(
   const admin = createAdminClient();
   const { data: order } = await admin
     .from("orders")
-    .select("id, approval_status, released_at, order_no, client_id, cancelled_at, commission_eligible")
+    .select("id, approval_status, released_at, order_no, client_id, cancelled_at, placed_by_agent")
     .eq("id", orderId)
     .maybeSingle();
   if (!order) return { ok: false, error: "Order not found." };
@@ -52,8 +52,8 @@ export async function receiveOrder(
       .limit(1)
       .maybeSingle();
     if (firstItem) {
-      // An agent's order goes to production once 80% is paid (packages/lib/agents).
-      const payFirst = order.commission_eligible ? " Production starts once 80% of the price is paid." : "";
+      // An order the agent placed themselves goes to production once 80% is paid (packages/lib/agents).
+      const payFirst = order.placed_by_agent ? " Production starts once 80% of the price is paid." : "";
       await notifyOrderItem({
         orderItemId: firstItem.id,
         eventType: "quote_ready",

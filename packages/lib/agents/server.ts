@@ -240,7 +240,7 @@ export async function agentOrder(agentId: string, orderId: string): Promise<Agen
 /** For staff: among these orders, the agents' ones, with what's paid and the 80% needed before production (null until priced). */
 export async function agentPaymentsFor(orderIds: string[]): Promise<Record<string, { paid: number; needed: number | null }>> {
   if (!orderIds.length) return {};
-  const rows = must(await createAdminClient().from("orders").select("id, quoted_price").in("id", orderIds).eq("commission_eligible", true).returns<{ id: string; quoted_price: number | string | null }[]>()) ?? [];
+  const rows = must(await createAdminClient().from("orders").select("id, quoted_price").in("id", orderIds).eq("placed_by_agent", true).returns<{ id: string; quoted_price: number | string | null }[]>()) ?? [];
   const paid = await paidByOrders(rows.map((r) => r.id));
   return Object.fromEntries(rows.map((r) => [r.id, { paid: paid[r.id] ?? 0, needed: r.quoted_price === null ? null : payBeforeProduction(Number(r.quoted_price)) }]));
 }
@@ -328,6 +328,8 @@ export async function placeForClient(agent: Agent, input: PlacedAgentOrder): Pro
     responsibleWorkerId: null,
     items: input.items,
     releaseImmediately: false,
+    // Their own order: production once 80% is paid.
+    placedByAgent: true,
   });
   if (!res.ok) throw new AppError(res.error);
 
@@ -529,10 +531,10 @@ export async function tellAgents(): Promise<void> {
     must(
       await db
         .from("orders")
-        .select("id, order_no, approval_status, cancelled_at, agent_stage_told, items:order_items (production_status, stage), agent:agents (client_id)")
+        .select("id, order_no, approval_status, cancelled_at, agent_stage_told, placed_by_agent, items:order_items (production_status, stage), agent:agents (client_id)")
         .eq("commission_eligible", true)
         .or("agent_stage_told.is.null,agent_stage_told.not.in.(delivered,cancelled)")
-        .returns<{ id: string; order_no: string; approval_status: string; cancelled_at: string | null; agent_stage_told: string | null; items: { production_status: ProductionStatus; stage: OrderStage }[]; agent: { client_id: string | null } | null }[]>(),
+        .returns<{ id: string; order_no: string; approval_status: string; cancelled_at: string | null; agent_stage_told: string | null; placed_by_agent: boolean; items: { production_status: ProductionStatus; stage: OrderStage }[]; agent: { client_id: string | null } | null }[]>(),
     ) ?? [];
   for (const o of open) {
     const stage = agentStage({ cancelled_at: o.cancelled_at, approval_status: o.approval_status, lines: o.items });
@@ -545,7 +547,7 @@ export async function tellAgents(): Promise<void> {
     if (stage === "submitted") continue;
     await notifyActor(
       { type: "client", id: o.agent.client_id },
-      { title: `Order ${o.order_no}: ${AGENT_STAGE_LABELS[stage]}`, body: stage === "cancelled" ? "This order was cancelled." : stage === "confirmed" ? "Your order is confirmed. Production starts once your client has paid 80% of the price." : `Your order is now ${AGENT_STAGE_LABELS[stage].toLowerCase()}.`, url: `/agents/orders/${o.id}` },
+      { title: `Order ${o.order_no}: ${AGENT_STAGE_LABELS[stage]}`, body: stage === "cancelled" ? "This order was cancelled." : stage === "confirmed" ? (o.placed_by_agent ? "Your order is confirmed. Production starts once your client has paid 80% of the price." : "Your order is confirmed.") : `Your order is now ${AGENT_STAGE_LABELS[stage].toLowerCase()}.`, url: `/agents/orders/${o.id}` },
     ).catch((err) => console.error("agents: push failed:", err));
   }
 

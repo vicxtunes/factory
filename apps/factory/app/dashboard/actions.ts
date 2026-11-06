@@ -1405,8 +1405,7 @@ export async function createOrder(input: OrderFormPayload): Promise<CreateOrderR
     designerBrief: input.designer_brief,
     responsibleWorkerId: input.responsible_worker_id,
     items: input.items,
-    // An agent's order waits in Client Orders until 80% is paid (packages/lib/agents).
-    releaseImmediately: !input.agent_id,
+    releaseImmediately: true,
     allowLineDiscounts: true,
   });
   if (!res.ok) return res;
@@ -1626,7 +1625,7 @@ export async function routeApprovedOrder(
   const admin = createAdminClient();
   const { data: order } = await admin
     .from("orders")
-    .select("id, approval_status, released_at, order_no, cancelled_at, commission_eligible, quoted_price")
+    .select("id, approval_status, released_at, order_no, cancelled_at, placed_by_agent, quoted_price")
     .eq("id", orderId)
     .maybeSingle();
   if (!order) return { ok: false, error: "Order not found." };
@@ -1634,8 +1633,8 @@ export async function routeApprovedOrder(
   if (order.approval_status !== "approved") return { ok: false, error: "Confirm this order before routing it." };
   if (order.released_at) return { ok: false, error: "This order was already sent to production." };
   if (!(await isOrderInvoiced(orderId))) return { ok: false, error: "Generate the invoice before routing this order." };
-  // An agent's order goes to production only once 80% is paid (packages/lib/agents).
-  if (order.commission_eligible) {
+  // An order the agent placed themselves goes to production only once 80% is paid (packages/lib/agents).
+  if (order.placed_by_agent) {
     if (order.quoted_price == null) return { ok: false, error: "This agent order has no price yet." };
     const needed = payBeforeProduction(Number(order.quoted_price));
     const paid = (await paidByOrders([orderId]))[orderId] ?? 0;
