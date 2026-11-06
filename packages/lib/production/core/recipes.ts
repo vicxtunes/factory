@@ -237,7 +237,7 @@ export class Costing {
 
   /** The cost of one of a material in a size; `missing` when a cost it needs isn't set. */
   rate(m: CostMaterial, size: string): { rate: number; missing: string | null; parts: CostLine["parts"] } {
-    if (m.costBy === "one") return { rate: m.cost, missing: m.cost > 0 ? null : `a cost for ${m.name}`, parts: [] };
+    if (m.costBy === "one") return { rate: m.cost, missing: m.cost > 0 ? null : `${m.name}'s cost`, parts: [] };
     if (m.costBy === "size") {
       const r = bySize(m.sizeCosts, size);
       return { rate: r ?? 0, missing: r === null ? (size ? `${m.name}'s cost for ${size}` : `the size, for ${m.name}`) : null, parts: [] };

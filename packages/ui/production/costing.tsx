@@ -5,13 +5,13 @@
 // materials; and its selling price), the margin photo books are priced at, and
 // how one photo book is priced. Selling prices and margins are the boss's.
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 
 import { Button } from "@repo/ui/Button";
 import { Field, Select, TextInput } from "@repo/ui/Field";
 import { FormSheet } from "@repo/ui/FormSheet";
 import { deleteMaterial, saveMaterial, setMargin, setPricing } from "@repo/lib/production/actions";
-import { Costing, type AutoPrice, type CostBy, type CostMaterial, type SizeAmounts } from "@repo/lib/production/core";
+import { Costing, marginAt, type AutoPrice, type CostBy, type CostMaterial, type SizeAmounts } from "@repo/lib/production/core";
 
 import { ErrorLine, Form, UnitField, parseNumber, useMoney, useSubmit } from "./sheets";
 
@@ -55,17 +55,35 @@ export function amounts(t: Typed): SizeAmounts | null {
 }
 
 /** An amount for each size, two to a row. */
-export function SizeAmountsField({ label, sizes, value, onChange, placeholder }: { label: string; sizes: string[]; value: Typed; onChange: (v: Typed) => void; placeholder?: string }) {
+export function SizeAmountsField({
+  label,
+  sizes,
+  value,
+  onChange,
+  placeholder,
+  note,
+}: {
+  label: string;
+  sizes: string[];
+  value: Typed;
+  onChange: (v: Typed) => void;
+  placeholder?: string;
+  /** A line under a size's box (its cost and margin). */
+  note?: (size: string) => ReactNode;
+}) {
   return (
     <div>
       <span className="mb-1 block text-xs font-medium text-muted">{label}</span>
       {sizes.length ? (
         <div className="grid grid-cols-2 gap-2">
           {sizes.map((size) => (
-            <label key={size} className="flex items-center gap-2 text-sm">
-              <span className="w-14 shrink-0 text-muted">{size}</span>
-              <TextInput inputMode="decimal" value={value[size] ?? ""} onChange={(e) => onChange({ ...value, [size]: e.target.value })} placeholder={placeholder ?? "Not set"} aria-label={`${label}, ${size}`} />
-            </label>
+            <div key={size}>
+              <label className="flex items-center gap-2 text-sm">
+                <span className="w-14 shrink-0 text-muted">{size}</span>
+                <TextInput inputMode="decimal" value={value[size] ?? ""} onChange={(e) => onChange({ ...value, [size]: e.target.value })} placeholder={placeholder ?? "Not set"} aria-label={`${label}, ${size}`} />
+              </label>
+              {note ? <div className="mt-0.5 pl-16 text-xs text-muted">{note(size)}</div> : null}
+            </div>
           ))}
         </div>
       ) : (
@@ -123,9 +141,9 @@ export function MaterialSheet({
     id: material?.id ?? "draft",
     name: name || "It",
     unit,
-    costBy: "parts",
-    cost: 0,
-    sizeCosts: {},
+    costBy,
+    cost: parseNumber(cost) || 0,
+    sizeCosts: amounts(sizeCosts) ?? {},
     parts: parts
       .filter((p) => p.partId)
       .map((p) => ({ partId: p.partId, qty: parseNumber(p.qty) || 0, sizeTotals: p.bySize ? (amounts(p.totals) ?? {}) : null })),
@@ -137,6 +155,24 @@ export function MaterialSheet({
   // The sizes its parts come in (all its parts have one cost: no sizes).
   const partSizes = sizes.filter((s) => draft.parts.some((p) => (p.sizeTotals ? p.sizeTotals[s] !== undefined : Object.keys(live.material(p.partId)?.sizeCosts ?? {}).includes(s))));
   const builtCost = (size: string) => live.rate(draft, size);
+  // The sizes its cost is known in (one cost: none), for setting its selling price beside it.
+  const costSizes = costBy === "parts" ? partSizes : costBy === "size" ? sizes.filter((s) => draft.sizeCosts[s] !== undefined) : [];
+  /** Its cost in a size, and the margin at a selling price typed. */
+  const costAndMargin = (size: string, sellText: string): ReactNode => {
+    const c = builtCost(size);
+    if (c.missing) return <span className="text-warning-600 dark:text-warning-500">cost short: no {c.missing}</span>;
+    const m = sellText.trim() ? marginAt(parseNumber(sellText), c.rate) : null;
+    return (
+      <>
+        costs {money(c.rate)}
+        {m ? (
+          <span className={m.profit < 0 ? " text-error-600 dark:text-error-400" : m.percent < 25 ? " text-warning-600 dark:text-warning-500" : " text-success-600 dark:text-success-500"}>
+            {" "}· {m.percent}% margin
+          </span>
+        ) : null}
+      </>
+    );
+  };
 
   // A part has a cost of its own: never a built material, never itself.
   const choices = materials.filter((m) => m.costBy !== "parts" && m.id !== material?.id);
@@ -262,11 +298,30 @@ export function MaterialSheet({
               Differs by size
             </label>
             {sellBySize ? (
-              <SizeAmountsField label="Selling price of one in each size (UGX)" sizes={sizes} value={sizeSells} onChange={setSizeSells} />
+              <SizeAmountsField
+                label="Selling price of one in each size (UGX)"
+                sizes={costSizes.length ? costSizes : sizes}
+                value={sizeSells}
+                onChange={setSizeSells}
+                note={(size) => costAndMargin(size, sizeSells[size] ?? "")}
+              />
             ) : (
-              <Field label={`Selling price of one ${unit || "unit"} (UGX)`}>
-                <TextInput inputMode="numeric" value={sell} onChange={(e) => setSell(e.target.value)} placeholder="Not set" />
-              </Field>
+              <div>
+                <Field label={`Selling price of one ${unit || "unit"} (UGX)`}>
+                  <TextInput inputMode="numeric" value={sell} onChange={(e) => setSell(e.target.value)} placeholder="Not set" />
+                </Field>
+                <div className="mt-1 space-y-0.5 text-xs text-muted">
+                  {costSizes.length ? (
+                    costSizes.map((size) => (
+                      <p key={size}>
+                        {size}: {costAndMargin(size, sell)}
+                      </p>
+                    ))
+                  ) : (
+                    <p>{costAndMargin("", sell)}</p>
+                  )}
+                </div>
+              </div>
             )}
           </div>
         ) : null}
