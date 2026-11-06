@@ -5,8 +5,7 @@ import { useState, useTransition } from "react";
 import { Button } from "@repo/ui/Button";
 import { Drawer } from "@repo/ui/Drawer";
 import { Field, TextInput } from "@repo/ui/Field";
-import { useCurrencySymbol } from "@repo/lib/currency/CurrencySymbolProvider";
-import { formatMoney } from "@repo/lib/currency/format";
+import { useFormatMoney } from "@repo/lib/currency/CurrencySymbolProvider";
 import { createTopupBonus, stopTopupBonus } from "@repo/lib/wallet/actions";
 import type { TopupBonus } from "@repo/lib/wallet/types";
 
@@ -30,8 +29,8 @@ function period(b: TopupBonus): string {
 
 /** Marketing → Top-up bonus: extra on the Aming card for top-ups (boss), one bonus at a time. */
 export function TopupBonusPanel({ initial, canManage }: { initial: TopupBonus[]; canManage: boolean }) {
-  const symbol = useCurrencySymbol();
-  const money = (n: number) => formatMoney(n, symbol);
+  const formatAmount = useFormatMoney();
+  const money = (n: number) => formatAmount(n);
   const [bonuses, setBonuses] = useState(initial);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);

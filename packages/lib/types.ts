@@ -266,6 +266,8 @@ export interface Currency {
   label: string;
   symbol: string;
   rate: number;
+  /** Decimal places shown: 0 for shillings and francs, 2 for USD and EUR. */
+  decimals: number;
   is_base: boolean;
   active: boolean;
   sort_order: number;

@@ -407,7 +407,7 @@ const cachedActiveCurrencies = unstable_cache(() => loadCurrencies(createCatalog
 async function loadCurrencies(supabase: SupabaseClient, activeOnly: boolean): Promise<Currency[]> {
   let query = supabase
     .from("currencies")
-    .select("id, code, label, symbol, rate, is_base, active, sort_order")
+    .select("id, code, label, symbol, rate, decimals, is_base, active, sort_order")
     .order("sort_order");
   if (activeOnly) query = query.eq("active", true);
   const { data, error } = await query;

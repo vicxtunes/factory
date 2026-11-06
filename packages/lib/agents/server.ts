@@ -6,6 +6,7 @@ import "server-only";
 import { clientUrl } from "@repo/lib/client-portal/paths";
 import { resolveOrCreateClient } from "@repo/lib/clients/dedupe";
 import { formatMoney } from "@repo/lib/currency/format";
+import { clientCurrency } from "@repo/lib/currency/server";
 import { AppError } from "@repo/lib/kernel/core";
 import { buildAndInsertOrder, type BuildOrderResult } from "@repo/lib/orders/create";
 import { isPhotobookCategory } from "@repo/lib/orders/photobook";
@@ -312,6 +313,8 @@ export async function placeForClient(agent: Agent, input: PlacedAgentOrder): Pro
   const db = createAdminClient();
   const client = must(await db.from("clients").select("id, name, email, phone").eq("id", input.clientId).single<{ id: string; name: string; email: string | null; phone: string | null }>())!;
   const res = await buildAndInsertOrder(db, {
+    // The currency the agent is looking at (their top bar); the invoice is issued in it.
+    currency: (await clientCurrency()).code,
     client,
     agentId: agent.id,
     agentName: agent.name,

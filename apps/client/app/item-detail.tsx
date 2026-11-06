@@ -8,8 +8,7 @@ import { OrderPayButton } from "@repo/ui/payments/OrderPayButton";
 import { ClientOrderPayment } from "@repo/ui/wallet/OrderPayment";
 import { ClientInvoiceLink } from "@repo/ui/invoices/ClientInvoiceLink";
 import { UrgencyBadge } from "@repo/ui/UrgencyBadge";
-import { useCurrencySymbol } from "@repo/lib/currency/CurrencySymbolProvider";
-import { formatMoney } from "@repo/lib/currency/format";
+import { useFormatMoney } from "@repo/lib/currency/CurrencySymbolProvider";
 import { CLIENT_STATUS_LABELS, clientStatus } from "@repo/lib/orders/clientStatus";
 import { orderAmount } from "@repo/lib/orders/pricing";
 import { lineDiscountOf } from "@repo/lib/discounts/core/rules";
@@ -47,7 +46,7 @@ function StatusLine({ item }: { item: OrderItemWithOrder }) {
 // status, then everything else in sections that open on tap (each shows a
 // one-line summary while closed). On desktop the sections start open.
 export function ClientItemDetail({ item, orderItems }: { item: OrderItemWithOrder; orderItems: OrderItemWithOrder[] }) {
-  const symbol = useCurrencySymbol();
+  const formatAmount = useFormatMoney();
   const photoLink = item.media_link ?? item.order.media_link;
   const { amount } = orderAmount(orderItems.length ? orderItems : [item]);
   const photoCount = item.media.length + (photoLink && item.media.length === 0 ? 1 : 0);
@@ -65,7 +64,7 @@ export function ClientItemDetail({ item, orderItems }: { item: OrderItemWithOrde
       ) : (
         <PriceHero
           label="Amount to pay"
-          price={formatMoney(amount, symbol)}
+          price={formatAmount(amount)}
           note={
             <>
               Total for order <span className="font-semibold text-foreground">{item.order.order_no}</span> · use it as your

@@ -6,8 +6,7 @@ import type { Swiper as SwiperInstance } from "swiper";
 import { A11y, Autoplay, Pagination } from "swiper/modules";
 import { Swiper, SwiperSlide } from "swiper/react";
 
-import { useCurrencySymbol } from "@repo/lib/currency/CurrencySymbolProvider";
-import { formatMoney } from "@repo/lib/currency/format";
+import { useFormatMoney } from "@repo/lib/currency/CurrencySymbolProvider";
 import { offerBadge, type Offer, type PendingOffer } from "@repo/lib/discounts/core";
 import type { Product } from "@repo/lib/types";
 
@@ -113,8 +112,8 @@ export function DealsWelcome({ title, deals, showPrices }: { title: string; deal
 }
 
 function DealsSlider({ title, deals, showPrices }: { title: string; deals: Deal[]; showPrices: boolean }) {
-  const symbol = useCurrencySymbol();
-  const money = (n: number) => formatMoney(n, symbol);
+  const formatAmount = useFormatMoney();
+  const money = (n: number) => formatAmount(n);
   const [swiper, setSwiper] = useState<SwiperInstance | null>(null);
   // Always an endless ring: with only a few deals, they repeat until there
   // are enough cards for both sides of the middle one (Swiper's loop needs them).

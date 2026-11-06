@@ -7,7 +7,6 @@ import Link from "next/link";
 
 import { Button } from "@repo/ui/Button";
 import { QuantityInput } from "@repo/ui/QuantityInput";
-import { CurrencySelect } from "@repo/ui/CurrencySelect";
 import { Field, Select, TextArea, TextInput } from "@repo/ui/Field";
 import { SectionLabel } from "@repo/ui/SectionLabel";
 import { UploadRow } from "@repo/ui/UploadRow";
@@ -127,7 +126,8 @@ export function OrderForm({
   initialVariantId?: string;
   // Boss-configurable (dashboard Products page) — see ShowroomSettings.
   showPrices: boolean;
-  currencies: Currency[];
+  /** No longer used: prices follow the currency chosen in the top bar. */
+  currencies?: Currency[];
   /** Ordering for a studio project: linked to it once placed (packages/lib/studio-orders). */
   project?: { id: string; title: string };
   /** The client has a business Drive to pick files from ("From my Drive"). */
@@ -786,7 +786,6 @@ function OrderSummary({
   hasPhotobookItem,
   etaLabel,
   showPrices,
-  currencies,
   promo,
   onPromo,
   quotes,
@@ -798,12 +797,13 @@ function OrderSummary({
   hasPhotobookItem: boolean;
   etaLabel: string;
   showPrices: boolean;
-  currencies: Currency[];
+  /** No longer used: prices follow the currency chosen in the top bar. */
+  currencies?: Currency[];
   promo: PromoCode | null;
   /** Left out: no promo codes here (an agent's order). */
   onPromo?: (promo: PromoCode | null) => void;
 }) {
-  const currency = useCurrency(currencies);
+  const currency = useCurrency();
   const resolved = resolveItems(catalog, items, promo, quotes);
   const total = orderTotal(resolved, showPrices);
 
@@ -874,9 +874,6 @@ function OrderSummary({
             <div className="flex items-center justify-between text-sm">
               <span className="font-semibold">Total</span>
               <span className="font-semibold tabular-nums">{currency.format(total)}</span>
-            </div>
-            <div className="flex justify-end">
-              <CurrencySelect currencies={currencies} selected={currency.selected} onChange={currency.select} />
             </div>
           </div>
         ) : (

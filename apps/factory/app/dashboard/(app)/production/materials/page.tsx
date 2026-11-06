@@ -4,7 +4,7 @@ import { Loading } from "@repo/ui/skeletons/Loading";
 import { localDate } from "@repo/lib/accounting/core/period";
 import { requireProductionAccess } from "@repo/lib/production/access";
 import { costingCatalog } from "@repo/lib/production/catalog";
-import { PartsCatalog, orderSizes } from "@repo/lib/production/core";
+import { PartsCatalog, detailKey, orderSizes } from "@repo/lib/production/core";
 import { production } from "@repo/lib/production/server";
 import { resolveTenantScope } from "@repo/lib/tenancy/server/resolve";
 
@@ -45,6 +45,7 @@ async function Parts() {
       productNames={Object.fromEntries(products.map((p) => [p.id, p.name]))}
       products={products}
       sizes={orderSizes(catalog)}
+      details={[...new Map(catalog.flatMap((c) => c.attributes).map((a) => [detailKey(a.name), a] as const)).values()]}
     />
   );
 }

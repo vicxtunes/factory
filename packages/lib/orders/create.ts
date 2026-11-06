@@ -57,6 +57,9 @@ export interface BuildOrderParams {
   allowLineDiscounts?: boolean;
   // Who's placing it, when no one is signed in (the assistant).
   actor?: AuditActor;
+  // The currency the client was looking at (the client app's top bar); its
+  // invoice is issued in it. UGX when not given. Amounts are always UGX.
+  currency?: string;
 }
 
 export type BuildOrderResult =
@@ -171,6 +174,7 @@ export async function buildAndInsertOrder(
       client_email: p.client.email,
       client_phone: p.client.phone,
       agent_id: p.agentId,
+      currency: p.currency ?? "UGX",
       agent_name: p.agentName,
       commission_eligible: p.agentId !== null,
       order_type: p.orderType,

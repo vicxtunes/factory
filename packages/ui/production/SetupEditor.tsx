@@ -66,8 +66,13 @@ export function SetupEditor({
 
   const lines = drafts.filter(complete).map(toLine);
   const catalog = new PartsCatalog({ ...book, productLines: new Map(book.productLines).set(product.id, lines) });
-  const pricing = catalog.setup(product.id).pricing;
+  const setup = catalog.setup(product.id);
+  const pricing = setup.pricing;
   const rates = pricing instanceof PerSheet ? pricing.rates : [];
+  // The sizes an order of it can choose: its size variants, else its Size detail's options.
+  const productSizes = product.sizes.length ? product.sizes.map((s) => s.name) : (details.find((d) => d.name.trim().toLowerCase() === "size")?.options ?? []);
+  const twice = catalog.doubleCounted(lines);
+  const addsOnFixed = pricing.key === "fixed" && lines.some((l) => l.addsPrice);
   const listPrice = (variantId: string | null) => product.sizes.find((s) => s.id === variantId)?.price ?? product.price;
 
   function change(next: LineDraft[]) {
@@ -128,7 +133,21 @@ export function SetupEditor({
           <section className="rounded-2xl border border-border bg-surface p-4 shadow-theme-xs">
             <h3 className="font-semibold">What one {product.unit?.toLowerCase() ?? "unit"} is made of</h3>
             <p className="mb-3 text-xs text-muted">What we pay, from the parts. Shared parts (PVC, a sheet, a box) are set up once under Parts; a part added here is only for this product unless you share it. For a part that comes in sizes, choose its name &ldquo;: the order&apos;s size&rdquo;.</p>
-            <PartLinesEditor drafts={drafts} onChange={change} parts={catalog.usableBy(product.id)} details={details} sizes={product.sizes} onNewPart={setNewPartFor} />
+            <PartLinesEditor
+              drafts={drafts}
+              onChange={change}
+              parts={catalog.usableBy(product.id)}
+              details={details}
+              sizes={productSizes}
+              products={book.products.filter((p) => p.id !== product.id)}
+              onNewPart={setNewPartFor}
+            />
+            {twice.length ? <p className="mt-2 text-xs text-warning-700 dark:text-warning-500">Counted twice: {twice.join("; ")}. Remove its own line.</p> : null}
+            {addsOnFixed ? (
+              <p className="mt-2 text-xs text-warning-700 dark:text-warning-500">
+                This product has its own catalog price, which is what invoices use, so an added product&apos;s price isn&apos;t added to it. Give it prices per sheet instead, or put that price in the catalog.
+              </p>
+            ) : null}
           </section>
         </div>
 
@@ -137,10 +156,10 @@ export function SetupEditor({
             catalog={catalog}
             lines={lines}
             details={details}
-            sizes={product.sizes}
-            sizeOptions={rates.map((r) => r.size)}
+            variants={product.sizes}
+            sizeOptions={rates.length ? rates.map((r) => r.size) : productSizes}
             evaluate={(order) => catalog.evaluate(lines, order, product.id)}
-            quote={(order) => pricing.quote(order, listPrice(order.variantId))}
+            quote={(order) => setup.quote(order, listPrice(order.variantId))}
           />
           {error ? <p className="text-sm text-error-600 dark:text-error-400">{error}</p> : null}
           <Button type="button" className="w-full" onClick={save} loading={pending} disabled={pending}>
@@ -154,10 +173,11 @@ export function SetupEditor({
         open={newPartFor !== null}
         onClose={() => setNewPartFor(null)}
         ownerProductId={product.id}
-        ownerName={product.name}
         products={products}
         sizes={sizes}
-        onAdded={(id) => change(drafts.map((d) => (d.key === newPartFor ? { ...d, partId: id } : d)))}
+        parts={book.parts}
+        details={details}
+        onAdded={(ids) => change(drafts.map((d) => (d.key === newPartFor ? { ...d, partId: ids[0] ?? "", byOrderSize: ids.length > 1 } : d)))}
       />
       <CopySheet key={String(copying)} open={copying} onClose={() => setCopying(false)} productId={product.id} products={products} />
     </div>

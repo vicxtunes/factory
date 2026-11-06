@@ -33,6 +33,7 @@ import {
 } from "./icons";
 import { ChatIcon } from "@repo/ui/chat/icons";
 import { useCloseOnBack } from "@repo/ui/navigation/back";
+import { forgetTransfers } from "./transfers/store";
 
 // Mobile "home bar" shared by every signed-in surface (client portal, staff
 // dashboard, factory floor, graphics). A flat, full-width bar pinned to the
@@ -263,6 +264,7 @@ export function HomeBar({
               onClick={() =>
                 start(async () => {
                   await logout();
+                  await forgetTransfers();
                   if (afterLogout) router.replace(afterLogout);
                   router.refresh();
                 })

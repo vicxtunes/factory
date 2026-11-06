@@ -5,15 +5,26 @@
 
 import type { ReactNode } from "react";
 
-import { useCurrencySymbol } from "@repo/lib/currency/CurrencySymbolProvider";
+import { useDisplayCurrency, useFormatMoney } from "@repo/lib/currency/CurrencySymbolProvider";
 import { formatMoney } from "@repo/lib/currency/format";
 import { ENTRY_LABELS, METHOD_LABELS, STATUS_LABELS } from "@repo/lib/wallet/policy";
 import type { PaymentMethod, WalletEntry, WalletPayment } from "@repo/lib/wallet/types";
 
-/** Formats shillings with the shop's currency symbol. */
+/** Formats a UGX amount in the currency the client sees the app in (UGX for staff). */
 export function useMoney(): (amount: number) => string {
-  const symbol = useCurrencySymbol();
-  return (amount) => formatMoney(amount, symbol);
+  const formatAmount = useFormatMoney();
+  return (amount) => formatAmount(amount);
+}
+
+/**
+ * An amount mobile money actually charges: always UGX (MTN and Airtel collect
+ * shillings), with the client's currency beside it when that's another one:
+ * "UGX 265,000 (≈ KES 9,464)".
+ */
+export function useChargeMoney(): (amount: number) => string {
+  const currency = useDisplayCurrency();
+  const formatAmount = useFormatMoney();
+  return (amount) => (currency.code === "UGX" ? formatMoney(amount) : `${formatMoney(amount)} (≈ ${formatAmount(amount)})`);
 }
 
 export function formatWhen(iso: string): string {

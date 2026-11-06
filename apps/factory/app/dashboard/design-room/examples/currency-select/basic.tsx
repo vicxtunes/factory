@@ -6,8 +6,8 @@ import { CurrencySelect } from "@repo/ui/CurrencySelect";
 import type { Currency } from "@repo/lib/types";
 
 const CURRENCIES: Currency[] = [
-  { id: "1", code: "UGX", label: "Uganda shilling", symbol: "USh", rate: 1, is_base: true, active: true, sort_order: 0 },
-  { id: "2", code: "USD", label: "US dollar", symbol: "$", rate: 0.00027, is_base: false, active: true, sort_order: 1 },
+  { id: "1", code: "UGX", label: "Uganda shilling", symbol: "UGX", rate: 1, decimals: 0, is_base: true, active: true, sort_order: 0 },
+  { id: "2", code: "USD", label: "US dollar", symbol: "USD", rate: 0.00027, decimals: 2, is_base: false, active: true, sort_order: 1 },
 ];
 
 export default function CurrencySelectBasic() {

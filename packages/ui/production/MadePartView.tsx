@@ -111,6 +111,7 @@ export function MadePartView({
             parts={usable}
             details={details}
             onNewPart={setNewPartFor}
+            sizes={sizes}
           />
         </section>
         <aside className="space-y-3 @5xl:sticky @5xl:top-20 @5xl:self-start">
@@ -155,7 +156,9 @@ export function MadePartView({
         ownerName={part.ownerProductId ? name(part.ownerProductId) : undefined}
         products={products}
         sizes={sizes}
-        onAdded={(id) => setDrafts(drafts.map((d) => (d.key === newPartFor ? { ...d, partId: id } : d)))}
+        parts={book.parts}
+        details={details}
+        onAdded={(ids) => setDrafts(drafts.map((d) => (d.key === newPartFor ? { ...d, partId: ids[0] ?? "", byOrderSize: ids.length > 1 } : d)))}
       />
     </div>
   );

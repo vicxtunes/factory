@@ -6,7 +6,7 @@
 // (./InvoicePdf.tsx) and download the same file. jspdf is loaded only when
 // needed, like the other exports (packages/lib/export/tableExport.ts).
 
-import { formatMoney } from "@repo/lib/currency/format";
+import { formatIn } from "@repo/lib/currency/format";
 import { STATUS_LABELS } from "@repo/lib/invoices/policy";
 import type { InvoiceView, ReceiptView } from "@repo/lib/invoices/types";
 import { PAYMENT_METHODS } from "@repo/lib/payments/details";
@@ -38,7 +38,7 @@ async function loadImage(url: string): Promise<Uint8Array | null> {
 }
 
 /** The invoice (or pro forma) as an A4 PDF file. */
-export async function invoicePdf(invoice: InvoiceView, currencySymbol: string): Promise<Blob> {
+export async function invoicePdf(invoice: InvoiceView): Promise<Blob> {
   const { issuer } = invoice;
   const [{ default: jsPDF }, { default: autoTable }, logo, signature] = await Promise.all([
     import("jspdf"),
@@ -48,7 +48,8 @@ export async function invoicePdf(invoice: InvoiceView, currencySymbol: string): 
     issuer.signatureUrl ? loadImage(issuer.signatureUrl) : null,
   ]);
   const doc = new jsPDF({ unit: "mm", format: "a4" });
-  const money = (n: number) => safe(formatMoney(n, currencySymbol));
+  // In the invoice's own currency (its rate frozen when it was issued); amounts are stored in UGX.
+  const money = (n: number) => safe(formatIn(n, invoice.currency));
   /** Draws an image as large as fits `w` × `h` (keeping its shape), against the right edge `x` + `w` when `right`. */
   const fit = (image: Uint8Array, x: number, y: number, w: number, h: number, right = false) => {
     const { width, height } = doc.getImageProperties(image);
@@ -335,11 +336,11 @@ export async function invoicePdf(invoice: InvoiceView, currencySymbol: string): 
 }
 
 /** A payment's receipt as an A4 PDF file. */
-export async function receiptPdf(receipt: ReceiptView, currencySymbol: string): Promise<Blob> {
+export async function receiptPdf(receipt: ReceiptView): Promise<Blob> {
   const { issuer } = receipt;
   const [{ default: jsPDF }, logo] = await Promise.all([import("jspdf"), loadImage(issuer.logoUrl ?? "/icon-192.png")]);
   const doc = new jsPDF({ unit: "mm", format: "a4" });
-  const money = (n: number) => safe(formatMoney(n, currencySymbol));
+  const money = (n: number) => safe(formatIn(n, receipt.currency));
 
   if (logo) {
     const { width, height } = doc.getImageProperties(logo);

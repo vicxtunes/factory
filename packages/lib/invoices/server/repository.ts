@@ -16,9 +16,12 @@ export interface InvoiceRow {
   due_date: string | null;
   notes: string | null;
   created_by_name: string;
+  /** The currency it reads in, and units of it per 1 UGX on the day, frozen; amounts are stored in UGX. */
+  currency: string;
+  rate: number | string;
 }
 
-const COLUMNS = "id, order_id, invoice_no, share_token, issued_at, due_date, notes, created_by_name";
+const COLUMNS = "id, order_id, invoice_no, share_token, issued_at, due_date, notes, created_by_name, currency, rate";
 
 function fail(error: { message: string; code?: string }): never {
   throw new Error(error.message);
@@ -117,6 +120,7 @@ export async function insert(input: {
   dueDate: string | null;
   notes: string | null;
   createdBy: { id: string; name: string };
+  currency: { code: string; rate: number };
 }): Promise<InvoiceRow> {
   const { data, error } = await createAdminClient()
     .from("invoices")
@@ -128,6 +132,8 @@ export async function insert(input: {
       notes: input.notes,
       created_by_id: input.createdBy.id,
       created_by_name: input.createdBy.name,
+      currency: input.currency.code,
+      rate: input.currency.rate,
     })
     .select(COLUMNS)
     .single<InvoiceRow>();

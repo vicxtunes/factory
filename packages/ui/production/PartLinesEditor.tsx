@@ -1,20 +1,22 @@
 "use client";
 
-// The lines of a product's setup or of a made part, and a panel to try an
-// order out. A line is a part × how many (or × a number on the order, like
-// NOS), optionally for one size and only when the order chose something
-// (Lamination = Matt); "the part the order chose" in a detail (Packaging); or
-// an other cost (a fixed amount). Each line is a card on a phone and a row of
-// fields from the container's 3xl. Controlled: the screen holds the drafts and
-// saves them (SetupEditor, MadePartView).
+// The lines of a product's setup or of a made part, set up the owner's way,
+// and a panel to try an order out. A line is a part × how many (or × a number
+// on the order, like NOS), a part in the order's size, an attached catalog
+// product (a box) whose price can add to the client's, or an other cost. Any
+// line can be for some sizes only (the sizes pop-up) and only when the order
+// chose something (Packaging = Box A). Each line is a card on a phone and a
+// row of fields from the container's 3xl. Controlled: the screen holds the
+// drafts and saves them (SetupEditor, MadePartView, the part form).
 
 import { useState } from "react";
 
 import { Button } from "@repo/ui/Button";
 import { Field, Select, TextInput } from "@repo/ui/Field";
+import { Popover } from "@repo/ui/Popover";
 import { useCurrencySymbol } from "@repo/lib/currency/CurrencySymbolProvider";
 import { formatMoney } from "@repo/lib/currency/format";
-import { formatQty, sheetsDetail, type Evaluation, type OrderChoice, type PartLine, type PartRow, type PartsCatalog } from "@repo/lib/production/core";
+import { formatQty, partLabel, sheetsDetail, type CatalogProduct, type Evaluation, type OrderChoice, type PartLine, type PartRow, type PartsCatalog } from "@repo/lib/production/core";
 
 import { parseNumber } from "./sheets";
 
@@ -27,18 +29,22 @@ export interface DetailOption {
 
 export interface LineDraft {
   key: number;
-  kind: "part" | "chosen" | "other";
-  variantId: string;
+  kind: "part" | "product" | "other";
   partId: string;
   /** Use the part of partId's name in the size the order chose. */
   byOrderSize: boolean;
-  chosenDetail: string;
+  productPartId: string;
+  addsPrice: boolean;
+  /** Only for these sizes; empty: every size. */
+  sizes: string[];
   qty: string;
   perDetail: string;
   whenDetail: string;
   whenValue: string;
   label: string;
   amount: string;
+  /** An older line just for one size variant; kept as it is. */
+  variantId: string;
 }
 
 let nextKey = 1;
@@ -46,38 +52,61 @@ let nextKey = 1;
 export function toDraft(l: PartLine): LineDraft {
   return {
     key: nextKey++,
-    kind: l.label !== null ? "other" : l.chosenDetail ? "chosen" : "part",
-    variantId: l.variantId ?? "",
+    kind: l.label !== null ? "other" : l.productPartId ? "product" : "part",
     partId: l.partId ?? "",
     byOrderSize: l.byOrderSize,
-    chosenDetail: l.chosenDetail ?? "",
+    productPartId: l.productPartId ?? "",
+    addsPrice: l.addsPrice,
+    sizes: l.sizes ?? [],
     qty: l.qty !== null ? String(l.qty) : "",
     perDetail: l.perDetail ?? "",
     whenDetail: l.whenDetail ?? "",
     whenValue: l.whenValue ?? "",
     label: l.label ?? "",
     amount: l.amount !== null ? String(l.amount) : "",
+    variantId: l.variantId ?? "",
   };
 }
 
 export function newDraft(kind: LineDraft["kind"], over: Partial<LineDraft> = {}): LineDraft {
-  return { key: nextKey++, kind, variantId: "", partId: "", byOrderSize: false, chosenDetail: "", qty: kind === "other" ? "" : "1", perDetail: "", whenDetail: "", whenValue: "", label: "", amount: "", ...over };
+  return {
+    key: nextKey++,
+    kind,
+    partId: "",
+    byOrderSize: false,
+    productPartId: "",
+    addsPrice: kind === "product",
+    sizes: [],
+    qty: kind === "other" ? "" : "1",
+    perDetail: "",
+    whenDetail: "",
+    whenValue: "",
+    label: "",
+    amount: "",
+    variantId: "",
+    ...over,
+  };
 }
 
 /** A draft as a line, for trying out and saving (numbers as typed; the server checks them again). */
 export function toLine(d: LineDraft): PartLine {
-  const when = d.whenDetail ? { whenDetail: d.whenDetail, whenValue: d.whenValue } : { whenDetail: null, whenValue: null };
+  const common = {
+    variantId: d.variantId || null,
+    sizes: d.sizes.length ? d.sizes : null,
+    whenDetail: d.whenDetail || null,
+    whenValue: d.whenDetail ? d.whenValue : null,
+  };
   if (d.kind === "other") {
-    return { variantId: d.variantId || null, partId: null, byOrderSize: false, chosenDetail: null, qty: null, perDetail: null, ...when, label: d.label.trim(), amount: Number.isFinite(parseNumber(d.amount)) ? parseNumber(d.amount) : null };
+    return { ...common, partId: null, byOrderSize: false, productPartId: null, addsPrice: false, qty: null, perDetail: null, label: d.label.trim(), amount: Number.isFinite(parseNumber(d.amount)) ? parseNumber(d.amount) : null };
   }
   return {
-    variantId: d.variantId || null,
+    ...common,
     partId: d.kind === "part" ? d.partId || null : null,
     byOrderSize: d.kind === "part" && d.byOrderSize,
-    chosenDetail: d.kind === "chosen" ? d.chosenDetail || null : null,
+    productPartId: d.kind === "product" ? d.productPartId || null : null,
+    addsPrice: d.kind === "product" && d.addsPrice,
     qty: parseNumber(d.qty) > 0 ? parseNumber(d.qty) : null,
     perDetail: d.perDetail || null,
-    ...when,
     label: null,
     amount: null,
   };
@@ -91,7 +120,7 @@ export function draftsProblem(drafts: LineDraft[]): string | null {
       if (!(parseNumber(d.amount) >= 0) || !Number.isInteger(parseNumber(d.amount))) return `Enter what ${d.label.trim()} costs, in whole shillings.`;
     } else {
       if (d.kind === "part" && !d.partId) return "Choose a part on each line, or remove the line.";
-      if (d.kind === "chosen" && !d.chosenDetail) return "Choose the detail a part is chosen by.";
+      if (d.kind === "product" && !d.productPartId) return "Choose the product on each line, or remove the line.";
       if (!(parseNumber(d.qty) > 0)) return "Enter how many each line takes.";
     }
     if (d.whenDetail && !d.whenValue.trim()) return `Say which ${d.whenDetail} the line is for.`;
@@ -103,12 +132,41 @@ const NEW_PART = "__new";
 /** A part select's value for "this part's name, in the order's size". */
 const BY_SIZE = "size:";
 
+/** "All sizes" or the ones ticked; a pop-up to tick them. */
+function SizesPicker({ sizes, value, onChange }: { sizes: string[]; value: string[]; onChange: (sizes: string[]) => void }) {
+  const label = value.length === 0 ? "All sizes" : value.length <= 2 ? value.join(", ") : `${value.length} sizes`;
+  return (
+    <Popover label={<span className="truncate">{label}</span>} narrow ariaLabel="Which sizes this line is for">
+      <fieldset className="space-y-1">
+        <legend className="mb-1 text-xs text-muted">Only for these sizes (none ticked: every size)</legend>
+        {sizes.map((s) => (
+          <label key={s} className="flex min-h-11 items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              className="size-4 accent-brand-500"
+              checked={value.some((v) => v.toLowerCase() === s.toLowerCase())}
+              onChange={(e) => onChange(e.target.checked ? [...value, s] : value.filter((v) => v.toLowerCase() !== s.toLowerCase()))}
+            />
+            {s}
+          </label>
+        ))}
+        {value.length ? (
+          <button type="button" className="mt-1 text-xs font-medium text-brand-600 hover:underline" onClick={() => onChange([])}>
+            Every size
+          </button>
+        ) : null}
+      </fieldset>
+    </Popover>
+  );
+}
+
 export function PartLinesEditor({
   drafts,
   onChange,
   parts,
   details,
   sizes = [],
+  products = [],
   onNewPart,
 }: {
   drafts: LineDraft[];
@@ -116,11 +174,14 @@ export function PartLinesEditor({
   /** The parts these lines may use: shared ones and the owner's own. */
   parts: PartRow[];
   details: DetailOption[];
-  /** A product's sizes (lines can be for one); none for a made part. */
-  sizes?: { id: string; name: string }[];
+  /** The sizes an order can choose (12x12, A4…), for the sizes pop-up. */
+  sizes?: string[];
+  /** Catalog products that can be attached (a product's setup only; none for a made part). */
+  products?: CatalogProduct[];
   /** "New part…" on a line: add one, then the line uses it. */
   onNewPart?: (lineKey: number) => void;
 }) {
+  const symbol = useCurrencySymbol();
   const numbers = details.filter((d) => d.type === "number");
   const choices = details.filter((d) => d.type !== "number");
   const own = parts.filter((p) => p.ownerProductId !== null);
@@ -141,8 +202,7 @@ export function PartLinesEditor({
 
   const option = (p: PartRow) => (
     <option key={p.id} value={p.id}>
-      {p.name}
-      {p.size ? ` ${p.size}` : ""} ({p.unit}){p.made ? " · made" : ""}
+      {partLabel(p)} ({p.unit}){p.made ? " · made" : ""}
       {p.active ? "" : " · not in use"}
     </option>
   );
@@ -161,13 +221,14 @@ export function PartLinesEditor({
 
   return (
     <div className="@container space-y-3">
-      {drafts.length === 0 ? <p className="rounded-2xl border border-dashed border-border p-4 text-sm text-muted">No lines yet. Add the parts it takes.</p> : null}
+      {drafts.length === 0 ? <p className="rounded-2xl border border-dashed border-border p-4 text-sm text-muted">No lines yet. Add what it&apos;s made of.</p> : null}
       <ul className="space-y-2">
         {drafts.map((d, i) => {
           const values = choices.find((c) => c.name === d.whenDetail)?.options ?? [];
-          const unit = parts.find((p) => p.id === d.partId)?.unit;
+          const unit = d.kind === "part" ? parts.find((p) => p.id === d.partId)?.unit : undefined;
+          const product = d.kind === "product" ? products.find((p) => p.id === d.productPartId) : undefined;
           return (
-            <li key={d.key} className="grid grid-cols-2 gap-2 rounded-xl border border-border bg-surface p-3 @3xl:grid-cols-[minmax(0,2fr)_6rem_9rem_repeat(2,minmax(0,1fr))_auto] @3xl:items-end">
+            <li key={d.key} className="grid grid-cols-2 gap-2 rounded-xl border border-border bg-surface p-3 @3xl:grid-cols-[minmax(0,2fr)_6rem_9rem_9rem_minmax(0,1.4fr)_auto] @3xl:items-end">
               <div className="col-span-2 @3xl:col-span-1">
                 {d.kind === "part" ? (
                   <Field label="Part">
@@ -187,13 +248,14 @@ export function PartLinesEditor({
                       {onNewPart ? <option value={NEW_PART}>+ New part…</option> : null}
                     </Select>
                   </Field>
-                ) : d.kind === "chosen" ? (
-                  <Field label="Part">
-                    <Select value={d.chosenDetail} onChange={(e) => set(d.key, { chosenDetail: e.target.value })}>
-                      <option value="">Chosen in…</option>
-                      {choices.map((c) => (
-                        <option key={c.name} value={c.name}>
-                          The {c.name.toLowerCase()} the order chose
+                ) : d.kind === "product" ? (
+                  <Field label="Product">
+                    <Select value={d.productPartId} onChange={(e) => set(d.key, { productPartId: e.target.value })}>
+                      <option value="">Choose…</option>
+                      {products.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                          {p.price !== null ? ` · ${formatMoney(p.price, symbol)}` : ""}
                         </option>
                       ))}
                     </Select>
@@ -228,20 +290,10 @@ export function PartLinesEditor({
                   </Select>
                 </Field>
               )}
-              {sizes.length ? (
-                <Field label="Size">
-                  <Select value={d.variantId} onChange={(e) => set(d.key, { variantId: e.target.value })}>
-                    <option value="">Every size</option>
-                    {sizes.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.name}
-                      </option>
-                    ))}
-                  </Select>
-                </Field>
-              ) : (
-                <span className="hidden @3xl:block" />
-              )}
+              <div>
+                <span className="mb-1 block text-xs font-medium text-muted">Sizes</span>
+                {sizes.length ? <SizesPicker sizes={sizes} value={d.sizes} onChange={(next) => set(d.key, { sizes: next })} /> : <p className="min-h-11 py-3 text-sm text-muted">All sizes</p>}
+              </div>
               <Field label="Only when">
                 <div className="flex gap-1">
                   <Select aria-label="Only when the order's" value={d.whenDetail} onChange={(e) => set(d.key, { whenDetail: e.target.value, whenValue: "" })}>
@@ -270,7 +322,7 @@ export function PartLinesEditor({
                   ) : null}
                 </div>
               </Field>
-              <div className="col-span-2 flex justify-end gap-1 @3xl:col-span-1">
+              <div className="col-span-2 flex items-center justify-end gap-1 @3xl:col-span-1">
                 <IconButton label="Move up" onClick={() => move(d.key, -1)} disabled={i === 0}>
                   ↑
                 </IconButton>
@@ -281,6 +333,14 @@ export function PartLinesEditor({
                   ✕
                 </IconButton>
               </div>
+              {d.kind === "product" ? (
+                <label className="col-span-2 flex min-h-11 flex-wrap items-center gap-x-2 text-sm @3xl:col-span-6">
+                  <input type="checkbox" className="size-4 accent-brand-500" checked={d.addsPrice} onChange={(e) => set(d.key, { addsPrice: e.target.checked })} />
+                  Add its price to what the client pays
+                  {product ? <span className="text-muted">({product.price !== null ? formatMoney(product.price, symbol) : "no catalog price yet"} each)</span> : null}
+                  <span className="text-muted">· unticked: included, its cost only</span>
+                </label>
+              ) : null}
             </li>
           );
         })}
@@ -289,9 +349,9 @@ export function PartLinesEditor({
         <Button type="button" variant="secondary" size="sm" onClick={() => onChange([...drafts, newDraft("part")])}>
           + Part
         </Button>
-        {choices.length ? (
-          <Button type="button" variant="secondary" size="sm" onClick={() => onChange([...drafts, newDraft("chosen", { chosenDetail: choices.find((c) => /^packag/i.test(c.name))?.name ?? "" })])}>
-            + Part the order chooses
+        {products.length ? (
+          <Button type="button" variant="secondary" size="sm" onClick={() => onChange([...drafts, newDraft("product")])}>
+            + Product
           </Button>
         ) : null}
         <Button type="button" variant="secondary" size="sm" onClick={() => onChange([...drafts, newDraft("other")])}>
@@ -320,14 +380,13 @@ function IconButton({ label, onClick, disabled, danger, children }: { label: str
 /**
  * Try an order: its size and the details the lines depend on, and what one
  * comes to: each line's cost, the total cost, and (for a product) the client
- * price from the catalog and the profit. `evaluate` works it out from the
- * lines on screen.
+ * price from the catalog, any attached products' prices and the profit.
  */
 export function TryOrder({
   catalog,
   lines,
   details,
-  sizes = [],
+  variants = [],
   sizeOptions = [],
   evaluate,
   quote,
@@ -336,46 +395,41 @@ export function TryOrder({
   lines: PartLine[];
   details: DetailOption[];
   /** A product's size variants. */
-  sizes?: { id: string; name: string }[];
-  /** Sizes chosen on the order form (12x12…), e.g. the sizes priced per sheet. */
+  variants?: { id: string; name: string }[];
+  /** Sizes chosen on the order form (12x12…). */
   sizeOptions?: string[];
   evaluate: (order: OrderChoice) => Evaluation;
-  /** The client price for an order, from the catalog; omitted for a made part. */
-  quote?: (order: OrderChoice) => { price: number | null; missing: string[] };
+  /** The client price for an order; omitted for a made part. */
+  quote?: (order: OrderChoice) => { price: number | null; missing: string[]; added: Evaluation["addedPrices"] };
 }) {
   const symbol = useCurrencySymbol();
   const money = (n: number) => formatMoney(Math.round(n), symbol);
   const used = catalog.detailsUsed(lines);
-  const sizeChoices = [...new Set([...sizeOptions, ...(details.find((d) => d.name.trim().toLowerCase() === "size")?.options ?? []), ...used.sizes])];
-  const [variantId, setVariantId] = useState(sizes[0]?.id ?? "");
+  const sizeChoices = [...new Set([...sizeOptions, ...used.sizes])];
+  const [variantId, setVariantId] = useState(variants[0]?.id ?? "");
   const [values, setValues] = useState<Record<string, string>>({});
   const optionsOf = (name: string, fallback: string[]) => {
     const found = details.find((d) => d.name.toLowerCase() === name.toLowerCase())?.options ?? [];
     return found.length ? found : fallback;
   };
-  const chosenOptions = (name: string) => {
-    const found = optionsOf(name, []);
-    return found.length ? found : catalog.book.packaging.map((p) => p.name);
-  };
   const valueOf = (name: string, options: string[]) => values[name] ?? (options[0] ?? "");
   // A product priced per sheet needs its count even when no line is × it.
-  const sheets = sheetsDetail(details.map((d) => d.name));
-  const numbers = [...new Set([...used.numbers, ...(quote && sizeOptions.length && sheets ? [sheets] : [])])];
-  const chosenDetails = [...new Set([...used.chosen, ...(quote && sizeOptions.length ? details.filter((d) => /^packag/i.test(d.name.trim())).map((d) => d.name) : [])])];
+  const sheets = quote ? sheetsDetail(details.map((d) => d.name)) : null;
+  const numbers = [...new Set([...used.numbers, ...(sheets ? [sheets] : [])])];
+  const choices = used.choices.filter((c) => c.name.trim().toLowerCase() !== "size");
   const order: OrderChoice = {
     variantId: variantId || null,
-    variantName: sizes.find((s) => s.id === variantId)?.name ?? null,
+    variantName: variants.find((s) => s.id === variantId)?.name ?? null,
     details: Object.fromEntries([
-      ...(sizeChoices.length ? [["Size", valueOf("Size", sizeChoices)]] : []),
+      ...(variants.length || !sizeChoices.length ? [] : [["Size", valueOf("Size", sizeChoices)]]),
       ...numbers.map((n) => [n, values[n] ?? "10"]),
-      ...used.choices.filter((c) => c.name.trim().toLowerCase() !== "size").map((c) => [c.name, valueOf(c.name, optionsOf(c.name, c.values))]),
-      ...chosenDetails.map((c) => [c, valueOf(c, chosenOptions(c))]),
+      ...choices.map((c) => [c.name, valueOf(c.name, optionsOf(c.name, c.values))]),
     ]),
   };
   const e = evaluate(order);
   const q = quote?.(order);
 
-  const select = (name: string, options: string[], none = true) => (
+  const select = (name: string, options: string[], none: boolean) => (
     <Field key={name} label={name}>
       <Select value={valueOf(name, options)} onChange={(ev) => setValues((v) => ({ ...v, [name]: ev.target.value }))}>
         {options.map((o) => (
@@ -392,10 +446,10 @@ export function TryOrder({
     <section className="space-y-3 rounded-2xl border border-border bg-surface p-4 shadow-theme-xs">
       <h3 className="font-semibold">Try an order</h3>
       <div className="grid grid-cols-2 gap-2">
-        {sizes.length ? (
+        {variants.length ? (
           <Field label="Size">
             <Select value={variantId} onChange={(ev) => setVariantId(ev.target.value)}>
-              {sizes.map((s) => (
+              {variants.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.name}
                 </option>
@@ -410,8 +464,7 @@ export function TryOrder({
             <TextInput inputMode="numeric" value={values[n] ?? "10"} onChange={(ev) => setValues((v) => ({ ...v, [n]: ev.target.value }))} />
           </Field>
         ))}
-        {used.choices.filter((c) => c.name.trim().toLowerCase() !== "size").map((c) => select(c.name, optionsOf(c.name, c.values)))}
-        {chosenDetails.map((c) => select(c, chosenOptions(c)))}
+        {choices.map((c) => select(c.name, optionsOf(c.name, c.values), true))}
       </div>
 
       {e.lines.length ? (
@@ -443,9 +496,15 @@ export function TryOrder({
           <dt className="text-muted">Costs us</dt>
           <dd className="tnum">{money(e.cost)}</dd>
         </div>
+        {q?.added.map((a, i) => (
+          <div key={i} className="flex justify-between gap-3">
+            <dt className="text-muted">+ {a.name} (adds its price)</dt>
+            <dd className="tnum">{a.price === null ? "no price" : money(a.price)}</dd>
+          </div>
+        ))}
         {q ? (
           <div className="flex justify-between gap-3">
-            <dt className="text-muted">Client pays (catalog)</dt>
+            <dt className="text-muted">Client pays</dt>
             <dd className="tnum">{q.price === null ? "priced on the call" : money(q.price)}</dd>
           </div>
         ) : null}
@@ -461,11 +520,9 @@ export function TryOrder({
       {q && q.price === null && q.missing.length ? <p className="text-xs text-warning-700 dark:text-warning-500">No price yet: needs {q.missing.join(", ")}.</p> : null}
       {e.missing.length ? <p className="text-xs text-warning-700 dark:text-warning-500">Cost is short: no {e.missing.join(", no ")}.</p> : null}
       {e.unpriced.length ? (
-        <p className="text-xs text-warning-700 dark:text-warning-500">
-          No price paid yet for {e.unpriced.join(", ")}: record a purchase, so the cost isn&apos;t short.
-        </p>
+        <p className="text-xs text-warning-700 dark:text-warning-500">No price yet for {e.unpriced.join(", ")}: set it on the part, or record a purchase.</p>
       ) : null}
-      <p className="text-xs text-muted">Costs are at the latest price paid for each bought part.</p>
+      <p className="text-xs text-muted">Costs are at each part&apos;s price (the latest paid, or set by you).</p>
     </section>
   );
 }

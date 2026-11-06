@@ -5,8 +5,7 @@ import { UrgencyBadge } from "@repo/ui/UrgencyBadge";
 import { statusCardClasses } from "@repo/ui/statusColors";
 import { CLIENT_STATUS_LABELS, clientStatus, clientStatusColorKey } from "@repo/lib/orders/clientStatus";
 import type { OrderItemWithOrder } from "@repo/lib/types";
-import { useCurrencySymbol } from "@repo/lib/currency/CurrencySymbolProvider";
-import { formatMoney } from "@repo/lib/currency/format";
+import { useFormatMoney } from "@repo/lib/currency/CurrencySymbolProvider";
 import { orderEstimate } from "@repo/lib/orders/pricing";
 
 // Same visual card as app/dashboard/order-card.tsx, minus the NoteBadge and
@@ -44,7 +43,7 @@ const APPROVAL_BADGE: Record<string, { label: string; className: string }> = {
  * Same rule as the pro forma invoice (packages/lib/orders/pricing.ts orderEstimate).
  */
 function CardPrice({ orderItems, confirmed }: { orderItems: OrderItemWithOrder[]; confirmed: boolean }) {
-  const symbol = useCurrencySymbol();
+  const formatAmount = useFormatMoney();
   const { amount, complete } = orderEstimate(orderItems);
   const label = confirmed ? (orderItems.length > 1 ? "Order total" : "Total") : "Estimate";
   return (
@@ -54,7 +53,7 @@ function CardPrice({ orderItems, confirmed }: { orderItems: OrderItemWithOrder[]
         <span className="text-xs font-medium">Price to be confirmed</span>
       ) : (
         <span className="text-sm font-bold text-foreground tabular-nums">
-          {formatMoney(amount, symbol)}
+          {formatAmount(amount)}
           {complete ? null : <span className="block text-[10px] font-normal text-muted">+ photo books</span>}
         </span>
       )}

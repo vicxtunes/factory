@@ -20,12 +20,12 @@ test("an order's total is shared over its lines by their prices, adding up exact
 const part = (id: string, unitCost: number) => ({
   id, name: id, unit: "pc", kind: "material" as const, made: false, size: null, unitCost, productId: null, productName: null, productPrice: null, ownerProductId: null, active: true,
 });
-const line = (partId: string, perDetail: string | null = null) => ({ variantId: null, partId, byOrderSize: false, chosenDetail: null, qty: 1, perDetail, whenDetail: null, whenValue: null, label: null, amount: null });
+const line = (partId: string, perDetail: string | null = null) => ({ variantId: null, partId, byOrderSize: false, productPartId: null, addsPrice: false, sizes: null, qty: 1, perDetail, whenDetail: null, whenValue: null, label: null, amount: null });
 const parts = new PartsCatalog({
   parts: [part("paper", 120), part("box", 2_000)],
   partLines: new Map(),
   productLines: new Map([["book", [line("paper", "Pages"), line("box")]]]),
-  sheetPrices: new Map(), packaging: [],
+  sheetPrices: new Map(), products: [],
 });
 /** As the service does it: a set-up product's estimate, else unknown. */
 const estimate = (i: SoldItem) => {
