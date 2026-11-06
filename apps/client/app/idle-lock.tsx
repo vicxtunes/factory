@@ -8,6 +8,7 @@ import { Button } from "@repo/ui/Button";
 
 import { logoutClient } from "./actions";
 import { isSignedIn, lockIfRemembered } from "./auth-actions";
+import { forgetTransfers } from "@repo/ui/transfers/store";
 
 // Like an OS: left untouched for IDLE_MS, the app locks — it signs this
 // browser out and opens on the lock screen, where the password alone gets
@@ -102,6 +103,7 @@ export function IdleLock() {
             onClick={() =>
               startLeaving(async () => {
                 await logoutClient();
+                await forgetTransfers();
                 setRemind(false);
                 router.replace("/");
                 router.refresh();

@@ -16,7 +16,9 @@ import {
   recordOrderPayment,
 } from "@repo/lib/wallet/orders";
 import type { MoneySource, OrderPaymentExcessDisposition, PaymentMethod } from "@repo/lib/wallet/types";
-import { formatMoney } from "@repo/lib/currency/format";
+import { BASE_CURRENCY, formatIn, type DisplayCurrency } from "@repo/lib/currency/format";
+import { currencyByCode } from "@repo/lib/currency/server";
+import { fetchCurrencies } from "@repo/lib/queries";
 import { notifyActor } from "@repo/lib/push/send";
 
 import { MAX_NOTES_LENGTH, invoiceBalance, invoiceDiscount, invoiceNumber, invoiceStatus, isWellFormedToken } from "../policy";
@@ -102,18 +104,31 @@ function cleanLines(order: directory.InvoiceOrder, lines: { itemId: string; unit
   });
 }
 
+/** Decimal places by currency code (0 for shillings and francs, 2 for USD and EUR). */
+async function decimalsOf(code: string): Promise<number> {
+  if (code === BASE_CURRENCY.code) return 0;
+  return (await fetchCurrencies(false)).find((c) => c.code === code)?.decimals ?? 0;
+}
+
+/** An invoice's own currency, at its frozen rate. */
+async function invoiceCurrency(invoice: Pick<repo.InvoiceRow, "currency" | "rate">): Promise<DisplayCurrency> {
+  return { code: invoice.currency, rate: Number(invoice.rate), decimals: await decimalsOf(invoice.currency) };
+}
+
 async function buildView(
-  invoice: Pick<repo.InvoiceRow, "id" | "invoice_no" | "issued_at" | "due_date" | "notes">,
+  invoice: Pick<repo.InvoiceRow, "id" | "invoice_no" | "issued_at" | "due_date" | "notes" | "currency" | "rate">,
   order: directory.InvoiceOrder,
 ): Promise<InvoiceView> {
-  const [paidMap, payments, issuer] = await Promise.all([
+  const [paidMap, payments, issuer, currency] = await Promise.all([
     paidByOrders([order.id]),
     orderPaymentHistory(order.id),
     getIssuer(),
+    invoiceCurrency(invoice),
   ]);
   const paid = paidMap[order.id] ?? 0;
   const amount = order.amount ?? 0;
   return {
+    currency,
     kind: "invoice",
     complete: true,
     id: invoice.id,
@@ -180,10 +195,22 @@ export async function getById(invoiceId: string): Promise<StaffInvoiceView> {
 }
 
 /** The price editor's starting lines for an order that hasn't been invoiced yet. */
-export async function draft(orderId: string): Promise<{ lines: DraftLine[]; currentAmount: number | null }> {
+export async function draft(orderId: string): Promise<InvoiceDraft> {
   const order = await directory.loadOrder(orderId);
   if (!order) throw new InvoiceError("Order not found.");
-  return { lines: order.draftLines, currentAmount: order.amount };
+  const currencies = (await fetchCurrencies(true)).map((c) => ({ code: c.code, label: c.label, rate: Number(c.rate), decimals: c.decimals }));
+  // The client's choice when ordering, if it's still on; else UGX.
+  const currency = currencies.some((c) => c.code === order.currency) ? order.currency : BASE_CURRENCY.code;
+  return { lines: order.draftLines, currentAmount: order.amount, currency, currencies };
+}
+
+/** What issuing an invoice starts from: its lines, the order's price, and the currencies it can be issued in. */
+export interface InvoiceDraft {
+  lines: DraftLine[];
+  currentAmount: number | null;
+  /** The order's currency (the client's choice), to issue it in unless staff change it. */
+  currency: string;
+  currencies: (DisplayCurrency & { label: string })[];
 }
 
 /**
@@ -196,6 +223,7 @@ export async function preview(
     lines: { itemId: string; unitPrice: number; unit?: string | null }[];
     dueDate?: string | null;
     notes?: string | null;
+    currency?: string | null;
   },
 ): Promise<InvoiceView> {
   if (await repo.byOrder(orderId)) throw new InvoiceError("This order already has an invoice.");
@@ -218,9 +246,12 @@ export async function preview(
     };
   });
   const amount = lines.reduce((sum, l) => sum + l.lineTotal, 0);
+  const currency = await currencyByCode(input.currency || order.currency);
   return buildView(
     {
       id: "preview",
+      currency: currency.code,
+      rate: currency.rate,
       invoice_no: invoiceNumber(order.orderNo),
       issued_at: new Date().toISOString(),
       due_date: cleanDueDate(input.dueDate),
@@ -242,6 +273,8 @@ export async function generate(
     lines: { itemId: string; unitPrice: number; unit?: string | null }[];
     dueDate?: string | null;
     notes?: string | null;
+    /** The currency to issue it in; the order's (the client's choice) when not given. */
+    currency?: string | null;
   },
 ): Promise<StaffInvoiceView> {
   const existing = await repo.byOrder(orderId);
@@ -252,6 +285,8 @@ export async function generate(
   if (order.cancelled) throw new InvoiceError("This order was cancelled.");
   if (!order.approved) throw new InvoiceError("Confirm the order's price with the client first, then invoice it.");
   const dueDate = cleanDueDate(input.dueDate);
+  // Today's rate, frozen on the invoice. A currency the boss has turned off (or an unknown one) is UGX.
+  const currency = await currencyByCode(input.currency || order.currency);
 
   await repo.setLines(orderId, cleanLines(order, input.lines));
   const invoice = await repo.insert({
@@ -261,13 +296,14 @@ export async function generate(
     dueDate,
     notes: cleanNotes(input.notes),
     createdBy: staff,
+    currency: { code: currency.code, rate: currency.rate },
   });
   const view = await staffView(invoice);
   // Best-effort (notifyActor never throws): the client hears there's something to pay.
   if (order.clientId) {
     await notifyActor(
       { type: "client", id: order.clientId },
-      { title: "New invoice", body: `Invoice ${view.invoiceNo} for ${formatMoney(view.amount)} is ready. Tap to pay.`, url: clientPath("/payment") },
+      { title: "New invoice", body: `Invoice ${view.invoiceNo} for ${formatIn(view.amount, view.currency)} is ready. Tap to pay.`, url: clientPath("/payment") },
     );
   }
   return view;
@@ -499,10 +535,11 @@ export async function proforma(orderId: string): Promise<{ view: InvoiceView } |
     complete = lines.every((l) => l.unitPrice != null);
   }
 
-  const [paidMap, issuer] = await Promise.all([paidByOrders([order.id]), getIssuer()]);
+  const [paidMap, issuer, currency] = await Promise.all([paidByOrders([order.id]), getIssuer(), currencyByCode(order.currency)]);
   const paid = paidMap[order.id] ?? 0;
   return {
     view: {
+      currency,
       kind: "proforma",
       complete,
       id: order.id,
@@ -558,14 +595,16 @@ export async function receiptByToken(token: string): Promise<ReceiptView | null>
   if (!isWellFormedToken(token)) return null;
   const { data, error } = await createAdminClient()
     .from("order_receipts")
-    .select("receipt_no, created_at, amount, method, reference, wallet_credit, order_total, balance_after, clients(name, phone), orders(order_no)")
+    .select("receipt_no, created_at, amount, method, reference, wallet_credit, order_total, balance_after, clients(name, phone), orders(order_no, invoices(currency, rate))")
     .eq("share_token", token)
     .maybeSingle();
   if (error) throw new Error(error.message);
   if (!data) return null;
   const client = data.clients as unknown as { name: string; phone: string | null };
-  const order = data.orders as unknown as { order_no: string } | null;
+  const order = data.orders as unknown as { order_no: string; invoices: { currency: string; rate: number | string }[] | { currency: string; rate: number | string } | null } | null;
+  const issued = Array.isArray(order?.invoices) ? order.invoices[0] : order?.invoices;
   return {
+    currency: issued ? await invoiceCurrency(issued) : BASE_CURRENCY,
     receiptNo: data.receipt_no,
     issuedAt: data.created_at,
     amount: Number(data.amount),

@@ -25,11 +25,15 @@ export const materialInputSchema = z.object({
   kind: z.enum(["material", "packaging"]),
   /** Made from other parts; else bought. */
   made: z.boolean().default(false),
-  /** One of the order form's sizes (12x12); none: any size. */
-  size,
-  /** Only when adding a bought part: its price per unit before any purchase is recorded. */
-  unitCost: z.number().finite().min(0).optional(),
-  /** Sold on its own as this catalog product. */
+  /** One part per size, each with its price (a made part: its own cost, or none to add up its parts); no sizes: one part without a size. */
+  sizes: z
+    .array(z.object({ size, unitCost: z.number().finite().min(0, "A price can't be negative.").nullish().transform((v) => v ?? null) }))
+    .max(30)
+    .refine((all) => new Set(all.map((s) => (s.size ?? "").toLowerCase())).size === all.length, "Each size once.")
+    .default([]),
+  /** A made part: what it's made of (each size the same). */
+  lines: z.array(z.lazy(() => partLineSchema)).max(100).default([]),
+  /** The catalog product it is (one size only). */
   productId: optionalId,
   /** Only this product uses it; null: shared. */
   ownerProductId: optionalId,
@@ -43,8 +47,10 @@ export const materialUpdateSchema = z.object({
   kind: z.enum(["material", "packaging"]),
   active: z.boolean(),
   size,
+  /** Bought: its price per unit (purchases update it too). Made: its own cost, or null to add up its parts. */
+  unitCost: z.number().finite().min(0, "A price can't be negative.").nullish().transform((v) => v ?? null),
   productId: optionalId,
-  /** Unchanged, or null to share it with every product. */
+  /** Shared (null), or only for this product. */
   ownerProductId: optionalId,
 });
 export type MaterialUpdate = z.output<typeof materialUpdateSchema>;
@@ -129,7 +135,16 @@ export const partLineSchema = z
     partId: optionalId,
     /** Use the part of partId's name in the size the order chose. */
     byOrderSize: z.boolean().default(false),
-    chosenDetail: optionalText(80),
+    /** An attached catalog product. */
+    productPartId: optionalId,
+    /** The attached product's catalog price adds to what the client pays. */
+    addsPrice: z.boolean().default(false),
+    /** Only for these sizes; none: every size. */
+    sizes: z
+      .array(text(40).min(1))
+      .max(30)
+      .nullish()
+      .transform((v) => (v && v.length ? v : null)),
     qty: quantity.positive("Enter how many it takes.").nullish().transform((v) => v ?? null),
     perDetail: optionalText(80),
     whenDetail: optionalText(80),
@@ -143,11 +158,12 @@ export const partLineSchema = z
     if (l.label !== null || l.amount !== null) {
       if (!l.label) fail("Name the cost (e.g. Binding).");
       if (l.amount === null) fail(`Enter what ${l.label ?? "the cost"} costs.`);
-      if (l.partId || l.chosenDetail || l.perDetail) fail("An other cost is a fixed amount, not a part.");
+      if (l.partId || l.productPartId || l.perDetail) fail("An other cost is a fixed amount, not a part.");
       return;
     }
-    if (!l.partId === !l.chosenDetail) fail("Choose a part on each line, or remove the line.");
+    if (!l.partId === !l.productPartId) fail("Choose a part or a product on each line, or remove the line.");
     if (l.byOrderSize && !l.partId) fail("Choose the part to use in the order's size.");
+    if (l.addsPrice && !l.productPartId) fail("Only an attached product adds its price.");
     if (l.qty === null) fail("Enter how many each line takes.");
   });
 export type PartLineInput = z.output<typeof partLineSchema>;

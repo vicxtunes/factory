@@ -11,6 +11,7 @@ import { useState, useTransition, type ReactNode } from "react";
 import { Button } from "@repo/ui/Button";
 import { Field, Select, TextArea, TextInput } from "@repo/ui/Field";
 import { FormSheet } from "@repo/ui/FormSheet";
+import { Popover } from "@repo/ui/Popover";
 import { useCurrencySymbol } from "@repo/lib/currency/CurrencySymbolProvider";
 import { formatMoney } from "@repo/lib/currency/format";
 import { addMaterial, countStock, recordLoan, recordPurchase, recordRepayment, updateMaterial } from "@repo/lib/production/actions";
@@ -32,8 +33,12 @@ import {
   type Material,
   type MaterialKind,
   type MoneyChannel,
+  type PartRow,
   type PurchasePaidFrom,
+  partLabel,
 } from "@repo/lib/production/core";
+
+import { PartLinesEditor, draftsProblem, toLine, type DetailOption, type LineDraft } from "./PartLinesEditor";
 
 /** "50,000" → 50000; "12.5" → 12.5; NaN when it isn't a number. */
 export function parseNumber(text: string): number {
@@ -81,64 +86,183 @@ function Form({ onSubmit, children }: { onSubmit: () => void; children: ReactNod
   );
 }
 
+/** Common measures for "Counted in"; anything else is typed under Other. */
+const UNITS: [string, string][] = [
+  ["pc", "piece (pc)"],
+  ["sheet", "sheet"],
+  ["m", "metre (m)"],
+  ["cm", "centimetre (cm)"],
+  ["m²", "square metre (m²)"],
+  ["roll", "roll"],
+  ["pack", "pack"],
+  ["box", "box"],
+  ["set", "set"],
+  ["l", "litre (l)"],
+  ["ml", "millilitre (ml)"],
+  ["kg", "kilogram (kg)"],
+  ["g", "gram (g)"],
+];
+const OTHER_UNIT = "__other";
+
+function UnitField({ value, onChange }: { value: string; onChange: (unit: string) => void }) {
+  const known = UNITS.some(([u]) => u === value);
+  const [other, setOther] = useState(!known && value !== "");
+  return (
+    <Field label="Counted in">
+      <div className="space-y-2">
+        <Select
+          value={other ? OTHER_UNIT : value}
+          onChange={(e) => {
+            if (e.target.value === OTHER_UNIT) {
+              setOther(true);
+              onChange("");
+            } else {
+              setOther(false);
+              onChange(e.target.value);
+            }
+          }}
+          required
+        >
+          <option value="">Choose…</option>
+          {UNITS.map(([u, label]) => (
+            <option key={u} value={u}>
+              {label}
+            </option>
+          ))}
+          <option value={OTHER_UNIT}>Other…</option>
+        </Select>
+        {other ? <TextInput value={value} onChange={(e) => onChange(e.target.value)} placeholder="e.g. tube" maxLength={20} required aria-label="Your own measure" /> : null}
+      </div>
+    </Field>
+  );
+}
+
+/** One size the part comes in, with its price as typed ("" size: no size). */
+interface SizePrice {
+  size: string;
+  price: string;
+}
+
+/** The sizes a new part comes in, each with its price, ticked in a pop-up. */
+function SizesAndPrices({ sizes, value, onChange, made, unit }: { sizes: string[]; value: SizePrice[]; onChange: (v: SizePrice[]) => void; made: boolean; unit: string }) {
+  const money = useMoney();
+  const priceLabel = made ? "Your own cost (optional)" : `Price per ${unit || "unit"}`;
+  const has = (size: string) => value.some((v) => v.size === size);
+  const toggle = (size: string, on: boolean) => {
+    const rest = value.filter((v) => v.size !== size);
+    // "No size" and sizes don't mix: a part either comes in sizes or it doesn't.
+    if (!on) return onChange(rest.length ? rest : [{ size: "", price: "" }]);
+    onChange(size === "" ? [{ size: "", price: "" }] : [...rest.filter((v) => v.size !== ""), { size, price: "" }]);
+  };
+  const setPrice = (size: string, price: string) => onChange(value.map((v) => (v.size === size ? { ...v, price } : v)));
+  const summary = value
+    .map((v) => `${v.size || "No size"}${v.price.trim() ? `: ${money(parseNumber(v.price) || 0)}` : ""}`)
+    .join(" · ");
+
+  return (
+    <div>
+      <span className="mb-1 block text-xs font-medium text-muted">Sizes and {made ? "costs" : "prices"}</span>
+      <Popover label={<span className="truncate">{summary}</span>} ariaLabel="Choose its sizes and their prices">
+        <div className="space-y-2">
+          <p className="text-xs text-muted">Tick each size it comes in and give its {made ? "own cost, or leave it empty to add up its parts" : "price"}. One part is made per size.</p>
+          {[{ size: "", label: "No size (one price)" }, ...sizes.map((s) => ({ size: s, label: s }))].map((o) => (
+            <div key={o.size || "none"} className="grid grid-cols-[1fr_8rem] items-center gap-2">
+              <label className="flex min-h-11 items-center gap-2 text-sm">
+                <input type="checkbox" className="size-4 accent-brand-500" checked={has(o.size)} onChange={(e) => toggle(o.size, e.target.checked)} />
+                {o.label}
+              </label>
+              {has(o.size) ? (
+                <TextInput
+                  inputMode="decimal"
+                  aria-label={`${priceLabel}, ${o.label}`}
+                  value={value.find((v) => v.size === o.size)?.price ?? ""}
+                  onChange={(e) => setPrice(o.size, e.target.value)}
+                  placeholder={made ? "adds up" : "0"}
+                />
+              ) : null}
+            </div>
+          ))}
+        </div>
+      </Popover>
+    </div>
+  );
+}
+
 /**
- * Add a part, or edit one (`material`). Bought parts have stock and a price
- * from purchases; made ones are made of other parts (their lines are on their
- * page). `ownerProductId`: added from a product's setup, only for it.
- * `products`: the catalog, for a part that's also sold on its own.
+ * Add a part, or edit one (`material`). A bought part has a price per unit (set
+ * here, and by each purchase); a made part is made of other parts (chosen here
+ * when it's added) and may have your own cost. Adding, a part can come in
+ * several sizes at once, each with its price. Any part is shared or only for
+ * one product, wherever it's added from.
  */
 export function MaterialSheet({
   open,
   onClose,
   material,
   ownerProductId = null,
-  ownerName,
   products = [],
   sizes = [],
+  parts = [],
+  details = [],
   onAdded,
 }: {
   open: boolean;
   onClose: () => void;
   material?: Material;
+  /** Added from a product's setup: only for it, to start with. */
   ownerProductId?: string | null;
   ownerName?: string;
+  /** The catalog: who a part can be only for, and the product a part can be. */
   products?: { id: string; name: string }[];
-  /** The order form's sizes (12x12, 10x10…), for a part made or bought in one size. */
+  /** The order form's sizes (12x12, 10x10…). */
   sizes?: string[];
-  onAdded?: (id: string) => void;
+  /** Every part, for what a new made part is made of. */
+  parts?: PartRow[];
+  details?: DetailOption[];
+  onAdded?: (ids: string[]) => void;
 }) {
-  const symbol = useCurrencySymbol();
   const [made, setMade] = useState(material?.made ?? false);
   const [name, setName] = useState(material?.name ?? "");
   const [unit, setUnit] = useState(material?.unit ?? "");
   const [kind, setKind] = useState<MaterialKind>(material?.kind ?? "material");
   const [active, setActive] = useState(material?.active ?? true);
-  const [cost, setCost] = useState("");
   const [size, setSize] = useState(material?.size ?? "");
+  const [price, setPrice] = useState(material && material.unitCost > 0 ? String(material.unitCost) : "");
+  const [sizePrices, setSizePrices] = useState<SizePrice[]>([{ size: "", price: "" }]);
+  const [lines, setLines] = useState<LineDraft[]>([]);
   const [productId, setProductId] = useState(material?.productId ?? "");
-  const [shared, setShared] = useState(material ? material.ownerProductId === null : ownerProductId === null);
-  const { error, pending, submit } = useSubmit(onClose);
-  const price = parseNumber(cost);
+  const [owner, setOwner] = useState(material ? (material.ownerProductId ?? "") : (ownerProductId ?? ""));
+  const { error, pending, submit, setError } = useSubmit(onClose);
   const sizeChoices = [...new Set([...sizes, ...(material?.size ? [material.size] : [])])];
+  const usable = parts.filter((p) => p.ownerProductId === null || p.ownerProductId === (owner || null));
+  const oneSize = sizePrices.length === 1;
 
   function save() {
-    const common = { name, unit, kind, size: size || null, productId: productId || null };
+    const common = { name, unit, kind, productId: productId || null, ownerProductId: owner || null };
+    if (material) {
+      const cost = price.trim() ? parseNumber(price) : null;
+      if (cost !== null && !(cost >= 0)) return setError("Enter the price as a number, or leave it empty.");
+      return submit(() => updateMaterial({ ...common, id: material.id, active, size: size || null, unitCost: cost }));
+    }
+    const priced = sizePrices.map((v) => ({ size: v.size || null, unitCost: v.price.trim() ? parseNumber(v.price) : null }));
+    if (priced.some((v) => v.unitCost !== null && !(v.unitCost >= 0))) return setError("Enter each price as a number, or leave it empty.");
+    const problem = made ? draftsProblem(lines) : null;
+    if (problem) return setError(problem);
     submit(async () => {
-      if (material) return updateMaterial({ ...common, id: material.id, active, ownerProductId: shared ? null : material.ownerProductId });
-      const res = await addMaterial({ ...common, made, unitCost: !made && Number.isFinite(price) ? price : undefined, ownerProductId: shared ? null : ownerProductId });
+      const res = await addMaterial({ ...common, made, productId: oneSize ? common.productId : null, sizes: priced, lines: made ? lines.map(toLine) : [] });
       if (res.ok) onAdded?.(res.data);
       return res;
     });
   }
 
   return (
-    <FormSheet open={open} onClose={onClose} title={material ? `Edit ${material.name}` : "Add a part"}>
+    <FormSheet open={open} onClose={onClose} title={material ? `Edit ${partLabel(material)}` : "Add a part"}>
       <Form onSubmit={save}>
         {material ? null : (
           <div role="radiogroup" aria-label="Bought or made" className="grid grid-cols-2 gap-2">
             {[
               { value: false, title: "Bought", hint: "PVC, paper, ink, film: we buy it and keep stock." },
-              { value: true, title: "Made", hint: "A sheet, a cover, a box: made from other parts." },
+              { value: true, title: "Made", hint: "A sheet, a cover: made from other parts." },
             ].map((o) => (
               <button
                 key={o.title}
@@ -157,20 +281,8 @@ export function MaterialSheet({
         <Field label="Name">
           <TextInput value={name} onChange={(e) => setName(e.target.value)} placeholder={made ? "e.g. Sheet" : "e.g. PVC"} required />
         </Field>
-        <Field label="Size" hint="One part per size: PVC in 12x12 and PVC in 10x10 are two parts named PVC. A setup line can then use the order's size.">
-          <Select value={size} onChange={(e) => setSize(e.target.value)}>
-            <option value="">Any size (not sized)</option>
-            {sizeChoices.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </Select>
-        </Field>
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Counted in" hint="sheet, pc, m, ml…">
-            <TextInput value={unit} onChange={(e) => setUnit(e.target.value)} placeholder={made ? "pc" : "sheet"} required />
-          </Field>
+          <UnitField value={unit} onChange={setUnit} />
           <Field label="Kind">
             <Select value={kind} onChange={(e) => setKind(e.target.value as MaterialKind)}>
               {(Object.keys(KIND_LABELS) as MaterialKind[]).map((k) => (
@@ -181,15 +293,49 @@ export function MaterialSheet({
             </Select>
           </Field>
         </div>
-        {!material && !made ? (
-          <Field label={`Price per ${unit || "unit"} (optional)`} hint="What we pay, until the first purchase is recorded. Purchases set it from then on.">
-            <TextInput inputMode="decimal" value={cost} onChange={(e) => setCost(e.target.value)} placeholder={`e.g. ${symbol} 120`} />
-          </Field>
+
+        {material ? (
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Size">
+              <Select value={size} onChange={(e) => setSize(e.target.value)}>
+                <option value="">No size</option>
+                {sizeChoices.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label={made ? "Your own cost (optional)" : `Price per ${unit || "unit"}`} hint={made ? "Empty: its parts added up." : "Each purchase updates it too."}>
+              <TextInput inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} placeholder={made ? "adds up" : "0"} />
+            </Field>
+          </div>
+        ) : (
+          <SizesAndPrices sizes={sizes} value={sizePrices} onChange={setSizePrices} made={made} unit={unit} />
+        )}
+
+        {made && !material ? (
+          <section className="space-y-2 rounded-xl border border-border p-3">
+            <h3 className="text-sm font-semibold">Made of</h3>
+            <p className="text-xs text-muted">The parts one is made of. Only what&apos;s here counts: its parts aren&apos;t counted again on their own.</p>
+            <PartLinesEditor drafts={lines} onChange={setLines} parts={usable} details={details} sizes={sizes} />
+          </section>
         ) : null}
-        {products.length ? (
-          <Field label="Also sold on its own as" hint="The catalog product it is (e.g. a box chosen as packaging), so a book that includes it counts its cost.">
+
+        <Field label="Used by" hint="Shared: any product can use it. Only for one product: it's offered to that product alone.">
+          <Select value={owner} onChange={(e) => setOwner(e.target.value)}>
+            <option value="">Shared, any product</option>
+            {products.map((p) => (
+              <option key={p.id} value={p.id}>
+                Only for {p.name}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        {products.length && (material || oneSize) ? (
+          <Field label="It is the catalog product" hint="If it's sold too (e.g. a box), so the two are the same thing.">
             <Select value={productId} onChange={(e) => setProductId(e.target.value)}>
-              <option value="">Not sold on its own</option>
+              <option value="">No</option>
               {products.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
@@ -197,12 +343,6 @@ export function MaterialSheet({
               ))}
             </Select>
           </Field>
-        ) : null}
-        {(material?.ownerProductId ?? ownerProductId) ? (
-          <label className="flex min-h-11 items-center gap-3 text-sm">
-            <input type="checkbox" checked={shared} onChange={(e) => setShared(e.target.checked)} disabled={!!material && material.ownerProductId === null} className="size-4 accent-brand-500" />
-            Share with every product{ownerName && !shared ? ` (now only for ${ownerName})` : ""}
-          </label>
         ) : null}
         {material ? (
           <label className="flex min-h-11 items-center gap-3 text-sm">
@@ -212,7 +352,7 @@ export function MaterialSheet({
         ) : null}
         <ErrorLine error={error} />
         <Button type="submit" className="w-full" loading={pending} disabled={pending}>
-          {material ? "Save" : "Add part"}
+          {material ? "Save" : sizePrices.length > 1 ? `Add ${sizePrices.length} parts` : "Add part"}
         </Button>
       </Form>
     </FormSheet>

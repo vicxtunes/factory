@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { Geist_Mono, Outfit } from "next/font/google";
 import { SerwistProvider } from "@serwist/turbopack/react";
 import { OfflineBanner } from "@repo/ui/pwa/OfflineBanner";
+import { TransferTray } from "@repo/ui/transfers/TransferTray";
 import { InstallCapture } from "@repo/ui/pwa/InstallCapture";
 import { AppSplash } from "@repo/ui/pwa/AppSplash";
 import { NavigationProgress } from "@repo/ui/pwa/NavigationProgress";
@@ -65,6 +66,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
         <SerwistProvider swUrl="/serwist/sw.js">
           <InstallCapture />
           <OfflineBanner />
+          <TransferTray />
           <NavigationProgress />
           <BackHistory />
           <KeepFresh />

@@ -7,6 +7,7 @@ import { Avatar } from "@repo/ui/profile/Avatar";
 import { ManageProfileModal } from "@repo/ui/profile/ManageProfileModal";
 
 import { logoutDesigner } from "./actions";
+import { forgetTransfers } from "@repo/ui/transfers/store";
 
 // Same shape as apps/client/app/user-menu.tsx, for a designer session
 // (no settings page on this portal).
@@ -91,6 +92,7 @@ export function DesignerUserMenu({ name, avatarUrl }: { name: string; avatarUrl:
             onClick={() =>
               start(async () => {
                 await logoutDesigner();
+                await forgetTransfers();
                 router.replace("/graphics");
                 router.refresh();
               })

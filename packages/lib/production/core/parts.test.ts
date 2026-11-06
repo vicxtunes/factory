@@ -22,7 +22,9 @@ const line = (over: Partial<PartLine>): PartLine => ({
   variantId: null,
   partId: null,
   byOrderSize: false,
-  chosenDetail: null,
+  productPartId: null,
+  addsPrice: false,
+  sizes: null,
   qty: 1,
   perDetail: null,
   whenDetail: null,
@@ -78,7 +80,7 @@ function photoBook(): PartsBook {
         [
           line({ partId: "sheet", perDetail: "NOS (Number of Sheets)" }),
           line({ partId: "cover", whenDetail: "Cover", whenValue: "Hard" }),
-          line({ chosenDetail: "Packaging" }),
+          line({ productPartId: "p-boxA", addsPrice: true, whenDetail: "Packaging", whenValue: "Box A" }),
         ],
       ],
       [MUG, [line({ partId: "blank" }), line({ variantId: A4, label: "Print", amount: 1_000 })]],
@@ -93,9 +95,10 @@ function photoBook(): PartsBook {
         ],
       ],
     ]),
-    packaging: [
-      { name: "Box A", price: 25_000 },
-      { name: "None", price: 0 },
+    products: [
+      { id: BOOK, name: "Photo book", price: null },
+      { id: "p-boxA", name: "Box A", price: 25_000 },
+      { id: MUG, name: "Mug", price: 15_000 },
     ],
   };
 }
@@ -121,7 +124,7 @@ test("a line in the order's size finds the part of that name in that size", () =
   assert.deepEqual(parts.evaluatePart("sheet", order({ Size: "8x8", Lamination: "Matt" })).missing, ["PVC in 8x8", "Paper & Ink in 8x8"], "no part in that size: said, not guessed");
 });
 
-test("a photo book's cost: sheet × NOS, a hard cover when chosen, and the chosen box, down to bought parts", () => {
+test("a photo book's cost: sheet × NOS, a hard cover when chosen, and the box (an attached product) when chosen, down to bought parts", () => {
   const setup = new PartsCatalog(photoBook()).setup(BOOK);
   const details = { Size: "12x12", NOS: "10", Lamination: "Glossy", Cover: "Hard", Packaging: "Box A" };
   const e = setup.evaluate(order(details));
@@ -131,19 +134,46 @@ test("a photo book's cost: sheet × NOS, a hard cover when chosen, and the chose
   assert.deepEqual(used, { pvc12: 20, ink12: 20, glossy: 20, greyboard: 4, board: 4, ribbon: 1 });
 });
 
-test("a photo book's price is the catalog's: per sheet for its size × sheets + the packaging's price", () => {
+test("a photo book's price is the catalog's: per sheet for its size × sheets + an attached product whose line adds its price", () => {
   const setup = new PartsCatalog(photoBook()).setup(BOOK);
   assert.equal(setup.pricing.key, "per_sheet");
   assert.equal(setup.price(order({ Size: "12x12", "NOS (Number of Sheets)": "20", Packaging: "Box A" }), null), 12_000 * 20 + 25_000);
-  assert.equal(setup.price(order({ Size: "10x10", NOS: 5 }), null), 50_000, "no packaging chosen: just the sheets");
+  assert.equal(setup.price(order({ Size: "10x10", NOS: 5 }), null), 50_000, "no box chosen: just the sheets");
+  assert.deepEqual(setup.quote(order({ Size: "12x12", NOS: 2, Packaging: "Box A" }), null).added, [{ name: "Box A", price: 25_000 }]);
 });
 
-test("a price is never guessed: no size, no price for the size, no sheets or an unknown packaging leaves it for the call", () => {
+test("a price is never guessed: no size, no price for the size, no sheets, or an added product with no price leaves it for the call", () => {
   const pricing = new PartsCatalog(photoBook()).setup(BOOK).pricing;
   assert.deepEqual(pricing.quote(order({ NOS: 5 }), null), { price: null, missing: ["Size"] });
   assert.deepEqual(pricing.quote(order({ Size: "8x8", NOS: 5 }), null).missing, ["a price per sheet for 8x8"]);
   assert.deepEqual(pricing.quote(order({ Size: "12x12" }), null).missing, ["Number of sheets"]);
-  assert.deepEqual(pricing.quote(order({ Size: "12x12", NOS: 5, Packaging: "Box Z" }), null).missing, ["Packaging: Box Z"]);
+  const book = photoBook();
+  book.products = book.products.map((p) => (p.id === "p-boxA" ? { ...p, price: null } : p));
+  assert.deepEqual(new PartsCatalog(book).setup(BOOK).quote(order({ Size: "12x12", NOS: 5, Packaging: "Box A" }), null).missing, ["a catalog price for Box A"]);
+});
+
+test("a line can be for some sizes only, ticked in the sizes pop-up", () => {
+  const book = photoBook();
+  book.productLines.set(BOOK, [line({ partId: "sheet", perDetail: "NOS" }), line({ productPartId: "p-boxA", addsPrice: true, sizes: ["12x12"] })]);
+  const setup = new PartsCatalog(book).setup(BOOK);
+  assert.equal(setup.price(order({ Size: "12x12", NOS: 1, Lamination: "Matt" }), null), 12_000 + 25_000);
+  assert.equal(setup.price(order({ Size: "10x10", NOS: 1, Lamination: "Matt" }), null), 10_000, "Box A isn't for 10x10");
+});
+
+test("a made part with its own cost: products use that figure, and its parts still come off stock", () => {
+  const book = photoBook();
+  book.parts = book.parts.map((p) => (p.id === "sheet" ? { ...p, unitCost: 4_500 } : p));
+  const parts = new PartsCatalog(book);
+  const e = parts.setup(BOOK).evaluate(order({ Size: "12x12", NOS: 2, Lamination: "Matt" }));
+  assert.equal(e.cost, 9_000);
+  assert.deepEqual(Object.fromEntries(e.usage.map((u) => [u.partId, u.qty])), { pvc12: 2, ink12: 2, matt: 2 });
+  assert.equal(parts.evaluatePart("sheet", order({ Size: "12x12" })).cost, 4_500);
+});
+
+test("a part both on its own line and inside a made part on the same setup is flagged as counted twice", () => {
+  const parts = new PartsCatalog(photoBook());
+  assert.deepEqual(parts.doubleCounted([line({ partId: "sheet" }), line({ partId: "matt" })]), ["Matt film is already inside Sheet"]);
+  assert.deepEqual(parts.doubleCounted([line({ partId: "sheet" })]), []);
 });
 
 test("a product without prices per sheet keeps the catalog price; size-only lines count for that size", () => {
@@ -179,7 +209,7 @@ test("own parts are only offered to their product; a part's sizes and users are 
   const parts = new PartsCatalog(photoBook());
   assert.ok(parts.usableBy(BOOK).some((p) => p.id === "cover"));
   assert.ok(!parts.usableBy(MUG).some((p) => p.id === "cover"));
-  assert.deepEqual(parts.sizesOf("pvc12", null), ["12x12", "10x10"]);
+  assert.deepEqual(parts.sizesOf("pvc12"), ["12x12", "10x10"]);
   assert.deepEqual(parts.usedBy("pvc10").parts, ["sheet"], "used by the order's size");
   assert.deepEqual(parts.detailsUsed(photoBook().productLines.get(BOOK)!).sizes, ["12x12", "10x10"]);
 });

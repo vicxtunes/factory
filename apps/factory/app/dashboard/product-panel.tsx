@@ -38,7 +38,8 @@ import {
   renameProduct,
   renameVariant,
   setCategoryActive,
-  setCurrencySymbol,
+  setCurrencyActive,
+  updateCurrency,
   setProductActive,
   setProductDescription,
   setProductUnit,
@@ -120,9 +121,11 @@ function ShowroomSettingsCard({
   );
 }
 
-// The single display symbol for every price (the business prices in one
-// currency). Saved on blur/Enter to the base currency row.
-function CurrencySymbolCard({
+// The currencies clients can switch the app to (top bar). Every price is
+// stored in UGX; each other currency's rate is typed as people say it,
+// "1 KES = 28 UGX", and kept as units per 1 UGX. A currency shows in the top
+// bar once it's on; turn one on only after checking its rate.
+function CurrenciesCard({
   currencies,
   run,
   pending,
@@ -131,25 +134,53 @@ function CurrencySymbolCard({
   run: (fn: () => Promise<MutationResult>) => void;
   pending: boolean;
 }) {
-  const current = currencies.find((c) => c.is_base)?.symbol ?? "UGX";
+  const others = currencies.filter((c) => !c.is_base);
+  const perOne = (c: Currency) => Math.round((1 / Number(c.rate)) * 10_000) / 10_000;
   return (
     <div className="rounded-2xl border border-border bg-surface p-4 shadow-theme-xs">
-      <p className="text-xs font-semibold uppercase tracking-wide text-muted">Currency symbol</p>
-      <p className="mt-1 text-xs text-muted">Shown before every price, e.g. &ldquo;UGX 150,000&rdquo;.</p>
-      <input
-        key={current}
-        defaultValue={current}
-        maxLength={8}
-        disabled={pending}
-        className="mt-3 min-h-9 w-28 rounded-[var(--radius)] border border-border bg-surface px-2 text-sm"
-        onBlur={(e) => {
-          const value = e.target.value.trim();
-          if (value && value !== current) run(() => setCurrencySymbol(value));
-        }}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") e.currentTarget.blur();
-        }}
-      />
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted">Currencies</p>
+      <p className="mt-1 text-xs text-muted">
+        Prices are kept in UGX. Clients pick a currency in the top bar and see every amount at these rates; an invoice keeps its rate from the day it&apos;s issued. Check a rate before turning a currency on.
+      </p>
+      <ul className="mt-3 divide-y divide-border">
+        {others.map((c) => (
+          <li key={c.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 py-2 text-sm">
+            <span className="w-40 font-medium">
+              {c.code} <span className="font-normal text-muted">{c.label}</span>
+            </span>
+            <label className="flex items-center gap-1.5">
+              <span className="text-muted">1 {c.code} =</span>
+              <input
+                key={`${c.id}-${c.rate}`}
+                type="number"
+                min="0"
+                step="any"
+                defaultValue={perOne(c)}
+                disabled={pending}
+                aria-label={`UGX per 1 ${c.code}`}
+                className="min-h-9 w-28 rounded-[var(--radius)] border border-border bg-surface px-2 text-sm"
+                onBlur={(e) => {
+                  const ugx = Number(e.target.value);
+                  if (!(ugx > 0) || ugx === perOne(c)) return;
+                  run(() => updateCurrency(c.id, { label: c.label, symbol: c.symbol, rate: String(1 / ugx) }));
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") e.currentTarget.blur();
+                }}
+              />
+              <span className="text-muted">UGX</span>
+            </label>
+            <Button
+              variant={c.active ? "secondary" : "primary"}
+              className="ml-auto min-h-9 text-xs"
+              disabled={pending}
+              onClick={() => run(() => setCurrencyActive(c.id, !c.active))}
+            >
+              {c.active ? "On · turn off" : "Turn on"}
+            </Button>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -196,7 +227,7 @@ export function ProductPanel({
   return (
     <div className="space-y-4">
       {canManage ? <ShowroomSettingsCard settings={showroomSettings} run={run} pending={pending} /> : null}
-      {canManage ? <CurrencySymbolCard currencies={currencies} run={run} pending={pending} /> : null}
+      {canManage ? <CurrenciesCard currencies={currencies} run={run} pending={pending} /> : null}
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <ExportButtons columns={EXPORT_COLUMNS} rows={exportRows} filename="product-categories" />

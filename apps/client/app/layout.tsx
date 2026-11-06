@@ -3,15 +3,19 @@ import { cookies } from "next/headers";
 import { Geist_Mono, Outfit } from "next/font/google";
 import { SerwistProvider } from "@serwist/turbopack/react";
 import { OfflineBanner } from "@repo/ui/pwa/OfflineBanner";
+import { TransferTray } from "@repo/ui/transfers/TransferTray";
 import { InstallCapture } from "@repo/ui/pwa/InstallCapture";
 import { NavigationProgress } from "@repo/ui/pwa/NavigationProgress";
 import { KeepFresh } from "@repo/ui/navigation/KeepFresh";
 import { TestCopyBanner } from "@repo/ui/TestCopyBanner";
 import { BackHistory } from "@repo/ui/navigation/back";
 import { SIDEBAR_COOKIE } from "@repo/ui/navigation/sidebar-init";
-import { CurrencySymbolProvider } from "@repo/lib/currency/CurrencySymbolProvider";
+import { CurrencySymbolProvider, DisplayCurrencyProvider } from "@repo/lib/currency/CurrencySymbolProvider";
+import { BASE_CURRENCY } from "@repo/lib/currency/format";
+import { clientCurrency } from "@repo/lib/currency/server";
 import { DEFAULT_CURRENCY_SYMBOL } from "@repo/lib/currency/format";
-import { fetchBaseCurrencySymbol } from "@repo/lib/queries";
+import { fetchBaseCurrencySymbol, fetchCurrencies } from "@repo/lib/queries";
+import { CurrencyChoices } from "./currency-switcher";
 import { IdleLock } from "./idle-lock";
 import { APP_IDENTITY as app } from "./identity";
 import "./globals.css";
@@ -68,6 +72,11 @@ export const viewport: Viewport = {
 export default async function RootLayout({ children }: LayoutProps<"/">) {
   // Never let a failed lookup take the whole app down — fall back to UGX.
   const symbol = await fetchBaseCurrencySymbol().catch(() => DEFAULT_CURRENCY_SYMBOL);
+  // The currency the client chose in the top bar (UGX by default); amounts are stored in UGX.
+  const [currency, choices] = await Promise.all([
+    clientCurrency().catch(() => BASE_CURRENCY),
+    fetchCurrencies(true).catch(() => []),
+  ]);
   return (
     <html
       lang="en"
@@ -80,11 +89,16 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
         <SerwistProvider swUrl="/serwist/sw.js">
           <InstallCapture />
           <OfflineBanner showBanner={false} />
+          <TransferTray />
           <NavigationProgress />
           <BackHistory />
           <KeepFresh />
           <IdleLock />
-          <CurrencySymbolProvider symbol={symbol}>{children}</CurrencySymbolProvider>
+          <CurrencySymbolProvider symbol={symbol}>
+            <DisplayCurrencyProvider currency={currency}>
+              <CurrencyChoices choices={choices.map((c) => ({ code: c.code, label: c.label }))}>{children}</CurrencyChoices>
+            </DisplayCurrencyProvider>
+          </CurrencySymbolProvider>
         </SerwistProvider>
       </body>
     </html>

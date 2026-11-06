@@ -2,6 +2,7 @@
 
 import { DocumentPayBar } from "@repo/ui/billing/DocumentPayBar";
 import { BankDetails } from "@repo/ui/payments/PaymentMethods";
+import { formatIn } from "@repo/lib/currency/format";
 import { checkInvoiceLinkPayment, payInvoiceLink } from "@repo/lib/invoices/actions";
 import type { InvoiceView } from "@repo/lib/invoices/types";
 import type { TenantScope } from "@repo/lib/tenancy/types";
@@ -48,6 +49,7 @@ export function InvoiceLinkPayBar({
         </details>
       }
       scope={scope}
+      shown={invoice.currency.code === "UGX" ? undefined : (n) => formatIn(n, invoice.currency)}
     />
   );
 }

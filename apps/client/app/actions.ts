@@ -1,6 +1,7 @@
 "use server";
 
 import { partsListPrice } from "@repo/lib/production/pricing";
+import { clientCurrency } from "@repo/lib/currency/server";
 import { revalidatePath } from "next/cache";
 
 import { createAdminClient } from "@repo/lib/supabase/admin";
@@ -84,6 +85,7 @@ export async function placeOrder(input: ClientOrderPayload): Promise<PlaceOrderR
   }
 
   const res = await buildAndInsertOrder(admin, {
+    currency: (await clientCurrency()).code,
     client,
     agentId: null,
     agentName: null,

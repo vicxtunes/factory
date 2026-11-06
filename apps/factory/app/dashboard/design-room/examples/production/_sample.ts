@@ -65,7 +65,7 @@ export const SACCO: LenderDetail = {
 };
 
 // Sample setups: a photo book priced per sheet (a sheet of PVC and paper & ink in the order's size, Matt or Glossy, × NOS, the box the order chose), a frame and a crystal board at their catalog prices, a mug not set up yet.
-const line = (over: Partial<PartLine>): PartLine => ({ variantId: null, partId: null, byOrderSize: false, chosenDetail: null, qty: 1, perDetail: null, whenDetail: null, whenValue: null, label: null, amount: null, ...over });
+const line = (over: Partial<PartLine>): PartLine => ({ variantId: null, partId: null, byOrderSize: false, productPartId: null, addsPrice: false, sizes: null, qty: 1, perDetail: null, whenDetail: null, whenValue: null, label: null, amount: null, ...over });
 
 export const BOOK_CATEGORY: CostingCategory = {
   id: "c1",
@@ -99,7 +99,7 @@ export const BOOK_LINES: PartLine[] = [
   line({ partId: "s1", perDetail: "NOS (Number of Sheets)" }),
   line({ partId: "m7", qty: 2, whenDetail: "Cover", whenValue: "Hard" }),
   line({ label: "Binding", amount: 3_000 }),
-  line({ chosenDetail: "Packaging" }),
+  line({ productPartId: "boxA", addsPrice: true, whenDetail: "Packaging", whenValue: "Box A" }),
 ];
 
 export const PARTS_BOOK: PartsBook = {
@@ -123,7 +123,7 @@ export const PARTS_BOOK: PartsBook = {
     ["boxA", [line({ partId: "s2" })]],
   ]),
   sheetPrices: new Map([["book", [{ size: "12x12", price: 12_000 }, { size: "10x10", price: 10_000 }]]]),
-  packaging: [{ name: "Box A", price: 25_000 }],
+  products: CATALOG.flatMap((c) => c.products.map((p) => ({ id: p.id, name: p.name, price: p.price }))),
 };
 
 export const PLAIN_BOOK = toPlainBook(PARTS_BOOK);

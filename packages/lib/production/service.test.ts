@@ -25,13 +25,13 @@ const item: UsageItem = {
   updatedAt: "2026-11-02T08:00:00Z",
 };
 
-const line = (over: Partial<PartLine>): PartLine => ({ variantId: null, partId: null, byOrderSize: false, chosenDetail: null, qty: 1, perDetail: null, whenDetail: null, whenValue: null, label: null, amount: null, ...over });
+const line = (over: Partial<PartLine>): PartLine => ({ variantId: null, partId: null, byOrderSize: false, productPartId: null, addsPrice: false, sizes: null, qty: 1, perDetail: null, whenDetail: null, whenValue: null, label: null, amount: null, ...over });
 
 const book: PartsBook = {
   parts: [{ id: PAPER, name: "Paper", unit: "sheet", kind: "material", made: false, size: null, unitCost: 120, productId: null, productName: null, productPrice: null, ownerProductId: null, active: true }],
   partLines: new Map(),
   productLines: new Map([["book", [line({ partId: PAPER, perDetail: "Pages" }), line({ variantId: "a4", qty: null, label: "Binding", amount: 3_000 })]]]),
-  sheetPrices: new Map(), packaging: [],
+  sheetPrices: new Map(), products: [],
 };
 
 function fakeStore(saved: unknown[]): ProductionStore {

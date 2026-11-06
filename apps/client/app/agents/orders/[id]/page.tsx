@@ -5,8 +5,7 @@ import { z } from "zod";
 import { payFirstWording } from "@repo/lib/agents/core";
 import { agentClient, agentOrder } from "@repo/lib/agents/server";
 import { clientUrl } from "@repo/lib/client-portal/paths";
-import { formatMoney } from "@repo/lib/currency/format";
-import { fetchBaseCurrencySymbol } from "@repo/lib/queries";
+import { clientMoney } from "@repo/lib/currency/server";
 
 import { requireAgent } from "../../agent";
 import { CommissionStatusText, StageBadge, StageProgress, shortDate } from "../../bits";
@@ -29,8 +28,7 @@ export default async function AgentOrderPage({ params }: { params: Promise<{ id:
   const order = await agentOrder(agent.id, id);
   if (!order) notFound();
 
-  const [symbol, client] = await Promise.all([fetchBaseCurrencySymbol(), order.clientId ? agentClient(agent.id, order.clientId) : null]);
-  const money = (n: number) => formatMoney(n, symbol);
+  const [money, client] = await Promise.all([clientMoney(), order.clientId ? agentClient(agent.id, order.clientId) : null]);
   const due = order.price === null ? null : Math.max(order.price - order.paid, 0);
   const canPay = order.stage !== "cancelled" && order.price !== null && due !== null && due > 0;
 

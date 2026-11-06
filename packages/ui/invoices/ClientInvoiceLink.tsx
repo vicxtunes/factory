@@ -4,8 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 
 import { PriceHero } from "@repo/ui/order/OrderSummary";
-import { useCurrencySymbol } from "@repo/lib/currency/CurrencySymbolProvider";
-import { formatMoney } from "@repo/lib/currency/format";
+import { useFormatMoney } from "@repo/lib/currency/CurrencySymbolProvider";
 import { getMyInvoiceLink } from "@repo/lib/invoices/actions";
 import type { ClientOrderDocument } from "@repo/lib/invoices/types";
 
@@ -56,7 +55,7 @@ export function ClientInvoiceLink({ orderId }: { orderId: string }) {
  * photo books are priced after the call) with a link to the pro forma.
  */
 export function ClientOrderEstimate({ orderId }: { orderId: string }) {
-  const symbol = useCurrencySymbol();
+  const formatAmount = useFormatMoney();
   const doc = useOrderDocument(orderId);
   if (!doc || doc.amount == null) return null;
 
@@ -65,7 +64,7 @@ export function ClientOrderEstimate({ orderId }: { orderId: string }) {
     <PriceHero
       tone={doc.complete ? "firm" : "pending"}
       label={doc.complete ? "Amount to pay (estimate)" : "Estimate so far"}
-      price={hasPrice ? formatMoney(doc.amount, symbol) : "To be confirmed"}
+      price={hasPrice ? formatAmount(doc.amount) : "To be confirmed"}
       note={
         doc.complete
           ? "Based on our current prices. It's final once we confirm your order."

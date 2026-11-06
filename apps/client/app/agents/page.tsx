@@ -2,8 +2,7 @@ import Link from "next/link";
 
 import { HomeGreeting, HomeHero, HomeSection } from "@repo/ui/home/HomeBits";
 import { figuresFor } from "@repo/lib/agents/server";
-import { formatMoney } from "@repo/lib/currency/format";
-import { fetchBaseCurrencySymbol } from "@repo/lib/queries";
+import { clientMoney } from "@repo/lib/currency/server";
 
 import { requireAgent } from "./agent";
 import { OrderGrid } from "./bits";
@@ -22,8 +21,7 @@ function Figure({ label, value, strong }: { label: string; value: string; strong
 
 export default async function AgentHomePage() {
   const { session, agent } = await requireAgent();
-  const [{ orders, ...figures }, symbol] = await Promise.all([figuresFor(agent.id), fetchBaseCurrencySymbol()]);
-  const money = (n: number) => formatMoney(n, symbol);
+  const [{ orders, ...figures }, money] = await Promise.all([figuresFor(agent.id), clientMoney()]);
 
   return (
     <AgentFrame agent={agent} page="home">

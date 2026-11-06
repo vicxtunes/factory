@@ -27,7 +27,6 @@ import type {
   ClientInvoiceRow,
   ClientOrderDocument,
   DiscountHistoryEntry,
-  DraftLine,
   InvoiceListRow,
   InvoiceResult,
   InvoiceSettingsInput,
@@ -78,7 +77,7 @@ export async function getInvoiceForOrder(orderId: string): Promise<InvoiceResult
 /** The price editor's starting lines for an order about to be invoiced. */
 export async function getInvoiceDraft(
   orderId: string,
-): Promise<InvoiceResult<{ lines: DraftLine[]; currentAmount: number | null }>> {
+): Promise<InvoiceResult<service.InvoiceDraft>> {
   return run(async () => {
     await requireStaff();
     return service.draft(orderId);
@@ -102,7 +101,7 @@ export async function getDiscountHistory(orderId: string): Promise<InvoiceResult
 /** The invoice as the client would receive it with these lines, without saving it. */
 export async function previewInvoice(
   orderId: string,
-  input: { lines: InvoiceLineInput[]; dueDate?: string | null; notes?: string | null },
+  input: { lines: InvoiceLineInput[]; dueDate?: string | null; notes?: string | null; currency?: string | null },
 ): Promise<InvoiceResult<InvoiceView>> {
   return run(async () => {
     await requireStaff();
@@ -112,7 +111,7 @@ export async function previewInvoice(
 
 export async function generateInvoice(
   orderId: string,
-  input: { lines: InvoiceLineInput[]; dueDate?: string | null; notes?: string | null },
+  input: { lines: InvoiceLineInput[]; dueDate?: string | null; notes?: string | null; currency?: string | null },
 ): Promise<InvoiceResult<StaffInvoiceView>> {
   return run(async () => {
     const invoice = await service.generate(await requireStaff(), orderId, input);

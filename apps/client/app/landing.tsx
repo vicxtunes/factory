@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { CurrencySwitcher } from "./currency-switcher";
 import { clientUrl } from "@repo/lib/client-portal/paths";
 import { amingFeed } from "@repo/lib/studio-portal/feed";
 
@@ -44,6 +45,7 @@ export async function Landing() {
           Aming <span className="text-brand-500">Space</span>
         </Link>
         <nav className="flex items-center gap-2 text-sm sm:gap-4">
+          <CurrencySwitcher />
           <Link href="/vendors" className="hidden font-medium text-muted hover:text-foreground sm:inline">
             For vendors
           </Link>

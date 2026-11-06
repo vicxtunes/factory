@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 
 import { logoutClient } from "../actions";
+import { forgetTransfers } from "@repo/ui/transfers/store";
 
 /** Logs this device out of the vendor's account, back to the vendors page. */
 export function LogOut() {
@@ -16,6 +17,7 @@ export function LogOut() {
       onClick={() =>
         start(async () => {
           await logoutClient();
+          await forgetTransfers();
           router.refresh();
         })
       }

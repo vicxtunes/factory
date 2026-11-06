@@ -16,9 +16,8 @@ import { ProofCover, useProofShield, Watermark } from "@repo/ui/files/proof";
 import { saveAsZips } from "@repo/ui/files/zip";
 import { ShareDialog, type SharePeople } from "@repo/ui/files/ShareDialog";
 import { uploadServiceMedia } from "@repo/ui/files/media-upload";
-import { putSigned } from "@repo/ui/photos/browser";
+import { uploadToDrive, zipInBackground } from "@repo/ui/transfers/store";
 import {
-  confirmFileUpload,
   createFolder,
   deleteFile,
   captionFile,
@@ -32,14 +31,12 @@ import {
   renameFile,
   renameFolder,
   renameMany,
-  startFileUpload,
 } from "@repo/lib/files/actions";
 import { deletePhoto, removeServiceVideo, setAlbumCover } from "@repo/lib/photos/actions";
 import {
   isLocked,
   isWithin,
   MAX_FILE_BYTES,
-  MAX_FILES_PER_BATCH,
   pathTo,
   uniqueName,
   type FileView,
@@ -289,19 +286,6 @@ function chooseView(view: View) {
     // Storage blocked (private mode etc.): the choice just isn't remembered.
   }
   viewListeners.forEach((l) => l());
-}
-
-/** Runs `work` over `items`, `limit` at a time. */
-async function pool<T>(items: T[], limit: number, work: (item: T, i: number) => Promise<void>) {
-  let next = 0;
-  await Promise.all(
-    Array.from({ length: Math.min(limit, items.length) }, async () => {
-      while (next < items.length) {
-        const i = next++;
-        await work(items[i], i);
-      }
-    }),
-  );
 }
 
 /**
@@ -667,25 +651,20 @@ export function FileBrowser({
   }
   const download = (url: string | null | undefined) => url && window.location.assign(url);
 
-  // Zips (made in the browser): chosen files, or a folder with everything in it, as originals or optimised copies.
-  const [zipping, setZipping] = useState<string | null>(null);
+  // Zips (made in the browser, in the background: see packages/ui/transfers): chosen files, or a folder with everything in it, as originals or optimised copies.
   function zip(pick: { fileIds: string[] } | { folderId: string }, name: string, version: "original" | "optimised") {
     setError(null);
-    setZipping("Getting the list…");
-    downloadLinks(via, { pick, version })
-      .then(async (res) => {
-        if (!res.ok) throw new Error(res.error);
-        if (res.data.length === 0) throw new Error("There's nothing here you can download.");
-        await saveAsZips(res.data, version === "optimised" ? `${name} (optimised)` : name, setZipping);
-      })
-      .catch((err: unknown) => {
-        setZipping(null);
-        setError(err instanceof Error ? err.message : "The zip couldn't be made.");
-      });
+    const zipName = version === "optimised" ? `${name} (optimised)` : name;
+    zipInBackground(zipName, async (status) => {
+      const res = await downloadLinks(via, { pick, version });
+      if (!res.ok) throw new Error(res.error);
+      if (res.data.length === 0) throw new Error("There's nothing here you can download.");
+      await saveAsZips(res.data, zipName, status);
+    });
   }
   /** "Download as zip" for files you may download (not the Business folders, which aren't stored files). */
   const zipMenu = (pick: { fileIds: string[] } | { folderId: string }, name: string, what: string): ContextEntry[] =>
-    rights.download && !listing.folder?.business && !zipping
+    rights.download && !listing.folder?.business
       ? [
           { label: `Download ${what} as zip (originals)`, onSelect: () => zip(pick, name, "original") },
           { label: `Download ${what} as zip (optimised)`, onSelect: () => zip(pick, name, "optimised") },
@@ -1056,32 +1035,7 @@ export function FileBrowser({
     const files = chosen.filter((f) => f.size <= MAX_FILE_BYTES);
     if (tooBig.length) setError(`${tooBig.map((f) => f.name).join(", ")}: too big. A file can be up to ${formatBytes(MAX_FILE_BYTES)}.`);
     if (!files.length) return;
-    setUploading(true);
-    setUploads(files.map((f) => ({ name: f.name, state: "waiting", progress: 0 })));
-    const update = (i: number, patch: Partial<Upload>) => setUploads((u) => u.map((x, j) => (j === i ? { ...x, ...patch } : x)));
-    for (let from = 0; from < files.length; from += MAX_FILES_PER_BATCH) {
-      const batch = files.slice(from, from + MAX_FILES_PER_BATCH);
-      const res = await startFileUpload(via, { folderId: here, files: batch.map((f) => ({ name: f.name, bytes: f.size, contentType: f.type })) });
-      if (!res.ok) {
-        setError(res.error);
-        batch.forEach((_, k) => update(from + k, { state: "failed", error: "Not uploaded." }));
-        break;
-      }
-      await pool(batch, 3, async (file, k) => {
-        const at = from + k;
-        update(at, { state: "uploading" });
-        try {
-          const ticket = res.data[k];
-          await putSigned(ticket.url, file, (progress) => update(at, { progress }), ticket.contentType);
-          const done = await confirmFileUpload(via, { folderId: here, fileId: ticket.fileId, name: file.name, contentType: ticket.contentType });
-          update(at, done.ok ? { state: "done", progress: 1 } : { state: "failed", error: done.error });
-        } catch (err) {
-          update(at, { state: "failed", error: err instanceof Error ? err.message : "Upload failed." });
-        }
-      });
-      router.refresh();
-    }
-    setUploading(false);
+    void uploadToDrive(via, here, listing.folder?.name ?? topLabel, files);
   }
 
   async function uploadMedia(chosen: File[], serviceId: string, albumId: string | null) {
@@ -1405,7 +1359,6 @@ export function FileBrowser({
                 <Button
                   variant="secondary"
                   className="min-h-11"
-                  disabled={!!zipping}
                   onClick={(ev) => {
                     const r = ev.currentTarget.getBoundingClientRect();
                     setDownloadMenu({ x: r.left, y: r.bottom + 4 });
@@ -1483,11 +1436,6 @@ export function FileBrowser({
       {listing.note ? <p className="text-sm text-muted">{listing.note}</p> : null}
       {listing.packages && mediaFolder ? <PackagesPanel serviceId={mediaFolder.serviceId} packages={listing.packages} /> : null}
       {error ? <p className="text-sm text-error-600 dark:text-error-400">{error}</p> : null}
-      {zipping ? (
-        <p role="status" className="text-sm text-muted">
-          {zipping} Keep this page open until the zip downloads.
-        </p>
-      ) : null}
 
       {uploads.length > 0 ? (
         <section aria-label="Uploads" className="space-y-2 rounded-2xl border border-border bg-surface p-3 shadow-theme-xs">

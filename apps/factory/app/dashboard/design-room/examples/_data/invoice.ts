@@ -2,6 +2,7 @@ import type { InvoiceView } from "@repo/lib/invoices/types";
 
 // A made-up invoice for Design Room examples.
 export const SAMPLE_INVOICE: InvoiceView = {
+  currency: { code: "UGX", rate: 1, decimals: 0 },
   kind: "invoice",
   complete: true,
   id: "sample",

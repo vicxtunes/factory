@@ -3,7 +3,6 @@
 import { useCallback } from "react";
 
 import { PdfPreview } from "@repo/ui/pdf/PdfPreview";
-import { useCurrencySymbol } from "@repo/lib/currency/CurrencySymbolProvider";
 import type { InvoiceView, ReceiptView } from "@repo/lib/invoices/types";
 
 import { invoicePdf, receiptPdf } from "./pdf";
@@ -14,15 +13,13 @@ import { invoicePdf, receiptPdf } from "./pdf";
  * viewer that has its own.
  */
 export function InvoicePdf({ invoice, download = true }: { invoice: InvoiceView; download?: boolean }) {
-  const symbol = useCurrencySymbol();
-  const build = useCallback(() => invoicePdf(invoice, symbol), [invoice, symbol]);
+  const build = useCallback(() => invoicePdf(invoice), [invoice]);
   const title = `${invoice.kind === "proforma" ? "Pro forma invoice" : "Invoice"} ${invoice.invoiceNo}`;
   return <PdfPreview build={build} title={title} fileName={download ? `${invoice.invoiceNo}.pdf` : undefined} />;
 }
 
 /** A payment's receipt as its PDF prints, with a Download button. */
 export function ReceiptPdf({ receipt }: { receipt: ReceiptView }) {
-  const symbol = useCurrencySymbol();
-  const build = useCallback(() => receiptPdf(receipt, symbol), [receipt, symbol]);
+  const build = useCallback(() => receiptPdf(receipt), [receipt]);
   return <PdfPreview build={build} title={`Receipt ${receipt.receiptNo}`} fileName={`${receipt.receiptNo}.pdf`} />;
 }

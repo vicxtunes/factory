@@ -45,12 +45,13 @@ async function staff() {
   return { actor: { id: session.userId, name: session.fullName ?? session.email ?? "Staff" }, scope: await resolveTenantScope() };
 }
 
-export async function addMaterial(input: unknown): Promise<Result<string>> {
+export async function addMaterial(input: unknown): Promise<Result<string[]>> {
   return runAction("production", async () => {
     const { scope, actor } = await staff();
-    const id = await production.addMaterial(scope, parseInput(materialInputSchema, input), actor);
+    const ids = await production.addMaterial(scope, parseInput(materialInputSchema, input), actor);
     revalidatePath(MATERIALS);
-    return id;
+    revalidatePath("/dashboard/production/products", "layout");
+    return ids;
   });
 }
 
