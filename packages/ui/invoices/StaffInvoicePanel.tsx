@@ -5,7 +5,7 @@ import { useEffect, useState, useTransition } from "react";
 import { Button } from "@repo/ui/Button";
 import { Field, Select, TextArea, TextInput } from "@repo/ui/Field";
 import { useCurrencySymbol } from "@repo/lib/currency/CurrencySymbolProvider";
-import { formatMoney } from "@repo/lib/currency/format";
+import { formatIn, formatMoney, rateText, toUgx, type DisplayCurrency } from "@repo/lib/currency/format";
 import { whatsappNumber } from "@repo/lib/kernel/core/phone";
 import {
   applyWalletToInvoice,
@@ -138,7 +138,7 @@ export function StaffInvoicePanel({
   const sendOnWhatsApp = () => window.open(`https://wa.me/${whatsappNumber(inv.client.phone)}?text=${encodeURIComponent(waText)}`, "_blank", "noopener");
 
   function download() {
-    invoicePdf(inv, symbol)
+    invoicePdf(inv)
       .then((pdf) => savePdf(pdf, `${inv.invoiceNo}.pdf`))
       .catch((err) => {
         console.error("invoice pdf failed:", err);
@@ -217,6 +217,11 @@ export function StaffInvoicePanel({
           <dd className="text-lg font-bold tabular-nums">{money(inv.balance)}</dd>
         </div>
       </dl>
+      {inv.currency.code !== "UGX" ? (
+        <p className="rounded-xl bg-brand-50 p-3 text-xs text-brand-700 dark:bg-brand-500/15 dark:text-brand-300">
+          Issued in {inv.currency.code} at {rateText(inv.currency)}: the client sees a total of {formatIn(inv.amount, inv.currency)}, balance {formatIn(inv.balance, inv.currency)}. Record payments in UGX: {inv.currency.code} 1,000 received is {formatMoney(toUgx(1000, inv.currency))}.
+        </p>
+      ) : null}
 
       {!inv.linesMatchTotal && !inv.order.cancelled ? (
         <p className="rounded-xl bg-warning-50 p-3 text-xs text-warning-700 dark:bg-warning-500/15 dark:text-warning-500">
@@ -382,6 +387,7 @@ export function StaffInvoicePanel({
           <span className="block text-xs text-muted tabular-nums">
             Total {money(inv.amount)} · Paid {money(inv.paid)} ·{" "}
             <span className="font-semibold text-foreground">Balance {money(inv.balance)}</span>
+            {inv.currency.code !== "UGX" ? <span> · issued in {inv.currency.code} ({formatIn(inv.balance, inv.currency)} due)</span> : null}
           </span>
           {inv.dueDate ? <span className="block text-xs text-muted">Due {new Date(`${inv.dueDate}T00:00:00`).toLocaleDateString()}</span> : null}
         </span>
@@ -542,6 +548,9 @@ function LinePricing({ line, price, money }: { line: EditableLine; price: number
   );
 }
 
+/** What issuing an invoice sends: its line prices, due date, notes and currency. */
+type GenerateInput = { lines: InvoiceLineInput[]; dueDate: string | null; notes: string | null; currency: string };
+
 function GeneratePanel({
   orderId,
   money,
@@ -553,10 +562,12 @@ function GeneratePanel({
   money: (n: number) => string;
   pending: boolean;
   error: string | null;
-  onGenerate: (input: { lines: InvoiceLineInput[]; dueDate: string | null; notes: string | null }) => void;
+  onGenerate: (input: GenerateInput) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [preview, setPreview] = useState<{ view: InvoiceView; input: { lines: InvoiceLineInput[]; dueDate: string | null; notes: string | null } } | null>(null);
+  const [preview, setPreview] = useState<{ view: InvoiceView; input: GenerateInput } | null>(null);
+  const [currency, setCurrency] = useState("UGX");
+  const [currencies, setCurrencies] = useState<(DisplayCurrency & { label: string })[]>([]);
   const [previewing, startPreview] = useTransition();
   const [lines, setLines] = useState<EditableLine[] | null>(null);
   const [currentAmount, setCurrentAmount] = useState<number | null>(null);
@@ -571,6 +582,8 @@ function GeneratePanel({
       if (!res.ok) return setLocalError(res.error);
       setLines(toEditable(res.data.lines));
       setCurrentAmount(res.data.currentAmount);
+      setCurrency(res.data.currency);
+      setCurrencies(res.data.currencies);
     });
   }
 
@@ -581,7 +594,7 @@ function GeneratePanel({
     const parsed = toInput(lines);
     if (typeof parsed === "string") return setLocalError(parsed);
     setLocalError(null);
-    const input = { lines: parsed, dueDate: dueDate || null, notes: notes || null };
+    const input = { lines: parsed, dueDate: dueDate || null, notes: notes || null, currency };
     startPreview(async () => {
       const res = await previewInvoice(orderId, input);
       if (!res.ok) return setLocalError(res.error);
@@ -590,6 +603,7 @@ function GeneratePanel({
   }
 
   const total = lines ? linesTotal(lines) : null;
+  const chosen = currencies.find((c) => c.code === currency);
 
   return (
     <section aria-label="Invoice" className="space-y-2 rounded-2xl border border-dashed border-border p-3">
@@ -608,6 +622,17 @@ function GeneratePanel({
             <p className="text-xs text-warning-700 dark:text-warning-500">
               The order&apos;s price will change from {money(currentAmount)} to {money(total)} (the sum of the lines).
             </p>
+          ) : null}
+          {currencies.length > 1 ? (
+            <Field label="Issue it in" hint={currency === "UGX" ? "Amounts stay in UGX in the books, whatever it's issued in." : `${rateText(chosen!)} today, kept on the invoice.${total != null ? ` The client sees ${formatIn(total, chosen!)}.` : ""}`}>
+              <Select value={currency} onChange={(e) => setCurrency(e.target.value)}>
+                {currencies.map((c) => (
+                  <option key={c.code} value={c.code}>
+                    {c.code} · {c.label}
+                  </option>
+                ))}
+              </Select>
+            </Field>
           ) : null}
           <Field label="Due date (optional)">
             <TextInput type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />

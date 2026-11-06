@@ -5,8 +5,7 @@ import Link from "next/link";
 import { UploadQueueStatus } from "@repo/ui/media/UploadQueueStatus";
 import { PriceHero } from "@repo/ui/order/OrderSummary";
 import { PayLater } from "@repo/ui/payments/OrderPayButton";
-import { useCurrencySymbol } from "@repo/lib/currency/CurrencySymbolProvider";
-import { formatMoney } from "@repo/lib/currency/format";
+import { useFormatMoney } from "@repo/lib/currency/CurrencySymbolProvider";
 
 // Shown in place of the order form once placeOrder succeeds: a big tick, the
 // order number, then a nudge to pay. Two flavours:
@@ -42,7 +41,7 @@ export function OrderPlaced({
   /** Placed by an agent: their client pays Aming, from the order's page. */
   forAgent?: boolean;
 }) {
-  const symbol = useCurrencySymbol();
+  const formatAmount = useFormatMoney();
   const payNow = total != null && !needsReview;
   const ref = <span className="font-semibold">{orderNo}</span>;
   // Laid out for phones: a compact "placed" line, the price front and
@@ -66,7 +65,7 @@ export function OrderPlaced({
       </div>
 
       {payNow ? (
-        <PriceHero label="Amount to pay" price={formatMoney(total, symbol)} note={<>Use {ref} as your payment reference.</>} />
+        <PriceHero label="Amount to pay" price={formatAmount(total)} note={<>Use {ref} as your payment reference.</>} />
       ) : (
         <PriceHero
           tone="pending"

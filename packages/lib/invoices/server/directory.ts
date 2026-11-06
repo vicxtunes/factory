@@ -41,6 +41,7 @@ interface ItemRow {
 interface OrderRow {
   id: string;
   order_no: string;
+  currency: string;
   client_id: string | null;
   client_name: string;
   client_phone: string | null;
@@ -79,10 +80,12 @@ export interface InvoiceOrder {
   unconfirmed: boolean;
   /** A price staff set on the order (their quote), if any. */
   quotedPrice: number | null;
+  /** The currency the client had chosen when ordering (its invoice's, unless staff change it). */
+  currency: string;
 }
 
 const SELECT = `
-  id, order_no, client_id, client_name, client_phone, client_email, created_at, delivery_date,
+  id, order_no, currency, client_id, client_name, client_phone, client_email, created_at, delivery_date,
   approval_status, quoted_price, cancelled_at, cancel_reason,
   items:order_items (
     id, product, product_type, size, cover_type, lamination_type, box_type, qty, unit_price, unit,
@@ -144,6 +147,7 @@ function toOrder(row: OrderRow): InvoiceOrder {
     }),
     unconfirmed: row.approval_status !== "approved",
     quotedPrice: quoted,
+    currency: row.currency ?? "UGX",
     proformaLines: items.map((i) => {
       // Same rule as the client's order cards (packages/lib/orders/pricing.ts).
       const estimate = estimateUnitPrice(i);

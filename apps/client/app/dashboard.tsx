@@ -4,7 +4,6 @@ import type { ReactNode } from "react";
 import { Avatar } from "@repo/ui/Avatar";
 import { OrdersIcon, PlaceOrderIcon, ShowroomIcon } from "@repo/ui/icons";
 import { StatusPieChart } from "@repo/ui/charts/OrderCharts";
-import { formatMoney } from "@repo/lib/currency/format";
 import { offerBadge } from "@repo/lib/discounts/core";
 import { CLIENT_STATUS_LABELS, clientStatus, clientStatusSteps } from "@repo/lib/orders/clientStatus";
 import { BOARD_COLUMNS, STATUS_LABELS, type MarketingSlide, type OrderItemWithOrder, type Product } from "@repo/lib/types";
@@ -75,7 +74,7 @@ function InProgressCard({ item }: { item: OrderItemWithOrder }) {
 }
 
 /** One of Aming's products: its picture and name, opening its own page. Prices are held back (see packages/lib/types.ts → Product.price). */
-function ProductCard({ product, category }: { product: Product; category: string }) {
+function ProductCard({ product, category, money }: { product: Product; category: string; money: (ugx: number) => string }) {
   const offer = product.offer ?? product.pending_offer;
   return (
     <Link href={`/${encodeURIComponent(product.slug)}`} className="group block overflow-hidden rounded-3xl border border-border bg-surface shadow-theme-xs">
@@ -86,7 +85,7 @@ function ProductCard({ product, category }: { product: Product; category: string
         ) : null}
         {offer ? (
           <span className="absolute left-2 top-2 rounded-full bg-error-600 px-2 py-0.5 text-xs font-bold text-white shadow-theme-xs">
-            {offerBadge(offer, (n) => formatMoney(n))}
+            {offerBadge(offer, money)}
           </span>
         ) : null}
       </div>
@@ -140,6 +139,7 @@ export function ClientDashboard({
   slides,
   products,
   wallet,
+  money,
 }: {
   client: { name: string; avatarUrl: string | null };
   items: OrderItemWithOrder[];
@@ -148,6 +148,8 @@ export function ClientDashboard({
   products: { product: Product; category: string }[];
   /** The wallet tile; null when the wallet can't load. */
   wallet: ReactNode;
+  /** A UGX amount in the client's chosen currency. */
+  money: (ugx: number) => string;
 }) {
   const completed = items.filter((i) => i.production_status === "completed").length;
   const making = items.filter((i) => i.production_status !== "completed");
@@ -201,7 +203,7 @@ export function ClientDashboard({
               <SectionHead title="From Aming" href="/showroom" link="Showroom" />
               <div className="grid grid-cols-2 gap-4 xl:grid-cols-3">
                 {products.slice(0, PRODUCTS_SHOWN).map(({ product, category }) => (
-                  <ProductCard key={product.id} product={product} category={category} />
+                  <ProductCard key={product.id} product={product} category={category} money={money} />
                 ))}
               </div>
             </section>

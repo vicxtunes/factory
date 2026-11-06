@@ -5,7 +5,7 @@ import { ChipRowSkeleton, ProductGridSkeleton } from "@repo/ui/skeletons/blocks"
 import { Loading } from "@repo/ui/skeletons/Loading";
 import { getClientSession } from "@repo/lib/auth/session";
 import { isOptionCategory, optionCategory, type OptionKind } from "@repo/lib/catalog-options";
-import { formatMoney } from "@repo/lib/currency/format";
+import { clientMoney } from "@repo/lib/currency/server";
 import { offerBadge } from "@repo/lib/discounts/core";
 import { fetchProductCatalog } from "@repo/lib/queries";
 import type { Product, ProductCategory } from "@repo/lib/types";
@@ -13,34 +13,36 @@ import { vendors } from "@repo/lib/vendors/server";
 
 import { ClientShell } from "./shell";
 
-const card = (product: Product): ShowroomCard => ({
+type Money = (ugx: number) => string;
+
+const card = (product: Product, money: Money): ShowroomCard => ({
   id: product.id,
   label: product.name,
   image: product.display_image_url,
   // The product's own page (see [slug]/page.tsx).
   href: `/${encodeURIComponent(product.slug)}`,
-  badge: discountBadge(product),
+  badge: discountBadge(product, money),
 });
 
 /** "−20%" on a card while a discount runs on the product, or on one of its sizes (the best one), or on its price agreed on a call. */
-function discountBadge(product: Product): string | null {
+function discountBadge(product: Product, money: Money): string | null {
   const offer =
     product.offer ?? product.variants.map((v) => v.offer).filter((o) => o != null).sort((a, b) => a.price - b.price)[0] ?? product.pending_offer;
-  return offer ? offerBadge(offer, (n) => formatMoney(n)) : null;
+  return offer ? offerBadge(offer, money) : null;
 }
 
-const optionTab = (catalog: ProductCategory[], kind: OptionKind, label: string): ShowroomTab => ({
+const optionTab = (catalog: ProductCategory[], kind: OptionKind, label: string, money: Money): ShowroomTab => ({
   key: kind,
   label,
   emptyText: `No ${kind} options listed yet.`,
-  cards: (optionCategory(catalog, kind)?.products ?? []).map(card),
+  cards: (optionCategory(catalog, kind)?.products ?? []).map((p) => card(p, money)),
 });
 
 // The factory's catalog in the showroom: a Product tab with a row per
 // category, leading with whichever has the most to show rather than
 // whatever order the catalog admin panel happens to list them in; and
 // Packaging and Lamination in tabs of their own (packages/lib/catalog-options.ts).
-function showroomTabs(catalog: ProductCategory[]): ShowroomTab[] {
+function showroomTabs(catalog: ProductCategory[], money: Money): ShowroomTab[] {
   return [
     {
       key: "product",
@@ -49,10 +51,10 @@ function showroomTabs(catalog: ProductCategory[]): ShowroomTab[] {
       sections: catalog
         .filter((c) => !isOptionCategory(c))
         .sort((a, b) => b.products.length - a.products.length)
-        .map((c) => ({ id: c.id, title: c.name, cards: c.products.map(card), emptyText: "No products listed yet." })),
+        .map((c) => ({ id: c.id, title: c.name, cards: c.products.map((p) => card(p, money)), emptyText: "No products listed yet." })),
     },
-    optionTab(catalog, "packaging", "Packaging"),
-    optionTab(catalog, "lamination", "Lamination"),
+    optionTab(catalog, "packaging", "Packaging", money),
+    optionTab(catalog, "lamination", "Lamination", money),
   ];
 }
 
@@ -90,5 +92,6 @@ export async function ShowroomView() {
 }
 
 async function Catalog() {
-  return <ShowroomGallery tabs={showroomTabs(await fetchProductCatalog(true))} />;
+  const [catalog, money] = await Promise.all([fetchProductCatalog(true), clientMoney()]);
+  return <ShowroomGallery tabs={showroomTabs(catalog, money)} />;
 }

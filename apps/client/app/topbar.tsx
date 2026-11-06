@@ -8,6 +8,7 @@ import { BackButton } from "@repo/ui/navigation/back";
 import { NotificationBell } from "@repo/ui/notifications/NotificationBell";
 
 import { getMyNotifications, markMyNotificationsRead } from "./actions";
+import { CurrencySwitcher } from "./currency-switcher";
 import { ClientUserMenu } from "./user-menu";
 
 // Same shape as app/dashboard/topbar.tsx.
@@ -50,6 +51,7 @@ export function ClientTopbar({
         <h1 className="truncate text-base font-semibold">{title}</h1>
       </span>
       <div className="relative ml-auto flex items-center gap-3">
+        <CurrencySwitcher />
         {signedIn && name ? (
           <>
             <ChatLauncher />

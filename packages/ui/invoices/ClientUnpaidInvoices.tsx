@@ -12,7 +12,7 @@ import { payOrdersFromWallet } from "@repo/lib/wallet/actions";
 import { usePinRetry } from "@repo/ui/wallet/WalletPin";
 import { MOBILE_MONEY_MAX } from "@repo/lib/wallet/policy";
 
-import { Panel, useMoney } from "../wallet/shared";
+import { Panel, useChargeMoney, useMoney } from "../wallet/shared";
 import { InvoiceStatusBadge } from "./InvoiceStatusBadge";
 
 // What the client owes, first thing on their Wallet page: the total, then
@@ -28,6 +28,7 @@ export interface UnpaidInvoice extends ClientInvoiceRow {
 export function ClientUnpaidInvoices({ invoices, walletBalance }: { invoices: UnpaidInvoice[]; walletBalance: number }) {
   const router = useRouter();
   const money = useMoney();
+  const charge = useChargeMoney();
   // Unticked rather than ticked: everything starts ticked, and one paid off just drops out.
   const [unticked, setUnticked] = useState<ReadonlySet<string>>(new Set());
   const [open, setOpen] = useState(false);
@@ -50,7 +51,7 @@ export function ClientUnpaidInvoices({ invoices, walletBalance }: { invoices: Un
   const overLimit =
     total > MOBILE_MONEY_MAX ? (
       <p className="rounded-xl bg-warning-50 px-3 py-2 text-xs text-warning-700 dark:bg-warning-500/15 dark:text-warning-500">
-        MTN and Airtel take up to {money(MOBILE_MONEY_MAX)} at a time.{" "}
+        MTN and Airtel take up to {charge(MOBILE_MONEY_MAX)} at a time.{" "}
         {chosen.length > 1 ? "Untick some to pay by mobile money, or pay these by bank." : "Pay this one by bank, or in parts from its own page (View)."}
       </p>
     ) : null;

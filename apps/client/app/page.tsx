@@ -13,6 +13,7 @@ import { agentOfClient } from "@repo/lib/agents/server";
 import { vendors } from "@repo/lib/vendors/server";
 import { getMyWalletSummary } from "@repo/lib/wallet/actions";
 
+import { clientMoney } from "@repo/lib/currency/server";
 import { ClientDashboard } from "./dashboard";
 import { DealsWelcome, type Deal } from "./deals-slider";
 import { Landing } from "./landing";
@@ -89,6 +90,7 @@ async function Home({ client }: { client: { id: string; name: string; avatarUrl:
         products={products}
         // If the wallet can't load, the home screen still works — it just has no balance tile.
         wallet={wallet.ok ? <WalletSummaryCard summary={wallet.data} holder={client.name} /> : null}
+        money={await clientMoney()}
       />
     </div>
   );

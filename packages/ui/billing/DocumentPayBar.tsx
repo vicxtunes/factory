@@ -35,6 +35,7 @@ export function DocumentPayBar({
   payNote,
   more,
   scope,
+  shown,
 }: {
   kind: "quotation" | "invoice";
   token: string;
@@ -61,11 +62,16 @@ export function DocumentPayBar({
   /** Other answers (accept without paying, decline): shown in a sheet behind "•••". */
   more?: ReactNode;
   scope: Pick<TenantScope, "currency" | "locale">;
+  /** The document's own currency for its figures (an invoice issued in KES); payments are still charged as `scope` says. */
+  shown?: (amount: number) => string;
 }) {
   const router = useRouter();
   const [sheet, setSheet] = useState<"pay" | "more" | null>(null);
   const [paid, setPaid] = useState<number | null>(null);
   const money = (n: number) => formatAmount(scope, n);
+  const headline = shown ?? money;
+  // What mobile money takes, with the document's currency beside it when that's another one.
+  const charge = shown ? (n: number) => `${money(n)} (≈ ${shown(n)})` : money;
 
   function close() {
     setSheet(null);
@@ -102,7 +108,7 @@ export function DocumentPayBar({
           <div className="flex items-end justify-between gap-4 border-t border-dashed border-border pt-4">
             <div>
               <p className="font-mono text-[11px] uppercase tracking-wide text-muted">{amountLabel}</p>
-              <p className="text-3xl font-semibold tnum">{money(amount)}</p>
+              <p className="text-3xl font-semibold tnum">{headline(amount)}</p>
             </div>
             {due ? (
               <div className="text-right">
@@ -134,7 +140,7 @@ export function DocumentPayBar({
           <div className="space-y-4">
             <PayNow
               total={amount}
-              format={money}
+              format={charge}
               phone={null}
               start={pay?.start ?? ((a, phone) => (kind === "quotation" ? approveAndPayQuotation(token, { amount: a, phone }) : payInvoiceByLink(token, { amount: a, phone })))}
               check={pay?.check ?? checkDocumentPayment}
@@ -151,7 +157,7 @@ export function DocumentPayBar({
               </Button>
             }
           >
-            {money(paid)} to {from}. {kind === "quotation" ? "It's approved, and your invoice shows the payment." : "Your invoice shows the payment."}
+            {charge(paid)} to {from}. {kind === "quotation" ? "It's approved, and your invoice shows the payment." : "Your invoice shows the payment."}
           </Confirmation>
         )}
       </BottomSheet>

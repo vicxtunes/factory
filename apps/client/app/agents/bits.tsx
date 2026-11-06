@@ -2,8 +2,7 @@ import Link from "next/link";
 
 import { AGENT_STAGE_LABELS, AGENT_STAGE_STEPS, COMMISSION_STATUS_LABELS, type AgentStage, type CommissionStatus } from "@repo/lib/agents/core";
 import type { AgentOrder } from "@repo/lib/agents/server";
-import { formatMoney } from "@repo/lib/currency/format";
-import { fetchBaseCurrencySymbol } from "@repo/lib/queries";
+import { clientMoney } from "@repo/lib/currency/server";
 
 export const shortDate = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 
@@ -48,7 +47,7 @@ export function StageProgress({ stage }: { stage: AgentStage }) {
 
 /** Orders as tiles: one a row on a phone, a grid on a desktop. */
 export async function OrderGrid({ orders, empty }: { orders: AgentOrder[]; empty: string }) {
-  const symbol = await fetchBaseCurrencySymbol();
+  const money = await clientMoney();
   if (!orders.length) return <p className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted">{empty}</p>;
   return (
     <ul className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -66,10 +65,10 @@ export async function OrderGrid({ orders, empty }: { orders: AgentOrder[]; empty
             </div>
             <p className="mt-3 truncate text-sm text-muted">{o.lines.map((l) => `${l.qty} × ${l.product}`).join(", ")}</p>
             <div className="mt-3 flex items-end justify-between gap-2 border-t border-border pt-3 text-sm">
-              <span className="tnum">{o.price === null ? "Price to confirm" : formatMoney(o.price, symbol)}</span>
+              <span className="tnum">{o.price === null ? "Price to confirm" : money(o.price)}</span>
               {o.earns ? (
                 <span className="text-right">
-                  <span className="block font-semibold tnum">{formatMoney(o.commission.status === "pending" ? o.commission.amount : o.commission.creditedAmount, symbol)}</span>
+                  <span className="block font-semibold tnum">{money(o.commission.status === "pending" ? o.commission.amount : o.commission.creditedAmount)}</span>
                   <CommissionStatusText status={o.commission.status} />
                 </span>
               ) : (

@@ -16,7 +16,6 @@ export function ProductShowcase({
   product,
   category,
   showPrices,
-  currencies,
   onExit,
   shareable = false,
 }: {
@@ -24,12 +23,13 @@ export function ProductShowcase({
   category: ProductCategory;
   // Boss-configurable (dashboard Products page) — see ShowroomSettings.
   showPrices: boolean;
-  currencies: Currency[];
+  /** No longer used: prices follow the currency chosen in the top bar. */
+  currencies?: Currency[];
   onExit: () => void;
   /** Show a Share button for the page's URL (on the product's own page). */
   shareable?: boolean;
 }) {
-  const currency = useCurrency(currencies);
+  const currency = useCurrency();
   const [selectedVariantId, setSelectedVariantId] = useState("");
   const item = useMemo(
     () => ({

@@ -9,7 +9,7 @@ import { checkMobileMoneyPayment, getMyPhone } from "@repo/lib/wallet/actions";
 import { checkMobileMoneyAmount, localPhone, networkOfPhone, type MobileNetwork } from "@repo/lib/wallet/policy";
 import type { MobileMoneyCollection, WalletResult } from "@repo/lib/wallet/types";
 
-import { useMoney } from "./shared";
+import { useChargeMoney } from "./shared";
 
 // Paying by MTN / Airtel (HivePay): their number on record as one tap (when
 // it's on the chosen network) or another number, one Pay button, then
@@ -48,7 +48,8 @@ export function MobileMoneyPay({
   onDone?: () => void;
 }) {
   const router = useRouter();
-  const money = useMoney();
+  // MTN and Airtel charge shillings: always UGX, with the client's currency beside it.
+  const money = useChargeMoney();
   const [fetchedPhone, setFetchedPhone] = useState<string | null>(null);
   const [useOther, setUseOther] = useState(false);
   const [otherPhone, setOtherPhone] = useState("");

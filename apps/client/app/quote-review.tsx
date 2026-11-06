@@ -10,8 +10,7 @@ import { ClientInvoiceLink, ClientOrderEstimate } from "@repo/ui/invoices/Client
 import type { OrderItemWithOrder } from "@repo/lib/types";
 
 import { respondToQuote } from "./actions";
-import { useCurrencySymbol } from "@repo/lib/currency/CurrencySymbolProvider";
-import { formatMoney } from "@repo/lib/currency/format";
+import { useFormatMoney } from "@repo/lib/currency/CurrencySymbolProvider";
 
 // The client's side of the receptionist quote/approval loop (see
 // app/dashboard/order-approval-queue.tsx for the receptionist's side).
@@ -29,7 +28,7 @@ export function ClientQuoteReview({
   order: OrderItemWithOrder["order"];
   onDone: () => void;
 }) {
-  const symbol = useCurrencySymbol();
+  const formatAmount = useFormatMoney();
   const [decliningWithNote, setDecliningWithNote] = useState(false);
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -73,7 +72,7 @@ export function ClientQuoteReview({
       <div className="space-y-3">
         <PriceHero
           label="Amount to pay"
-          price={formatMoney(order.quoted_price, symbol)}
+          price={formatAmount(order.quoted_price)}
           note={
             <>
               You approved this price, and we&apos;re sending the order into production. Use{" "}
@@ -93,7 +92,7 @@ export function ClientQuoteReview({
     <div className="space-y-3">
       <PriceHero
         label="Quoted price"
-        price={formatMoney(order.quoted_price, symbol)}
+        price={formatAmount(order.quoted_price)}
         note={<>For order <span className="font-semibold text-foreground">{order.order_no}</span>. Approve it to start production.</>}
       >
         {decliningWithNote ? null : (

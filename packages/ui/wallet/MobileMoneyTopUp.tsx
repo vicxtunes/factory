@@ -16,7 +16,7 @@ export function MobileMoneyTopUp({ network }: { network: MobileNetwork }) {
 
   return (
     <div className="space-y-3">
-      <Field label="Amount">
+      <Field label="Amount (UGX)">
         <TextInput inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="e.g. 50000" />
       </Field>
       <MobileMoneyPay
