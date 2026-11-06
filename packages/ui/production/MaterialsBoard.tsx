@@ -1,155 +1,122 @@
 "use client";
 
-// Production → Parts: everything production buys or makes, cost only. Bought
-// parts with their size, stock, price paid and value; made parts with what one
-// costs from its parts. Same-named parts in sizes sort together.
-// Tabs split them; cards on a phone, a table from the container's 3xl; tap one
-// for its page. Below-zero stock (usage recorded before the purchase) shows in red.
+// Production → Materials: what products are made of, cost only, and (for
+// photo books priced from their materials) a selling price. A material costs
+// one amount, an amount for each size, or is built from other materials. Cards
+// on a phone, a table from the container's 3xl; tap one to edit it in a form
+// sheet.
 
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { Button } from "@repo/ui/Button";
 import { DataTable, type DataTableColumn } from "@repo/ui/DataTable";
 import { TextInput } from "@repo/ui/Field";
-import { Tabs } from "@repo/ui/Tabs";
 import { useCurrencySymbol } from "@repo/lib/currency/CurrencySymbolProvider";
 import { formatMoney } from "@repo/lib/currency/format";
-import { KIND_LABELS, formatQty, formatUnitCost, partLabel, type Material } from "@repo/lib/production/core";
+import { Costing, fromPlainCostBook, type CostMaterial, type PlainCostBook } from "@repo/lib/production/core";
 
-import type { DetailOption } from "./PartLinesEditor";
-import { MaterialSheet, PurchaseSheet } from "./sheets";
+import { COST_BY_LABELS, MaterialSheet } from "./costing";
 
-const stockTone = (m: Material) => (m.stock < 0 ? "text-error-600 dark:text-error-400" : m.stock === 0 ? "text-muted" : "");
+/** A material's cost, or each size's ("12x12 3,000 · 10x10 2,500"); sizes with a cost short are left out. */
+export function costSummary(costing: Costing, m: CostMaterial, sizes: string[], money: (n: number) => string): string {
+  const any = costing.rate(m, "");
+  if (m.costBy === "one" || (m.costBy === "parts" && !any.missing)) return `${money(any.rate)} per ${m.unit}`;
+  const known = sizes.flatMap((s) => {
+    const r = costing.rate(m, s);
+    return r.missing ? [] : [`${s} ${money(r.rate)}`];
+  });
+  return known.length ? known.join(" · ") : "not set";
+}
 
-type View = "all" | "bought" | "made";
+function sellSummary(m: CostMaterial, money: (n: number) => string): string {
+  const sizes = Object.entries(m.sizeSells);
+  if (sizes.length) return sizes.map(([s, v]) => `${s} ${money(v)}`).join(" · ");
+  return m.sellPrice === null ? "—" : money(m.sellPrice);
+}
 
-export function MaterialsBoard({
-  materials,
-  today,
-  basePath,
-  madeCosts,
-  productNames,
-  products,
-  sizes,
-  details,
-}: {
-  materials: Material[];
-  today: string;
-  basePath: string;
-  /** One made part's cost from its parts, by its id. */
-  madeCosts: Record<string, number>;
-  /** Product names by id, for parts only one product uses. */
-  productNames: Record<string, string>;
-  /** The catalog, for a part that's also sold on its own. */
-  products: { id: string; name: string }[];
-  /** The order form's sizes, for parts in a size. */
-  sizes: string[];
-  /** Every category's order details, for what a new made part is made of. */
-  details: DetailOption[];
-}) {
-  const router = useRouter();
+export function MaterialsBoard({ book: plain, sizes, setsPrices }: { book: PlainCostBook; sizes: string[]; setsPrices: boolean }) {
   const symbol = useCurrencySymbol();
   const money = (n: number) => formatMoney(n, symbol);
+  const costing = useMemo(() => new Costing(fromPlainCostBook(plain)), [plain]);
+  const materials = plain.materials;
   const [query, setQuery] = useState("");
   const [showInactive, setShowInactive] = useState(false);
-  const [sheet, setSheet] = useState<"add" | "purchase" | null>(null);
-  const [view, setView] = useState<View>("all");
+  /** The material being edited; "new" to add one. */
+  const [editing, setEditing] = useState<CostMaterial | "new" | null>(null);
 
+  const productName = (id: string) => plain.products.find((p) => p.id === id)?.name ?? "a product";
+  const uses = (m: CostMaterial) => {
+    const u = costing.usedBy(m.id);
+    return [...u.products.map(productName), ...u.materials.map((id) => costing.material(id)?.name ?? "a material")];
+  };
   const q = query.trim().toLowerCase();
-  const inView = materials.filter((m) => view === "all" || (view === "made") === m.made);
-  const shown = inView
-    .filter((m) => (showInactive || m.active) && (!q || `${m.name} ${m.size ?? ""}`.toLowerCase().includes(q)))
-    .sort((a, b) => a.name.localeCompare(b.name) || (a.size ?? "").localeCompare(b.size ?? "", undefined, { numeric: true }));
-  const inactive = inView.filter((m) => !m.active).length;
-  const value = materials.reduce((sum, m) => sum + Math.max(m.stockValue, 0), 0);
-  const belowZero = materials.filter((m) => m.active && !m.made && m.stock < 0).length;
-  const bought = materials.filter((m) => !m.made);
-  const count = (made: boolean) => materials.filter((m) => m.active && m.made === made).length;
+  const shown = materials.filter((m) => (showInactive || m.active) && (!q || m.name.toLowerCase().includes(q)));
+  const inactive = materials.filter((m) => !m.active).length;
 
-  const owner = (m: Material) => (m.ownerProductId ? `only ${productNames[m.ownerProductId] ?? "one product"}` : null);
-  const sold = (m: Material) => (m.productName ? `sold as ${m.productName}` : null);
-  const notes = (m: Material) => [owner(m), sold(m), m.active ? null : "not in use"].filter(Boolean).join(" · ");
-
-  const columns: DataTableColumn<Material>[] = [
+  const columns: DataTableColumn<CostMaterial>[] = [
     {
       key: "name",
-      header: "Part",
+      header: "Material",
       render: (m) => (
         <span className="font-medium">
           {m.name}
-          {notes(m) ? <span className="ml-2 text-xs font-normal text-muted">{notes(m)}</span> : null}
+          {m.active ? null : <span className="ml-2 text-xs font-normal text-muted">not in use</span>}
         </span>
       ),
     },
-    { key: "kind", header: "Kind", render: (m) => `${m.made ? "Made" : "Bought"} · ${KIND_LABELS[m.kind]}` },
-    { key: "stock", header: "Stock", align: "right", render: (m) => (m.made ? <span className="text-muted">made to order</span> : <span className={stockTone(m)}>{`${formatQty(m.stock)} ${m.unit}`}</span>) },
-    { key: "price", header: "Costs us per unit", align: "right", render: (m) => formatUnitCost(m.made ? (madeCosts[m.id] ?? 0) : m.unitCost, symbol) },
-    { key: "size", header: "Size", render: (m) => m.size ?? <span className="text-muted">any</span> },
-    { key: "value", header: "Value", align: "right", render: (m) => (m.made ? "—" : money(m.stockValue)) },
+    { key: "kind", header: "Cost", render: (m) => COST_BY_LABELS[m.costBy] },
+    { key: "cost", header: "Costs us", align: "right", render: (m) => costSummary(costing, m, sizes, money) },
+    ...(setsPrices ? [{ key: "sell", header: "Sells at", align: "right" as const, render: (m: CostMaterial) => sellSummary(m, money) }] : []),
+    {
+      key: "used",
+      header: "Used in",
+      render: (m) => {
+        const u = uses(m);
+        return u.length ? <span className="text-muted">{u.length > 2 ? `${u.slice(0, 2).join(", ")} +${u.length - 2}` : u.join(", ")}</span> : <span className="text-muted">nothing yet</span>;
+      },
+    },
   ];
+
   return (
     <div className="@container space-y-4">
-      <div className="grid grid-cols-2 gap-3 @2xl:grid-cols-3">
-        <Tile label="Stock value" value={money(value)} wide />
-        <Tile label="Bought · made" value={`${count(false)} · ${count(true)}`} />
-        {belowZero ? <Tile label="Below zero" value={String(belowZero)} tone="error" /> : null}
-      </div>
-
       <div className="flex flex-col gap-3 @2xl:flex-row @2xl:items-center">
         <TextInput type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search materials" className="@2xl:max-w-xs" />
-        <div className="flex gap-2 @2xl:ml-auto">
-          <Button type="button" variant="secondary" className="flex-1 @2xl:flex-none" onClick={() => setSheet("add")}>
-            Add part
-          </Button>
-          <Button type="button" className="flex-1 @2xl:flex-none" onClick={() => setSheet("purchase")} disabled={bought.length === 0}>
-            Record purchase
-          </Button>
-        </div>
+        <Button type="button" className="@2xl:ml-auto" onClick={() => setEditing("new")}>
+          Add material
+        </Button>
       </div>
 
       {materials.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border p-8 text-center text-sm text-muted">
-          No parts yet. Add what you buy (PVC, paper, ink, film, boxes), then what you make from them (a sheet, a cover).
+          No materials yet. Add what products are made of (paper, printing, wood, cloth), then what&apos;s built from them (a cover).
         </div>
       ) : (
         <>
-          <Tabs
-            label="Parts"
-            value={view}
-            onChange={setView}
-            tabs={[
-              { key: "all", label: "All", count: materials.filter((m) => m.active).length },
-              { key: "bought", label: "Bought", count: count(false) },
-              { key: "made", label: "Made", count: count(true) },
-            ]}
-          />
-          {/* Phones: one card per part. */}
+          {/* Phones: one card per material. */}
           <ul className="space-y-2 @3xl:hidden">
             {shown.map((m) => (
               <li key={m.id}>
-                <Link href={`${basePath}/${m.id}`} className="block rounded-2xl border border-border bg-surface p-4 shadow-theme-xs active:bg-gray-50 dark:active:bg-white/5">
+                <button
+                  type="button"
+                  onClick={() => setEditing(m)}
+                  className="block w-full rounded-2xl border border-border bg-surface p-4 text-left shadow-theme-xs active:bg-gray-50 dark:active:bg-white/5"
+                >
                   <div className="flex items-baseline justify-between gap-3">
-                    <p className="truncate font-medium">{partLabel(m)}</p>
-                    {m.made ? (
-                      <p className="shrink-0 text-sm font-semibold tnum">{formatUnitCost(madeCosts[m.id] ?? 0, symbol)}</p>
-                    ) : (
-                      <p className={`shrink-0 text-sm font-semibold tnum ${stockTone(m)}`}>
-                        {formatQty(m.stock)} {m.unit}
-                      </p>
-                    )}
+                    <p className="truncate font-medium">{m.name}</p>
+                    <p className="shrink-0 text-xs text-muted">{COST_BY_LABELS[m.costBy]}</p>
                   </div>
+                  <p className="mt-1 text-sm tnum">{costSummary(costing, m, sizes, money)}</p>
                   <p className="mt-1 text-xs text-muted">
-                    {m.made ? "Made" : `${formatUnitCost(m.unitCost, symbol)} per ${m.unit} · ${money(m.stockValue)}`} · {KIND_LABELS[m.kind]}
-                    {notes(m) ? ` · ${notes(m)}` : ""}
+                    {setsPrices && sellSummary(m, money) !== "—" ? `Sells at ${sellSummary(m, money)} · ` : ""}
+                    {uses(m).length ? `In ${uses(m).join(", ")}` : "Not used yet"}
+                    {m.active ? "" : " · not in use"}
                   </p>
-                </Link>
+                </button>
               </li>
             ))}
           </ul>
-          <DataTable className="hidden @3xl:block" columns={columns} rows={shown} rowKey={(m) => m.id} onRowClick={(m) => router.push(`${basePath}/${m.id}`)} emptyMessage="No part matches." />
-          {shown.length === 0 ? <p className="text-center text-sm text-muted @3xl:hidden">No part matches.</p> : null}
+          <DataTable className="hidden @3xl:block" columns={columns} rows={shown} rowKey={(m) => m.id} onRowClick={(m) => setEditing(m)} emptyMessage="No material matches." />
+          {shown.length === 0 ? <p className="text-center text-sm text-muted @3xl:hidden">No material matches.</p> : null}
           {inactive ? (
             <button type="button" onClick={() => setShowInactive((v) => !v)} className="text-sm font-medium text-brand-600 hover:underline">
               {showInactive ? "Hide" : "Show"} {inactive} not in use
@@ -159,15 +126,15 @@ export function MaterialsBoard({
       )}
 
       <MaterialSheet
-        key={sheet === "add" ? "open" : "closed"}
-        open={sheet === "add"}
-        onClose={() => setSheet(null)}
-        products={products}
+        key={editing === null ? "closed" : editing === "new" ? "new" : editing.id}
+        open={editing !== null}
+        onClose={() => setEditing(null)}
+        material={editing === "new" ? null : editing}
+        materials={materials}
         sizes={sizes}
-        parts={materials}
-        details={details}
+        setsPrices={setsPrices}
+        inUse={editing !== null && editing !== "new" && uses(editing).length > 0}
       />
-      <PurchaseSheet open={sheet === "purchase"} onClose={() => setSheet(null)} materials={bought} today={today} />
     </div>
   );
 }

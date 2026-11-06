@@ -14,6 +14,10 @@ import { cancelOrder, routeApprovedOrder } from "./actions";
 import { AgreedPrices, OrderConfirmation } from "./order-confirmation";
 import { useCurrencySymbol } from "@repo/lib/currency/CurrencySymbolProvider";
 import { formatMoney } from "@repo/lib/currency/format";
+import { catalogUnitPrice } from "@repo/lib/orders/pricing";
+
+/** One unit's cost from its product's recipe (with its add-ons), by item id; `short`: a cost it needs isn't set. */
+export type ItemCosts = Record<string, { cost: number; short: boolean }>;
 
 interface OrderGroup {
   orderId: string;
@@ -51,11 +55,14 @@ export function OrderApprovalQueue({
   designers,
   photobookCategoryIds,
   agentPayments,
+  costs,
   canCancel = false,
 }: {
   items: OrderItemWithOrder[];
   designers: DesignerPublic[];
   photobookCategoryIds: string[];
+  /** Only for those who see production costs (boss, supervisors). */
+  costs: ItemCosts | null;
   /** Agents' orders: paid so far and the 80% needed before production (packages/lib/agents). */
   agentPayments: Record<string, { paid: number; needed: number | null }>;
   canCancel?: boolean;
@@ -77,6 +84,7 @@ export function OrderApprovalQueue({
             designers={designers}
             call={g.items.some((i) => i.category_id && photobookIds.has(i.category_id))}
             agentPayment={agentPayments[g.orderId] ?? null}
+            costs={costs}
             canCancel={canCancel}
           />
         ))}
@@ -102,7 +110,8 @@ function ItemsList({ items }: { items: OrderItemWithOrder[] }) {
 // What the receptionist checks before receiving an order: is everything filled
 // in? Two plain tables — order info, then one row per item with its options
 // stacked as label / value pairs so nothing runs together.
-function OrderDetails({ order, items }: { order: OrderGroup["order"]; items: OrderItemWithOrder[] }) {
+function OrderDetails({ order, items, costs }: { order: OrderGroup["order"]; items: OrderItemWithOrder[]; costs: ItemCosts | null }) {
+  const symbol = useCurrencySymbol();
   const notes = order.order_notes.map((n) => n.body).filter(Boolean);
   const info: [string, string][] = [
     ["Order type", order.order_type === "express" ? "Express" : "Normal"],
@@ -141,6 +150,7 @@ function OrderDetails({ order, items }: { order: OrderGroup["order"]; items: Ord
               <th className="px-3 py-2 text-right font-medium">Qty</th>
               <th className="px-3 py-2 font-medium">Details</th>
               <th className="px-3 py-2 font-medium">Files</th>
+              {costs ? <th className="px-3 py-2 text-right font-medium">Cost · margin</th> : null}
             </tr>
           </thead>
           <tbody>
@@ -175,6 +185,7 @@ function OrderDetails({ order, items }: { order: OrderGroup["order"]; items: Ord
                       <span className="text-[var(--rush)]">None</span>
                     )}
                   </td>
+                  {costs ? <CostCell item={item} cost={costs[item.id]} symbol={symbol} /> : null}
                 </tr>
               );
             })}
@@ -182,6 +193,22 @@ function OrderDetails({ order, items }: { order: OrderGroup["order"]; items: Ord
         </table>
       </div>
     </div>
+  );
+}
+
+/** An item's cost from its recipe, and its margin at its price (the recipe's or the catalog's) when it has one. */
+function CostCell({ item, cost, symbol }: { item: OrderItemWithOrder; cost: ItemCosts[string] | undefined; symbol: string }) {
+  if (!cost) return <td className="px-3 py-2 text-right text-muted">No recipe</td>;
+  const price = catalogUnitPrice(item);
+  const margin = price && price > 0 ? Math.round(((price - cost.cost) / price) * 1000) / 10 : null;
+  return (
+    <td className="tnum px-3 py-2 text-right text-foreground">
+      {formatMoney(cost.cost * item.qty, symbol)}
+      {margin !== null ? (
+        <span className={`block ${margin < 0 ? "text-error-600 dark:text-error-400" : margin < 25 ? "text-warning-600 dark:text-warning-500" : "text-success-600 dark:text-success-500"}`}>{margin}%</span>
+      ) : null}
+      {cost.short ? <span className="block text-warning-600 dark:text-warning-500">cost short</span> : null}
+    </td>
   );
 }
 
@@ -238,11 +265,13 @@ function RouteCard({
   designers,
   call = false,
   agentPayment,
+  costs,
   canCancel = false,
 }: {
   group: OrderGroup;
   designers: DesignerPublic[];
   agentPayment: { paid: number; needed: number | null } | null;
+  costs: ItemCosts | null;
   // Photo-book order: confirming needs the price agreed on a call with the
   // client — photo books have no catalog price (see ./order-confirmation.tsx).
   call?: boolean;
@@ -276,7 +305,7 @@ function RouteCard({
 
   return (
     <OrderCard group={group}>
-      <OrderDetails order={group.order} items={group.items} />
+      <OrderDetails order={group.order} items={group.items} costs={costs} />
       <Steps current={confirmed ? (invoiceReady ? "route" : "invoice") : "confirm"} />
       {!confirmed ? (
         <OrderConfirmation

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { PartsCatalog, monthlyFigures, ordersWhere, periodFigures, shareRevenue, wastageByMaterial, type SoldItem, type SoldOrder } from "./index";
+import { Costing, monthlyFigures, ordersWhere, periodFigures, shareRevenue, wastageByMaterial, type SoldItem, type SoldOrder } from "./index";
 
 const item = (over: Partial<SoldItem>): SoldItem => ({ itemId: "i", productId: null, product: "Thing", variantId: null, qty: 1, unitPrice: null, attributes: {}, ...over });
 
@@ -17,23 +17,18 @@ test("an order's total is shared over its lines by their prices, adding up exact
   assert.deepEqual([...shareRevenue({ issuedAt: "", clientName: "", total: 9_000, items: [item({ itemId: "a" }), item({ itemId: "b", qty: 2 })] }).values()], [3_000, 6_000]);
 });
 
-const part = (id: string, unitCost: number) => ({
-  id, name: id, unit: "pc", kind: "material" as const, made: false, size: null, unitCost, productId: null, productName: null, productPrice: null, ownerProductId: null, active: true,
+const material = (id: string, cost: number) => ({ id, name: id, unit: "pc", costBy: "one" as const, cost, sizeCosts: {}, parts: [], sellPrice: null, sizeSells: {}, active: true });
+const line = (materialId: string, perSheet = false) => ({ materialId, qty: 1, perSheet, sizes: null, whenDetail: null, whenValue: null, sellPrice: null, sizeSells: null });
+const costing = new Costing({
+  materials: [material("paper", 120), material("box", 2_000)],
+  recipes: new Map([["book", [line("paper", true), line("box")]]]),
+  products: [{ id: "book", name: "Photo book", categoryName: "Photo Books", price: null, variants: [], autoPrice: null, margin: null }],
+  margin: 0.4,
 });
-const line = (partId: string, perDetail: string | null = null) => ({ variantId: null, partId, byOrderSize: false, productPartId: null, addsPrice: false, sizes: null, qty: 1, perDetail, whenDetail: null, whenValue: null, label: null, amount: null });
-const parts = new PartsCatalog({
-  parts: [part("paper", 120), part("box", 2_000)],
-  partLines: new Map(),
-  productLines: new Map([["book", [line("paper", "Pages"), line("box")]]]),
-  sheetPrices: new Map(), products: [],
-});
-/** As the service does it: a set-up product's estimate, else unknown. */
-const estimate = (i: SoldItem) => {
-  const setup = i.productId ? parts.setup(i.productId) : null;
-  return setup?.isSetUp ? setup.evaluate({ variantId: i.variantId, details: i.attributes }).cost : null;
-};
+/** As the service does it: a product's recipe estimate, else unknown. */
+const estimate = (i: SoldItem) => (i.productId && costing.hasRecipe(i.productId) ? costing.quote(i.productId, { variantId: i.variantId, details: i.attributes }).cost : null);
 
-test("costs: recorded when there's a record, else the setup's estimate, else unknown (and shown)", () => {
+test("costs: recorded when there's a record, else the recipe's estimate, else unknown (and shown)", () => {
   const figures = periodFigures(
     [
       {
@@ -41,8 +36,8 @@ test("costs: recorded when there's a record, else the setup's estimate, else unk
         clientName: "",
         total: 300_000,
         items: [
-          item({ itemId: "b1", productId: "book", product: "Photo book", qty: 1, unitPrice: 150_000, attributes: { Pages: 40 } }),
-          item({ itemId: "b2", productId: "book", product: "Photo book", qty: 1, unitPrice: 150_000, attributes: { Pages: 40 } }),
+          item({ itemId: "b1", productId: "book", product: "Photo book", qty: 1, unitPrice: 150_000, attributes: { NOS: 40 } }),
+          item({ itemId: "b2", productId: "book", product: "Photo book", qty: 1, unitPrice: 150_000, attributes: { NOS: 40 } }),
         ],
       },
       { issuedAt: "", clientName: "", total: 15_000, items: [item({ itemId: "m1", productId: "mug", product: "Mug", unitPrice: 15_000 })] },

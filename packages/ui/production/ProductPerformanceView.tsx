@@ -66,14 +66,14 @@ export function ProductPerformanceView({ view, setupHref }: { view: ProductPerfo
           </p>
         </div>
         <Link href={setupHref} className={buttonClass("secondary", "sm")}>
-          {f.notSetUp ? "Set it up" : "Edit setup"}
+          {f.notSetUp ? "Write its recipe" : "Edit recipe"}
         </Link>
       </div>
 
       <PeriodPicker period={view.period} />
 
       <div className="grid grid-cols-2 gap-3 @4xl:grid-cols-4">
-        <Stat tone="brand" label="Gross profit" value={f.notSetUp ? "—" : money(f.profit)} delta={f.notSetUp ? null : change(f.profit, before?.profit)} hint={f.notSetUp ? "needs its setup" : `on ${money(f.revenue)} of sales`} />
+        <Stat tone="brand" label="Gross profit" value={f.notSetUp ? "—" : money(f.profit)} delta={f.notSetUp ? null : change(f.profit, before?.profit)} hint={f.notSetUp ? "needs its recipe" : `on ${money(f.revenue)} of sales`} />
         <Stat label="Sales" value={money(f.revenue)} delta={change(f.revenue, before?.revenue)} />
         <Stat label="Units sold" value={String(f.units)} delta={change(f.units, before?.units)} hint={product.unit ? `in ${product.unit.toLowerCase()}` : undefined} />
         <Stat
@@ -89,7 +89,7 @@ export function ProductPerformanceView({ view, setupHref }: { view: ProductPerfo
       ) : f.revenue > 0 ? (
         <p className="text-xs text-muted">
           Cost from recorded usage {money(f.costRecorded)}
-          {f.costEstimated ? `, estimated from its setup ${money(f.costEstimated)}` : ""}.
+          {f.costEstimated ? `, estimated from its recipe ${money(f.costEstimated)}` : ""}.
         </p>
       ) : null}
 
@@ -153,7 +153,7 @@ export function ProductPerformanceView({ view, setupHref }: { view: ProductPerfo
         <ChartCard
           title="What one cost to make"
           subtitle="By month; rising when materials cost more or more is wasted"
-          empty={unitCost.length >= 2 ? null : f.notSetUp ? "Needs its setup." : "Needs at least two months of sales."}
+          empty={unitCost.length >= 2 ? null : f.notSetUp ? "Needs its recipe." : "Needs at least two months of sales."}
           table={{ columns: [{ key: "month", label: "Month" }, { key: "each", label: "Cost of one", align: "right" }], rows: monthRows }}
         >
           {(w) => (
@@ -229,7 +229,7 @@ export function ProductPerformanceView({ view, setupHref }: { view: ProductPerfo
 
         <ChartCard
           title="Wastage"
-          subtitle="Used beyond its setup in this period (from corrected records)"
+          subtitle="Used beyond its recipe in this period (from corrected records)"
           empty={wastage.length ? null : "No wastage recorded for it in this period."}
           table={{
             columns: [

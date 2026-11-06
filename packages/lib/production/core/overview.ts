@@ -5,7 +5,7 @@
 // invoice's issue date, at the order's agreed total), so the two agree; an
 // order's total is shared out over its lines by their confirmed prices. An
 // item's cost is its production record's actual cost when one exists, else
-// its setup's estimate at today's prices; an item whose product isn't set up
+// its recipe's estimate at today's costs; an item whose product isn't set up
 // costs 0 and is shown as such, so the gap is visible rather than hidden.
 
 export interface SoldItem {
@@ -39,7 +39,7 @@ export interface ProductFigures {
   profit: number;
   /** null without revenue. */
   marginPercent: number | null;
-  /** Part of the cost is a setup estimate (no usage recorded). */
+  /** Part of the cost is a recipe estimate (no usage recorded). */
   estimated: boolean;
   /** Not set up: its cost isn't known. */
   notSetUp: boolean;
@@ -51,11 +51,11 @@ export interface PeriodFigures {
   /** Over the sales whose cost is known, like the margin: a sale whose product isn't set up isn't counted as profit. */
   profit: number;
   /**
-   * Over the sales whose cost is known (recorded or from a setup): sales
+   * Over the sales whose cost is known (recorded or from a recipe): sales
    * not set up would count as all margin. Null when no sale's cost is known.
    */
   marginPercent: number | null;
-  /** How the cost is known: from recorded usage, from setups, or not at all (revenue not set up). */
+  /** How the cost is known: from recorded usage, from recipes, or not at all (revenue not set up). */
   costRecorded: number;
   costEstimated: number;
   revenueNotSetUp: number;
@@ -93,7 +93,7 @@ export function periodFigures(
   orders: SoldOrder[],
   /** Live production records' actual cost, by item. */
   recorded: Map<string, number>,
-  /** What one unit of an item costs from its product's setup; null when it isn't set up. */
+  /** What one unit of an item costs from its product's recipe; null when it has none. */
   estimate: (item: SoldItem) => number | null,
 ): PeriodFigures {
   const byProduct = new Map<string, ProductFigures>();
