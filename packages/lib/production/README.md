@@ -26,7 +26,7 @@ Screens:
 
 - **Costing** follows the owner's prototype (2026-11-06; `core/recipes.ts`, migration `20261224100000_costing_recipes.sql`).
   It replaced parts, setups and price per sheet. A **material** (`materials`) costs one amount (`unit_cost`), an amount for
-  each size (`size_costs`), or is **built** from other materials (`material_parts`: a quantity × the part's cost, or a total
+  each size (`size_costs`), or is **built** from other materials (`material_parts`: a quantity × the part's cost, or × a cost of one
   typed for each size; a part is never built itself). It may have a **selling price** (`sell_price`, or `size_sells`),
   used only by photo books priced from their materials.
 - **A recipe** (`recipe_lines`) is a material × how many. On a photo book it can be **per sheet** (× the order's NOS);

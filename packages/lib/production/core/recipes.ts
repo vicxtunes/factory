@@ -3,7 +3,7 @@
 // on client and server.
 //
 // A material costs one amount, an amount for each size, or is built from other
-// materials (each a quantity × its cost, or a total typed for each size). A
+// materials (each a quantity × its own cost, or × a cost typed for each size). A
 // recipe line is a material × a quantity, × the number of sheets on a photo
 // book, only for some sizes and only when the order chose something. Add-ons
 // are the catalog's Lamination, Packaging and Cover Type products the order
@@ -25,7 +25,7 @@ export type SizeAmounts = Record<string, number>;
 export interface MaterialPart {
   partId: string;
   qty: number;
-  /** A total for each size, instead of qty × the part's cost. */
+  /** A cost of one for each size, typed instead of the part's own: qty × it. */
   sizeTotals: SizeAmounts | null;
 }
 
@@ -249,10 +249,10 @@ export class Costing {
       const part = this.materials.get(pt.partId);
       if (!part || part.costBy === "parts") continue;
       if (pt.sizeTotals) {
-        const total = bySize(pt.sizeTotals, size);
-        if (total === null) missing ??= size ? `${part.name} in ${m.name} for ${size}` : `the size, for ${m.name}`;
-        rate += total ?? 0;
-        parts.push({ name: part.name, qty: 1, rate: total ?? 0, cost: total ?? 0 });
+        const one = bySize(pt.sizeTotals, size);
+        if (one === null) missing ??= size ? `${part.name} in ${m.name} for ${size}` : `the size, for ${m.name}`;
+        rate += pt.qty * (one ?? 0);
+        parts.push({ name: part.name, qty: pt.qty, rate: one ?? 0, cost: pt.qty * (one ?? 0) });
         continue;
       }
       const r = this.rate(part, size);

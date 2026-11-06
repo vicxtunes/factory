@@ -142,3 +142,12 @@ test("a cover type is an add-on priced by the order's size, with its own recipe'
   assert.equal(at("10x10").addOns.find((a) => a.kind === "Cover Type")?.price, 25_000);
   assert.equal(at("8x8").price, null, "no 8x8 cover price: priced on the call");
 });
+
+test("a part's typed cost for a size is a cost of one: how many multiplies it", () => {
+  const b = book();
+  const cover = b.materials.find((m) => m.id === "Cover")!;
+  cover.parts = [{ partId: "Wood", qty: 2, sizeTotals: { "12x12": 1_500 } }, { partId: "Cloth", qty: 1, sizeTotals: null }];
+  const r = new Costing(b).rate(cover, "12x12");
+  assert.equal(r.rate, 4_500, "2 × 1,500 typed + 1 × 1,500 own");
+  assert.deepEqual(r.parts[0], { name: "Wood", qty: 2, rate: 1_500, cost: 3_000 });
+});

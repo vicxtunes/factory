@@ -128,7 +128,7 @@ export function MaterialSheet({
     sizeCosts: {},
     parts: parts
       .filter((p) => p.partId)
-      .map((p) => ({ partId: p.partId, qty: p.bySize ? 1 : parseNumber(p.qty) || 0, sizeTotals: p.bySize ? (amounts(p.totals) ?? {}) : null })),
+      .map((p) => ({ partId: p.partId, qty: parseNumber(p.qty) || 0, sizeTotals: p.bySize ? (amounts(p.totals) ?? {}) : null })),
     sellPrice: null,
     sizeSells: {},
     active: true,
@@ -148,9 +148,9 @@ export function MaterialSheet({
     const one = cost.trim() ? parseNumber(cost) : 0;
     const sellOne = sell.trim() ? parseNumber(sell) : null;
     const chosen = parts.filter((p) => p.partId);
-    const builtFrom = chosen.map((p) => ({ partId: p.partId, qty: p.bySize ? 1 : parseNumber(p.qty), sizeTotals: p.bySize ? amounts(p.totals) : null }));
+    const builtFrom = chosen.map((p) => ({ partId: p.partId, qty: parseNumber(p.qty), sizeTotals: p.bySize ? amounts(p.totals) : null }));
     if (!costs || !sells || !Number.isFinite(one) || (sellOne !== null && !Number.isFinite(sellOne))) return setError("Enter amounts as numbers.");
-    if (builtFrom.some((p, i) => (chosen[i].bySize ? p.sizeTotals === null : !Number.isFinite(p.qty)))) return setError("Enter each part's quantity, or its totals, as numbers.");
+    if (builtFrom.some((p, i) => !Number.isFinite(p.qty) || p.qty <= 0 || (chosen[i].bySize && p.sizeTotals === null))) return setError("Enter how many of each part, and any costs you typed, as numbers.");
     submit(async () => {
       const res = await saveMaterial({
         id: material?.id ?? null,
@@ -213,18 +213,17 @@ export function MaterialSheet({
                       Remove
                     </Button>
                   </div>
-                  {p.bySize ? (
-                    <SizeAmountsField label={`What ${part?.name ?? "it"} costs in it, for each size (UGX)`} sizes={sizes} value={p.totals} onChange={(totals) => setPart(i, { totals })} />
-                  ) : (
-                    <Field label={`How many${part ? ` (${part.unit})` : ""}`}>
-                      <TextInput inputMode="decimal" value={p.qty} onChange={(e) => setPart(i, { qty: e.target.value })} required />
-                    </Field>
-                  )}
-                  {part && !p.bySize ? <p className="text-xs text-muted">Its own cost: {costSummary(live, part, sizes, money)}</p> : null}
+                  <Field label={`How many${part ? ` (${part.unit})` : ""}`}>
+                    <TextInput inputMode="decimal" value={p.qty} onChange={(e) => setPart(i, { qty: e.target.value })} required />
+                  </Field>
+                  {part && !p.bySize ? <p className="text-xs text-muted">× its own cost: {costSummary(live, part, sizes, money)}</p> : null}
                   <label className="flex min-h-11 items-center gap-2 text-sm">
                     <input type="checkbox" className="size-4 accent-brand-500" checked={p.bySize} onChange={(e) => setPart(i, { bySize: e.target.checked })} />
-                    Use a different cost here instead of its own (e.g. only part of a piece is used)
+                    Use a different cost of one here instead of its own
                   </label>
+                  {p.bySize ? (
+                    <SizeAmountsField label={`Cost of one ${part?.name ?? "of it"} here, for each size (UGX) — × how many`} sizes={sizes} value={p.totals} onChange={(totals) => setPart(i, { totals })} />
+                  ) : null}
                 </div>
               );
             })}
