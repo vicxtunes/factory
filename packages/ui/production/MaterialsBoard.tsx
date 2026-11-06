@@ -15,18 +15,7 @@ import { useCurrencySymbol } from "@repo/lib/currency/CurrencySymbolProvider";
 import { formatMoney } from "@repo/lib/currency/format";
 import { Costing, fromPlainCostBook, type CostMaterial, type PlainCostBook } from "@repo/lib/production/core";
 
-import { COST_BY_LABELS, MaterialSheet } from "./costing";
-
-/** A material's cost, or each size's ("12x12 3,000 · 10x10 2,500"); sizes with a cost short are left out. */
-export function costSummary(costing: Costing, m: CostMaterial, sizes: string[], money: (n: number) => string): string {
-  const any = costing.rate(m, "");
-  if (m.costBy === "one" || (m.costBy === "parts" && !any.missing)) return `${money(any.rate)} per ${m.unit}`;
-  const known = sizes.flatMap((s) => {
-    const r = costing.rate(m, s);
-    return r.missing ? [] : [`${s} ${money(r.rate)}`];
-  });
-  return known.length ? known.join(" · ") : "not set";
-}
+import { COST_BY_LABELS, MaterialSheet, costSummary } from "./costing";
 
 function sellSummary(m: CostMaterial, money: (n: number) => string): string {
   const sizes = Object.entries(m.sizeSells);

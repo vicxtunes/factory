@@ -11,9 +11,9 @@ import { Button } from "@repo/ui/Button";
 import { Field, Select, TextInput } from "@repo/ui/Field";
 import { FormSheet } from "@repo/ui/FormSheet";
 import { deleteMaterial, saveMaterial, setMargin, setPricing } from "@repo/lib/production/actions";
-import type { AutoPrice, CostBy, CostMaterial, SizeAmounts } from "@repo/lib/production/core";
+import { Costing, type AutoPrice, type CostBy, type CostMaterial, type SizeAmounts } from "@repo/lib/production/core";
 
-import { ErrorLine, Form, UnitField, parseNumber, useSubmit } from "./sheets";
+import { ErrorLine, Form, UnitField, parseNumber, useMoney, useSubmit } from "./sheets";
 
 export const COST_BY_LABELS: Record<CostBy, string> = {
   one: "One cost",
@@ -28,6 +28,17 @@ export const AUTO_PRICE_LABELS: Record<AutoPrice | "catalog", string> = {
 };
 
 type Typed = Record<string, string>;
+
+/** A material's cost, or each size's ("12x12 3,000 · 10x10 2,500"); sizes with a cost short are left out. */
+export function costSummary(costing: Costing, m: CostMaterial, sizes: string[], money: (n: number) => string): string {
+  const any = costing.rate(m, "");
+  if (m.costBy === "one" || (m.costBy === "parts" && !any.missing)) return `${money(any.rate)} per ${m.unit}`;
+  const known = sizes.flatMap((s) => {
+    const r = costing.rate(m, s);
+    return r.missing ? [] : [`${s} ${money(r.rate)}`];
+  });
+  return known.length ? known.join(" · ") : "not set";
+}
 
 const typed = (m: SizeAmounts | null | undefined): Typed => Object.fromEntries(Object.entries(m ?? {}).map(([k, v]) => [k, String(v)]));
 
@@ -105,6 +116,27 @@ export function MaterialSheet({
   const [sizeSells, setSizeSells] = useState<Typed>(typed(material?.sizeSells));
   const [active, setActive] = useState(material?.active ?? true);
   const { error, pending, submit, setError } = useSubmit(onClose);
+  const money = useMoney();
+
+  // What it's built from, worked out as it's typed: each part's own cost (its size's), × how many.
+  const draft: CostMaterial = {
+    id: material?.id ?? "draft",
+    name: name || "It",
+    unit,
+    costBy: "parts",
+    cost: 0,
+    sizeCosts: {},
+    parts: parts
+      .filter((p) => p.partId)
+      .map((p) => ({ partId: p.partId, qty: p.bySize ? 1 : parseNumber(p.qty) || 0, sizeTotals: p.bySize ? (amounts(p.totals) ?? {}) : null })),
+    sellPrice: null,
+    sizeSells: {},
+    active: true,
+  };
+  const live = new Costing({ materials: [...materials.filter((m) => m.id !== draft.id), draft], recipes: new Map(), products: [], margin: 0 });
+  // The sizes its parts come in (all its parts have one cost: no sizes).
+  const partSizes = sizes.filter((s) => draft.parts.some((p) => (p.sizeTotals ? p.sizeTotals[s] !== undefined : Object.keys(live.material(p.partId)?.sizeCosts ?? {}).includes(s))));
+  const builtCost = (size: string) => live.rate(draft, size);
 
   // A part has a cost of its own: never a built material, never itself.
   const choices = materials.filter((m) => m.costBy !== "parts" && m.id !== material?.id);
@@ -181,17 +213,18 @@ export function MaterialSheet({
                       Remove
                     </Button>
                   </div>
-                  <label className="flex min-h-11 items-center gap-2 text-sm">
-                    <input type="checkbox" className="size-4 accent-brand-500" checked={p.bySize} onChange={(e) => setPart(i, { bySize: e.target.checked })} />
-                    Type its total cost for each size
-                  </label>
                   {p.bySize ? (
-                    <SizeAmountsField label={`Total cost of ${part?.name ?? "it"} in each size (UGX)`} sizes={sizes} value={p.totals} onChange={(totals) => setPart(i, { totals })} />
+                    <SizeAmountsField label={`What ${part?.name ?? "it"} costs in it, for each size (UGX)`} sizes={sizes} value={p.totals} onChange={(totals) => setPart(i, { totals })} />
                   ) : (
-                    <Field label={`How many${part ? ` (${part.unit})` : ""}`} hint={part ? `× its own cost${part.costBy === "size" ? " for the order's size" : ""}` : undefined}>
+                    <Field label={`How many${part ? ` (${part.unit})` : ""}`}>
                       <TextInput inputMode="decimal" value={p.qty} onChange={(e) => setPart(i, { qty: e.target.value })} required />
                     </Field>
                   )}
+                  {part && !p.bySize ? <p className="text-xs text-muted">Its own cost: {costSummary(live, part, sizes, money)}</p> : null}
+                  <label className="flex min-h-11 items-center gap-2 text-sm">
+                    <input type="checkbox" className="size-4 accent-brand-500" checked={p.bySize} onChange={(e) => setPart(i, { bySize: e.target.checked })} />
+                    Use a different cost here instead of its own (e.g. only part of a piece is used)
+                  </label>
                 </div>
               );
             })}
@@ -199,6 +232,26 @@ export function MaterialSheet({
               Add a material it&apos;s built from
             </Button>
             {!choices.length ? <p className="text-xs text-muted">Add the materials it&apos;s built from first (wood, cloth…).</p> : null}
+            {draft.parts.length ? (
+              <div className="rounded-2xl bg-gray-50 p-3 text-sm dark:bg-white/5">
+                <p className="text-xs font-medium text-muted">Cost of one {name || "of it"}, from what it&apos;s built from</p>
+                {partSizes.length ? (
+                  <ul className="mt-1 grid grid-cols-2 gap-x-4 gap-y-0.5 tnum">
+                    {partSizes.map((s) => {
+                      const r = builtCost(s);
+                      return (
+                        <li key={s}>
+                          {s}: <strong>{money(r.rate)}</strong>
+                          {r.missing ? <span className="block text-xs text-warning-600 dark:text-warning-500">short: no {r.missing}</span> : null}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : (
+                  <p className="mt-1 font-semibold tnum">{money(builtCost("").rate)}</p>
+                )}
+              </div>
+            ) : null}
           </div>
         )}
 
