@@ -244,6 +244,8 @@ export interface ProductCategory {
   name: string;
   sort_order: number;
   active: boolean;
+  /** Clients browse it in the showroom; false: only on the order form (e.g. Cover Type). */
+  in_showroom: boolean;
   created_at: string;
   attributes: CategoryAttribute[];
   products: Product[];

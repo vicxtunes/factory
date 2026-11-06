@@ -149,7 +149,7 @@ function checkOrderPaymentInput(input: { amount: number; method: PaymentMethod; 
 async function settle(payment: repo.PaymentRow, actor: WalletActor): Promise<number> {
   const result = await repo.settlePayment(payment.id, actor);
   if (!result.alreadySettled) {
-    await notifier.depositConfirmed(payment.client_id, payment.amount, result.balance);
+    await notifier.walletCredited(payment.client_id, payment.amount, result.balance);
     if (payment.order_id && result.appliedToOrder > 0) {
       await directory.logOnOrder(payment.order_id, actor, "wallet_payment", { amount: result.appliedToOrder });
     }

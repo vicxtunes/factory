@@ -1,13 +1,13 @@
 import type { CategoryAttribute, ProductCategory } from "./types";
 
-// Packaging and Lamination are product categories of their own, so each
+// Packaging, Lamination and Cover Type are product categories of their own, so each
 // option is a full product (image, video, media, price) managed from
 // Dashboard -> Products. The showroom gives each its own tab instead of
 // listing it with the products, and the order form uses its products as the
 // choices for any category's attribute of the same name. Matched by name.
-export type OptionKind = "packaging" | "lamination";
+export type OptionKind = "packaging" | "lamination" | "cover type";
 
-export const OPTION_KINDS: OptionKind[] = ["packaging", "lamination"];
+export const OPTION_KINDS: OptionKind[] = ["packaging", "lamination", "cover type"];
 
 export function optionCategory(catalog: ProductCategory[], kind: OptionKind): ProductCategory | null {
   return catalog.find((c) => c.name.trim().toLowerCase() === kind) ?? null;

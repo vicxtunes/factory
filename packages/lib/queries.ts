@@ -288,7 +288,7 @@ export async function fetchAgents(activeOnly = false): Promise<Agent[]> {
 }
 
 const CATALOG_SELECT = `
-  id, name, sort_order, active, created_at,
+  id, name, sort_order, active, in_showroom, created_at,
   attributes:category_attributes (id, category_id, name, type, options, required, sort_order, created_at),
   products (
     id, category_id, name, slug, price, offer:product_offer, pending_offer, description, unit, active, created_at, display_image_url, preview_video_url,

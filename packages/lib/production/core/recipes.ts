@@ -3,11 +3,12 @@
 // on client and server.
 //
 // A material costs one amount, an amount for each size, or is built from other
-// materials (each a quantity × its cost, or a total typed for each size). A
+// materials (each a quantity × its own cost, or × a cost typed for each size). A
 // recipe line is a material × a quantity, × the number of sheets on a photo
 // book, only for some sizes and only when the order chose something. Add-ons
-// are the catalog's Lamination and Packaging products the order chose: their
-// catalog price, and their own recipe's cost, once per book.
+// are the catalog's Lamination, Packaging and Cover Type products the order
+// chose: their catalog price (their size's, when it has sizes), and their own
+// recipe's cost, once per book.
 //
 // Every product but a photo book is priced by the catalog. A photo book can be
 // priced from its recipe, as the boss chooses: from the margin (on the whole
@@ -24,7 +25,7 @@ export type SizeAmounts = Record<string, number>;
 export interface MaterialPart {
   partId: string;
   qty: number;
-  /** A total for each size, instead of qty × the part's cost. */
+  /** A cost of one for each size, typed instead of the part's own: qty × it. */
   sizeTotals: SizeAmounts | null;
 }
 
@@ -134,7 +135,7 @@ export interface Quote {
 // --- Details ---------------------------------------------------------------
 
 /** The catalog categories whose products are add-ons, matched with the order detail of the same name. */
-export const ADD_ON_KINDS = ["Lamination", "Packaging"] as const;
+export const ADD_ON_KINDS = ["Lamination", "Packaging", "Cover Type"] as const;
 
 const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
 
@@ -236,7 +237,7 @@ export class Costing {
 
   /** The cost of one of a material in a size; `missing` when a cost it needs isn't set. */
   rate(m: CostMaterial, size: string): { rate: number; missing: string | null; parts: CostLine["parts"] } {
-    if (m.costBy === "one") return { rate: m.cost, missing: m.cost > 0 ? null : `a cost for ${m.name}`, parts: [] };
+    if (m.costBy === "one") return { rate: m.cost, missing: m.cost > 0 ? null : `${m.name}'s cost`, parts: [] };
     if (m.costBy === "size") {
       const r = bySize(m.sizeCosts, size);
       return { rate: r ?? 0, missing: r === null ? (size ? `${m.name}'s cost for ${size}` : `the size, for ${m.name}`) : null, parts: [] };
@@ -248,10 +249,10 @@ export class Costing {
       const part = this.materials.get(pt.partId);
       if (!part || part.costBy === "parts") continue;
       if (pt.sizeTotals) {
-        const total = bySize(pt.sizeTotals, size);
-        if (total === null) missing ??= size ? `${part.name} in ${m.name} for ${size}` : `the size, for ${m.name}`;
-        rate += total ?? 0;
-        parts.push({ name: part.name, qty: 1, rate: total ?? 0, cost: total ?? 0 });
+        const one = bySize(pt.sizeTotals, size);
+        if (one === null) missing ??= size ? `${part.name} in ${m.name} for ${size}` : `the size, for ${m.name}`;
+        rate += pt.qty * (one ?? 0);
+        parts.push({ name: part.name, qty: pt.qty, rate: one ?? 0, cost: pt.qty * (one ?? 0) });
         continue;
       }
       const r = this.rate(part, size);
@@ -304,7 +305,7 @@ export class Costing {
     return { lines, cost: lines.reduce((s, l) => s + l.cost, 0), missing: [...missing] };
   }
 
-  /** The add-ons an order chose: each Lamination and Packaging product it names. */
+  /** The add-ons an order chose: each Lamination, Packaging and Cover Type product it names, at its size's price when it has one. */
   addOns(order: OrderChoice): AddOn[] {
     const out: AddOn[] = [];
     const size = orderSize(order);

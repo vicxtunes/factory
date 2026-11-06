@@ -19,12 +19,9 @@ async function pushClient(clientId: string, title: string, body: string): Promis
   await notifyActor({ type: "client", id: clientId }, { title, body, url: CLIENT_URL });
 }
 
-export async function depositConfirmed(clientId: string, amount: number, balance: number): Promise<void> {
-  await pushClient(
-    clientId,
-    "Deposit confirmed",
-    `${formatMoney(amount)} was added to your wallet. Balance: ${formatMoney(balance)}.`,
-  );
+/** A top-up reached the wallet (mobile money, or a deposit staff recorded or confirmed): what came in and the balance now. */
+export async function walletCredited(clientId: string, amount: number, balance: number): Promise<void> {
+  await pushClient(clientId, "Wallet credited", `${formatMoney(amount)} was added to your wallet. New balance: ${formatMoney(balance)}.`);
 }
 
 export async function depositRejected(clientId: string, amount: number, reason: string): Promise<void> {
@@ -40,15 +37,9 @@ export async function walletChangedByStaff(clientId: string, amount: number, bal
   );
 }
 
-/** A mobile money prompt the client approved went through. `orderNo` null: a wallet top-up. */
-export async function mobileMoneyReceived(clientId: string, amount: number, orderNo: string | null): Promise<void> {
-  await pushClient(
-    clientId,
-    "Payment received",
-    orderNo
-      ? `${formatMoney(amount)} by mobile money for order ${orderNo}. Thank you!`
-      : `${formatMoney(amount)} by mobile money was added to your wallet.`,
-  );
+/** A mobile money prompt the client approved for an order went through. */
+export async function mobileMoneyReceived(clientId: string, amount: number, orderNo: string): Promise<void> {
+  await pushClient(clientId, "Payment received", `${formatMoney(amount)} by mobile money for order ${orderNo}. Thank you!`);
 }
 
 /** One prompt that cleared several invoices went through. */

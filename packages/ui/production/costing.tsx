@@ -5,15 +5,15 @@
 // materials; and its selling price), the margin photo books are priced at, and
 // how one photo book is priced. Selling prices and margins are the boss's.
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 
 import { Button } from "@repo/ui/Button";
 import { Field, Select, TextInput } from "@repo/ui/Field";
 import { FormSheet } from "@repo/ui/FormSheet";
 import { deleteMaterial, saveMaterial, setMargin, setPricing } from "@repo/lib/production/actions";
-import type { AutoPrice, CostBy, CostMaterial, SizeAmounts } from "@repo/lib/production/core";
+import { Costing, marginAt, type AutoPrice, type CostBy, type CostMaterial, type SizeAmounts } from "@repo/lib/production/core";
 
-import { ErrorLine, Form, UnitField, parseNumber, useSubmit } from "./sheets";
+import { ErrorLine, Form, UnitField, parseNumber, useMoney, useSubmit } from "./sheets";
 
 export const COST_BY_LABELS: Record<CostBy, string> = {
   one: "One cost",
@@ -28,6 +28,17 @@ export const AUTO_PRICE_LABELS: Record<AutoPrice | "catalog", string> = {
 };
 
 type Typed = Record<string, string>;
+
+/** A material's cost, or each size's ("12x12 3,000 · 10x10 2,500"); sizes with a cost short are left out. */
+export function costSummary(costing: Costing, m: CostMaterial, sizes: string[], money: (n: number) => string): string {
+  const any = costing.rate(m, "");
+  if (m.costBy === "one" || (m.costBy === "parts" && !any.missing)) return `${money(any.rate)} per ${m.unit}`;
+  const known = sizes.flatMap((s) => {
+    const r = costing.rate(m, s);
+    return r.missing ? [] : [`${s} ${money(r.rate)}`];
+  });
+  return known.length ? known.join(" · ") : "not set";
+}
 
 const typed = (m: SizeAmounts | null | undefined): Typed => Object.fromEntries(Object.entries(m ?? {}).map(([k, v]) => [k, String(v)]));
 
@@ -44,17 +55,35 @@ export function amounts(t: Typed): SizeAmounts | null {
 }
 
 /** An amount for each size, two to a row. */
-export function SizeAmountsField({ label, sizes, value, onChange, placeholder }: { label: string; sizes: string[]; value: Typed; onChange: (v: Typed) => void; placeholder?: string }) {
+export function SizeAmountsField({
+  label,
+  sizes,
+  value,
+  onChange,
+  placeholder,
+  note,
+}: {
+  label: string;
+  sizes: string[];
+  value: Typed;
+  onChange: (v: Typed) => void;
+  placeholder?: string;
+  /** A line under a size's box (its cost and margin). */
+  note?: (size: string) => ReactNode;
+}) {
   return (
     <div>
       <span className="mb-1 block text-xs font-medium text-muted">{label}</span>
       {sizes.length ? (
         <div className="grid grid-cols-2 gap-2">
           {sizes.map((size) => (
-            <label key={size} className="flex items-center gap-2 text-sm">
-              <span className="w-14 shrink-0 text-muted">{size}</span>
-              <TextInput inputMode="decimal" value={value[size] ?? ""} onChange={(e) => onChange({ ...value, [size]: e.target.value })} placeholder={placeholder ?? "Not set"} aria-label={`${label}, ${size}`} />
-            </label>
+            <div key={size}>
+              <label className="flex items-center gap-2 text-sm">
+                <span className="w-14 shrink-0 text-muted">{size}</span>
+                <TextInput inputMode="decimal" value={value[size] ?? ""} onChange={(e) => onChange({ ...value, [size]: e.target.value })} placeholder={placeholder ?? "Not set"} aria-label={`${label}, ${size}`} />
+              </label>
+              {note ? <div className="mt-0.5 pl-16 text-xs text-muted">{note(size)}</div> : null}
+            </div>
           ))}
         </div>
       ) : (
@@ -105,6 +134,45 @@ export function MaterialSheet({
   const [sizeSells, setSizeSells] = useState<Typed>(typed(material?.sizeSells));
   const [active, setActive] = useState(material?.active ?? true);
   const { error, pending, submit, setError } = useSubmit(onClose);
+  const money = useMoney();
+
+  // What it's built from, worked out as it's typed: each part's own cost (its size's), × how many.
+  const draft: CostMaterial = {
+    id: material?.id ?? "draft",
+    name: name || "It",
+    unit,
+    costBy,
+    cost: parseNumber(cost) || 0,
+    sizeCosts: amounts(sizeCosts) ?? {},
+    parts: parts
+      .filter((p) => p.partId)
+      .map((p) => ({ partId: p.partId, qty: parseNumber(p.qty) || 0, sizeTotals: p.bySize ? (amounts(p.totals) ?? {}) : null })),
+    sellPrice: null,
+    sizeSells: {},
+    active: true,
+  };
+  const live = new Costing({ materials: [...materials.filter((m) => m.id !== draft.id), draft], recipes: new Map(), products: [], margin: 0 });
+  // The sizes its parts come in (all its parts have one cost: no sizes).
+  const partSizes = sizes.filter((s) => draft.parts.some((p) => (p.sizeTotals ? p.sizeTotals[s] !== undefined : Object.keys(live.material(p.partId)?.sizeCosts ?? {}).includes(s))));
+  const builtCost = (size: string) => live.rate(draft, size);
+  // The sizes its cost is known in (one cost: none), for setting its selling price beside it.
+  const costSizes = costBy === "parts" ? partSizes : costBy === "size" ? sizes.filter((s) => draft.sizeCosts[s] !== undefined) : [];
+  /** Its cost in a size, and the margin at a selling price typed. */
+  const costAndMargin = (size: string, sellText: string): ReactNode => {
+    const c = builtCost(size);
+    if (c.missing) return <span className="text-warning-600 dark:text-warning-500">cost short: no {c.missing}</span>;
+    const m = sellText.trim() ? marginAt(parseNumber(sellText), c.rate) : null;
+    return (
+      <>
+        costs {money(c.rate)}
+        {m ? (
+          <span className={m.profit < 0 ? " text-error-600 dark:text-error-400" : m.percent < 25 ? " text-warning-600 dark:text-warning-500" : " text-success-600 dark:text-success-500"}>
+            {" "}· {m.percent}% margin
+          </span>
+        ) : null}
+      </>
+    );
+  };
 
   // A part has a cost of its own: never a built material, never itself.
   const choices = materials.filter((m) => m.costBy !== "parts" && m.id !== material?.id);
@@ -116,9 +184,9 @@ export function MaterialSheet({
     const one = cost.trim() ? parseNumber(cost) : 0;
     const sellOne = sell.trim() ? parseNumber(sell) : null;
     const chosen = parts.filter((p) => p.partId);
-    const builtFrom = chosen.map((p) => ({ partId: p.partId, qty: p.bySize ? 1 : parseNumber(p.qty), sizeTotals: p.bySize ? amounts(p.totals) : null }));
+    const builtFrom = chosen.map((p) => ({ partId: p.partId, qty: parseNumber(p.qty), sizeTotals: p.bySize ? amounts(p.totals) : null }));
     if (!costs || !sells || !Number.isFinite(one) || (sellOne !== null && !Number.isFinite(sellOne))) return setError("Enter amounts as numbers.");
-    if (builtFrom.some((p, i) => (chosen[i].bySize ? p.sizeTotals === null : !Number.isFinite(p.qty)))) return setError("Enter each part's quantity, or its totals, as numbers.");
+    if (builtFrom.some((p, i) => !Number.isFinite(p.qty) || p.qty <= 0 || (chosen[i].bySize && p.sizeTotals === null))) return setError("Enter how many of each part, and any costs you typed, as numbers.");
     submit(async () => {
       const res = await saveMaterial({
         id: material?.id ?? null,
@@ -181,17 +249,17 @@ export function MaterialSheet({
                       Remove
                     </Button>
                   </div>
+                  <Field label={`How many${part ? ` (${part.unit})` : ""}`}>
+                    <TextInput inputMode="decimal" value={p.qty} onChange={(e) => setPart(i, { qty: e.target.value })} required />
+                  </Field>
+                  {part && !p.bySize ? <p className="text-xs text-muted">× its own cost: {costSummary(live, part, sizes, money)}</p> : null}
                   <label className="flex min-h-11 items-center gap-2 text-sm">
                     <input type="checkbox" className="size-4 accent-brand-500" checked={p.bySize} onChange={(e) => setPart(i, { bySize: e.target.checked })} />
-                    Type its total cost for each size
+                    Use a different cost of one here instead of its own
                   </label>
                   {p.bySize ? (
-                    <SizeAmountsField label={`Total cost of ${part?.name ?? "it"} in each size (UGX)`} sizes={sizes} value={p.totals} onChange={(totals) => setPart(i, { totals })} />
-                  ) : (
-                    <Field label={`How many${part ? ` (${part.unit})` : ""}`} hint={part ? `× its own cost${part.costBy === "size" ? " for the order's size" : ""}` : undefined}>
-                      <TextInput inputMode="decimal" value={p.qty} onChange={(e) => setPart(i, { qty: e.target.value })} required />
-                    </Field>
-                  )}
+                    <SizeAmountsField label={`Cost of one ${part?.name ?? "of it"} here, for each size (UGX) — × how many`} sizes={sizes} value={p.totals} onChange={(totals) => setPart(i, { totals })} />
+                  ) : null}
                 </div>
               );
             })}
@@ -199,6 +267,26 @@ export function MaterialSheet({
               Add a material it&apos;s built from
             </Button>
             {!choices.length ? <p className="text-xs text-muted">Add the materials it&apos;s built from first (wood, cloth…).</p> : null}
+            {draft.parts.length ? (
+              <div className="rounded-2xl bg-gray-50 p-3 text-sm dark:bg-white/5">
+                <p className="text-xs font-medium text-muted">Cost of one {name || "of it"}, from what it&apos;s built from</p>
+                {partSizes.length ? (
+                  <ul className="mt-1 grid grid-cols-2 gap-x-4 gap-y-0.5 tnum">
+                    {partSizes.map((s) => {
+                      const r = builtCost(s);
+                      return (
+                        <li key={s}>
+                          {s}: <strong>{money(r.rate)}</strong>
+                          {r.missing ? <span className="block text-xs text-warning-600 dark:text-warning-500">short: no {r.missing}</span> : null}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : (
+                  <p className="mt-1 font-semibold tnum">{money(builtCost("").rate)}</p>
+                )}
+              </div>
+            ) : null}
           </div>
         )}
 
@@ -210,11 +298,30 @@ export function MaterialSheet({
               Differs by size
             </label>
             {sellBySize ? (
-              <SizeAmountsField label="Selling price of one in each size (UGX)" sizes={sizes} value={sizeSells} onChange={setSizeSells} />
+              <SizeAmountsField
+                label="Selling price of one in each size (UGX)"
+                sizes={costSizes.length ? costSizes : sizes}
+                value={sizeSells}
+                onChange={setSizeSells}
+                note={(size) => costAndMargin(size, sizeSells[size] ?? "")}
+              />
             ) : (
-              <Field label={`Selling price of one ${unit || "unit"} (UGX)`}>
-                <TextInput inputMode="numeric" value={sell} onChange={(e) => setSell(e.target.value)} placeholder="Not set" />
-              </Field>
+              <div>
+                <Field label={`Selling price of one ${unit || "unit"} (UGX)`}>
+                  <TextInput inputMode="numeric" value={sell} onChange={(e) => setSell(e.target.value)} placeholder="Not set" />
+                </Field>
+                <div className="mt-1 space-y-0.5 text-xs text-muted">
+                  {costSizes.length ? (
+                    costSizes.map((size) => (
+                      <p key={size}>
+                        {size}: {costAndMargin(size, sell)}
+                      </p>
+                    ))
+                  ) : (
+                    <p>{costAndMargin("", sell)}</p>
+                  )}
+                </div>
+              </div>
             )}
           </div>
         ) : null}
