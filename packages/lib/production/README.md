@@ -38,19 +38,28 @@ Screens:
   PVC 10x10 are two parts named PVC), may be the catalog product it's **sold as** (`product_id`, e.g. a box chosen as
   packaging) and may belong to **one product only** (`owner_product_id`; set when it's added, only ever changed to
   shared). Names are unique per size; a product's own parts only among themselves.
-- **A product's setup** is its own lines (`part_lines.product_id`): a part × how many, optionally × a number on the
-  order (× NOS), **in the order's size** (`by_order_size`: the part of that name in the size the order chose, its
-  Size detail else its size variant), for one size variant, only when the order chose something (Lamination =
-  Matt), or **the part the order chose** in a detail (Packaging: a part by its product's name, else its own); or an
-  **other cost** (a fixed amount). Order details match by name without a note in brackets ("NOS (Number of
-  Sheets)" = "NOS"). **Copy from** another product copies its lines (size lines by size name) and makes the parts
-  it uses shared. Every save is kept in `part_setup_history`. Labour isn't costed (decided 2026-11-02).
+- **A part is added** in one form, from anywhere (Parts, a product's setup, a made part): bought or made, its
+  measure (a list of common ones, or your own), **shared or only for one product** (changeable later while no
+  other product uses it), and **its sizes with a price each**, ticked in a pop-up: one part per size, in one go
+  (`parts_add`). A made part picks **what it's made of** in the same form, from the parts there are; what's inside
+  it counts only through it (a setup that also lists one of them on its own is warned). A bought part's price is
+  editable any time (each purchase updates it too); a made part can have **your own cost** (`unit_cost` on a made
+  part: products use that figure, and its parts still come off stock).
+- **A product's setup** is its own lines (`part_lines.product_id`), set up the owner's way with nothing fixed: a
+  part × how many, optionally × a number on the order (× NOS), **in the order's size** (`by_order_size`: the part of
+  that name in the size the order chose, its Size detail else its size variant); an **attached catalog product**
+  (`product_part_id`, a box: its cost is its own setup's, and **adds its price** to the client's when ticked); or an
+  **other cost** (a fixed amount). Any line can be for **some sizes only** (`sizes`, ticked in a pop-up) and **only
+  when** the order chose something (Packaging = Box A). Order details match by name without a note in brackets
+  ("NOS (Number of Sheets)" = "NOS"). **Copy from** another product copies its lines (size lines by size name) and
+  makes the parts it uses shared. Every save is kept in `part_setup_history`. Labour isn't costed (decided 2026-11-02).
 - **Client prices are the catalog's** (decided 2026-11-05): a product's catalog price per size, or, for a photo book,
   its **price per sheet** for each size (`product_sheet_prices`, the boss sets it in Products): an order comes to that
-  × its number of sheets + the chosen packaging's catalog price, and with anything missing it's left for the call. A
+  × its number of sheets + each attached product whose line adds its price, and with anything missing it's left for
+  the call. A product with its own catalog price is invoiced at that alone (the setup says so if a line adds a price). A
   product priced per sheet has no catalog price of its own (it would win on invoices; both sides refuse). Profit is
   the client price less the parts' cost.
-- The classes: `BoughtPart` and `MadePart` (a `Component`: what a quantity of it costs and uses), `PartsCatalog`
+- The classes: `BoughtPart`, `MadePart` and `AttachedProduct` (a `Component`: what a quantity of it costs and uses), `PartsCatalog`
   (all parts; walks lines), `ProductSetup` (lines + a `PricingMethod`: `FixedPerSize`, `PerSheet`). A new way of
   pricing is one more `PricingMethod`.
 - **Recording usage is automatic** (chosen 2026-11-02): when an item reaches Quality check (or later, from
@@ -95,4 +104,5 @@ supabase/migrations/20261218090000_clear_materials.sql   The clean start: old ma
 supabase/migrations/20261218100000_parts.sql   Parts and setups (the old recipe and sheet tables stay, empty and
                                                unused, so a rolled-back app still runs)
 supabase/migrations/20261219100000_part_sizes_sheet_prices.sql   Parts in sizes, cost only; prices per sheet
+supabase/migrations/20261221100000_parts_customise.sql   Attached products, sizes per line, own cost, parts_add
 ```

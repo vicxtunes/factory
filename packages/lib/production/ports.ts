@@ -18,7 +18,8 @@ export interface ProductionActor {
 export interface ProductionStore {
   materials(scope: TenantScope): Promise<Material[]>;
   material(scope: TenantScope, id: string): Promise<MaterialDetail | null>;
-  addMaterial(scope: TenantScope, input: MaterialInput, actor: ProductionActor): Promise<string>;
+  /** One part per size (each with its price); a made one with what it's made of. Returns the new ids. */
+  addMaterial(scope: TenantScope, input: MaterialInput, actor: ProductionActor): Promise<string[]>;
   updateMaterial(scope: TenantScope, input: MaterialUpdate): Promise<void>;
   /** Stock up, the material's price becomes this one, a materials expense; on credit, money we owe the supplier. */
   recordPurchase(scope: TenantScope, input: PurchaseInput, actor: ProductionActor): Promise<string>;

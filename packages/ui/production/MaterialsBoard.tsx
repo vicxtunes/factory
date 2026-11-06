@@ -18,6 +18,7 @@ import { useCurrencySymbol } from "@repo/lib/currency/CurrencySymbolProvider";
 import { formatMoney } from "@repo/lib/currency/format";
 import { KIND_LABELS, formatQty, formatUnitCost, partLabel, type Material } from "@repo/lib/production/core";
 
+import type { DetailOption } from "./PartLinesEditor";
 import { MaterialSheet, PurchaseSheet } from "./sheets";
 
 const stockTone = (m: Material) => (m.stock < 0 ? "text-error-600 dark:text-error-400" : m.stock === 0 ? "text-muted" : "");
@@ -32,6 +33,7 @@ export function MaterialsBoard({
   productNames,
   products,
   sizes,
+  details,
 }: {
   materials: Material[];
   today: string;
@@ -44,6 +46,8 @@ export function MaterialsBoard({
   products: { id: string; name: string }[];
   /** The order form's sizes, for parts in a size. */
   sizes: string[];
+  /** Every category's order details, for what a new made part is made of. */
+  details: DetailOption[];
 }) {
   const router = useRouter();
   const symbol = useCurrencySymbol();
@@ -160,7 +164,8 @@ export function MaterialsBoard({
         onClose={() => setSheet(null)}
         products={products}
         sizes={sizes}
-        onAdded={(id) => router.push(`${basePath}/${id}`)}
+        parts={materials}
+        details={details}
       />
       <PurchaseSheet open={sheet === "purchase"} onClose={() => setSheet(null)} materials={bought} today={today} />
     </div>

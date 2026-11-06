@@ -7,6 +7,7 @@ import { Avatar } from "@repo/ui/profile/Avatar";
 import { ManageProfileModal } from "@repo/ui/profile/ManageProfileModal";
 
 import { signOut } from "./actions";
+import { forgetTransfers } from "@repo/ui/transfers/store";
 
 function ChevronDownIcon({ className }: { className?: string }) {
   return (
@@ -103,6 +104,7 @@ export function UserMenu({
             onClick={() =>
               start(async () => {
                 await signOut();
+                await forgetTransfers();
                 router.replace("/dashboard/login");
                 router.refresh();
               })

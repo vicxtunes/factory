@@ -9,6 +9,7 @@ import { ManageProfileModal } from "@repo/ui/profile/ManageProfileModal";
 import { logoutClient } from "./actions";
 import { DeviceUnlockSettings } from "./device-unlock-settings";
 import { mySignInEmail } from "./auth-actions";
+import { forgetTransfers } from "@repo/ui/transfers/store";
 
 // Same shape as app/dashboard/user-menu.tsx, adapted for a client session
 // (name instead of email/role, a Settings shortcut instead of a role badge).
@@ -93,6 +94,7 @@ export function ClientUserMenu({ name, avatarUrl }: { name: string; avatarUrl: s
             onClick={() =>
               start(async () => {
                 await logoutClient();
+                await forgetTransfers();
                 router.replace("/");
                 router.refresh();
               })

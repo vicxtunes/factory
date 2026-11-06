@@ -155,7 +155,9 @@ interface PartLineRow {
   variant_id: string | null;
   part_id: string | null;
   by_order_size: boolean;
-  chosen_detail: string | null;
+  product_part_id: string | null;
+  adds_price: boolean;
+  sizes: string[] | null;
   qty: number | string | null;
   per_detail: string | null;
   when_detail: string | null;
@@ -168,7 +170,9 @@ const toPartLine = (r: PartLineRow): PartLine => ({
   variantId: r.variant_id,
   partId: r.part_id,
   byOrderSize: r.by_order_size,
-  chosenDetail: r.chosen_detail,
+  productPartId: r.product_part_id,
+  addsPrice: r.adds_price,
+  sizes: r.sizes,
   qty: r.qty === null ? null : Number(r.qty),
   perDetail: r.per_detail,
   whenDetail: r.when_detail,
@@ -183,7 +187,9 @@ const linesOut = (lines: PartLineInput[]) =>
     variant_id: l.variantId,
     part_id: l.partId,
     by_order_size: l.byOrderSize,
-    chosen_detail: l.chosenDetail,
+    product_part_id: l.productPartId,
+    adds_price: l.addsPrice,
+    sizes: l.sizes,
     qty: l.qty,
     per_detail: l.perDetail,
     when_detail: l.whenDetail,
@@ -239,7 +245,7 @@ const MESSAGES: Record<string, string> = {
   made_part: "A made part has no stock of its own: record purchases and counts of the parts it's made of.",
   has_stock: "This part has been bought or counted, so it stays a bought part. Add a new made part instead.",
   has_lines: "This part is made from other parts. Remove its lines first.",
-  owner_fixed: "A part can only be shared with every product, not moved to another one.",
+  in_use_elsewhere: "Another product (or a part shared with it) uses this part, so it stays shared. Remove it there first.",
   not_made: "Only a made part has parts of its own.",
   loop: "That would put the part inside itself. Choose different parts.",
   same_product: "Choose another product to copy from.",
@@ -348,31 +354,32 @@ export const factoryStore: ProductionStore = {
   },
 
   async addMaterial(scope, input, actor) {
-    const { data, error } = await createAdminClient()
-      .from("materials")
-      .insert({
-        tenant_id: scope.tenantId,
-        name: input.name,
-        unit: input.unit,
-        kind: input.kind,
-        made: input.made,
-        size: input.size,
-        unit_cost: input.made ? 0 : (input.unitCost ?? 0),
-        product_id: input.productId,
-        owner_product_id: input.ownerProductId,
-        created_by_name: actor.name,
-      })
-      .select("id")
-      .single<{ id: string }>();
+    const { data, error } = await createAdminClient().rpc("parts_add", {
+      p_tenant: scope.tenantId,
+      p_part: { name: input.name, unit: input.unit, kind: input.kind, made: input.made, product_id: input.productId, owner_product_id: input.ownerProductId },
+      p_sizes: input.sizes.map((s) => ({ size: s.size, unit_cost: s.unitCost })),
+      p_lines: linesOut(input.lines),
+      p_actor_id: actor.id,
+      p_actor_name: actor.name,
+    });
     if (error) fail(error);
-    return data.id;
+    return (data ?? []) as string[];
   },
 
   async updateMaterial(scope, input) {
     const { error, count } = await createAdminClient()
       .from("materials")
       .update(
-        { name: input.name, unit: input.unit, kind: input.kind, active: input.active, size: input.size, product_id: input.productId, owner_product_id: input.ownerProductId },
+        {
+          name: input.name,
+          unit: input.unit,
+          kind: input.kind,
+          active: input.active,
+          size: input.size,
+          unit_cost: input.unitCost ?? 0,
+          product_id: input.productId,
+          owner_product_id: input.ownerProductId,
+        },
         { count: "exact" },
       )
       .eq("tenant_id", scope.tenantId)
@@ -527,32 +534,27 @@ export const factoryStore: ProductionStore = {
 
   async partsBook(scope) {
     const db = createAdminClient();
-    const [parts, lines, sheets, packaging] = await Promise.all([
+    const [parts, lines, sheets, products] = await Promise.all([
       db.from("production_materials").select(MATERIAL_COLUMNS).eq("tenant_id", scope.tenantId).order("name").returns<MaterialRow[]>(),
       db
         .from("part_lines")
-        .select("product_id, part_of, variant_id, part_id, by_order_size, chosen_detail, qty, per_detail, when_detail, when_value, label, amount")
+        .select("product_id, part_of, variant_id, part_id, by_order_size, product_part_id, adds_price, sizes, qty, per_detail, when_detail, when_value, label, amount")
         .eq("tenant_id", scope.tenantId)
         .order("sort_order")
         .returns<PartLineRow[]>(),
       db.from("product_sheet_prices").select("product_id, size, price").order("size").returns<{ product_id: string; size: string; price: number | string }[]>(),
-      db
-        .from("products")
-        .select("name, price, category:product_categories!inner (name)")
-        .eq("active", true)
-        .ilike("category.name", "packaging")
-        .returns<{ name: string; price: number | string | null }[]>(),
+      db.from("products").select("id, name, price").eq("active", true).order("name").returns<{ id: string; name: string; price: number | string | null }[]>(),
     ]);
     if (parts.error) fail(parts.error);
     if (lines.error) fail(lines.error);
     if (sheets.error) fail(sheets.error);
-    if (packaging.error) fail(packaging.error);
+    if (products.error) fail(products.error);
     const book: PartsBook = {
       parts: (parts.data ?? []).map(toMaterial),
       partLines: new Map(),
       productLines: new Map(),
       sheetPrices: new Map(),
-      packaging: (packaging.data ?? []).map((p) => ({ name: p.name, price: Math.round(Number(p.price ?? 0)) })),
+      products: (products.data ?? []).map((p) => ({ id: p.id, name: p.name, price: p.price === null ? null : Math.round(Number(p.price)) })),
     };
     for (const r of lines.data ?? []) {
       const [map, key] = r.product_id ? [book.productLines, r.product_id] : [book.partLines, r.part_of!];
