@@ -75,7 +75,7 @@ async function Home({ client }: { client: { id: string; name: string; avatarUrl:
   const deals = discounted(catalog);
   // Aming's products (not the packaging and lamination options), the ones with a picture first.
   const products = catalog
-    .filter((c) => !isOptionCategory(c))
+    .filter((c) => c.in_showroom && !isOptionCategory(c))
     .flatMap((c) => c.products.map((product) => ({ product, category: c.name })))
     .sort((a, b) => Number(!!b.product.display_image_url) - Number(!!a.product.display_image_url));
   return (
@@ -100,7 +100,7 @@ async function Home({ client }: { client: { id: string; name: string; avatarUrl:
 /** Aming's products on a running discount (their own price, a size's, or the price agreed on a call), the ones with a picture first. */
 function discounted(catalog: ProductCategory[]): Deal[] {
   return catalog
-    .filter((c) => !isOptionCategory(c))
+    .filter((c) => c.in_showroom && !isOptionCategory(c))
     .flatMap((c) =>
       c.products.flatMap((product): Deal[] => {
         const sizeOffer = product.variants

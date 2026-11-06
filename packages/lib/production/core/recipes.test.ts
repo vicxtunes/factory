@@ -129,3 +129,25 @@ test("inputs: a built material needs its parts; a recipe line's “only when” 
   assert.ok(!recipeInputSchema.safeParse({ productId: id, lines: [{ materialId: id, qty: 1, whenDetail: "Type" }] }).success);
   assert.ok(!recipeInputSchema.safeParse({ productId: id, lines: [{ materialId: id, qty: 0 }] }).success);
 });
+
+test("a cover type is an add-on priced by the order's size, with its own recipe's cost", () => {
+  const b = book();
+  b.products.push({ id: "uv", name: "UV Print (Leather)", categoryName: "Cover Type", price: null, variants: [{ id: "uv12", name: "12x12", price: 30_000 }, { id: "uv10", name: "10x10", price: 25_000 }], autoPrice: null, margin: null });
+  b.recipes.set("uv", [line("Cloth")]);
+  const costing = new Costing(b);
+  const at = (Size: string) => costing.quote("book", { variantId: null, details: { ...order.details, Size, "Cover Type": "UV Print (Leather)" } });
+  const big = at("12x12");
+  assert.deepEqual(big.addOns.find((a) => a.kind === "Cover Type"), { kind: "Cover Type", name: "UV Print (Leather)", price: 30_000, cost: 1_500, hasRecipe: true });
+  assert.equal(big.cost, 77_500, "76,000 + the cover's 1,500");
+  assert.equal(at("10x10").addOns.find((a) => a.kind === "Cover Type")?.price, 25_000);
+  assert.equal(at("8x8").price, null, "no 8x8 cover price: priced on the call");
+});
+
+test("a part's typed cost for a size is a cost of one: how many multiplies it", () => {
+  const b = book();
+  const cover = b.materials.find((m) => m.id === "Cover")!;
+  cover.parts = [{ partId: "Wood", qty: 2, sizeTotals: { "12x12": 1_500 } }, { partId: "Cloth", qty: 1, sizeTotals: null }];
+  const r = new Costing(b).rate(cover, "12x12");
+  assert.equal(r.rate, 4_500, "2 × 1,500 typed + 1 × 1,500 own");
+  assert.deepEqual(r.parts[0], { name: "Wood", qty: 2, rate: 1_500, cost: 3_000 });
+});

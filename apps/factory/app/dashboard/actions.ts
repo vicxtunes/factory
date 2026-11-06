@@ -928,6 +928,15 @@ export async function setCategoryActive(id: string, active: boolean): Promise<Re
   return { ok: true };
 }
 
+/** Whether clients browse the category in the showroom; off, its products stay on the order form (e.g. Cover Type). */
+export async function setCategoryInShowroom(id: string, inShowroom: boolean): Promise<Result> {
+  await requireRole("boss");
+  const { error } = await createAdminClient().from("product_categories").update({ in_showroom: inShowroom }).eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  catalogChanged();
+  return { ok: true };
+}
+
 export async function createProduct(categoryId: string, name: string): Promise<Result> {
   await requireRole("boss");
   const trimmed = name.trim();
