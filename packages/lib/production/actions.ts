@@ -12,25 +12,21 @@ import { runAction } from "@repo/lib/kernel/server/action";
 import { resolveTenantScope } from "@repo/lib/tenancy/server/resolve";
 
 import {
+  idSchema,
   loanInputSchema,
+  marginInputSchema,
   materialInputSchema,
-  materialUpdateSchema,
-  purchaseInputSchema,
-  copySetupSchema,
-  partLinesInputSchema,
-  setupInputSchema,
-  sheetPriceSchema,
+  pricingInputSchema,
+  recipeInputSchema,
   repaymentInputSchema,
-  correctionInputSchema,
-  stockCountSchema,
-  usageInputSchema,
   voidSchema,
 } from "./core/schema";
 import { canManageProduction } from "./policy";
 import { ProductionError } from "./ports";
-import { production, usage } from "./server";
+import { production } from "./server";
 
 const MATERIALS = "/dashboard/production/materials";
+const PRODUCTS = "/dashboard/production/products";
 const OWED = "/dashboard/accounts/owed";
 
 /** Money we owe shows on its own pages and as the We owe card on Accounts → Overview. */
@@ -42,52 +38,84 @@ function owedChanged() {
 async function staff() {
   const session = await getDashboardSession();
   if (!session || !canManageProduction(session.role)) throw new ProductionError("Only the boss and supervisors can do this.");
-  return { actor: { id: session.userId, name: session.fullName ?? session.email ?? "Staff" }, scope: await resolveTenantScope() };
+  return {
+    actor: { id: session.userId, name: session.fullName ?? session.email ?? "Staff" },
+    scope: await resolveTenantScope(),
+    /** Selling prices and margins are the boss's alone. */
+    setsPrices: session.role === "boss",
+  };
 }
 
-export async function addMaterial(input: unknown): Promise<Result<string[]>> {
+async function boss() {
+  const s = await staff();
+  if (!s.setsPrices) throw new ProductionError("Only the boss sets prices.");
+  return s;
+}
+
+/** Costs and prices changed: the materials, the costs list and every recipe follow. */
+function costingChanged() {
+  revalidatePath(MATERIALS);
+  revalidatePath(PRODUCTS, "layout");
+}
+
+/** Adds or replaces a material. Someone who doesn't set prices keeps the selling prices it has. */
+export async function saveMaterial(input: unknown): Promise<Result<string>> {
   return runAction("production", async () => {
-    const { scope, actor } = await staff();
-    const ids = await production.addMaterial(scope, parseInput(materialInputSchema, input), actor);
-    revalidatePath(MATERIALS);
-    revalidatePath("/dashboard/production/products", "layout");
-    return ids;
+    const { scope, actor, setsPrices } = await staff();
+    const material = parseInput(materialInputSchema, input);
+    if (!setsPrices) {
+      const now = material.id ? (await production.costBook(scope)).materials.find((m) => m.id === material.id) : undefined;
+      material.sellPrice = now?.sellPrice ?? null;
+      material.sizeSells = now?.sizeSells ?? {};
+    }
+    const id = await production.saveMaterial(scope, material, actor);
+    costingChanged();
+    return id;
   });
 }
 
-export async function updateMaterial(input: unknown): Promise<Result> {
+export async function deleteMaterial(id: unknown): Promise<Result> {
   return runAction("production", async () => {
     const { scope } = await staff();
-    await production.updateMaterial(scope, parseInput(materialUpdateSchema, input));
-    revalidatePath(MATERIALS, "layout");
+    await production.deleteMaterial(scope, parseInput(idSchema, id));
+    costingChanged();
   });
 }
 
-export async function recordPurchase(input: unknown): Promise<Result> {
+/** Replaces a product's recipe. Someone who doesn't set prices keeps each material's selling price on it. */
+export async function saveRecipe(input: unknown): Promise<Result> {
   return runAction("production", async () => {
-    const { scope, actor } = await staff();
-    await production.recordPurchase(scope, parseInput(purchaseInputSchema, input), actor);
-    revalidatePath(MATERIALS, "layout");
-    owedChanged();
+    const { scope, setsPrices } = await staff();
+    const recipe = parseInput(recipeInputSchema, input);
+    if (!setsPrices) {
+      const now = (await production.costBook(scope)).recipes.get(recipe.productId) ?? [];
+      for (const line of recipe.lines) {
+        const was = now.find((l) => l.materialId === line.materialId);
+        line.sellPrice = was?.sellPrice ?? null;
+        line.sizeSells = was?.sizeSells ?? null;
+      }
+    }
+    await production.saveRecipe(scope, recipe);
+    costingChanged();
   });
 }
 
-export async function voidPurchase(input: unknown): Promise<Result> {
+/** How a photo book is priced: from the margin, from its materials, or the catalog's. The boss only. */
+export async function setPricing(input: unknown): Promise<Result> {
   return runAction("production", async () => {
-    const { scope, actor } = await staff();
-    await production.voidPurchase(scope, parseInput(voidSchema, input), actor);
-    revalidatePath(MATERIALS, "layout");
-    owedChanged();
+    const { scope } = await boss();
+    await production.setPricing(scope, parseInput(pricingInputSchema, input));
+    catalogChanged();
+    costingChanged();
   });
 }
 
-/** Sets the stock to what was counted; returns the change. */
-export async function countStock(input: unknown): Promise<Result<number>> {
+/** The margin photo books are priced at. The boss only. */
+export async function setMargin(input: unknown): Promise<Result> {
   return runAction("production", async () => {
-    const { scope, actor } = await staff();
-    const delta = await production.countStock(scope, parseInput(stockCountSchema, input), actor);
-    revalidatePath(MATERIALS, "layout");
-    return delta;
+    const { scope, actor } = await boss();
+    await production.setMargin(scope, parseInput(marginInputSchema, input), actor);
+    costingChanged();
   });
 }
 
@@ -121,79 +149,5 @@ export async function voidRepayment(input: unknown): Promise<Result> {
     const { scope, actor } = await staff();
     await production.voidRepayment(scope, parseInput(voidSchema, input), actor);
     owedChanged();
-  });
-}
-
-const PRODUCTS = "/dashboard/production/products";
-
-/** Replaces a product's whole setup (its lines for every size, and how it's priced). */
-export async function saveSetup(input: unknown): Promise<Result> {
-  return runAction("production", async () => {
-    const { scope, actor } = await staff();
-    await production.saveSetup(scope, parseInput(setupInputSchema, input), actor);
-    revalidatePath(PRODUCTS, "layout");
-  });
-}
-
-/** A photo book's price per sheet for one size (null clears it). Prices are the catalog's: the boss only. */
-export async function setSheetPrice(input: unknown): Promise<Result> {
-  return runAction("production", async () => {
-    const session = await getDashboardSession();
-    if (!session || session.role !== "boss") throw new ProductionError("Only the boss sets prices.");
-    await production.setSheetPrice(await resolveTenantScope(), parseInput(sheetPriceSchema, input));
-    catalogChanged();
-    revalidatePath(PRODUCTS, "layout");
-  });
-}
-
-/** Replaces what a made part is made of: every product using it follows. */
-export async function savePartLines(input: unknown): Promise<Result> {
-  return runAction("production", async () => {
-    const { scope, actor } = await staff();
-    await production.savePartLines(scope, parseInput(partLinesInputSchema, input), actor);
-    revalidatePath(MATERIALS, "layout");
-    revalidatePath(PRODUCTS, "layout");
-  });
-}
-
-/** Starts a product's setup from another's; returns how many size lines were left out. */
-export async function copySetup(input: unknown): Promise<Result<number>> {
-  return runAction("production", async () => {
-    const { scope, actor } = await staff();
-    const leftOut = await production.copySetup(scope, parseInput(copySetupSchema, input), actor);
-    revalidatePath(PRODUCTS, "layout");
-    revalidatePath(MATERIALS, "layout");
-    return leftOut;
-  });
-}
-
-const USAGE = "/dashboard/production/usage";
-
-/** What an item used; its stock comes off. */
-export async function recordUsage(input: unknown): Promise<Result> {
-  return runAction("production", async () => {
-    const { scope, actor } = await staff();
-    await usage.record(scope, parseInput(usageInputSchema, input), actor);
-    revalidatePath(USAGE);
-    revalidatePath(MATERIALS, "layout");
-  });
-}
-
-/** What a recorded item really used; its record is replaced and the stock follows. */
-export async function correctRecord(input: unknown): Promise<Result> {
-  return runAction("production", async () => {
-    const { scope, actor } = await staff();
-    await production.correctRecord(scope, parseInput(correctionInputSchema, input), actor);
-    revalidatePath(USAGE);
-    revalidatePath(MATERIALS, "layout");
-  });
-}
-
-export async function voidRecord(input: unknown): Promise<Result> {
-  return runAction("production", async () => {
-    const { scope, actor } = await staff();
-    await production.voidRecord(scope, parseInput(voidSchema, input), actor);
-    revalidatePath(USAGE);
-    revalidatePath(MATERIALS, "layout");
   });
 }

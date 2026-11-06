@@ -8,74 +8,52 @@ Screens:
 - **Production → Overview** `/dashboard/production`: for a period, gross profit, production cost, margin
   and materials used (each against the period before), how the cost is known, products by profit (Excel/PDF),
   wastage by material and materials used.
-- **Production → Parts** `/dashboard/production/materials`: everything bought or made, tabbed All / Bought / Made.
-  A bought part: stock, price per unit and value; Record purchase, Stock count; its purchases (void with a reason)
-  and stock history. A made part: what it's made of (its lines, beside an order to try) and what uses it.
-- **Production → Product costs** `/dashboard/production/products`: each product size's cost, price, profit and
-  margin (per sheet or page when it depends on one); a product's **setup** at `/<id>/setup`.
-- **Production → Record usage** `/dashboard/production/usage`: the latest records, each corrected when it used
-  something different from its setup; items made in the last 30 days with nothing recorded (not set up, or made
-  before automatic recording), recorded by hand.
+- **Production → Materials** `/dashboard/production/materials`: what products are made of, each with its cost and
+  (the boss) its selling price; add or edit one in a form sheet.
+- **Production → Product costs** `/dashboard/production/products`: each product size's cost from its recipe, price,
+  profit and margin; a photo book's cost with no sheets + per sheet, and how it's priced; the photo book margin. A
+  product's **recipe** at `/<id>/setup`, with **Try it** (one order worked out, line by line).
 - **Production → Speed** `/dashboard/production/speed`: from each item's history (order_audit_log) and its
   order's dates: order to ready, on time against the client's date, items late right now, where items wait (each
   stage's middle time), the trend week by week, the slowest products, making time by worker (`core/speed.ts`).
 - **A product's page** `/dashboard/production/products/<id>`: its sales, profit, units and margin against the
   period before, a year of sales against cost, units and cost of one by month, its sizes, clients and wastage;
-  its setup at `/setup`.
+  its recipe at `/setup`.
 - **Accounts → Money we owe** `/dashboard/accounts/owed`: lenders, loans and repayments; the **We owe** card on
   Accounts → Overview.
 
 ## The rules
 
-- **Stock** is the sum of a material's movements (`material_movements`: purchase +, usage −, stock count ±,
-  reversal), never a column that could drift. It may go below zero (usage recorded before its purchase); shown in red.
-- **A purchase** adds stock, sets the material's price (the latest purchase's), and is a **materials expense**
-  (`expenses`, the first kind of money going out). **On credit**, the supplier becomes a lender and the purchase a
-  loan from them, received as materials.
-- **Parts** (`core/parts.ts`, the `materials` table) carry **cost only**: a part is **bought** (stock, purchases, a
-  price from the latest one) or **made** from other parts (`part_lines.part_of`, any depth, never inside itself; no
-  stock of its own, refused by a trigger). A part may have a **size** (one of the order form's sizes: PVC 12x12 and
-  PVC 10x10 are two parts named PVC), may be the catalog product it's **sold as** (`product_id`, e.g. a box chosen as
-  packaging) and may belong to **one product only** (`owner_product_id`; set when it's added, only ever changed to
-  shared). Names are unique per size; a product's own parts only among themselves.
-- **A part is added** in one form, from anywhere (Parts, a product's setup, a made part): bought or made, its
-  measure (a list of common ones, or your own), **shared or only for one product** (changeable later while no
-  other product uses it), and **its sizes with a price each**, ticked in a pop-up: one part per size, in one go
-  (`parts_add`). A made part picks **what it's made of** in the same form, from the parts there are; what's inside
-  it counts only through it (a setup that also lists one of them on its own is warned). A bought part's price is
-  editable any time (each purchase updates it too); a made part can have **your own cost** (`unit_cost` on a made
-  part: products use that figure, and its parts still come off stock).
-- **A product's setup** is its own lines (`part_lines.product_id`), set up the owner's way with nothing fixed: a
-  part × how many, optionally × a number on the order (× NOS), **in the order's size** (`by_order_size`: the part of
-  that name in the size the order chose, its Size detail else its size variant); an **attached catalog product**
-  (`product_part_id`, a box: its cost is its own setup's, and **adds its price** to the client's when ticked); or an
-  **other cost** (a fixed amount). Any line can be for **some sizes only** (`sizes`, ticked in a pop-up) and **only
-  when** the order chose something (Packaging = Box A). Order details match by name without a note in brackets
-  ("NOS (Number of Sheets)" = "NOS"). **Copy from** another product copies its lines (size lines by size name) and
-  makes the parts it uses shared. Every save is kept in `part_setup_history`. Labour isn't costed (decided 2026-11-02).
-- **Client prices are the catalog's** (decided 2026-11-05): a product's catalog price per size, or, for a photo book,
-  its **price per sheet** for each size (`product_sheet_prices`, the boss sets it in Products): an order comes to that
-  × its number of sheets + each attached product whose line adds its price, and with anything missing it's left for
-  the call. A product with its own catalog price is invoiced at that alone (the setup says so if a line adds a price). A
-  product priced per sheet has no catalog price of its own (it would win on invoices; both sides refuse). Profit is
-  the client price less the parts' cost.
-- The classes: `BoughtPart`, `MadePart` and `AttachedProduct` (a `Component`: what a quantity of it costs and uses), `PartsCatalog`
-  (all parts; walks lines), `ProductSetup` (lines + a `PricingMethod`: `FixedPerSize`, `PerSheet`). A new way of
-  pricing is one more `PricingMethod`.
-- **Recording usage is automatic** (chosen 2026-11-02): when an item reaches Quality check (or later, from
-  before), a trigger records it from its product's setup, down to the bought parts, as if it went exactly to plan
-  (`production_auto_record` → `parts_usage()`, the same walk as `ProductSetup.usage()`) and their stock comes off.
-  It never blocks the status change: a failure is a database warning. Nothing is recorded for a product not set up.
-  A supervisor **corrects** a record when the item used something different (`production_correct_record`: the old
-  one voided, a new one with the same expected quantities, in one transaction); only corrections show as wastage,
-  so wastage nobody reports stays invisible. When recording by hand, what an item should have used comes from its
-  setup on the server (`createUsage` in `service.ts`); the browser only sends what was actually used. Costs are at
-  the parts' prices when it's saved.
-- **Order prices** for photo books priced per sheet: `partsListPrice` in `pricing.ts`, worked out on the server and
-  stored as the line's list price when an order is placed (and when staff change details before it's confirmed).
+- **Costing** follows the owner's prototype (2026-11-06; `core/recipes.ts`, migration `20261224100000_costing_recipes.sql`).
+  It replaced parts, setups and price per sheet. A **material** (`materials`) costs one amount (`unit_cost`), an amount for
+  each size (`size_costs`), or is **built** from other materials (`material_parts`: a quantity × the part's cost, or a total
+  typed for each size; a part is never built itself). It may have a **selling price** (`sell_price`, or `size_sells`),
+  used only by photo books priced from their materials.
+- **A recipe** (`recipe_lines`) is a material × how many. On a photo book it can be **per sheet** (× the order's NOS);
+  per sheet belongs to photo books only. A line can be **only for some sizes** and **only when** the order chose
+  something (Type = Crystal), and can carry the book's own selling price. Order details match by name without a note
+  in brackets ("NOS (Number of Sheets)" = "NOS"). The size is the order's Size detail, else its size variant.
+- **Add-ons** are the catalog's Lamination and Packaging products the order names: their catalog price, and the cost
+  of their own recipe, **once per book**.
+- **Prices:** every product but a photo book has its catalog price. The boss chooses how each photo book is priced
+  (`products.auto_price`), and the order then arrives priced:
+  - **from the margin**: one margin for all photo books (`costing_settings.margin`, 40% until set) or the book's own
+    (`products.margin`), on the whole book with its add-ons. The base is (cost ÷ (1 − margin)) − the add-ons' prices,
+    rounded up to the next 500 and never below 0, and the add-ons' prices are added on top.
+  - **from its materials**: each line's selling price (the book's own first, else the material's) × how many, + the
+    add-ons' catalog prices.
+  - **null**: the catalog's price, or priced on the call.
+
+  With anything missing, the book is priced on the call. A book priced from its recipe has no catalog price (both
+  sides refuse). `recipeListPrice` in `pricing.ts` works the price out on the server, and stores it as the line's list
+  price when the order is placed (and when staff change details before it's confirmed). Selling prices and margins
+  are the boss's alone; a supervisor's save keeps them.
+- **Stock is left out for now** (owner, 2026-11-06): nothing comes off stock automatically, and the purchase and
+  stock screens are gone. The tables (`material_purchases`, `material_movements`, `production_records`) and their
+  functions stay, so the overview's materials-used and wastage figures read empty until stock comes back.
 - **Profit** (`core/overview.ts`): sales as Accounts counts them (live orders, on the invoice's issue date, at the
   order's agreed total, shared over its lines by their confirmed prices); an item's cost is its record's actual cost,
-  else its setup's estimate at today's prices, else unknown (not set up), and the overview says how much of each.
+  else its recipe's estimate (with its add-ons) at today's costs, else unknown (no recipe), and the overview says how much of each.
 - **Borrowed money** is never income and paying it back is never a cost. Only interest is: each repayment's
   interest share is pro rata (amount × extra ÷ total to repay), the last one takes what's left, and it's written to
   `expenses` (`production_record_repayment`; `interestShare` in `core/loans.ts` shows it before saving).
@@ -86,14 +64,14 @@ Screens:
 
 ```
 packages/lib/production/
-  core/          Pure: model, rules (labels, unit prices), schema (zod inputs), parts (parts, setups, pricing),
+  core/          Pure: model, rules (labels, unit prices), schema (zod inputs), recipes (materials, recipes, photo book prices),
                  costing (the costs list, margins), loans (owed, overdue, interest shares), overview (period
                  figures, wastage). Tests beside them.
   ports.ts       ProductionStore: what a host must provide; every method takes a TenantScope.
   adapters/factory/store.ts   The only database code: the production tables, views and functions.
-  service.ts     Money we owe, recording usage, the overview (store + core, no database code). service.test.ts.
+  service.ts     Money we owe, the overview, speed (store + core, no database code).
   catalog.ts     The live catalog as costing needs it (fetchProductCatalog).
-  pricing.ts     An order line's price from its parts (partsListPrice).
+  pricing.ts     A photo book order line's price from its recipe (recipeListPrice).
   actions.ts     "use server": the browser's only entry point.
   policy.ts / access.ts / server.ts
 packages/ui/production/        The screens.
@@ -101,8 +79,6 @@ packages/ui/charts/kit.tsx     The D3 chart kit they use (orange = money in, blu
 supabase/migrations/20261130100000_production_costing.sql
 supabase/migrations/20261218090000_clear_materials.sql   The clean start: old materials, usage, recipes and
                                                         sheet prices deleted (refused if any purchase exists)
-supabase/migrations/20261218100000_parts.sql   Parts and setups (the old recipe and sheet tables stay, empty and
-                                               unused, so a rolled-back app still runs)
-supabase/migrations/20261219100000_part_sizes_sheet_prices.sql   Parts in sizes, cost only; prices per sheet
-supabase/migrations/20261221100000_parts_customise.sql   Attached products, sizes per line, own cost, parts_add
+supabase/migrations/20261224100000_costing_recipes.sql   Materials, recipes and photo book prices; parts, setups
+                                               and price per sheet dropped
 ```

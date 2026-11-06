@@ -1,18 +1,17 @@
 import "server-only";
 
 // This app's ProductionStore: the production tables, views and functions
-// (supabase/migrations/20261130100000_production_costing.sql). Every query is
+// (supabase/migrations/20261130100000_production_costing.sql,
+// 20261224100000_costing_recipes.sql). Every query is
 // filtered by the scope's tenant.
 
 import { DAY_CLOSED_MESSAGE } from "@repo/lib/books/model";
 import { createAdminClient } from "@repo/lib/supabase/admin";
 
-import type { Lender, Loan, Material, MaterialMovement, MaterialPurchase, ProductionRecord, Repayment, UsageItem } from "../../core/model";
-import type { PartLine, PartsBook, SheetPrice } from "../../core/parts";
-import type { PartLineInput } from "../../core/schema";
+import type { Lender, Loan, Repayment } from "../../core/model";
+import type { AutoPrice, CostBy, CostedProduct, CostMaterial, MaterialPart, RecipeLine, SizeAmounts } from "../../core/recipes";
 import type { MaterialFigure, SoldOrder } from "../../core/overview";
 import type { ItemJourney } from "../../core/speed";
-import { unitCostOf } from "../../core/rules";
 import { ProductionError, type ProductionStore } from "../../ports";
 
 interface LoanRow {
@@ -76,156 +75,29 @@ interface RepaymentRow {
   void_reason: string | null;
 }
 
-interface ItemRow {
-  id: string;
-  product: string;
-  product_id: string | null;
-  variant_id: string | null;
-  size: string | null;
-  qty: number;
-  attributes: Record<string, string | number> | null;
-  production_status: string;
-  updated_at: string;
-  order: { order_no: string; client_name: string; cancelled_at: string | null };
-  variant: { name: string } | null;
-}
-
-const ITEM_COLUMNS =
-  "id, product, product_id, variant_id, size, qty, attributes, production_status, updated_at, order:orders!inner (order_no, client_name, cancelled_at), variant:product_variants (name)";
-
-/** Statuses an item has once it's been made. */
-const MADE = ["quality_check", "ready_for_pickup", "completed"];
-
-const toItem = (r: ItemRow): UsageItem => ({
-  itemId: r.id,
-  orderNo: r.order.order_no,
-  clientName: r.order.client_name,
-  product: r.product,
-  productId: r.product_id,
-  variantId: r.variant_id,
-  sizeName: r.variant?.name ?? r.size,
-  qty: r.qty,
-  attributes: r.attributes ?? {},
-  status: r.production_status,
-  updatedAt: r.updated_at,
-});
-
 interface MaterialRow {
   id: string;
   name: string;
   unit: string;
-  kind: Material["kind"];
-  made: boolean;
-  size: string | null;
+  cost_by: CostBy;
   unit_cost: number | string;
-  product_id: string | null;
-  product_name: string | null;
-  product_price: number | string | null;
-  owner_product_id: string | null;
+  size_costs: SizeAmounts;
+  sell_price: number | string | null;
+  size_sells: SizeAmounts;
   active: boolean;
-  stock: number | string;
-  stock_value: number | string;
-  created_at: string;
 }
 
-const MATERIAL_COLUMNS =
-  "id, name, unit, kind, made, size, unit_cost, product_id, product_name, product_price, owner_product_id, active, stock, stock_value, created_at";
-
-const toMaterial = (r: MaterialRow): Material => ({
-  id: r.id,
-  name: r.name,
-  unit: r.unit,
-  kind: r.kind,
-  made: r.made,
-  size: r.size,
-  unitCost: Number(r.unit_cost),
-  productId: r.product_id,
-  productName: r.product_name,
-  productPrice: r.product_price === null ? null : Number(r.product_price),
-  ownerProductId: r.owner_product_id,
-  active: r.active,
-  stock: Number(r.stock),
-  stockValue: Number(r.stock_value),
-  createdAt: r.created_at,
-});
-
-interface PartLineRow {
-  product_id: string | null;
-  part_of: string | null;
-  variant_id: string | null;
-  part_id: string | null;
-  by_order_size: boolean;
-  product_part_id: string | null;
-  adds_price: boolean;
-  sizes: string[] | null;
-  qty: number | string | null;
-  per_detail: string | null;
-  when_detail: string | null;
-  when_value: string | null;
-  label: string | null;
-  amount: number | string | null;
-}
-
-const toPartLine = (r: PartLineRow): PartLine => ({
-  variantId: r.variant_id,
-  partId: r.part_id,
-  byOrderSize: r.by_order_size,
-  productPartId: r.product_part_id,
-  addsPrice: r.adds_price,
-  sizes: r.sizes,
-  qty: r.qty === null ? null : Number(r.qty),
-  perDetail: r.per_detail,
-  whenDetail: r.when_detail,
-  whenValue: r.when_value,
-  label: r.label,
-  amount: r.amount === null ? null : Number(r.amount),
-});
-
-/** Lines as parts_put_lines() takes them. */
-const linesOut = (lines: PartLineInput[]) =>
-  lines.map((l) => ({
-    variant_id: l.variantId,
-    part_id: l.partId,
-    by_order_size: l.byOrderSize,
-    product_part_id: l.productPartId,
-    adds_price: l.addsPrice,
-    sizes: l.sizes,
-    qty: l.qty,
-    per_detail: l.perDetail,
-    when_detail: l.whenDetail,
-    when_value: l.whenValue,
-    label: l.label,
-    amount: l.amount,
-  }));
-
-interface MovementRow {
+interface ProductRow {
   id: string;
-  kind: MaterialMovement["kind"];
-  qty: number | string;
-  unit_cost: number | string;
-  total: number | string;
-  occurred_on: string;
-  reason: string | null;
-  actor_name: string;
-  created_at: string;
-  purchase_id: string | null;
+  name: string;
+  price: number | string | null;
+  auto_price: AutoPrice | null;
+  margin: number | string | null;
+  category: { name: string } | null;
+  variants: { id: string; name: string; price: number | string | null; active: boolean }[];
 }
 
-interface PurchaseRow {
-  id: string;
-  material_id: string;
-  qty: number | string;
-  total: number | string;
-  supplier: string | null;
-  paid_from: MaterialPurchase["paidFrom"];
-  reference: string | null;
-  note: string | null;
-  purchased_on: string;
-  actor_name: string;
-  created_at: string;
-  voided_at: string | null;
-  void_reason: string | null;
-}
+const num = (v: number | string | null) => (v === null ? null : Number(v));
 
 /** PostgREST returns at most 1,000 rows a request: read page by page. */
 async function allPages<T>(page: (from: number, to: number) => PromiseLike<{ data: unknown; error: { message: string } | null }>): Promise<T[]> {
@@ -241,20 +113,13 @@ async function allPages<T>(page: (from: number, to: number) => PromiseLike<{ dat
 
 // The database's PRODUCTION:<code> refusals, as sentences.
 const MESSAGES: Record<string, string> = {
-  no_material: "One of those parts no longer exists, or belongs to another product.",
-  made_part: "A made part has no stock of its own: record purchases and counts of the parts it's made of.",
-  has_stock: "This part has been bought or counted, so it stays a bought part. Add a new made part instead.",
-  has_lines: "This part is made from other parts. Remove its lines first.",
-  in_use_elsewhere: "Another product (or a part shared with it) uses this part, so it stays shared. Remove it there first.",
-  not_made: "Only a made part has parts of its own.",
-  loop: "That would put the part inside itself. Choose different parts.",
-  same_product: "Choose another product to copy from.",
-  has_catalog_price: "This product has a price of its own, which would win on invoices. Clear its price (and its sizes' prices) first: a photo book's price comes from its sheets.",
-  no_purchase: "That purchase no longer exists.",
+  no_material: "One of those materials no longer exists.",
+  used_as_part: "Another material is built with this one, so it can't be built from others itself.",
+  bad_part: "A material is built only from materials with a cost of their own (not built ones, and not itself).",
+  has_catalog_price: "This product has a catalog price of its own, which would win on invoices. Clear its price (and its sizes' prices) first.",
+  no_product: "That product no longer exists.",
   already_voided: "That's already been voided.",
-  has_repayments: "Part of this has been paid back to the supplier. Void those repayments first.",
   future_date: "The date can't be in the future.",
-  negative_count: "A count can't be below zero.",
   history: "History can't be changed. Void it with a reason instead.",
   no_lender: "That lender no longer exists.",
   no_loan: "That loan no longer exists.",
@@ -264,17 +129,16 @@ const MESSAGES: Record<string, string> = {
   void_latest_first: "Void this loan's latest repayment first: each one's interest depends on those before it.",
   over_repaid: "That's more than is left to pay back on this loan.",
   before_loan: "A repayment can't be dated before the money was borrowed.",
-  void_the_purchase: "This is a supplier's credit for a purchase: void the purchase instead (on its material's page).",
-  no_product: "That product no longer exists.",
-  no_item: "That item no longer exists, or its order was cancelled.",
-  already_recorded: "What this item used has already been recorded. Void that record first to record it again.",
-  no_record: "That record no longer exists.",
-  wrong_size: "One of the sizes no longer belongs to this product. Reload and try again.",
-  credit_via_purchase: "Materials on credit are recorded as a purchase, on Materials.",
+  void_the_purchase: "This is a supplier's credit for a purchase: void the purchase instead.",
+  credit_via_purchase: "Materials on credit are recorded as a purchase.",
 };
 
+/** The margin photo books are priced at until the boss sets one. */
+const DEFAULT_MARGIN = 0.4;
+
 function fail(error: { message: string; code?: string }): never {
-  if (error.code === "23505") throw new ProductionError("There's already a part with that name and size. Shared parts need different names or sizes; a product's own parts too.");
+  if (error.code === "23505") throw new ProductionError("There's already a material with that name.");
+  if (error.code === "23001" || error.code === "23503") throw new ProductionError("A recipe or a built material uses this material. Remove it there first, or mark it not in use.");
   if (error.message.includes("DAYBOOK:day_closed")) throw new ProductionError(DAY_CLOSED_MESSAGE);
   const code = /PRODUCTION:(\w+)/.exec(error.message)?.[1];
   if (code && MESSAGES[code]) throw new ProductionError(MESSAGES[code]);
@@ -282,151 +146,154 @@ function fail(error: { message: string; code?: string }): never {
 }
 
 export const factoryStore: ProductionStore = {
-  async materials(scope) {
-    const { data, error } = await createAdminClient()
-      .from("production_materials")
-      .select(MATERIAL_COLUMNS)
-      .eq("tenant_id", scope.tenantId)
-      .order("name")
-      .returns<MaterialRow[]>();
-    if (error) fail(error);
-    return (data ?? []).map(toMaterial);
-  },
-
-  async material(scope, id) {
+  async costBook(scope) {
     const db = createAdminClient();
-    const [material, movements, purchases] = await Promise.all([
-      db.from("production_materials").select(MATERIAL_COLUMNS).eq("tenant_id", scope.tenantId).eq("id", id).maybeSingle<MaterialRow>(),
+    const [materials, parts, lines, products, settings] = await Promise.all([
       db
-        .from("material_movements")
-        .select("id, kind, qty, unit_cost, total, occurred_on, reason, actor_name, created_at, purchase_id")
+        .from("materials")
+        .select("id, name, unit, cost_by, unit_cost, size_costs, sell_price, size_sells, active")
         .eq("tenant_id", scope.tenantId)
-        .eq("material_id", id)
-        .order("occurred_on", { ascending: false })
-        .order("created_at", { ascending: false })
-        .limit(200)
-        .returns<MovementRow[]>(),
+        .order("name")
+        .returns<MaterialRow[]>(),
       db
-        .from("material_purchases")
-        .select("id, material_id, qty, total, supplier, paid_from, reference, note, purchased_on, actor_name, created_at, voided_at, void_reason")
+        .from("material_parts")
+        .select("material_id, part_id, qty, size_totals")
         .eq("tenant_id", scope.tenantId)
-        .eq("material_id", id)
-        .order("purchased_on", { ascending: false })
-        .order("created_at", { ascending: false })
-        .limit(100)
-        .returns<PurchaseRow[]>(),
+        .order("sort_order")
+        .returns<{ material_id: string; part_id: string; qty: number | string; size_totals: SizeAmounts | null }[]>(),
+      db
+        .from("recipe_lines")
+        .select("product_id, material_id, qty, per_sheet, sizes, when_detail, when_value, sell_price, size_sells")
+        .eq("tenant_id", scope.tenantId)
+        .order("sort_order")
+        .returns<
+          {
+            product_id: string;
+            material_id: string;
+            qty: number | string;
+            per_sheet: boolean;
+            sizes: string[] | null;
+            when_detail: string | null;
+            when_value: string | null;
+            sell_price: number | string | null;
+            size_sells: SizeAmounts | null;
+          }[]
+        >(),
+      db
+        .from("products")
+        .select("id, name, price, auto_price, margin, category:product_categories (name), variants:product_variants (id, name, price, active)")
+        .eq("active", true)
+        .order("name")
+        .returns<ProductRow[]>(),
+      db.from("costing_settings").select("margin").eq("tenant_id", scope.tenantId).maybeSingle<{ margin: number | string }>(),
     ]);
-    if (material.error) fail(material.error);
-    if (movements.error) fail(movements.error);
-    if (purchases.error) fail(purchases.error);
-    if (!material.data) return null;
+    for (const r of [materials, parts, lines, products, settings]) if (r.error) fail(r.error);
+    const partsOf = new Map<string, MaterialPart[]>();
+    for (const r of parts.data ?? []) partsOf.set(r.material_id, [...(partsOf.get(r.material_id) ?? []), { partId: r.part_id, qty: Number(r.qty), sizeTotals: r.size_totals }]);
+    const recipes = new Map<string, RecipeLine[]>();
+    for (const r of lines.data ?? []) {
+      const line: RecipeLine = {
+        materialId: r.material_id,
+        qty: Number(r.qty),
+        perSheet: r.per_sheet,
+        sizes: r.sizes,
+        whenDetail: r.when_detail,
+        whenValue: r.when_value,
+        sellPrice: num(r.sell_price),
+        sizeSells: r.size_sells,
+      };
+      recipes.set(r.product_id, [...(recipes.get(r.product_id) ?? []), line]);
+    }
     return {
-      material: toMaterial(material.data),
-      movements: (movements.data ?? []).map((m) => ({
-        id: m.id,
-        kind: m.kind,
-        qty: Number(m.qty),
-        unitCost: Number(m.unit_cost),
-        total: Number(m.total),
-        occurredOn: m.occurred_on,
-        reason: m.reason,
-        actorName: m.actor_name,
-        createdAt: m.created_at,
-        purchaseId: m.purchase_id,
-      })),
-      purchases: (purchases.data ?? []).map((p) => ({
-        id: p.id,
-        materialId: p.material_id,
-        qty: Number(p.qty),
-        total: Number(p.total),
-        unitCost: unitCostOf(Number(p.total), Number(p.qty)),
-        supplier: p.supplier,
-        paidFrom: p.paid_from,
-        reference: p.reference,
-        note: p.note,
-        purchasedOn: p.purchased_on,
-        actorName: p.actor_name,
-        createdAt: p.created_at,
-        voidedAt: p.voided_at,
-        voidReason: p.void_reason,
-      })),
+      materials: (materials.data ?? []).map(
+        (m): CostMaterial => ({
+          id: m.id,
+          name: m.name,
+          unit: m.unit,
+          costBy: m.cost_by,
+          cost: Number(m.unit_cost),
+          sizeCosts: m.size_costs ?? {},
+          parts: partsOf.get(m.id) ?? [],
+          sellPrice: num(m.sell_price),
+          sizeSells: m.size_sells ?? {},
+          active: m.active,
+        }),
+      ),
+      recipes,
+      products: (products.data ?? []).map(
+        (p): CostedProduct => ({
+          id: p.id,
+          name: p.name,
+          categoryName: p.category?.name ?? "",
+          price: num(p.price),
+          variants: (p.variants ?? []).filter((v) => v.active).map((v) => ({ id: v.id, name: v.name, price: num(v.price) })),
+          autoPrice: p.auto_price,
+          margin: num(p.margin),
+        }),
+      ),
+      margin: settings.data ? Number(settings.data.margin) : DEFAULT_MARGIN,
     };
   },
 
-  async addMaterial(scope, input, actor) {
-    const { data, error } = await createAdminClient().rpc("parts_add", {
+  async saveMaterial(scope, input, actor) {
+    const { data, error } = await createAdminClient().rpc("costing_save_material", {
       p_tenant: scope.tenantId,
-      p_part: { name: input.name, unit: input.unit, kind: input.kind, made: input.made, product_id: input.productId, owner_product_id: input.ownerProductId },
-      p_sizes: input.sizes.map((s) => ({ size: s.size, unit_cost: s.unitCost })),
-      p_lines: linesOut(input.lines),
-      p_actor_id: actor.id,
-      p_actor_name: actor.name,
-    });
-    if (error) fail(error);
-    return (data ?? []) as string[];
-  },
-
-  async updateMaterial(scope, input) {
-    const { error, count } = await createAdminClient()
-      .from("materials")
-      .update(
-        {
-          name: input.name,
-          unit: input.unit,
-          kind: input.kind,
-          active: input.active,
-          size: input.size,
-          unit_cost: input.unitCost ?? 0,
-          product_id: input.productId,
-          owner_product_id: input.ownerProductId,
-        },
-        { count: "exact" },
-      )
-      .eq("tenant_id", scope.tenantId)
-      .eq("id", input.id);
-    if (error) fail(error);
-    if (!count) throw new ProductionError(MESSAGES.no_material);
-  },
-
-  async recordPurchase(scope, input, actor) {
-    const { data, error } = await createAdminClient().rpc("production_record_purchase", {
-      p_tenant: scope.tenantId,
-      p_material: input.materialId,
-      p_qty: input.qty,
-      p_total: input.total,
-      p_supplier: input.supplier,
-      p_paid_from: input.paidFrom,
-      p_reference: input.reference,
-      p_note: input.note,
-      p_purchased_on: input.purchasedOn,
-      p_due_on: input.dueOn,
-      p_actor_id: actor.id,
+      p_id: input.id,
+      p_material: {
+        name: input.name,
+        unit: input.unit,
+        cost_by: input.costBy,
+        unit_cost: input.costBy === "one" ? input.cost : 0,
+        size_costs: input.costBy === "size" ? input.sizeCosts : {},
+        sell_price: input.sellPrice,
+        size_sells: input.sizeSells,
+        active: input.active,
+      },
+      p_parts: input.costBy === "parts" ? input.parts.map((p) => ({ part_id: p.partId, qty: p.qty, size_totals: p.sizeTotals })) : [],
       p_actor_name: actor.name,
     });
     if (error) fail(error);
     return data as string;
   },
 
-  async voidPurchase(scope, input, actor) {
-    const { error } = await createAdminClient().rpc("production_void_purchase", {
+  async deleteMaterial(scope, id) {
+    const { error, count } = await createAdminClient().from("materials").delete({ count: "exact" }).eq("tenant_id", scope.tenantId).eq("id", id);
+    if (error) fail(error);
+    if (!count) throw new ProductionError(MESSAGES.no_material);
+  },
+
+  async saveRecipe(scope, input) {
+    const { error } = await createAdminClient().rpc("costing_save_recipe", {
       p_tenant: scope.tenantId,
-      p_purchase: input.id,
-      p_reason: input.reason,
-      p_actor_name: actor.name,
+      p_product: input.productId,
+      p_lines: input.lines.map((l) => ({
+        material_id: l.materialId,
+        qty: l.qty,
+        per_sheet: l.perSheet,
+        sizes: l.sizes,
+        when_detail: l.whenDetail,
+        when_value: l.whenValue,
+        sell_price: l.sellPrice,
+        size_sells: l.sizeSells,
+      })),
     });
     if (error) fail(error);
   },
 
-  async countStock(scope, input, actor) {
-    const { data, error } = await createAdminClient().rpc("production_count_stock", {
-      p_tenant: scope.tenantId,
-      p_material: input.materialId,
-      p_counted: input.counted,
-      p_reason: input.reason,
-      p_actor_name: actor.name,
+  async setPricing(_scope, input) {
+    const { error } = await createAdminClient().rpc("costing_set_pricing", {
+      p_product: input.productId,
+      p_auto: input.autoPrice,
+      p_margin: input.autoPrice === "margin" && input.marginPercent !== null ? input.marginPercent / 100 : null,
     });
     if (error) fail(error);
-    return Number(data);
+  },
+
+  async setMargin(scope, input, actor) {
+    const { error } = await createAdminClient()
+      .from("costing_settings")
+      .upsert({ tenant_id: scope.tenantId, margin: input.marginPercent / 100, updated_by_name: actor.name, updated_at: new Date().toISOString() });
+    if (error) fail(error);
   },
 
   async lenders(scope) {
@@ -526,202 +393,6 @@ export const factoryStore: ProductionStore = {
     const { error } = await createAdminClient().rpc("production_void_repayment", {
       p_tenant: scope.tenantId,
       p_repayment: input.id,
-      p_reason: input.reason,
-      p_actor_name: actor.name,
-    });
-    if (error) fail(error);
-  },
-
-  async partsBook(scope) {
-    const db = createAdminClient();
-    const [parts, lines, sheets, products] = await Promise.all([
-      db.from("production_materials").select(MATERIAL_COLUMNS).eq("tenant_id", scope.tenantId).order("name").returns<MaterialRow[]>(),
-      db
-        .from("part_lines")
-        .select("product_id, part_of, variant_id, part_id, by_order_size, product_part_id, adds_price, sizes, qty, per_detail, when_detail, when_value, label, amount")
-        .eq("tenant_id", scope.tenantId)
-        .order("sort_order")
-        .returns<PartLineRow[]>(),
-      db.from("product_sheet_prices").select("product_id, size, price").order("size").returns<{ product_id: string; size: string; price: number | string }[]>(),
-      db.from("products").select("id, name, price").eq("active", true).order("name").returns<{ id: string; name: string; price: number | string | null }[]>(),
-    ]);
-    if (parts.error) fail(parts.error);
-    if (lines.error) fail(lines.error);
-    if (sheets.error) fail(sheets.error);
-    if (products.error) fail(products.error);
-    const book: PartsBook = {
-      parts: (parts.data ?? []).map(toMaterial),
-      partLines: new Map(),
-      productLines: new Map(),
-      sheetPrices: new Map(),
-      products: (products.data ?? []).map((p) => ({ id: p.id, name: p.name, price: p.price === null ? null : Math.round(Number(p.price)) })),
-    };
-    for (const r of lines.data ?? []) {
-      const [map, key] = r.product_id ? [book.productLines, r.product_id] : [book.partLines, r.part_of!];
-      map.set(key, [...(map.get(key) ?? []), toPartLine(r)]);
-    }
-    for (const r of sheets.data ?? []) {
-      const rate: SheetPrice = { size: r.size, price: Number(r.price) };
-      book.sheetPrices.set(r.product_id, [...(book.sheetPrices.get(r.product_id) ?? []), rate]);
-    }
-    return book;
-  },
-
-  async saveSetup(scope, input, actor) {
-    const { error } = await createAdminClient().rpc("parts_save_product", {
-      p_tenant: scope.tenantId,
-      p_product: input.productId,
-      p_lines: linesOut(input.lines),
-      p_actor_id: actor.id,
-      p_actor_name: actor.name,
-    });
-    if (error) fail(error);
-  },
-
-  async savePartLines(scope, input, actor) {
-    const { error } = await createAdminClient().rpc("parts_save_part", {
-      p_tenant: scope.tenantId,
-      p_part: input.partId,
-      p_lines: linesOut(input.lines),
-      p_actor_id: actor.id,
-      p_actor_name: actor.name,
-    });
-    if (error) fail(error);
-  },
-
-  async setSheetPrice(_scope, input) {
-    const { error } = await createAdminClient().rpc("product_set_sheet_price", { p_product: input.productId, p_size: input.size, p_price: input.price });
-    if (error) fail(error);
-  },
-
-  async copySetup(scope, input, actor) {
-    const { data, error } = await createAdminClient().rpc("parts_copy_setup", {
-      p_tenant: scope.tenantId,
-      p_from: input.from,
-      p_to: input.to,
-      p_actor_id: actor.id,
-      p_actor_name: actor.name,
-    });
-    if (error) fail(error);
-    return Number(data ?? 0);
-  },
-
-  async usageQueue(scope, since) {
-    const db = createAdminClient();
-    const { data, error } = await db
-      .from("order_items")
-      .select(ITEM_COLUMNS)
-      .in("production_status", MADE)
-      .is("order.cancelled_at", null)
-      .gte("updated_at", since)
-      .order("updated_at")
-      .limit(300)
-      .returns<ItemRow[]>();
-    if (error) fail(error);
-    const items = (data ?? []).map(toItem);
-    if (items.length === 0) return [];
-    const { data: recorded, error: recErr } = await db
-      .from("production_records")
-      .select("order_item_id")
-      .eq("tenant_id", scope.tenantId)
-      .is("voided_at", null)
-      .in("order_item_id", items.map((i) => i.itemId))
-      .returns<{ order_item_id: string }[]>();
-    if (recErr) fail(recErr);
-    const done = new Set((recorded ?? []).map((r) => r.order_item_id));
-    return items.filter((i) => !done.has(i.itemId));
-  },
-
-  async usageItem(_scope, itemId) {
-    const { data, error } = await createAdminClient().from("order_items").select(ITEM_COLUMNS).eq("id", itemId).maybeSingle<ItemRow>();
-    if (error) fail(error);
-    return data && !data.order.cancelled_at ? toItem(data) : null;
-  },
-
-  async records(scope, limit) {
-    const { data, error } = await createAdminClient()
-      .from("production_records")
-      .select(
-        `id, other_cost, automatic, estimated_cost, actual_cost, note, actor_name, created_at, voided_at, void_reason, item:order_items!inner (${ITEM_COLUMNS}), lines:production_record_lines (material_id, expected_qty, actual_qty, unit_cost, material:materials (name, unit))`,
-      )
-      .eq("tenant_id", scope.tenantId)
-      .order("created_at", { ascending: false })
-      .limit(limit)
-      .returns<
-        {
-          id: string;
-          other_cost: number | string;
-          automatic: boolean;
-          estimated_cost: number | string;
-          actual_cost: number | string;
-          note: string | null;
-          actor_name: string;
-          created_at: string;
-          voided_at: string | null;
-          void_reason: string | null;
-          item: ItemRow;
-          lines: { material_id: string; expected_qty: number | string; actual_qty: number | string; unit_cost: number | string; material: { name: string; unit: string } }[];
-        }[]
-      >();
-    if (error) fail(error);
-    return (data ?? []).map((r): ProductionRecord => {
-      const item = toItem(r.item);
-      return {
-        id: r.id,
-        item: { itemId: item.itemId, orderNo: item.orderNo, clientName: item.clientName, product: item.product, sizeName: item.sizeName, qty: item.qty },
-        otherCost: Number(r.other_cost),
-        automatic: r.automatic,
-        estimatedCost: Number(r.estimated_cost),
-        actualCost: Number(r.actual_cost),
-        note: r.note,
-        actorName: r.actor_name,
-        createdAt: r.created_at,
-        voidedAt: r.voided_at,
-        voidReason: r.void_reason,
-        lines: r.lines.map((l) => ({
-          materialId: l.material_id,
-          materialName: l.material.name,
-          unit: l.material.unit,
-          expectedQty: Number(l.expected_qty),
-          actualQty: Number(l.actual_qty),
-          unitCost: Number(l.unit_cost),
-        })),
-      };
-    });
-  },
-
-  async recordUsage(scope, input, actor) {
-    const { data, error } = await createAdminClient().rpc("production_record_usage", {
-      p_tenant: scope.tenantId,
-      p_item: input.itemId,
-      p_lines: input.lines.map((l) => ({ material_id: l.materialId, expected_qty: l.expectedQty, actual_qty: l.actualQty })),
-      p_other_cost: input.otherCost,
-      p_note: input.note,
-      p_actor_id: actor.id,
-      p_actor_name: actor.name,
-      p_automatic: false,
-    });
-    if (error) fail(error);
-    return data as string;
-  },
-
-  async correctRecord(scope, input, actor) {
-    const { data, error } = await createAdminClient().rpc("production_correct_record", {
-      p_tenant: scope.tenantId,
-      p_record: input.recordId,
-      p_lines: input.actual.map((a) => ({ material_id: a.materialId, actual_qty: a.qty })),
-      p_note: input.note,
-      p_actor_id: actor.id,
-      p_actor_name: actor.name,
-    });
-    if (error) fail(error);
-    return data as string;
-  },
-
-  async voidRecord(scope, input, actor) {
-    const { error } = await createAdminClient().rpc("production_void_record", {
-      p_tenant: scope.tenantId,
-      p_record: input.id,
       p_reason: input.reason,
       p_actor_name: actor.name,
     });

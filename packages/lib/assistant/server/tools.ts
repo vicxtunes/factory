@@ -14,7 +14,7 @@ import * as invoices from "@repo/lib/invoices/server/service";
 import { payBeforeProduction } from "@repo/lib/agents/core";
 import { buildAndInsertOrder } from "@repo/lib/orders/create";
 import { receiveOrder } from "@repo/lib/orders/receive";
-import { partsListPrice } from "@repo/lib/production/pricing";
+import { recipeListPrice } from "@repo/lib/production/pricing";
 import { notifyActor } from "@repo/lib/push/send";
 import { MEDIA_BUCKET } from "@repo/lib/storage/client";
 import { createAdminClient } from "@repo/lib/supabase/admin";
@@ -349,7 +349,7 @@ export function assistantTools(ctx: ToolContext): AssistantTool[] {
           const link = item.photo_link.trim();
           if (link && !/^https?:\/\/\S+$/.test(link)) return "Refused: photo_link isn't a valid link.";
 
-          const unit = (variant?.price ?? product.price) ?? (await partsListPrice(product.id, variant?.id ?? null, item.attributes));
+          const unit = (variant?.price ?? product.price) ?? (await recipeListPrice(product.id, variant?.id ?? null, item.attributes));
           // The running offer, decided by the database as it will be on the order and its invoice.
           const offer = unit == null ? null : await db.rpc("discount_offer", { p_product: product.id, p_list_price: unit, p_at: new Date().toISOString() });
           const unitPrice = unit == null ? null : Number((offer?.data as { price?: number } | null)?.price ?? unit);

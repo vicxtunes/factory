@@ -1,6 +1,6 @@
 "use server";
 
-import { partsListPrice } from "@repo/lib/production/pricing";
+import { recipeListPrice } from "@repo/lib/production/pricing";
 import { randomBytes } from "crypto";
 
 import Papa from "papaparse";
@@ -515,11 +515,11 @@ export async function updateOrderItem(input: UpdateOrderItemInput): Promise<Resu
   const newQty = Number.isFinite(input.qty) && input.qty > 0 ? Math.floor(input.qty) : 1;
   const newProductType = variant?.name ?? null;
 
-  // A book priced per sheet follows its details while the order's still being
+  // A book priced from its recipe follows its details while the order's still being
   // confirmed: more sheets, a bigger size. A price agreed on the call stands
   // until the details change. A confirmed order's price never moves here.
   const detailsChanged = JSON.stringify(sortedEntries(item.attributes)) !== JSON.stringify(sortedEntries(attributes)) || item.product_id !== input.product_id;
-  const sheetTotal = detailsChanged && order.approval_status !== "approved" ? await partsListPrice(input.product_id, input.variant_id || null, attributes) : null;
+  const recipePrice = detailsChanged && order.approval_status !== "approved" ? await recipeListPrice(input.product_id, input.variant_id || null, attributes) : null;
 
   const { error: itemError } = await admin
     .from("order_items")
@@ -531,7 +531,7 @@ export async function updateOrderItem(input: UpdateOrderItemInput): Promise<Resu
       product_type: newProductType,
       qty: newQty,
       attributes,
-      ...(sheetTotal === null ? {} : { list_unit_price: sheetTotal }),
+      ...(recipePrice === null ? {} : { list_unit_price: recipePrice }),
     })
     .eq("id", input.itemId);
   if (itemError) return { ok: false, error: itemError.message };
@@ -974,9 +974,9 @@ export async function setProductPrice(id: string, price: string): Promise<Result
   }
 
   const admin = createAdminClient();
-  // A photo book priced per sheet has no price of its own: it would win on invoices.
-  if (value !== null && (await hasSheetPrices(id))) {
-    return { ok: false, error: "This product is priced per sheet. Clear its prices per sheet first, or leave its price empty." };
+  // A photo book priced from its recipe has no price of its own: it would win on invoices.
+  if (value !== null && (await pricedFromRecipe(id))) {
+    return { ok: false, error: "This photo book is priced from its recipe. Set it to the catalog's price first (Production → Product costs), or leave its price empty." };
   }
   const { error } = await admin.from("products").update({ price: value }).eq("id", id);
   if (error) return { ok: false, error: error.message };
@@ -984,9 +984,9 @@ export async function setProductPrice(id: string, price: string): Promise<Result
   return { ok: true };
 }
 
-async function hasSheetPrices(productId: string): Promise<boolean> {
-  const { count } = await createAdminClient().from("product_sheet_prices").select("id", { count: "exact", head: true }).eq("product_id", productId);
-  return (count ?? 0) > 0;
+async function pricedFromRecipe(productId: string): Promise<boolean> {
+  const { data } = await createAdminClient().from("products").select("auto_price").eq("id", productId).maybeSingle<{ auto_price: string | null }>();
+  return Boolean(data?.auto_price);
 }
 
 // The unit shown on invoices ("Pc", "Sheet", "Service"); copied onto an
@@ -1194,8 +1194,8 @@ export async function setVariantPrice(id: string, price: string): Promise<Result
   const admin = createAdminClient();
   if (value !== null) {
     const { data: variant } = await admin.from("product_variants").select("product_id").eq("id", id).maybeSingle();
-    if (variant && (await hasSheetPrices(variant.product_id as string))) {
-      return { ok: false, error: "This product is priced per sheet. Clear its prices per sheet first, or leave its sizes' prices empty." };
+    if (variant && (await pricedFromRecipe(variant.product_id as string))) {
+      return { ok: false, error: "This photo book is priced from its recipe. Set it to the catalog's price first (Production → Product costs), or leave its sizes' prices empty." };
     }
   }
   const { error } = await admin.from("product_variants").update({ price: value }).eq("id", id);

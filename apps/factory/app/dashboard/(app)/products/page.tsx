@@ -6,9 +6,8 @@ import { Loading } from "@repo/ui/skeletons/Loading";
 import { fetchCurrencies, fetchProductCatalog, fetchShowroomSettings } from "@repo/lib/queries";
 import { getDashboardSession } from "@repo/lib/auth/session";
 import { isManagerRole } from "@repo/lib/types";
-import { createAdminClient } from "@repo/lib/supabase/admin";
 
-import { ProductPanel, type SheetPrices } from "../../product-panel";
+import { ProductPanel } from "../../product-panel";
 
 export default async function ProductsPage() {
   const session = await getDashboardSession();
@@ -32,14 +31,6 @@ export default async function ProductsPage() {
 }
 
 async function Products({ canManage }: { canManage: boolean }) {
-  const [categories, showroomSettings, currencies, sheets] = await Promise.all([
-    fetchProductCatalog(),
-    fetchShowroomSettings(),
-    fetchCurrencies(),
-    createAdminClient().from("product_sheet_prices").select("product_id, size, price"),
-  ]);
-  if (sheets.error) throw new Error(`catalog: sheet prices: ${sheets.error.message}`);
-  const sheetPrices: SheetPrices = {};
-  for (const r of sheets.data ?? []) (sheetPrices[r.product_id as string] ??= {})[String(r.size).trim().toLowerCase()] = Number(r.price);
-  return <ProductPanel categories={categories} showroomSettings={showroomSettings} currencies={currencies} canManage={canManage} sheetPrices={sheetPrices} />;
+  const [categories, showroomSettings, currencies] = await Promise.all([fetchProductCatalog(), fetchShowroomSettings(), fetchCurrencies()]);
+  return <ProductPanel categories={categories} showroomSettings={showroomSettings} currencies={currencies} canManage={canManage} />;
 }

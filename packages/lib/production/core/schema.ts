@@ -16,67 +16,7 @@ const quantity = z.number().finite().refine((n) => Math.round(n * 1000) === n * 
 
 export const idSchema = z.string().uuid();
 
-const size = optionalText(40);
 const optionalId = idSchema.nullish().transform((v) => v ?? null);
-
-export const materialInputSchema = z.object({
-  name: text(120).min(1, "Give the part a name."),
-  unit: text(20).min(1, "Say what it's counted in (sheet, pc, m…)."),
-  kind: z.enum(["material", "packaging"]),
-  /** Made from other parts; else bought. */
-  made: z.boolean().default(false),
-  /** One part per size, each with its price (a made part: its own cost, or none to add up its parts); no sizes: one part without a size. */
-  sizes: z
-    .array(z.object({ size, unitCost: z.number().finite().min(0, "A price can't be negative.").nullish().transform((v) => v ?? null) }))
-    .max(30)
-    .refine((all) => new Set(all.map((s) => (s.size ?? "").toLowerCase())).size === all.length, "Each size once.")
-    .default([]),
-  /** A made part: what it's made of (each size the same). */
-  lines: z.array(z.lazy(() => partLineSchema)).max(100).default([]),
-  /** The catalog product it is (one size only). */
-  productId: optionalId,
-  /** Only this product uses it; null: shared. */
-  ownerProductId: optionalId,
-});
-export type MaterialInput = z.output<typeof materialInputSchema>;
-
-export const materialUpdateSchema = z.object({
-  id: idSchema,
-  name: text(120).min(1, "Give the part a name."),
-  unit: text(20).min(1, "Say what it's counted in (sheet, pc, m…)."),
-  kind: z.enum(["material", "packaging"]),
-  active: z.boolean(),
-  size,
-  /** Bought: its price per unit (purchases update it too). Made: its own cost, or null to add up its parts. */
-  unitCost: z.number().finite().min(0, "A price can't be negative.").nullish().transform((v) => v ?? null),
-  productId: optionalId,
-  /** Shared (null), or only for this product. */
-  ownerProductId: optionalId,
-});
-export type MaterialUpdate = z.output<typeof materialUpdateSchema>;
-
-export const purchaseInputSchema = z
-  .object({
-    materialId: idSchema,
-    qty: quantity.positive("Enter how much was bought."),
-    total: z.number().int("Enter the total in whole shillings.").positive("Enter what it cost in total."),
-    supplier: optionalText(120),
-    paidFrom: z.enum(["cash", "bank_transfer", "mobile_money", "other", "on_credit"]),
-    reference: optionalText(120),
-    note: optionalText(500),
-    purchasedOn: day,
-    /** On credit only: when the supplier expects to be paid. */
-    dueOn: day.nullish().transform((v) => v ?? null),
-  })
-  .refine((p) => p.paidFrom !== "on_credit" || p.supplier, { message: "On credit: say which supplier we owe.", path: ["supplier"] });
-export type PurchaseInput = z.output<typeof purchaseInputSchema>;
-
-export const stockCountSchema = z.object({
-  materialId: idSchema,
-  counted: quantity.min(0, "A count can't be below zero."),
-  reason: text(300).min(1, "Say why (e.g. counted on Friday)."),
-});
-export type StockCountInput = z.output<typeof stockCountSchema>;
 
 export const voidSchema = z.object({
   id: idSchema,
@@ -126,85 +66,78 @@ export const repaymentInputSchema = z.object({
 });
 export type RepaymentInput = z.output<typeof repaymentInputSchema>;
 
-// --- Parts and setups -------------------------------------------------------
+// --- Costing (see core/recipes.ts) -----------------------------------------
 
-/** One line of a product's setup or of a made part (see core/parts.ts). */
-export const partLineSchema = z
+const amount = (what: string) => z.number().finite().min(0, `${what} can't be negative.`);
+const wholeShillings = z.number().int("Enter whole shillings.").min(0, "A price can't be negative.");
+/** Amounts by size name; empty sizes dropped, each size once. */
+const sizeAmounts = <T extends z.ZodTypeAny>(value: T) =>
+  z
+    .record(text(40), value)
+    .refine((m) => Object.keys(m).length <= 30, "At most 30 sizes.")
+    .refine((m) => new Set(Object.keys(m).map((k) => k.trim().toLowerCase())).size === Object.keys(m).length, "Each size once.");
+
+export const materialInputSchema = z
   .object({
-    variantId: optionalId,
-    partId: optionalId,
-    /** Use the part of partId's name in the size the order chose. */
-    byOrderSize: z.boolean().default(false),
-    /** An attached catalog product. */
-    productPartId: optionalId,
-    /** The attached product's catalog price adds to what the client pays. */
-    addsPrice: z.boolean().default(false),
-    /** Only for these sizes; none: every size. */
+    /** Null: a new material. */
+    id: optionalId,
+    name: text(120).min(1, "Give the material a name."),
+    unit: text(20).min(1, "Say what it's counted in (sheet, pc, m…)."),
+    costBy: z.enum(["one", "size", "parts"]),
+    cost: amount("A cost").default(0),
+    sizeCosts: sizeAmounts(amount("A cost")).default({}),
+    parts: z
+      .array(z.object({ partId: idSchema, qty: quantity.positive("Enter how many it takes."), sizeTotals: sizeAmounts(amount("A cost")).nullable() }))
+      .max(50)
+      .default([]),
+    sellPrice: wholeShillings.nullish().transform((v) => v ?? null),
+    sizeSells: sizeAmounts(wholeShillings).default({}),
+    active: z.boolean().default(true),
+  })
+  .superRefine((m, ctx) => {
+    const fail = (message: string) => ctx.addIssue({ code: "custom", message });
+    if (m.costBy === "parts" && m.parts.length === 0) fail("Add what it's built from.");
+    if (m.costBy === "parts" && new Set(m.parts.map((p) => p.partId)).size !== m.parts.length) fail("Each material once.");
+    if (m.costBy === "size" && Object.keys(m.sizeCosts).length === 0) fail("Enter a cost for at least one size.");
+  });
+export type MaterialInput = z.output<typeof materialInputSchema>;
+
+export const recipeLineSchema = z
+  .object({
+    materialId: idSchema,
+    qty: quantity.positive("Enter how many it takes."),
+    perSheet: z.boolean().default(false),
     sizes: z
       .array(text(40).min(1))
       .max(30)
       .nullish()
       .transform((v) => (v && v.length ? v : null)),
-    qty: quantity.positive("Enter how many it takes.").nullish().transform((v) => v ?? null),
-    perDetail: optionalText(80),
     whenDetail: optionalText(80),
     whenValue: optionalText(120),
-    label: optionalText(80),
-    amount: z.number().int("Enter whole shillings.").min(0, "A cost can't be negative.").nullish().transform((v) => v ?? null),
+    sellPrice: wholeShillings.nullish().transform((v) => v ?? null),
+    sizeSells: sizeAmounts(wholeShillings)
+      .nullish()
+      .transform((v) => (v && Object.keys(v).length ? v : null)),
   })
-  .superRefine((l, ctx) => {
-    const fail = (message: string) => ctx.addIssue({ code: "custom", message });
-    if ((l.whenDetail === null) !== (l.whenValue === null)) fail("Say both the detail and its value for “only when”.");
-    if (l.label !== null || l.amount !== null) {
-      if (!l.label) fail("Name the cost (e.g. Binding).");
-      if (l.amount === null) fail(`Enter what ${l.label ?? "the cost"} costs.`);
-      if (l.partId || l.productPartId || l.perDetail) fail("An other cost is a fixed amount, not a part.");
-      return;
-    }
-    if (!l.partId === !l.productPartId) fail("Choose a part or a product on each line, or remove the line.");
-    if (l.byOrderSize && !l.partId) fail("Choose the part to use in the order's size.");
-    if (l.addsPrice && !l.productPartId) fail("Only an attached product adds its price.");
-    if (l.qty === null) fail("Enter how many each line takes.");
-  });
-export type PartLineInput = z.output<typeof partLineSchema>;
+  .refine((l) => (l.whenDetail === null) === (l.whenValue === null), "Say both the detail and its value for “only when”.");
+export type RecipeLineInput = z.output<typeof recipeLineSchema>;
 
-export const setupInputSchema = z.object({
+export const recipeInputSchema = z.object({
   productId: idSchema,
-  lines: z.array(partLineSchema).max(100),
+  lines: z.array(recipeLineSchema).max(100),
 });
-export type SetupInput = z.output<typeof setupInputSchema>;
+export type RecipeInput = z.output<typeof recipeInputSchema>;
 
-export const partLinesInputSchema = z.object({
-  partId: idSchema,
-  lines: z.array(partLineSchema.refine((l) => l.variantId === null, "A part's lines are the same for every size.")).max(100),
-});
-export type PartLinesInput = z.output<typeof partLinesInputSchema>;
-
-/** A photo book's price per sheet for one size, set by the boss in the catalog; null clears it. */
-export const sheetPriceSchema = z.object({
+/** How a photo book is priced (null: the catalog's) and its own margin in percent (null: the shared one). */
+export const pricingInputSchema = z.object({
   productId: idSchema,
-  size: text(40).min(1, "Choose the size."),
-  price: z.number().int("Enter whole shillings.").min(0, "A price can't be negative.").nullable(),
+  autoPrice: z.enum(["margin", "materials"]).nullable(),
+  marginPercent: z.number().finite().min(0, "A margin can't be negative.").max(95, "Keep the margin under 95%.").nullable(),
 });
-export type SheetPriceInput = z.output<typeof sheetPriceSchema>;
+export type PricingInput = z.output<typeof pricingInputSchema>;
 
-export const copySetupSchema = z.object({ from: idSchema, to: idSchema }).refine((c) => c.from !== c.to, "Choose another product to copy from.");
-export type CopySetupInput = z.output<typeof copySetupSchema>;
-
-// --- Production records -----------------------------------------------------
-
-/** What an item actually used; what it should have used comes from its recipe, on the server. */
-export const usageInputSchema = z.object({
-  itemId: idSchema,
-  actual: z.array(z.object({ materialId: idSchema, qty: quantity.min(0, "A quantity can't be below zero.") })).max(100),
-  note: optionalText(500),
+/** The margin photo books are priced at, in percent. */
+export const marginInputSchema = z.object({
+  marginPercent: z.number().finite().min(0, "A margin can't be negative.").max(95, "Keep the margin under 95%."),
 });
-export type UsageInput = z.output<typeof usageInputSchema>;
-
-/** What a recorded item really used, replacing its record (expected quantities and other costs stay). */
-export const correctionInputSchema = z.object({
-  recordId: idSchema,
-  actual: z.array(z.object({ materialId: idSchema, qty: quantity.min(0, "A quantity can't be below zero.") })).max(100),
-  note: optionalText(500),
-});
-export type CorrectionInput = z.output<typeof correctionInputSchema>;
+export type MarginInput = z.output<typeof marginInputSchema>;

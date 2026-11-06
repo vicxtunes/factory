@@ -1,45 +1,56 @@
 "use client";
 
-// Production → Product costs: each product size's cost at the latest prices
-// paid (from its setup), its catalog price, the profit and the margin. A
-// product whose cost depends on a number (pages, sheets) shows it per one;
-// priced per sheet, its price and margin are per sheet too. Cards on a phone, aligned rows from the
-// container's 3xl; tap a product for how it's doing (or, not set up yet, to
-// set it up).
+// Production → Product costs: each product size's cost at today's material
+// costs (from its recipe), its catalog price, the profit and the margin. A
+// photo book shows its cost with no sheets and what each sheet adds, and how
+// it's priced (the catalog's, from the margin, or from its materials). Cards on
+// a phone, aligned rows from the container's 3xl; tap a product for how it's
+// doing (or, with no recipe yet, to write one).
 
 import Link from "next/link";
 import { useState } from "react";
 
+import { Button } from "@repo/ui/Button";
 import { TextInput } from "@repo/ui/Field";
 import { useCurrencySymbol } from "@repo/lib/currency/CurrencySymbolProvider";
 import { formatMoney } from "@repo/lib/currency/format";
-import { formatUnitCost, type ProductCost } from "@repo/lib/production/core";
+import type { ProductCost } from "@repo/lib/production/core";
 
+import { MarginSheet } from "./costing";
 import { Tile } from "./MaterialsBoard";
 
-export function ProductCostsBoard({ products, basePath }: { products: ProductCost[]; basePath: string }) {
+export const pct = (m: number) => `${Math.round(m * 1000) / 10}%`;
+
+/** "From the margin (40%)", "From its materials", "Catalog price". */
+export function pricingText(p: Pick<ProductCost, "isPhotoBook" | "autoPrice" | "margin">): string {
+  if (p.autoPrice === "margin") return `From the margin (${pct(p.margin ?? 0)})`;
+  if (p.autoPrice === "materials") return "From its materials";
+  return "Catalog price";
+}
+
+export function ProductCostsBoard({ products, basePath, margin, setsPrices }: { products: ProductCost[]; basePath: string; margin: number; setsPrices: boolean }) {
   const symbol = useCurrencySymbol();
   const money = (n: number) => formatMoney(n, symbol);
   const [query, setQuery] = useState("");
   const [missingOnly, setMissingOnly] = useState(false);
+  const [marginOpen, setMarginOpen] = useState(false);
 
   const q = query.trim().toLowerCase();
-  const shown = products.filter((p) => (!missingOnly || !p.isSetUp) && (!q || `${p.name} ${p.categoryName}`.toLowerCase().includes(q)));
-  const setUp = products.filter((p) => p.isSetUp).length;
+  const shown = products.filter((p) => (!missingOnly || !p.hasRecipe) && (!q || `${p.name} ${p.categoryName}`.toLowerCase().includes(q)));
+  const withRecipe = products.filter((p) => p.hasRecipe).length;
   const margins = products.flatMap((p) => p.rows.flatMap((r) => (r.margin ? [r.margin.percent] : [])));
-  const lowLoss = products.flatMap((p) => p.rows.filter((r) => r.margin && r.margin.profit < 0)).length;
+  const atLoss = products.flatMap((p) => p.rows.filter((r) => r.margin && r.margin.profit < 0)).length;
 
   type Row = ProductCost["rows"][number];
-  const per = (name: string) => (/^(nos|sheets?|number of sheets)\b/i.test(name.trim()) ? "per sheet" : `per ${name.replace(/\s*\(.*\)\s*$/, "").toLowerCase().replace(/s$/, "")}`);
-  const costText = (r: Row) => `${r.cost || !r.perDetail.length ? money(r.cost) : ""}${r.perDetail.map((d) => `${r.cost ? " + " : ""}${formatUnitCost(d.cost, symbol)} ${per(d.name)}`).join("")}`;
-  const priceText = (r: Row) => (r.perSheet !== null ? `${money(r.perSheet)} per sheet` : r.price !== null ? money(r.price) : "—");
+  const costText = (p: ProductCost, r: Row) => `${money(r.cost)}${p.isPhotoBook && r.perSheet ? ` + ${money(r.perSheet)} per sheet` : ""}`;
+  const priceText = (p: ProductCost, r: Row) => (p.isPhotoBook && p.autoPrice ? pricingText(p) : r.price !== null ? money(r.price) : "priced on call");
   const marginText = (r: Row) =>
     r.margin ? (
-      <span className={r.margin.profit < 0 ? "text-error-600 dark:text-error-400" : r.margin.percent < 20 ? "text-warning-600 dark:text-warning-500" : "text-success-600 dark:text-success-500"}>
-        {r.margin.percent}%{r.margin.per ? ` ${per(r.margin.per)}` : ""}
+      <span className={r.margin.profit < 0 ? "text-error-600 dark:text-error-400" : r.margin.percent < 25 ? "text-warning-600 dark:text-warning-500" : "text-success-600 dark:text-success-500"}>
+        {r.margin.percent}%
       </span>
     ) : (
-      <span className="text-muted">{r.price === null && r.perSheet === null && !r.perDetail.length ? "priced on call" : r.perDetail.length ? `by ${per(r.perDetail[0].name).slice(4)}` : "—"}</span>
+      <span className="text-muted">—</span>
     );
 
   // Products by category, in catalog order.
@@ -47,17 +58,28 @@ export function ProductCostsBoard({ products, basePath }: { products: ProductCos
 
   return (
     <div className="@container space-y-4">
-      <div className="grid grid-cols-2 gap-3 @2xl:grid-cols-3">
-        <Tile label="Products set up" value={`${setUp} of ${products.length}`} wide />
+      <div className="grid grid-cols-2 gap-3 @2xl:grid-cols-4">
+        <Tile label="Products with a recipe" value={`${withRecipe} of ${products.length}`} wide />
         <Tile label="Average margin" value={margins.length ? `${Math.round((margins.reduce((a, b) => a + b, 0) / margins.length) * 10) / 10}%` : "—"} />
-        <Tile label="Sold at a loss" value={String(lowLoss)} tone={lowLoss ? "error" : undefined} />
+        <Tile label="Sold at a loss" value={String(atLoss)} tone={atLoss ? "error" : undefined} />
+        <div className="rounded-2xl border border-border bg-surface p-4 shadow-theme-xs">
+          <div className="flex items-start justify-between gap-2">
+            <p className="text-lg font-bold tnum @2xl:text-2xl">{pct(margin)}</p>
+            {setsPrices ? (
+              <Button type="button" variant="secondary" className="min-h-8 text-xs" onClick={() => setMarginOpen(true)}>
+                Change
+              </Button>
+            ) : null}
+          </div>
+          <p className="mt-0.5 text-xs text-muted">Photo book margin</p>
+        </div>
       </div>
 
       <div className="flex flex-col gap-3 @2xl:flex-row @2xl:items-center">
         <TextInput type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search products" className="@2xl:max-w-xs" />
         <label className="flex min-h-11 items-center gap-2 text-sm @2xl:ml-auto">
           <input type="checkbox" checked={missingOnly} onChange={(e) => setMissingOnly(e.target.checked)} className="size-4 accent-brand-500" />
-          Only those not set up ({products.length - setUp})
+          Only those with no recipe ({products.length - withRecipe})
         </label>
       </div>
 
@@ -70,19 +92,19 @@ export function ProductCostsBoard({ products, basePath }: { products: ProductCos
               .filter((p) => p.categoryName === category)
               .map((p) => (
                 <li key={p.productId} className="border-b border-border last:border-b-0">
-                  <Link href={`${basePath}/${p.productId}${p.isSetUp ? "" : "/setup"}`} className="block p-4 hover:bg-gray-50 active:bg-gray-50 dark:hover:bg-white/5 dark:active:bg-white/5">
+                  <Link href={`${basePath}/${p.productId}${p.hasRecipe ? "" : "/setup"}`} className="block p-4 hover:bg-gray-50 active:bg-gray-50 dark:hover:bg-white/5 dark:active:bg-white/5">
                     <div className="flex items-baseline justify-between gap-3">
                       <p className="truncate font-medium">{p.name}</p>
-                      {p.isSetUp ? (
-                        <span className="shrink-0 text-xs text-muted">{p.pricing === "per_sheet" ? "Priced per sheet" : "Catalog price"} · How it&apos;s doing →</span>
+                      {p.hasRecipe ? (
+                        <span className="shrink-0 text-xs text-muted">{pricingText(p)} · How it&apos;s doing →</span>
                       ) : (
-                        <span className="shrink-0 text-xs font-medium text-brand-600">Set it up →</span>
+                        <span className="shrink-0 text-xs font-medium text-brand-600">Write its recipe →</span>
                       )}
                     </div>
-                    {p.isSetUp ? (
+                    {p.hasRecipe ? (
                       <div className="mt-2 grid gap-1">
                         {/* Wider: one aligned row per size. */}
-                        <div className="hidden grid-cols-[1fr_15rem_15rem_7rem_8rem] gap-3 text-[0.7rem] font-semibold uppercase tracking-wide text-muted @3xl:grid">
+                        <div className="hidden grid-cols-[1fr_15rem_13rem_7rem_6rem] gap-3 text-[0.7rem] font-semibold uppercase tracking-wide text-muted @3xl:grid">
                           <span>Size</span>
                           <span className="text-right">Cost</span>
                           <span className="text-right">Price</span>
@@ -90,26 +112,24 @@ export function ProductCostsBoard({ products, basePath }: { products: ProductCos
                           <span className="text-right">Margin</span>
                         </div>
                         {p.rows.map((r) => (
-                          <div key={r.key} className="grid grid-cols-[1fr_auto] gap-x-3 text-sm @3xl:grid-cols-[1fr_15rem_15rem_7rem_8rem]">
+                          <div key={r.size ?? "each"} className="grid grid-cols-[1fr_auto] gap-x-3 text-sm @3xl:grid-cols-[1fr_15rem_13rem_7rem_6rem]">
                             <span className="truncate text-muted @3xl:text-foreground">
-                              {r.name ?? "Each"}
-                              {r.unpriced.length || r.missing.length ? (
-                                <span className="ml-2 text-xs text-warning-600 dark:text-warning-500">cost short: {[...r.unpriced.map((u) => `${u} not bought yet`), ...r.missing.map((m) => `no ${m}`)].join(", ")}</span>
-                              ) : null}
+                              {r.size ?? "Each"}
+                              {r.missing.length ? <span className="ml-2 text-xs text-warning-600 dark:text-warning-500">cost short: no {r.missing.join(", no ")}</span> : null}
                             </span>
                             <span className="text-right tnum @3xl:order-last">{marginText(r)}</span>
                             <span className="col-span-2 text-xs text-muted @3xl:col-span-1 @3xl:text-right @3xl:text-sm @3xl:text-foreground tnum">
                               <span className="@3xl:hidden">Costs </span>
-                              {costText(r)}
-                              <span className="@3xl:hidden">{priceText(r) !== "—" ? ` · sells at ${priceText(r)}` : ""}</span>
+                              {costText(p, r)}
+                              <span className="@3xl:hidden"> · {priceText(p, r)}</span>
                             </span>
-                            <span className="hidden text-right tnum @3xl:block">{priceText(r)}</span>
-                            <span className="hidden text-right tnum @3xl:block">{r.margin ? `${money(r.margin.profit)}${r.margin.per ? ` ${per(r.margin.per)}` : ""}` : "—"}</span>
+                            <span className="hidden text-right tnum @3xl:block">{priceText(p, r)}</span>
+                            <span className="hidden text-right tnum @3xl:block">{r.margin ? money(r.margin.profit) : "—"}</span>
                           </div>
                         ))}
                       </div>
                     ) : (
-                      <p className="mt-1 text-xs text-muted">Not set up yet: list what it&apos;s made of to see its cost and margin.</p>
+                      <p className="mt-1 text-xs text-muted">No recipe yet: list what it&apos;s made of to see its cost and margin.</p>
                     )}
                   </Link>
                 </li>
@@ -117,6 +137,8 @@ export function ProductCostsBoard({ products, basePath }: { products: ProductCos
           </ul>
         </section>
       ))}
+
+      {setsPrices ? <MarginSheet key={marginOpen ? "open" : "closed"} open={marginOpen} onClose={() => setMarginOpen(false)} margin={margin} /> : null}
     </div>
   );
 }

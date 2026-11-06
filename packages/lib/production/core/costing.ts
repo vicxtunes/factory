@@ -1,20 +1,13 @@
-// What each product costs to make, from its setup (core/parts.ts) and today's
-// prices, and what it earns at its selling price. Pure.
+// What each product costs to make, from its recipe (core/recipes.ts) and
+// today's costs, and what it earns at its catalog price. Pure.
 
-import { PartsCatalog, rowMargin, type CostRow, type PricingMethod } from "./parts";
-
-/** Profit and margin at a selling price; null when there's no price. */
-export function margin(price: number | null, cost: number): { profit: number; percent: number } | null {
-  if (price === null || price <= 0) return null;
-  const profit = price - cost;
-  return { profit, percent: Math.round((profit / price) * 1000) / 10 };
-}
+import { costRows, isPhotoBook, marginAt, productSizes, type AutoPrice, type CostRow, type Costing } from "./recipes";
 
 /** The catalog as costing needs it (a subset of the app's catalog types). */
 export interface CostingCategory {
   id: string;
   name: string;
-  /** The order form's details (Pages, NOS, Lamination…), with a choice's options. */
+  /** The order form's details (NOS, Size, Lamination…), with a choice's options. */
   attributes: { id: string; name: string; type: string; options: string[] }[];
   products: { id: string; name: string; price: number | null; unit: string | null; variants: { id: string; name: string; price: number | null }[] }[];
 }
@@ -23,44 +16,37 @@ export interface ProductCost {
   productId: string;
   name: string;
   categoryName: string;
-  unit: string | null;
-  pricing: PricingMethod["key"];
-  isSetUp: boolean;
-  rows: (CostRow & { margin: ReturnType<typeof rowMargin> })[];
+  isPhotoBook: boolean;
+  hasRecipe: boolean;
+  autoPrice: AutoPrice | null;
+  /** The margin it's priced at (method "margin"). */
+  margin: number | null;
+  rows: (CostRow & { margin: ReturnType<typeof marginAt> })[];
 }
 
-/** Every product's cost, price and margin by size, from its setup. */
-export function productCosts(catalog: CostingCategory[], parts: PartsCatalog): ProductCost[] {
+/** A category's Size options, for products with no size variants. */
+export function categorySizes(category: CostingCategory): string[] {
+  return category.attributes.find((a) => a.name.trim().toLowerCase() === "size")?.options ?? [];
+}
+
+/** Every product's cost, price and margin by size, from its recipe. */
+export function productCosts(catalog: CostingCategory[], costing: Costing): ProductCost[] {
   return catalog.flatMap((category) =>
-    category.products.map((product) => {
-      const setup = parts.setup(product.id);
+    category.products.flatMap((p) => {
+      const product = costing.product(p.id);
+      if (!product) return [];
+      const book = isPhotoBook(category.name);
+      const hasRecipe = costing.hasRecipe(p.id);
       return {
-        productId: product.id,
-        name: product.name,
+        productId: p.id,
+        name: p.name,
         categoryName: category.name,
-        unit: product.unit,
-        pricing: setup.pricing.key,
-        isSetUp: setup.isSetUp,
-        rows: setup.isSetUp ? setup.rows(product.variants, product.price).map((r) => ({ ...r, margin: rowMargin(r) })) : [],
+        isPhotoBook: book,
+        hasRecipe,
+        autoPrice: book ? product.autoPrice : null,
+        margin: book && product.autoPrice === "margin" ? (product.margin ?? costing.book.margin) : null,
+        rows: hasRecipe ? costRows(costing, product, productSizes(product, categorySizes(category))).map((r) => ({ ...r, margin: marginAt(r.price, r.cost) })) : [],
       };
     }),
   );
-}
-
-/** The sizes an order can choose (each category's Size options, then size variants), for parts in a size. */
-export function orderSizes(catalog: CostingCategory[]): string[] {
-  const fromDetails = catalog.flatMap((c) => c.attributes.filter((a) => a.name.trim().toLowerCase() === "size").flatMap((a) => a.options));
-  const fromVariants = catalog.flatMap((c) => c.products.flatMap((p) => p.variants.map((v) => v.name)));
-  return [...new Set([...fromDetails, ...fromVariants].map((s) => s.trim()).filter(Boolean))];
-}
-
-/**
- * The lines to save: every part the setup expects (actual defaults to
- * expected when not given) plus any other part actually used.
- */
-export function mergeUsage(expected: { materialId: string; qty: number }[], actual: { materialId: string; qty: number }[]) {
-  const used = new Map(actual.map((a) => [a.materialId, a.qty]));
-  const lines = expected.map((e) => ({ materialId: e.materialId, expectedQty: e.qty, actualQty: used.get(e.materialId) ?? e.qty }));
-  for (const a of actual) if (!expected.some((e) => e.materialId === a.materialId) && a.qty > 0) lines.push({ materialId: a.materialId, expectedQty: 0, actualQty: a.qty });
-  return lines;
 }

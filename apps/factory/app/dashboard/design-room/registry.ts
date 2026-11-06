@@ -140,13 +140,10 @@ import ServiceCardsVendor from "./examples/service-cards/vendor";
 import SocialIconAll from "./examples/social-icon/all";
 import MoneyDashboardBoss from "./examples/money-dashboard/boss";
 import ProductionMaterials from "./examples/production/materials";
-import ProductionMaterialDetail from "./examples/production/material-detail";
 import ProductionMoneyWeOwe from "./examples/production/money-we-owe";
 import ProductionLender from "./examples/production/lender";
 import ProductionProductCosts from "./examples/production/product-costs";
-import ProductionSetup from "./examples/production/setup";
-import ProductionMadePart from "./examples/production/made-part";
-import ProductionUsage from "./examples/production/usage";
+import ProductionRecipe from "./examples/production/recipe";
 import ProductionOverviewExample from "./examples/production/overview";
 import ProductionProduct from "./examples/production/product";
 import ProductionSpeed from "./examples/production/speed";
@@ -257,16 +254,12 @@ export const COMPONENTS: RoomComponent[] = [
   },
   {
     slug: "production-materials",
-    name: "Production parts",
+    name: "Production materials",
     category: "Flows",
     status: "live",
     source: "packages/ui/production/MaterialsBoard.tsx",
-    summary: "Everything production buys or makes, cost only, tabbed All, Bought and Made; cards on a phone, a table from the container's 3xl; same-named parts in sizes sort together. A bought part has a size (PVC 12x12, PVC 10x10 are two parts named PVC), stock, price paid and value (below zero in red); Record purchase sets its price and counts as money spent, or as money we owe the supplier on credit. A made part (a sheet, a box) is made of other parts at any depth, so its cost follows theirs; a part can also be the catalog product it's sold as (a box chosen as packaging). Add part opens in a form sheet from anywhere: bought or made, a measure from a list or your own, shared or only for one product, its sizes and prices ticked in a pop-up (one part per size, in one go), and a made part's parts chosen right there. One bought part shows purchases (voidable) beside its stock history; one made part edits its lines beside an order to try, and lists what uses it.",
-    examples: [
-      { title: "Parts", file: "production/materials.tsx", Demo: ProductionMaterials },
-      { title: "One bought part", file: "production/material-detail.tsx", Demo: ProductionMaterialDetail },
-      { title: "One made part", file: "production/made-part.tsx", Demo: ProductionMadePart },
-    ],
+    summary: "What products are made of, cost only, plus a selling price the boss sets for photo books priced from their materials. A material costs one amount, an amount for each size, or is built from other materials (each a quantity × its cost, or a total typed for each size). Cards on a phone, a table from the container's 3xl, with what uses each one. Add or tap one to edit it in a form sheet; one in a recipe can't be deleted, only marked not in use.",
+    examples: [{ title: "Materials", file: "production/materials.tsx", Demo: ProductionMaterials }],
   },
   {
     slug: "day-book",
@@ -300,24 +293,15 @@ export const COMPONENTS: RoomComponent[] = [
   },
   {
     slug: "product-costs",
-    name: "Product costs and setups",
+    name: "Product costs and recipes",
     category: "Flows",
     status: "live",
     source: "packages/ui/production/ProductCostsBoard.tsx",
-    summary: "What each product size costs to make at the latest prices paid, its catalog price, profit and margin (red at a loss, amber under 20%), by category; a photo book priced per sheet shows its price, cost and margin per sheet for each size. A product's own setup (SetupEditor): its selling price from the catalog shown on top, then its lines (cost only): a part × how many or × a number on the order, a part in the order's size, an attached catalog product that can add its price, or an other cost; any line for some sizes only (a pop-up) and only when the order chose something. New part on a line adds one only for that product; Copy from another product starts from its lines. An order to try sits beside it (below on a phone) with each line's cost, the catalog price and the profit.",
+    summary: "What each product size costs to make from its recipe at today's material costs, its catalog price, profit and margin (red at a loss, amber under 25%), by category; a photo book shows its cost with no sheets + per sheet and how it's priced; the photo book margin sits in a tile (the boss changes it in a form sheet). A product's recipe (RecipeEditor): how a photo book is priced (the catalog's, from the margin, or from its materials' selling prices), then its lines as a list, each opened in a form sheet: a material × how many (× sheets on a photo book), only for some sizes and only when the order chose something, a book's own selling price. Try it works out one order like the prototype: each line, a built material's parts, the add-ons with their price and cost, the cost of one, the price and the margin, or why it's priced on the call.",
     examples: [
       { title: "Product costs", file: "production/product-costs.tsx", Demo: ProductionProductCosts },
-      { title: "A product's setup", file: "production/setup.tsx", Demo: ProductionSetup },
+      { title: "A photo book's recipe", file: "production/recipe.tsx", Demo: ProductionRecipe },
     ],
-  },
-  {
-    slug: "record-usage",
-    name: "Record usage",
-    category: "Flows",
-    status: "live",
-    source: "packages/ui/production/UsageBoard.tsx",
-    summary: "Items with a recipe are recorded by themselves at Quality check (marked automatic). Correct opens a form sheet with what it was expected to use, to enter what it really used or add other materials; the record is replaced and the stock follows, and the difference is the wastage (red when over). Items made in the last 30 days with nothing recorded (no recipe, or made before) are recorded by hand. Records can be voided with a reason, which puts the stock back.",
-    examples: [{ title: "Record usage", file: "production/usage.tsx", Demo: ProductionUsage }],
   },
   {
     slug: "production-overview",
