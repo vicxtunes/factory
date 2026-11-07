@@ -525,8 +525,8 @@ export function assistantTools(ctx: ToolContext): AssistantTool[] {
         const link = photo_link.trim();
         if (link && !/^https?:\/\/\S+$/.test(link)) return "Refused: that isn't a valid link.";
         if (!attachment_ids.length && !link) return "Refused: no files or link given.";
-        const { data: items } = await db.from("order_items").select("id, media_link, order_item_media(id)").eq("order_id", order.id);
-        const missing = (items ?? []).filter((i) => !i.media_link && !i.order_item_media.length);
+        const { data: items } = await db.from("order_items").select("id, media_link, order_item_media(id), order_item_drive_links(id)").eq("order_id", order.id);
+        const missing = (items ?? []).filter((i) => !i.media_link && !i.order_item_media.length && !i.order_item_drive_links.length);
         for (const item of missing) {
           await photosToItem(ctx, item.id, order.order_no, order.id, { attachment_ids, photo_link: link || null } as PendingItem);
         }

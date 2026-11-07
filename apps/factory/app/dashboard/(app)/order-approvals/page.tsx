@@ -10,6 +10,7 @@ import { Costing } from "@repo/lib/production/core";
 import { canManageProduction } from "@repo/lib/production/policy";
 import { production } from "@repo/lib/production/server";
 import { resolveTenantScope } from "@repo/lib/tenancy/server/resolve";
+import { createAdminClient } from "@repo/lib/supabase/admin";
 import { isManagerRole } from "@repo/lib/types";
 
 import { OrderApprovalQueue, type ItemCosts } from "../../order-approval-queue";
@@ -49,9 +50,21 @@ async function Queue({ canCancel, seesCosts }: { canCancel: boolean; seesCosts: 
       photobookCategoryIds={photobookCategoryIds}
       agentPayments={agentPayments}
       costs={seesCosts ? await itemCosts(items) : null}
+      driveLinks={await driveLinkCounts(items.map((i) => i.id))}
       canCancel={canCancel}
     />
   );
+}
+
+/** How many Drive folders and files each item has linked (the table is the server's own, like the Drive). */
+async function driveLinkCounts(itemIds: string[]): Promise<Record<string, number>> {
+  const out: Record<string, number> = {};
+  for (let i = 0; i < itemIds.length; i += 200) {
+    const { data, error } = await createAdminClient().from("order_item_drive_links").select("order_item_id").in("order_item_id", itemIds.slice(i, i + 200));
+    if (error) throw new Error(`order approvals: drive links: ${error.message}`);
+    for (const r of data ?? []) out[r.order_item_id as string] = (out[r.order_item_id as string] ?? 0) + 1;
+  }
+  return out;
 }
 
 /** Each item's cost of one from its product's recipe (with its add-ons), at today's costs; items with no recipe left out. */

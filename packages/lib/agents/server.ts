@@ -9,7 +9,7 @@ import { formatMoney } from "@repo/lib/currency/format";
 import { clientCurrency } from "@repo/lib/currency/server";
 import { AppError } from "@repo/lib/kernel/core";
 import { buildAndInsertOrder, type BuildOrderResult } from "@repo/lib/orders/create";
-import { isPhotobookCategory } from "@repo/lib/orders/photobook";
+import { orderNeedsCall } from "@repo/lib/orders/needs-call";
 import type { OrderItemInput } from "@repo/lib/orders/types";
 import { notifyActor } from "@repo/lib/push/send";
 import { resendMailer } from "@repo/lib/studio-access/adapters/resend/mailer";
@@ -333,9 +333,7 @@ export async function placeForClient(agent: Agent, input: PlacedAgentOrder): Pro
   });
   if (!res.ok) throw new AppError(res.error);
 
-  const categoryIds = [...new Set(input.items.map((i) => i.category_id).filter(Boolean))];
-  const categories = categoryIds.length ? must(await db.from("product_categories").select("name").in("id", categoryIds)) ?? [] : [];
-  const needsCall = categories.some((c) => isPhotobookCategory(c.name));
+  const needsCall = await orderNeedsCall(db, res.orderId);
   await tellManagers({
     title: needsCall ? "Photo book order from an agent — call the client" : "New order from an agent",
     body: `Order ${res.orderNo} from ${agent.name}, for ${client.name}${client.phone ? ` (${client.phone})` : ""}`,
