@@ -56,11 +56,14 @@ export function OrderApprovalQueue({
   photobookCategoryIds,
   agentPayments,
   costs,
+  driveLinks,
   canCancel = false,
 }: {
   items: OrderItemWithOrder[];
   designers: DesignerPublic[];
   photobookCategoryIds: string[];
+  /** Drive folders and files linked to each item, by item id. */
+  driveLinks: Record<string, number>;
   /** Only for those who see production costs (boss, supervisors). */
   costs: ItemCosts | null;
   /** Agents' orders: paid so far and the 80% needed before production (packages/lib/agents). */
@@ -82,7 +85,9 @@ export function OrderApprovalQueue({
             key={g.orderId}
             group={g}
             designers={designers}
-            call={g.items.some((i) => i.category_id && photobookIds.has(i.category_id))}
+            // Only a photo book with no price needs the call (a priced one is confirmed like any order).
+            call={g.items.some((i) => i.category_id && photobookIds.has(i.category_id) && catalogUnitPrice(i) == null)}
+            driveLinks={driveLinks}
             agentPayment={agentPayments[g.orderId] ?? null}
             costs={costs}
             canCancel={canCancel}
@@ -110,7 +115,7 @@ function ItemsList({ items }: { items: OrderItemWithOrder[] }) {
 // What the receptionist checks before receiving an order: is everything filled
 // in? Two plain tables — order info, then one row per item with its options
 // stacked as label / value pairs so nothing runs together.
-function OrderDetails({ order, items, costs }: { order: OrderGroup["order"]; items: OrderItemWithOrder[]; costs: ItemCosts | null }) {
+function OrderDetails({ order, items, costs, driveLinks }: { order: OrderGroup["order"]; items: OrderItemWithOrder[]; costs: ItemCosts | null; driveLinks: Record<string, number> }) {
   const symbol = useCurrencySymbol();
   const notes = order.order_notes.map((n) => n.body).filter(Boolean);
   const info: [string, string][] = [
@@ -156,7 +161,7 @@ function OrderDetails({ order, items, costs }: { order: OrderGroup["order"]; ite
           <tbody>
             {items.map((item) => {
               const attrs = Object.entries(item.attributes ?? {});
-              const files = item.media.length + (item.media_link ? 1 : 0);
+              const files = item.media.length + (item.media_link ? 1 : 0) + (driveLinks[item.id] ?? 0);
               return (
                 <tr key={item.id} className="border-t border-border align-top">
                   <td className="px-3 py-2 font-medium text-foreground">
@@ -266,12 +271,14 @@ function RouteCard({
   call = false,
   agentPayment,
   costs,
+  driveLinks,
   canCancel = false,
 }: {
   group: OrderGroup;
   designers: DesignerPublic[];
   agentPayment: { paid: number; needed: number | null } | null;
   costs: ItemCosts | null;
+  driveLinks: Record<string, number>;
   // Photo-book order: confirming needs the price agreed on a call with the
   // client — photo books have no catalog price (see ./order-confirmation.tsx).
   call?: boolean;
@@ -305,7 +312,7 @@ function RouteCard({
 
   return (
     <OrderCard group={group}>
-      <OrderDetails order={group.order} items={group.items} costs={costs} />
+      <OrderDetails order={group.order} items={group.items} costs={costs} driveLinks={driveLinks} />
       <Steps current={confirmed ? (invoiceReady ? "route" : "invoice") : "confirm"} />
       {!confirmed ? (
         <OrderConfirmation

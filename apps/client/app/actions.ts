@@ -14,7 +14,7 @@ import { discounts } from "@repo/lib/discounts/server";
 import { DiscountError } from "@repo/lib/discounts/ports";
 import { resolveTenantScope } from "@repo/lib/tenancy/server/resolve";
 import { applyCancellation, cleanReason, loadCancellableOrder } from "@repo/lib/orders/cancel";
-import { isPhotobookCategory } from "@repo/lib/orders/photobook";
+import { orderNeedsCall } from "@repo/lib/orders/needs-call";
 import type { CreateOrderResult, OrderItemInput } from "@repo/lib/orders/types";
 import { projectIdSchema } from "@repo/lib/projects/core";
 import { fetchInbox, markInboxRead } from "@repo/lib/notifications/inbox";
@@ -61,16 +61,10 @@ export async function placeOrder(input: ClientOrderPayload): Promise<PlaceOrderR
     .single();
   if (error || !client) return { ok: false, error: "Your account could not be found." };
 
-  // No quote or client approval: every order lands in the receptionist's
-  // incoming queue, she checks it's filled in properly, receives it and picks
-  // where it goes (receiveClientOrder in app/dashboard/actions.ts). Photo
-  // books additionally need her to phone the client first.
-  const categoryIds = [...new Set(input.items.map((i) => i.category_id).filter(Boolean))];
-  const { data: categories } = categoryIds.length
-    ? await admin.from("product_categories").select("id, name").in("id", categoryIds)
-    : { data: [] };
-  const needsCall = (categories ?? []).some((c) => isPhotobookCategory(c.name));
-
+  // No quote or client approval: a priced order is confirmed and invoiced by
+  // the assistant (packages/lib/assistant/server/review.ts); one it can't price
+  // lands with reception. Only a photo book without a price needs her to phone
+  // the client first (orderNeedsCall, after it's placed).
   // A promo code is checked before the order exists, so a bad code is said
   // while the client can still fix it or remove it.
   const scope = await resolveTenantScope();
@@ -120,6 +114,7 @@ export async function placeOrder(input: ClientOrderPayload): Promise<PlaceOrderR
   }
 
   {
+    const needsCall = await orderNeedsCall(admin, res.orderId);
     const { data: managers } = await admin.from("profiles").select("id").in("role", ["receptionist", "supervisor", "boss"]);
     await Promise.all(
       (managers ?? []).map((m) =>
