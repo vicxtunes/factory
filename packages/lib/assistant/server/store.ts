@@ -219,6 +219,8 @@ export async function recentRuns(limit: number): Promise<RunRow[]> {
     await createAdminClient()
       .from("assistant_runs")
       .select("id, conversation_id, reply, actions, error, cost_usd, created_at, clients(name)")
+      // Chat answers only: the Alexis panel's runs are in usageByPayer.
+      .is("person_type", null)
       .order("created_at", { ascending: false })
       .limit(limit),
   ) as unknown as RunRow[];

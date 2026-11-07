@@ -4,6 +4,7 @@ import { Geist_Mono, Outfit } from "next/font/google";
 import { SerwistProvider } from "@serwist/turbopack/react";
 import { OfflineBanner } from "@repo/ui/pwa/OfflineBanner";
 import { TransferTray } from "@repo/ui/transfers/TransferTray";
+import { Alexis } from "@repo/ui/assistant/Alexis";
 import { InstallCapture } from "@repo/ui/pwa/InstallCapture";
 import { NavigationProgress } from "@repo/ui/pwa/NavigationProgress";
 import { KeepFresh } from "@repo/ui/navigation/KeepFresh";
@@ -90,6 +91,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
           <InstallCapture />
           <OfflineBanner showBanner={false} />
           <TransferTray />
+          <Alexis />
           <NavigationProgress />
           <BackHistory />
           <KeepFresh />

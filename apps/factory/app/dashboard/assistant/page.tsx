@@ -1,11 +1,13 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { currentTerms, panelSettings, usageByPayer } from "@repo/lib/assistant/panel/server";
 import { monthStats, recentRuns, getSettings, spentToday } from "@repo/lib/assistant/server/store";
 import { getDashboardSession } from "@repo/lib/auth/session";
 import { chatHref } from "@repo/lib/chat/routes";
 import { SUPPORT_OWNER_EMAIL } from "@repo/lib/support/constants";
 
+import { AlexisPanelForm, PublishTermsButton } from "./alexis-panel-form";
 import { AssistantForm } from "./assistant-form";
 
 export const dynamic = "force-dynamic";
@@ -29,7 +31,15 @@ export default async function AssistantPage() {
   const session = await getDashboardSession();
   const developer = session?.email === SUPPORT_OWNER_EMAIL;
   if (session?.role !== "boss" && !developer) redirect("/dashboard");
-  const [settings, spent, month, runs] = await Promise.all([getSettings(), spentToday(), monthStats(), recentRuns(50)]);
+  const [settings, spent, month, runs, panel, terms, payers] = await Promise.all([
+    getSettings(),
+    spentToday(),
+    monthStats(),
+    recentRuns(50),
+    panelSettings(),
+    currentTerms(),
+    usageByPayer(),
+  ]);
 
   return (
     <div className="mx-auto grid w-full max-w-6xl gap-6 p-4 lg:grid-cols-[22rem_1fr]">
@@ -62,7 +72,59 @@ export default async function AssistantPage() {
           </ul>
         </div>
       </section>
-      <section className="min-w-0">
+      <section className="h-fit rounded-xl border border-border bg-surface p-4 lg:row-start-2">
+        <h2 className="text-lg font-semibold">Alexis on every page</h2>
+        <p className="mt-1 text-sm text-muted">The Alexis button in every app. A paid feature, free for now: each reply&apos;s charge is shown to the person and waived.</p>
+        <div className="mt-4">
+          <AlexisPanelForm settings={{ panelMode: panel.panelMode, multiplier: panel.multiplier, monthlyCapUsd: panel.monthlyCapUsd }} />
+        </div>
+        <div className="mt-5 border-t border-border pt-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-sm font-semibold">Terms of use</h3>
+            <PublishTermsButton current={terms ? { version: terms.version, body: terms.body } : null} />
+          </div>
+          <p className="mt-1 text-sm text-muted">
+            {terms
+              ? `Version ${terms.version}, published ${new Date(terms.publishedAt).toLocaleDateString("en-UG", { timeZone: "Africa/Kampala", dateStyle: "medium" })}.`
+              : "Not published yet. Alexis stays closed until it is."}
+          </p>
+        </div>
+      </section>
+      <section className="min-w-0 lg:row-start-2">
+        <h2 className="mb-2 text-sm font-semibold">Alexis usage this month</h2>
+        {payers.length ? (
+          <div className="overflow-x-auto rounded-xl border border-border bg-surface">
+            <table className="w-full text-sm">
+              <thead className="text-left text-xs text-muted">
+                <tr className="border-b border-border">
+                  <th className="px-3 py-2 font-medium">Who pays</th>
+                  <th className="px-3 py-2 text-right font-medium">Replies</th>
+                  <th className="px-3 py-2 text-right font-medium">AI cost</th>
+                  <th className="px-3 py-2 text-right font-medium">Charge</th>
+                  <th className="px-3 py-2 text-right font-medium">Margin</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {payers.map((p) => (
+                  <tr key={`${p.kind}-${p.label}`}>
+                    <td className="px-3 py-2">
+                      {p.label} {p.kind === "company" ? null : <span className="text-xs text-muted">{p.kind}</span>}
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums">{p.replies}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">US${p.costUsd.toFixed(3)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{p.kind === "company" ? "—" : `US$${p.chargeUsd.toFixed(3)}`}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{p.kind === "company" ? "—" : `US$${(p.chargeUsd - p.costUsd).toFixed(3)}`}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="text-sm text-muted">Nobody has used Alexis this month.</p>
+        )}
+        <p className="mt-2 text-xs text-muted">All charges are waived while Alexis is free.</p>
+      </section>
+      <section className="min-w-0 lg:col-start-2 lg:row-start-1">
         <h2 className="mb-2 text-sm font-semibold">Latest answers</h2>
         {runs.length ? (
           <ul className="grid gap-2">
