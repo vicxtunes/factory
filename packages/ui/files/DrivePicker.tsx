@@ -51,6 +51,11 @@ export function DrivePicker({ picked, onAdd }: { picked: DrivePick[]; onAdd: (fi
   const here = (shown?.listing.files ?? []).filter((f) => !already.has(f.id));
   const allHereChosen = here.length > 0 && here.every((f) => chosen.has(f.id));
 
+  function close() {
+    setOpen(false);
+    setChosen(new Map());
+  }
+
   function toggle(pick: DrivePick) {
     if (already.has(pick.id)) return;
     const next = new Map(chosen);
