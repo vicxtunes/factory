@@ -466,11 +466,14 @@ function TryIt({ product, costing, sizes, details }: { product: RecipeProduct; c
             ) : null}
           </>
         ) : q.method ? (
-          <span className="text-warning-600 dark:text-warning-500">Priced on the call: no {q.priceMissing.join(", no ")}.</span>
+          <span className="text-warning-600 dark:text-warning-500">Priced on the call: {q.lines.length ? "it comes to 0" : "no recipe yet"}.</span>
         ) : (
           <span className="text-muted">No catalog price: priced on the call.</span>
         )}
       </p>
+      {q.method && price !== null && q.priceMissing.length ? (
+        <p className="text-xs text-warning-600 dark:text-warning-500">Counted as 0 (not set): {q.priceMissing.join(", ")}.</p>
+      ) : null}
       {q.missing.length && price !== null ? <p className="text-xs text-warning-600 dark:text-warning-500">Cost short: no {q.missing.join(", no ")}.</p> : null}
     </section>
   );

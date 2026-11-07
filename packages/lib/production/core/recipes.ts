@@ -123,9 +123,9 @@ export interface Quote {
   addOns: AddOn[];
   /** What the cost is short of. */
   missing: string[];
-  /** A photo book's automatic price for one; null: the catalog's, or priced on the call. */
+  /** A photo book's automatic price for one; null: the catalog's, or (no recipe, or it comes to 0) priced on the call. */
   price: number | null;
-  /** Why there's no automatic price, when it should have one. */
+  /** What the price counted as 0 because it isn't set (a selling price, an add-on's price, a cost). */
   priceMissing: string[];
   method: AutoPrice | null;
   /** The margin used (method "margin"). */
@@ -348,8 +348,9 @@ export class Costing {
       for (const l of own.lines) if (l.sell === null) priceMissing.push(`a selling price for ${l.name}`);
       price = Math.round(own.lines.reduce((s, l) => s + (l.sell ?? 0) * l.qty, 0) + addOnPrice);
     }
+    // Anything not set counts as 0 (owner, 2026-11-07): the order still gets a price, and Try it says what was left out.
     result.priceMissing = [...new Set(priceMissing)];
-    result.price = result.priceMissing.length ? null : price;
+    result.price = own.lines.length && price > 0 ? price : null;
     return result;
   }
 }
