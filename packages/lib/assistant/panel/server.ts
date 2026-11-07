@@ -33,6 +33,7 @@ import {
   type PersonType,
 } from "./core";
 import { PANEL_PROMPT } from "./prompt";
+import { MAX_GUIDE_STEPS, readTool, type ChangeOutcome, type ChangeTool, type GuideStep, type PageLink, type Toolbox } from "./toolbox";
 
 function must<T>(res: { data: T; error: { message: string } | null }): NonNullable<T> {
   if (res.error) throw new Error(res.error.message);
@@ -246,35 +247,96 @@ async function usageView(person: Person, payer: Payer, settings: PanelSettings):
 
 // ---------- The chat ----------
 
+/** A change Alexis prepared, as its card shows it. */
+export interface ActionCard {
+  id: string;
+  title: string;
+  lines: string[];
+  status: "pending" | "running" | "done" | "failed" | "cancelled";
+  result: string | null;
+  expired: boolean;
+}
+
 export interface PanelMessage {
   id: string;
   role: "user" | "assistant";
   body: string;
   createdAt: string;
+  actions: ActionCard[];
+  guide: GuideStep[] | null;
+}
+
+interface MessageExtras {
+  actions?: string[];
+  guide?: GuideStep[];
+}
+
+interface ActionRow {
+  id: string;
+  person_type: PersonType;
+  person_id: string;
+  tool: string;
+  input: unknown;
+  title: string;
+  lines: string[];
+  status: ActionCard["status"];
+  result: string | null;
+  expires_at: string;
+}
+
+const ACTION_COLUMNS = "id, person_type, person_id, tool, input, title, lines, status, result, expires_at";
+
+function toCard(row: ActionRow): ActionCard {
+  return {
+    id: row.id,
+    title: row.title,
+    lines: row.lines,
+    status: row.status,
+    result: row.result,
+    expired: row.status === "pending" && Date.parse(row.expires_at) <= Date.now(),
+  };
 }
 
 async function history(person: Person, limit: number): Promise<PanelMessage[]> {
+  const db = createAdminClient();
   const rows = must(
-    await createAdminClient()
+    await db
       .from("assistant_messages")
-      .select("id, role, body, created_at")
+      .select("id, role, body, created_at, extras")
       .eq("person_type", person.type)
       .eq("person_id", person.id)
       .order("created_at", { ascending: false })
       .limit(limit),
-  ) as { id: string; role: "user" | "assistant"; body: string; created_at: string }[];
-  return rows.reverse().map((r) => ({ id: r.id, role: r.role, body: r.body, createdAt: r.created_at }));
+  ) as { id: string; role: "user" | "assistant"; body: string; created_at: string; extras: MessageExtras | null }[];
+  const ids = rows.flatMap((r) => r.extras?.actions ?? []);
+  const actions = ids.length ? (must(await db.from("assistant_pending_actions").select(ACTION_COLUMNS).in("id", ids)) as ActionRow[]) : [];
+  const byId = new Map(actions.map((a) => [a.id, toCard(a)]));
+  return rows.reverse().map((r) => ({
+    id: r.id,
+    role: r.role,
+    body: r.body,
+    createdAt: r.created_at,
+    actions: (r.extras?.actions ?? []).flatMap((id) => byId.get(id) ?? []),
+    guide: r.extras?.guide ?? null,
+  }));
 }
 
-async function saveMessage(person: Person, role: "user" | "assistant", body: string, page: string): Promise<PanelMessage> {
+async function saveMessage(
+  person: Person,
+  role: "user" | "assistant",
+  body: string,
+  page: string,
+  channel: "app" | "whatsapp",
+  extras: MessageExtras | null = null,
+): Promise<string> {
   const row = must(
     await createAdminClient()
       .from("assistant_messages")
-      .insert({ person_type: person.type, person_id: person.id, role, body, page })
-      .select("id, created_at")
+      .insert({ person_type: person.type, person_id: person.id, role, body, page, channel, extras })
+      .select("id")
       .single(),
   );
-  return { id: row.id, role, body, createdAt: row.created_at };
+  return row.id;
 }
 
 export type PanelState =
@@ -301,24 +363,105 @@ export async function panelState(person: Person, page: string): Promise<PanelSta
 }
 
 function usageTool(person: Person, payer: Payer, settings: PanelSettings): AssistantTool {
-  return {
+  return readTool({
     name: "get_my_usage",
     description: "The person's Alexis usage: today, this month, the monthly limit, and whether it's free for now.",
     inputSchema: z.object({}),
-    run: async () => JSON.stringify(await usageView(person, payer, settings)),
+    run: () => usageView(person, payer, settings),
+  });
+}
+
+const MAX_CARDS_PER_REPLY = 3;
+const ACTION_LIFETIME_MS = 15 * 60_000;
+
+/** Each change tool as Alexis sees it: it prepares a card and stops there. */
+function preparingTool(t: ChangeTool, person: Person, prepared: string[]): AssistantTool {
+  return {
+    name: t.name,
+    description: `${t.description} This only prepares the change: the person sees it on a card and must tap Confirm.`,
+    inputSchema: t.inputSchema,
+    run: (async (input: never) => {
+      if (prepared.length >= MAX_CARDS_PER_REPLY) return "Refused: prepare at most 3 changes at a time.";
+      let card: { title: string; lines: string[] };
+      try {
+        card = await t.card(input);
+      } catch (err) {
+        return `Refused: ${err instanceof Error ? err.message : "it can't be done."}`;
+      }
+      const row = must(
+        await createAdminClient()
+          .from("assistant_pending_actions")
+          .insert({
+            person_type: person.type,
+            person_id: person.id,
+            person_name: person.name,
+            tool: t.name,
+            input,
+            title: card.title.slice(0, 200),
+            lines: card.lines.map((l) => l.slice(0, 300)).slice(0, 12),
+            expires_at: new Date(Date.now() + ACTION_LIFETIME_MS).toISOString(),
+          })
+          .select("id")
+          .single(),
+      );
+      prepared.push(row.id);
+      return "Shown to the person as a card with Confirm and Cancel. Nothing has changed yet: ask them to check the card and tap Confirm. Never say it's done.";
+    }) as AssistantTool["run"],
   };
 }
 
-function contextFor(person: Person, page: { path: string; title: string }, payer: Payer): string {
+const guideSchema = z.object({
+  steps: z
+    .array(
+      z.object({
+        href: z.string().describe("A page from the list of pages they can open, or the page they're on."),
+        tap: z.string().max(60).nullable().describe("The exact words on the button or link to tap once there, or null."),
+        say: z.string().max(200).describe("What this step is for, in a few words."),
+      }),
+    )
+    .min(1)
+    .max(MAX_GUIDE_STEPS),
+});
+
+/** Shows the way step by step: opens each page in turn and points at what to tap. */
+function guideTool(page: { path: string; links: PageLink[] }, ctx: { guide: GuideStep[] | null }): AssistantTool {
+  const known = new Set([page.path, ...page.links.map((l) => l.href)]);
+  return readTool({
+    name: "show_the_way",
+    description:
+      "Take the person to where something is done, step by step, like a person showing them: each step opens a page and points at the button or link to tap. Use it when they ask where something is or how to get somewhere. Only pages from the list you were given.",
+    inputSchema: guideSchema,
+    run: async ({ steps }) => {
+      const unknown = steps.find((s) => !known.has(s.href));
+      if (unknown) return `Refused: ${unknown.href} isn't a page they can open. Use one from the list.`;
+      ctx.guide = steps.map((s) => ({ href: s.href, tap: s.tap?.trim() || null, say: s.say }));
+      return "Shown to the person as a 'Show me' button under your reply. Tell them in one sentence what you'll show them.";
+    },
+  });
+}
+
+function contextFor(person: Person, page: { path: string; title: string; links: PageLink[] }, payer: Payer, abilities: string): string {
   const where = page.title ? `"${page.title}" (${page.path})` : page.path;
   const business = payer.type === "studio" || payer.type === "vendor" || payer.type === "agent" ? ` They're working in their ${payer.type} account.` : "";
-  return `Today is ${kampalaDay(new Date())}. You're talking to ${person.name}, signed in as: ${person.role}.${business} The page they have open is ${where}.`;
+  const lines = [
+    `Today is ${kampalaDay(new Date())}. You're talking to ${person.name}, signed in as: ${person.role}.${business}`,
+    page.path ? `The page they have open is ${where}.` : "They're writing on WhatsApp, not in the app.",
+    `What you can do for them: ${abilities}`,
+  ];
+  if (page.links.length) lines.push(`Pages and links they can open from here: ${page.links.map((l) => `${l.label} (${l.href})`).join("; ")}.`);
+  return lines.join("\n\n");
 }
 
 export type SendResult = { ok: true; reply: PanelMessage; usage: UsageView } | { ok: false; error: string };
 
 /** One message from the person and Alexis's reply. Charged to the payer, waived while it's free. */
-export async function send(person: Person, text: string, page: { path: string; title: string }): Promise<SendResult> {
+export async function send(
+  person: Person,
+  text: string,
+  page: { path: string; title: string; links: PageLink[] },
+  toolbox: Toolbox,
+  channel: "app" | "whatsapp" = "app",
+): Promise<SendResult> {
   const body = text.trim().slice(0, MAX_MESSAGE_CHARS);
   if (!body) return { ok: false, error: "Write a message first." };
   const settings = await panelSettings();
@@ -336,7 +479,16 @@ export async function send(person: Person, text: string, page: { path: string; t
   if (!model) return { ok: false, error: "Alexis isn't set up yet." };
 
   const earlier = await history(person, PANEL_HISTORY);
-  await saveMessage(person, "user", body, page.path);
+  await saveMessage(person, "user", body, page.path, channel);
+
+  const prepared: string[] = [];
+  const ctx: { guide: GuideStep[] | null } = { guide: null };
+  const tools = [
+    ...toolbox.read,
+    usageTool(person, payer, settings),
+    ...toolbox.change.map((t) => preparingTool(t, person, prepared)),
+    ...(channel === "app" ? [guideTool(page, ctx)] : []),
+  ];
 
   let totals: TokenUsage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
   let reply: string | null = null;
@@ -345,8 +497,8 @@ export async function send(person: Person, text: string, page: { path: string; t
     const answered = await askModel({
       model,
       system: PANEL_PROMPT,
-      context: contextFor(person, page, payer),
-      tools: [usageTool(person, payer, settings)],
+      context: contextFor(person, page, payer, toolbox.abilities),
+      tools,
       messages: [...earlier.map((m) => ({ role: m.role, content: m.body })), { role: "user" as const, content: body }],
       onUsage: (u) => {
         totals = u;
@@ -364,6 +516,7 @@ export async function send(person: Person, text: string, page: { path: string; t
     await createAdminClient().from("assistant_runs").insert({
       reply,
       error: failure,
+      actions: prepared.length ? [`Prepared ${prepared.length} change(s) to confirm`] : [],
       input_tokens: totals.input,
       output_tokens: totals.output,
       cache_read_tokens: totals.cacheRead,
@@ -380,8 +533,75 @@ export async function send(person: Person, text: string, page: { path: string; t
   );
 
   if (!reply) return { ok: false, error: "Sorry, Alexis couldn't answer just now. Try again in a moment." };
-  return { ok: true, reply: await saveMessage(person, "assistant", reply, page.path), usage: await usageView(person, payer, settings) };
+  const extras: MessageExtras | null = prepared.length || ctx.guide ? { actions: prepared, guide: ctx.guide ?? undefined } : null;
+  const id = await saveMessage(person, "assistant", reply, page.path, channel, extras);
+  const saved = (await history(person, 1)).find((m) => m.id === id);
+  const fallback: PanelMessage = { id, role: "assistant", body: reply, createdAt: new Date().toISOString(), actions: [], guide: ctx.guide };
+  return { ok: true, reply: saved ?? fallback, usage: await usageView(person, payer, settings) };
 }
+
+export type DecideResult = { ok: true; card: ActionCard; note: PanelMessage } | { ok: false; error: string };
+
+/** The person taps Confirm: the prepared change runs once, through the app's own function, and is recorded. */
+export async function confirm(person: Person, id: string, toolbox: Toolbox): Promise<DecideResult> {
+  const db = createAdminClient();
+  const claimed = must(
+    await db
+      .from("assistant_pending_actions")
+      .update({ status: "running", decided_at: new Date().toISOString() })
+      .eq("id", id)
+      .eq("person_type", person.type)
+      .eq("person_id", person.id)
+      .eq("status", "pending")
+      .gt("expires_at", new Date().toISOString())
+      .select(ACTION_COLUMNS),
+  ) as ActionRow[];
+  const row = claimed[0];
+  if (!row) return { ok: false, error: "This change has expired or was already decided. Ask Alexis again." };
+
+  const tool = toolbox.change.find((t) => t.name === row.tool);
+  const parsed = tool?.inputSchema.safeParse(row.input);
+  let result: ChangeOutcome;
+  if (!tool || !parsed?.success) {
+    result = { ok: false, error: "You can't make this change any more." };
+  } else {
+    try {
+      result = await tool.run(parsed.data as never);
+    } catch (err) {
+      console.error("alexis change failed:", row.tool, err);
+      result = { ok: false, error: "Something went wrong. Nothing was changed, or check the page to be sure." };
+    }
+  }
+  const done = must(
+    await db
+      .from("assistant_pending_actions")
+      .update({ status: result.ok ? "done" : "failed", result: result.ok ? result.done : result.error })
+      .eq("id", id)
+      .select(ACTION_COLUMNS)
+      .single(),
+  ) as ActionRow;
+  const words = result.ok ? `Done. ${result.done}` : `That didn't work: ${result.error}`;
+  const noteId = await saveMessage(person, "assistant", words, "", "app");
+  return { ok: true, card: toCard(done), note: { id: noteId, role: "assistant", body: words, createdAt: new Date().toISOString(), actions: [], guide: null } };
+}
+
+export async function cancel(person: Person, id: string): Promise<DecideResult> {
+  const rows = must(
+    await createAdminClient()
+      .from("assistant_pending_actions")
+      .update({ status: "cancelled", decided_at: new Date().toISOString() })
+      .eq("id", id)
+      .eq("person_type", person.type)
+      .eq("person_id", person.id)
+      .eq("status", "pending")
+      .select(ACTION_COLUMNS),
+  ) as ActionRow[];
+  if (!rows[0]) return { ok: false, error: "This change was already decided." };
+  const words = "Cancelled. Nothing was changed.";
+  const noteId = await saveMessage(person, "assistant", words, "", "app");
+  return { ok: true, card: toCard(rows[0]), note: { id: noteId, role: "assistant", body: words, createdAt: new Date().toISOString(), actions: [], guide: null } };
+}
+
 
 // ---------- The boss's view ----------
 
@@ -428,4 +648,33 @@ export async function savePanelSettings(s: { panelMode: AssistantMode; multiplie
       .update({ panel_mode: s.panelMode, charge_multiplier: s.multiplier, monthly_cap_usd: s.monthlyCapUsd, updated_at: new Date().toISOString() })
       .eq("id", true),
   );
+}
+
+export interface ChangeRecord {
+  id: string;
+  who: string;
+  title: string;
+  status: ActionCard["status"];
+  result: string | null;
+  at: string;
+}
+
+/** Every change made through Alexis, newest first: who asked, what ran, how it went. */
+export async function recentChanges(limit: number): Promise<ChangeRecord[]> {
+  const rows = must(
+    await createAdminClient()
+      .from("assistant_pending_actions")
+      .select("id, person_name, title, status, result, decided_at")
+      .neq("status", "pending")
+      .order("created_at", { ascending: false })
+      .limit(limit),
+  ) as { id: string; person_name: string; title: string; status: ActionCard["status"]; result: string | null; decided_at: string | null }[];
+  return rows.map((r) => ({ id: r.id, who: r.person_name, title: r.title, status: r.status, result: r.result, at: r.decided_at ?? "" }));
+}
+
+/** The boss as Alexis's person, for a channel with no app sign-in (WhatsApp). Null unless the account is still a boss. */
+export async function bossById(userId: string): Promise<Person | null> {
+  const row = must(await createAdminClient().from("profiles").select("role, full_name").eq("id", userId).maybeSingle()) as { role: string; full_name: string | null } | null;
+  if (row?.role !== "boss") return null;
+  return { type: "staff", id: userId, name: row.full_name || "Boss", role: "boss", email: null, phone: null, alwaysInTest: true };
 }

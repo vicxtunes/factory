@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { currentTerms, panelSettings, usageByPayer } from "@repo/lib/assistant/panel/server";
+import { currentTerms, panelSettings, recentChanges, usageByPayer } from "@repo/lib/assistant/panel/server";
 import { monthStats, recentRuns, getSettings, spentToday } from "@repo/lib/assistant/server/store";
 import { getDashboardSession } from "@repo/lib/auth/session";
 import { chatHref } from "@repo/lib/chat/routes";
@@ -31,7 +31,7 @@ export default async function AssistantPage() {
   const session = await getDashboardSession();
   const developer = session?.email === SUPPORT_OWNER_EMAIL;
   if (session?.role !== "boss" && !developer) redirect("/dashboard");
-  const [settings, spent, month, runs, panel, terms, payers] = await Promise.all([
+  const [settings, spent, month, runs, panel, terms, payers, changes] = await Promise.all([
     getSettings(),
     spentToday(),
     monthStats(),
@@ -39,6 +39,7 @@ export default async function AssistantPage() {
     panelSettings(),
     currentTerms(),
     usageByPayer(),
+    recentChanges(30),
   ]);
 
   return (
@@ -123,6 +124,26 @@ export default async function AssistantPage() {
           <p className="text-sm text-muted">Nobody has used Alexis this month.</p>
         )}
         <p className="mt-2 text-xs text-muted">All charges are waived while Alexis is free.</p>
+        <h2 className="mt-6 mb-2 text-sm font-semibold">Changes made through Alexis</h2>
+        {changes.length ? (
+          <ul className="grid gap-2">
+            {changes.map((c) => (
+              <li key={c.id} className="rounded-xl border border-border bg-surface p-3 text-sm">
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
+                  <span className="font-medium">{c.who}</span>
+                  <span>
+                    {c.at ? new Date(c.at).toLocaleString("en-UG", { timeZone: "Africa/Kampala", dateStyle: "medium", timeStyle: "short" }) : ""} ·{" "}
+                    <span className={c.status === "done" ? "text-success-600" : c.status === "failed" ? "text-error-600" : ""}>{c.status}</span>
+                  </span>
+                </div>
+                <p className="mt-1">{c.title}</p>
+                {c.result ? <p className="mt-1 text-xs text-muted">{c.result}</p> : null}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-sm text-muted">None yet. Every change needs the person to tap Confirm, and each one is listed here.</p>
+        )}
       </section>
       <section className="min-w-0 lg:col-start-2 lg:row-start-1">
         <h2 className="mb-2 text-sm font-semibold">Latest answers</h2>

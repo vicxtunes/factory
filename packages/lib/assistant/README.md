@@ -37,5 +37,20 @@ studio's page without an Aming account, so they never see it. Plan: the "Alexis 
   company; a client-app account → the studio, vendor or agent account whose pages it's on, else itself. A studio's team shares one bill.
 - **Monthly cap:** `monthly_cap_usd` (US$1) of charge per paying account; then it pauses until the 1st (Kampala). The company has none.
 - **Usage:** the panel's Usage tab, in the person's top-bar currency through the US dollar's rate (US$ when it has none; staff see UGX).
-- **What it can do (part 1):** answer about the page it was opened on and the app, and its own usage (`get_my_usage`). No tools
-  that change anything: those come with confirm cards in part 3.
+- **Tools (`toolbox.ts`):** each app builds them for whoever is signed in (`apps/factory/app/alexis-tools.ts`,
+  `panel/tools/client-app.ts`), from the functions its own pages and buttons use, given only to the roles those already
+  allow. Reads run straight away. A **change** only prepares a card (`assistant_pending_actions`): it runs once, through
+  the app's own server action (which checks the role again), when the person taps Confirm within 15 minutes. That table
+  is also the record of every change (Dashboard → Assistant → Changes made through Alexis). No payments, refunds,
+  withdrawals, payouts or deletions.
+  - Staff: orders, clients, the review queue (managers); money and expenses, record an expense or a repeating one
+    (boss, supervisors); server health, agents, staff accounts, currencies; set a currency rate, a staff role, a
+    commission rate, register an agent (boss). Item status and new clients (managers). Designers and workers: their board.
+  - Client app: the account's orders, invoices, receipts, wallet and prices; on `/studio` its money, clients (add one) and
+    vendor jobs by team area; on `/agents` figures and clients (add one); on `/vendors` jobs.
+- **Show the way:** the panel sends the links on the page; `show_the_way` picks pages from them, and the guide bar opens
+  each and outlines the button to tap.
+- **Server health (`tools/health.ts`):** Uptime Kuma (`/metrics` with an API key), Beszel (a read-only user) and the money
+  watch's open alerts, for the boss. Kuma and Beszel need their settings in the staff app's environment (`.env.example`).
+- **WhatsApp (`apps/factory/app/api/whatsapp/route.ts`):** the boss's own number only, as the boss, read-only (changes need
+  the app's sign-in for Confirm). Needs the WHATSAPP_* settings and a Meta business number with the webhook pointed at it.

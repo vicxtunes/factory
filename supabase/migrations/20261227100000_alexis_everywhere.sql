@@ -40,9 +40,35 @@ create table assistant_messages (
   body        text not null,
   -- The page the person was on when they wrote.
   page        text,
+  -- What goes with a reply: changes to confirm ({ actions: [id] }) and a guide around the app ({ guide: { steps } }).
+  extras      jsonb,
+  -- Where it was written: the app, or WhatsApp.
+  channel     text not null default 'app' check (channel in ('app', 'whatsapp')),
   created_at  timestamptz not null default now()
 );
 create index assistant_messages_person_idx on assistant_messages (person_type, person_id, created_at desc);
+
+-- A change Alexis prepared. Nothing happens until the person who asked taps Confirm, once, before it expires.
+-- Kept as the record of every change made through Alexis: who asked, what ran, and how it went.
+create table assistant_pending_actions (
+  id          uuid primary key default gen_random_uuid(),
+  person_type text not null check (person_type in ('staff', 'designer', 'worker', 'client')),
+  person_id   text not null,
+  person_name text not null,
+  -- The tool that prepared it (each app's own list) and its checked input.
+  tool        text not null,
+  input       jsonb not null,
+  -- What the card shows: exactly what will run.
+  title       text not null,
+  lines       jsonb not null default '[]',
+  status      text not null default 'pending' check (status in ('pending', 'running', 'done', 'failed', 'cancelled')),
+  result      text,
+  expires_at  timestamptz not null,
+  created_at  timestamptz not null default now(),
+  decided_at  timestamptz
+);
+create index assistant_pending_actions_person_idx on assistant_pending_actions (person_type, person_id, created_at desc);
+create index assistant_pending_actions_created_idx on assistant_pending_actions (created_at desc) where status <> 'pending';
 
 -- A run from the panel: who asked, who pays and what they were charged. Client-chat runs leave these empty.
 alter table assistant_runs
@@ -59,6 +85,7 @@ create index assistant_runs_person_idx on assistant_runs (person_type, person_id
 alter table assistant_terms enable row level security;
 alter table assistant_terms_acceptances enable row level security;
 alter table assistant_messages enable row level security;
+alter table assistant_pending_actions enable row level security;
 
 -- One payer's charges since a moment, for the monthly cap. Summed here so it's right however many replies there are.
 create or replace function assistant_payer_charged(p_type text, p_id text, p_since timestamptz)

@@ -18,6 +18,7 @@ import { DEFAULT_CURRENCY_SYMBOL } from "@repo/lib/currency/format";
 import { fetchBaseCurrencySymbol, fetchCurrencies } from "@repo/lib/queries";
 import { CurrencyChoices } from "./currency-switcher";
 import { IdleLock } from "./idle-lock";
+import { askAlexis, cancelAlexis, confirmAlexis } from "./alexis-actions";
 import { APP_IDENTITY as app } from "./identity";
 import "./globals.css";
 
@@ -91,7 +92,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
           <InstallCapture />
           <OfflineBanner showBanner={false} />
           <TransferTray />
-          <Alexis />
+          <Alexis actions={{ ask: askAlexis, confirm: confirmAlexis, cancel: cancelAlexis }} />
           <NavigationProgress />
           <BackHistory />
           <KeepFresh />

@@ -23,12 +23,6 @@ export async function agreeToAlexisTerms(version: number, page: string): Promise
   return panel.panelState(person, page);
 }
 
-export async function askAlexis(text: string, page: { path: string; title: string }): Promise<panel.SendResult> {
-  const person = await panel.currentPerson();
-  if (!person) return { ok: false, error: "Sign in to use Alexis." };
-  return panel.send(person, String(text), { path: String(page.path).slice(0, 300), title: String(page.title).slice(0, 120) });
-}
-
 async function bossOrDeveloper(): Promise<string | null> {
   const session = await getDashboardSession();
   if (session?.role !== "boss" && session?.email !== SUPPORT_OWNER_EMAIL) return null;
