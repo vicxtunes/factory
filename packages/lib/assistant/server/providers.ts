@@ -20,6 +20,8 @@ export interface ChatTurn {
 
 export interface AskInput {
   model: AssistantModel;
+  /** The fixed instructions: the client-chat assistant's unless given. */
+  system?: string;
   context: string;
   tools: AssistantTool[];
   messages: ChatTurn[];
@@ -36,7 +38,7 @@ export function askModel(input: AskInput): Promise<Answer> {
   return input.model.provider === "openai" ? askOpenAI(input) : askClaude(input);
 }
 
-async function askClaude({ model, context, tools, messages, onUsage }: AskInput): Promise<Answer> {
+async function askClaude({ model, system = SYSTEM_PROMPT, context, tools, messages, onUsage }: AskInput): Promise<Answer> {
   const runner = new Anthropic({ timeout: TIMEOUT_MS }).beta.messages.toolRunner({
     model: model.id,
     max_tokens: MAX_TOKENS,
@@ -45,7 +47,7 @@ async function askClaude({ model, context, tools, messages, onUsage }: AskInput)
     fallbacks: "default",
     output_config: { effort: "low" },
     system: [
-      { type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } },
+      { type: "text", text: system, cache_control: { type: "ephemeral" } },
       { type: "text", text: context },
     ],
     tools: tools.map((t) => betaZodTool({ name: t.name, description: t.description, inputSchema: t.inputSchema as z.ZodObject, run: t.run as (input: unknown) => Promise<string> })),
@@ -85,7 +87,7 @@ async function runTool(tools: AssistantTool[], name: string, args: string): Prom
   }
 }
 
-async function askOpenAI({ model, context, tools, messages, onUsage }: AskInput): Promise<Answer> {
+async function askOpenAI({ model, system = SYSTEM_PROMPT, context, tools, messages, onUsage }: AskInput): Promise<Answer> {
   const client = new OpenAI({ timeout: TIMEOUT_MS });
   const definitions = tools.map((t): OpenAI.Responses.FunctionTool => {
     const parameters = { ...z.toJSONSchema(t.inputSchema), $schema: undefined };
@@ -93,7 +95,7 @@ async function askOpenAI({ model, context, tools, messages, onUsage }: AskInput)
   });
   const input: OpenAI.Responses.ResponseInputItem[] = [
     // The fixed instructions first: OpenAI caches a request's unchanged start by itself.
-    { role: "developer", content: SYSTEM_PROMPT },
+    { role: "developer", content: system },
     { role: "developer", content: context },
     ...messages,
   ];
