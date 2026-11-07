@@ -44,7 +44,8 @@ Screens:
     add-ons' catalog prices.
   - **null**: the catalog's price, or priced on the call.
 
-  With anything missing, the book is priced on the call. A book priced from its recipe has no catalog price (both
+  A price or cost that isn't set counts as 0 (owner, 2026-11-07), so the order still gets a price and Try it lists
+  what was counted as 0; only a book with no recipe, or one that comes to 0, is priced on the call. A book priced from its recipe has no catalog price (both
   sides refuse). `recipeListPrice` in `pricing.ts` works the price out on the server, and stores it as the line's list
   price when the order is placed (and when staff change details before it's confirmed). Selling prices and margins
   are the boss's alone; a supervisor's save keeps them.

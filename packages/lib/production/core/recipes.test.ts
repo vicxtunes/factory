@@ -92,18 +92,24 @@ test("from the materials: each line's selling price (the book's own first) × it
   // 2,500 × 20 + 1,500 × 20 + 25,000 + 10,000 (the book's own Binding price) + 40,000.
   assert.equal(new Costing(c).quote("book", order).price, 155_000);
   const small = new Costing(c).quote("book", { ...order, details: { ...order.details, Size: "10x10" } });
-  assert.equal(small.price, null, "Paper and Cover have no 10x10 selling price");
-  assert.deepEqual(small.priceMissing, ["a selling price for Paper (10x10)", "a selling price for Cover (10x10)"], "says what's missing");
+  // Paper and Cover have no 10x10 selling price: counted as 0. 1,500 × 20 + 10,000 + 40,000.
+  assert.equal(small.price, 80_000);
+  assert.deepEqual(small.priceMissing, ["a selling price for Paper (10x10)", "a selling price for Cover (10x10)"], "says what was counted as 0");
 });
 
-test("with something missing a photo book is priced on the call, and says why", () => {
+test("anything not set counts as 0: the book still gets a price, and says what was left out", () => {
   const costing = new Costing(book());
   const noSheets = costing.quote("book", { variantId: null, details: { Size: "12x12", Lamination: "Matt" } });
-  assert.equal(noSheets.price, null);
+  // Cover 3,000 + binding 5,000 + Matt 6,000 = 14,000 ÷ 0.6 = 23,333 − 20,000 → 3,500; + 20,000.
+  assert.equal(noSheets.price, 23_500);
   assert.ok(noSheets.priceMissing.includes("Number of sheets"));
   const noRecipe = new Costing(book({ recipes: new Map([...book().recipes].filter(([id]) => id !== "vintage")) })).quote("book", order);
-  assert.equal(noRecipe.price, null, "an add-on's cost isn't known, so the margin can't be reached");
+  assert.equal(noRecipe.price, 107_000, "Vintage X's cost counts as 0: 64,000 ÷ 0.6 → 66,667 − 40,000 → 27,000; + 40,000");
   assert.ok(noRecipe.missing.includes("Vintage X's recipe (its cost)"));
+  const unpriced = new Costing(book({ products: book().products.map((p) => (p.id === "matt" ? { ...p, price: null } : p)) })).quote("book", order);
+  assert.ok(unpriced.price !== null && unpriced.priceMissing.includes("a catalog price for Matt"), "an add-on with no price counts as 0");
+  const empty = new Costing(book({ recipes: new Map() })).quote("book", { variantId: null, details: {} });
+  assert.equal(empty.price, null, "no recipe: nothing to price, so on the call");
 });
 
 test("every other product keeps its catalog price; per sheet is for photo books only; lines can be only when", () => {
@@ -140,7 +146,7 @@ test("a cover type is an add-on priced by the order's size, with its own recipe'
   assert.deepEqual(big.addOns.find((a) => a.kind === "Cover Type"), { kind: "Cover Type", name: "UV Print (Leather)", price: 30_000, cost: 1_500, hasRecipe: true });
   assert.equal(big.cost, 77_500, "76,000 + the cover's 1,500");
   assert.equal(at("10x10").addOns.find((a) => a.kind === "Cover Type")?.price, 25_000);
-  assert.equal(at("8x8").price, null, "no 8x8 cover price: priced on the call");
+  assert.ok(at("8x8").priceMissing.includes("a catalog price for UV Print (Leather)"), "no 8x8 cover price: counted as 0");
 });
 
 test("a part's typed cost for a size is a cost of one: how many multiplies it", () => {

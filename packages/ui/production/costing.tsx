@@ -174,6 +174,14 @@ export function MaterialSheet({
     );
   };
 
+  // Ticking "a different cost" starts from the part's own cost for each size, to change what differs.
+  const hasTyped = (t: Typed) => Object.values(t).some((v) => v.trim() !== "");
+  const ownCosts = (part: CostMaterial | undefined): Typed => {
+    if (!part) return {};
+    if (part.costBy === "size") return typed(part.sizeCosts);
+    return part.cost > 0 ? Object.fromEntries(sizes.map((s) => [s, String(part.cost)])) : {};
+  };
+
   // A part has a cost of its own: never a built material, never itself.
   const choices = materials.filter((m) => m.costBy !== "parts" && m.id !== material?.id);
   const setPart = (i: number, over: Partial<PartDraft>) => setParts((ps) => ps.map((p, k) => (k === i ? { ...p, ...over } : p)));
@@ -254,7 +262,7 @@ export function MaterialSheet({
                   </Field>
                   {part && !p.bySize ? <p className="text-xs text-muted">× its own cost: {costSummary(live, part, sizes, money)}</p> : null}
                   <label className="flex min-h-11 items-center gap-2 text-sm">
-                    <input type="checkbox" className="size-4 accent-brand-500" checked={p.bySize} onChange={(e) => setPart(i, { bySize: e.target.checked })} />
+                    <input type="checkbox" className="size-4 accent-brand-500" checked={p.bySize} onChange={(e) => setPart(i, e.target.checked ? { bySize: true, totals: hasTyped(p.totals) ? p.totals : ownCosts(part) } : { bySize: false })} />
                     Use a different cost of one here instead of its own
                   </label>
                   {p.bySize ? (
