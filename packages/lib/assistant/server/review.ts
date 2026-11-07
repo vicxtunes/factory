@@ -16,7 +16,7 @@ interface OrderRow {
   id: string;
   order_no: string;
   clients: { id: string; name: string; email: string | null; phone: string | null };
-  order_items: { media_link: string | null; order_item_media: { id: string }[] }[];
+  order_items: { media_link: string | null; order_item_media: { id: string }[]; order_item_drive_links: { id: string }[] }[];
 }
 
 /**
@@ -31,7 +31,7 @@ export async function reviewClientOrders(): Promise<void> {
   const now = Date.now();
   const { data, error } = await db
     .from("orders")
-    .select("id, order_no, clients(id, name, email, phone), order_items(media_link, order_item_media(id))")
+    .select("id, order_no, clients(id, name, email, phone), order_items(media_link, order_item_media(id), order_item_drive_links(id))")
     .eq("approval_status", "pending_review")
     .is("cancelled_at", null)
     .is("released_at", null)
@@ -57,7 +57,8 @@ async function reviewOne(order: OrderRow, client: OrderRow["clients"]): Promise<
   const db = createAdminClient();
   const { data: done } = await db.from("assistant_order_reviews").select("asked_photos, asked_price").eq("order_id", order.id).maybeSingle();
   const { lines } = await invoices.draft(order.id);
-  const outcome = reviewOutcome(lines, order.order_items.map((i) => ({ hasPhotos: !!i.media_link || i.order_item_media.length > 0 })));
+  // Photos uploaded, a link, or folders and files linked from the client's Drive.
+  const outcome = reviewOutcome(lines, order.order_items.map((i) => ({ hasPhotos: !!i.media_link || i.order_item_media.length > 0 || i.order_item_drive_links.length > 0 })));
 
   const say = async (text: string, action: string, choices: string[] = []) => {
     const conversationId = await openClientOrderThread({ type: "client", id: client.id, name: client.name }, order.id);

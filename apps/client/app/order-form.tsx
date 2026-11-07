@@ -269,9 +269,9 @@ export function OrderForm({
       setReceipt({
         orderNo: res.orderNo,
         total: orderTotal(resolveItems(catalog, items, res.promoApplied ? promo : null, quotes), showPrices),
-        // Photo books get a call from the receptionist first, so the price
-        // isn't final until then — don't ask for money up front.
-        needsReview: hasPhotobookItem,
+        // Only a photo book with no price gets a call first (its price isn't
+        // known until then): a priced one is confirmed and invoiced like any order.
+        needsReview: resolveItems(catalog, items, null, quotes).some((r) => isPhotobookCategory(r.category?.name) && r.unitPrice == null),
       });
       router.refresh();
     });
