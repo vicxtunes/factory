@@ -48,6 +48,13 @@ studio's page without an Aming account, so they never see it. Plan: the "Alexis 
     commission rate, register an agent (boss). Item status and new clients (managers). Designers and workers: their board.
   - Client app: the account's orders, invoices, receipts, wallet and prices; on `/studio` its money, clients (add one) and
     vendor jobs by team area; on `/agents` figures and clients (add one); on `/vendors` jobs.
+- **Screens (`packages/ui/assistant`):** `AlexisPanel` (the floating button's quick chat: the newest chat, New chat, All chats),
+  `AlexisPage` (the full page: `/alexis` in the client app, `/dashboard/alexis` for staff; chats on the left with search and
+  the orange "free for now" card, the welcome with a big message box and suggestions for the role), sharing `AlexisChat`.
+- **Chats:** `assistant_chats`, each named after its first message; WhatsApp is one chat named WhatsApp.
+- **Attach:** clients and managers attach files in the message box. Alexis sees only their names. `add_files_to_order`
+  (`tools/order-files.ts`) prepares a card for one order item; once confirmed, the files upload from the device through
+  `uploadFileToStorage`, the order's own upload path, which checks again who may add to that item.
 - **Show the way:** the panel sends the links on the page; `show_the_way` picks pages from them, and the guide bar opens
   each and outlines the button to tap.
 - **Server health (`tools/health.ts`):** Uptime Kuma (`/metrics` with an API key), Beszel (a read-only user) and the money

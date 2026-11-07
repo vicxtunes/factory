@@ -17,23 +17,33 @@ export interface PageInput {
 }
 
 const pathOf = (path: unknown) => String(path ?? "/").slice(0, 300);
+const NOT_SIGNED_IN = { ok: false as const, error: "Sign in to use Alexis." };
 
-export async function ask(build: BuildToolbox, text: unknown, page: PageInput): Promise<panel.SendResult> {
+export async function ask(build: BuildToolbox, chatId: unknown, text: unknown, page: PageInput, files: unknown): Promise<panel.SendResult> {
   const person = await panel.currentPerson();
-  if (!person) return { ok: false, error: "Sign in to use Alexis." };
+  if (!person) return NOT_SIGNED_IN;
   const path = pathOf(page?.path);
   const links = pageLinksSchema.parse(page?.links).filter((l) => l.href.startsWith("/") && !l.href.startsWith("//"));
-  return panel.send(person, String(text ?? ""), { path, title: String(page?.title ?? "").slice(0, 120), links }, await build(person, path));
+  const names = Array.isArray(files) ? files.map((f) => String(f)) : [];
+  return panel.send(
+    person,
+    typeof chatId === "string" && chatId ? chatId : null,
+    String(text ?? ""),
+    { path, title: String(page?.title ?? "").slice(0, 120), links },
+    await build(person, path),
+    "app",
+    names,
+  );
 }
 
 export async function confirm(build: BuildToolbox, id: unknown, path: unknown): Promise<panel.DecideResult> {
   const person = await panel.currentPerson();
-  if (!person) return { ok: false, error: "Sign in to use Alexis." };
+  if (!person) return NOT_SIGNED_IN;
   return panel.confirm(person, String(id), await build(person, pathOf(path)));
 }
 
 export async function cancel(id: unknown): Promise<panel.DecideResult> {
   const person = await panel.currentPerson();
-  if (!person) return { ok: false, error: "Sign in to use Alexis." };
+  if (!person) return NOT_SIGNED_IN;
   return panel.cancel(person, String(id));
 }

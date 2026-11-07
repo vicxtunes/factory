@@ -15,6 +15,7 @@ import { vendorJobs, vendors } from "@repo/lib/vendors/server";
 import { assistantTools } from "../../server/tools";
 import type { Person } from "../server";
 import { changeTool, outcome, readTool, type ChangeTool, type Toolbox } from "../toolbox";
+import { addFilesToOrderTool } from "./order-files";
 import type { AssistantTool } from "../../server/tools";
 
 // Alexis's tools in the client app: the account's own orders and money, and,
@@ -167,12 +168,11 @@ export async function clientAppToolbox(person: Person, page: string): Promise<To
   const business = under("/studio") ? await studioTools() : under("/agents") ? await agentTools(person) : under("/vendors") ? await vendorTools(person) : null;
   return {
     read: [...clientReads(person), ...(business?.read ?? [])],
-    change: business?.change ?? [],
+    change: [addFilesToOrderTool(person.id), ...(business?.change ?? [])],
     abilities: [
-      "Look up their own Aming orders, invoices, receipts, wallet and Aming's prices.",
+      "Look up their own Aming orders, invoices, receipts, wallet and Aming's prices, and add files they attach (photos to print) to one of their orders.",
       business?.words ?? "",
       "Show them the way around the app.",
-      business?.change.length ? "" : "They can't make changes through you on this page.",
     ]
       .filter(Boolean)
       .join(" "),

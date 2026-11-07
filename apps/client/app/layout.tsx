@@ -19,6 +19,9 @@ import { fetchBaseCurrencySymbol, fetchCurrencies } from "@repo/lib/queries";
 import { CurrencyChoices } from "./currency-switcher";
 import { IdleLock } from "./idle-lock";
 import { askAlexis, cancelAlexis, confirmAlexis } from "./alexis-actions";
+
+/** Where each kind of person's full Alexis page is in this app. */
+const ALEXIS_PAGES = { client: "/alexis" };
 import { APP_IDENTITY as app } from "./identity";
 import "./globals.css";
 
@@ -92,7 +95,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
           <InstallCapture />
           <OfflineBanner showBanner={false} />
           <TransferTray />
-          <Alexis actions={{ ask: askAlexis, confirm: confirmAlexis, cancel: cancelAlexis }} />
+          <Alexis actions={{ ask: askAlexis, confirm: confirmAlexis, cancel: cancelAlexis }} pages={ALEXIS_PAGES} />
           <NavigationProgress />
           <BackHistory />
           <KeepFresh />

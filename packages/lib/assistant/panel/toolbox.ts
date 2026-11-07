@@ -33,6 +33,8 @@ export interface ChangeTool {
   card: (input: never) => Promise<{ title: string; lines: string[] }>;
   /** Runs the change through the app's own guarded function. Called only from Confirm. */
   run: (input: never) => Promise<ChangeOutcome>;
+  /** For a change that adds the attached files to an order item: that item. Once confirmed, the person's device uploads them there. */
+  uploadsTo?: (input: never) => string;
 }
 
 export function changeTool<S extends z.ZodType>(t: {
@@ -41,6 +43,7 @@ export function changeTool<S extends z.ZodType>(t: {
   inputSchema: S;
   card: (input: z.infer<S>) => Promise<{ title: string; lines: string[] }>;
   run: (input: z.infer<S>) => Promise<ChangeOutcome>;
+  uploadsTo?: (input: z.infer<S>) => string;
 }): ChangeTool {
   return t as unknown as ChangeTool;
 }
