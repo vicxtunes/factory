@@ -4,6 +4,7 @@ import { Geist_Mono, Outfit } from "next/font/google";
 import { SerwistProvider } from "@serwist/turbopack/react";
 import { OfflineBanner } from "@repo/ui/pwa/OfflineBanner";
 import { TransferTray } from "@repo/ui/transfers/TransferTray";
+import { Alexis } from "@repo/ui/assistant/Alexis";
 import { InstallCapture } from "@repo/ui/pwa/InstallCapture";
 import { NavigationProgress } from "@repo/ui/pwa/NavigationProgress";
 import { KeepFresh } from "@repo/ui/navigation/KeepFresh";
@@ -17,6 +18,7 @@ import { DEFAULT_CURRENCY_SYMBOL } from "@repo/lib/currency/format";
 import { fetchBaseCurrencySymbol, fetchCurrencies } from "@repo/lib/queries";
 import { CurrencyChoices } from "./currency-switcher";
 import { IdleLock } from "./idle-lock";
+import { askAlexis, cancelAlexis, confirmAlexis } from "./alexis-actions";
 import { APP_IDENTITY as app } from "./identity";
 import "./globals.css";
 
@@ -90,6 +92,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
           <InstallCapture />
           <OfflineBanner showBanner={false} />
           <TransferTray />
+          <Alexis actions={{ ask: askAlexis, confirm: confirmAlexis, cancel: cancelAlexis }} />
           <NavigationProgress />
           <BackHistory />
           <KeepFresh />
