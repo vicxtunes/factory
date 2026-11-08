@@ -403,9 +403,16 @@ async function runOne(s: Scenario, modelId: string, streamed: boolean): Promise<
     onUsage: () => {},
     // Both ways, as Alexis runs: streamed in the app's panel, not streamed in the client chat.
     onText: streamed ? () => {} : undefined,
+    everyStep: true,
   });
   const outcome = { calls, reply: answer.text ?? "" };
-  const problems = [...(answer.text ? [] : ["no reply"]), ...s.checks.map((c) => c(outcome)).filter((p): p is string => !!p)];
+  const sentences = outcome.reply.split(/(?<=[.?!])\s+/).map((x) => x.trim().toLowerCase()).filter((x) => x.length > 12);
+  const repeated = sentences.find((x, i) => sentences.indexOf(x) !== i);
+  const problems = [
+    ...(answer.text ? [] : ["no reply"]),
+    ...(repeated ? [`says the same sentence twice: "${repeated}"`] : []),
+    ...s.checks.map((c) => c(outcome)).filter((p): p is string => !!p),
+  ];
   return { problems, outcome };
 }
 

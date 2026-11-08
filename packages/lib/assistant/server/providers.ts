@@ -27,8 +27,13 @@ export interface AskInput {
   messages: ChatTurn[];
   /** Told what's been used so far, so a run that fails partway is still counted. */
   onUsage: (usage: TokenUsage) => void;
-  /** Given: the reply streams, its words told as they come, numbered by step of the tool loop (a later step's words replace an earlier one's). */
+  /** Given: the reply streams, its words told as they come, numbered by step of the tool loop. */
   onText?: (step: number, delta: string) => void;
+  /**
+   * The reply is everything it wrote, every step in order (the Alexis panel: a question written beside its
+   * buttons, then a short closing line, are both the reply). Otherwise its last words.
+   */
+  everyStep?: boolean;
 }
 
 export interface Answer {
@@ -40,7 +45,7 @@ export function askModel(input: AskInput): Promise<Answer> {
   return input.model.provider === "openai" ? askOpenAI(input) : askClaude(input);
 }
 
-async function askClaude({ model, system = SYSTEM_PROMPT, context, tools, messages, onUsage, onText }: AskInput): Promise<Answer> {
+async function askClaude({ model, system = SYSTEM_PROMPT, context, tools, messages, onUsage, onText, everyStep }: AskInput): Promise<Answer> {
   const params = {
     model: model.id,
     max_tokens: MAX_TOKENS,
@@ -67,7 +72,8 @@ async function askClaude({ model, system = SYSTEM_PROMPT, context, tools, messag
   let last: Anthropic.Beta.BetaMessage | null = null;
   // Words written beside its tool calls (a question, with buttons to answer it) count when its last turn is empty.
   let said = "";
-  const words = (m: Anthropic.Beta.BetaMessage) => m.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("\n").trim();
+  const steps: string[] = [];
+  const words = (m: Anthropic.Beta.BetaMessage) => visible(m.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("\n"));
   if (onText) {
     let step = 0;
     for await (const stream of client.beta.messages.toolRunner({ ...params, stream: true })) {
@@ -75,17 +81,19 @@ async function askClaude({ model, system = SYSTEM_PROMPT, context, tools, messag
       stream.on("text", (delta) => onText(at, delta));
       last = await stream.finalMessage();
       said = words(last) || said;
+      steps.push(words(last));
       count(last);
     }
   } else {
     for await (const message of client.beta.messages.toolRunner(params)) {
       last = message;
       said = words(message) || said;
+      steps.push(words(message));
       count(message);
     }
   }
   if (last?.stop_reason === "refusal") return { text: null, refused: true };
-  return { text: said || null, refused: false };
+  return { text: (everyStep ? allSteps(steps) : said) || null, refused: false };
 }
 
 /** One tool call: its input checked against the schema, and a sentence back when it can't run. */
@@ -113,13 +121,21 @@ async function runTool(tools: AssistantTool[], name: string, args: string): Prom
  * reply that wasn't streamed, so a streamed one has none (2026-11-08: every streamed reply failed on it).
  */
 function replyText(response: OpenAI.Responses.Response): string {
-  return response.output
-    .flatMap((item) => (item.type === "message" ? item.content.flatMap((c) => (c.type === "output_text" ? [c.text] : [])) : []))
-    .join("")
-    .trim();
+  return visible(response.output.flatMap((item) => (item.type === "message" ? item.content.flatMap((c) => (c.type === "output_text" ? [c.text] : [])) : [])).join(""));
 }
 
-async function askOpenAI({ model, system = SYSTEM_PROMPT, context, tools, messages, onUsage, onText }: AskInput): Promise<Answer> {
+/** Every step's words in order, each once: it sometimes says the same thing beside a tool call and after it. */
+function allSteps(steps: string[]): string {
+  return steps.filter((t, i) => t && steps.indexOf(t) === i).join("\n\n");
+}
+
+/** Words with something to read: zero-width and other invisible characters alone count as no reply. */
+function visible(text: string): string {
+  const trimmed = text.trim();
+  return trimmed.replace(/[\s\u200B-\u200D\u2060\uFEFF]/g, "") ? trimmed : "";
+}
+
+async function askOpenAI({ model, system = SYSTEM_PROMPT, context, tools, messages, onUsage, onText, everyStep }: AskInput): Promise<Answer> {
   const client = new OpenAI({ timeout: TIMEOUT_MS });
   const definitions = tools.map((t): OpenAI.Responses.FunctionTool => {
     const parameters = { ...z.toJSONSchema(t.inputSchema), $schema: undefined };
@@ -134,6 +150,7 @@ async function askOpenAI({ model, system = SYSTEM_PROMPT, context, tools, messag
   const usage: TokenUsage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
 
   let said = "";
+  const steps: string[] = [];
   for (let step = 0; step < MAX_STEPS; step++) {
     const request = { model: model.id, max_output_tokens: MAX_TOKENS, reasoning: { effort: "low" as const }, tools: definitions, input };
     let response: OpenAI.Responses.Response | null = null;
@@ -158,7 +175,8 @@ async function askOpenAI({ model, system = SYSTEM_PROMPT, context, tools, messag
     const calls = response.output.filter((item) => item.type === "function_call");
     // Words written beside its tool calls (a question, with buttons to answer it) count when its last turn is empty.
     said = replyText(response) || said;
-    if (!calls.length) return { text: said || null, refused: false };
+    steps.push(replyText(response));
+    if (!calls.length) return { text: (everyStep ? allSteps(steps) : said) || null, refused: false };
 
     // Everything it produced goes back with the results: its reasoning has to stay with its calls.
     input.push(...(response.output as OpenAI.Responses.ResponseInputItem[]));

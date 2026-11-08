@@ -67,7 +67,7 @@ function pageLinks(): PageLink[] {
 
 // ---------- The chat's state ----------
 
-/** While Alexis works on a reply: what it's doing, and its words so far (each step of its loop starts afresh). */
+/** While Alexis works on a reply: what it's doing, and its words so far (every step of its loop, in order). */
 export interface Draft {
   doing: string | null;
   step: number;
@@ -156,8 +156,8 @@ export function useAlexis(actions: AlexisActions, initial: PanelState | null = n
         setDraft((d) => {
           const now = d ?? { doing: null, step: 0, text: "" };
           if (line.type === "step") return { ...now, doing: line.words };
-          // A later step of its loop starts its words afresh: what it said before a tool call isn't the reply.
-          return line.step === now.step ? { ...now, doing: null, text: now.text + line.delta } : { doing: null, step: line.step, text: line.delta };
+          // A later step of its loop adds to what it said: all of it is the reply (everyStep on the server).
+          return line.step === now.step ? { ...now, doing: null, text: now.text + line.delta } : { doing: null, step: line.step, text: now.text ? `${now.text}\n\n${line.delta}` : line.delta };
         }),
     ).catch((): SendResult => ({ ok: false, error: OFFLINE }));
     setDraft(null);
