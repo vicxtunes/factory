@@ -1,12 +1,11 @@
 "use client";
 
-import Link from "next/link";
 import { useState, useSyncExternalStore, type ReactNode } from "react";
 
 import { Drawer } from "../Drawer";
 import { Spinner } from "../Spinner";
 import { Tabs } from "../Tabs";
-import { Composer, GuideBar, Messages, SparkIcon, startGuide, stopGuide, TermsGate, Usage, useAlexis, useGuiding, Welcome, type AlexisActions } from "./AlexisChat";
+import { ChatList, Composer, GuideBar, Messages, SparkIcon, startGuide, stopGuide, TermsGate, Usage, useAlexis, useGuiding, Welcome, type AlexisActions } from "./AlexisChat";
 
 // Alexis on every page (packages/lib/assistant/panel): a floating button that
 // opens a quick chat. A full-screen sheet on a phone; on a computer a panel
@@ -15,7 +14,7 @@ import { Composer, GuideBar, Messages, SparkIcon, startGuide, stopGuide, TermsGa
 
 export type { AlexisActions } from "./AlexisChat";
 
-type View = "chat" | "usage";
+type View = "chat" | "usage" | "chats";
 
 const DESKTOP = "(min-width: 1024px)";
 const subscribeDesktop = (onChange: () => void) => {
@@ -77,14 +76,22 @@ export function AlexisPanel({ actions, fullPage }: { actions: AlexisActions; ful
 
   const header = ready ? (
     <span className="inline-flex items-center gap-1 text-xs font-medium">
-      <button type="button" onClick={alexis.startNew} className="min-h-9 rounded-lg px-2 text-brand-600 hover:bg-brand-50 dark:text-brand-400 dark:hover:bg-brand-500/10">
+      <button
+        type="button"
+        onClick={() => {
+          alexis.startNew();
+          setView("chat");
+        }}
+        className="min-h-9 rounded-lg px-2 text-brand-600 hover:bg-brand-50 dark:text-brand-400 dark:hover:bg-brand-500/10">
         New chat
       </button>
-      {fullPage ? (
-        <Link href={fullPage} onClick={() => setOpen(false)} className="inline-flex min-h-9 items-center rounded-lg px-2 text-muted hover:bg-gray-100 dark:hover:bg-white/5">
-          All chats
-        </Link>
-      ) : null}
+      <button
+        type="button"
+        onClick={() => setView("chats")}
+        className="inline-flex min-h-9 items-center rounded-lg px-2 text-muted hover:bg-gray-100 dark:hover:bg-white/5"
+      >
+        All chats
+      </button>
     </span>
   ) : null;
 
@@ -116,7 +123,7 @@ export function AlexisPanel({ actions, fullPage }: { actions: AlexisActions; ful
           <>
             <Tabs<View>
               label="Alexis"
-              value={view}
+              value={view === "chats" ? "chat" : view}
               onChange={setView}
               tabs={[
                 { key: "chat", label: "Chat" },
@@ -124,7 +131,14 @@ export function AlexisPanel({ actions, fullPage }: { actions: AlexisActions; ful
               ]}
               className="-mx-4 -mt-4 mb-3 px-4"
             />
-            {view === "chat" ? (
+            {view === "chats" ? (
+              <div className="flex min-h-0 flex-1 flex-col gap-3">
+                <button type="button" onClick={() => setView("chat")} className="inline-flex min-h-9 items-center gap-1 self-start rounded-lg px-1 text-sm font-medium text-muted hover:text-foreground">
+                  ← Back to chat
+                </button>
+                <ChatList alexis={alexis} onPicked={() => setView("chat")} />
+              </div>
+            ) : view === "chat" ? (
               <div className="flex min-h-0 flex-1 flex-col">
                 <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-3">
                   {state.messages.length || alexis.busy ? (

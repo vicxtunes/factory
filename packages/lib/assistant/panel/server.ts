@@ -687,6 +687,7 @@ export async function send(
         totals = u;
       },
       onText: listen?.onText,
+      everyStep: true,
     });
     reply = answered.refused ? null : answered.text;
     if (!reply) failure = answered.refused ? "The AI declined to answer." : "The AI gave no reply.";
