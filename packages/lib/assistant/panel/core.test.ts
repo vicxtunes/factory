@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { capReached, chargeFor, COMPANY, isAppPath, isWaived, kampalaDay, mayUsePanel, payerForPage, startOfKampalaMonth, startOfNextKampalaMonth } from "./core";
+import { capReached, chargeFor, COMPANY, formatUsd, isAppPath, isWaived, kampalaDay, mayUsePanel, payerForPage, startOfKampalaMonth, startOfNextKampalaMonth } from "./core";
 
 describe("Alexis panel rules", () => {
   it("charges the real cost times the multiplier", () => {
@@ -62,5 +62,14 @@ describe("Alexis only sends people to pages of this app", () => {
     for (const bad of ["//evil.com", "/\\evil.com", "/\\\\evil.com", "https://evil.com", "javascript:alert(1)", "/ /x", "/\u0001/evil.com", "evil.com", ""]) {
       assert.equal(isAppPath(bad), false, bad);
     }
+  });
+});
+
+describe("Alexis usage is shown in US dollars", () => {
+  it("with three decimals under a dollar and two from a dollar", () => {
+    assert.equal(formatUsd(0), "US$0.00");
+    assert.equal(formatUsd(0.0123), "US$0.012");
+    assert.equal(formatUsd(1), "US$1.00");
+    assert.equal(formatUsd(12.5), "US$12.50");
   });
 });
