@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { currentTerms, panelSettings, recentChanges, usageByPayer } from "@repo/lib/assistant/panel/server";
+import { currentTerms, panelSettings, recentChanges, recentPanelRuns, usageByPayer } from "@repo/lib/assistant/panel/server";
 import { monthStats, recentRuns, getSettings, spentToday } from "@repo/lib/assistant/server/store";
 import { getDashboardSession } from "@repo/lib/auth/session";
 import { chatHref } from "@repo/lib/chat/routes";
@@ -31,7 +31,7 @@ export default async function AssistantPage() {
   const session = await getDashboardSession();
   const developer = session?.email === SUPPORT_OWNER_EMAIL;
   if (session?.role !== "boss" && !developer) redirect("/dashboard");
-  const [settings, spent, month, runs, panel, terms, payers, changes] = await Promise.all([
+  const [settings, spent, month, runs, panel, terms, payers, changes, panelRuns] = await Promise.all([
     getSettings(),
     spentToday(),
     monthStats(),
@@ -40,6 +40,7 @@ export default async function AssistantPage() {
     currentTerms(),
     usageByPayer(),
     recentChanges(30),
+    recentPanelRuns(30),
   ]);
 
   return (
@@ -124,6 +125,43 @@ export default async function AssistantPage() {
           <p className="text-sm text-muted">Nobody has used Alexis this month.</p>
         )}
         <p className="mt-2 text-xs text-muted">All charges are waived while Alexis is free.</p>
+        <h2 className="mt-6 mb-2 text-sm font-semibold">Latest Alexis replies</h2>
+        {panelRuns.length ? (
+          <ul className="grid gap-2">
+            {panelRuns.map((r) => (
+              <li key={r.id} className="rounded-xl border border-border bg-surface p-3 text-sm">
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
+                  <span className="font-medium">{r.who}</span>
+                  <span>
+                    {new Date(r.at).toLocaleString("en-UG", { timeZone: "Africa/Kampala", dateStyle: "medium", timeStyle: "short" })} · US${r.costUsd.toFixed(4)}
+                  </span>
+                </div>
+                {r.reply ? <p className="mt-1 line-clamp-3 whitespace-pre-wrap">{r.reply}</p> : null}
+                {r.error ? <p className="mt-1 text-error-600">{r.error}</p> : null}
+                {r.trace.length ? (
+                  <details className="mt-2">
+                    <summary className="cursor-pointer text-xs font-medium text-brand-600 dark:text-brand-400">
+                      {r.trace.length} step{r.trace.length === 1 ? "" : "s"}: {r.trace.map((t) => t.tool).join(" → ")}
+                    </summary>
+                    <ol className="mt-2 space-y-2">
+                      {r.trace.map((t, i) => (
+                        <li key={i} className="rounded-lg border border-border bg-background p-2 text-xs">
+                          <p className="font-medium">
+                            {t.tool} <span className={t.ok ? "text-muted" : "text-error-600"}>· {t.ok ? `${t.ms} ms` : `refused or failed · ${t.ms} ms`}</span>
+                          </p>
+                          <p className="mt-1 break-all text-muted">In: {t.input}</p>
+                          <p className="mt-1 break-all text-muted">Out: {t.output}</p>
+                        </li>
+                      ))}
+                    </ol>
+                  </details>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-sm text-muted">No replies yet.</p>
+        )}
         <h2 className="mt-6 mb-2 text-sm font-semibold">Changes made through Alexis</h2>
         {changes.length ? (
           <ul className="grid gap-2">

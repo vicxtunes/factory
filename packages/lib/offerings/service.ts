@@ -194,25 +194,35 @@ export class OfferingService {
 
   /**
    * Adds a service from one of Aming's templates: the studio's own copy, with
-   * the template's packages (its suggested prices, or 0 in another currency),
-   * in its services category of the template's category name (made if it has
-   * none). Unless a service on sale already has the name (added before, say).
+   * the template's packages (its suggested prices, or 0 in another currency).
    */
   async addFromTemplate(scope: TenantScope, template: ServiceTemplate): Promise<SaveOutcome<Service>> {
-    const duplicate = await this.duplicateService(scope, template.name);
+    return this.addWithPackages(scope, { ...template, packages: template.packages.map((p) => ({ ...p, price: templatePrice(p.price, scope.currency) })) });
+  }
+
+  /**
+   * Adds a whole service at once, its packages priced in the studio's own
+   * currency, in its services category of that name (made if it has none).
+   * Unless a service on sale already has the name (added before, say).
+   */
+  async addWithPackages(
+    scope: TenantScope,
+    input: { categoryName: string; name: string; description: string | null; packages: OfferingInput[] },
+  ): Promise<SaveOutcome<Service>> {
+    const duplicate = await this.duplicateService(scope, input.name);
     if (duplicate) return { duplicateOf: duplicate };
     const category =
-      (await this.store.findActiveCategory(scope, "service", template.categoryName)) ??
-      (await this.store.createCategory(scope, "service", template.categoryName, null));
+      (await this.store.findActiveCategory(scope, "service", input.categoryName)) ??
+      (await this.store.createCategory(scope, "service", input.categoryName, null));
     const service = await this.store.createService(scope, {
-      name: template.name,
-      description: template.description,
-      slug: await this.newSlug(scope, template.name),
+      name: input.name,
+      description: input.description,
+      slug: await this.newSlug(scope, input.name),
       categoryId: category.id,
       kind: "service",
       sourceProductId: null,
     });
-    for (const p of template.packages) await this.store.createPackage(scope, service.id, { ...p, price: templatePrice(p.price, scope.currency) });
+    for (const p of input.packages) await this.store.createPackage(scope, service.id, p);
     return { saved: service };
   }
 

@@ -12,22 +12,22 @@ import { runAction } from "@repo/lib/kernel/server/action";
 import { brandColorSchema, showOnAmingSchema, studioIdSchema, studioProfileSchema, type Studio } from "./core";
 import { StudioError } from "./ports";
 import { getClientSession } from "@repo/lib/auth/session";
-import { STUDIO_CHOICE_COOKIE, studioOfCaller, studios, studiosOf } from "./server";
+import { STUDIO_CHOICE_COOKIE, studioForSetup, studioOfCaller, studios, studiosOf } from "./server";
 
-/** Saves the signed-in client's own studio profile. */
+/** Saves the signed-in client's own studio profile: while setting it up too (its page isn't public until Aming approves it). */
 export async function saveMyStudioProfile(input: unknown): Promise<Result<Studio>> {
   return runAction("studios", async () => {
-    const { studio } = await studioOfCaller();
+    const { studio } = await studioForSetup();
     const saved = await studios.updateProfile(studio.id, parseInput(studioProfileSchema, input));
     revalidatePath("/studio", "layout");
     return saved;
   });
 }
 
-/** Sets the signed-in client's own studio's brand color. */
+/** Sets the signed-in client's own studio's brand color: while setting it up too. */
 export async function saveMyBrandColor(input: unknown): Promise<Result<Studio>> {
   return runAction("studios", async () => {
-    const { studio } = await studioOfCaller();
+    const { studio } = await studioForSetup();
     const saved = await studios.setBrandColor(studio.id, parseInput(brandColorSchema, input).color);
     revalidatePath("/studio", "layout");
     return saved;

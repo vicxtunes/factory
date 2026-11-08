@@ -18,6 +18,25 @@ const nextConfig: NextConfig = {
   // Monorepo: shared code lives in ../../packages, so trace the standalone
   // build from the repo root or those files are left out of it.
   outputFileTracingRoot: path.join(import.meta.dirname, "../.."),
+  // Security headers on every page (security review, 2026-11-08). No other site may show these pages in
+  // a frame, so a signed-in person can't be tricked into clicking (Alexis's Confirm, a payment prompt);
+  // the app's own frames (PDF previews) are of storage, another address, so they're unaffected.
+  // HSTS without subdomains: api. and test. keep their own settings. No "x-powered-by: Next.js".
+  poweredByHeader: false,
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          { key: "X-Frame-Options", value: "SAMEORIGIN" },
+          { key: "Content-Security-Policy", value: "frame-ancestors 'self'" },
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          { key: "Strict-Transport-Security", value: "max-age=31536000" },
+        ],
+      },
+    ];
+  },
   // Dev only: other hosts allowed to load the dev server's scripts, e.g. this
   // machine's network address when opening the app on a phone
   // (DEV_ALLOWED_ORIGINS=192.168.1.20 in .env.local, comma-separated). Without

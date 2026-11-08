@@ -69,7 +69,7 @@ async function answer(message: Incoming): Promise<void> {
     await reply(message.from, "I can only read text messages. Please type your question.");
     return;
   }
-  const res = await send(person, message.text.body, { path: "", title: "", links: [] }, await staffAppToolbox(person, "", "whatsapp"), "whatsapp");
+  const res = await send(person, null, message.text.body, { path: "", title: "", links: [] }, await staffAppToolbox(person, "", "whatsapp"), "whatsapp");
   await reply(message.from, res.ok ? res.reply.body : res.error);
 }
 

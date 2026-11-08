@@ -27,6 +27,8 @@ export interface AskInput {
   messages: ChatTurn[];
   /** Told what's been used so far, so a run that fails partway is still counted. */
   onUsage: (usage: TokenUsage) => void;
+  /** Given: the reply streams, its words told as they come, numbered by step of the tool loop (a later step's words replace an earlier one's). */
+  onText?: (step: number, delta: string) => void;
 }
 
 export interface Answer {
@@ -38,30 +40,44 @@ export function askModel(input: AskInput): Promise<Answer> {
   return input.model.provider === "openai" ? askOpenAI(input) : askClaude(input);
 }
 
-async function askClaude({ model, system = SYSTEM_PROMPT, context, tools, messages, onUsage }: AskInput): Promise<Answer> {
-  const runner = new Anthropic({ timeout: TIMEOUT_MS }).beta.messages.toolRunner({
+async function askClaude({ model, system = SYSTEM_PROMPT, context, tools, messages, onUsage, onText }: AskInput): Promise<Answer> {
+  const params = {
     model: model.id,
     max_tokens: MAX_TOKENS,
     max_iterations: MAX_STEPS,
     betas: ["server-side-fallback-2026-07-01"],
-    fallbacks: "default",
-    output_config: { effort: "low" },
+    fallbacks: "default" as const,
+    output_config: { effort: "low" as const },
     system: [
-      { type: "text", text: system, cache_control: { type: "ephemeral" } },
-      { type: "text", text: context },
+      { type: "text" as const, text: system, cache_control: { type: "ephemeral" as const } },
+      { type: "text" as const, text: context },
     ],
     tools: tools.map((t) => betaZodTool({ name: t.name, description: t.description, inputSchema: t.inputSchema as z.ZodObject, run: t.run as (input: unknown) => Promise<string> })),
     messages,
-  });
+  };
+  const client = new Anthropic({ timeout: TIMEOUT_MS });
   const usage: TokenUsage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
-  let last: Anthropic.Beta.BetaMessage | null = null;
-  for await (const message of runner) {
-    last = message;
+  const count = (message: Anthropic.Beta.BetaMessage) => {
     usage.input += message.usage.input_tokens;
     usage.output += message.usage.output_tokens;
     usage.cacheRead += message.usage.cache_read_input_tokens ?? 0;
     usage.cacheWrite += message.usage.cache_creation_input_tokens ?? 0;
     onUsage({ ...usage });
+  };
+  let last: Anthropic.Beta.BetaMessage | null = null;
+  if (onText) {
+    let step = 0;
+    for await (const stream of client.beta.messages.toolRunner({ ...params, stream: true })) {
+      const at = step++;
+      stream.on("text", (delta) => onText(at, delta));
+      last = await stream.finalMessage();
+      count(last);
+    }
+  } else {
+    for await (const message of client.beta.messages.toolRunner(params)) {
+      last = message;
+      count(message);
+    }
   }
   if (last?.stop_reason === "refusal") return { text: null, refused: true };
   return { text: last?.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("\n").trim() || null, refused: false };
@@ -87,7 +103,7 @@ async function runTool(tools: AssistantTool[], name: string, args: string): Prom
   }
 }
 
-async function askOpenAI({ model, system = SYSTEM_PROMPT, context, tools, messages, onUsage }: AskInput): Promise<Answer> {
+async function askOpenAI({ model, system = SYSTEM_PROMPT, context, tools, messages, onUsage, onText }: AskInput): Promise<Answer> {
   const client = new OpenAI({ timeout: TIMEOUT_MS });
   const definitions = tools.map((t): OpenAI.Responses.FunctionTool => {
     const parameters = { ...z.toJSONSchema(t.inputSchema), $schema: undefined };
@@ -102,13 +118,18 @@ async function askOpenAI({ model, system = SYSTEM_PROMPT, context, tools, messag
   const usage: TokenUsage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
 
   for (let step = 0; step < MAX_STEPS; step++) {
-    const response = await client.responses.create({
-      model: model.id,
-      max_output_tokens: MAX_TOKENS,
-      reasoning: { effort: "low" },
-      tools: definitions,
-      input,
-    });
+    const request = { model: model.id, max_output_tokens: MAX_TOKENS, reasoning: { effort: "low" as const }, tools: definitions, input };
+    let response: OpenAI.Responses.Response | null = null;
+    if (onText) {
+      for await (const event of await client.responses.create({ ...request, stream: true })) {
+        if (event.type === "response.output_text.delta") onText(step, event.delta);
+        else if (event.type === "response.completed" || event.type === "response.incomplete") response = event.response;
+        else if (event.type === "response.failed") throw new Error(event.response.error?.message ?? "The AI failed.");
+      }
+      if (!response) throw new Error("The AI's reply ended early.");
+    } else {
+      response = await client.responses.create(request);
+    }
     const cached = response.usage?.input_tokens_details?.cached_tokens ?? 0;
     usage.input += (response.usage?.input_tokens ?? 0) - cached;
     usage.cacheRead += cached;

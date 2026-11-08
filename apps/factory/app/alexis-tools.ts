@@ -12,6 +12,7 @@ import { agentRegisterSchema } from "@repo/lib/agents/core";
 import { categoryRates, listAgentsWithFigures } from "@repo/lib/agents/server";
 import type { Person } from "@repo/lib/assistant/panel/server";
 import { serverHealth } from "@repo/lib/assistant/panel/tools/health";
+import { addFilesToOrderTool } from "@repo/lib/assistant/panel/tools/order-files";
 import { changeTool, outcome, readTool, type ChangeTool, type Toolbox } from "@repo/lib/assistant/panel/toolbox";
 import type { AssistantTool } from "@repo/lib/assistant/server/tools";
 import { addExpenseSchedule, recordExpense } from "@repo/lib/books/actions";
@@ -192,6 +193,7 @@ function staffChanges(role: AppRole): ChangeTool[] {
         card: async (c) => ({ title: `Add client ${c.name}`, lines: [`Phone: ${c.phone}`, c.email ? `Email: ${c.email}` : "No email"] }),
         run: async (c) => outcome(await addClient(c), `${c.name} is now a client.`),
       }),
+      addFilesToOrderTool(null),
     );
   }
   if (canViewAccounts(role)) {
