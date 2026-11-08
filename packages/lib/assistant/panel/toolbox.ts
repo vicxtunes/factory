@@ -59,13 +59,16 @@ export function outcome(res: { ok: boolean; error?: string }, done: string): Cha
   return res.ok ? { ok: true, done } : { ok: false, error: res.error ?? "It couldn't be done." };
 }
 
+/** Something the app shows under a reply for the person to use themselves: "logo", the studio's logo uploader. */
+export type ReplyWidget = "logo";
+
 export interface Toolbox {
   read: AssistantTool[];
   change: ChangeTool[];
   /** In words for Alexis: what this person can and can't do through it. */
   abilities: string;
   /** Tappable answers and product photos the tools put under the reply (the chat assistant's offer_choices and show_product_photos). */
-  replyExtras?: () => { choices: string[]; images: { url: string; name: string }[] };
+  replyExtras?: () => { choices: string[]; images: { url: string; name: string }[]; widgets?: ReplyWidget[] };
 }
 
 /** A link on the page the person has open: where Alexis may send them. */

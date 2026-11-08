@@ -34,7 +34,7 @@ import {
   type PersonType,
 } from "./core";
 import { PANEL_PROMPT } from "./prompt";
-import { MAX_GUIDE_STEPS, readTool, type ChangeOutcome, type ChangeTool, type GuideStep, type PageLink, type Toolbox } from "./toolbox";
+import { MAX_GUIDE_STEPS, readTool, type ChangeOutcome, type ChangeTool, type GuideStep, type PageLink, type ReplyWidget, type Toolbox } from "./toolbox";
 
 function must<T>(res: { data: T; error: { message: string } | null }): NonNullable<T> {
   if (res.error) throw new Error(res.error.message);
@@ -269,9 +269,10 @@ export interface PanelMessage {
   guide: GuideStep[] | null;
   /** Names of the files the person attached to this message (the files stay on their device). */
   files: string[];
-  /** Answers to tap, and product photos, under a reply. */
+  /** Answers to tap, product photos, and things to use (the logo uploader), under a reply. */
   choices: string[];
   images: { url: string; name: string }[];
+  widgets: ReplyWidget[];
 }
 
 export interface ChatSummary {
@@ -286,6 +287,7 @@ interface MessageExtras {
   files?: string[];
   choices?: string[];
   images?: { url: string; name: string }[];
+  widgets?: ReplyWidget[];
 }
 
 interface ActionRow {
@@ -369,6 +371,7 @@ async function history(chatId: string, limit: number): Promise<PanelMessage[]> {
     files: r.extras?.files ?? [],
     choices: r.extras?.choices ?? [],
     images: r.extras?.images ?? [],
+    widgets: r.extras?.widgets ?? [],
   }));
 }
 
@@ -420,6 +423,7 @@ async function saveMessage(
     files: extras?.files ?? [],
     choices: extras?.choices ?? [],
     images: extras?.images ?? [],
+    widgets: extras?.widgets ?? [],
   };
 }
 
@@ -655,10 +659,11 @@ export async function send(
   );
 
   if (!reply) return { ok: false, error: "Sorry, Alexis couldn't answer just now. Try again in a moment." };
-  const shown = toolbox.replyExtras?.() ?? { choices: [], images: [] };
+  const shown = toolbox.replyExtras?.() ?? { choices: [], images: [], widgets: [] };
+  const widgets = shown.widgets ?? [];
   const extras: MessageExtras | null =
-    prepared.length || ctx.guide || shown.choices.length || shown.images.length
-      ? { actions: prepared, guide: ctx.guide ?? undefined, choices: shown.choices, images: shown.images }
+    prepared.length || ctx.guide || shown.choices.length || shown.images.length || widgets.length
+      ? { actions: prepared, guide: ctx.guide ?? undefined, choices: shown.choices, images: shown.images, widgets }
       : null;
   const saved = await saveMessage(person, chat, "assistant", reply, page.path, channel, extras);
   const cards = prepared.length ? (must(await createAdminClient().from("assistant_pending_actions").select(ACTION_COLUMNS).in("id", prepared)) as ActionRow[]) : [];
@@ -676,7 +681,7 @@ export type DecideResult = { ok: true; card: ActionCard; note: PanelMessage } | 
 
 async function note(person: Person, row: ActionRow, words: string): Promise<PanelMessage> {
   if (row.chat_id) return saveMessage(person, row.chat_id, "assistant", words, "", "app");
-  return { id: `note-${row.id}`, role: "assistant", body: words, createdAt: new Date().toISOString(), actions: [], guide: null, files: [], choices: [], images: [] };
+  return { id: `note-${row.id}`, role: "assistant", body: words, createdAt: new Date().toISOString(), actions: [], guide: null, files: [], choices: [], images: [], widgets: [] };
 }
 
 /** The person taps Confirm: the prepared change runs once, through the app's own function, and is recorded. */

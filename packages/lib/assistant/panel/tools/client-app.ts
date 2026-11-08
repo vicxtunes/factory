@@ -8,7 +8,7 @@ import { agentClients, agentOfClient, figuresFor } from "@repo/lib/agents/server
 import { createCustomer } from "@repo/lib/customers/actions";
 import { customers } from "@repo/lib/customers/server";
 import { agentClientSchema } from "@repo/lib/agents/core";
-import { studioOfCaller } from "@repo/lib/studios/server";
+import { ownStudio, studioOfCaller } from "@repo/lib/studios/server";
 import { canUse } from "@repo/lib/team/core";
 import { vendorJobs, vendors } from "@repo/lib/vendors/server";
 
@@ -18,6 +18,7 @@ import type { Person } from "../server";
 import { changeTool, outcome, readTool, type ChangeTool, type Toolbox } from "../toolbox";
 import { clientOrderTools } from "./client-orders";
 import { addFilesToOrderTool } from "./order-files";
+import { studioSetupTools } from "./studio-setup";
 import type { AssistantTool } from "../../server/tools";
 
 // Alexis's tools in the client app: the account's own orders and money, and,
@@ -62,9 +63,16 @@ function handToStaff(person: Person): AssistantTool {
 
 const PERIODS = ["today", "yesterday", "this_week", "this_month", "last_month", "this_year", "all"] as const;
 
-async function studioTools(): Promise<{ read: AssistantTool[]; change: ChangeTool[]; words: string } | null> {
+/**
+ * On /studio pages. An open studio: what the person's team areas allow, and for the owner its page too.
+ * The owner's studio while it's being set up (studioOfCaller refuses it until Aming approves): setting up its page.
+ */
+async function studioTools(widgets: { logo: boolean }): Promise<{ read: AssistantTool[]; change: ChangeTool[]; words: string } | null> {
   const caller = await studioOfCaller("anyone").catch(() => null);
-  if (!caller) return null;
+  if (!caller) {
+    const settingUp = await ownStudio().catch(() => null);
+    return settingUp ? studioSetupTools(settingUp, widgets) : null;
+  }
   const { scope, access, studio } = caller;
   const read: AssistantTool[] = [];
   const change: ChangeTool[] = [];
@@ -131,7 +139,10 @@ async function studioTools(): Promise<{ read: AssistantTool[]; change: ChangeToo
     );
     can.push("see the studio's vendor jobs");
   }
-  return { read, change, words: can.length ? `For ${studio.name}: ${can.join(", ")}.` : "" };
+  const words = can.length ? `For ${studio.name}: ${can.join(", ")}.` : "";
+  if (!access.owner) return { read, change, words };
+  const page = studioSetupTools(caller, widgets);
+  return { read: [...read, ...page.read], change: [...change, ...page.change], words: `${words} ${page.words}` };
 }
 
 async function agentTools(person: Person): Promise<{ read: AssistantTool[]; change: ChangeTool[]; words: string } | null> {
@@ -194,11 +205,12 @@ export async function clientAppToolbox(person: Person, page: string): Promise<To
   if (person.type !== "client") return { read: [], change: [], abilities: "Nothing in this app." };
   const under = (root: string) => page === root || page.startsWith(`${root}/`);
   const chat = fromChat(person);
-  const business = under("/studio") ? await studioTools() : under("/agents") ? await agentTools(person) : under("/vendors") ? await vendorTools(person) : null;
+  const widgets = { logo: false };
+  const business = under("/studio") ? await studioTools(widgets) : under("/agents") ? await agentTools(person) : under("/vendors") ? await vendorTools(person) : null;
   return {
     read: [...chat.tools, handToStaff(person), ...(business?.read ?? [])],
     change: [...clientOrderTools(person), addFilesToOrderTool(person.id), ...(business?.change ?? [])],
-    replyExtras: chat.extras,
+    replyExtras: () => ({ ...chat.extras(), widgets: widgets.logo ? ["logo" as const] : [] }),
     abilities: [
       "Everything the chat assistant does for them: take and place Aming orders, invoice them, send MTN or Airtel payment prompts, add photos to an order, look up their orders, invoices, receipts, wallet and prices, show product photos, and call the team.",
       business?.words ?? "",

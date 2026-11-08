@@ -10,6 +10,7 @@ import { uploadFileToStorage } from "@repo/lib/storage/upload-client";
 
 import { Button } from "../Button";
 import { AddMediaButton } from "../media/AddMediaButton";
+import { LogoUploader } from "../studio-access/LogoUploader";
 import { Spinner } from "../Spinner";
 import { UploadThumbs, uploadKey, type UploadThumb } from "../UploadThumbs";
 
@@ -109,7 +110,7 @@ export function useAlexis(actions: AlexisActions, initial: PanelState | null = n
     if (!ready || busy || (!text.trim() && !files.length)) return;
     setBusy(true);
     setError(null);
-    const temp: PanelMessage = { id: `mine-${Date.now()}`, role: "user", body: text.trim() || "(files attached)", createdAt: new Date().toISOString(), actions: [], guide: null, files: files.map((f) => f.name), choices: [], images: [] };
+    const temp: PanelMessage = { id: `mine-${Date.now()}`, role: "user", body: text.trim() || "(files attached)", createdAt: new Date().toISOString(), actions: [], guide: null, files: files.map((f) => f.name), choices: [], images: [], widgets: [] };
     patch({ messages: [...ready.messages, temp] });
     const res = await actions
       .ask(ready.chatId, text, { path, title: document.title, links: pageLinks() }, files.map((f) => f.name))
@@ -286,6 +287,11 @@ export function Messages({ alexis, onGuide }: { alexis: Alexis; onGuide: (steps:
                     {c}
                   </button>
                 ))}
+              </div>
+            ) : null}
+            {m.widgets.includes("logo") ? (
+              <div className="mt-2 rounded-xl border border-border bg-surface p-3">
+                <LogoUploader logoUrl={null} />
               </div>
             ) : null}
             {m.actions.map((card) => (
