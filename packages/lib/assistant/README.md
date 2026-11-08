@@ -46,7 +46,10 @@ studio's page without an Aming account, so they never see it. Plan: the "Alexis 
   - Staff: orders, clients, the review queue (managers); money and expenses, record an expense or a repeating one
     (boss, supervisors); server health, agents, staff accounts, currencies; set a currency rate, a staff role, a
     commission rate, register an agent (boss). Item status and new clients (managers). Designers and workers: their board.
-  - Client app: the account's orders, invoices, receipts, wallet and prices; on `/studio` its money, clients (add one) and
+  - Client app: everything the chat assistant does, on cards instead of a "yes" in chat (`tools/client-orders.ts`):
+    place an order (checked and priced by the chat's `checkOrderItems`; approved and invoiced at once with a photo link, or
+    left to the order form's review once attached photos have uploaded), create an invoice, send an MTN/Airtel prompt; plus
+    the chat's own reads, tappable answers and product photos, and hand_to_staff (the team is told, once an hour). Also: on `/studio` its money, clients (add one) and
     vendor jobs by team area; on `/agents` figures and clients (add one); on `/vendors` jobs.
 - **Screens (`packages/ui/assistant`):** `AlexisPanel` (the floating button's quick chat: the newest chat, New chat, All chats),
   `AlexisPage` (the full page: `/alexis` in the client app, `/dashboard/alexis` for staff; chats on the left with search and

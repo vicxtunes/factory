@@ -109,13 +109,14 @@ export function useAlexis(actions: AlexisActions, initial: PanelState | null = n
     if (!ready || busy || (!text.trim() && !files.length)) return;
     setBusy(true);
     setError(null);
-    const temp: PanelMessage = { id: `mine-${Date.now()}`, role: "user", body: text.trim() || "(files attached)", createdAt: new Date().toISOString(), actions: [], guide: null, files: files.map((f) => f.name) };
+    const temp: PanelMessage = { id: `mine-${Date.now()}`, role: "user", body: text.trim() || "(files attached)", createdAt: new Date().toISOString(), actions: [], guide: null, files: files.map((f) => f.name), choices: [], images: [] };
     patch({ messages: [...ready.messages, temp] });
     const res = await actions
       .ask(ready.chatId, text, { path, title: document.title, links: pageLinks() }, files.map((f) => f.name))
       .catch((): SendResult => ({ ok: false, error: OFFLINE }));
     if (res.ok) {
-      const uploads = res.reply.actions.filter((card) => card.uploadItemId && files.length);
+      // Any card may end up uploading them: an order learns its item only once it's placed.
+      const uploads = files.length ? res.reply.actions : [];
       if (uploads.length) setHeld((h) => ({ ...h, ...Object.fromEntries(uploads.map((card) => [card.id, files])) }));
       setState((s) =>
         s?.kind === "ready"
@@ -245,6 +246,8 @@ function Card({ card, files, onDecide }: { card: ActionCard; files: File[] | und
 export function Messages({ alexis, onGuide }: { alexis: Alexis; onGuide: (steps: GuideStep[]) => void }) {
   const end = useRef<HTMLDivElement>(null);
   const messages = alexis.ready?.messages ?? [];
+  // Tappable answers belong to the latest reply only.
+  const lastReplyId = messages.findLast((m) => m.role === "assistant")?.id;
   useEffect(() => {
     end.current?.scrollIntoView({ block: "end" });
   }, [messages.length, alexis.busy]);
@@ -259,6 +262,31 @@ export function Messages({ alexis, onGuide }: { alexis: Alexis; onGuide: (steps:
               <p className={`mt-1 text-xs text-muted ${m.role === "user" ? "text-right" : ""}`}>
                 Attached: {m.files.length === 1 ? m.files[0] : `${m.files.length} files`}
               </p>
+            ) : null}
+            {m.images.length ? (
+              <div className="mt-2 grid grid-cols-3 gap-1.5">
+                {m.images.map((img) => (
+                  <a key={img.url} href={img.url} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-lg border border-border">
+                    {/* eslint-disable-next-line @next/next/no-img-element -- product photos from storage, any size */}
+                    <img src={img.url} alt={img.name} loading="lazy" className="aspect-square w-full object-cover" />
+                  </a>
+                ))}
+              </div>
+            ) : null}
+            {m.choices.length && m.id === lastReplyId ? (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {m.choices.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    disabled={alexis.busy}
+                    onClick={() => void alexis.send(c, [])}
+                    className="min-h-9 rounded-full border border-brand-300 bg-brand-50 px-3 text-xs font-medium text-brand-700 hover:bg-brand-100 disabled:opacity-50 dark:border-brand-500/40 dark:bg-brand-500/10 dark:text-brand-300"
+                  >
+                    {c}
+                  </button>
+                ))}
+              </div>
             ) : null}
             {m.actions.map((card) => (
               <Card key={card.id} card={card} files={alexis.held[card.id]} onDecide={(yes) => alexis.decide(card, yes)} />

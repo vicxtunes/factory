@@ -99,6 +99,55 @@ async function photosToItem(ctx: ToolContext, itemId: string, orderNo: string, o
   }
 }
 
+export interface CheckedItem {
+  category_id: string;
+  product_id: string;
+  variant_id: string;
+  qty: number;
+  attributes: Record<string, string>;
+  item_notes: string;
+}
+
+/**
+ * An order's items checked against the catalog (active product and variant, required attributes, quantity)
+ * and priced as the order and its invoice will be: list or recipe price, less any running offer.
+ * Shared by the chat and the Alexis panel. A refusal is a sentence for the AI.
+ */
+export async function checkOrderItems(
+  items: { product_id: string; variant_id: string; qty: number; attributes: Record<string, string>; notes: string }[],
+): Promise<{ ok: false; refusal: string } | { ok: true; items: CheckedItem[]; lines: string[]; total: number; unknown: boolean }> {
+  const db = createAdminClient();
+  const checked: CheckedItem[] = [];
+  const lines: string[] = [];
+  let total = 0;
+  let unknown = false;
+  if (!items.length) return { ok: false, refusal: "Refused: the order has no items." };
+  for (const item of items) {
+    if (item.qty > MAX_ITEM_QTY) return { ok: false, refusal: `Refused: more than ${MAX_ITEM_QTY} of one item needs the team. Ask if they meant a smaller number; if not, call hand_to_staff.` };
+    const { data: product } = await db
+      .from("products")
+      .select("id, name, category_id, price, active, product_variants(id, name, price, active)")
+      .eq("id", item.product_id)
+      .maybeSingle();
+    if (!product?.active) return { ok: false, refusal: `Refused: product ${item.product_id} isn't in the catalog.` };
+    const variant = item.variant_id ? product.product_variants.find((v) => v.id === item.variant_id && v.active) : null;
+    if (item.variant_id && !variant) return { ok: false, refusal: `Refused: that variant isn't available for ${product.name}.` };
+    const { data: defs } = await db.from("category_attributes").select("name, required").eq("category_id", product.category_id);
+    const missing = (defs ?? []).filter((d) => d.required && !item.attributes[d.name]?.trim()).map((d) => d.name);
+    if (missing.length) return { ok: false, refusal: `Refused: ${product.name} still needs: ${missing.join(", ")}.` };
+
+    const unit = (variant?.price ?? product.price) ?? (await recipeListPrice(product.id, variant?.id ?? null, item.attributes));
+    // The running offer, decided by the database as it will be on the order and its invoice.
+    const offer = unit == null ? null : await db.rpc("discount_offer", { p_product: product.id, p_list_price: unit, p_at: new Date().toISOString() });
+    const unitPrice = unit == null ? null : Number((offer?.data as { price?: number } | null)?.price ?? unit);
+    if (unitPrice == null || unitPrice <= 0) unknown = true;
+    else total += unitPrice * item.qty;
+    lines.push(`${item.qty} × ${product.name}${variant ? ` (${variant.name})` : ""}: ${unitPrice == null ? "price to be confirmed" : formatMoney(unitPrice * item.qty)}`);
+    checked.push({ category_id: product.category_id, product_id: product.id, variant_id: item.variant_id, qty: item.qty, attributes: item.attributes, item_notes: item.notes });
+  }
+  return { ok: true, items: checked, lines, total, unknown };
+}
+
 /** A tool, whichever AI is calling it. */
 export interface AssistantTool {
   name: string;
@@ -322,24 +371,11 @@ export function assistantTools(ctx: ToolContext): AssistantTool[] {
         if (!/^\d{4}-\d{2}-\d{2}$/.test(delivery_date) || delivery_date < new Date().toISOString().slice(0, 10)) {
           return "Refused: delivery_date must be today or later, as YYYY-MM-DD.";
         }
+        const checked = await checkOrderItems(items);
+        if (!checked.ok) return checked.refusal;
+        const { lines, total, unknown } = checked;
         const pending: PendingItem[] = [];
-        const lines: string[] = [];
-        let total = 0;
-        let unknown = false;
-        for (const item of items) {
-          if (item.qty > MAX_ITEM_QTY) return `Refused: more than ${MAX_ITEM_QTY} of one item needs the team. Ask if they meant a smaller number; if not, call hand_to_staff.`;
-          const { data: product } = await db
-            .from("products")
-            .select("id, name, category_id, price, active, product_variants(id, name, price, active)")
-            .eq("id", item.product_id)
-            .maybeSingle();
-          if (!product?.active) return `Refused: product ${item.product_id} isn't in the catalog.`;
-          const variant = item.variant_id ? product.product_variants.find((v) => v.id === item.variant_id && v.active) : null;
-          if (item.variant_id && !variant) return `Refused: that variant isn't available for ${product.name}.`;
-          const { data: defs } = await db.from("category_attributes").select("name, required").eq("category_id", product.category_id);
-          const missing = (defs ?? []).filter((d) => d.required && !item.attributes[d.name]?.trim()).map((d) => d.name);
-          if (missing.length) return `Refused: ${product.name} still needs: ${missing.join(", ")}.`;
-
+        for (const [n, item] of items.entries()) {
           let attachmentIds: string[] = [];
           if (item.attachment_ids.length) {
             const { data: found } = await db.from("chat_attachments").select("id").eq("conversation_id", ctx.conversationId).in("id", item.attachment_ids);
@@ -348,24 +384,7 @@ export function assistantTools(ctx: ToolContext): AssistantTool[] {
           }
           const link = item.photo_link.trim();
           if (link && !/^https?:\/\/\S+$/.test(link)) return "Refused: photo_link isn't a valid link.";
-
-          const unit = (variant?.price ?? product.price) ?? (await recipeListPrice(product.id, variant?.id ?? null, item.attributes));
-          // The running offer, decided by the database as it will be on the order and its invoice.
-          const offer = unit == null ? null : await db.rpc("discount_offer", { p_product: product.id, p_list_price: unit, p_at: new Date().toISOString() });
-          const unitPrice = unit == null ? null : Number((offer?.data as { price?: number } | null)?.price ?? unit);
-          if (unitPrice == null || unitPrice <= 0) unknown = true;
-          else total += unitPrice * item.qty;
-          lines.push(`${item.qty} × ${product.name}${variant ? ` (${variant.name})` : ""}: ${unitPrice == null ? "price to be confirmed" : formatMoney(unitPrice * item.qty)}`);
-          pending.push({
-            category_id: product.category_id,
-            product_id: product.id,
-            variant_id: item.variant_id,
-            qty: item.qty,
-            attributes: item.attributes,
-            item_notes: item.notes,
-            attachment_ids: attachmentIds,
-            photo_link: link || null,
-          });
+          pending.push({ ...checked.items[n], attachment_ids: attachmentIds, photo_link: link || null });
         }
         if (!everyItemHasPhotos(pending)) return "Refused: every item needs its photos attached or a link first. Ask the client for them.";
         const summary = [...lines, unknown ? "Total: reception will confirm the price" : `Total: ${formatMoney(total)}`, `Needed by ${delivery_date}${express ? " (express)" : ""}`].join("\n");

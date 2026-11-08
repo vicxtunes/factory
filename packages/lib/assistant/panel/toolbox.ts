@@ -23,14 +23,20 @@ export function readTool<S extends z.ZodType>(t: { name: string; description: st
   };
 }
 
-export type ChangeOutcome = { ok: true; done: string } | { ok: false; error: string };
+/** `uploadItemId`: once done, the files the person attached upload to this order item from their device. */
+export type ChangeOutcome = { ok: true; done: string; uploadItemId?: string } | { ok: false; error: string };
+
+/** What a card knows besides its input: how many files are attached to the person's latest message. */
+export interface CardContext {
+  attached: number;
+}
 
 export interface ChangeTool {
   name: string;
   description: string;
   inputSchema: z.ZodType;
   /** What the card shows. May look things up (a name for an id); throws with a sentence when it can't be done. */
-  card: (input: never) => Promise<{ title: string; lines: string[] }>;
+  card: (input: never, ctx: CardContext) => Promise<{ title: string; lines: string[] }>;
   /** Runs the change through the app's own guarded function. Called only from Confirm. */
   run: (input: never) => Promise<ChangeOutcome>;
   /** For a change that adds the attached files to an order item: that item. Once confirmed, the person's device uploads them there. */
@@ -41,7 +47,7 @@ export function changeTool<S extends z.ZodType>(t: {
   name: string;
   description: string;
   inputSchema: S;
-  card: (input: z.infer<S>) => Promise<{ title: string; lines: string[] }>;
+  card: (input: z.infer<S>, ctx: CardContext) => Promise<{ title: string; lines: string[] }>;
   run: (input: z.infer<S>) => Promise<ChangeOutcome>;
   uploadsTo?: (input: z.infer<S>) => string;
 }): ChangeTool {
@@ -58,6 +64,8 @@ export interface Toolbox {
   change: ChangeTool[];
   /** In words for Alexis: what this person can and can't do through it. */
   abilities: string;
+  /** Tappable answers and product photos the tools put under the reply (the chat assistant's offer_choices and show_product_photos). */
+  replyExtras?: () => { choices: string[]; images: { url: string; name: string }[] };
 }
 
 /** A link on the page the person has open: where Alexis may send them. */

@@ -269,6 +269,9 @@ export interface PanelMessage {
   guide: GuideStep[] | null;
   /** Names of the files the person attached to this message (the files stay on their device). */
   files: string[];
+  /** Answers to tap, and product photos, under a reply. */
+  choices: string[];
+  images: { url: string; name: string }[];
 }
 
 export interface ChatSummary {
@@ -281,6 +284,8 @@ interface MessageExtras {
   actions?: string[];
   guide?: GuideStep[];
   files?: string[];
+  choices?: string[];
+  images?: { url: string; name: string }[];
 }
 
 interface ActionRow {
@@ -362,6 +367,8 @@ async function history(chatId: string, limit: number): Promise<PanelMessage[]> {
     actions: (r.extras?.actions ?? []).flatMap((id) => byId.get(id) ?? []),
     guide: r.extras?.guide ?? null,
     files: r.extras?.files ?? [],
+    choices: r.extras?.choices ?? [],
+    images: r.extras?.images ?? [],
   }));
 }
 
@@ -403,7 +410,17 @@ async function saveMessage(
     await db.from("assistant_messages").insert({ chat_id: chatId, person_type: person.type, person_id: person.id, role, body, page, channel, extras }).select("id, created_at").single(),
   );
   must(await db.from("assistant_chats").update({ last_at: row.created_at }).eq("id", chatId));
-  return { id: row.id, role, body, createdAt: row.created_at, actions: [], guide: extras?.guide ?? null, files: extras?.files ?? [] };
+  return {
+    id: row.id,
+    role,
+    body,
+    createdAt: row.created_at,
+    actions: [],
+    guide: extras?.guide ?? null,
+    files: extras?.files ?? [],
+    choices: extras?.choices ?? [],
+    images: extras?.images ?? [],
+  };
 }
 
 export type PanelState =
@@ -475,7 +492,7 @@ function preparingTool(t: ChangeTool, person: Person, chatId: string, prepared: 
       if (t.uploadsTo && !attached) return "Refused: no files are attached to their latest message. Ask them to tap Attach and choose the files.";
       let card: { title: string; lines: string[] };
       try {
-        card = await t.card(input);
+        card = await t.card(input, { attached });
       } catch (err) {
         return `Refused: ${err instanceof Error ? err.message : "it can't be done."}`;
       }
@@ -638,7 +655,11 @@ export async function send(
   );
 
   if (!reply) return { ok: false, error: "Sorry, Alexis couldn't answer just now. Try again in a moment." };
-  const extras: MessageExtras | null = prepared.length || ctx.guide ? { actions: prepared, guide: ctx.guide ?? undefined } : null;
+  const shown = toolbox.replyExtras?.() ?? { choices: [], images: [] };
+  const extras: MessageExtras | null =
+    prepared.length || ctx.guide || shown.choices.length || shown.images.length
+      ? { actions: prepared, guide: ctx.guide ?? undefined, choices: shown.choices, images: shown.images }
+      : null;
   const saved = await saveMessage(person, chat, "assistant", reply, page.path, channel, extras);
   const cards = prepared.length ? (must(await createAdminClient().from("assistant_pending_actions").select(ACTION_COLUMNS).in("id", prepared)) as ActionRow[]) : [];
   const summary = (await chatsOf(person)).find((c) => c.id === chat) ?? { id: chat, title: "New chat", lastAt: saved.createdAt };
@@ -655,7 +676,7 @@ export type DecideResult = { ok: true; card: ActionCard; note: PanelMessage } | 
 
 async function note(person: Person, row: ActionRow, words: string): Promise<PanelMessage> {
   if (row.chat_id) return saveMessage(person, row.chat_id, "assistant", words, "", "app");
-  return { id: `note-${row.id}`, role: "assistant", body: words, createdAt: new Date().toISOString(), actions: [], guide: null, files: [] };
+  return { id: `note-${row.id}`, role: "assistant", body: words, createdAt: new Date().toISOString(), actions: [], guide: null, files: [], choices: [], images: [] };
 }
 
 /** The person taps Confirm: the prepared change runs once, through the app's own function, and is recorded. */
@@ -691,7 +712,11 @@ export async function confirm(person: Person, id: string, toolbox: Toolbox): Pro
   const done = must(
     await db
       .from("assistant_pending_actions")
-      .update({ status: result.ok ? "done" : "failed", result: result.ok ? result.done : result.error })
+      .update({
+        status: result.ok ? "done" : "failed",
+        result: result.ok ? result.done : result.error,
+        ...(result.ok && result.uploadItemId ? { upload_item_id: result.uploadItemId } : {}),
+      })
       .eq("id", id)
       .select(ACTION_COLUMNS)
       .single(),
