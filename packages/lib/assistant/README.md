@@ -64,3 +64,17 @@ studio's page without an Aming account, so they never see it. Plan: the "Alexis 
   watch's open alerts, for the boss. Kuma and Beszel need their settings in the staff app's environment (`.env.example`).
 - **WhatsApp (`apps/factory/app/api/whatsapp/route.ts`):** the boss's own number only, as the boss, read-only (changes need
   the app's sign-in for Confirm). Needs the WHATSAPP_* settings and a Meta business number with the webhook pointed at it.
+
+## Streaming, tracing, evaluations, security (2026-11-08)
+
+- **Streaming:** each app's `POST /api/alexis` (`panel/stream.ts`) answers as lines of JSON: what Alexis is doing ("Looking up
+  your orders") and its words as they come. Only from the app's own pages (Origin must be this site, JSON only).
+- **Tracing:** every reply's tool calls (input, output, time, refused or not) are kept in `assistant_runs.trace` and shown
+  under Latest Alexis replies on Dashboard → Assistant.
+- **Evaluations:** `npm run eval:alexis` runs ten real conversations with the real AI, Alexis's real instructions and tool
+  definitions, and fixture data (`panel/evals/run.ts`): ordering, a vague order, an order's status, prompt injection in order
+  notes, payment, showing the way, off-topic, studio setup, adding a service, the boss's money. Run it after changing the
+  instructions or tools. A few US cents a run; never touches the database.
+- **Security:** the guide only sends people to this app's own pages (`isAppPath`), at most 30 messages per person per
+  10 minutes, page link labels and tool results are data, never instructions. Both apps send frame-ancestors 'self',
+  X-Frame-Options, nosniff, a referrer policy and HSTS, and no x-powered-by.

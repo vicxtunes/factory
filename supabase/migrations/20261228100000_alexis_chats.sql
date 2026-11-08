@@ -45,3 +45,7 @@ language sql immutable as $$
     'alexis'
   );
 $$;
+
+-- Each Alexis reply's steps, for finding out why it did what it did:
+-- [{ tool, input, output, ms, ok }], inputs and outputs cut to 1,000 characters.
+alter table assistant_runs add column trace jsonb;

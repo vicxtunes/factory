@@ -15,7 +15,7 @@ import { SIDEBAR_COOKIE } from "@repo/ui/navigation/sidebar-init";
 import { CurrencySymbolProvider } from "@repo/lib/currency/CurrencySymbolProvider";
 import { DEFAULT_CURRENCY_SYMBOL } from "@repo/lib/currency/format";
 import { fetchBaseCurrencySymbol } from "@repo/lib/queries";
-import { askAlexis, cancelAlexis, confirmAlexis } from "./alexis-actions";
+import { cancelAlexis, confirmAlexis } from "./alexis-actions";
 
 /** Where each kind of person's full Alexis page is in this app. */
 const ALEXIS_PAGES = { staff: "/dashboard/alexis" };
@@ -72,7 +72,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
           <InstallCapture />
           <OfflineBanner />
           <TransferTray />
-          <Alexis actions={{ ask: askAlexis, confirm: confirmAlexis, cancel: cancelAlexis }} pages={ALEXIS_PAGES} />
+          <Alexis actions={{ confirm: confirmAlexis, cancel: cancelAlexis }} pages={ALEXIS_PAGES} />
           <NavigationProgress />
           <BackHistory />
           <KeepFresh />

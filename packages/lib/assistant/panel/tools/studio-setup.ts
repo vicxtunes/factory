@@ -50,7 +50,8 @@ export function studioSetupTools(caller: CallerStudio, widgets: { logo: boolean 
           status: a.status,
           settingUp,
           done: settingUp ? { ...stepsDone(a), logo: !!a.logoKey, services: services.some((c) => c.services.length) } : undefined,
-          missingBeforeReview: settingUp ? missingForSubmit(a) : [],
+          // Set-up's "address" is the page's web address, not a street address.
+          missingBeforeReview: settingUp ? missingForSubmit(a).map((m) => (m === "your business's address" ? "a web address for its page" : m)) : [],
           reviewNote: a.reviewNote,
           details: { name: a.name, phone: a.phone, ownerFirstName: a.ownerFirstName, ownerLastName: a.ownerLastName, email: a.ownerEmail, emailVerified: !!a.ownerEmailVerifiedAt },
           profile: { address: studio.address, email: studio.email, brandColor: studio.brandColor, showOnAming: settingUp ? undefined : studio.showOnAming },

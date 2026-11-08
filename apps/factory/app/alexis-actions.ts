@@ -7,10 +7,6 @@ import * as alexis from "@repo/lib/assistant/panel/app";
 
 import { staffAppToolbox } from "./alexis-tools";
 
-export async function askAlexis(chatId: string | null, text: string, page: alexis.PageInput, files: string[]) {
-  return alexis.ask(staffAppToolbox, chatId, text, page, files);
-}
-
 export async function confirmAlexis(id: string, path: string) {
   return alexis.confirm(staffAppToolbox, id, path);
 }

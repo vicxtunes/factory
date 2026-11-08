@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { AlexisFullPage } from "@repo/ui/assistant/Alexis";
 import { getClientSession } from "@repo/lib/auth/session";
 
-import { askAlexis, cancelAlexis, confirmAlexis } from "../alexis-actions";
+import { cancelAlexis, confirmAlexis } from "../alexis-actions";
 import { ClientShell } from "../shell";
 
 export const metadata = { title: "Alexis" };
@@ -15,7 +15,7 @@ export default async function AlexisPage() {
   if (!session) redirect("/?signin=1");
   return (
     <ClientShell signedIn name={session.name} avatarUrl={session.avatarUrl}>
-      <AlexisFullPage actions={{ ask: askAlexis, confirm: confirmAlexis, cancel: cancelAlexis }} path="/alexis" />
+      <AlexisFullPage actions={{ confirm: confirmAlexis, cancel: cancelAlexis }} path="/alexis" />
     </ClientShell>
   );
 }

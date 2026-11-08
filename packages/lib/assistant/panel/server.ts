@@ -22,7 +22,9 @@ import {
   COMPANY,
   isWaived,
   kampalaDay,
+  isAppPath,
   MAX_MESSAGE_CHARS,
+  MAX_MESSAGES_PER_10_MIN,
   mayUsePanel,
   PANEL_HISTORY,
   payerForPage,
@@ -342,6 +344,19 @@ export async function chatsOf(person: Person, search = ""): Promise<ChatSummary[
   return rows.map((r) => ({ id: r.id, title: r.title, lastAt: r.last_at }));
 }
 
+/** What this person wrote in the last 10 minutes, everywhere. */
+async function recentMessages(person: Person): Promise<number> {
+  const { count, error } = await createAdminClient()
+    .from("assistant_messages")
+    .select("id", { count: "exact", head: true })
+    .eq("person_type", person.type)
+    .eq("person_id", person.id)
+    .eq("role", "user")
+    .gte("created_at", new Date(Date.now() - 10 * 60_000).toISOString());
+  if (error) throw new Error(error.message);
+  return count ?? 0;
+}
+
 async function ownChat(person: Person, chatId: string): Promise<boolean> {
   const { count, error } = await createAdminClient()
     .from("assistant_chats")
@@ -483,13 +498,16 @@ function usageTool(person: Person, payer: Payer, settings: PanelSettings): Assis
 }
 
 const MAX_CARDS_PER_REPLY = 3;
+/** Added to every change tool's description: what Alexis is told a change tool does. */
+export const PREPARES_ONLY = " This only prepares the change: the person sees it on a card and must tap Confirm.";
+export const PREPARED_REPLY = "Shown to the person as a card with Confirm and Cancel. Nothing has changed yet: ask them to check the card and tap Confirm. Never say it's done.";
 const ACTION_LIFETIME_MS = 15 * 60_000;
 
 /** Each change tool as Alexis sees it: it prepares a card and stops there. */
 function preparingTool(t: ChangeTool, person: Person, chatId: string, prepared: string[], attached: number): AssistantTool {
   return {
     name: t.name,
-    description: `${t.description} This only prepares the change: the person sees it on a card and must tap Confirm.`,
+    description: `${t.description}${PREPARES_ONLY}`,
     inputSchema: t.inputSchema,
     run: (async (input: never) => {
       if (prepared.length >= MAX_CARDS_PER_REPLY) return "Refused: prepare at most 3 changes at a time.";
@@ -521,7 +539,7 @@ function preparingTool(t: ChangeTool, person: Person, chatId: string, prepared: 
           .single(),
       );
       prepared.push(row.id);
-      return "Shown to the person as a card with Confirm and Cancel. Nothing has changed yet: ask them to check the card and tap Confirm. Never say it's done.";
+      return PREPARED_REPLY;
     }) as AssistantTool["run"],
   };
 }
@@ -540,7 +558,7 @@ const guideSchema = z.object({
 });
 
 /** Shows the way step by step: opens each page in turn and points at what to tap. */
-function guideTool(page: { path: string; links: PageLink[] }, ctx: { guide: GuideStep[] | null }): AssistantTool {
+export function guideTool(page: { path: string; links: PageLink[] }, ctx: { guide: GuideStep[] | null }): AssistantTool {
   const known = new Set([page.path, ...page.links.map((l) => l.href)]);
   return readTool({
     name: "show_the_way",
@@ -548,7 +566,7 @@ function guideTool(page: { path: string; links: PageLink[] }, ctx: { guide: Guid
       "Take the person to where something is done, step by step, like a person showing them: each step opens a page and points at the button or link to tap. Use it when they ask where something is or how to get somewhere. Only pages from the list you were given.",
     inputSchema: guideSchema,
     run: async ({ steps }) => {
-      const unknown = steps.find((s) => !known.has(s.href));
+      const unknown = steps.find((s) => !known.has(s.href) || !isAppPath(s.href));
       if (unknown) return `Refused: ${unknown.href} isn't a page they can open. Use one from the list.`;
       ctx.guide = steps.map((s) => ({ href: s.href, tap: s.tap?.trim() || null, say: s.say }));
       return "Shown to the person as a 'Show me' button under your reply. Tell them in one sentence what you'll show them.";
@@ -556,7 +574,8 @@ function guideTool(page: { path: string; links: PageLink[] }, ctx: { guide: Guid
   });
 }
 
-function contextFor(person: Person, page: { path: string; title: string; links: PageLink[] }, payer: Payer, abilities: string): string {
+/** The second system block: who is asking, where, and what Alexis can do for them. Exported for the evaluations. */
+export function contextFor(person: Person, page: { path: string; title: string; links: PageLink[] }, payer: Payer, abilities: string): string {
   const where = page.title ? `"${page.title}" (${page.path})` : page.path;
   const business = payer.type === "studio" || payer.type === "vendor" || payer.type === "agent" ? ` They're working in their ${payer.type} account.` : "";
   const lines = [
@@ -566,6 +585,42 @@ function contextFor(person: Person, page: { path: string; title: string; links: 
   ];
   if (page.links.length) lines.push(`Pages and links they can open from here: ${page.links.map((l) => `${l.label} (${l.href})`).join("; ")}.`);
   return lines.join("\n\n");
+}
+
+/** A tool call in a reply, for the boss's trace: what Alexis asked, what came back, how long it took. */
+export interface TraceStep {
+  tool: string;
+  input: string;
+  output: string;
+  ms: number;
+  ok: boolean;
+}
+
+/** Live progress while Alexis works: a tool starting, and the reply's words as they come (per step of its loop). */
+export interface Listen {
+  onStep?: (tool: string) => void;
+  onText?: (step: number, delta: string) => void;
+}
+
+const cut = (s: string) => (s.length > 1000 ? `${s.slice(0, 1000)}…` : s);
+
+/** The tools, each recording its call in `trace` and telling `onStep` it started. */
+function traced(tools: AssistantTool[], trace: TraceStep[], onStep?: (tool: string) => void): AssistantTool[] {
+  return tools.map((t) => ({
+    ...t,
+    run: (async (input: never) => {
+      onStep?.(t.name);
+      const started = Date.now();
+      try {
+        const output = await t.run(input);
+        trace.push({ tool: t.name, input: cut(JSON.stringify(input) ?? ""), output: cut(output), ms: Date.now() - started, ok: !/^(Refused|Failed)/.test(output) });
+        return output;
+      } catch (err) {
+        trace.push({ tool: t.name, input: cut(JSON.stringify(input) ?? ""), output: `Error: ${err instanceof Error ? err.message : "failed"}`, ms: Date.now() - started, ok: false });
+        throw err;
+      }
+    }) as AssistantTool["run"],
+  }));
 }
 
 export type SendResult =
@@ -584,6 +639,7 @@ export async function send(
   toolbox: Toolbox,
   channel: "app" | "whatsapp" = "app",
   files: string[] = [],
+  listen?: Listen,
 ): Promise<SendResult> {
   const body = text.trim().slice(0, MAX_MESSAGE_CHARS);
   const attached = files.map((f) => f.slice(0, 120)).slice(0, MAX_ATTACHED_FILES);
@@ -593,6 +649,7 @@ export async function send(
   const terms = await currentTerms();
   if (!terms || !(await hasAgreed(person, terms.version))) return { ok: false, error: "Agree to the terms first." };
   if (chatId && !(await ownChat(person, chatId))) return { ok: false, error: "That chat doesn't exist." };
+  if ((await recentMessages(person)) >= MAX_MESSAGES_PER_10_MIN) return { ok: false, error: "That's a lot of messages at once. Wait a minute and try again." };
 
   const payer = await payerOf(person, page.path);
   if (capReached(payer, await chargedThisMonth(payer), settings.monthlyCapUsd)) {
@@ -609,12 +666,17 @@ export async function send(
 
   const prepared: string[] = [];
   const ctx: { guide: GuideStep[] | null } = { guide: null };
-  const tools = [
-    ...toolbox.read,
-    usageTool(person, payer, settings),
-    ...toolbox.change.map((t) => preparingTool(t, person, chat, prepared, attached.length)),
-    ...(channel === "app" ? [guideTool(page, ctx)] : []),
-  ];
+  const trace: TraceStep[] = [];
+  const tools = traced(
+    [
+      ...toolbox.read,
+      usageTool(person, payer, settings),
+      ...toolbox.change.map((t) => preparingTool(t, person, chat, prepared, attached.length)),
+      ...(channel === "app" ? [guideTool(page, ctx)] : []),
+    ],
+    trace,
+    listen?.onStep,
+  );
 
   let totals: TokenUsage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
   let reply: string | null = null;
@@ -629,6 +691,7 @@ export async function send(
       onUsage: (u) => {
         totals = u;
       },
+      onText: listen?.onText,
     });
     reply = answered.refused ? null : answered.text;
     if (!reply) failure = answered.refused ? "The AI declined to answer." : "The AI gave no reply.";
@@ -648,6 +711,7 @@ export async function send(
       cache_read_tokens: totals.cacheRead,
       cache_write_tokens: totals.cacheWrite,
       cost_usd: cost,
+      trace,
       person_type: person.type,
       person_id: person.id,
       payer_type: payer.type,
@@ -834,4 +898,39 @@ export async function bossById(userId: string): Promise<Person | null> {
   const row = must(await createAdminClient().from("profiles").select("role, full_name").eq("id", userId).maybeSingle()) as { role: string; full_name: string | null } | null;
   if (row?.role !== "boss") return null;
   return { type: "staff", id: userId, name: row.full_name || "Boss", role: "boss", email: null, phone: null, alwaysInTest: true };
+}
+
+export interface PanelRun {
+  id: string;
+  who: string;
+  reply: string | null;
+  error: string | null;
+  costUsd: number;
+  at: string;
+  trace: TraceStep[];
+}
+
+/** The latest Alexis replies (not the client chats'), with each one's steps: for finding out why it did what it did. */
+export async function recentPanelRuns(limit: number): Promise<PanelRun[]> {
+  const db = createAdminClient();
+  const rows = must(
+    await db
+      .from("assistant_runs")
+      .select("id, person_type, person_id, reply, error, cost_usd, created_at, trace")
+      .not("person_type", "is", null)
+      .not("payer_type", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(limit),
+  ) as { id: string; person_type: PersonType; person_id: string; reply: string | null; error: string | null; cost_usd: number; created_at: string; trace: TraceStep[] | null }[];
+  const ids = (type: PersonType) => [...new Set(rows.filter((r) => r.person_type === type).map((r) => r.person_id))];
+  const [staff, clients, designers, workers] = await Promise.all([
+    ids("staff").length ? db.from("profiles").select("id, full_name").in("id", ids("staff")) : { data: [], error: null },
+    ids("client").length ? db.from("clients").select("id, name").in("id", ids("client")) : { data: [], error: null },
+    ids("designer").length ? db.from("designers").select("id, name").in("id", ids("designer")) : { data: [], error: null },
+    ids("worker").length ? db.from("workers").select("id, name").in("id", ids("worker")) : { data: [], error: null },
+  ]);
+  const names = new Map<string, string>();
+  for (const r of (must(staff) ?? []) as { id: string; full_name: string | null }[]) names.set(r.id, r.full_name ?? "Staff");
+  for (const res of [clients, designers, workers]) for (const r of (must(res) ?? []) as { id: string; name: string }[]) names.set(r.id, r.name);
+  return rows.map((r) => ({ id: r.id, who: names.get(r.person_id) ?? r.person_type, reply: r.reply, error: r.error, costUsd: Number(r.cost_usd), at: r.created_at, trace: r.trace ?? [] }));
 }

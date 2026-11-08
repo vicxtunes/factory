@@ -20,6 +20,16 @@ export const COMPANY: Payer = { type: "company", id: null };
 /** How many earlier messages Alexis reads with a new one. */
 export const PANEL_HISTORY = 30;
 export const MAX_MESSAGE_CHARS = 2000;
+/** More than this from one person in 10 minutes is a script or a stuck key, not a person: it waits. */
+export const MAX_MESSAGES_PER_10_MIN = 30;
+
+/**
+ * An address inside this app: one leading "/", then no second "/" or "\\" (browsers read "/\\x" and "//x" as
+ * another site), no spaces or control characters. Where Alexis may send a person.
+ */
+export function isAppPath(href: string): boolean {
+  return /^\/(?![\/\\])[^\s\\\u0000-\u001f\u007f]*$/.test(href) && href.length <= 300;
+}
 
 /** Charge for a reply: its real cost × the multiplier, in US$. */
 export function chargeFor(costUsd: number, multiplier: number): number {

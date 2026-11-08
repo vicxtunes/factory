@@ -20,7 +20,6 @@ import { UploadThumbs, uploadKey, type UploadThumb } from "../UploadThumbs";
 
 /** Each app's own server actions (apps/*\/app/alexis-actions.ts). */
 export interface AlexisActions {
-  ask: (chatId: string | null, text: string, page: { path: string; title: string; links: PageLink[] }, files: string[]) => Promise<SendResult>;
   confirm: (id: string, path: string) => Promise<DecideResult>;
   cancel: (id: string) => Promise<DecideResult>;
 }
@@ -64,12 +63,48 @@ function pageLinks(): PageLink[] {
 
 // ---------- The chat's state ----------
 
+/** While Alexis works on a reply: what it's doing, and its words so far (each step of its loop starts afresh). */
+export interface Draft {
+  doing: string | null;
+  step: number;
+  text: string;
+}
+
+type StreamLine = { type: "step"; words: string } | { type: "text"; step: number; delta: string } | { type: "done"; result: SendResult };
+
+/** One message to Alexis through this app's /api/alexis, telling `onLine` each line of the stream. */
+async function ask(body: unknown, onLine: (line: Exclude<StreamLine, { type: "done" }>) => void): Promise<SendResult> {
+  const res = await fetch("/api/alexis", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  if (!res.ok || !res.body) {
+    const failed = (await res.json().catch(() => null)) as SendResult | null;
+    return failed && !failed.ok ? failed : { ok: false, error: OFFLINE };
+  }
+  const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+  let buffered = "";
+  let result: SendResult | null = null;
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffered += value;
+    const lines = buffered.split("\n");
+    buffered = lines.pop() ?? "";
+    for (const raw of lines) {
+      if (!raw.trim()) continue;
+      const line = JSON.parse(raw) as StreamLine;
+      if (line.type === "done") result = line.result;
+      else onLine(line);
+    }
+  }
+  return result ?? { ok: false, error: OFFLINE };
+}
+
 /** Alexis for this person: their chats, the open one, sending, deciding cards, uploading confirmed files. */
 export function useAlexis(actions: AlexisActions, initial: PanelState | null = null) {
   const path = usePathname();
   const router = useRouter();
   const [state, setState] = useState<PanelState | null>(initial);
   const [busy, setBusy] = useState(false);
+  const [draft, setDraft] = useState<Draft | null>(null);
   const [error, setError] = useState<string | null>(null);
   // Files waiting to upload once their card is confirmed, by card id. They stay on this device.
   const [held, setHeld] = useState<Record<string, File[]>>({});
@@ -112,9 +147,18 @@ export function useAlexis(actions: AlexisActions, initial: PanelState | null = n
     setError(null);
     const temp: PanelMessage = { id: `mine-${Date.now()}`, role: "user", body: text.trim() || "(files attached)", createdAt: new Date().toISOString(), actions: [], guide: null, files: files.map((f) => f.name), choices: [], images: [], widgets: [] };
     patch({ messages: [...ready.messages, temp] });
-    const res = await actions
-      .ask(ready.chatId, text, { path, title: document.title, links: pageLinks() }, files.map((f) => f.name))
-      .catch((): SendResult => ({ ok: false, error: OFFLINE }));
+    setDraft({ doing: null, step: 0, text: "" });
+    const res = await ask(
+      { chatId: ready.chatId, text, page: { path, title: document.title, links: pageLinks() }, files: files.map((f) => f.name) },
+      (line) =>
+        setDraft((d) => {
+          const now = d ?? { doing: null, step: 0, text: "" };
+          if (line.type === "step") return { ...now, doing: line.words };
+          // A later step of its loop starts its words afresh: what it said before a tool call isn't the reply.
+          return line.step === now.step ? { ...now, doing: null, text: now.text + line.delta } : { doing: null, step: line.step, text: line.delta };
+        }),
+    ).catch((): SendResult => ({ ok: false, error: OFFLINE }));
+    setDraft(null);
     if (res.ok) {
       // Any card may end up uploading them: an order learns its item only once it's placed.
       const uploads = files.length ? res.reply.actions : [];
@@ -148,7 +192,7 @@ export function useAlexis(actions: AlexisActions, initial: PanelState | null = n
     if (yes && res.card.status === "done" && !res.card.uploadItemId) router.refresh();
   }
 
-  return { state, ready, busy, error, load, agree, startNew, open, search, send, decide, held, path };
+  return { state, ready, busy, draft, error, load, agree, startNew, open, search, send, decide, held, path };
 }
 
 export type Alexis = ReturnType<typeof useAlexis>;
@@ -251,7 +295,7 @@ export function Messages({ alexis, onGuide }: { alexis: Alexis; onGuide: (steps:
   const lastReplyId = messages.findLast((m) => m.role === "assistant")?.id;
   useEffect(() => {
     end.current?.scrollIntoView({ block: "end" });
-  }, [messages.length, alexis.busy]);
+  }, [messages.length, alexis.busy, alexis.draft?.text.length]);
   return (
     <div className="space-y-3">
       {messages.map((m) => (
@@ -306,9 +350,15 @@ export function Messages({ alexis, onGuide }: { alexis: Alexis; onGuide: (steps:
         </div>
       ))}
       {alexis.busy ? (
-        <p className="inline-flex items-center gap-2 text-xs text-muted">
-          <Spinner className="h-3 w-3" /> Alexis is typing
-        </p>
+        <div className="flex gap-2">
+          <AlexisMark size="sm" />
+          <div className="min-w-0 max-w-[85%]">
+            {alexis.draft?.text ? <p className="rounded-2xl border border-border bg-surface px-3 py-2 text-sm whitespace-pre-wrap">{alexis.draft.text}</p> : null}
+            <p className="mt-1 inline-flex items-center gap-2 text-xs text-muted">
+              <Spinner className="h-3 w-3" /> {alexis.draft?.doing ? `${alexis.draft.doing}…` : alexis.draft?.text ? "Writing…" : "Alexis is thinking…"}
+            </p>
+          </div>
+        </div>
       ) : null}
       <div ref={end} />
     </div>
@@ -608,6 +658,11 @@ export function GuideBar() {
 
   useEffect(() => {
     if (!step) return;
+    // Only this app's own pages, whatever the guide says (packages/lib/assistant/panel/core.ts isAppPath).
+    if (new URL(step.href, window.location.origin).origin !== window.location.origin || !/^\/(?![\/\\])/.test(step.href)) {
+      stopGuide();
+      return;
+    }
     if (path !== step.href.split(/[?#]/)[0]) {
       router.push(step.href);
       return;
