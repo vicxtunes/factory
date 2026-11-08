@@ -206,7 +206,7 @@ async function vendorTools(person: Person): Promise<{ read: AssistantTool[]; cha
  * has (its studio, agency, vendor account), so Alexis never says "not from here". Only businesses it already
  * has: studioOfCaller would open a studio for an account without one.
  */
-export async function clientAppToolbox(person: Person, _page: string): Promise<Toolbox> {
+export async function clientAppToolbox(person: Person): Promise<Toolbox> {
   if (person.type !== "client") return { read: [], change: [], abilities: "Nothing in this app." };
   const chat = fromChat(person);
   const widgets = { logo: false };
