@@ -9,11 +9,12 @@ import { z } from "zod";
 import { findModel } from "../../core/rules";
 import { askModel } from "../../server/providers";
 import { assistantTools, type AssistantTool, type ToolContext } from "../../server/tools";
-import { COMPANY, type Payer } from "../core";
+import { COMPANY, plainText, type Payer } from "../core";
 import { PANEL_PROMPT } from "../prompt";
-import { contextFor, guideTool, PREPARED_REPLY, PREPARES_ONLY, type Person } from "../server";
+import { memoryTools } from "../memory";
+import { contextFor, guideTool, optionsTool, PREPARED_REPLY, PREPARES_ONLY, type Person } from "../server";
 import type { ChangeTool, PageLink, Toolbox } from "../toolbox";
-import { clientOrderTools, walletTools } from "../tools/client-orders";
+import { clientOrderTools, explainPriceTool, walletTools } from "../tools/client-orders";
 import { addFilesToOrderTool } from "../tools/order-files";
 import { studioSetupTools } from "../tools/studio-setup";
 
@@ -79,6 +80,35 @@ const crystalCatalog = [
   },
 ];
 
+const bookCatalog = [
+  {
+    id: "cat-books",
+    name: "Photo Books",
+    attributes: [
+      { name: "Size", required: true, options: ["12x12", "10x10", "8x8", "6x6"] },
+      { name: "NOS (Number of Sheets)", required: true, options: null },
+      { name: "Lamination", required: true, options: ["Matt", "Glossy"] },
+      { name: "Cover Type", required: true, options: ["Vintage (Cover with Photo)", "UV Print"] },
+    ],
+    products: [{ id: "p-book", name: "Photo Book", unit: "book", variants: [], price: null }],
+  },
+];
+
+/** The card from the Luganda test (2026-11-08), as Alexis reads it after the client cancelled it. */
+const cancelledBookCard =
+  '[Card you prepared (place_order): Place your order: UGX 450,000 | 1 × Photo Book: UGX 450,000; Total: UGX 450,000; Needed by 2026-11-16 | cancelled | its input: {"items":[{"product_id":"p-book","variant_id":"","qty":1,"attributes":{"Size":"10x10","NOS (Number of Sheets)":"25","Lamination":"Glossy","Cover Type":"Vintage (Cover with Photo)","Packaging":"Standard","Packaging Colour":"Black"},"notes":"","photo_link":"https://drive.google.com/drive/folders/1paifJ7pDv7r7B-5yfDrXtXl3oowbLuJc","uses_attached_files":false}],"delivery_date":"2026-11-16","express":false}]';
+
+const bookPrice = {
+  forOneBook: {
+    parts: ["Sheets 10x10 glossy: 25 × UGX 12,000 = UGX 300,000", "Vintage photo cover 10x10: 1 × UGX 90,000 = UGX 90,000"],
+    addOns: ["Packaging: Standard black leather box: UGX 60,000"],
+    total: "UGX 450,000",
+  },
+  quantity: 1,
+  orderLine: "1 × Photo Book: UGX 450,000",
+  partsWithNoPriceYet: [],
+};
+
 const myOrders = [
   {
     id: "o-1",
@@ -131,10 +161,10 @@ const samples = [
 
 function clientToolbox(person: Person): Toolbox {
   const ctx: ToolContext = { conversationId: "", client: { id: person.id, name: person.name, email: person.email, phone: person.phone }, actions: [], choices: [], images: [] };
-  const fromChat = ["get_catalog", "get_prices", "get_typical_times", "get_my_orders", "get_my_account", "get_my_receipts", "get_pay_options", "offer_choices", "show_product_photos"];
+  const fromChat = ["get_catalog", "get_prices", "get_typical_times", "get_my_orders", "get_my_account", "get_my_receipts", "get_pay_options", "show_product_photos"];
   const handToStaff: AssistantTool = { name: "hand_to_staff", description: "Tell the team this client needs a person (a question you can't answer, a complaint, a large or unusual order). Keep helping with anything else.", inputSchema: z.object({ reason: z.string() }), run: (async () => "") as AssistantTool["run"] };
   return {
-    read: [...assistantTools(ctx).filter((t) => fromChat.includes(t.name)), handToStaff],
+    read: [...assistantTools(ctx).filter((t) => fromChat.includes(t.name)), explainPriceTool(), handToStaff],
     change: [...clientOrderTools(person), ...walletTools(person), addFilesToOrderTool(person.id)],
     abilities: "Everything the chat assistant does for them: take and place Aming orders, invoice them, send MTN or Airtel payment prompts, add photos to an order, look up their orders, invoices, receipts, wallet and prices, show product photos, and call the team. Show them the way around the app.",
   };
@@ -212,6 +242,66 @@ const SCENARIOS: Scenario[] = [
     fixtures: { get_catalog: crystalCatalog, offer_choices: "The buttons will show under your reply." },
     messages: [{ role: "user", content: "I need crystal boards" }],
     checks: [called("get_catalog"), asksSomething, notCalled("place_order", "show_the_way"), doesntTeach],
+  },
+  {
+    name: "Luganda: after cancelling, 'go ahead with the order' prepares the same card, not a new interview (2026-11-08)",
+    person: sarah,
+    payer: { type: "client", id: sarah.id },
+    page: { path: "/", title: "Dashboard", links: clientLinks },
+    tools: () => clientToolbox(sarah),
+    fixtures: { get_catalog: bookCatalog },
+    messages: [
+      { role: "user", content: "Njagala kola oda ya Photo Book" },
+      { role: "assistant", content: `Webale! Ntegeesetegeese oda yo. Kebera ebiri ku kaadi onyige Confirm.\n${cancelledBookCard}` },
+      { role: "user", content: "Kale kukole oda tofayo" },
+    ],
+    checks: [
+      called("place_order"),
+      (o) => {
+        const order = o.calls.find((c) => c.name === "place_order")?.input as { items?: { attributes?: Record<string, string> }[] } | undefined;
+        const a = order?.items?.[0]?.attributes ?? {};
+        return a.Size === "10x10" && a.Lamination === "Glossy" ? null : `didn't keep the choices: ${JSON.stringify(a)}`;
+      },
+      neverSays(/sayizi ki|which size/i, "asks for the size again"),
+    ],
+  },
+  {
+    name: "Luganda: 'how did the price come about?' is explained part by part (2026-11-08)",
+    person: sarah,
+    payer: { type: "client", id: sarah.id },
+    page: { path: "/", title: "Dashboard", links: clientLinks },
+    tools: () => clientToolbox(sarah),
+    fixtures: { get_catalog: bookCatalog, explain_price: bookPrice },
+    messages: [
+      { role: "user", content: "Njagala kola oda ya Photo Book" },
+      { role: "assistant", content: `Ntegeesetegeese oda yo. Kebera ebiri ku kaadi onyige Confirm.\n${cancelledBookCard.replace("| cancelled |", "| pending |")}` },
+      { role: "user", content: "Eeeeee sente ezo zona zaki ntemela temela mu kulabye" },
+    ],
+    checks: [called("explain_price"), notCalled("hand_to_staff"), says(/300,?000|12,?000/, "give the sheets' part of the price")],
+  },
+  {
+    name: "Luganda: after Confirm it follows up in Luganda, not English",
+    person: sarah,
+    payer: { type: "client", id: sarah.id },
+    page: { path: "/", title: "Dashboard", links: clientLinks },
+    tools: () => clientToolbox(sarah),
+    fixtures: {},
+    messages: [
+      { role: "user", content: "Njagala kola oda ya Photo Book ya 10x10" },
+      { role: "assistant", content: `Ntegeesetegeese oda yo. Kebera ebiri ku kaadi onyige Confirm.\n${cancelledBookCard.replace("| cancelled |", "| pending |")}` },
+      { role: "user", content: '[They tapped Confirm on your card "Place your order: UGX 450,000". It worked: Order AMG-2001 is confirmed. Total UGX 450,000. Invoice: https://www.amingspace.com/invoice/xyz Tell them in a sentence or two, in the language of this chat, and carry on with what\'s next.]' },
+    ],
+    checks: [neverSays(/^(done|it worked|your order)/i, "starts in English"), neverSays(/\b(your order is|has been confirmed|thank you)\b/i, "answers in English"), says(/AMG-2001/, "give the order number")],
+  },
+  {
+    name: "It remembers a lasting preference",
+    person: sarah,
+    payer: { type: "client", id: sarah.id },
+    page: { path: "/", title: "Dashboard", links: clientLinks },
+    tools: () => clientToolbox(sarah),
+    fixtures: {},
+    messages: [{ role: "user", content: "Just so you know, I always want my photo books glossy, with black packaging." }],
+    checks: [called("remember"), (o) => (o.calls.some((c) => c.name === "remember" && /glossy/i.test(String(c.input.fact))) ? null : "didn't keep the glossy preference")],
   },
   {
     name: "Where is my order: it looks it up",
@@ -360,7 +450,7 @@ const SCENARIOS: Scenario[] = [
 // ---------- Running ----------
 
 /** Each tool keeps its real name, description and input; its work is a fixture, and the call is recorded. */
-function rigged(toolbox: Toolbox, page: Scenario["page"], fixtures: Record<string, unknown>, calls: Call[]): AssistantTool[] {
+function rigged(toolbox: Toolbox, person: Person, page: Scenario["page"], fixtures: Record<string, unknown>, calls: Call[]): AssistantTool[] {
   const record = (name: string, input: unknown) => calls.push({ name, input: (input ?? {}) as Record<string, unknown> });
   const read = toolbox.read.map((t): AssistantTool => ({
     ...t,
@@ -381,11 +471,16 @@ function rigged(toolbox: Toolbox, page: Scenario["page"], fixtures: Record<strin
   }));
   const guide = guideTool(page, { guide: null });
   const usage: AssistantTool = { name: "get_my_usage", description: "The person's Alexis usage: today, this month, the monthly limit, and whether it's free for now.", inputSchema: z.object({}), run: (async () => JSON.stringify({ month: "UGX 120", free: true })) as AssistantTool["run"] };
+  const options = optionsTool({ ask: null });
+  // The real remember/forget, recording instead of keeping anything.
+  const memory = memoryTools(person).map((t): AssistantTool => ({ ...t, run: (async (input: unknown) => (record(t.name, input), "Kept.")) as AssistantTool["run"] }));
   return [
     ...read,
     usage,
     ...change,
+    ...memory,
     { ...guide, run: (async (input: never) => (record(guide.name, input), guide.run(input))) as AssistantTool["run"] },
+    { ...options, run: (async (input: never) => (record(options.name, input), options.run(input))) as AssistantTool["run"] },
   ];
 }
 
@@ -398,14 +493,14 @@ async function runOne(s: Scenario, modelId: string, streamed: boolean): Promise<
     model,
     system: PANEL_PROMPT,
     context: contextFor(s.person, s.page, s.payer, toolbox.abilities),
-    tools: rigged(toolbox, s.page, s.fixtures, calls),
+    tools: rigged(toolbox, s.person, s.page, s.fixtures, calls),
     messages: s.messages,
     onUsage: () => {},
     // Both ways, as Alexis runs: streamed in the app's panel, not streamed in the client chat.
     onText: streamed ? () => {} : undefined,
     everyStep: true,
   });
-  const outcome = { calls, reply: answer.text ?? "" };
+  const outcome = { calls, reply: plainText(answer.text ?? "") };
   const sentences = outcome.reply.split(/(?<=[.?!])\s+/).map((x) => x.trim().toLowerCase()).filter((x) => x.length > 12);
   const repeated = sentences.find((x, i) => sentences.indexOf(x) !== i);
   const problems = [

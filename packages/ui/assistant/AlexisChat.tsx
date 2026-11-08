@@ -5,8 +5,8 @@ import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } fro
 import { createPortal } from "react-dom";
 
 import { takeLines } from "@repo/lib/assistant/panel/lines";
-import { agreeToAlexisTerms, openAlexis, openAlexisChat, searchAlexisChats } from "@repo/lib/assistant/panel/actions";
-import type { ActionCard, ChatSummary, DecideResult, PanelMessage, PanelState, SendResult, UsageView } from "@repo/lib/assistant/panel/server";
+import { agreeToAlexisTerms, forgetAlexisMemory, openAlexis, openAlexisChat, searchAlexisChats } from "@repo/lib/assistant/panel/actions";
+import type { ActionCard, AskChoice, ChatSummary, DecideResult, PanelMessage, PanelState, SendResult, UsageView } from "@repo/lib/assistant/panel/server";
 import type { GuideStep, PageLink } from "@repo/lib/assistant/panel/toolbox";
 import { uploadFileToStorage } from "@repo/lib/storage/upload-client";
 
@@ -147,7 +147,7 @@ export function useAlexis(actions: AlexisActions, initial: PanelState | null = n
     if (!ready || busy || (!text.trim() && !files.length)) return;
     setBusy(true);
     setError(null);
-    const temp: PanelMessage = { id: `mine-${Date.now()}`, role: "user", body: text.trim() || "(files attached)", createdAt: new Date().toISOString(), actions: [], guide: null, files: files.map((f) => f.name), choices: [], images: [], widgets: [] };
+    const temp: PanelMessage = { id: `mine-${Date.now()}`, role: "user", body: text.trim() || "(files attached)", createdAt: new Date().toISOString(), actions: [], guide: null, files: files.map((f) => f.name), ask: null, choices: [], images: [], widgets: [] };
     patch({ messages: [...ready.messages, temp] });
     setDraft({ doing: null, step: 0, text: "" });
     const res = await ask(
@@ -171,7 +171,7 @@ export function useAlexis(actions: AlexisActions, initial: PanelState | null = n
               ...s,
               chatId: res.chat.id,
               chats: [res.chat, ...s.chats.filter((c) => c.id !== res.chat.id)],
-              messages: [...s.messages.filter((m) => m.id !== temp.id), res.mine, res.reply],
+              messages: [...s.messages.filter((m) => m.id !== temp.id), ...(res.mine ? [res.mine] : []), res.reply],
               usage: res.usage,
             }
           : s,
@@ -188,13 +188,18 @@ export function useAlexis(actions: AlexisActions, initial: PanelState | null = n
     if (!res.ok) return setError(res.error);
     setState((s) =>
       s?.kind === "ready"
-        ? { ...s, messages: [...s.messages.map((m) => ({ ...m, actions: m.actions.map((a) => (a.id === card.id ? res.card : a)) })), res.note] }
+        ? { ...s, messages: [...s.messages.map((m) => ({ ...m, actions: m.actions.map((a) => (a.id === card.id ? res.card : a)) })), ...(res.note ? [res.note] : [])] }
         : s,
     );
     if (yes && res.card.status === "done" && !res.card.uploadItemId) router.refresh();
   }
 
-  return { state, ready, busy, draft, error, load, agree, startNew, open, search, send, decide, held, path };
+  async function forgetMemory(id: string) {
+    if (await forgetAlexisMemory(id).catch(() => false)) patch({ memories: (ready?.memories ?? []).filter((m) => m.id !== id) });
+    else setError("That couldn't be deleted. Try again.");
+  }
+
+  return { state, ready, busy, draft, error, load, forgetMemory, agree, startNew, open, search, send, decide, held, path };
 }
 
 export type Alexis = ReturnType<typeof useAlexis>;
@@ -282,7 +287,7 @@ function Card({ card, files, onDecide }: { card: ActionCard; files: File[] | und
       ) : (
         <p className={`mt-2 text-xs font-medium ${card.status === "done" ? "text-success-600" : card.status === "failed" ? "text-error-600" : "text-muted"}`}>
           {card.expired ? "Expired: ask Alexis again" : STATUS_WORDS[card.status]}
-          {card.result && card.status !== "done" ? `: ${card.result}` : ""}
+          {card.result ? `: ${card.result}` : ""}
         </p>
       )}
       {card.status === "done" && card.uploadItemId ? <CardUpload itemId={card.uploadItemId} files={files} /> : null}
@@ -313,8 +318,6 @@ function ReplyPhotos({ images }: { images: { url: string; name: string }[] }) {
 export function Messages({ alexis, onGuide }: { alexis: Alexis; onGuide: (steps: GuideStep[]) => void }) {
   const end = useRef<HTMLDivElement>(null);
   const messages = alexis.ready?.messages ?? [];
-  // Tappable answers belong to the latest reply only.
-  const lastReplyId = messages.findLast((m) => m.role === "assistant")?.id;
   useEffect(() => {
     end.current?.scrollIntoView({ block: "end" });
   }, [messages.length, alexis.busy, alexis.draft?.text.length]);
@@ -331,21 +334,6 @@ export function Messages({ alexis, onGuide }: { alexis: Alexis; onGuide: (steps:
               </p>
             ) : null}
             {m.images.length ? <ReplyPhotos images={m.images} /> : null}
-            {m.choices.length && m.id === lastReplyId ? (
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {m.choices.map((c) => (
-                  <button
-                    key={c}
-                    type="button"
-                    disabled={alexis.busy}
-                    onClick={() => void alexis.send(c, [])}
-                    className="min-h-9 rounded-full border border-brand-300 bg-brand-50 px-3 text-xs font-medium text-brand-700 hover:bg-brand-100 disabled:opacity-50 dark:border-brand-500/40 dark:bg-brand-500/10 dark:text-brand-300"
-                  >
-                    {c}
-                  </button>
-                ))}
-              </div>
-            ) : null}
             {m.widgets.includes("logo") ? (
               <div className="mt-2 rounded-xl border border-border bg-surface p-3">
                 <LogoUploader logoUrl={null} />
@@ -398,12 +386,73 @@ function SendIcon({ className }: { className?: string }) {
 
 const MAX_FILES = 30;
 
+/** The latest reply's question with options, while it's still the last word: older replies' plain choices count too. */
+function openQuestion(messages: PanelMessage[]): AskChoice | null {
+  const last = messages.at(-1);
+  if (last?.role !== "assistant") return null;
+  if (last.ask) return last.ask;
+  return last.choices.length ? { question: "", options: last.choices.map((c) => ({ label: c, hint: null })), multiple: false } : null;
+}
+
+/**
+ * Options Alexis offers, in a panel above the message box: tap one, or tick several and tap Done.
+ * The person can still type their own answer below.
+ */
+function OptionsPanel({ ask, busy, onAnswer }: { ask: AskChoice; busy: boolean; onAnswer: (text: string) => void }) {
+  const [picked, setPicked] = useState<string[]>([]);
+  return (
+    <div role="group" aria-label={ask.question || "Choose an answer"} className="mb-2 overflow-hidden rounded-2xl border border-border bg-surface shadow-theme-sm">
+      {ask.question ? <p className="border-b border-border px-3 py-2.5 text-sm font-medium">{ask.question}</p> : null}
+      <ul className="max-h-64 divide-y divide-border overflow-y-auto overscroll-contain">
+        {ask.options.map((o, i) => {
+          const on = picked.includes(o.label);
+          return (
+            <li key={o.label}>
+              <button
+                type="button"
+                disabled={busy}
+                aria-pressed={ask.multiple ? on : undefined}
+                onClick={() => (ask.multiple ? setPicked((p) => (on ? p.filter((x) => x !== o.label) : [...p, o.label])) : onAnswer(o.label))}
+                className={`flex min-h-12 w-full items-center gap-3 px-3 py-2 text-left text-sm hover:bg-gray-50 disabled:opacity-50 dark:hover:bg-white/5 ${on ? "bg-brand-50 dark:bg-brand-500/10" : ""}`}
+              >
+                {ask.multiple ? (
+                  <span aria-hidden="true" className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${on ? "border-brand-500 bg-brand-500 text-white" : "border-gray-300 dark:border-gray-600"}`}>
+                    {on ? "✓" : ""}
+                  </span>
+                ) : (
+                  <span aria-hidden="true" className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-gray-100 text-xs font-semibold text-gray-600 dark:bg-white/10 dark:text-gray-300">
+                    {i + 1}
+                  </span>
+                )}
+                <span className="min-w-0 flex-1">
+                  <span className="block font-medium">{o.label}</span>
+                  {o.hint ? <span className="block text-xs text-muted">{o.hint}</span> : null}
+                </span>
+                {ask.multiple ? null : <span aria-hidden="true" className="text-muted">›</span>}
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+      {ask.multiple ? (
+        <div className="flex items-center justify-between gap-2 border-t border-border px-3 py-2">
+          <span className="text-xs text-muted">{picked.length ? `${picked.length} chosen` : "Choose one or more"}</span>
+          <Button size="sm" disabled={busy || !picked.length} onClick={() => onAnswer(picked.join(", "))}>
+            Done
+          </Button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 /** The box people write in: Attach (when they may add files to an order), and Send. `big`: the welcome screen's. */
 export function Composer({ alexis, big = false, placeholder = "Ask Alexis" }: { alexis: Alexis; big?: boolean; placeholder?: string }) {
   const [text, setText] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const picker = useRef<HTMLInputElement>(null);
   const canAttach = alexis.ready?.canAttach ?? false;
+  const question = alexis.busy ? null : openQuestion(alexis.ready?.messages ?? []);
 
   function submit() {
     if (alexis.busy || (!text.trim() && !files.length)) return;
@@ -413,6 +462,8 @@ export function Composer({ alexis, big = false, placeholder = "Ask Alexis" }: { 
   }
 
   return (
+    <>
+    {question ? <OptionsPanel key={alexis.ready?.messages.at(-1)?.id} ask={question} busy={alexis.busy} onAnswer={(answer) => void alexis.send(answer, [])} /> : null}
     <form
       className={`rounded-2xl border border-border bg-surface shadow-theme-xs focus-within:border-brand-300 focus-within:ring-3 focus-within:ring-brand-500/10 ${big ? "p-3" : "p-2"}`}
       onSubmit={(e) => {
@@ -490,6 +541,7 @@ export function Composer({ alexis, big = false, placeholder = "Ask Alexis" }: { 
         </button>
       </div>
     </form>
+    </>
   );
 }
 
@@ -725,6 +777,36 @@ export function Usage({ usage }: { usage: UsageView }) {
         )}
       </section>
     </div>
+  );
+}
+
+const MEMORY_KINDS: Record<string, string> = { preference: "Your preference", business: "Your business", unfinished_order: "Unfinished order" };
+
+/** What Alexis remembers about the person across chats, each with Delete. */
+export function Memories({ alexis }: { alexis: Alexis }) {
+  const memories = alexis.ready?.memories ?? [];
+  return (
+    <section className="text-sm">
+      <h3 className="mb-1 text-xs font-semibold tracking-wide text-muted uppercase">What Alexis remembers</h3>
+      <p className="mb-2 text-xs text-muted">Kept across your chats to help you faster. Delete anything you don&apos;t want kept.</p>
+      {memories.length ? (
+        <ul className="divide-y divide-border rounded-xl border border-border">
+          {memories.map((m) => (
+            <li key={m.id} className="flex items-start gap-3 px-3 py-2">
+              <span className="min-w-0 flex-1">
+                <span className="block text-xs text-muted">{MEMORY_KINDS[m.kind] ?? m.kind}</span>
+                <span className="block break-words">{m.fact.replace(/\s*Its input: .*$/, "")}</span>
+              </span>
+              <Button size="sm" variant="ghost" onClick={() => void alexis.forgetMemory(m.id)} aria-label={`Delete: ${m.fact.slice(0, 40)}`}>
+                Delete
+              </Button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-muted">Nothing yet.</p>
+      )}
+    </section>
   );
 }
 

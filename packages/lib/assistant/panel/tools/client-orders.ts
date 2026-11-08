@@ -17,7 +17,9 @@ import { payOrdersFromWallet, payOrdersWithMobileMoney, topUpWithMobileMoney } f
 import { ASSISTANT_NAME, canAutoApprove, MAX_PROMPTS_PER_DAY } from "../../core/rules";
 import { ASSISTANT_ACTOR, checkOrderItems, tellManagers } from "../../server/tools";
 import type { Person } from "../server";
-import { changeTool, type ChangeTool } from "../toolbox";
+import { changeTool, readTool, type ChangeTool } from "../toolbox";
+import type { AssistantTool } from "../../server/tools";
+import { explainListPrice } from "@repo/lib/production/pricing";
 
 // A client's orders through Alexis, as the chat assistant takes them
 // (server/tools.ts): place an order, invoice it, ask for payment. Each is a
@@ -331,4 +333,39 @@ export function walletTools(person: Person): ChangeTool[] {
   });
 
   return [topUp, payAll];
+}
+
+/**
+ * "How did you get that price?": a photo book priced from its recipe, part by part at selling prices (never a
+ * cost or the margin); anything else, its catalog price and any running offer, from the chat's own checks.
+ */
+export function explainPriceTool(): AssistantTool {
+  return readTool({
+    name: "explain_price",
+    description:
+      "Explain how a product's price is made up for the client's choices: a photo book part by part (sheets × price per sheet, cover, lamination, packaging), anything else its price and any offer. Use the same product, variant and attributes as the order.",
+    inputSchema: z.object({
+      product_id: z.string(),
+      variant_id: z.string().describe("Empty when the product has no variants."),
+      qty: z.number().int().positive(),
+      attributes: z.record(z.string(), z.string()).describe("Attribute name to chosen value."),
+    }),
+    run: async ({ product_id, variant_id, qty, attributes }) => {
+      const checked = await checkOrderItems([{ product_id, variant_id, qty, attributes, notes: "" }]);
+      if (!checked.ok) return checked.refusal;
+      const book = await explainListPrice(product_id, variant_id || null, attributes);
+      if (!book) return { line: checked.lines[0], priceToBeConfirmed: checked.unknown, note: "Its catalog price (less any running offer) × the quantity." };
+      return {
+        forOneBook: {
+          parts: book.parts.map((p) => `${p.name}: ${p.qty} × ${formatMoney(p.each)} = ${formatMoney(p.total)}`),
+          addOns: book.addOns.map((a) => `${a.name}: ${formatMoney(a.price)}`),
+          total: formatMoney(book.price),
+        },
+        quantity: qty,
+        orderLine: checked.lines[0],
+        partsWithNoPriceYet: book.notSet,
+        note: "Selling prices only. Never guess or mention costs or margins. A running offer may make the order line lower than the book's total.",
+      };
+    },
+  });
 }
