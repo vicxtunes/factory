@@ -2,6 +2,7 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 import { takeLines } from "@repo/lib/assistant/panel/lines";
 import { agreeToAlexisTerms, openAlexis, openAlexisChat, searchAlexisChats } from "@repo/lib/assistant/panel/actions";
@@ -10,6 +11,8 @@ import type { GuideStep, PageLink } from "@repo/lib/assistant/panel/toolbox";
 import { uploadFileToStorage } from "@repo/lib/storage/upload-client";
 
 import { Button } from "../Button";
+import { Lightbox } from "../Lightbox";
+import type { GalleryPhoto } from "../PhotoGrid";
 import { AddMediaButton } from "../media/AddMediaButton";
 import { LogoUploader } from "../studio-access/LogoUploader";
 import { Spinner } from "../Spinner";
@@ -287,6 +290,26 @@ function Card({ card, files, onDecide }: { card: ActionCard; files: File[] | und
   );
 }
 
+/** Product photos under a reply: tapped, they open in the app's photo viewer, like photos in Chat. */
+function ReplyPhotos({ images }: { images: { url: string; name: string }[] }) {
+  const [viewing, setViewing] = useState<number | null>(null);
+  const photos: GalleryPhoto[] = images.map((img) => ({ key: img.url, src: img.url, alt: img.name }));
+  return (
+    <>
+      <div className="mt-2 grid grid-cols-3 gap-1.5">
+        {images.map((img, i) => (
+          <button key={img.url} type="button" onClick={() => setViewing(i)} aria-label={`View ${img.name}`} className="block overflow-hidden rounded-lg border border-border">
+            {/* eslint-disable-next-line @next/next/no-img-element -- product photos from storage, any size */}
+            <img src={img.url} alt={img.name} loading="lazy" className="aspect-square w-full object-cover" />
+          </button>
+        ))}
+      </div>
+      {/* On the page itself, so the Alexis panel can't box it in. */}
+      {viewing !== null ? createPortal(<Lightbox photos={photos} index={viewing} onIndexChange={setViewing} onClose={() => setViewing(null)} />, document.body) : null}
+    </>
+  );
+}
+
 export function Messages({ alexis, onGuide }: { alexis: Alexis; onGuide: (steps: GuideStep[]) => void }) {
   const end = useRef<HTMLDivElement>(null);
   const messages = alexis.ready?.messages ?? [];
@@ -307,16 +330,7 @@ export function Messages({ alexis, onGuide }: { alexis: Alexis; onGuide: (steps:
                 Attached: {m.files.length === 1 ? m.files[0] : `${m.files.length} files`}
               </p>
             ) : null}
-            {m.images.length ? (
-              <div className="mt-2 grid grid-cols-3 gap-1.5">
-                {m.images.map((img) => (
-                  <a key={img.url} href={img.url} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-lg border border-border">
-                    {/* eslint-disable-next-line @next/next/no-img-element -- product photos from storage, any size */}
-                    <img src={img.url} alt={img.name} loading="lazy" className="aspect-square w-full object-cover" />
-                  </a>
-                ))}
-              </div>
-            ) : null}
+            {m.images.length ? <ReplyPhotos images={m.images} /> : null}
             {m.choices.length && m.id === lastReplyId ? (
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {m.choices.map((c) => (
