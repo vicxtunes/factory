@@ -31,6 +31,14 @@ export function isAppPath(href: string): boolean {
   return /^\/(?![\/\\])[^\s\\\u0000-\u001f\u007f]*$/.test(href) && href.length <= 300;
 }
 
+/**
+ * Alexis usage is always shown in US dollars, whatever currency the person picked (owner, 2026-11-08):
+ * three decimals under a dollar, since one reply is a fraction of a cent to a few cents.
+ */
+export function formatUsd(amount: number): string {
+  return `US$${amount.toFixed(amount !== 0 && Math.abs(amount) < 1 ? 3 : 2)}`;
+}
+
 /** Charge for a reply: its real cost × the multiplier, in US$. */
 export function chargeFor(costUsd: number, multiplier: number): number {
   return Math.round(costUsd * multiplier * 10_000) / 10_000;

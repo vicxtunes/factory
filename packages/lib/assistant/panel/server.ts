@@ -4,8 +4,6 @@ import { z } from "zod";
 
 import { agentOfClient } from "@repo/lib/agents/server";
 import { getClientSession, getDashboardSession, getDesignerSession, getWorkerSession } from "@repo/lib/auth/session";
-import { clientCurrency } from "@repo/lib/currency/server";
-import { BASE_CURRENCY, formatIn, type DisplayCurrency } from "@repo/lib/currency/format";
 import { studioOfCaller } from "@repo/lib/studios/server";
 import { createAdminClient } from "@repo/lib/supabase/admin";
 import { SUPPORT_OWNER_EMAIL } from "@repo/lib/support/constants";
@@ -20,6 +18,7 @@ import {
   capReached,
   chargeFor,
   COMPANY,
+  formatUsd,
   isWaived,
   kampalaDay,
   isAppPath,
@@ -165,14 +164,6 @@ export async function publishTerms(body: string, by: string): Promise<number> {
 
 // ---------- Money ----------
 
-/** US$ shown in the person's currency, through the US dollar's rate. Without one, in US$. */
-async function usdFormatter(person: Person): Promise<(usd: number) => string> {
-  const currency: DisplayCurrency = person.type === "client" ? await clientCurrency() : BASE_CURRENCY;
-  const usd = must(await createAdminClient().from("currencies").select("rate").eq("code", "USD").maybeSingle()) as { rate: number } | null;
-  const perUgx = Number(usd?.rate ?? 0);
-  if (!(perUgx > 0)) return (amount) => `US$${amount.toFixed(2)}`;
-  return (amount) => formatIn(amount / perUgx, currency);
-}
 
 interface ChargeRow {
   charge_usd: number;
@@ -215,7 +206,7 @@ export interface UsageView {
 
 async function usageView(person: Person, payer: Payer, settings: PanelSettings): Promise<UsageView> {
   const now = new Date();
-  const money = await usdFormatter(person);
+  const money = formatUsd;
   const sixMonthsAgo = new Date(startOfKampalaMonth(now));
   sixMonthsAgo.setUTCMonth(sixMonthsAgo.getUTCMonth() - 5);
   const rows = await chargesSince(person, payer, sixMonthsAgo, 5000);
