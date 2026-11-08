@@ -28,7 +28,7 @@ const pageUrl = (slug: string | null) => (slug ? clientUrl(clientPath(`/${slug}`
 
 const packageInput = z.object({
   name: z.string().min(1).max(80).describe("e.g. Basic, Standard, Premium; or Half day, Full day"),
-  price: z.number().int().min(0).describe("In UGX, whole shillings."),
+  price: z.number().int().min(0).describe("In the studio's own currency (studio_page_status gives it), whole amounts."),
   description: z.string().max(1000).describe("One line on who it's for, or empty."),
   inclusions: z.array(z.string().max(120)).max(30).describe("What's included, one item each: hours of coverage, edited photos, an album…"),
 });
@@ -53,7 +53,7 @@ export function studioSetupTools(caller: CallerStudio, widgets: { logo: boolean 
           missingBeforeReview: settingUp ? missingForSubmit(a) : [],
           reviewNote: a.reviewNote,
           details: { name: a.name, phone: a.phone, ownerFirstName: a.ownerFirstName, ownerLastName: a.ownerLastName, email: a.ownerEmail, emailVerified: !!a.ownerEmailVerifiedAt },
-          profile: settingUp ? undefined : { address: studio.address, email: studio.email, brandColor: studio.brandColor, showOnAming: studio.showOnAming },
+          profile: { address: studio.address, email: studio.email, brandColor: studio.brandColor, showOnAming: settingUp ? undefined : studio.showOnAming },
           logo: !!a.logoKey,
           webAddress: a.slug,
           suggestedWebAddress: a.slug ? undefined : slugFromName(a.name),
@@ -109,7 +109,7 @@ export function studioSetupTools(caller: CallerStudio, widgets: { logo: boolean 
     }),
     changeTool({
       name: "save_studio_profile",
-      description: "Once the studio is open: its name, phone, email and street address on the public page.",
+      description: "The studio's name, phone, email and street address on its public page (while setting up too).",
       inputSchema: z.object({ name: z.string().min(1).max(80), phone: z.string().max(20).nullable(), email: z.string().max(120).nullable(), address: z.string().max(200).nullable() }),
       card: async (p) => ({
         title: "Update your business profile",
@@ -128,7 +128,7 @@ export function studioSetupTools(caller: CallerStudio, widgets: { logo: boolean 
     changeTool({
       name: "add_service",
       description:
-        "Add one service to the studio's page, with its packages (prices in UGX and what each includes), under a category (e.g. Photography, Videography, Printing). Shape it with the owner first, using service_samples.",
+        "Add one service to the studio's page, with its packages (prices in the studio's currency and what each includes), under a category (e.g. Photography, Videography, Printing). Shape it with the owner first, using service_samples.",
       inputSchema: z.object({
         category: z.string().min(1).max(60),
         name: z.string().min(1).max(80).describe("The service, e.g. Wedding photography"),
@@ -136,19 +136,16 @@ export function studioSetupTools(caller: CallerStudio, widgets: { logo: boolean 
         packages: z.array(packageInput).min(1).max(10),
       }),
       card: async (s) => {
-        if (scope.currency !== TEMPLATE_CURRENCY) throw new Error(`The studio's prices are in ${scope.currency}: add this service in Packages & Services.`);
         if (new Set(s.packages.map((p) => p.name.trim().toLowerCase())).size !== s.packages.length) throw new Error("Two packages have the same name.");
         return {
           title: `Add ${s.name} under ${s.category}`,
-          lines: s.packages.map((p) => `${p.name}: ${formatMoney(p.price)}${p.inclusions.length ? ` (${p.inclusions.slice(0, 4).join(", ")}${p.inclusions.length > 4 ? "…" : ""})` : ""}`),
+          lines: s.packages.map((p) => `${p.name}: ${formatMoney(p.price, scope.currency)}${p.inclusions.length ? ` (${p.inclusions.slice(0, 4).join(", ")}${p.inclusions.length > 4 ? "…" : ""})` : ""}`),
         };
       },
       run: async (s) => {
         // The set-up wizard's own way in (addFromTemplates): the owner while setting up, else whoever has the catalog.
         const { scope: own } = await studioForSetup();
-        const res = await offerings.addFromTemplate(own, {
-          id: "",
-          archivedAt: null,
+        const res = await offerings.addWithPackages(own, {
           categoryName: s.category.trim(),
           name: s.name.trim(),
           description: s.description.trim() || null,
@@ -160,7 +157,7 @@ export function studioSetupTools(caller: CallerStudio, widgets: { logo: boolean 
     }),
     changeTool({
       name: "add_sample_services",
-      description: "Add some of Aming's ready-made services (from service_samples, by their service names) as they are; the owner can change prices and details later.",
+      description: `Add some of Aming's ready-made services (from service_samples, by their service names) as they are; the owner can change prices and details later. Their prices are in ${TEMPLATE_CURRENCY}: for a studio in another currency they come in at 0, so prefer add_service with the owner's own prices.`,
       inputSchema: z.object({ services: z.array(z.string().min(1)).min(1).max(20) }),
       card: async ({ services }) => {
         const all = await templatesOnOffer();
@@ -199,15 +196,18 @@ export function studioSetupTools(caller: CallerStudio, widgets: { logo: boolean 
     }),
   ];
 
+  change.push(
+    changeTool({
+      name: "set_page_color",
+      description: "The colour of the studio's page and documents, as a hex colour like #F67413.",
+      inputSchema: z.object({ color: z.string().max(9) }),
+      card: async ({ color }) => ({ title: `Make your page colour ${color}`, lines: [] }),
+      run: async ({ color }) => outcome(await saveMyBrandColor({ color }), "Your page colour is changed."),
+    }),
+  );
+
   if (!isSettingUp(studio.status)) {
     change.push(
-      changeTool({
-        name: "set_page_color",
-        description: "The colour of the studio's page and documents, as a hex colour like #F67413.",
-        inputSchema: z.object({ color: z.string().max(9) }),
-        card: async ({ color }) => ({ title: `Make your page colour ${color}`, lines: [] }),
-        run: async ({ color }) => outcome(await saveMyBrandColor({ color }), "Your page colour is changed."),
-      }),
       changeTool({
         name: "show_on_aming",
         description: "Show (or stop showing) the studio's public work in the feed on Aming's front page.",
@@ -228,6 +228,6 @@ export function studioSetupTools(caller: CallerStudio, widgets: { logo: boolean 
   return {
     read,
     change,
-    words: `They own ${studio.name}: set up and improve its public page with them (details, web address, logo, services and packages, email, submitting for review; once open, profile, page colour, prices and the Aming feed).`,
+    words: `They own ${studio.name}: set up and improve its public page with them (details, profile and street address, web address, logo, page colour, services and packages, email, submitting for review; once open, also prices showing and the Aming feed).`,
   };
 }

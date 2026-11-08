@@ -394,3 +394,12 @@ test("a template makes its category when the studio has none, and prices on requ
   assert.equal(category!.name, "Weddings");
   assert.deepEqual(category!.services[0]!.packages.map((p) => p.price), [0, 0]);
 });
+
+test("a whole service at once keeps its prices in the studio's own currency", async () => {
+  const offerings = new OfferingService(memoryStore().store);
+  const kes = { ...studioB, currency: "KES" };
+  saved(await offerings.addWithPackages(kes, { categoryName: "Weddings", name: "Wedding Photography", description: null, packages: [tier("Gold", 90_000), tier("Silver", 60_000)] }));
+  const [category] = await offerings.manage(kes, "service");
+  assert.deepEqual(category!.services[0]!.packages.map((p) => [p.name, p.price]), [["Gold", 90_000], ["Silver", 60_000]]);
+  assert.ok("duplicateOf" in (await offerings.addWithPackages(kes, { categoryName: "Weddings", name: "wedding photography", description: null, packages: [tier("Gold", 1)] })), "one service of a name");
+});
