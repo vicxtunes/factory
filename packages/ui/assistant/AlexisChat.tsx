@@ -3,6 +3,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 
+import { takeLines } from "@repo/lib/assistant/panel/lines";
 import { agreeToAlexisTerms, openAlexis, openAlexisChat, searchAlexisChats } from "@repo/lib/assistant/panel/actions";
 import type { ActionCard, ChatSummary, DecideResult, PanelMessage, PanelState, SendResult, UsageView } from "@repo/lib/assistant/panel/server";
 import type { GuideStep, PageLink } from "@repo/lib/assistant/panel/toolbox";
@@ -80,16 +81,14 @@ async function ask(body: unknown, onLine: (line: Exclude<StreamLine, { type: "do
     return failed && !failed.ok ? failed : { ok: false, error: OFFLINE };
   }
   const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
-  let buffered = "";
+  let held = "";
   let result: SendResult | null = null;
   for (;;) {
     const { value, done } = await reader.read();
     if (done) break;
-    buffered += value;
-    const lines = buffered.split("\n");
-    buffered = lines.pop() ?? "";
-    for (const raw of lines) {
-      if (!raw.trim()) continue;
+    const taken = takeLines(held, value);
+    held = taken.held;
+    for (const raw of taken.lines) {
       const line = JSON.parse(raw) as StreamLine;
       if (line.type === "done") result = line.result;
       else onLine(line);

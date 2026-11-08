@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { currentTerms, panelSettings, recentChanges, recentPanelRuns, usageByPayer } from "@repo/lib/assistant/panel/server";
+import { currentTerms, hasAiKey, panelSettings, recentChanges, recentPanelRuns, usageByPayer } from "@repo/lib/assistant/panel/server";
+import { findModel } from "@repo/lib/assistant/core/rules";
 import { monthStats, recentRuns, getSettings, spentToday } from "@repo/lib/assistant/server/store";
 import { getDashboardSession } from "@repo/lib/auth/session";
 import { chatHref } from "@repo/lib/chat/routes";
@@ -76,6 +77,15 @@ export default async function AssistantPage() {
       </section>
       <section className="h-fit rounded-xl border border-border bg-surface p-4 lg:row-start-2">
         <h2 className="text-lg font-semibold">Alexis on every page</h2>
+        {(() => {
+          const model = findModel(panel.model);
+          return model && !hasAiKey(model.provider) ? (
+            <p className="mt-2 rounded-xl border border-error-500/40 bg-error-50 p-3 text-sm text-error-700 dark:bg-error-500/10 dark:text-error-100">
+              The staff app has no {model.provider === "openai" ? "OpenAI" : "Anthropic"} key, so Alexis can&apos;t answer staff, designers or workers. Add{" "}
+              {model.provider === "openai" ? "OPENAI_API_KEY" : "ANTHROPIC_API_KEY"} to /etc/aming-factory.env and restart the staff app.
+            </p>
+          ) : null;
+        })()}
         <p className="mt-1 text-sm text-muted">The Alexis button in every app. A paid feature, free for now: each reply&apos;s charge is shown to the person and waived.</p>
         <div className="mt-4">
           <AlexisPanelForm settings={{ panelMode: panel.panelMode, multiplier: panel.multiplier, monthlyCapUsd: panel.monthlyCapUsd }} />

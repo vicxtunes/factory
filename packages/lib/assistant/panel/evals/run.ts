@@ -70,6 +70,15 @@ const catalog = [
   },
 ];
 
+const crystalCatalog = [
+  {
+    id: "cat-crystal",
+    name: "Crystal boards",
+    attributes: [{ name: "Size", required: true, options: ["A4 (20x30)", "A3 (30x40)", "A2 (40x60)", "A1 (60x90)"] }],
+    products: [{ id: "p-crystal", name: "Crystal board", unit: "board", variants: [], price: 85000 }],
+  },
+];
+
 const myOrders = [
   {
     id: "o-1",
@@ -187,6 +196,16 @@ const SCENARIOS: Scenario[] = [
     checks: [notCalled("place_order", "show_the_way"), asksSomething, doesntTeach],
   },
   {
+    name: "The live failure of 2026-11-08: 'I need crystal boards', answered with size buttons",
+    person: sarah,
+    payer: { type: "client", id: sarah.id },
+    page: { path: "/", title: "Dashboard", links: clientLinks },
+    tools: () => clientToolbox(sarah),
+    fixtures: { get_catalog: crystalCatalog, offer_choices: "The buttons will show under your reply." },
+    messages: [{ role: "user", content: "I need crystal boards" }],
+    checks: [called("get_catalog"), asksSomething, notCalled("place_order", "show_the_way"), doesntTeach],
+  },
+  {
     name: "Where is my order: it looks it up",
     person: sarah,
     payer: { type: "client", id: sarah.id },
@@ -277,7 +296,8 @@ function rigged(toolbox: Toolbox, page: Scenario["page"], fixtures: Record<strin
     ...t,
     run: (async (input: unknown) => {
       record(t.name, input);
-      return JSON.stringify(fixtures[t.name] ?? []);
+      const fixture = fixtures[t.name] ?? [];
+      return typeof fixture === "string" ? fixture : JSON.stringify(fixture);
     }) as AssistantTool["run"],
   }));
   const change = toolbox.change.map((t: ChangeTool): AssistantTool => ({
@@ -299,7 +319,7 @@ function rigged(toolbox: Toolbox, page: Scenario["page"], fixtures: Record<strin
   ];
 }
 
-async function runOne(s: Scenario, modelId: string): Promise<{ problems: string[]; outcome: Outcome }> {
+async function runOne(s: Scenario, modelId: string, streamed: boolean): Promise<{ problems: string[]; outcome: Outcome }> {
   const model = findModel(modelId);
   if (!model) throw new Error(`Unknown model ${modelId}`);
   const toolbox = s.tools();
@@ -311,6 +331,8 @@ async function runOne(s: Scenario, modelId: string): Promise<{ problems: string[
     tools: rigged(toolbox, s.page, s.fixtures, calls),
     messages: s.messages,
     onUsage: () => {},
+    // Both ways, as Alexis runs: streamed in the app's panel, not streamed in the client chat.
+    onText: streamed ? () => {} : undefined,
   });
   const outcome = { calls, reply: answer.text ?? "" };
   const problems = [...(answer.text ? [] : ["no reply"]), ...s.checks.map((c) => c(outcome)).filter((p): p is string => !!p)];
@@ -319,19 +341,22 @@ async function runOne(s: Scenario, modelId: string): Promise<{ problems: string[
 
 export async function main(modelId: string, only: string | undefined): Promise<number> {
   let failed = 0;
-  for (const s of SCENARIOS.filter((x) => !only || x.name.toLowerCase().includes(only.toLowerCase()))) {
+  let ran = 0;
+  for (const s of SCENARIOS.filter((x) => !only || x.name.toLowerCase().includes(only.toLowerCase())))
+  for (const streamed of [true, false]) {
+    ran++;
     try {
-      const { problems, outcome } = await runOne(s, modelId);
-      console.log(`${problems.length ? "✗" : "✓"} ${s.name}`);
+      const { problems, outcome } = await runOne(s, modelId, streamed);
+      console.log(`${problems.length ? "✗" : "✓"} ${s.name} (${streamed ? "streamed" : "not streamed"})`);
       console.log(`    tools: ${outcome.calls.map((c) => c.name).join(" → ") || "none"}`);
       console.log(`    reply: ${outcome.reply.replace(/\s+/g, " ").slice(0, 300)}`);
       for (const p of problems) console.log(`    problem: ${p}`);
       if (problems.length) failed++;
     } catch (err) {
       failed++;
-      console.log(`✗ ${s.name}\n    error: ${err instanceof Error ? err.message : String(err)}`);
+      console.log(`✗ ${s.name} (${streamed ? "streamed" : "not streamed"})\n    error: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
-  console.log(`\n${SCENARIOS.length - failed} passed, ${failed} failed (${modelId})`);
+  console.log(`\n${ran - failed} passed, ${failed} failed (${modelId})`);
   return failed;
 }

@@ -659,6 +659,10 @@ export async function send(
   if ((await spentToday()) >= settings.dailyCapUsd) return { ok: false, error: "Alexis is resting until tomorrow. Try again then." };
   const model = findModel(settings.model);
   if (!model) return { ok: false, error: "Alexis isn't set up yet." };
+  if (!hasAiKey(model.provider)) {
+    console.error(`alexis: no ${model.provider} key in this app's settings`);
+    return { ok: false, error: "Alexis isn't set up in this app yet. The team has been told." };
+  }
 
   const chat = chatId ?? (channel === "whatsapp" ? await whatsAppChat(person) : await newChat(person, body || attached.join(", ")));
   const earlier = await history(chat, PANEL_HISTORY);
@@ -825,6 +829,11 @@ export function suggestionsFor(person: Person, page: string): string[] {
 }
 
 // ---------- The boss's view ----------
+
+/** Whether this app has the key for the chosen AI (each app has its own settings: /etc/aming-<app>.env). */
+export function hasAiKey(provider: "openai" | "anthropic"): boolean {
+  return provider === "openai" ? !!process.env.OPENAI_API_KEY : !!process.env.ANTHROPIC_API_KEY;
+}
 
 export interface PayerUsage {
   label: string;
