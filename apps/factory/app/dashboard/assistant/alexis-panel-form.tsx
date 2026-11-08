@@ -49,7 +49,7 @@ export function AlexisPanelForm({ settings }: { settings: { panelMode: Assistant
       <Field label="Price (× the AI cost)" hint="2 means a reply that costs Aming US$0.01 is charged US$0.02.">
         <TextInput type="number" min={1} step="0.1" inputMode="decimal" value={multiplier} onChange={(e) => setMultiplier(e.target.value)} />
       </Field>
-      <Field label="Monthly limit per account (US$ of charge)" hint="Clients, studios, vendors and agents. Shown to each in their currency. Staff have no limit.">
+      <Field label="Monthly limit per account (US$ of charge)" hint="Clients, studios, vendors and agents, shown to them in US$. Staff have no limit.">
         <TextInput type="number" min={0} step="0.5" inputMode="decimal" value={cap} onChange={(e) => setCap(e.target.value)} />
       </Field>
       <Button type="button" className="min-h-10 font-semibold" loading={busy} disabled={busy} onClick={save}>

@@ -65,22 +65,27 @@ async function askClaude({ model, system = SYSTEM_PROMPT, context, tools, messag
     onUsage({ ...usage });
   };
   let last: Anthropic.Beta.BetaMessage | null = null;
+  // Words written beside its tool calls (a question, with buttons to answer it) count when its last turn is empty.
+  let said = "";
+  const words = (m: Anthropic.Beta.BetaMessage) => m.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("\n").trim();
   if (onText) {
     let step = 0;
     for await (const stream of client.beta.messages.toolRunner({ ...params, stream: true })) {
       const at = step++;
       stream.on("text", (delta) => onText(at, delta));
       last = await stream.finalMessage();
+      said = words(last) || said;
       count(last);
     }
   } else {
     for await (const message of client.beta.messages.toolRunner(params)) {
       last = message;
+      said = words(message) || said;
       count(message);
     }
   }
   if (last?.stop_reason === "refusal") return { text: null, refused: true };
-  return { text: last?.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("\n").trim() || null, refused: false };
+  return { text: said || null, refused: false };
 }
 
 /** One tool call: its input checked against the schema, and a sentence back when it can't run. */
@@ -103,6 +108,17 @@ async function runTool(tools: AssistantTool[], name: string, args: string): Prom
   }
 }
 
+/**
+ * The reply's words, from its message items. Not `response.output_text`: the SDK fills that in only for a
+ * reply that wasn't streamed, so a streamed one has none (2026-11-08: every streamed reply failed on it).
+ */
+function replyText(response: OpenAI.Responses.Response): string {
+  return response.output
+    .flatMap((item) => (item.type === "message" ? item.content.flatMap((c) => (c.type === "output_text" ? [c.text] : [])) : []))
+    .join("")
+    .trim();
+}
+
 async function askOpenAI({ model, system = SYSTEM_PROMPT, context, tools, messages, onUsage, onText }: AskInput): Promise<Answer> {
   const client = new OpenAI({ timeout: TIMEOUT_MS });
   const definitions = tools.map((t): OpenAI.Responses.FunctionTool => {
@@ -117,6 +133,7 @@ async function askOpenAI({ model, system = SYSTEM_PROMPT, context, tools, messag
   ];
   const usage: TokenUsage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
 
+  let said = "";
   for (let step = 0; step < MAX_STEPS; step++) {
     const request = { model: model.id, max_output_tokens: MAX_TOKENS, reasoning: { effort: "low" as const }, tools: definitions, input };
     let response: OpenAI.Responses.Response | null = null;
@@ -139,7 +156,9 @@ async function askOpenAI({ model, system = SYSTEM_PROMPT, context, tools, messag
     const refused = response.output.some((item) => item.type === "message" && item.content.some((c) => c.type === "refusal"));
     if (refused || response.incomplete_details?.reason === "content_filter") return { text: null, refused: true };
     const calls = response.output.filter((item) => item.type === "function_call");
-    if (!calls.length) return { text: response.output_text.trim() || null, refused: false };
+    // Words written beside its tool calls (a question, with buttons to answer it) count when its last turn is empty.
+    said = replyText(response) || said;
+    if (!calls.length) return { text: said || null, refused: false };
 
     // Everything it produced goes back with the results: its reasoning has to stay with its calls.
     input.push(...(response.output as OpenAI.Responses.ResponseInputItem[]));
