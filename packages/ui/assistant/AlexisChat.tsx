@@ -2,6 +2,7 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 import { takeLines } from "@repo/lib/assistant/panel/lines";
 import { agreeToAlexisTerms, openAlexis, openAlexisChat, searchAlexisChats } from "@repo/lib/assistant/panel/actions";
@@ -10,6 +11,8 @@ import type { GuideStep, PageLink } from "@repo/lib/assistant/panel/toolbox";
 import { uploadFileToStorage } from "@repo/lib/storage/upload-client";
 
 import { Button } from "../Button";
+import { Lightbox } from "../Lightbox";
+import type { GalleryPhoto } from "../PhotoGrid";
 import { AddMediaButton } from "../media/AddMediaButton";
 import { LogoUploader } from "../studio-access/LogoUploader";
 import { Spinner } from "../Spinner";
@@ -64,7 +67,7 @@ function pageLinks(): PageLink[] {
 
 // ---------- The chat's state ----------
 
-/** While Alexis works on a reply: what it's doing, and its words so far (each step of its loop starts afresh). */
+/** While Alexis works on a reply: what it's doing, and its words so far (every step of its loop, in order). */
 export interface Draft {
   doing: string | null;
   step: number;
@@ -153,8 +156,8 @@ export function useAlexis(actions: AlexisActions, initial: PanelState | null = n
         setDraft((d) => {
           const now = d ?? { doing: null, step: 0, text: "" };
           if (line.type === "step") return { ...now, doing: line.words };
-          // A later step of its loop starts its words afresh: what it said before a tool call isn't the reply.
-          return line.step === now.step ? { ...now, doing: null, text: now.text + line.delta } : { doing: null, step: line.step, text: line.delta };
+          // A later step of its loop adds to what it said: all of it is the reply (everyStep on the server).
+          return line.step === now.step ? { ...now, doing: null, text: now.text + line.delta } : { doing: null, step: line.step, text: now.text ? `${now.text}\n\n${line.delta}` : line.delta };
         }),
     ).catch((): SendResult => ({ ok: false, error: OFFLINE }));
     setDraft(null);
@@ -287,6 +290,26 @@ function Card({ card, files, onDecide }: { card: ActionCard; files: File[] | und
   );
 }
 
+/** Product photos under a reply: tapped, they open in the app's photo viewer, like photos in Chat. */
+function ReplyPhotos({ images }: { images: { url: string; name: string }[] }) {
+  const [viewing, setViewing] = useState<number | null>(null);
+  const photos: GalleryPhoto[] = images.map((img) => ({ key: img.url, src: img.url, alt: img.name }));
+  return (
+    <>
+      <div className="mt-2 grid grid-cols-3 gap-1.5">
+        {images.map((img, i) => (
+          <button key={img.url} type="button" onClick={() => setViewing(i)} aria-label={`View ${img.name}`} className="block overflow-hidden rounded-lg border border-border">
+            {/* eslint-disable-next-line @next/next/no-img-element -- product photos from storage, any size */}
+            <img src={img.url} alt={img.name} loading="lazy" className="aspect-square w-full object-cover" />
+          </button>
+        ))}
+      </div>
+      {/* On the page itself, so the Alexis panel can't box it in. */}
+      {viewing !== null ? createPortal(<Lightbox photos={photos} index={viewing} onIndexChange={setViewing} onClose={() => setViewing(null)} />, document.body) : null}
+    </>
+  );
+}
+
 export function Messages({ alexis, onGuide }: { alexis: Alexis; onGuide: (steps: GuideStep[]) => void }) {
   const end = useRef<HTMLDivElement>(null);
   const messages = alexis.ready?.messages ?? [];
@@ -307,16 +330,7 @@ export function Messages({ alexis, onGuide }: { alexis: Alexis; onGuide: (steps:
                 Attached: {m.files.length === 1 ? m.files[0] : `${m.files.length} files`}
               </p>
             ) : null}
-            {m.images.length ? (
-              <div className="mt-2 grid grid-cols-3 gap-1.5">
-                {m.images.map((img) => (
-                  <a key={img.url} href={img.url} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-lg border border-border">
-                    {/* eslint-disable-next-line @next/next/no-img-element -- product photos from storage, any size */}
-                    <img src={img.url} alt={img.name} loading="lazy" className="aspect-square w-full object-cover" />
-                  </a>
-                ))}
-              </div>
-            ) : null}
+            {m.images.length ? <ReplyPhotos images={m.images} /> : null}
             {m.choices.length && m.id === lastReplyId ? (
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {m.choices.map((c) => (
@@ -476,6 +490,118 @@ export function Composer({ alexis, big = false, placeholder = "Ask Alexis" }: { 
         </button>
       </div>
     </form>
+  );
+}
+
+// ---------- Chats ----------
+
+/** When a chat was last used: "Today, 14:32", "Yesterday, 09:05", or "3 Nov, 10:00". */
+function lastUsed(iso: string): string {
+  const at = new Date(iso);
+  const time = at.toLocaleTimeString("en-UG", { hour: "2-digit", minute: "2-digit", hour12: false });
+  const day = (d: Date) => d.toDateString();
+  const yesterday = new Date(Date.now() - 86_400_000);
+  if (day(at) === day(new Date())) return `Today, ${time}`;
+  if (day(at) === day(yesterday)) return `Yesterday, ${time}`;
+  return `${at.toLocaleDateString("en-UG", { day: "numeric", month: "short" })}, ${time}`;
+}
+
+export function PlusIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" className={className} aria-hidden="true">
+      <path d="M12 5v14M5 12h14" />
+    </svg>
+  );
+}
+
+export function ClockIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" className={className} aria-hidden="true">
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 7.5V12l3 2" />
+    </svg>
+  );
+}
+
+function SearchIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" className={className} aria-hidden="true">
+      <circle cx="11" cy="11" r="6.5" />
+      <path d="M16 16l4 4" />
+    </svg>
+  );
+}
+
+/** New chat, search and the recent chats. */
+export function ChatList({ alexis, onPicked }: { alexis: Alexis; onPicked?: () => void }) {
+  const ready = alexis.ready!;
+  const [words, setWords] = useState("");
+  const [found, setFound] = useState<ChatSummary[] | null>(null);
+
+  useEffect(() => {
+    const q = words.trim();
+    if (!q) return;
+    const timer = window.setTimeout(() => void alexis.search(q).then(setFound), 300);
+    return () => window.clearTimeout(timer);
+  }, [words, alexis]);
+
+  const list = words.trim() ? (found ?? []) : ready.chats;
+  return (
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
+      <button
+        type="button"
+        onClick={() => {
+          alexis.startNew();
+          onPicked?.();
+        }}
+        className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-brand-500 px-3 text-sm font-medium text-white shadow-theme-xs hover:bg-brand-600"
+      >
+        <PlusIcon className="h-4 w-4" /> New chat
+      </button>
+      <label className="flex min-h-10 items-center gap-2 rounded-xl border border-border bg-background px-3 text-sm focus-within:border-brand-300">
+        <SearchIcon className="h-4 w-4 shrink-0 text-muted" />
+        <input
+          value={words}
+          onChange={(e) => {
+            setWords(e.target.value);
+            if (!e.target.value.trim()) setFound(null);
+          }}
+          placeholder="Search chats"
+          aria-label="Search chats"
+          className="w-full bg-transparent outline-none placeholder:text-gray-400"
+        />
+      </label>
+      <p className="px-1 text-xs font-medium text-muted">{words.trim() ? "Found" : "Recent chats"}</p>
+      <ul className="-mx-1 min-h-0 flex-1 space-y-0.5 overflow-y-auto overscroll-contain px-1">
+        {list.length ? (
+          list.map((c) => {
+            const active = c.id === ready.chatId;
+            return (
+              <li key={c.id}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void alexis.open(c.id);
+                    onPicked?.();
+                  }}
+                  className={`flex min-h-12 w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm ${
+                    active ? "bg-brand-50 font-medium text-brand-700 dark:bg-brand-500/10 dark:text-brand-300" : "text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-white/5"
+                  }`}
+                >
+                  <ClockIcon className="h-4 w-4 shrink-0 text-muted" />
+                  <span className="min-w-0">
+                    <span className="block truncate">{c.title}</span>
+                    <span className="block text-xs font-normal text-muted">{lastUsed(c.lastAt)}</span>
+                  </span>
+                </button>
+              </li>
+            );
+          })
+        ) : (
+          <li className="px-2 text-sm text-muted">{words.trim() ? "No chats found." : "No chats yet."}</li>
+        )}
+      </ul>
+    </div>
   );
 }
 

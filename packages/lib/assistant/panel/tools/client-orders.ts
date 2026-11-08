@@ -12,6 +12,7 @@ import { createAdminClient } from "@repo/lib/supabase/admin";
 import { paidByOrders } from "@repo/lib/wallet/orders";
 import { WalletError } from "@repo/lib/wallet/server/errors";
 import { startOrderPayment } from "@repo/lib/wallet/server/mobile-money";
+import { payOrdersFromWallet, payOrdersWithMobileMoney, topUpWithMobileMoney } from "@repo/lib/wallet/actions";
 
 import { ASSISTANT_NAME, canAutoApprove, MAX_PROMPTS_PER_DAY } from "../../core/rules";
 import { ASSISTANT_ACTOR, checkOrderItems, tellManagers } from "../../server/tools";
@@ -238,4 +239,96 @@ export function clientOrderTools(person: Person): ChangeTool[] {
   });
 
   return [place, invoice, pay];
+}
+
+/** The client's invoiced orders with something still due, oldest first. */
+async function unpaidInvoiced(clientId: string): Promise<{ id: string; order_no: string; due: number }[]> {
+  const { data, error } = await createAdminClient()
+    .from("orders")
+    .select("id, order_no, quoted_price, created_at, invoices!inner(id)")
+    .eq("client_id", clientId)
+    .is("cancelled_at", null)
+    .order("created_at", { ascending: true })
+    .limit(100);
+  if (error) throw new Error(error.message);
+  const rows = (data ?? []) as { id: string; order_no: string; quoted_price: number | null }[];
+  const paid = await paidByOrders(rows.map((r) => r.id));
+  return rows.map((r) => ({ id: r.id, order_no: r.order_no, due: Math.max(Number(r.quoted_price ?? 0) - (paid[r.id] ?? 0), 0) })).filter((r) => r.due > 0);
+}
+
+async function promptsToday(clientId: string): Promise<number> {
+  const { count } = await createAdminClient()
+    .from("provider_collections")
+    .select("id", { count: "exact", head: true })
+    .eq("client_id", clientId)
+    .gte("created_at", new Date(Date.now() - 24 * 3_600_000).toISOString());
+  return count ?? 0;
+}
+
+/**
+ * Topping up the wallet and paying every invoice at once, through the wallet's own actions (the same as its
+ * buttons): a mobile money prompt the client approves with their PIN, or paying from the wallet, which needs
+ * the wallet unlocked as in the app.
+ */
+export function walletTools(person: Person): ChangeTool[] {
+  const phoneOf = (phone: string | null) => phone?.trim() || person.phone;
+
+  const topUp = changeTool({
+    name: "top_up_wallet",
+    description: "Top up the client's Aming wallet by mobile money (MTN or Airtel): a prompt for the amount goes to their phone, and the money lands in the wallet once they approve it with their PIN.",
+    inputSchema: z.object({
+      amount: z.number().int().min(500).max(10_000_000).describe("In UGX."),
+      phone: z.string().max(20).nullable().describe("The number they gave, or null for the one on file."),
+    }),
+    card: async ({ amount, phone }) => {
+      const number = phoneOf(phone);
+      if (!number) throw new Error("There's no number on file. Ask which MTN or Airtel number to use.");
+      return { title: `Top up your wallet: ${formatMoney(amount)} from ${number}`, lines: ["You approve it on your phone with your PIN."] };
+    },
+    run: async ({ amount, phone }) => {
+      const number = phoneOf(phone);
+      if (!number) return { ok: false, error: "There's no number on file." };
+      if ((await promptsToday(person.id)) >= MAX_PROMPTS_PER_DAY) return { ok: false, error: "Too many payment prompts today. Try again tomorrow, or ask the team." };
+      const res = await topUpWithMobileMoney(amount, number);
+      return res.ok ? { ok: true, done: `A prompt of ${formatMoney(amount)} went to ${number}. Approve it with your PIN and it lands in your wallet.` } : { ok: false, error: res.error };
+    },
+  });
+
+  const payAll = changeTool({
+    name: "pay_all_invoices",
+    description:
+      "Pay everything still due on all of the client's invoices at once: by one mobile money prompt (MTN or Airtel), or from their Aming wallet balance (oldest first, as far as the balance goes; their wallet must be unlocked with their PIN in the app).",
+    inputSchema: z.object({
+      method: z.enum(["mobile_money", "wallet"]),
+      phone: z.string().max(20).nullable().describe("For mobile money: the number they gave, or null for the one on file."),
+    }),
+    card: async ({ method, phone }) => {
+      const due = await unpaidInvoiced(person.id);
+      if (!due.length) throw new Error("Nothing is due on their invoices.");
+      const total = due.reduce((s, o) => s + o.due, 0);
+      const lines = due.slice(0, 8).map((o) => `Order ${o.order_no}: ${formatMoney(o.due)}`);
+      if (due.length > 8) lines.push(`and ${due.length - 8} more`);
+      if (method === "wallet") return { title: `Pay ${formatMoney(total)} from your wallet`, lines: [...lines, "Oldest first, as far as your balance goes."] };
+      const number = phoneOf(phone);
+      if (!number) throw new Error("There's no number on file. Ask which MTN or Airtel number to use.");
+      return { title: `Pay all your invoices: one prompt of ${formatMoney(total)} to ${number}`, lines: [...lines, "You approve it on your phone with your PIN."] };
+    },
+    run: async ({ method, phone }) => {
+      const due = await unpaidInvoiced(person.id);
+      if (!due.length) return { ok: false, error: "Nothing is due any more." };
+      const ids = due.map((o) => o.id);
+      if (method === "wallet") {
+        const res = await payOrdersFromWallet(ids);
+        if (!res.ok) return { ok: false, error: res.error };
+        return { ok: true, done: `Paid ${formatMoney(res.data.paidNow)} from your wallet. Balance left: ${formatMoney(res.data.balance)}.` };
+      }
+      const number = phoneOf(phone);
+      if (!number) return { ok: false, error: "There's no number on file." };
+      if ((await promptsToday(person.id)) >= MAX_PROMPTS_PER_DAY) return { ok: false, error: "Too many payment prompts today. Pay from the invoice page, or ask the team." };
+      const res = await payOrdersWithMobileMoney(ids, number);
+      return res.ok ? { ok: true, done: `A prompt of ${formatMoney(res.data.amount)} went to ${number}. Approve it on your phone with your PIN.` } : { ok: false, error: res.error };
+    },
+  });
+
+  return [topUp, payAll];
 }
