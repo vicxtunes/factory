@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { capReached, chargeFor, COMPANY, isWaived, kampalaDay, mayUsePanel, payerForPage, startOfKampalaMonth, startOfNextKampalaMonth } from "./core";
+import { capReached, chargeFor, COMPANY, isAppPath, isWaived, kampalaDay, mayUsePanel, payerForPage, startOfKampalaMonth, startOfNextKampalaMonth } from "./core";
 
 describe("Alexis panel rules", () => {
   it("charges the real cost times the multiplier", () => {
@@ -49,5 +49,18 @@ describe("Alexis panel rules", () => {
     assert.equal(kampalaDay(now), "2026-11-01");
     assert.equal(startOfKampalaMonth(now).toISOString(), "2026-10-31T21:00:00.000Z");
     assert.equal(startOfNextKampalaMonth(now).toISOString(), "2026-11-30T21:00:00.000Z");
+  });
+});
+
+describe("Alexis only sends people to pages of this app", () => {
+  it("accepts the app's own paths", () => {
+    assert.equal(isAppPath("/payment"), true);
+    assert.equal(isAppPath("/studio/offerings?tab=services#top"), true);
+    assert.equal(isAppPath("/"), true);
+  });
+  it("refuses anything a browser would read as another site", () => {
+    for (const bad of ["//evil.com", "/\\evil.com", "/\\\\evil.com", "https://evil.com", "javascript:alert(1)", "/ /x", "/\u0001/evil.com", "evil.com", ""]) {
+      assert.equal(isAppPath(bad), false, bad);
+    }
   });
 });

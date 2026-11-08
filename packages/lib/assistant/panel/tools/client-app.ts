@@ -8,13 +8,17 @@ import { agentClients, agentOfClient, figuresFor } from "@repo/lib/agents/server
 import { createCustomer } from "@repo/lib/customers/actions";
 import { customers } from "@repo/lib/customers/server";
 import { agentClientSchema } from "@repo/lib/agents/core";
-import { studioOfCaller } from "@repo/lib/studios/server";
+import { ownStudio, studioOfCaller } from "@repo/lib/studios/server";
 import { canUse } from "@repo/lib/team/core";
 import { vendorJobs, vendors } from "@repo/lib/vendors/server";
 
-import { assistantTools } from "../../server/tools";
+import { assistantTools, tellManagers, type ToolContext } from "../../server/tools";
+import { createAdminClient } from "@repo/lib/supabase/admin";
 import type { Person } from "../server";
 import { changeTool, outcome, readTool, type ChangeTool, type Toolbox } from "../toolbox";
+import { clientOrderTools } from "./client-orders";
+import { addFilesToOrderTool } from "./order-files";
+import { studioSetupTools } from "./studio-setup";
 import type { AssistantTool } from "../../server/tools";
 
 // Alexis's tools in the client app: the account's own orders and money, and,
@@ -23,19 +27,52 @@ import type { AssistantTool } from "../../server/tools";
 // vendors.mine), never from what the AI sends, and each change runs the same
 // action the app's own button does.
 
-/** The chat assistant's read-only tools, for the account's own orders, invoices, wallet and prices. */
-const CLIENT_READS = ["get_catalog", "get_prices", "get_typical_times", "get_my_orders", "get_my_account", "get_my_receipts"];
+/**
+ * The chat assistant's own tools that don't belong to a chat thread: the account's orders, invoices, wallet,
+ * prices and pay options, and the tappable answers and product photos it puts under a reply. Ordering,
+ * invoicing and payment prompts are cards here (./client-orders.ts), and so are photos (./order-files.ts).
+ */
+const FROM_CHAT = ["get_catalog", "get_prices", "get_typical_times", "get_my_orders", "get_my_account", "get_my_receipts", "get_pay_options", "offer_choices", "show_product_photos"];
 
-function clientReads(person: Person): AssistantTool[] {
-  const ctx = { conversationId: "", client: { id: person.id, name: person.name, email: person.email, phone: person.phone }, actions: [], choices: [], images: [] };
-  return assistantTools(ctx).filter((t) => CLIENT_READS.includes(t.name));
+function fromChat(person: Person) {
+  const ctx: ToolContext = { conversationId: "", client: { id: person.id, name: person.name, email: person.email, phone: person.phone }, actions: [], choices: [], images: [] };
+  return { tools: assistantTools(ctx).filter((t) => FROM_CHAT.includes(t.name)), extras: () => ({ choices: ctx.choices, images: ctx.images }) };
+}
+
+/** The chat's hand_to_staff, without a chat thread: the team is told, at most once an hour per account. */
+function handToStaff(person: Person): AssistantTool {
+  return readTool({
+    name: "hand_to_staff",
+    description: "Tell the team this client needs a person (a question you can't answer, a complaint, a large or unusual order). Keep helping with anything else.",
+    inputSchema: z.object({ reason: z.string().max(500) }),
+    run: async ({ reason }) => {
+      const { count } = await createAdminClient()
+        .from("assistant_runs")
+        .select("id", { count: "exact", head: true })
+        .eq("person_type", "client")
+        .eq("person_id", person.id)
+        .contains("actions", ["Asked staff"])
+        .gte("created_at", new Date(Date.now() - 60 * 60_000).toISOString());
+      if ((count ?? 0) > 0) return "The team was already told a short while ago. Carry on helping.";
+      await tellManagers(`${person.name} needs a person`, `Through Alexis: ${reason}`, "/dashboard/clients");
+      await createAdminClient().from("assistant_runs").insert({ person_type: "client", person_id: person.id, actions: ["Asked staff"], reply: null });
+      return "The team has been told. Say someone from the team will contact them (in Chat or by phone), and keep helping until then.";
+    },
+  });
 }
 
 const PERIODS = ["today", "yesterday", "this_week", "this_month", "last_month", "this_year", "all"] as const;
 
-async function studioTools(): Promise<{ read: AssistantTool[]; change: ChangeTool[]; words: string } | null> {
+/**
+ * On /studio pages. An open studio: what the person's team areas allow, and for the owner its page too.
+ * The owner's studio while it's being set up (studioOfCaller refuses it until Aming approves): setting up its page.
+ */
+async function studioTools(widgets: { logo: boolean }): Promise<{ read: AssistantTool[]; change: ChangeTool[]; words: string } | null> {
   const caller = await studioOfCaller("anyone").catch(() => null);
-  if (!caller) return null;
+  if (!caller) {
+    const settingUp = await ownStudio().catch(() => null);
+    return settingUp ? studioSetupTools(settingUp, widgets) : null;
+  }
   const { scope, access, studio } = caller;
   const read: AssistantTool[] = [];
   const change: ChangeTool[] = [];
@@ -102,7 +139,10 @@ async function studioTools(): Promise<{ read: AssistantTool[]; change: ChangeToo
     );
     can.push("see the studio's vendor jobs");
   }
-  return { read, change, words: can.length ? `For ${studio.name}: ${can.join(", ")}.` : "" };
+  const words = can.length ? `For ${studio.name}: ${can.join(", ")}.` : "";
+  if (!access.owner) return { read, change, words };
+  const page = studioSetupTools(caller, widgets);
+  return { read: [...read, ...page.read], change: [...change, ...page.change], words: `${words} ${page.words}` };
 }
 
 async function agentTools(person: Person): Promise<{ read: AssistantTool[]; change: ChangeTool[]; words: string } | null> {
@@ -164,15 +204,17 @@ async function vendorTools(person: Person): Promise<{ read: AssistantTool[]; cha
 export async function clientAppToolbox(person: Person, page: string): Promise<Toolbox> {
   if (person.type !== "client") return { read: [], change: [], abilities: "Nothing in this app." };
   const under = (root: string) => page === root || page.startsWith(`${root}/`);
-  const business = under("/studio") ? await studioTools() : under("/agents") ? await agentTools(person) : under("/vendors") ? await vendorTools(person) : null;
+  const chat = fromChat(person);
+  const widgets = { logo: false };
+  const business = under("/studio") ? await studioTools(widgets) : under("/agents") ? await agentTools(person) : under("/vendors") ? await vendorTools(person) : null;
   return {
-    read: [...clientReads(person), ...(business?.read ?? [])],
-    change: business?.change ?? [],
+    read: [...chat.tools, handToStaff(person), ...(business?.read ?? [])],
+    change: [...clientOrderTools(person), addFilesToOrderTool(person.id), ...(business?.change ?? [])],
+    replyExtras: () => ({ ...chat.extras(), widgets: widgets.logo ? ["logo" as const] : [] }),
     abilities: [
-      "Look up their own Aming orders, invoices, receipts, wallet and Aming's prices.",
+      "Everything the chat assistant does for them: take and place Aming orders, invoice them, send MTN or Airtel payment prompts, add photos to an order, look up their orders, invoices, receipts, wallet and prices, show product photos, and call the team.",
       business?.words ?? "",
       "Show them the way around the app.",
-      business?.change.length ? "" : "They can't make changes through you on this page.",
     ]
       .filter(Boolean)
       .join(" "),

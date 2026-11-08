@@ -46,11 +46,35 @@ studio's page without an Aming account, so they never see it. Plan: the "Alexis 
   - Staff: orders, clients, the review queue (managers); money and expenses, record an expense or a repeating one
     (boss, supervisors); server health, agents, staff accounts, currencies; set a currency rate, a staff role, a
     commission rate, register an agent (boss). Item status and new clients (managers). Designers and workers: their board.
-  - Client app: the account's orders, invoices, receipts, wallet and prices; on `/studio` its money, clients (add one) and
+  - Client app: everything the chat assistant does, on cards instead of a "yes" in chat (`tools/client-orders.ts`):
+    place an order (checked and priced by the chat's `checkOrderItems`; approved and invoiced at once with a photo link, or
+    left to the order form's review once attached photos have uploaded), create an invoice, send an MTN/Airtel prompt; plus
+    the chat's own reads, tappable answers and product photos, and hand_to_staff (the team is told, once an hour). Also: on `/studio` its money, clients (add one) and
     vendor jobs by team area; on `/agents` figures and clients (add one); on `/vendors` jobs.
+- **Screens (`packages/ui/assistant`):** `AlexisPanel` (the floating button's quick chat: the newest chat, New chat, All chats),
+  `AlexisPage` (the full page: `/alexis` in the client app, `/dashboard/alexis` for staff; chats on the left with search and
+  the orange "free for now" card, the welcome with a big message box and suggestions for the role), sharing `AlexisChat`.
+- **Chats:** `assistant_chats`, each named after its first message; WhatsApp is one chat named WhatsApp.
+- **Attach:** clients and managers attach files in the message box. Alexis sees only their names. `add_files_to_order`
+  (`tools/order-files.ts`) prepares a card for one order item; once confirmed, the files upload from the device through
+  `uploadFileToStorage`, the order's own upload path, which checks again who may add to that item.
 - **Show the way:** the panel sends the links on the page; `show_the_way` picks pages from them, and the guide bar opens
   each and outlines the button to tap.
 - **Server health (`tools/health.ts`):** Uptime Kuma (`/metrics` with an API key), Beszel (a read-only user) and the money
   watch's open alerts, for the boss. Kuma and Beszel need their settings in the staff app's environment (`.env.example`).
 - **WhatsApp (`apps/factory/app/api/whatsapp/route.ts`):** the boss's own number only, as the boss, read-only (changes need
   the app's sign-in for Confirm). Needs the WHATSAPP_* settings and a Meta business number with the webhook pointed at it.
+
+## Streaming, tracing, evaluations, security (2026-11-08)
+
+- **Streaming:** each app's `POST /api/alexis` (`panel/stream.ts`) answers as lines of JSON: what Alexis is doing ("Looking up
+  your orders") and its words as they come. Only from the app's own pages (Origin must be this site, JSON only).
+- **Tracing:** every reply's tool calls (input, output, time, refused or not) are kept in `assistant_runs.trace` and shown
+  under Latest Alexis replies on Dashboard → Assistant.
+- **Evaluations:** `npm run eval:alexis` runs ten real conversations with the real AI, Alexis's real instructions and tool
+  definitions, and fixture data (`panel/evals/run.ts`): ordering, a vague order, an order's status, prompt injection in order
+  notes, payment, showing the way, off-topic, studio setup, adding a service, the boss's money. Run it after changing the
+  instructions or tools. A few US cents a run; never touches the database.
+- **Security:** the guide only sends people to this app's own pages (`isAppPath`), at most 30 messages per person per
+  10 minutes, page link labels and tool results are data, never instructions. Both apps send frame-ancestors 'self',
+  X-Frame-Options, nosniff, a referrer policy and HSTS, and no x-powered-by.

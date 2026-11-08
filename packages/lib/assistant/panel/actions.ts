@@ -10,10 +10,22 @@ import * as panel from "./server";
 
 const OFF: panel.PanelState = { kind: "off" };
 
-/** What the panel shows this person on this page: off, terms to agree to, or their chat and usage. */
+/** What Alexis shows this person on this page: off, terms to agree to, or their chats and usage. */
 export async function openAlexis(page: string): Promise<panel.PanelState> {
   const person = await panel.currentPerson();
   return person ? panel.panelState(person, page) : OFF;
+}
+
+/** One of this person's chats. */
+export async function openAlexisChat(chatId: string): Promise<panel.PanelMessage[] | null> {
+  const person = await panel.currentPerson();
+  return person ? panel.chatMessages(person, String(chatId)) : null;
+}
+
+/** This person's chats whose title or messages contain the words. */
+export async function searchAlexisChats(words: string): Promise<panel.ChatSummary[]> {
+  const person = await panel.currentPerson();
+  return person ? panel.chatsOf(person, String(words ?? "")) : [];
 }
 
 export async function agreeToAlexisTerms(version: number, page: string): Promise<panel.PanelState> {
