@@ -750,7 +750,7 @@ export function suggestionsFor(person: Person, page: string): string[] {
   if (person.type === "designer") return ["What orders are assigned to me?", "Which of my orders are due soonest?"];
   if (person.type === "worker") return ["What's on the factory board?", "Which items are urgent?"];
   if (person.type === "client") {
-    if (under("/studio")) return ["How much did we receive this month?", "Who owes us money?", "Add a new client", "Show me where our bookings are"];
+    if (under("/studio")) return ["Help me set up my page", "Add a service with packages", "How much did we receive this month?", "Add a new client"];
     if (under("/agents")) return ["How much commission have I earned?", "Add a new client", "Show me how to place an order for a client"];
     if (under("/vendors")) return ["What jobs do I have?", "Show me where to accept a job"];
     return ["Where is my latest order?", "Do I owe anything?", "Add photos to my order", "Show me where to top up my wallet"];
