@@ -13,7 +13,7 @@ import { COMPANY, type Payer } from "../core";
 import { PANEL_PROMPT } from "../prompt";
 import { contextFor, guideTool, PREPARED_REPLY, PREPARES_ONLY, type Person } from "../server";
 import type { ChangeTool, PageLink, Toolbox } from "../toolbox";
-import { clientOrderTools } from "../tools/client-orders";
+import { clientOrderTools, walletTools } from "../tools/client-orders";
 import { addFilesToOrderTool } from "../tools/order-files";
 import { studioSetupTools } from "../tools/studio-setup";
 
@@ -135,7 +135,7 @@ function clientToolbox(person: Person): Toolbox {
   const handToStaff: AssistantTool = { name: "hand_to_staff", description: "Tell the team this client needs a person (a question you can't answer, a complaint, a large or unusual order). Keep helping with anything else.", inputSchema: z.object({ reason: z.string() }), run: (async () => "") as AssistantTool["run"] };
   return {
     read: [...assistantTools(ctx).filter((t) => fromChat.includes(t.name)), handToStaff],
-    change: [...clientOrderTools(person), addFilesToOrderTool(person.id)],
+    change: [...clientOrderTools(person), ...walletTools(person), addFilesToOrderTool(person.id)],
     abilities: "Everything the chat assistant does for them: take and place Aming orders, invoice them, send MTN or Airtel payment prompts, add photos to an order, look up their orders, invoices, receipts, wallet and prices, show product photos, and call the team. Show them the way around the app.",
   };
 }
@@ -143,6 +143,13 @@ function clientToolbox(person: Person): Toolbox {
 function studioToolbox(): Toolbox {
   const studio = studioSetupTools(fakeStudio, { logo: false });
   return { read: studio.read, change: studio.change, abilities: studio.words };
+}
+
+/** A client who also owns a studio: every page has both (clientAppToolbox). */
+function ownerToolbox(person: Person): Toolbox {
+  const own = clientToolbox(person);
+  const studio = studioToolbox();
+  return { read: [...own.read, ...studio.read], change: [...own.change, ...studio.change], abilities: `${own.abilities} ${studio.abilities} All of this works from any page.` };
 }
 
 function bossToolbox(): Toolbox {
@@ -168,7 +175,8 @@ const firstCall = (name: string) => (o: Outcome) => (o.calls[0]?.name === name ?
 const says = (re: RegExp, what: string) => (o: Outcome) => (re.test(o.reply) ? null : `reply doesn't ${what}`);
 const neverSays = (re: RegExp, what: string) => (o: Outcome) => (re.test(o.reply) ? `reply ${what}` : null);
 const either = (...checks: ((o: Outcome) => string | null)[]) => (o: Outcome) => (checks.some((c) => c(o) === null) ? null : checks.map((c) => c(o)).join(" / "));
-const asksSomething = says(/\?/, "ask a question");
+/** A question in words, or answers to tap (offer_choices): both ask the person. */
+const asksSomething = (o: Outcome) => (/\?/.test(o.reply) || o.calls.some((c) => c.name === "offer_choices") ? null : "doesn't ask anything");
 const doesntTeach = neverSays(/\b(go to|tap|click|open)\b[^.?!]*\b(place order|my orders|wallet page|menu)\b/i, "tells them how to do it in the app instead of doing it");
 const notDone = neverSays(/\b(I've|I have|it's|it is|has been|is now)\s+(placed|sent|done|saved|added|created|confirmed)\b/i, "claims something is done before Confirm");
 
@@ -274,6 +282,40 @@ const SCENARIOS: Scenario[] = [
     fixtures: { studio_page_status: studioStatus, service_samples: samples },
     messages: [{ role: "user", content: "Help me add a wedding photography service" }],
     checks: [called("service_samples"), notCalled("add_service"), either(asksSomething, says(/recommend|suggest/i, "recommend"))],
+  },
+  {
+    name: "A studio owner on the Wallet page adds packages: done here, not 'go to My Business' (live chat, 2026-11-08)",
+    person: { ...sarah, id: "c-2", name: "Peter Okello" },
+    payer: { type: "client", id: "c-2" },
+    page: { path: "/payment", title: "Wallet", links: clientLinks },
+    tools: () => ownerToolbox({ ...sarah, id: "c-2", name: "Peter Okello" }),
+    fixtures: { studio_page_status: studioStatus, service_samples: samples },
+    messages: [
+      { role: "user", content: "I want to add some packages" },
+      { role: "assistant", content: "Do you mean packages for your studio's services or Aming product packages?" },
+      { role: "user", content: "Studio service packages" },
+    ],
+    checks: [notCalled("show_the_way"), either(called("service_samples"), called("studio_page_status"), called("add_service")), neverSays(/from here|My Business/i, "sends them elsewhere")],
+  },
+  {
+    name: "Top up my wallet: it prepares the top-up prompt",
+    person: sarah,
+    payer: { type: "client", id: sarah.id },
+    page: { path: "/showroom", title: "Showroom", links: clientLinks },
+    tools: () => clientToolbox(sarah),
+    fixtures: {},
+    messages: [{ role: "user", content: "Top up my wallet with 50,000 from 0772123456" }],
+    checks: [called("top_up_wallet"), notCalled("show_the_way"), notDone],
+  },
+  {
+    name: "Pay all my invoices: one card, or a question about how (live chat, 2026-11-08)",
+    person: sarah,
+    payer: { type: "client", id: sarah.id },
+    page: { path: "/", title: "Dashboard", links: clientLinks },
+    tools: () => clientToolbox(sarah),
+    fixtures: { get_my_orders: myOrders },
+    messages: [{ role: "user", content: "I want to pay all my invoices" }],
+    checks: [either(called("pay_all_invoices"), asksSomething), notCalled("show_the_way"), notDone],
   },
   {
     name: "The boss asks about today's money: it looks it up",

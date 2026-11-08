@@ -8,7 +8,7 @@ import { agentClients, agentOfClient, figuresFor } from "@repo/lib/agents/server
 import { createCustomer } from "@repo/lib/customers/actions";
 import { customers } from "@repo/lib/customers/server";
 import { agentClientSchema } from "@repo/lib/agents/core";
-import { ownStudio, studioOfCaller } from "@repo/lib/studios/server";
+import { ownStudio, studioOfCaller, studiosOf } from "@repo/lib/studios/server";
 import { canUse } from "@repo/lib/team/core";
 import { vendorJobs, vendors } from "@repo/lib/vendors/server";
 
@@ -16,7 +16,7 @@ import { assistantTools, tellManagers, type ToolContext } from "../../server/too
 import { createAdminClient } from "@repo/lib/supabase/admin";
 import type { Person } from "../server";
 import { changeTool, outcome, readTool, type ChangeTool, type Toolbox } from "../toolbox";
-import { clientOrderTools } from "./client-orders";
+import { clientOrderTools, walletTools } from "./client-orders";
 import { addFilesToOrderTool } from "./order-files";
 import { studioSetupTools } from "./studio-setup";
 import type { AssistantTool } from "../../server/tools";
@@ -201,20 +201,28 @@ async function vendorTools(person: Person): Promise<{ read: AssistantTool[]; cha
 }
 
 /** The toolbox for a client-app account on this page. */
-export async function clientAppToolbox(person: Person, page: string): Promise<Toolbox> {
+/**
+ * The toolbox for a client-app account, the same on every page: its own Aming account, and each business it
+ * has (its studio, agency, vendor account), so Alexis never says "not from here". Only businesses it already
+ * has: studioOfCaller would open a studio for an account without one.
+ */
+export async function clientAppToolbox(person: Person, _page: string): Promise<Toolbox> {
   if (person.type !== "client") return { read: [], change: [], abilities: "Nothing in this app." };
-  const under = (root: string) => page === root || page.startsWith(`${root}/`);
   const chat = fromChat(person);
   const widgets = { logo: false };
-  const business = under("/studio") ? await studioTools(widgets) : under("/agents") ? await agentTools(person) : under("/vendors") ? await vendorTools(person) : null;
+  const { owned, working } = await studiosOf(person.id);
+  const businesses = (
+    await Promise.all([owned || working.length ? studioTools(widgets) : null, agentTools(person), vendorTools(person)])
+  ).filter((b): b is NonNullable<typeof b> => !!b);
   return {
-    read: [...chat.tools, handToStaff(person), ...(business?.read ?? [])],
-    change: [...clientOrderTools(person), addFilesToOrderTool(person.id), ...(business?.change ?? [])],
+    read: [...chat.tools, handToStaff(person), ...businesses.flatMap((b) => b.read)],
+    change: [...clientOrderTools(person), ...walletTools(person), addFilesToOrderTool(person.id), ...businesses.flatMap((b) => b.change)],
     replyExtras: () => ({ ...chat.extras(), widgets: widgets.logo ? ["logo" as const] : [] }),
     abilities: [
-      "Everything the chat assistant does for them: take and place Aming orders, invoice them, send MTN or Airtel payment prompts, add photos to an order, look up their orders, invoices, receipts, wallet and prices, show product photos, and call the team.",
-      business?.words ?? "",
-      "Show them the way around the app.",
+      "Everything the chat assistant does for them: take and place Aming orders, invoice them, send MTN or Airtel payment prompts, pay all their invoices at once, top up their wallet, add photos to an order, look up their orders, invoices, receipts, wallet and prices, show product photos, and call the team.",
+      ...businesses.map((b) => b.words),
+      "All of this works from any page: never tell them to go to another page to do something you have a tool for.",
+      "Show them the way around the app only when they ask where something is.",
     ]
       .filter(Boolean)
       .join(" "),
