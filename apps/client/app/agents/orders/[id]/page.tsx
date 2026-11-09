@@ -29,7 +29,7 @@ export default async function AgentOrderPage({ params }: { params: Promise<{ id:
   if (!order) notFound();
 
   const [money, client, percent] = await Promise.all([clientMoney(), order.clientId ? agentClient(agent.id, order.clientId) : null, payFirstPercent(agent.id)]);
-  const payFirst = order.earns && order.stage !== "cancelled" ? payFirstWording(order.price, percent, money) : null;
+  const payFirst = order.earns && order.stage !== "cancelled" ? payFirstWording(order.price, order.payFirstPercent ?? percent, money) : null;
   const due = order.price === null ? null : Math.max(order.price - order.paid, 0);
   const canPay = order.stage !== "cancelled" && order.price !== null && due !== null && due > 0;
 

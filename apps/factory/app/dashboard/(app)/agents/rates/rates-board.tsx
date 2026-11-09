@@ -5,7 +5,7 @@ import { useState, useTransition } from "react";
 
 import { Button } from "@repo/ui/Button";
 import { TextInput } from "@repo/ui/Field";
-import { setCommissionRate, setPayFirstForAll, setWithdrawalFeePaidBy } from "@repo/lib/agents/actions";
+import { setCommissionRate, setPayFirstForAll, setWithdrawalFeePaidBy, waitingForPayFirst } from "@repo/lib/agents/actions";
 import type { FeePaidBy } from "@repo/lib/agents/core";
 import type { CategoryRate } from "@repo/lib/agents/server";
 
@@ -77,13 +77,25 @@ function PayFirstSetting({ percent }: { percent: number }) {
   const [value, setValue] = useState(String(percent));
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  // Orders already waiting under the setting: the boss chooses whether they take the new %.
+  const [waiting, setWaiting] = useState<{ count: number; orderNos: string[] } | null>(null);
   const changed = value.trim() !== "" && Number(value) !== percent;
+
+  function save(choice: "follow" | "keep") {
+    setError(null);
+    start(async () => {
+      const res = await setPayFirstForAll(value, choice);
+      if (!res.ok) return setError(res.error);
+      setWaiting(null);
+      router.refresh();
+    });
+  }
 
   return (
     <section className="rounded-2xl border border-border bg-surface p-4 shadow-theme-xs sm:p-5">
       <h2 className="text-sm font-semibold">Pay before production</h2>
       <p className="mt-1 text-xs text-muted">
-        An order an agent places from their own login goes to production once the client has paid this % of the price. 0% means no payment is needed first. An agent&apos;s own % (on their page, under Edit) overrides this. It applies to orders already waiting too.
+        An order an agent places from their own login goes to production once the client has paid this % of the price. 0% means no payment is needed first. An agent&apos;s own % (on their page, under Edit) overrides this. When you change it, you choose whether orders already waiting take the new %.
       </p>
       <form
         className="mt-3 flex items-center gap-3"
@@ -91,23 +103,63 @@ function PayFirstSetting({ percent }: { percent: number }) {
           e.preventDefault();
           setError(null);
           start(async () => {
-            const res = await setPayFirstForAll(value);
-            if (!res.ok) setError(res.error);
-            else router.refresh();
+            const found = await waitingForPayFirst(null);
+            if (!found.ok) return setError(found.error);
+            if (found.data.count > 0) setWaiting(found.data);
+            else save("follow");
           });
         }}
       >
         <span className="min-w-0 flex-1 text-sm font-medium">All agents</span>
         <div className="w-20 shrink-0">
-          <TextInput aria-label="Pay before production, percent" inputMode="numeric" className="text-right" value={value} onChange={(e) => setValue(e.target.value)} />
+          <TextInput aria-label="Pay before production, percent" inputMode="numeric" className="text-right" value={value} onChange={(e) => { setValue(e.target.value); setWaiting(null); }} />
         </div>
         <span className="text-sm text-muted">%</span>
-        <Button type="submit" variant="secondary" className="min-h-9 text-xs" loading={pending} disabled={pending || !changed}>
+        <Button type="submit" variant="secondary" className="min-h-9 text-xs" loading={pending && !waiting} disabled={pending || !changed}>
           Save
         </Button>
       </form>
+      {waiting ? <WaitingChoice waiting={waiting} from={percent} to={Number(value)} busy={pending} onChoose={save} onCancel={() => setWaiting(null)} /> : null}
       {error ? <p className="mt-2 text-sm text-error-600">{error}</p> : null}
     </section>
+  );
+}
+
+/** Asked when saving a new %: do the orders already waiting take it? */
+export function WaitingChoice({
+  waiting,
+  from,
+  to,
+  busy,
+  onChoose,
+  onCancel,
+}: {
+  waiting: { count: number; orderNos: string[] };
+  from: number;
+  to: number;
+  busy: boolean;
+  onChoose: (choice: "follow" | "keep") => void;
+  onCancel: () => void;
+}) {
+  const orders = waiting.count === 1 ? "1 order is" : `${waiting.count} orders are`;
+  return (
+    <div className="mt-3 rounded-xl border border-warning-500/40 bg-warning-50 p-3 text-sm dark:bg-warning-500/10">
+      <p className="font-medium">
+        {orders} already waiting under {from}%: {waiting.orderNos.slice(0, 6).join(", ")}
+        {waiting.count > 6 ? ` and ${waiting.count - 6} more` : ""}. Should they take {to}% too?
+      </p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <Button size="sm" loading={busy} disabled={busy} onClick={() => onChoose("follow")}>
+          Yes, apply {to}% to them
+        </Button>
+        <Button size="sm" variant="secondary" disabled={busy} onClick={() => onChoose("keep")}>
+          No, they keep {from}%
+        </Button>
+        <Button size="sm" variant="ghost" disabled={busy} onClick={onCancel}>
+          Cancel
+        </Button>
+      </div>
+    </div>
   );
 }
 
