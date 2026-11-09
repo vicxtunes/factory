@@ -24,3 +24,9 @@ export async function cancel(id: unknown): Promise<panel.DecideResult> {
   if (!person) return NOT_SIGNED_IN;
   return panel.cancel(person, String(id));
 }
+
+export async function uploaded(build: BuildToolbox, id: unknown, path: unknown): Promise<panel.DecideResult> {
+  const person = await panel.currentPerson();
+  if (!person) return NOT_SIGNED_IN;
+  return panel.afterUpload(person, String(id), await build(person, pathOf(path)), pathOf(path));
+}

@@ -59,8 +59,8 @@ export function outcome(res: { ok: boolean; error?: string }, done: string): Cha
   return res.ok ? { ok: true, done } : { ok: false, error: res.error ?? "It couldn't be done." };
 }
 
-/** Something the app shows under a reply for the person to use themselves: "logo", the studio's logo uploader. */
-export type ReplyWidget = "logo";
+/** Something the app shows under a reply for the person to use themselves: the studio's logo uploader, or one service's photos panel. */
+export type ReplyWidget = "logo" | `service-media:${string}`;
 
 export interface Toolbox {
   read: AssistantTool[];

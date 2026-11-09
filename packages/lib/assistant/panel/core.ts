@@ -122,3 +122,13 @@ export function plainText(text: string): string {
     .replace(/__(.+?)__/g, "$1")
     .replace(/^#{1,6}\s+/gm, "");
 }
+
+/** Openers that don't say what a chat is about: hello in English or Luganda, a question about who Alexis is. */
+const GREETINGS = /^(hi+|hey+|hello+|hallo|good (morning|afternoon|evening)|oli otya|osiibye otya|wasuze otya|gyebale|nkulamusizza|gwe ani\??|who are you\??|yo|sup|ok(ay)?|thanks?|thank you|webale)[\s!.?]*$/i;
+
+/** A chat's name from a message, or null when the message says nothing about it (a greeting). */
+export function chatTitleFrom(message: string): string | null {
+  const text = message.replace(/\s+/g, " ").trim();
+  if (!text || GREETINGS.test(text) || text === "(files attached)") return null;
+  return text.slice(0, 60);
+}

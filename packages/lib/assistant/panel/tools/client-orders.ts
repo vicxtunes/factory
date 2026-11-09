@@ -3,6 +3,8 @@ import "server-only";
 import { z } from "zod";
 
 import { logOrderEvent, type AuditActor } from "@repo/lib/audit/log";
+import { openClientOrderThread, postAssistantMessage } from "@repo/lib/chat/assistant";
+import { chatHref } from "@repo/lib/chat/routes";
 import { formatMoney } from "@repo/lib/currency/format";
 import { InvoiceError } from "@repo/lib/invoices/server/errors";
 import * as invoices from "@repo/lib/invoices/server/service";
@@ -155,7 +157,7 @@ export function clientOrderTools(person: Person): ChangeTool[] {
         await tellManagers("New client order", `Order ${res.orderNo} from ${person.name}, placed through ${ASSISTANT_NAME}; photos uploading`, "/dashboard/order-approvals");
         return {
           ok: true,
-          done: `Order ${res.orderNo} is placed. Your photos are uploading below: keep this open until they finish. Then it's confirmed and your invoice comes in the order's chat.`,
+          done: `Order ${res.orderNo} is placed. Your photos are uploading below: keep this open until they finish, and your invoice follows here in a moment.`,
           uploadItemId,
         };
       }
@@ -368,4 +370,60 @@ export function explainPriceTool(): AssistantTool {
       };
     },
   });
+}
+
+/**
+ * Cancelling is the office's: Alexis asks why, tries to put it right first, and when the client still wants
+ * to cancel it sends the request, with the reason, to the order's chat and tells the staff.
+ */
+export function cancellationTool(person: Person): ChangeTool {
+  return changeTool({
+    name: "request_cancellation",
+    description:
+      "Ask the office to cancel one of the client's orders, with their reason. Only once you know the reason and they still want to cancel after you offered what might fix it. The office decides and replies in the order's chat.",
+    inputSchema: z.object({ orderNo: z.string().min(1).max(40), reason: z.string().min(2).max(500).describe("In their words.") }),
+    card: async ({ orderNo, reason }) => {
+      const order = await ownOrder(person.id, orderNo);
+      return { title: `Ask the office to cancel order ${order.order_no}`, lines: [`Reason: ${reason}`, "The office decides and replies in the order's chat."] };
+    },
+    run: async ({ orderNo, reason }) => {
+      const order = await ownOrder(person.id, orderNo);
+      const conversationId = await openClientOrderThread({ type: "client", id: person.id, name: person.name }, order.id);
+      await postAssistantMessage(conversationId, person.id, ASSISTANT_NAME, `${person.name} asked to cancel this order. Reason: ${reason}`);
+      await tellManagers(`Cancellation request: order ${order.order_no}`, `${person.name}: ${reason}`, chatHref(conversationId));
+      return { ok: true, done: `The office has your request to cancel order ${order.order_no}, with your reason. They'll reply in the order's chat.` };
+    },
+  });
+}
+
+/**
+ * The photos a client attached for an order item have finished uploading: their order, if it's still waiting
+ * for review, priced and has photos on every item, is confirmed and invoiced now (as the order form's review
+ * would a minute later). Returns what happened, for Alexis to tell them.
+ */
+export async function afterPhotosUploaded(person: Person, orderItemId: string): Promise<string> {
+  const db = createAdminClient();
+  const { data: item } = await db.from("order_items").select("order_id").eq("id", orderItemId).maybeSingle();
+  if (!item) return "The photos uploaded, but that order item no longer exists.";
+  const { data: order } = await db
+    .from("orders")
+    .select("id, order_no, client_id, approval_status, cancelled_at, order_items(media_link, order_item_media(id), order_item_drive_links(id))")
+    .eq("id", item.order_id)
+    .maybeSingle<{ id: string; order_no: string; client_id: string | null; approval_status: string; cancelled_at: string | null; order_items: { media_link: string | null; order_item_media: { id: string }[]; order_item_drive_links: { id: string }[] }[] }>();
+  if (!order || (person.type === "client" && order.client_id !== person.id)) return "The photos uploaded.";
+  if (order.cancelled_at) return `The photos uploaded, but order ${order.order_no} was cancelled.`;
+  if (order.approval_status !== "pending_review") return `The photos are on order ${order.order_no}.`;
+  const everyItem = order.order_items.every((i) => !!i.media_link || i.order_item_media.length > 0 || i.order_item_drive_links.length > 0);
+  if (!everyItem) return `The photos are on order ${order.order_no}, but another item on it still needs its photos.`;
+  const { lines } = await invoices.draft(order.id);
+  if (!canAutoApprove(lines)) return `The photos are on order ${order.order_no}. Reception will confirm its price and send the invoice.`;
+  const received = await receiveOrder(order.id, ASSISTANT_ACTOR);
+  if (!received.ok) {
+    await tellManagers("Alexis couldn't confirm an order", `Order ${order.order_no}: ${received.error}`, "/dashboard/order-approvals");
+    return `The photos are on order ${order.order_no}. Reception will confirm it and send the invoice.`;
+  }
+  const made = await invoices.generate({ id: ASSISTANT_ACTOR.id, name: ASSISTANT_NAME }, order.id, {
+    lines: lines.map((l) => ({ itemId: l.itemId, unitPrice: l.unitPrice as number, unit: l.unit })),
+  });
+  return `The photos are in and order ${order.order_no} is confirmed. Total ${formatMoney(made.amount)}. Invoice: ${made.shareUrl}`;
 }

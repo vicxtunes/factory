@@ -14,3 +14,7 @@ export async function confirmAlexis(id: string, path: string) {
 export async function cancelAlexis(id: string) {
   return alexis.cancel(id);
 }
+
+export async function uploadedAlexis(id: string, path: string) {
+  return alexis.uploaded(staffAppToolbox, id, path);
+}
