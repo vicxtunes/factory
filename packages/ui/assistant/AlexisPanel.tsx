@@ -5,7 +5,7 @@ import { useState, useSyncExternalStore, type ReactNode } from "react";
 import { Drawer } from "../Drawer";
 import { Spinner } from "../Spinner";
 import { Tabs } from "../Tabs";
-import { ChatList, Composer, GuideBar, Messages, SparkIcon, startGuide, stopGuide, TermsGate, Usage, useAlexis, useGuiding, Welcome, type AlexisActions } from "./AlexisChat";
+import { ChatList, Composer, GuideBar, Memories, Messages, SparkIcon, startGuide, stopGuide, TermsGate, Usage, useAlexis, useGuiding, Welcome, type AlexisActions } from "./AlexisChat";
 
 // Alexis on every page (packages/lib/assistant/panel): a floating button that
 // opens a quick chat. A full-screen sheet on a phone; on a computer a panel
@@ -162,7 +162,10 @@ export function AlexisPanel({ actions, fullPage }: { actions: AlexisActions; ful
               </div>
             ) : (
               <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-                <Usage usage={state.usage} />
+                <div className="space-y-6">
+                  <Usage usage={state.usage} />
+                  <Memories alexis={alexis} />
+                </div>
               </div>
             )}
           </>

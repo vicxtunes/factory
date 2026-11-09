@@ -6,7 +6,7 @@ import type { PanelState } from "@repo/lib/assistant/panel/server";
 
 import { BottomSheet } from "../BottomSheet";
 import { FormSheet } from "../FormSheet";
-import { AlexisMark, ChatList, ClockIcon, Composer, FreeCard, Messages, PlusIcon, startGuide, TermsGate, Usage, useAlexis, Welcome, type AlexisActions } from "./AlexisChat";
+import { AlexisMark, ChatList, Memories, ClockIcon, Composer, FreeCard, Messages, PlusIcon, startGuide, TermsGate, Usage, useAlexis, Welcome, type AlexisActions } from "./AlexisChat";
 
 // Alexis's own page in each app: the person's chats on the left (New chat,
 // search, recent chats, and the "free for now" card), and the open chat. An
@@ -107,7 +107,10 @@ export function AlexisPage({ actions, initial }: { actions: AlexisActions; initi
         </div>
       </BottomSheet>
       <FormSheet open={usageOpen} onClose={() => setUsageOpen(false)} title="Alexis usage">
-        <Usage usage={state.usage} />
+        <div className="space-y-6">
+          <Usage usage={state.usage} />
+          <Memories alexis={alexis} />
+        </div>
       </FormSheet>
     </div>
   );

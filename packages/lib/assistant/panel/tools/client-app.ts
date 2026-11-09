@@ -16,7 +16,7 @@ import { assistantTools, tellManagers, type ToolContext } from "../../server/too
 import { createAdminClient } from "@repo/lib/supabase/admin";
 import type { Person } from "../server";
 import { changeTool, outcome, readTool, type ChangeTool, type Toolbox } from "../toolbox";
-import { clientOrderTools, walletTools } from "./client-orders";
+import { clientOrderTools, explainPriceTool, walletTools } from "./client-orders";
 import { addFilesToOrderTool } from "./order-files";
 import { studioSetupTools } from "./studio-setup";
 import type { AssistantTool } from "../../server/tools";
@@ -29,10 +29,11 @@ import type { AssistantTool } from "../../server/tools";
 
 /**
  * The chat assistant's own tools that don't belong to a chat thread: the account's orders, invoices, wallet,
- * prices and pay options, and the tappable answers and product photos it puts under a reply. Ordering,
+ * prices and pay options, and the product photos it puts under a reply. (Options to tap are the panel's own
+ * offer_choices, shown above the message box.) Ordering,
  * invoicing and payment prompts are cards here (./client-orders.ts), and so are photos (./order-files.ts).
  */
-const FROM_CHAT = ["get_catalog", "get_prices", "get_typical_times", "get_my_orders", "get_my_account", "get_my_receipts", "get_pay_options", "offer_choices", "show_product_photos"];
+const FROM_CHAT = ["get_catalog", "get_prices", "get_typical_times", "get_my_orders", "get_my_account", "get_my_receipts", "get_pay_options", "show_product_photos"];
 
 function fromChat(person: Person) {
   const ctx: ToolContext = { conversationId: "", client: { id: person.id, name: person.name, email: person.email, phone: person.phone }, actions: [], choices: [], images: [] };
@@ -215,7 +216,7 @@ export async function clientAppToolbox(person: Person): Promise<Toolbox> {
     await Promise.all([owned || working.length ? studioTools(widgets) : null, agentTools(person), vendorTools(person)])
   ).filter((b): b is NonNullable<typeof b> => !!b);
   return {
-    read: [...chat.tools, handToStaff(person), ...businesses.flatMap((b) => b.read)],
+    read: [...chat.tools, explainPriceTool(), handToStaff(person), ...businesses.flatMap((b) => b.read)],
     change: [...clientOrderTools(person), ...walletTools(person), addFilesToOrderTool(person.id), ...businesses.flatMap((b) => b.change)],
     replyExtras: () => ({ ...chat.extras(), widgets: widgets.logo ? ["logo" as const] : [] }),
     abilities: [

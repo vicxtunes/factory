@@ -27,6 +27,7 @@ import {
   mayUsePanel,
   PANEL_HISTORY,
   payerForPage,
+  plainText,
   startOfKampalaDay,
   startOfKampalaMonth,
   startOfNextKampalaMonth,
@@ -34,6 +35,7 @@ import {
   type PayerType,
   type PersonType,
 } from "./core";
+import { forgetKind, memoriesForModel, memoriesOf, memoryTools, remember, type Memory } from "./memory";
 import { PANEL_PROMPT } from "./prompt";
 import { MAX_GUIDE_STEPS, readTool, type ChangeOutcome, type ChangeTool, type GuideStep, type PageLink, type ReplyWidget, type Toolbox } from "./toolbox";
 
@@ -262,7 +264,11 @@ export interface PanelMessage {
   guide: GuideStep[] | null;
   /** Names of the files the person attached to this message (the files stay on their device). */
   files: string[];
-  /** Answers to tap, product photos, and things to use (the logo uploader), under a reply. */
+  /** A question with options, shown in a panel above the message box (one answer, or several). */
+  ask: AskChoice | null;
+  /** For Alexis only: the cards it prepared in this message, with their details and how they ended. */
+  cardNotes?: string;
+  /** Answers to tap (older replies; new ones use `ask`), product photos, and things to use (the logo uploader), under a reply. */
   choices: string[];
   images: { url: string; name: string }[];
   widgets: ReplyWidget[];
@@ -274,7 +280,15 @@ export interface ChatSummary {
   lastAt: string;
 }
 
+/** A question with options for the panel above the message box. */
+export interface AskChoice {
+  question: string;
+  options: { label: string; hint: string | null }[];
+  multiple: boolean;
+}
+
 interface MessageExtras {
+  ask?: AskChoice;
   actions?: string[];
   guide?: GuideStep[];
   files?: string[];
@@ -315,7 +329,14 @@ function toCard(row: ActionRow): ActionCard {
 
 /** What the AI reads for a message: its words, and the names of any files attached. */
 function forModel(m: PanelMessage): string {
-  return m.files.length ? `${m.body}\n[Attached from their device, not yet uploaded: ${m.files.join(", ")}]` : m.body;
+  const files = m.files.length ? `\n[Attached from their device, not yet uploaded: ${m.files.join(", ")}]` : "";
+  return `${m.body}${files}${m.cardNotes ? `\n${m.cardNotes}` : ""}`;
+}
+
+/** A card as Alexis reads it later: what it showed, what it would run, and how it ended (so "go ahead after all" can prepare it again). */
+function cardNote(a: ActionRow): string {
+  const ended = a.status === "pending" && Date.parse(a.expires_at) <= Date.now() ? "expired" : a.status;
+  return `[Card you prepared (${a.tool}): ${a.title}${a.lines.length ? ` | ${a.lines.join("; ")}` : ""} | ${ended}${a.result ? `: ${a.result}` : ""} | its input: ${JSON.stringify(a.input)}]`;
 }
 
 /** This person's chats, newest first; with `search`, those whose title or messages contain it. */
@@ -366,13 +387,15 @@ async function history(chatId: string, limit: number): Promise<PanelMessage[]> {
   ) as { id: string; role: "user" | "assistant"; body: string; created_at: string; extras: MessageExtras | null }[];
   const ids = rows.flatMap((r) => r.extras?.actions ?? []);
   const actions = ids.length ? (must(await db.from("assistant_pending_actions").select(ACTION_COLUMNS).in("id", ids)) as ActionRow[]) : [];
-  const byId = new Map(actions.map((a) => [a.id, toCard(a)]));
+  const byId = new Map(actions.map((a) => [a.id, a]));
   return rows.reverse().map((r) => ({
     id: r.id,
     role: r.role,
     body: r.body,
     createdAt: r.created_at,
-    actions: (r.extras?.actions ?? []).flatMap((id) => byId.get(id) ?? []),
+    actions: (r.extras?.actions ?? []).flatMap((id) => (byId.has(id) ? [toCard(byId.get(id)!)] : [])),
+    cardNotes: (r.extras?.actions ?? []).flatMap((id) => (byId.has(id) ? [cardNote(byId.get(id)!)] : [])).join("\n") || undefined,
+    ask: r.extras?.ask ?? null,
     guide: r.extras?.guide ?? null,
     files: r.extras?.files ?? [],
     choices: r.extras?.choices ?? [],
@@ -427,6 +450,7 @@ async function saveMessage(
     actions: [],
     guide: extras?.guide ?? null,
     files: extras?.files ?? [],
+    ask: extras?.ask ?? null,
     choices: extras?.choices ?? [],
     images: extras?.images ?? [],
     widgets: extras?.widgets ?? [],
@@ -448,6 +472,8 @@ export type PanelState =
       chatId: string | null;
       messages: PanelMessage[];
       usage: UsageView;
+      /** What Alexis remembers about them, which they can delete. */
+      memories: Memory[];
     };
 
 /** Whether this person sees the Alexis button at all. */
@@ -476,6 +502,7 @@ export async function panelState(person: Person, page: string, chatId?: string |
     chatId: open,
     messages: open ? await history(open, 100) : [],
     usage,
+    memories: await memoriesOf(person),
   };
 }
 
@@ -548,6 +575,29 @@ const guideSchema = z.object({
     .max(MAX_GUIDE_STEPS),
 });
 
+const askSchema = z.object({
+  question: z.string().min(1).max(200).describe("The question, in their language."),
+  options: z
+    .array(z.object({ label: z.string().min(1).max(60), hint: z.string().max(120).nullable().describe("A few words that help them choose, or null.") }))
+    .min(2)
+    .max(8),
+  multiple: z.boolean().describe("true when they may pick several (e.g. add-ons); false for one."),
+});
+
+/** A question with options, shown in a panel above their message box: one answer, or several. */
+export function optionsTool(ctx: { ask: AskChoice | null }): AssistantTool {
+  return readTool({
+    name: "offer_choices",
+    description:
+      "Whenever they choose from a short list or answer yes or no, give them the options to tap, in a panel above their message box: the question, each option with an optional hint, and whether they may pick several. Still write the question in your reply. They can also type their own answer.",
+    inputSchema: askSchema,
+    run: async (a) => {
+      ctx.ask = { question: a.question, options: a.options.map((o) => ({ label: o.label, hint: o.hint?.trim() || null })), multiple: a.multiple };
+      return "The options will show above their message box.";
+    },
+  });
+}
+
 /** Shows the way step by step: opens each page in turn and points at what to tap. */
 export function guideTool(page: { path: string; links: PageLink[] }, ctx: { guide: GuideStep[] | null }): AssistantTool {
   const known = new Set([page.path, ...page.links.map((l) => l.href)]);
@@ -615,7 +665,7 @@ function traced(tools: AssistantTool[], trace: TraceStep[], onStep?: (tool: stri
 }
 
 export type SendResult =
-  | { ok: true; chat: ChatSummary; mine: PanelMessage; reply: PanelMessage; usage: UsageView }
+  | { ok: true; chat: ChatSummary; mine: PanelMessage | null; reply: PanelMessage; usage: UsageView }
   | { ok: false; error: string };
 
 /**
@@ -631,10 +681,13 @@ export async function send(
   channel: "app" | "whatsapp" = "app",
   files: string[] = [],
   listen?: Listen,
+  /** Instead of a message from the person: something that happened (they tapped Confirm), for Alexis to follow up on in `chatId`. */
+  event?: string,
 ): Promise<SendResult> {
   const body = text.trim().slice(0, MAX_MESSAGE_CHARS);
   const attached = files.map((f) => f.slice(0, 120)).slice(0, MAX_ATTACHED_FILES);
-  if (!body && !attached.length) return { ok: false, error: "Write a message first." };
+  if (!body && !attached.length && !event) return { ok: false, error: "Write a message first." };
+  if (event && !chatId) return { ok: false, error: "That chat doesn't exist." };
   const settings = await panelSettings();
   if (!mayUsePanel(settings.panelMode, settings.testClients, person)) return { ok: false, error: "Alexis isn't open yet." };
   const terms = await currentTerms();
@@ -657,17 +710,19 @@ export async function send(
 
   const chat = chatId ?? (channel === "whatsapp" ? await whatsAppChat(person) : await newChat(person, body || attached.join(", ")));
   const earlier = await history(chat, PANEL_HISTORY);
-  const mine = await saveMessage(person, chat, "user", body || "(files attached)", page.path, channel, attached.length ? { files: attached } : null);
+  const mine = event ? null : await saveMessage(person, chat, "user", body || "(files attached)", page.path, channel, attached.length ? { files: attached } : null);
+  const memories = await memoriesOf(person);
 
   const prepared: string[] = [];
-  const ctx: { guide: GuideStep[] | null } = { guide: null };
+  const ctx: { guide: GuideStep[] | null; ask: AskChoice | null } = { guide: null, ask: null };
   const trace: TraceStep[] = [];
   const tools = traced(
     [
       ...toolbox.read,
       usageTool(person, payer, settings),
       ...toolbox.change.map((t) => preparingTool(t, person, chat, prepared, attached.length)),
-      ...(channel === "app" ? [guideTool(page, ctx)] : []),
+      ...memoryTools(person),
+      ...(channel === "app" ? [guideTool(page, ctx), optionsTool(ctx)] : []),
     ],
     trace,
     listen?.onStep,
@@ -680,16 +735,16 @@ export async function send(
     const answered = await askModel({
       model,
       system: PANEL_PROMPT,
-      context: contextFor(person, page, payer, toolbox.abilities),
+      context: [contextFor(person, page, payer, toolbox.abilities), memoriesForModel(memories)].filter(Boolean).join("\n\n"),
       tools,
-      messages: [...earlier, mine].map((m) => ({ role: m.role, content: forModel(m) })),
+      messages: [...earlier.map((m) => ({ role: m.role, content: forModel(m) })), { role: "user" as const, content: event ?? forModel(mine!) }],
       onUsage: (u) => {
         totals = u;
       },
       onText: listen?.onText,
       everyStep: true,
     });
-    reply = answered.refused ? null : answered.text;
+    reply = answered.refused || !answered.text ? null : plainText(answered.text);
     if (!reply) failure = answered.refused ? "The AI declined to answer." : "The AI gave no reply.";
   } catch (err) {
     failure = err instanceof Error ? err.message : "The AI couldn't be reached.";
@@ -722,8 +777,8 @@ export async function send(
   const shown = toolbox.replyExtras?.() ?? { choices: [], images: [], widgets: [] };
   const widgets = shown.widgets ?? [];
   const extras: MessageExtras | null =
-    prepared.length || ctx.guide || shown.choices.length || shown.images.length || widgets.length
-      ? { actions: prepared, guide: ctx.guide ?? undefined, choices: shown.choices, images: shown.images, widgets }
+    prepared.length || ctx.guide || ctx.ask || shown.choices.length || shown.images.length || widgets.length
+      ? { actions: prepared, guide: ctx.guide ?? undefined, ask: ctx.ask ?? undefined, choices: shown.choices, images: shown.images, widgets }
       : null;
   const saved = await saveMessage(person, chat, "assistant", reply, page.path, channel, extras);
   const cards = prepared.length ? (must(await createAdminClient().from("assistant_pending_actions").select(ACTION_COLUMNS).in("id", prepared)) as ActionRow[]) : [];
@@ -737,15 +792,11 @@ export async function send(
   };
 }
 
-export type DecideResult = { ok: true; card: ActionCard; note: PanelMessage } | { ok: false; error: string };
-
-async function note(person: Person, row: ActionRow, words: string): Promise<PanelMessage> {
-  if (row.chat_id) return saveMessage(person, row.chat_id, "assistant", words, "", "app");
-  return { id: `note-${row.id}`, role: "assistant", body: words, createdAt: new Date().toISOString(), actions: [], guide: null, files: [], choices: [], images: [], widgets: [] };
-}
+/** `note`: Alexis's follow-up after Confirm, in the person's language (none after Cancel: the card says it). */
+export type DecideResult = { ok: true; card: ActionCard; note: PanelMessage | null } | { ok: false; error: string };
 
 /** The person taps Confirm: the prepared change runs once, through the app's own function, and is recorded. */
-export async function confirm(person: Person, id: string, toolbox: Toolbox): Promise<DecideResult> {
+export async function confirm(person: Person, id: string, toolbox: Toolbox, path = "/"): Promise<DecideResult> {
   const db = createAdminClient();
   const claimed = must(
     await db
@@ -786,7 +837,19 @@ export async function confirm(person: Person, id: string, toolbox: Toolbox): Pro
       .select(ACTION_COLUMNS)
       .single(),
   ) as ActionRow;
-  return { ok: true, card: toCard(done), note: await note(person, row, result.ok ? `Done. ${result.done}` : `That didn't work: ${result.error}`) };
+  // An order placed: the unfinished one Alexis was keeping for them is done.
+  if (result.ok && row.tool === "place_order") await forgetKind(person, "unfinished_order");
+  // Alexis carries on in their language: what happened, and what's next (an invoice to pay, photos to upload…).
+  let note: PanelMessage | null = null;
+  if (row.chat_id) {
+    const what = result.ok ? `It worked: ${result.done}` : `It didn't work: ${result.error}`;
+    const followed = await send(person, row.chat_id, "", { path, title: "", links: [] }, toolbox, "app", [], undefined, `[They tapped Confirm on your card "${row.title}". ${what} Tell them in a sentence or two, in the language of this chat, and carry on with what's next.]`).catch((err) => {
+      console.error("alexis follow-up failed:", err);
+      return null;
+    });
+    if (followed?.ok) note = followed.reply;
+  }
+  return { ok: true, card: toCard(done), note };
 }
 
 export async function cancel(person: Person, id: string): Promise<DecideResult> {
@@ -801,7 +864,9 @@ export async function cancel(person: Person, id: string): Promise<DecideResult> 
       .select(ACTION_COLUMNS),
   ) as ActionRow[];
   if (!rows[0]) return { ok: false, error: "This change was already decided." };
-  return { ok: true, card: toCard(rows[0]), note: await note(person, rows[0], "Cancelled. Nothing was changed.") };
+  // An order they stepped back from: kept, so they can come back to it in any chat.
+  if (rows[0].tool === "place_order") await remember(person, "unfinished_order", `${rows[0].title}: ${rows[0].lines.join("; ")}. Its input: ${JSON.stringify(rows[0].input)}`);
+  return { ok: true, card: toCard(rows[0]), note: null };
 }
 
 /** Suggestions under the welcome, for this person's role and the business they're working in. */

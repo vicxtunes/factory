@@ -18,7 +18,7 @@ export interface Payer {
 export const COMPANY: Payer = { type: "company", id: null };
 
 /** How many earlier messages Alexis reads with a new one. */
-export const PANEL_HISTORY = 30;
+export const PANEL_HISTORY = 80;
 export const MAX_MESSAGE_CHARS = 2000;
 /** More than this from one person in 10 minutes is a script or a stuck key, not a person: it waits. */
 export const MAX_MESSAGES_PER_10_MIN = 30;
@@ -112,4 +112,13 @@ export function startOfKampalaDay(now: Date): Date {
 export function startOfNextKampalaMonth(now: Date): Date {
   const k = new Date(now.getTime() + KAMPALA_MS);
   return new Date(Date.UTC(k.getUTCFullYear(), k.getUTCMonth() + 1, 1) - KAMPALA_MS);
+}
+
+/** The app shows replies as plain text: **bold** and [words](link) become the words, and the words then the link. */
+export function plainText(text: string): string {
+  return text
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, (_, words: string, url: string) => (words === url ? url : `${words}: ${url}`))
+    .replace(/\*\*(.+?)\*\*/g, "$1")
+    .replace(/__(.+?)__/g, "$1")
+    .replace(/^#{1,6}\s+/gm, "");
 }

@@ -16,7 +16,7 @@ const NOT_SIGNED_IN = { ok: false as const, error: "Sign in to use Alexis." };
 export async function confirm(build: BuildToolbox, id: unknown, path: unknown): Promise<panel.DecideResult> {
   const person = await panel.currentPerson();
   if (!person) return NOT_SIGNED_IN;
-  return panel.confirm(person, String(id), await build(person, pathOf(path)));
+  return panel.confirm(person, String(id), await build(person, pathOf(path)), pathOf(path));
 }
 
 export async function cancel(id: unknown): Promise<panel.DecideResult> {
