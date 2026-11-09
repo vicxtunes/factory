@@ -73,3 +73,40 @@ export async function markInboxRead(recipient: Recipient): Promise<void> {
     .is("read_at", null);
   if (error) console.error("inbox: marking read failed:", error.message);
 }
+
+export const INBOX_PAGE = 50;
+
+/** One page of someone's inbox, newest first: unread only, or matching words in the title or message, before a moment. */
+export async function inboxPage(
+  recipient: Recipient,
+  options: { unreadOnly: boolean; search: string; before: string | null },
+): Promise<{ rows: NotificationRow[]; more: boolean; unread: number }> {
+  const db = createAdminClient();
+  let query = db
+    .from("inbox")
+    .select("id, title, body, url, read_at, created_at")
+    .eq("recipient_type", recipient.type)
+    .eq("recipient_id", recipient.id)
+    .order("created_at", { ascending: false })
+    .limit(INBOX_PAGE + 1);
+  if (options.unreadOnly) query = query.is("read_at", null);
+  if (options.before) query = query.lt("created_at", options.before);
+  const words = options.search.replace(/[%_\\,()]/g, " ").trim().slice(0, 60);
+  if (words) query = query.or(`title.ilike.%${words}%,body.ilike.%${words}%`);
+  const [{ data, error }, unread] = await Promise.all([
+    query.returns<InboxRow[]>(),
+    db.from("inbox").select("id", { count: "exact", head: true }).eq("recipient_type", recipient.type).eq("recipient_id", recipient.id).is("read_at", null),
+  ]);
+  if (error) throw new Error(error.message);
+  const rows = data.slice(0, INBOX_PAGE).map((r) => ({
+    id: r.id,
+    order_item_id: null,
+    event_type: "notice" as const,
+    title: r.title,
+    message: r.body,
+    created_at: r.created_at,
+    href: r.url ?? undefined,
+    unread: r.read_at === null,
+  }));
+  return { rows, more: data.length > INBOX_PAGE, unread: unread.count ?? 0 };
+}

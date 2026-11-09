@@ -138,6 +138,13 @@ export function NotificationMenu({ initial }: { initial: NotificationRow[] }) {
               <li className="px-4 py-6 text-center text-sm text-muted">No events yet.</li>
             ) : null}
           </ul>
+          <Link
+            href="/dashboard/notifications"
+            onClick={() => setOpen(false)}
+            className="block border-t border-border px-4 py-2.5 text-center text-sm font-medium text-brand-600 hover:bg-gray-50 dark:text-brand-400 dark:hover:bg-white/[0.03]"
+          >
+            See all notifications
+          </Link>
         </div>
       ) : null}
     </div>
