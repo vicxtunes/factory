@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { agentFigures, agentStage, isFinalStage } from "./core";
+import { agentFigures, agentStage, isFinalStage, payBeforeProduction, payFirstWording } from "./core";
 
 const line = (production_status: Parameters<typeof agentStage>[0]["lines"][number]["production_status"], stage: "factory" | "with_designer" = "factory") => ({ production_status, stage });
 const approved = (...lines: ReturnType<typeof line>[]) => agentStage({ cancelled_at: null, approval_status: "approved", lines });
@@ -55,4 +55,17 @@ test("figures: cancelled orders count in the total only, pending commission only
     withdrawn: 500,
   });
   assert.deepEqual(figures, { totalOrders: 4, completedSales: 1, pendingOrders: 2, commissionEarned: 900, commissionPending: 500, balance: 400, withdrawn: 500 });
+});
+
+test("pay before production uses the boss's %, rounded up", () => {
+  assert.equal(payBeforeProduction(100_001, 80), 80_001);
+  assert.equal(payBeforeProduction(100_000, 50), 50_000);
+  assert.equal(payBeforeProduction(100_000, 0), 0);
+});
+
+test("at 0% nothing is said about paying first", () => {
+  const money = (n: number) => `UGX ${n}`;
+  assert.equal(payFirstWording(1000, 0, money), null);
+  assert.equal(payFirstWording(1000, 60, money), "Production starts once 60% of the price (UGX 600) is paid.");
+  assert.equal(payFirstWording(null, 60, money), "Production starts once 60% of the price is paid.");
 });

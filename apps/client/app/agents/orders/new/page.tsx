@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { placeAgentOrder } from "@repo/lib/agents/actions";
-import { agentClient, agentClients } from "@repo/lib/agents/server";
+import { agentClient, agentClients, payFirstPercent } from "@repo/lib/agents/server";
 import { fetchCurrencies, fetchProductCatalog } from "@repo/lib/queries";
 import type { ProductCategory } from "@repo/lib/types";
 
@@ -22,10 +22,10 @@ export default async function AgentNewOrderPage({ searchParams }: { searchParams
   if (clientId) {
     const client = await agentClient(agent.id, clientId).catch(() => null);
     if (client?.status === "active") {
-      const [catalog, currencies] = await Promise.all([fetchProductCatalog(true).then(withoutOffers), fetchCurrencies()]);
+      const [catalog, currencies, percent] = await Promise.all([fetchProductCatalog(true).then(withoutOffers), fetchCurrencies(), payFirstPercent(agent.id)]);
       return (
         <AgentFrame agent={agent} page="orders">
-          <OrderForm catalog={catalog} showPrices currencies={currencies} agent={{ clientName: client.name, place: placeAgentOrder.bind(null, client.clientId) }} />
+          <OrderForm catalog={catalog} showPrices currencies={currencies} agent={{ clientName: client.name, place: placeAgentOrder.bind(null, client.clientId), payFirstPercent: percent }} />
         </AgentFrame>
       );
     }

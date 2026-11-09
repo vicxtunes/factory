@@ -5,7 +5,7 @@ import { useState, useTransition } from "react";
 
 import { Button } from "@repo/ui/Button";
 import { TextInput } from "@repo/ui/Field";
-import { setCommissionRate, setWithdrawalFeePaidBy } from "@repo/lib/agents/actions";
+import { setCommissionRate, setPayFirstForAll, setWithdrawalFeePaidBy } from "@repo/lib/agents/actions";
 import type { FeePaidBy } from "@repo/lib/agents/core";
 import type { CategoryRate } from "@repo/lib/agents/server";
 
@@ -14,7 +14,7 @@ const FEE_OPTIONS: { value: FeePaidBy; label: string; text: string }[] = [
   { value: "aming", label: "Aming", text: "The fee still comes out of what's sent, then Aming puts the same amount back on their balance for next time. HivePay's price list would be needed to send it in full." },
 ];
 
-export function RatesBoard({ rates, feePaidBy }: { rates: CategoryRate[]; feePaidBy: FeePaidBy }) {
+export function RatesBoard({ rates, feePaidBy, payFirstPercent }: { rates: CategoryRate[]; feePaidBy: FeePaidBy; payFirstPercent: number }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -33,37 +33,81 @@ export function RatesBoard({ rates, feePaidBy }: { rates: CategoryRate[]; feePai
         </ul>
       </section>
 
-      <section className="rounded-2xl border border-border bg-surface p-4 shadow-theme-xs sm:p-5">
-        <h2 className="text-sm font-semibold">Who pays the mobile money sending fee?</h2>
-        <p className="mt-1 text-xs text-muted">Applies to withdrawals asked for from now on.</p>
-        <div className="mt-3 space-y-2">
-          {FEE_OPTIONS.map((o) => (
-            <label key={o.value} className={`flex cursor-pointer gap-3 rounded-xl border p-3 ${o.value === feePaidBy ? "border-brand-500 bg-brand-50 dark:bg-brand-500/15" : "border-border"}`}>
-              <input
-                type="radio"
-                name="fee"
-                className="mt-1"
-                checked={o.value === feePaidBy}
-                disabled={pending}
-                onChange={() =>
-                  start(async () => {
-                    setError(null);
-                    const res = await setWithdrawalFeePaidBy(o.value);
-                    if (!res.ok) setError(res.error);
-                    else router.refresh();
-                  })
-                }
-              />
-              <span>
-                <span className="block text-sm font-medium">{o.label}</span>
-                <span className="block text-xs text-muted">{o.text}</span>
-              </span>
-            </label>
-          ))}
-        </div>
-        {error ? <p className="mt-2 text-sm text-error-600">{error}</p> : null}
-      </section>
+      <div className="space-y-6">
+        <PayFirstSetting percent={payFirstPercent} />
+
+        <section className="rounded-2xl border border-border bg-surface p-4 shadow-theme-xs sm:p-5">
+          <h2 className="text-sm font-semibold">Who pays the mobile money sending fee?</h2>
+          <p className="mt-1 text-xs text-muted">Applies to withdrawals asked for from now on.</p>
+          <div className="mt-3 space-y-2">
+            {FEE_OPTIONS.map((o) => (
+              <label key={o.value} className={`flex cursor-pointer gap-3 rounded-xl border p-3 ${o.value === feePaidBy ? "border-brand-500 bg-brand-50 dark:bg-brand-500/15" : "border-border"}`}>
+                <input
+                  type="radio"
+                  name="fee"
+                  className="mt-1"
+                  checked={o.value === feePaidBy}
+                  disabled={pending}
+                  onChange={() =>
+                    start(async () => {
+                      setError(null);
+                      const res = await setWithdrawalFeePaidBy(o.value);
+                      if (!res.ok) setError(res.error);
+                      else router.refresh();
+                    })
+                  }
+                />
+                <span>
+                  <span className="block text-sm font-medium">{o.label}</span>
+                  <span className="block text-xs text-muted">{o.text}</span>
+                </span>
+              </label>
+            ))}
+          </div>
+          {error ? <p className="mt-2 text-sm text-error-600">{error}</p> : null}
+        </section>
+      </div>
     </div>
+  );
+}
+
+/** The % of the price an agent's own order must have paid before it goes to production. */
+function PayFirstSetting({ percent }: { percent: number }) {
+  const router = useRouter();
+  const [value, setValue] = useState(String(percent));
+  const [error, setError] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+  const changed = value.trim() !== "" && Number(value) !== percent;
+
+  return (
+    <section className="rounded-2xl border border-border bg-surface p-4 shadow-theme-xs sm:p-5">
+      <h2 className="text-sm font-semibold">Pay before production</h2>
+      <p className="mt-1 text-xs text-muted">
+        An order an agent places from their own login goes to production once the client has paid this % of the price. 0% means no payment is needed first. An agent&apos;s own % (on their page, under Edit) overrides this. It applies to orders already waiting too.
+      </p>
+      <form
+        className="mt-3 flex items-center gap-3"
+        onSubmit={(e) => {
+          e.preventDefault();
+          setError(null);
+          start(async () => {
+            const res = await setPayFirstForAll(value);
+            if (!res.ok) setError(res.error);
+            else router.refresh();
+          });
+        }}
+      >
+        <span className="min-w-0 flex-1 text-sm font-medium">All agents</span>
+        <div className="w-20 shrink-0">
+          <TextInput aria-label="Pay before production, percent" inputMode="numeric" className="text-right" value={value} onChange={(e) => setValue(e.target.value)} />
+        </div>
+        <span className="text-sm text-muted">%</span>
+        <Button type="submit" variant="secondary" className="min-h-9 text-xs" loading={pending} disabled={pending || !changed}>
+          Save
+        </Button>
+      </form>
+      {error ? <p className="mt-2 text-sm text-error-600">{error}</p> : null}
+    </section>
   );
 }
 

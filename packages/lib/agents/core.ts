@@ -65,21 +65,20 @@ export const AGENT_WALLET_KIND_LABELS: Record<AgentWalletKind, string> = {
 };
 
 /**
- * An order that earns an agent commission goes to production only once this
- * share of its price is paid (the owner's rule, 2026-11-05). Checked when
- * staff send it on (routeApprovedOrder); agents, clients and the assistant
- * are told it.
+ * An order an agent places from their own login goes to production only once
+ * this % of its price is paid. The boss sets it for all agents and per agent
+ * (payFirstPercent in ./server.ts); 0 means no payment is needed. Checked when
+ * staff send it on (routeApprovedOrder); agents, clients and the assistant are
+ * told it.
  */
-export const PAY_BEFORE_PRODUCTION = 0.8;
-
-/** What must be paid before production, for an order of this price. */
-export function payBeforeProduction(price: number): number {
-  return Math.ceil(price * PAY_BEFORE_PRODUCTION);
+export function payBeforeProduction(price: number, percent: number): number {
+  return Math.ceil((price * percent) / 100);
 }
 
-/** The rule in words, with the amount when the price is known. */
-export function payFirstWording(price: number | null, money: (n: number) => string): string {
-  const amount = price === null ? "80% of the price" : `80% of the price (${money(payBeforeProduction(price))})`;
+/** The rule in words, with the amount when the price is known; null when nothing needs paying first. */
+export function payFirstWording(price: number | null, percent: number, money: (n: number) => string): string | null {
+  if (percent <= 0) return null;
+  const amount = price === null ? `${percent}% of the price` : `${percent}% of the price (${money(payBeforeProduction(price, percent))})`;
   return `Production starts once ${amount} is paid.`;
 }
 
@@ -132,11 +131,17 @@ export const agentRegisterSchema = z.object({
   rateOverride: rate.nullable(),
 });
 
+const percent = z.coerce.number({ message: "Enter a %." }).int("Use a whole number.").min(0, "It can't be below 0%.").max(100, "It can't be above 100%.");
+
 export const agentEditSchema = z.object({
   agentId: z.string().uuid(),
   name: z.string().trim().min(1, "Enter their name.").max(100),
   rateOverride: rate.nullable(),
+  /** Null: the setting for all agents applies. */
+  payFirstOverride: percent.nullable(),
 });
+
+export const payFirstPercentSchema = percent;
 
 export const commissionRateSchema = z.object({ categoryId: z.string().uuid(), rate });
 
