@@ -965,38 +965,3 @@ export async function bossById(userId: string): Promise<Person | null> {
   if (row?.role !== "boss") return null;
   return { type: "staff", id: userId, name: row.full_name || "Boss", role: "boss", email: null, phone: null, alwaysInTest: true };
 }
-
-export interface PanelRun {
-  id: string;
-  who: string;
-  reply: string | null;
-  error: string | null;
-  costUsd: number;
-  at: string;
-  trace: TraceStep[];
-}
-
-/** The latest Alexis replies (not the client chats'), with each one's steps: for finding out why it did what it did. */
-export async function recentPanelRuns(limit: number): Promise<PanelRun[]> {
-  const db = createAdminClient();
-  const rows = must(
-    await db
-      .from("assistant_runs")
-      .select("id, person_type, person_id, reply, error, cost_usd, created_at, trace")
-      .not("person_type", "is", null)
-      .not("payer_type", "is", null)
-      .order("created_at", { ascending: false })
-      .limit(limit),
-  ) as { id: string; person_type: PersonType; person_id: string; reply: string | null; error: string | null; cost_usd: number; created_at: string; trace: TraceStep[] | null }[];
-  const ids = (type: PersonType) => [...new Set(rows.filter((r) => r.person_type === type).map((r) => r.person_id))];
-  const [staff, clients, designers, workers] = await Promise.all([
-    ids("staff").length ? db.from("profiles").select("id, full_name").in("id", ids("staff")) : { data: [], error: null },
-    ids("client").length ? db.from("clients").select("id, name").in("id", ids("client")) : { data: [], error: null },
-    ids("designer").length ? db.from("designers").select("id, name").in("id", ids("designer")) : { data: [], error: null },
-    ids("worker").length ? db.from("workers").select("id, name").in("id", ids("worker")) : { data: [], error: null },
-  ]);
-  const names = new Map<string, string>();
-  for (const r of (must(staff) ?? []) as { id: string; full_name: string | null }[]) names.set(r.id, r.full_name ?? "Staff");
-  for (const res of [clients, designers, workers]) for (const r of (must(res) ?? []) as { id: string; name: string }[]) names.set(r.id, r.name);
-  return rows.map((r) => ({ id: r.id, who: names.get(r.person_id) ?? r.person_type, reply: r.reply, error: r.error, costUsd: Number(r.cost_usd), at: r.created_at, trace: r.trace ?? [] }));
-}
