@@ -6,6 +6,11 @@ import { getDashboardSession } from "@repo/lib/auth/session";
 import { SUPPORT_OWNER_EMAIL } from "@repo/lib/support/constants";
 
 import type { AssistantMode } from "../core/rules";
+import { offerings } from "@repo/lib/offerings/server";
+import type { AlbumView, PhotoView, Usage } from "@repo/lib/photos/core";
+import { photos as photosService } from "@repo/lib/photos/server";
+import { studioOfCaller } from "@repo/lib/studios/server";
+
 import { forget } from "./memory";
 import * as panel from "./server";
 
@@ -21,6 +26,19 @@ export async function openAlexis(page: string): Promise<panel.PanelState> {
 export async function openAlexisChat(chatId: string): Promise<panel.PanelMessage[] | null> {
   const person = await panel.currentPerson();
   return person ? panel.chatMessages(person, String(chatId)) : null;
+}
+
+/** One of the studio's services' photos, for the panel Alexis shows in the chat. Its Catalog area only. */
+export async function alexisServiceMedia(serviceId: string): Promise<{ album: AlbumView | null; photos: PhotoView[]; usage: Usage } | null> {
+  try {
+    const { scope } = await studioOfCaller("catalog");
+    const id = String(serviceId);
+    if (!(await offerings.service(scope, id))) return null;
+    const [album, usage] = await Promise.all([photosService.serviceGallery(scope, id).catch(() => null), photosService.usage(scope)]);
+    return { album, photos: album ? await photosService.photos(scope, album.id) : [], usage };
+  } catch {
+    return null;
+  }
 }
 
 /** Deletes one thing Alexis remembers about this person. */

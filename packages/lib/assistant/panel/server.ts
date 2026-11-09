@@ -17,6 +17,7 @@ import type { AssistantTool } from "../server/tools";
 import {
   capReached,
   chargeFor,
+  chatTitleFrom,
   COMPANY,
   formatUsd,
   isWaived,
@@ -35,6 +36,7 @@ import {
   type PayerType,
   type PersonType,
 } from "./core";
+import { afterPhotosUploaded } from "./tools/client-orders";
 import { forgetKind, memoriesForModel, memoriesOf, memoryTools, remember, type Memory } from "./memory";
 import { PANEL_PROMPT } from "./prompt";
 import { MAX_GUIDE_STEPS, readTool, type ChangeOutcome, type ChangeTool, type GuideStep, type PageLink, type ReplyWidget, type Toolbox } from "./toolbox";
@@ -420,6 +422,14 @@ async function newChat(person: Person, title: string): Promise<string> {
   return row.id;
 }
 
+/** Names a chat still called "New chat" (or after a greeting) from a message that says what it's about. */
+async function nameChat(chatId: string, message: string): Promise<void> {
+  const title = chatTitleFrom(message);
+  if (!title) return;
+  const { data } = await createAdminClient().from("assistant_chats").select("title").eq("id", chatId).maybeSingle();
+  if (data && (data.title === "New chat" || chatTitleFrom(data.title) === null)) must(await createAdminClient().from("assistant_chats").update({ title }).eq("id", chatId));
+}
+
 /** WhatsApp is one ongoing chat, named WhatsApp. */
 async function whatsAppChat(person: Person): Promise<string> {
   const found = must(
@@ -708,7 +718,9 @@ export async function send(
     return { ok: false, error: "Alexis isn't set up in this app yet. The team has been told." };
   }
 
-  const chat = chatId ?? (channel === "whatsapp" ? await whatsAppChat(person) : await newChat(person, body || attached.join(", ")));
+  const chat = chatId ?? (channel === "whatsapp" ? await whatsAppChat(person) : await newChat(person, chatTitleFrom(body) ?? "New chat"));
+  // A chat that opened with a greeting takes its name from the first message that says what it's about.
+  if (chatId && !event && channel === "app") await nameChat(chatId, body);
   const earlier = await history(chat, PANEL_HISTORY);
   const mine = event ? null : await saveMessage(person, chat, "user", body || "(files attached)", page.path, channel, attached.length ? { files: attached } : null);
   const memories = await memoriesOf(person);
@@ -850,6 +862,28 @@ export async function confirm(person: Person, id: string, toolbox: Toolbox, path
     if (followed?.ok) note = followed.reply;
   }
   return { ok: true, card: toCard(done), note };
+}
+
+/**
+ * The files a confirmed card uploaded have all arrived: the order goes on (confirmed and invoiced when it
+ * can be), and Alexis follows up in the card's chat, in its language.
+ */
+export async function afterUpload(person: Person, id: string, toolbox: Toolbox, path = "/"): Promise<DecideResult> {
+  const rows = must(
+    await createAdminClient().from("assistant_pending_actions").select(ACTION_COLUMNS).eq("id", id).eq("person_type", person.type).eq("person_id", person.id).eq("status", "done"),
+  ) as ActionRow[];
+  const row = rows[0];
+  if (!row?.upload_item_id) return { ok: false, error: "There's nothing to follow up for that card." };
+  const what = await afterPhotosUploaded(person, row.upload_item_id);
+  let note: PanelMessage | null = null;
+  if (row.chat_id) {
+    const followed = await send(person, row.chat_id, "", { path, title: "", links: [] }, toolbox, "app", [], undefined, `[The files they attached finished uploading. ${what} Tell them in a sentence or two, in the language of this chat, and carry on with what's next (an invoice to pay: ask how they'd like to pay).]`).catch((err) => {
+      console.error("alexis after upload failed:", err);
+      return null;
+    });
+    if (followed?.ok) note = followed.reply;
+  }
+  return { ok: true, card: toCard(row), note };
 }
 
 export async function cancel(person: Person, id: string): Promise<DecideResult> {

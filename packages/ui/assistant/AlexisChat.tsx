@@ -5,7 +5,7 @@ import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } fro
 import { createPortal } from "react-dom";
 
 import { takeLines } from "@repo/lib/assistant/panel/lines";
-import { agreeToAlexisTerms, forgetAlexisMemory, openAlexis, openAlexisChat, searchAlexisChats } from "@repo/lib/assistant/panel/actions";
+import { agreeToAlexisTerms, alexisServiceMedia, forgetAlexisMemory, openAlexis, openAlexisChat, searchAlexisChats } from "@repo/lib/assistant/panel/actions";
 import type { ActionCard, AskChoice, ChatSummary, DecideResult, PanelMessage, PanelState, SendResult, UsageView } from "@repo/lib/assistant/panel/server";
 import type { GuideStep, PageLink } from "@repo/lib/assistant/panel/toolbox";
 import { uploadFileToStorage } from "@repo/lib/storage/upload-client";
@@ -14,6 +14,7 @@ import { Button } from "../Button";
 import { Lightbox } from "../Lightbox";
 import type { GalleryPhoto } from "../PhotoGrid";
 import { AddMediaButton } from "../media/AddMediaButton";
+import { ServiceMediaPanel } from "../photos/ServiceMediaPanel";
 import { LogoUploader } from "../studio-access/LogoUploader";
 import { Spinner } from "../Spinner";
 import { UploadThumbs, uploadKey, type UploadThumb } from "../UploadThumbs";
@@ -26,6 +27,8 @@ import { UploadThumbs, uploadKey, type UploadThumb } from "../UploadThumbs";
 export interface AlexisActions {
   confirm: (id: string, path: string) => Promise<DecideResult>;
   cancel: (id: string) => Promise<DecideResult>;
+  /** The files a confirmed card uploaded have all arrived: the order goes on, and Alexis follows up. */
+  uploaded: (id: string, path: string) => Promise<DecideResult>;
 }
 
 export type ReadyState = Extract<PanelState, { kind: "ready" }>;
@@ -194,12 +197,18 @@ export function useAlexis(actions: AlexisActions, initial: PanelState | null = n
     if (yes && res.card.status === "done" && !res.card.uploadItemId) router.refresh();
   }
 
+  async function uploaded(card: ActionCard) {
+    const res = await actions.uploaded(card.id, path).catch((): DecideResult => ({ ok: false, error: OFFLINE }));
+    if (res.ok && res.note) patch({ messages: [...(ready?.messages ?? []), res.note] });
+    router.refresh();
+  }
+
   async function forgetMemory(id: string) {
     if (await forgetAlexisMemory(id).catch(() => false)) patch({ memories: (ready?.memories ?? []).filter((m) => m.id !== id) });
     else setError("That couldn't be deleted. Try again.");
   }
 
-  return { state, ready, busy, draft, error, load, forgetMemory, agree, startNew, open, search, send, decide, held, path };
+  return { state, ready, busy, draft, error, load, forgetMemory, uploaded, agree, startNew, open, search, send, decide, held, path };
 }
 
 export type Alexis = ReturnType<typeof useAlexis>;
@@ -215,7 +224,7 @@ const STATUS_WORDS: Record<ActionCard["status"], string> = {
 };
 
 /** After a confirmed "add files" card: the attached files upload here, or (without them, after a reload) the item's own Add photos. */
-function CardUpload({ itemId, files }: { itemId: string; files: File[] | undefined }) {
+function CardUpload({ itemId, files, onDone }: { itemId: string; files: File[] | undefined; onDone: () => void }) {
   const [items, setItems] = useState<UploadThumb[]>(() => (files ?? []).map((file) => ({ key: uploadKey(file), file, state: "uploading" as const, progress: 0 })));
   const started = useRef(false);
   const router = useRouter();
@@ -225,14 +234,18 @@ function CardUpload({ itemId, files }: { itemId: string; files: File[] | undefin
     started.current = true;
     const update = (key: string, p: Partial<UploadThumb>) => setItems((prev) => prev.map((i) => (i.key === key ? { ...i, ...p } : i)));
     void (async () => {
+      let all = true;
       for (const file of files) {
         const key = uploadKey(file);
         const res = await uploadFileToStorage(itemId, file, (progress) => update(key, { progress }));
         update(key, res.ok ? { state: "done", progress: 1 } : { state: "failed", error: res.error });
+        all &&= res.ok;
       }
-      router.refresh();
+      // Every file in: the order goes on (confirmed and invoiced when it can be), and Alexis says so.
+      if (all) onDone();
+      else router.refresh();
     })();
-  }, [files, itemId, router]);
+  }, [files, itemId, router, onDone]);
 
   async function retry(key: string) {
     const item = items.find((i) => i.key === key);
@@ -257,7 +270,7 @@ function CardUpload({ itemId, files }: { itemId: string; files: File[] | undefin
   );
 }
 
-function Card({ card, files, onDecide }: { card: ActionCard; files: File[] | undefined; onDecide: (yes: boolean) => Promise<void> }) {
+function Card({ card, files, onDecide, onUploaded }: { card: ActionCard; files: File[] | undefined; onDecide: (yes: boolean) => Promise<void>; onUploaded: () => void }) {
   const [busy, setBusy] = useState<"yes" | "no" | null>(null);
   const open = card.status === "pending" && !card.expired;
   const act = (yes: boolean) => async () => {
@@ -290,7 +303,22 @@ function Card({ card, files, onDecide }: { card: ActionCard; files: File[] | und
           {card.result ? `: ${card.result}` : ""}
         </p>
       )}
-      {card.status === "done" && card.uploadItemId ? <CardUpload itemId={card.uploadItemId} files={files} /> : null}
+      {card.status === "done" && card.uploadItemId ? <CardUpload itemId={card.uploadItemId} files={files} onDone={onUploaded} /> : null}
+    </div>
+  );
+}
+
+/** A studio service's photos panel (cover, gallery, video), as on Packages & Services, under Alexis's reply. */
+function ServiceMediaWidget({ serviceId }: { serviceId: string }) {
+  const [media, setMedia] = useState<Awaited<ReturnType<typeof alexisServiceMedia>> | undefined>(undefined);
+  useEffect(() => {
+    void alexisServiceMedia(serviceId).then(setMedia, () => setMedia(null));
+  }, [serviceId]);
+  if (media === undefined) return <Spinner className="mt-2 h-4 w-4" />;
+  if (!media) return <p className="mt-2 text-xs text-muted">That service&apos;s photos can&apos;t be opened here. Open it in Packages &amp; Services.</p>;
+  return (
+    <div className="mt-2 rounded-xl border border-border bg-surface p-3">
+      <ServiceMediaPanel serviceId={serviceId} album={media.album} photos={media.photos} usage={media.usage} />
     </div>
   );
 }
@@ -334,13 +362,16 @@ export function Messages({ alexis, onGuide }: { alexis: Alexis; onGuide: (steps:
               </p>
             ) : null}
             {m.images.length ? <ReplyPhotos images={m.images} /> : null}
+            {m.widgets.flatMap((w) => (w.startsWith("service-media:") ? [w.slice("service-media:".length)] : [])).map((serviceId) => (
+              <ServiceMediaWidget key={serviceId} serviceId={serviceId} />
+            ))}
             {m.widgets.includes("logo") ? (
               <div className="mt-2 rounded-xl border border-border bg-surface p-3">
                 <LogoUploader logoUrl={null} />
               </div>
             ) : null}
             {m.actions.map((card) => (
-              <Card key={card.id} card={card} files={alexis.held[card.id]} onDecide={(yes) => alexis.decide(card, yes)} />
+              <Card key={card.id} card={card} files={alexis.held[card.id]} onDecide={(yes) => alexis.decide(card, yes)} onUploaded={() => void alexis.uploaded(card)} />
             ))}
             {m.guide?.length ? (
               <Button size="sm" variant="secondary" className="mt-2" onClick={() => onGuide(m.guide!)}>

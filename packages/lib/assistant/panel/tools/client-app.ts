@@ -16,9 +16,16 @@ import { assistantTools, tellManagers, type ToolContext } from "../../server/too
 import { createAdminClient } from "@repo/lib/supabase/admin";
 import type { Person } from "../server";
 import { changeTool, outcome, readTool, type ChangeTool, type Toolbox } from "../toolbox";
-import { clientOrderTools, explainPriceTool, walletTools } from "./client-orders";
+import { cancellationTool, clientOrderTools, explainPriceTool, walletTools } from "./client-orders";
 import { addFilesToOrderTool } from "./order-files";
 import { studioSetupTools } from "./studio-setup";
+import { marketPricesTool, packagePhotosTool, studioDocumentTool } from "./studio-work";
+
+/** What the studio's tools show under a reply: the logo uploader, and a service's photos panel. */
+interface Widgets {
+  logo: boolean;
+  serviceMedia: string | null;
+}
 import type { AssistantTool } from "../../server/tools";
 
 // Alexis's tools in the client app: the account's own orders and money, and,
@@ -68,7 +75,7 @@ const PERIODS = ["today", "yesterday", "this_week", "this_month", "last_month", 
  * On /studio pages. An open studio: what the person's team areas allow, and for the owner its page too.
  * The owner's studio while it's being set up (studioOfCaller refuses it until Aming approves): setting up its page.
  */
-async function studioTools(widgets: { logo: boolean }): Promise<{ read: AssistantTool[]; change: ChangeTool[]; words: string } | null> {
+async function studioTools(widgets: Widgets): Promise<{ read: AssistantTool[]; change: ChangeTool[]; words: string } | null> {
   const caller = await studioOfCaller("anyone").catch(() => null);
   if (!caller) {
     const settingUp = await ownStudio().catch(() => null);
@@ -87,7 +94,8 @@ async function studioTools(widgets: { logo: boolean }): Promise<{ read: Assistan
         run: ({ period }) => accounting.overview(scope, { preset: period }),
       }),
     );
-    can.push("see the studio's money");
+    change.push(studioDocumentTool(scope));
+    can.push("see the studio's money and create quotations and invoices for its clients");
   }
   if (canUse(access, "clients")) {
     read.push(
@@ -128,6 +136,10 @@ async function studioTools(widgets: { logo: boolean }): Promise<{ read: Assistan
       }),
     );
     can.push("see and add the studio's clients");
+  }
+  if (canUse(access, "catalog")) {
+    read.push(packagePhotosTool(scope, widgets), marketPricesTool(scope));
+    can.push("add photos to its packages, and say what other studios on Aming charge (a range, no names)");
   }
   if (canUse(access, "projects")) {
     read.push(
@@ -210,15 +222,18 @@ async function vendorTools(person: Person): Promise<{ read: AssistantTool[]; cha
 export async function clientAppToolbox(person: Person): Promise<Toolbox> {
   if (person.type !== "client") return { read: [], change: [], abilities: "Nothing in this app." };
   const chat = fromChat(person);
-  const widgets = { logo: false };
+  const widgets: Widgets = { logo: false, serviceMedia: null };
   const { owned, working } = await studiosOf(person.id);
   const businesses = (
     await Promise.all([owned || working.length ? studioTools(widgets) : null, agentTools(person), vendorTools(person)])
   ).filter((b): b is NonNullable<typeof b> => !!b);
   return {
     read: [...chat.tools, explainPriceTool(), handToStaff(person), ...businesses.flatMap((b) => b.read)],
-    change: [...clientOrderTools(person), ...walletTools(person), addFilesToOrderTool(person.id), ...businesses.flatMap((b) => b.change)],
-    replyExtras: () => ({ ...chat.extras(), widgets: widgets.logo ? ["logo" as const] : [] }),
+    change: [...clientOrderTools(person), ...walletTools(person), cancellationTool(person), addFilesToOrderTool(person.id), ...businesses.flatMap((b) => b.change)],
+    replyExtras: () => ({
+      ...chat.extras(),
+      widgets: [...(widgets.logo ? (["logo"] as const) : []), ...(widgets.serviceMedia ? ([`service-media:${widgets.serviceMedia}`] as const) : [])],
+    }),
     abilities: [
       "Everything the chat assistant does for them: take and place Aming orders, invoice them, send MTN or Airtel payment prompts, pay all their invoices at once, top up their wallet, add photos to an order, look up their orders, invoices, receipts, wallet and prices, show product photos, and call the team.",
       ...businesses.map((b) => b.words),
