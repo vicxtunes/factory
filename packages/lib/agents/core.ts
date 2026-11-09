@@ -143,6 +143,9 @@ export const agentEditSchema = z.object({
 
 export const payFirstPercentSchema = percent;
 
+/** When the rule changes: orders already waiting take the new % ("follow") or keep theirs ("keep"). */
+export const waitingChoiceSchema = z.enum(["follow", "keep"], "Choose what happens to orders already waiting.");
+
 export const commissionRateSchema = z.object({ categoryId: z.string().uuid(), rate });
 
 export const agentClientSchema = z.object({

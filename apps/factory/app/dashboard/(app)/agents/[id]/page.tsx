@@ -52,7 +52,7 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
             {agent.payFirstOverride === null ? " (all agents)" : " (own)"}
           </p>
         </div>
-        {session.role === "boss" ? <AgentActions agent={agent} /> : null}
+        {session.role === "boss" ? <AgentActions agent={agent} payFirstForAll={payFirstAll} /> : null}
       </div>
 
       <div className="@container grid grid-cols-2 gap-3 lg:grid-cols-4">

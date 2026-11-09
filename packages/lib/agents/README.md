@@ -17,7 +17,7 @@ clients pay Aming directly.
 - **Pay before production:** only an order the agent places from their own login (`orders.placed_by_agent`)
   goes to production once a % of its price is paid. The boss sets it for all agents (Rates & settings,
   `agent_settings.pay_first_percent`, 80 at first) and per agent (`agents.pay_first_override`); 0 means no
-  payment first. `payFirstPercent()` reads it when checked, so a change applies to waiting orders too. It waits in Client
+  payment first. `payFirstPercent()` reads it when checked. When the boss saves a new % (for all agents or one agent) and orders are already waiting under it, they choose: those orders take the new % ("follow"), or keep the one they had, written on the order as `orders.pay_first_percent` ("keep", migration 20261231100000). Every check reads the order's own % first (`orderPayFirst()`). It waits in Client
   Orders, `routeApprovedOrder` refuses to send it on earlier, and the card shows what's paid. The agent (order
   form, order page, "confirmed" push), the client (confirmation message) and the assistant (`get_my_orders`) are
   told. An order staff or a designer create in an agent's name earns the same but flows as any other order:

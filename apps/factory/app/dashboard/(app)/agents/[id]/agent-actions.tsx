@@ -9,7 +9,7 @@ import type { Agent } from "@repo/lib/agents/server";
 
 import { AgentSheet } from "../agents-board";
 
-export function AgentActions({ agent }: { agent: Agent }) {
+export function AgentActions({ agent, payFirstForAll }: { agent: Agent; payFirstForAll: number }) {
   const router = useRouter();
   const [sheet, setSheet] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -35,7 +35,7 @@ export function AgentActions({ agent }: { agent: Agent }) {
         {agent.active ? "Deactivate" : "Reactivate"}
       </Button>
       {error ? <p className="w-full text-sm text-error-600">{error}</p> : null}
-      {sheet ? <AgentSheet sheet={agent.clientId ? { kind: "edit", agent } : { kind: "register", agent }} onClose={() => setSheet(false)} /> : null}
+      {sheet ? <AgentSheet sheet={agent.clientId ? { kind: "edit", agent } : { kind: "register", agent }} payFirstForAll={payFirstForAll} onClose={() => setSheet(false)} /> : null}
     </div>
   );
 }

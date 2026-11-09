@@ -39,7 +39,7 @@ import type {
 import { pushOnlyOrderItem, notifyOrderItem } from "@repo/lib/notifications/notify";
 import { formatMoney } from "@repo/lib/currency/format";
 import { payBeforeProduction } from "@repo/lib/agents/core";
-import { payFirstPercent } from "@repo/lib/agents/server";
+import { orderPayFirst } from "@repo/lib/agents/server";
 import { paidByOrders, walletErrorMessage } from "@repo/lib/wallet/orders";
 import { isOrderInvoiced } from "@repo/lib/invoices/orders";
 import { lineDiscountOf, validateLineDiscount, type LineDiscount, type LineDiscountChange } from "@repo/lib/discounts/core";
@@ -1635,7 +1635,7 @@ export async function routeApprovedOrder(
   const admin = createAdminClient();
   const { data: order } = await admin
     .from("orders")
-    .select("id, approval_status, released_at, order_no, cancelled_at, placed_by_agent, agent_id, quoted_price")
+    .select("id, approval_status, released_at, order_no, cancelled_at, placed_by_agent, agent_id, quoted_price, pay_first_percent")
     .eq("id", orderId)
     .maybeSingle();
   if (!order) return { ok: false, error: "Order not found." };
@@ -1645,7 +1645,7 @@ export async function routeApprovedOrder(
   if (!(await isOrderInvoiced(orderId))) return { ok: false, error: "Generate the invoice before routing this order." };
   // An order the agent placed themselves goes to production only once the
   // boss's % for that agent is paid (packages/lib/agents).
-  const percent = order.placed_by_agent && order.agent_id ? await payFirstPercent(order.agent_id) : 0;
+  const percent = order.placed_by_agent && order.agent_id ? await orderPayFirst({ agent_id: order.agent_id, pay_first_percent: order.pay_first_percent }) : 0;
   if (percent > 0) {
     if (order.quoted_price == null) return { ok: false, error: "This agent order has no price yet." };
     const needed = payBeforeProduction(Number(order.quoted_price), percent);

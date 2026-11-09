@@ -9,11 +9,13 @@ import { DataTable, type DataTableColumn } from "@repo/ui/DataTable";
 import { ExportButtons } from "@repo/ui/ExportButtons";
 import { Field, TextInput } from "@repo/ui/Field";
 import { FormSheet } from "@repo/ui/FormSheet";
-import { editAgent, registerAgent } from "@repo/lib/agents/actions";
+import { editAgent, registerAgent, waitingForPayFirst } from "@repo/lib/agents/actions";
 import type { Agent, AgentListRow } from "@repo/lib/agents/server";
 import { useCurrencySymbol } from "@repo/lib/currency/CurrencySymbolProvider";
 import { formatMoney } from "@repo/lib/currency/format";
 import type { ExportColumn } from "@repo/lib/export/tableExport";
+
+import { WaitingChoice } from "./rates/rates-board";
 
 type Sheet = { kind: "register"; agent: Agent | null } | { kind: "edit"; agent: Agent } | null;
 
@@ -41,7 +43,8 @@ const EXPORT_COLUMNS: ExportColumn<ExportRow>[] = [
 
 const status = (a: Agent) => (!a.active ? "Inactive" : a.clientId ? "Active" : "No login");
 
-export function AgentsBoard({ agents, boss }: { agents: AgentListRow[]; boss: boolean }) {
+/** `payFirstForAll`: the pay-before-production % for agents without their own. */
+export function AgentsBoard({ agents, boss, payFirstForAll }: { agents: AgentListRow[]; boss: boolean; payFirstForAll: number }) {
   const symbol = useCurrencySymbol();
   const money = (n: number) => formatMoney(n, symbol);
   const [sheet, setSheet] = useState<Sheet>(null);
@@ -108,13 +111,13 @@ export function AgentsBoard({ agents, boss }: { agents: AgentListRow[]; boss: bo
         <DataTable columns={columns} rows={agents} rowKey={(a) => a.id} emptyMessage="No agents yet." />
       </div>
 
-      {sheet ? <AgentSheet key={sheet.agent?.id ?? "new"} sheet={sheet} onClose={() => setSheet(null)} /> : null}
+      {sheet ? <AgentSheet key={sheet.agent?.id ?? "new"} sheet={sheet} payFirstForAll={payFirstForAll} onClose={() => setSheet(null)} /> : null}
     </div>
   );
 }
 
 /** Registering an agent, giving an old one a login, or editing one: an empty rate means their category rates apply. */
-export function AgentSheet({ sheet, onClose }: { sheet: NonNullable<Sheet>; onClose: () => void }) {
+export function AgentSheet({ sheet, payFirstForAll, onClose }: { sheet: NonNullable<Sheet>; payFirstForAll: number; onClose: () => void }) {
   const router = useRouter();
   const [name, setName] = useState(sheet.agent?.name ?? "");
   const [email, setEmail] = useState("");
@@ -123,7 +126,22 @@ export function AgentSheet({ sheet, onClose }: { sheet: NonNullable<Sheet>; onCl
   const [payFirst, setPayFirst] = useState(sheet.agent?.payFirstOverride?.toString() ?? "");
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  // Their orders already waiting, when their % changes: the boss chooses whether those take the new one.
+  const [waiting, setWaiting] = useState<{ count: number; orderNos: string[] } | null>(null);
   const rateOverride = rate.trim() === "" ? null : rate;
+  const payFirstOverride = payFirst.trim() === "" ? null : payFirst;
+  const payFirstChanged = sheet.kind === "edit" && (payFirstOverride === null ? null : Number(payFirstOverride)) !== sheet.agent.payFirstOverride;
+
+  function saveEdit(choice: "follow" | "keep") {
+    if (sheet.kind !== "edit") return;
+    setError(null);
+    start(async () => {
+      const res = await editAgent({ agentId: sheet.agent.id, name, rateOverride, payFirstOverride }, choice);
+      if (!res.ok) return setError(res.error);
+      onClose();
+      router.refresh();
+    });
+  }
 
   return (
     <FormSheet open onClose={onClose} title={sheet.kind === "edit" ? "Edit agent" : sheet.agent ? "Give a login" : "Register agent"}>
@@ -132,11 +150,18 @@ export function AgentSheet({ sheet, onClose }: { sheet: NonNullable<Sheet>; onCl
         onSubmit={(e) => {
           e.preventDefault();
           setError(null);
+          if (sheet.kind === "edit") {
+            if (!payFirstChanged) return saveEdit("follow");
+            start(async () => {
+              const found = await waitingForPayFirst(sheet.agent.id);
+              if (!found.ok) return setError(found.error);
+              if (found.data.count > 0) setWaiting(found.data);
+              else saveEdit("follow");
+            });
+            return;
+          }
           start(async () => {
-            const res =
-              sheet.kind === "edit"
-                ? await editAgent({ agentId: sheet.agent.id, name, rateOverride, payFirstOverride: payFirst.trim() === "" ? null : payFirst })
-                : await registerAgent({ agentId: sheet.agent?.id ?? null, name, email, phone, rateOverride });
+            const res = await registerAgent({ agentId: sheet.agent?.id ?? null, name, email, phone, rateOverride });
             if (!res.ok) {
               setError(res.error);
               return;
@@ -165,8 +190,18 @@ export function AgentSheet({ sheet, onClose }: { sheet: NonNullable<Sheet>; onCl
         </Field>
         {sheet.kind === "edit" ? (
           <Field label="Their own % to pay before production (optional)">
-            <TextInput inputMode="numeric" value={payFirst} onChange={(e) => setPayFirst(e.target.value)} placeholder="The setting for all agents applies" />
+            <TextInput inputMode="numeric" value={payFirst} onChange={(e) => { setPayFirst(e.target.value); setWaiting(null); }} placeholder="The setting for all agents applies" />
           </Field>
+        ) : null}
+        {waiting && sheet.kind === "edit" ? (
+          <WaitingChoice
+            waiting={waiting}
+            from={sheet.agent.payFirstOverride ?? payFirstForAll}
+            to={payFirstOverride === null ? payFirstForAll : Number(payFirstOverride)}
+            busy={pending}
+            onChoose={saveEdit}
+            onCancel={() => setWaiting(null)}
+          />
         ) : null}
         {error ? <p className="text-sm text-error-600">{error}</p> : null}
         <Button variant="primary" type="submit" className="w-full" loading={pending} disabled={pending}>

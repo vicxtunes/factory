@@ -271,7 +271,7 @@ export function assistantTools(ctx: ToolContext): AssistantTool[] {
       run: async () => {
         const { data, error } = await db
           .from("orders")
-          .select("id, order_no, approval_status, quoted_price, placed_by_agent, agent_id, released_at, cancelled_at, delivery_date, created_at, order_items(product, product_type, qty, production_status, stage), invoices(invoice_no, share_token)")
+          .select("id, order_no, approval_status, quoted_price, placed_by_agent, agent_id, pay_first_percent, released_at, cancelled_at, delivery_date, created_at, order_items(product, product_type, qty, production_status, stage), invoices(invoice_no, share_token)")
           .eq("client_id", ctx.client.id)
           .order("created_at", { ascending: false })
           .limit(15);
@@ -294,7 +294,7 @@ export function assistantTools(ctx: ToolContext): AssistantTool[] {
               total,
               paid: paid[o.id] ?? 0,
               due: total == null ? null : Math.max(total - (paid[o.id] ?? 0), 0),
-              ...(o.placed_by_agent && !o.released_at ? { through_agent: true, ...payFirst(total, percents.get(o.agent_id as string) ?? 0) } : {}),
+              ...(o.placed_by_agent && !o.released_at ? { through_agent: true, ...payFirst(total, o.pay_first_percent ?? percents.get(o.agent_id as string) ?? 0) } : {}),
               invoice_no: invoice?.invoice_no ?? null,
               invoice_url: invoice ? invoiceLink(invoice.share_token) : null,
             };

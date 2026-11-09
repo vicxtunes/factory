@@ -118,7 +118,13 @@ function escapeHtml(text: string): string {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
-export async function editAgent(input: { agentId: string; name: string; rateOverride: number | null; payFirstOverride: number | null }): Promise<void> {
+export async function editAgent(
+  input: { agentId: string; name: string; rateOverride: number | null; payFirstOverride: number | null },
+  waiting: WaitingChoice = "follow",
+): Promise<void> {
+  const before = await payFirstPercent(input.agentId);
+  const after = input.payFirstOverride ?? (await payFirstForAll());
+  if (before !== after) await settleWaiting({ agentId: input.agentId }, before, waiting);
   must(
     await createAdminClient()
       .from("agents")
@@ -166,11 +172,59 @@ export async function payFirstForAll(): Promise<number> {
   return must(await createAdminClient().from("agent_settings").select("pay_first_percent").single<{ pay_first_percent: number }>())!.pay_first_percent;
 }
 
-export async function setPayFirstForAll(percent: number, byName: string): Promise<void> {
+export async function setPayFirstForAll(percent: number, byName: string, waiting: WaitingChoice = "follow"): Promise<void> {
+  const before = await payFirstForAll();
+  if (before !== percent) await settleWaiting("all", before, waiting);
   must(await createAdminClient().from("agent_settings").update({ pay_first_percent: percent, updated_by_name: byName, updated_at: new Date().toISOString() }).eq("id", true));
 }
 
-/** This agent's % to pay before production: their own, else the setting for all agents. Read when it's checked, so a change applies to orders already waiting. */
+/**
+ * What a change of the rule does to orders already waiting for it: "follow", they take the new %; "keep",
+ * they keep the % they had (written on the order). Chosen by the boss when saving.
+ */
+export type WaitingChoice = "follow" | "keep";
+
+/** Agents' own orders not yet sent to production or cancelled, that a change of `scope`'s rule reaches. */
+async function waitingUnder(scope: { agentId: string } | "all"): Promise<{ id: string; order_no: string; pay_first_percent: number | null }[]> {
+  const db = createAdminClient();
+  let agentIds: string[] | null = null;
+  if (scope === "all") {
+    // The setting for all agents reaches only agents without their own %.
+    const rows = must(await db.from("agents").select("id").is("pay_first_override", null)) as { id: string }[];
+    agentIds = rows.map((r) => r.id);
+    if (!agentIds.length) return [];
+  }
+  let query = db.from("orders").select("id, order_no, pay_first_percent").eq("placed_by_agent", true).is("cancelled_at", null).is("released_at", null);
+  query = scope === "all" ? query.in("agent_id", agentIds!) : query.eq("agent_id", scope.agentId);
+  return (must(await query.order("created_at")) ?? []) as { id: string; order_no: string; pay_first_percent: number | null }[];
+}
+
+/** For the boss before saving: how many orders are waiting under this rule (and their numbers). */
+export async function waitingForPayFirst(agentId: string | null): Promise<{ count: number; orderNos: string[] }> {
+  const rows = await waitingUnder(agentId ? { agentId } : "all");
+  return { count: rows.length, orderNos: rows.map((r) => r.order_no) };
+}
+
+/** Before the rule changes from `before`: waiting orders follow the new one (their own % cleared), or keep `before`. */
+async function settleWaiting(scope: { agentId: string } | "all", before: number, waiting: WaitingChoice): Promise<void> {
+  const rows = await waitingUnder(scope);
+  if (!rows.length) return;
+  const db = createAdminClient();
+  if (waiting === "follow") {
+    must(await db.from("orders").update({ pay_first_percent: null }).in("id", rows.map((r) => r.id)));
+  } else {
+    // Only those still following the rule: an order already keeping its own % keeps that one.
+    const following = rows.filter((r) => r.pay_first_percent === null).map((r) => r.id);
+    if (following.length) must(await db.from("orders").update({ pay_first_percent: before }).in("id", following));
+  }
+}
+
+/** An order's % to pay before production: its own, if it kept one, else its agent's current rule. */
+export async function orderPayFirst(order: { agent_id: string; pay_first_percent: number | null }): Promise<number> {
+  return order.pay_first_percent ?? (await payFirstPercent(order.agent_id));
+}
+
+/** This agent's % to pay before production: their own, else the setting for all agents. Read when it's checked; an order that kept its own % uses that (orderPayFirst). */
 export async function payFirstPercent(agentId: string): Promise<number> {
   const [row, all] = await Promise.all([createAdminClient().from("agents").select("pay_first_override").eq("id", agentId).maybeSingle<{ pay_first_override: number | null }>(), payFirstForAll()]);
   return must(row)?.pay_first_override ?? all;
@@ -203,10 +257,13 @@ export interface AgentOrder {
   earns: boolean;
   /** The invoice's share link token, once staff generated it. */
   invoiceToken: string | null;
+  /** Its own % to pay before production, kept when the rule changed and the boss chose "keep"; null: it follows the rule. */
+  payFirstPercent: number | null;
 }
 
 interface OrderRow {
   id: string;
+  pay_first_percent: number | null;
   order_no: string;
   client_id: string | null;
   client_name: string;
@@ -221,7 +278,7 @@ interface OrderRow {
   invoice: { share_token: string } | { share_token: string }[] | null;
 }
 
-const ORDER_COLUMNS = `id, order_no, client_id, client_name, quoted_price, commission_eligible, approval_status, cancelled_at, created_at, delivery_date,
+const ORDER_COLUMNS = `id, order_no, pay_first_percent, client_id, client_name, quoted_price, commission_eligible, approval_status, cancelled_at, created_at, delivery_date,
   items:order_items (id, product, qty, unit_price, production_status, stage),
   commission:agent_commissions (status, amount, credited_amount, credited_at),
   invoice:invoices (share_token)`;
@@ -249,6 +306,7 @@ async function toOrders(rows: OrderRow[]): Promise<AgentOrder[]> {
       },
       earns: r.commission_eligible,
       invoiceToken: invoice?.share_token ?? null,
+      payFirstPercent: r.pay_first_percent,
     };
   });
 }
@@ -269,13 +327,14 @@ export async function agentOrder(agentId: string, orderId: string): Promise<Agen
 /** For staff: among these orders, the agents' own ones that must be part paid before production, with what's paid, the % and the amount needed (null until priced). */
 export async function agentPaymentsFor(orderIds: string[]): Promise<Record<string, { paid: number; percent: number; needed: number | null }>> {
   if (!orderIds.length) return {};
-  const rows = must(await createAdminClient().from("orders").select("id, quoted_price, agent_id").in("id", orderIds).eq("placed_by_agent", true).returns<{ id: string; quoted_price: number | string | null; agent_id: string }[]>()) ?? [];
-  const percents = new Map(await Promise.all([...new Set(rows.map((r) => r.agent_id))].map(async (a) => [a, await payFirstPercent(a)] as const)));
-  const waiting = rows.filter((r) => percents.get(r.agent_id)! > 0);
+  const rows = must(await createAdminClient().from("orders").select("id, quoted_price, agent_id, pay_first_percent").in("id", orderIds).eq("placed_by_agent", true).returns<{ id: string; quoted_price: number | string | null; agent_id: string; pay_first_percent: number | null }[]>()) ?? [];
+  const byAgent = new Map(await Promise.all([...new Set(rows.map((r) => r.agent_id))].map(async (a) => [a, await payFirstPercent(a)] as const)));
+  const percents = new Map(rows.map((r) => [r.id, r.pay_first_percent ?? byAgent.get(r.agent_id)!]));
+  const waiting = rows.filter((r) => percents.get(r.id)! > 0);
   const paid = await paidByOrders(waiting.map((r) => r.id));
   return Object.fromEntries(
     waiting.map((r) => {
-      const percent = percents.get(r.agent_id)!;
+      const percent = percents.get(r.id)!;
       return [r.id, { paid: paid[r.id] ?? 0, percent, needed: r.quoted_price === null ? null : payBeforeProduction(Number(r.quoted_price), percent) }];
     }),
   );
@@ -657,10 +716,10 @@ export async function tellAgents(): Promise<void> {
     must(
       await db
         .from("orders")
-        .select("id, order_no, approval_status, cancelled_at, agent_stage_told, placed_by_agent, agent_id, items:order_items (production_status, stage), agent:agents (client_id)")
+        .select("id, order_no, approval_status, cancelled_at, agent_stage_told, placed_by_agent, agent_id, pay_first_percent, items:order_items (production_status, stage), agent:agents (client_id)")
         .eq("commission_eligible", true)
         .or("agent_stage_told.is.null,agent_stage_told.not.in.(delivered,cancelled)")
-        .returns<{ id: string; order_no: string; approval_status: string; cancelled_at: string | null; agent_stage_told: string | null; placed_by_agent: boolean; agent_id: string; items: { production_status: ProductionStatus; stage: OrderStage }[]; agent: { client_id: string | null } | null }[]>(),
+        .returns<{ id: string; order_no: string; approval_status: string; cancelled_at: string | null; agent_stage_told: string | null; placed_by_agent: boolean; agent_id: string; pay_first_percent: number | null; items: { production_status: ProductionStatus; stage: OrderStage }[]; agent: { client_id: string | null } | null }[]>(),
     ) ?? [];
   for (const o of open) {
     const stage = agentStage({ cancelled_at: o.cancelled_at, approval_status: o.approval_status, lines: o.items });
@@ -671,7 +730,7 @@ export async function tellAgents(): Promise<void> {
     if (!claimed?.length || !o.agent?.client_id) continue;
     // They just placed it: no need to say so.
     if (stage === "submitted") continue;
-    const percent = stage === "confirmed" && o.placed_by_agent ? await payFirstPercent(o.agent_id) : 0;
+    const percent = stage === "confirmed" && o.placed_by_agent ? await orderPayFirst(o) : 0;
     const confirmed = percent > 0 ? `Your order is confirmed. Production starts once your client has paid ${percent}% of the price.` : "Your order is confirmed.";
     await notifyActor(
       { type: "client", id: o.agent.client_id },

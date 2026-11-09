@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { SectionLabel } from "@repo/ui/SectionLabel";
 import { RowsSkeleton } from "@repo/ui/skeletons/blocks";
 import { Loading } from "@repo/ui/skeletons/Loading";
-import { listAgentsWithFigures } from "@repo/lib/agents/server";
+import { listAgentsWithFigures, payFirstForAll } from "@repo/lib/agents/server";
 import { getDashboardSession } from "@repo/lib/auth/session";
 import { isManagerRole } from "@repo/lib/types";
 
@@ -29,5 +29,6 @@ export default async function AgentsPage() {
 }
 
 async function Agents({ boss }: { boss: boolean }) {
-  return <AgentsBoard agents={await listAgentsWithFigures()} boss={boss} />;
+  const [agents, payFirst] = await Promise.all([listAgentsWithFigures(), payFirstForAll()]);
+  return <AgentsBoard agents={agents} boss={boss} payFirstForAll={payFirst} />;
 }

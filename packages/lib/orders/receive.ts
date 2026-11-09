@@ -1,6 +1,6 @@
 import "server-only";
 
-import { payFirstPercent } from "@repo/lib/agents/server";
+import { orderPayFirst } from "@repo/lib/agents/server";
 import { logOrderEvent, type AuditActor } from "@repo/lib/audit/log";
 import { postOrderCard } from "@repo/lib/chat/orders";
 import { chatHref } from "@repo/lib/chat/routes";
@@ -25,7 +25,7 @@ export async function receiveOrder(
   const admin = createAdminClient();
   const { data: order } = await admin
     .from("orders")
-    .select("id, approval_status, released_at, order_no, client_id, cancelled_at, placed_by_agent, agent_id")
+    .select("id, approval_status, released_at, order_no, client_id, cancelled_at, placed_by_agent, agent_id, pay_first_percent")
     .eq("id", orderId)
     .maybeSingle();
   if (!order) return { ok: false, error: "Order not found." };
@@ -54,7 +54,7 @@ export async function receiveOrder(
       .maybeSingle();
     if (firstItem) {
       // An order the agent placed themselves goes to production once the boss's % for that agent is paid (packages/lib/agents).
-      const percent = order.placed_by_agent && order.agent_id ? await payFirstPercent(order.agent_id) : 0;
+      const percent = order.placed_by_agent && order.agent_id ? await orderPayFirst({ agent_id: order.agent_id, pay_first_percent: order.pay_first_percent }) : 0;
       const payFirst = percent > 0 ? ` Production starts once ${percent}% of the price is paid.` : "";
       await notifyOrderItem({
         orderItemId: firstItem.id,
