@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { z } from "zod";
 
 import { payFirstWording } from "@repo/lib/agents/core";
-import { agentClient, agentOrder } from "@repo/lib/agents/server";
+import { agentClient, agentOrder, payFirstPercent } from "@repo/lib/agents/server";
 import { clientUrl } from "@repo/lib/client-portal/paths";
 import { clientMoney } from "@repo/lib/currency/server";
 
@@ -28,7 +28,8 @@ export default async function AgentOrderPage({ params }: { params: Promise<{ id:
   const order = await agentOrder(agent.id, id);
   if (!order) notFound();
 
-  const [money, client] = await Promise.all([clientMoney(), order.clientId ? agentClient(agent.id, order.clientId) : null]);
+  const [money, client, percent] = await Promise.all([clientMoney(), order.clientId ? agentClient(agent.id, order.clientId) : null, payFirstPercent(agent.id)]);
+  const payFirst = order.earns && order.stage !== "cancelled" ? payFirstWording(order.price, percent, money) : null;
   const due = order.price === null ? null : Math.max(order.price - order.paid, 0);
   const canPay = order.stage !== "cancelled" && order.price !== null && due !== null && due > 0;
 
@@ -103,7 +104,7 @@ export default async function AgentOrderPage({ params }: { params: Promise<{ id:
                   </div>
                 </dl>
               )}
-              {order.earns && order.stage !== "cancelled" ? <p className="text-xs font-medium text-warning-700">{payFirstWording(order.price, money)}</p> : null}
+              {payFirst ? <p className="text-xs font-medium text-warning-700">{payFirst}</p> : null}
               {canPay ? <OrderPayment orderId={order.id} phone={client?.status === "active" ? client.phone : null} invoiceUrl={order.invoiceToken ? clientUrl(`/invoice/${order.invoiceToken}`) : null} /> : null}
             </section>
           </div>

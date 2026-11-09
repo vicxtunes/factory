@@ -39,6 +39,7 @@ import type {
 import { pushOnlyOrderItem, notifyOrderItem } from "@repo/lib/notifications/notify";
 import { formatMoney } from "@repo/lib/currency/format";
 import { payBeforeProduction } from "@repo/lib/agents/core";
+import { payFirstPercent } from "@repo/lib/agents/server";
 import { paidByOrders, walletErrorMessage } from "@repo/lib/wallet/orders";
 import { isOrderInvoiced } from "@repo/lib/invoices/orders";
 import { lineDiscountOf, validateLineDiscount, type LineDiscount, type LineDiscountChange } from "@repo/lib/discounts/core";
@@ -1634,7 +1635,7 @@ export async function routeApprovedOrder(
   const admin = createAdminClient();
   const { data: order } = await admin
     .from("orders")
-    .select("id, approval_status, released_at, order_no, cancelled_at, placed_by_agent, quoted_price")
+    .select("id, approval_status, released_at, order_no, cancelled_at, placed_by_agent, agent_id, quoted_price")
     .eq("id", orderId)
     .maybeSingle();
   if (!order) return { ok: false, error: "Order not found." };
@@ -1642,14 +1643,16 @@ export async function routeApprovedOrder(
   if (order.approval_status !== "approved") return { ok: false, error: "Confirm this order before routing it." };
   if (order.released_at) return { ok: false, error: "This order was already sent to production." };
   if (!(await isOrderInvoiced(orderId))) return { ok: false, error: "Generate the invoice before routing this order." };
-  // An order the agent placed themselves goes to production only once 80% is paid (packages/lib/agents).
-  if (order.placed_by_agent) {
+  // An order the agent placed themselves goes to production only once the
+  // boss's % for that agent is paid (packages/lib/agents).
+  const percent = order.placed_by_agent && order.agent_id ? await payFirstPercent(order.agent_id) : 0;
+  if (percent > 0) {
     if (order.quoted_price == null) return { ok: false, error: "This agent order has no price yet." };
-    const needed = payBeforeProduction(Number(order.quoted_price));
+    const needed = payBeforeProduction(Number(order.quoted_price), percent);
     const paid = (await paidByOrders([orderId]))[orderId] ?? 0;
     if (paid < needed) {
       const symbol = await fetchBaseCurrencySymbol();
-      return { ok: false, error: `Agent order: ${formatMoney(needed, symbol)} (80%) must be paid before production. Paid so far: ${formatMoney(paid, symbol)}.` };
+      return { ok: false, error: `Agent order: ${formatMoney(needed, symbol)} (${percent}%) must be paid before production. Paid so far: ${formatMoney(paid, symbol)}.` };
     }
   }
 

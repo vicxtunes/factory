@@ -14,8 +14,10 @@ clients pay Aming directly.
 - **Orders:** placed with `buildAndInsertOrder` at list prices, into reception's normal queue. An order staff or a designer create in an agent's name is theirs
   too: it shows in their portal and earns the same way. Commission starts on 2026-11-01: orders
   tagged before then don't earn (`orders.commission_eligible`). It doesn't add the client to the agent's list.
-- **80% before production:** only an order the agent places from their own login (`orders.placed_by_agent`)
-  goes to production once 80% of its price is paid (`payBeforeProduction()` in `core.ts`): it waits in Client
+- **Pay before production:** only an order the agent places from their own login (`orders.placed_by_agent`)
+  goes to production once a % of its price is paid. The boss sets it for all agents (Rates & settings,
+  `agent_settings.pay_first_percent`, 80 at first) and per agent (`agents.pay_first_override`); 0 means no
+  payment first. `payFirstPercent()` reads it when checked, so a change applies to waiting orders too. It waits in Client
   Orders, `routeApprovedOrder` refuses to send it on earlier, and the card shows what's paid. The agent (order
   form, order page, "confirmed" push), the client (confirmation message) and the assistant (`get_my_orders`) are
   told. An order staff or a designer create in an agent's name earns the same but flows as any other order:
@@ -71,3 +73,8 @@ one message.
 
 `commission-check.sql` runs the money rules against a real database inside a transaction that's
 rolled back: paste the migration between `begin;` and it on a test database, never live.
+- **Agents' clients (Agents → Clients):** registrations to check, then everyone on an agent's list. The boss
+  edits contacts, changes agent, or merges an agent's client into the same person already on Aming
+  (`merge_client` in migration 20261230100000): orders, payments, receipts and chats move, the agent's
+  phone/email fill blanks, the person stays the agent's, the duplicate is deleted and noted in `client_merges`.
+  Refused for a client with a login, an agent/vendor/studio account, wallet money, or another agent's client.

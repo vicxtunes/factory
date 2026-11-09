@@ -30,7 +30,7 @@ export function OrderPlaced({
   needsReview,
   uploadWarnings,
   uploads,
-  forAgent = false,
+  forAgent,
 }: {
   orderNo: string;
   total: number | null;
@@ -39,7 +39,7 @@ export function OrderPlaced({
   /** Photos uploading in the background from this device's queue. */
   uploads: { id: string; name: string }[];
   /** Placed by an agent: their client pays Aming, from the order's page. */
-  forAgent?: boolean;
+  forAgent?: { payFirstPercent: number };
 }) {
   const formatAmount = useFormatMoney();
   const payNow = total != null && !needsReview;
@@ -75,9 +75,9 @@ export function OrderPlaced({
         />
       )}
 
-      {forAgent ? (
+      {forAgent && forAgent.payFirstPercent > 0 ? (
         <p className="rounded-[var(--radius)] border border-warning-100 bg-warning-50 p-3 text-sm text-warning-700">
-          Production starts once your client has paid 80% of the confirmed price. Share the payment details with them from the order.
+          Production starts once your client has paid {forAgent.payFirstPercent}% of the confirmed price. Share the payment details with them from the order.
         </p>
       ) : null}
 

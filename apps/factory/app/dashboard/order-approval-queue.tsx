@@ -66,8 +66,8 @@ export function OrderApprovalQueue({
   driveLinks: Record<string, number>;
   /** Only for those who see production costs (boss, supervisors). */
   costs: ItemCosts | null;
-  /** Agents' orders: paid so far and the 80% needed before production (packages/lib/agents). */
-  agentPayments: Record<string, { paid: number; needed: number | null }>;
+  /** Agents' own orders: paid so far and the % (set by the boss) needed before production (packages/lib/agents). */
+  agentPayments: Record<string, { paid: number; percent: number; needed: number | null }>;
   canCancel?: boolean;
 }) {
   const groups = useMemo(() => groupByOrder(items), [items]);
@@ -276,7 +276,7 @@ function RouteCard({
 }: {
   group: OrderGroup;
   designers: DesignerPublic[];
-  agentPayment: { paid: number; needed: number | null } | null;
+  agentPayment: { paid: number; percent: number; needed: number | null } | null;
   costs: ItemCosts | null;
   driveLinks: Record<string, number>;
   // Photo-book order: confirming needs the price agreed on a call with the
@@ -333,7 +333,7 @@ function RouteCard({
           />
           {agentPayment ? (
             <p className={`text-xs ${paidEnough ? "text-muted" : "font-medium text-[var(--rush)]"}`}>
-              Agent order: {agentPayment.needed === null ? "80% of the price" : formatMoney(agentPayment.needed, symbol)} (80%) must be paid before production. Paid so far:{" "}
+              Agent order: {agentPayment.needed === null ? `${agentPayment.percent}% of the price` : `${formatMoney(agentPayment.needed, symbol)} (${agentPayment.percent}%)`} must be paid before production. Paid so far:{" "}
               {formatMoney(agentPayment.paid, symbol)}.
             </p>
           ) : null}

@@ -12,6 +12,7 @@ import { formatMoney } from "@repo/lib/currency/format";
 import { InvoiceError } from "@repo/lib/invoices/server/errors";
 import * as invoices from "@repo/lib/invoices/server/service";
 import { payBeforeProduction } from "@repo/lib/agents/core";
+import { payFirstPercent } from "@repo/lib/agents/server";
 import { buildAndInsertOrder } from "@repo/lib/orders/create";
 import { receiveOrder } from "@repo/lib/orders/receive";
 import { recipeListPrice } from "@repo/lib/production/pricing";
@@ -270,12 +271,15 @@ export function assistantTools(ctx: ToolContext): AssistantTool[] {
       run: async () => {
         const { data, error } = await db
           .from("orders")
-          .select("id, order_no, approval_status, quoted_price, placed_by_agent, released_at, cancelled_at, delivery_date, created_at, order_items(product, product_type, qty, production_status, stage), invoices(invoice_no, share_token)")
+          .select("id, order_no, approval_status, quoted_price, placed_by_agent, agent_id, released_at, cancelled_at, delivery_date, created_at, order_items(product, product_type, qty, production_status, stage), invoices(invoice_no, share_token)")
           .eq("client_id", ctx.client.id)
           .order("created_at", { ascending: false })
           .limit(15);
         if (error) throw new Error(error.message);
         const paid = await paidByOrders((data ?? []).map((o) => o.id));
+        // Through a sales agent: production starts once the boss's % for that agent is paid (packages/lib/agents).
+        const waiting = (data ?? []).filter((o) => o.placed_by_agent && !o.released_at && o.agent_id);
+        const percents = new Map(await Promise.all([...new Set(waiting.map((o) => o.agent_id as string))].map(async (a) => [a, await payFirstPercent(a)] as const)));
         return JSON.stringify(
           (data ?? []).map((o) => {
             const invoice = (Array.isArray(o.invoices) ? o.invoices[0] : o.invoices) as { invoice_no: string; share_token: string } | undefined;
@@ -290,10 +294,7 @@ export function assistantTools(ctx: ToolContext): AssistantTool[] {
               total,
               paid: paid[o.id] ?? 0,
               due: total == null ? null : Math.max(total - (paid[o.id] ?? 0), 0),
-              // Through a sales agent: production starts once 80% is paid (packages/lib/agents).
-              ...(o.placed_by_agent && !o.released_at
-                ? { through_agent: true, pay_before_production: total == null ? "80% of the price, once confirmed" : payBeforeProduction(total) }
-                : {}),
+              ...(o.placed_by_agent && !o.released_at ? { through_agent: true, ...payFirst(total, percents.get(o.agent_id as string) ?? 0) } : {}),
               invoice_no: invoice?.invoice_no ?? null,
               invoice_url: invoice ? invoiceLink(invoice.share_token) : null,
             };
@@ -582,4 +583,10 @@ export function assistantTools(ctx: ToolContext): AssistantTool[] {
       return result;
     },
   }));
+}
+
+/** What an order through a sales agent needs paid before production; nothing when the boss set 0%. */
+function payFirst(total: number | null, percent: number): { pay_before_production?: number | string } {
+  if (percent <= 0) return {};
+  return { pay_before_production: total == null ? `${percent}% of the price, once confirmed` : payBeforeProduction(total, percent) };
 }

@@ -4,7 +4,7 @@ import { z } from "zod";
 
 import { Tile } from "@repo/ui/production/MaterialsBoard";
 import { COMMISSION_STATUS_LABELS, AGENT_STAGE_LABELS, AGENT_WALLET_KIND_LABELS } from "@repo/lib/agents/core";
-import { agentById, agentClients, figuresFor } from "@repo/lib/agents/server";
+import { agentById, agentClients, figuresFor, payFirstForAll } from "@repo/lib/agents/server";
 import { getDashboardSession } from "@repo/lib/auth/session";
 import { formatMoney } from "@repo/lib/currency/format";
 import { fetchBaseCurrencySymbol } from "@repo/lib/queries";
@@ -35,7 +35,7 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
   const agent = await agentById(id);
   if (!agent) notFound();
 
-  const [{ orders, ...figures }, clients, wallet, symbol] = await Promise.all([figuresFor(id), agentClients(id), agentWallet(id), fetchBaseCurrencySymbol()]);
+  const [{ orders, ...figures }, clients, wallet, symbol, payFirstAll] = await Promise.all([figuresFor(id), agentClients(id), agentWallet(id), fetchBaseCurrencySymbol(), payFirstForAll()]);
   const money = (n: number) => formatMoney(n, symbol);
 
   return (
@@ -48,7 +48,8 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
           <h1 className="truncate text-xl font-bold">{agent.name}</h1>
           <p className="text-sm text-muted">{[agent.phone, agent.email].filter(Boolean).join(" · ") || "No login yet"}</p>
           <p className="text-sm text-muted">
-            {agent.active ? "Active" : "Inactive"} · {agent.rateOverride === null ? "Category rates" : `Own rate: ${agent.rateOverride}%`}
+            {agent.active ? "Active" : "Inactive"} · {agent.rateOverride === null ? "Category rates" : `Own rate: ${agent.rateOverride}%`} · Pays {agent.payFirstOverride ?? payFirstAll}% before production
+            {agent.payFirstOverride === null ? " (all agents)" : " (own)"}
           </p>
         </div>
         {session.role === "boss" ? <AgentActions agent={agent} /> : null}
