@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { capReached, chargeFor, COMPANY, formatUsd, isAppPath, isWaived, kampalaDay, mayUsePanel, payerForPage, startOfKampalaMonth, startOfNextKampalaMonth } from "./core";
+import { capReached, chargeFor, COMPANY, formatUsd, isAppPath, plainText, isWaived, kampalaDay, mayUsePanel, payerForPage, startOfKampalaMonth, startOfNextKampalaMonth } from "./core";
 
 describe("Alexis panel rules", () => {
   it("charges the real cost times the multiplier", () => {
@@ -71,5 +71,17 @@ describe("Alexis usage is shown in US dollars", () => {
     assert.equal(formatUsd(0.0123), "US$0.012");
     assert.equal(formatUsd(1), "US$1.00");
     assert.equal(formatUsd(12.5), "US$12.50");
+  });
+});
+
+describe("Alexis's replies are plain text", () => {
+  it("drops bold and headings, and spells out links", () => {
+    assert.equal(plainText("**Omugatte: UGX 450,000.**"), "Omugatte: UGX 450,000.");
+    assert.equal(plainText("laba [invoice yo](https://www.amingspace.com/invoice/xyz)."), "laba invoice yo: https://www.amingspace.com/invoice/xyz.");
+    assert.equal(plainText("[https://a.com/x](https://a.com/x)"), "https://a.com/x");
+    assert.equal(plainText("## Total\nUGX 5"), "Total\nUGX 5");
+  });
+  it("leaves ordinary text alone", () => {
+    assert.equal(plainText("25 × UGX 12,000 = UGX 300,000 - Sheets"), "25 × UGX 12,000 = UGX 300,000 - Sheets");
   });
 });

@@ -6,6 +6,7 @@ import { getDashboardSession } from "@repo/lib/auth/session";
 import { SUPPORT_OWNER_EMAIL } from "@repo/lib/support/constants";
 
 import type { AssistantMode } from "../core/rules";
+import { forget } from "./memory";
 import * as panel from "./server";
 
 const OFF: panel.PanelState = { kind: "off" };
@@ -20,6 +21,12 @@ export async function openAlexis(page: string): Promise<panel.PanelState> {
 export async function openAlexisChat(chatId: string): Promise<panel.PanelMessage[] | null> {
   const person = await panel.currentPerson();
   return person ? panel.chatMessages(person, String(chatId)) : null;
+}
+
+/** Deletes one thing Alexis remembers about this person. */
+export async function forgetAlexisMemory(id: string): Promise<boolean> {
+  const person = await panel.currentPerson();
+  return person ? forget(person, String(id)) : false;
 }
 
 /** This person's chats whose title or messages contain the words. */
