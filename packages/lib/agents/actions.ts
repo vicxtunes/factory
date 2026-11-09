@@ -13,7 +13,7 @@ import { isManagerRole, type OrderType } from "@repo/lib/types";
 import { WalletError, checkOrderLinkPayment, startOrderLinkPayment } from "@repo/lib/wallet/orders";
 import type { MobileMoneyCollection } from "@repo/lib/wallet/types";
 
-import { agentClientSchema, agentEditSchema, agentRegisterSchema, commissionRateSchema, payFirstPercentSchema } from "./core";
+import { agentClientSchema, agentEditSchema, agentRegisterSchema, commissionRateSchema, payFirstPercentSchema, waitingChoiceSchema } from "./core";
 import * as server from "./server";
 
 const id = z.string().uuid();
@@ -116,10 +116,11 @@ export async function registerAgent(input: unknown): Promise<Result> {
   });
 }
 
-export async function editAgent(input: unknown): Promise<Result> {
+/** `waiting`: if their % changes, whether their orders already waiting take the new one ("follow") or keep theirs ("keep"). */
+export async function editAgent(input: unknown, waiting: unknown = "follow"): Promise<Result> {
   return runAction("agents", async () => {
     await requireBoss();
-    await server.editAgent(parseInput(agentEditSchema, input));
+    await server.editAgent(parseInput(agentEditSchema, input), parseInput(waitingChoiceSchema, waiting));
     refreshAdmin();
   });
 }
@@ -149,11 +150,20 @@ export async function setWithdrawalFeePaidBy(paidBy: unknown): Promise<Result> {
   });
 }
 
-export async function setPayFirstForAll(percent: unknown): Promise<Result> {
+/** `waiting`: whether orders already waiting take the new % ("follow") or keep theirs ("keep"). */
+export async function setPayFirstForAll(percent: unknown, waiting: unknown = "follow"): Promise<Result> {
   return runAction("agents", async () => {
     const by = await requireBoss();
-    await server.setPayFirstForAll(parseInput(payFirstPercentSchema, percent), by);
+    await server.setPayFirstForAll(parseInput(payFirstPercentSchema, percent), by, parseInput(waitingChoiceSchema, waiting));
     refreshAdmin();
+  });
+}
+
+/** Before saving a new %: how many agent orders are waiting under that rule (one agent's, or all agents'). */
+export async function waitingForPayFirst(agentId: unknown): Promise<Result<{ count: number; orderNos: string[] }>> {
+  return runAction("agents", async () => {
+    await requireBoss();
+    return server.waitingForPayFirst(agentId == null ? null : parseInput(id, agentId));
   });
 }
 
