@@ -13,7 +13,7 @@ import { isManagerRole, type OrderType } from "@repo/lib/types";
 import { WalletError, checkOrderLinkPayment, startOrderLinkPayment } from "@repo/lib/wallet/orders";
 import type { MobileMoneyCollection } from "@repo/lib/wallet/types";
 
-import { agentClientSchema, agentEditSchema, agentRegisterSchema, commissionRateSchema } from "./core";
+import { agentClientSchema, agentEditSchema, agentRegisterSchema, commissionRateSchema, payFirstPercentSchema } from "./core";
 import * as server from "./server";
 
 const id = z.string().uuid();
@@ -145,6 +145,39 @@ export async function setWithdrawalFeePaidBy(paidBy: unknown): Promise<Result> {
   return runAction("agents", async () => {
     const by = await requireBoss();
     await server.setFeePaidBy(parseInput(z.enum(["agent", "aming"]), paidBy), by);
+    refreshAdmin();
+  });
+}
+
+export async function setPayFirstForAll(percent: unknown): Promise<Result> {
+  return runAction("agents", async () => {
+    const by = await requireBoss();
+    await server.setPayFirstForAll(parseInput(payFirstPercentSchema, percent), by);
+    refreshAdmin();
+  });
+}
+
+/** Clients on Aming that an agent's client could be, for the merge sheet. */
+export async function findMergeTargets(fromClientId: unknown, query: unknown): Promise<Result<server.MergeTarget[]>> {
+  return runAction("agents", async () => {
+    await requireBoss();
+    return server.mergeTargets(parseInput(id, fromClientId), parseInput(z.string().max(200), query));
+  });
+}
+
+export async function mergeAgentClient(fromClientId: unknown, intoClientId: unknown): Promise<Result> {
+  return runAction("agents", async () => {
+    const by = await requireBoss();
+    await server.mergeAgentClient(parseInput(id, fromClientId), parseInput(id, intoClientId), by);
+    refreshAdmin();
+    revalidatePath("/dashboard/clients");
+  });
+}
+
+export async function moveAgentClient(clientId: unknown, toAgentId: unknown): Promise<Result> {
+  return runAction("agents", async () => {
+    const by = await requireBoss();
+    await server.moveAgentClient(parseInput(id, clientId), parseInput(id, toAgentId), by);
     refreshAdmin();
   });
 }

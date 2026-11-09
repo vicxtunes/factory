@@ -12,7 +12,7 @@ export function AgentTabs({ boss }: { boss: boolean }) {
   const pathname = usePathname();
   const tabs: { key: Section; label: string }[] = [
     { key: "/dashboard/agents", label: "Agents" },
-    { key: "/dashboard/agents/clients", label: "Clients to check" },
+    { key: "/dashboard/agents/clients", label: "Clients" },
     ...(boss
       ? ([
           { key: "/dashboard/agents/withdrawals", label: "Withdrawals" },

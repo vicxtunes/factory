@@ -133,7 +133,7 @@ export function OrderForm({
   /** The client has a business Drive to pick files from ("From my Drive"). */
   hasDrive?: boolean;
   /** An agent ordering for a client of theirs (/agents/orders/new): no promo code, and it's placed with their action. */
-  agent?: { clientName: string; place: (input: AgentOrderInput) => Promise<AgentPlaceResult> };
+  agent?: { clientName: string; place: (input: AgentOrderInput) => Promise<AgentPlaceResult>; /** % of the price to pay before production (the boss's setting); 0: none. */ payFirstPercent: number };
 }) {
   const router = useRouter();
   const [orderType, setOrderType] = useState<OrderType>("normal");
@@ -292,7 +292,7 @@ export function OrderForm({
           needsReview={receipt.needsReview}
           uploadWarnings={uploadWarnings}
           uploads={queuedUploads}
-          forAgent={!!agent}
+          forAgent={agent ? { payFirstPercent: agent.payFirstPercent } : undefined}
         />
       </>
     );
@@ -320,7 +320,7 @@ export function OrderForm({
       ) : null}
 
       <h1 className="mt-3 text-2xl font-bold sm:text-3xl">{agent ? `Order for ${agent.clientName}` : "Place order"}</h1>
-      {agent ? <p className="mt-1 text-sm text-muted">List prices, no discounts. Production starts once 80% of the confirmed price is paid.</p> : null}
+      {agent ? <p className="mt-1 text-sm text-muted">List prices, no discounts.{agent.payFirstPercent > 0 ? ` Production starts once ${agent.payFirstPercent}% of the confirmed price is paid.` : ""}</p> : null}
 
       <div className="mt-6 flex flex-col-reverse gap-6 lg:grid lg:grid-cols-[1fr_22rem] lg:items-start lg:gap-8">
         <div className="space-y-6">

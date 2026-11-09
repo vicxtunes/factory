@@ -120,6 +120,7 @@ export function AgentSheet({ sheet, onClose }: { sheet: NonNullable<Sheet>; onCl
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [rate, setRate] = useState(sheet.agent?.rateOverride?.toString() ?? "");
+  const [payFirst, setPayFirst] = useState(sheet.agent?.payFirstOverride?.toString() ?? "");
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const rateOverride = rate.trim() === "" ? null : rate;
@@ -134,7 +135,7 @@ export function AgentSheet({ sheet, onClose }: { sheet: NonNullable<Sheet>; onCl
           start(async () => {
             const res =
               sheet.kind === "edit"
-                ? await editAgent({ agentId: sheet.agent.id, name, rateOverride })
+                ? await editAgent({ agentId: sheet.agent.id, name, rateOverride, payFirstOverride: payFirst.trim() === "" ? null : payFirst })
                 : await registerAgent({ agentId: sheet.agent?.id ?? null, name, email, phone, rateOverride });
             if (!res.ok) {
               setError(res.error);
@@ -162,6 +163,11 @@ export function AgentSheet({ sheet, onClose }: { sheet: NonNullable<Sheet>; onCl
         <Field label="Their own rate, % (optional)">
           <TextInput inputMode="decimal" value={rate} onChange={(e) => setRate(e.target.value)} placeholder="Category rates apply" />
         </Field>
+        {sheet.kind === "edit" ? (
+          <Field label="Their own % to pay before production (optional)">
+            <TextInput inputMode="numeric" value={payFirst} onChange={(e) => setPayFirst(e.target.value)} placeholder="The setting for all agents applies" />
+          </Field>
+        ) : null}
         {error ? <p className="text-sm text-error-600">{error}</p> : null}
         <Button variant="primary" type="submit" className="w-full" loading={pending} disabled={pending}>
           Save

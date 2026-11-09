@@ -4,7 +4,7 @@ import "server-only";
 // client: callers (./actions.ts and the pages) check who's asking first.
 
 import { clientUrl } from "@repo/lib/client-portal/paths";
-import { resolveOrCreateClient } from "@repo/lib/clients/dedupe";
+import { findClientCandidates, resolveOrCreateClient, type ClientMatchReason } from "@repo/lib/clients/dedupe";
 import { formatMoney } from "@repo/lib/currency/format";
 import { clientCurrency } from "@repo/lib/currency/server";
 import { AppError } from "@repo/lib/kernel/core";
@@ -35,6 +35,8 @@ export interface Agent {
   active: boolean;
   clientId: string | null;
   rateOverride: number | null;
+  /** Their own % to pay before production; null: the setting for all agents. */
+  payFirstOverride: number | null;
   email: string | null;
   phone: string | null;
 }
@@ -45,10 +47,11 @@ interface AgentRow {
   active: boolean;
   client_id: string | null;
   rate_override: number | string | null;
+  pay_first_override: number | null;
   client: { email: string | null; phone: string | null } | null;
 }
 
-const AGENT_COLUMNS = "id, name, active, client_id, rate_override, client:clients (email, phone)";
+const AGENT_COLUMNS = "id, name, active, client_id, rate_override, pay_first_override, client:clients (email, phone)";
 
 const toAgent = (r: AgentRow): Agent => ({
   id: r.id,
@@ -56,6 +59,7 @@ const toAgent = (r: AgentRow): Agent => ({
   active: r.active,
   clientId: r.client_id,
   rateOverride: r.rate_override === null ? null : Number(r.rate_override),
+  payFirstOverride: r.pay_first_override,
   email: r.client?.email ?? null,
   phone: r.client?.phone ?? null,
 });
@@ -69,6 +73,11 @@ function must<T>(res: { data: T; error: { message: string } | null }): T {
 export async function agentOfClient(clientId: string): Promise<Agent | null> {
   const row = must(await createAdminClient().from("agents").select(AGENT_COLUMNS).eq("client_id", clientId).maybeSingle<AgentRow>());
   return row ? toAgent(row) : null;
+}
+
+/** Every agent, by name. */
+export async function listAgents(): Promise<Agent[]> {
+  return (must(await createAdminClient().from("agents").select(AGENT_COLUMNS).order("name").returns<AgentRow[]>()) ?? []).map(toAgent);
 }
 
 export async function agentById(id: string): Promise<Agent | null> {
@@ -109,8 +118,13 @@ function escapeHtml(text: string): string {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
-export async function editAgent(input: { agentId: string; name: string; rateOverride: number | null }): Promise<void> {
-  must(await createAdminClient().from("agents").update({ name: input.name, rate_override: input.rateOverride, updated_at: new Date().toISOString() }).eq("id", input.agentId));
+export async function editAgent(input: { agentId: string; name: string; rateOverride: number | null; payFirstOverride: number | null }): Promise<void> {
+  must(
+    await createAdminClient()
+      .from("agents")
+      .update({ name: input.name, rate_override: input.rateOverride, pay_first_override: input.payFirstOverride, updated_at: new Date().toISOString() })
+      .eq("id", input.agentId),
+  );
 }
 
 export async function setAgentActive(id: string, active: boolean): Promise<void> {
@@ -145,6 +159,21 @@ export async function feePaidBy(): Promise<FeePaidBy> {
 
 export async function setFeePaidBy(paidBy: FeePaidBy, byName: string): Promise<void> {
   must(await createAdminClient().from("agent_settings").update({ withdrawal_fee_paid_by: paidBy, updated_by_name: byName, updated_at: new Date().toISOString() }).eq("id", true));
+}
+
+/** The % of the price an agent's own order must have paid before production, for agents without their own. */
+export async function payFirstForAll(): Promise<number> {
+  return must(await createAdminClient().from("agent_settings").select("pay_first_percent").single<{ pay_first_percent: number }>())!.pay_first_percent;
+}
+
+export async function setPayFirstForAll(percent: number, byName: string): Promise<void> {
+  must(await createAdminClient().from("agent_settings").update({ pay_first_percent: percent, updated_by_name: byName, updated_at: new Date().toISOString() }).eq("id", true));
+}
+
+/** This agent's % to pay before production: their own, else the setting for all agents. Read when it's checked, so a change applies to orders already waiting. */
+export async function payFirstPercent(agentId: string): Promise<number> {
+  const [row, all] = await Promise.all([createAdminClient().from("agents").select("pay_first_override").eq("id", agentId).maybeSingle<{ pay_first_override: number | null }>(), payFirstForAll()]);
+  return must(row)?.pay_first_override ?? all;
 }
 
 // --- Orders ----------------------------------------------------------------------
@@ -237,12 +266,19 @@ export async function agentOrder(agentId: string, orderId: string): Promise<Agen
   return row ? (await toOrders([row]))[0] : null;
 }
 
-/** For staff: among these orders, the agents' ones, with what's paid and the 80% needed before production (null until priced). */
-export async function agentPaymentsFor(orderIds: string[]): Promise<Record<string, { paid: number; needed: number | null }>> {
+/** For staff: among these orders, the agents' own ones that must be part paid before production, with what's paid, the % and the amount needed (null until priced). */
+export async function agentPaymentsFor(orderIds: string[]): Promise<Record<string, { paid: number; percent: number; needed: number | null }>> {
   if (!orderIds.length) return {};
-  const rows = must(await createAdminClient().from("orders").select("id, quoted_price").in("id", orderIds).eq("placed_by_agent", true).returns<{ id: string; quoted_price: number | string | null }[]>()) ?? [];
-  const paid = await paidByOrders(rows.map((r) => r.id));
-  return Object.fromEntries(rows.map((r) => [r.id, { paid: paid[r.id] ?? 0, needed: r.quoted_price === null ? null : payBeforeProduction(Number(r.quoted_price)) }]));
+  const rows = must(await createAdminClient().from("orders").select("id, quoted_price, agent_id").in("id", orderIds).eq("placed_by_agent", true).returns<{ id: string; quoted_price: number | string | null; agent_id: string }[]>()) ?? [];
+  const percents = new Map(await Promise.all([...new Set(rows.map((r) => r.agent_id))].map(async (a) => [a, await payFirstPercent(a)] as const)));
+  const waiting = rows.filter((r) => percents.get(r.agent_id)! > 0);
+  const paid = await paidByOrders(waiting.map((r) => r.id));
+  return Object.fromEntries(
+    waiting.map((r) => {
+      const percent = percents.get(r.agent_id)!;
+      return [r.id, { paid: paid[r.id] ?? 0, percent, needed: r.quoted_price === null ? null : payBeforeProduction(Number(r.quoted_price), percent) }];
+    }),
+  );
 }
 
 /** A commission the triggers couldn't work out is tried again whenever the agent looks. */
@@ -328,7 +364,7 @@ export async function placeForClient(agent: Agent, input: PlacedAgentOrder): Pro
     responsibleWorkerId: null,
     items: input.items,
     releaseImmediately: false,
-    // Their own order: production once 80% is paid.
+    // Their own order: production once their % is paid (payFirstPercent).
     placedByAgent: true,
   });
   if (!res.ok) throw new AppError(res.error);
@@ -514,6 +550,98 @@ export async function decideClientMatch(id: string, approve: boolean, byName: st
   }
 }
 
+// --- Agents' clients, for the boss ----------------------------------------------------
+
+export interface AgentClientListRow {
+  clientId: string;
+  agentId: string;
+  agentName: string;
+  /** The client's details on Aming. */
+  name: string;
+  phone: string | null;
+  email: string | null;
+  orders: number;
+}
+
+/** Everyone on an agent's list, as they are on Aming, for the boss to tidy up. */
+export async function allAgentClients(): Promise<AgentClientListRow[]> {
+  const db = createAdminClient();
+  const rows =
+    must(
+      await db
+        .from("agent_clients")
+        .select("client_id, agent_id, agent:agents (name), client:clients (name, phone, email)")
+        .eq("status", "active")
+        .returns<{ client_id: string; agent_id: string; agent: { name: string } | null; client: { name: string; phone: string | null; email: string | null } | null }[]>(),
+    ) ?? [];
+  const orders = rows.length ? (must(await db.from("orders").select("client_id").in("client_id", rows.map((r) => r.client_id))) ?? []) : [];
+  const count = new Map<string, number>();
+  for (const o of orders) count.set(o.client_id as string, (count.get(o.client_id as string) ?? 0) + 1);
+  return rows
+    .map((r) => ({
+      clientId: r.client_id,
+      agentId: r.agent_id,
+      agentName: r.agent?.name ?? "An agent",
+      name: r.client?.name ?? "",
+      phone: r.client?.phone ?? null,
+      email: r.client?.email ?? null,
+      orders: count.get(r.client_id) ?? 0,
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export interface MergeTarget {
+  id: string;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  matchReason: ClientMatchReason;
+  /** The agent they belong to already, if any. */
+  agentName: string | null;
+}
+
+/** Clients on Aming an agent's client could be, by name, phone or email. */
+export async function mergeTargets(fromClientId: string, query: string): Promise<MergeTarget[]> {
+  const q = query.trim();
+  if (!q) return [];
+  const db = createAdminClient();
+  const email = q.includes("@");
+  const phone = !email && /^[+\d][\d\s()-]{5,}$/.test(q);
+  const found = await findClientCandidates(db, { name: email || phone ? null : q, email: email ? q : null, phone: phone ? q : null, excludeId: fromClientId, limit: 8 });
+  const owners = found.length
+    ? (must(await db.from("agent_clients").select("client_id, agent:agents (name)").eq("status", "active").in("client_id", found.map((c) => c.id)).returns<{ client_id: string; agent: { name: string } | null }[]>()) ?? [])
+    : [];
+  const ownerOf = new Map(owners.map((o) => [o.client_id, o.agent?.name ?? null]));
+  return found.map((c) => ({ id: c.id, name: c.name, phone: c.phone, email: c.email, matchReason: c.match_reason, agentName: ownerOf.get(c.id) ?? null }));
+}
+
+/**
+ * Merges an agent's client into the same person already on Aming
+ * (merge_client, supabase/migrations/20261230100000_agent_pay_first_and_client_merge.sql):
+ * their orders, payments and chats move across, the contacts the agent typed fill
+ * the blanks, they stay on the agent's list, and the duplicate is removed.
+ */
+export async function mergeAgentClient(fromClientId: string, intoClientId: string, byName: string): Promise<void> {
+  const db = createAdminClient();
+  const listed = must(await db.from("agent_clients").select("id").eq("client_id", fromClientId).eq("status", "active").maybeSingle());
+  if (!listed) throw new AppError("That client isn't on an agent's list any more. Refresh the page.");
+  const { error } = await db.rpc("merge_client", { p_from: fromClientId, p_into: intoClientId, p_by: byName });
+  // merge_client's refusals are written for the boss.
+  if (error?.code === "P0001") throw new AppError(error.message);
+  if (error) throw new Error(error.message);
+}
+
+/** Puts a client on another agent's list. Orders already placed stay with the agent who placed them. */
+export async function moveAgentClient(clientId: string, toAgentId: string, byName: string): Promise<void> {
+  const db = createAdminClient();
+  // A refused or waiting registration by the new agent makes way.
+  must(await db.from("agent_clients").delete().eq("agent_id", toAgentId).eq("client_id", clientId).neq("status", "active"));
+  const moved = must(
+    await db.from("agent_clients").update({ agent_id: toAgentId, decided_by_name: byName, decided_at: new Date().toISOString() }).eq("client_id", clientId).eq("status", "active").select("id"),
+  );
+  if (!moved?.length) throw new AppError("That client isn't on an agent's list any more. Refresh the page.");
+}
+
 // --- Telling agents what changed ------------------------------------------------
 
 /**
@@ -529,10 +657,10 @@ export async function tellAgents(): Promise<void> {
     must(
       await db
         .from("orders")
-        .select("id, order_no, approval_status, cancelled_at, agent_stage_told, placed_by_agent, items:order_items (production_status, stage), agent:agents (client_id)")
+        .select("id, order_no, approval_status, cancelled_at, agent_stage_told, placed_by_agent, agent_id, items:order_items (production_status, stage), agent:agents (client_id)")
         .eq("commission_eligible", true)
         .or("agent_stage_told.is.null,agent_stage_told.not.in.(delivered,cancelled)")
-        .returns<{ id: string; order_no: string; approval_status: string; cancelled_at: string | null; agent_stage_told: string | null; placed_by_agent: boolean; items: { production_status: ProductionStatus; stage: OrderStage }[]; agent: { client_id: string | null } | null }[]>(),
+        .returns<{ id: string; order_no: string; approval_status: string; cancelled_at: string | null; agent_stage_told: string | null; placed_by_agent: boolean; agent_id: string; items: { production_status: ProductionStatus; stage: OrderStage }[]; agent: { client_id: string | null } | null }[]>(),
     ) ?? [];
   for (const o of open) {
     const stage = agentStage({ cancelled_at: o.cancelled_at, approval_status: o.approval_status, lines: o.items });
@@ -543,9 +671,11 @@ export async function tellAgents(): Promise<void> {
     if (!claimed?.length || !o.agent?.client_id) continue;
     // They just placed it: no need to say so.
     if (stage === "submitted") continue;
+    const percent = stage === "confirmed" && o.placed_by_agent ? await payFirstPercent(o.agent_id) : 0;
+    const confirmed = percent > 0 ? `Your order is confirmed. Production starts once your client has paid ${percent}% of the price.` : "Your order is confirmed.";
     await notifyActor(
       { type: "client", id: o.agent.client_id },
-      { title: `Order ${o.order_no}: ${AGENT_STAGE_LABELS[stage]}`, body: stage === "cancelled" ? "This order was cancelled." : stage === "confirmed" ? (o.placed_by_agent ? "Your order is confirmed. Production starts once your client has paid 80% of the price." : "Your order is confirmed.") : `Your order is now ${AGENT_STAGE_LABELS[stage].toLowerCase()}.`, url: `/agents/orders/${o.id}` },
+      { title: `Order ${o.order_no}: ${AGENT_STAGE_LABELS[stage]}`, body: stage === "cancelled" ? "This order was cancelled." : stage === "confirmed" ? confirmed : `Your order is now ${AGENT_STAGE_LABELS[stage].toLowerCase()}.`, url: `/agents/orders/${o.id}` },
     ).catch((err) => console.error("agents: push failed:", err));
   }
 
