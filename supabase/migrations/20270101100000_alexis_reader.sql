@@ -11,7 +11,8 @@ grant usage on schema public to alexis_reader;
 -- Needed to make it the owner of alexis_read below.
 grant alexis_reader to postgres;
 
-/** Gives alexis_reader every column that isn't a secret. The staff app runs it
+/** Gives alexis_reader every column that isn't a secret, and the functions that
+    only read. The staff app runs it
     once per start, so tables and columns added later are seen too. */
 create or replace function alexis_reader_sync() returns int
 language plpgsql security definer set search_path = public as $$
@@ -30,6 +31,15 @@ begin
   loop
     execute format('grant select (%I) on public.%I to alexis_reader', r.column_name, r.table_name);
     n := n + 1;
+  end loop;
+  -- The views use helper functions (money_received_at, wallet_order_paid…): only
+  -- those that can't change anything (stable or immutable).
+  for r in
+    select p.oid::regprocedure as fn
+    from pg_proc p
+    where p.pronamespace = 'public'::regnamespace and p.provolatile in ('s', 'i') and pg_get_userbyid(p.proowner) = current_user
+  loop
+    execute format('grant execute on function %s to alexis_reader', r.fn);
   end loop;
   return n;
 end $$;
@@ -59,6 +69,9 @@ begin
   return result;
 end $$;
 
+-- Postgres wants a new owner to be able to create in the schema: only for this moment.
+grant create on schema public to alexis_reader;
 alter function alexis_read(text, int) owner to alexis_reader;
+revoke create on schema public from alexis_reader;
 revoke all on function alexis_read(text, int) from public, anon, authenticated;
 grant execute on function alexis_read(text, int) to service_role;
