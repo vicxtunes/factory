@@ -18,6 +18,7 @@ import { clientOrderTools, explainPriceTool, walletTools } from "../tools/client
 import { accountsTools, databaseTools } from "../tools/business";
 import { addFilesToOrderTool } from "../tools/order-files";
 import { staffAdminTools } from "../tools/staff-admin";
+import { ordersAlexis } from "../../../../../apps/factory/app/alexis-orders";
 import { SUPPORT_OWNER_EMAIL } from "../../../support/constants";
 import { studioSetupTools } from "../tools/studio-setup";
 
@@ -211,6 +212,27 @@ function developerBossToolbox(): Toolbox {
     abilities: `${base.abilities} Also announcements and support tickets. Prepare these changes for them to confirm: ${admin.change.map((c) => c.name.replace(/_/g, " ")).join(", ")}.`,
   };
 }
+/** Reception's toolbox for orders: the real order tools, find_orders as a stand-in. */
+function receptionToolbox(): Toolbox {
+  const orders = ordersAlexis.managerTools("receptionist");
+  const findOrders: AssistantTool = { name: "find_orders", description: "Find orders by order number, client name or phone, newest first. Each order has its id; each item its id, product, quantity, production status and unit price in UGX.", inputSchema: z.object({ search: z.string().nullable() }), run: (async () => "") as AssistantTool["run"] };
+  return { read: [findOrders, ...orders.read], change: orders.change, abilities: `Look things up for their role: orders (and one order in full, with its invoice), clients, the workers and designers. Prepare these changes for them to confirm: ${orders.change.map((c) => c.name.replace(/_/g, " ")).join(", ")}. No payments, refunds, withdrawals or payouts yet.` };
+}
+const faith: Person = { type: "staff", id: "u-2", name: "Faith", role: "receptionist", email: "faith@example.com", phone: null, alwaysInTest: true };
+const ordersPage = { path: "/dashboard/orders", title: "Orders", links: [{ href: "/dashboard/orders", label: "Orders" }, { href: "/dashboard/order-approvals", label: "Client Orders" }] };
+const ORDER_ID = "9a3f1c20-5b7e-4d1a-8c2f-1e0d3b4a5c60";
+const BOOK_ITEM = "9a3f1c20-5b7e-4d1a-8c2f-1e0d3b4a5c61";
+const PRINT_ITEM = "9a3f1c20-5b7e-4d1a-8c2f-1e0d3b4a5c62";
+const foundOrder = [{ id: ORDER_ID, order_no: "2026-0662", client_name: "Kato Studios", delivery_date: "2026-11-20", approval_status: "pending_review", items: [{ id: BOOK_ITEM, product: "Photo Book", product_type: "12x12", qty: 1, production_status: "pending", unit_price: null }, { id: PRINT_ITEM, product: "Prints", product_type: "A4", qty: 20, production_status: "pending", unit_price: 5000 }] }];
+const orderInFull = {
+  id: ORDER_ID, order_no: "2026-0662", client_name: "Kato Studios", order_type: "normal", delivery_date: "2026-11-20", stage: "not confirmed yet", approval_status: "pending_review", released_at: null,
+  items: [
+    { id: BOOK_ITEM, product: "Photo Book", product_type: "12x12", qty: 1, attributes: { Sheets: "20", Lamination: "Glossy" }, production_status: "pending", list_unit_price: null, worker: null },
+    { id: PRINT_ITEM, product: "Prints", product_type: "A4", qty: 20, attributes: {}, production_status: "pending", list_unit_price: 5000, worker: null },
+  ],
+  invoice: null,
+  invoiceWouldBe: [{ itemId: BOOK_ITEM, line: "Photo Book 12x12", qty: 1, unitPrice: null }, { itemId: PRINT_ITEM, line: "Prints A4", qty: 20, unitPrice: 5000 }],
+};
 const dashboardPage = { path: "/dashboard/support", title: "Support", links: [{ href: "/dashboard/support", label: "Support" }, { href: "/dashboard/announcements", label: "Announcements" }] };
 const runningAnnouncement = (canChange: boolean, createdBy: string) => [
   { id: "5b1c7a52-3f0e-4c47-9a51-0f7a3c1d2e01", title: "Mobile money is back ✅", message: "Mobile money payments and withdrawals are available again after maintenance.", audience: "clients", state: "running", createdBy, createdAt: "2026-11-08", canChange },
@@ -662,6 +684,54 @@ const SCENARIOS: Scenario[] = [
         const ids = o.calls.filter((c) => c.name === "delete_ticket").map((c) => String(c.input.id).slice(-1));
         return ids.length === 1 && ["3", "4"].includes(ids[0]!) ? null : `deleted ${ids.join(", ") || "nothing"}, not one copy of the gallery ticket`;
       },
+      notCalled("show_the_way"),
+      notDone,
+    ],
+  },
+  {
+    name: "Reception changes a photo book's sheets: it finds the order and prepares the edit",
+    person: faith,
+    payer: COMPANY,
+    page: ordersPage,
+    tools: receptionToolbox,
+    fixtures: { find_orders: foundOrder, order_details: orderInFull },
+    messages: [{ role: "user", content: "Kato Studios called, change their photo book on order 0662 to 25 sheets" }],
+    checks: [
+      called("edit_order_item"),
+      (o) => (o.calls.some((c) => c.name === "edit_order_item" && c.input.itemId === BOOK_ITEM && JSON.stringify(c.input.details ?? {}).includes("25")) ? null : "didn't prepare 25 sheets on the photo book"),
+      notCalled("show_the_way"),
+      notDone,
+    ],
+  },
+  {
+    name: "Reception confirms and invoices an order with an agreed photo book price",
+    person: faith,
+    payer: COMPANY,
+    page: ordersPage,
+    tools: receptionToolbox,
+    fixtures: { find_orders: foundOrder, order_details: orderInFull },
+    messages: [{ role: "user", content: "we agreed 240,000 for Kato's photo book on 0662. confirm the order" }],
+    checks: [
+      either(called("set_agreed_price"), called("confirm_order")),
+      (o) => (o.calls.some((c) => c.name === "set_agreed_price" && c.input.unitPrice === 240000) || o.calls.some((c) => c.name === "confirm_order") ? null : "didn't use the agreed 240,000"),
+      notCalled("show_the_way", "cancel_order"),
+      notDone,
+    ],
+  },
+  {
+    name: "Reception sends an invoiced order to a designer: it looks up the designer, one card",
+    person: faith,
+    payer: COMPANY,
+    page: ordersPage,
+    tools: receptionToolbox,
+    fixtures: {
+      find_orders: foundOrder,
+      order_details: { ...orderInFull, stage: "confirmed, not sent to production yet", approval_status: "approved", invoice: { number: "INV-0412", amount: 340000, paid: 0, balance: 340000 }, invoiceWouldBe: null },
+      team: { workers: [{ id: "1b2c3d4e-0000-4000-8000-000000000001", name: "Mark", station: "Printing", active: true }], designers: [{ id: "1b2c3d4e-0000-4000-8000-0000000000d1", name: "Brian", active: true }] },
+    },
+    messages: [{ role: "user", content: "send 0662 to Brian for design" }],
+    checks: [
+      (o) => (o.calls.some((c) => c.name === "send_to_production" && c.input.to === "designer" && c.input.designerId === "1b2c3d4e-0000-4000-8000-0000000000d1") ? null : "didn't prepare sending it to Brian"),
       notCalled("show_the_way"),
       notDone,
     ],

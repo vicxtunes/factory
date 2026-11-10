@@ -38,6 +38,8 @@ const STEP_WORDS: Record<string, string> = {
   ask_database: "Looking through the records",
   server_health: "Checking the servers",
   announcements: "Looking at the announcements",
+  order_details: "Opening the order",
+  team: "Looking at the team",
   support_tickets: "Looking at the support tickets",
   studio_page_status: "Checking your page",
   service_samples: "Looking at examples",
