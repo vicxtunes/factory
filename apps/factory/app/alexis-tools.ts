@@ -27,6 +27,7 @@ import { resolveTenantScope } from "@repo/lib/tenancy/server/resolve";
 import { isManagerRole, STATUS_LABELS, type AppRole, type ProductionStatus } from "@repo/lib/types";
 
 import { ordersAlexis } from "./alexis-orders";
+import { peopleTools } from "./alexis-people";
 import { addClient, overrideStatus, updateCurrency, updateUserRole } from "./dashboard/actions";
 
 // Alexis's tools in the staff app (packages/lib/assistant/panel). Each set is
@@ -288,6 +289,7 @@ function abilities(role: AppRole, change: ChangeTool[], read: AssistantTool[]): 
   if (read.some((t) => t.name === "announcements")) parts.push("announcements;");
   if (read.some((t) => t.name === "support_tickets")) parts.push("support tickets;");
   if (read.some((t) => t.name === "invoices")) parts.push("every invoice and the money accounts;");
+  if (read.some((t) => t.name === "client_wallets")) parts.push("clients' wallets, deposits waiting to be confirmed, agents' clients that may already be on Aming;");
   if (canViewAccounts(role)) parts.push("money at a glance, every payment, sale and expense for any period;");
   if (role === "boss") parts.push("server health, agents, staff accounts, currencies, and everything else in the business through the database (every feature: orders, production, Drive files, chats, wallets, agents, vendors, studios, notifications…);");
   if (change.length) parts.push(`Prepare these changes for them to confirm: ${change.map((c) => c.name.replace(/_/g, " ")).join(", ")}.`);
@@ -340,8 +342,9 @@ export async function staffAppToolbox(person: Person, _page: string, channel: "a
     const admin = staffAdminTools({ userId: person.id, role, email: person.email });
     const orders = isManagerRole(role) ? ordersAlexis.managerTools(role) : { read: [], change: [] };
     const invoices = isManagerRole(role) ? invoiceTools() : { read: [], change: [] };
-    read.push(...admin.read, ...orders.read, ...invoices.read);
-    change.push(...admin.change, ...orders.change, ...invoices.change, ...(canViewAccounts(role) ? booksChanges(role === "boss") : []));
+    const people = isManagerRole(role) ? peopleTools(role, canViewAccounts(role)) : { read: [], change: [] };
+    read.push(...admin.read, ...orders.read, ...invoices.read, ...people.read);
+    change.push(...admin.change, ...orders.change, ...invoices.change, ...(canViewAccounts(role) ? booksChanges(role === "boss") : []), ...people.change);
   }
   return { read, change, abilities: abilities(role, change, read) + (channel === "whatsapp" ? " On WhatsApp they can only look things up: changes are made in the app." : "") };
 }

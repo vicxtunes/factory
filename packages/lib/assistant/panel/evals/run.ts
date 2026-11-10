@@ -20,6 +20,7 @@ import { addFilesToOrderTool } from "../tools/order-files";
 import { staffAdminTools } from "../tools/staff-admin";
 import { booksChanges, invoiceTools } from "../tools/money";
 import { ordersAlexis } from "../../../../../apps/factory/app/alexis-orders";
+import { peopleTools } from "../../../../../apps/factory/app/alexis-people";
 import { SUPPORT_OWNER_EMAIL } from "../../../support/constants";
 import { studioSetupTools } from "../tools/studio-setup";
 
@@ -231,6 +232,12 @@ const MOMO = "3c1d2e4f-0000-4000-8000-0000000000a2";
 const accounts = [{ id: CASH, name: "Cash", kind: "cash" }, { id: "3c1d2e4f-0000-4000-8000-0000000000a3", name: "Bank", kind: "bank" }, { id: MOMO, name: "Mobile money", kind: "mobile_money" }];
 const ALEX = "4d5e6f70-0000-4000-8000-0000000000e1";
 const salariesWithIds = () => ({ ...allSalaries, lines: allSalaries.lines.map((l, i) => ({ id: i === 0 ? ALEX : `4d5e6f70-0000-4000-8000-0000000000e${i + 2}`, ...l })) });
+/** The boss's clients and agents toolbox: the real tools, agents as a stand-in. */
+function bossPeopleToolbox(): Toolbox {
+  const p = peopleTools("boss", true);
+  const agents: AssistantTool = { name: "agents", description: "Every agent with their id, orders, sales, commission and balance in UGX, their own commission % and pay-first % (null: the general setting).", inputSchema: z.object({}), run: (async () => "") as AssistantTool["run"] };
+  return { read: [agents, ...p.read], change: p.change, abilities: `Look things up: agents, clients' wallets, deposits waiting to be confirmed, agents' clients. Prepare these changes for them to confirm: ${p.change.map((c) => c.name.replace(/_/g, " ")).join(", ")}. No money is sent out through you.` };
+}
 const faith: Person = { type: "staff", id: "u-2", name: "Faith", role: "receptionist", email: "faith@example.com", phone: null, alwaysInTest: true };
 const ordersPage = { path: "/dashboard/orders", title: "Orders", links: [{ href: "/dashboard/orders", label: "Orders" }, { href: "/dashboard/order-approvals", label: "Client Orders" }] };
 const ORDER_ID = "9a3f1c20-5b7e-4d1a-8c2f-1e0d3b4a5c60";
@@ -772,6 +779,26 @@ const SCENARIOS: Scenario[] = [
     fixtures: { invoices: { count: 1, owed: 340000, invoices: [{ id: "5e6f7081-0000-4000-8000-000000000001", invoiceNo: "INV-0412", orderNo: "2026-0662", clientName: "Kato Studios", status: "unpaid", amount: 340000, paid: 0, balance: 340000 }] }, money_accounts: accounts },
     messages: [{ role: "user", content: "Kato Studios sent 340,000 on mobile money for invoice 0412 today, record it" }],
     checks: [either(asksSomething, called("record_invoice_payment")), (o) => (o.calls.some((c) => c.name === "record_invoice_payment" && !c.input.senderPhone) ? "recorded mobile money without the sender's phone" : null), notCalled("show_the_way"), notDone],
+  },
+  {
+    name: "A client's bank deposit arrived: it confirms that deposit",
+    person: boss,
+    payer: COMPANY,
+    page: { path: "/dashboard/wallets", title: "Wallets", links: [{ href: "/dashboard/wallets", label: "Wallets" }] },
+    tools: bossPeopleToolbox,
+    fixtures: { pending_deposits: [{ id: "6f708192-0000-4000-8000-000000000001", client: "Nakato Grace", amount: 150000, method: "bank_transfer", reference: "FT2611100042", by: "Nakato Grace" }, { id: "6f708192-0000-4000-8000-000000000002", client: "Dari Pictures", amount: 80000, method: "mobile_money", reference: "MP2611", by: "Dari Pictures" }] },
+    messages: [{ role: "user", content: "Nakato's 150k bank deposit has reflected" }],
+    checks: [(o) => (o.calls.some((c) => c.name === "confirm_deposit" && c.input.depositId === "6f708192-0000-4000-8000-000000000001") ? null : "didn't prepare confirming Nakato's deposit"), notCalled("reject_deposit", "show_the_way"), notDone],
+  },
+  {
+    name: "The boss gives one agent their own pay-first %: it uses edit_agent",
+    person: boss,
+    payer: COMPANY,
+    page: { path: "/dashboard/agents", title: "Agents", links: [{ href: "/dashboard/agents", label: "Agents" }] },
+    tools: bossPeopleToolbox,
+    fixtures: { agents: [{ id: "7a8b9c0d-0000-4000-8000-000000000001", name: "Moses", active: true, rateOverride: null, payFirstOverride: null }, { id: "7a8b9c0d-0000-4000-8000-000000000002", name: "Ruth", active: true, rateOverride: 10, payFirstOverride: null }] },
+    messages: [{ role: "user", content: "Moses should pay 50% before production from now on, the others stay as they are" }],
+    checks: [(o) => (o.calls.some((c) => c.name === "edit_agent" && c.input.agentId === "7a8b9c0d-0000-4000-8000-000000000001" && c.input.payFirstOverride === 50) ? null : "didn't prepare 50% for Moses"), notCalled("set_pay_first_for_all", "show_the_way"), notDone],
   },
 ];
 
