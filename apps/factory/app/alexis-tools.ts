@@ -12,11 +12,11 @@ import { agentRegisterSchema } from "@repo/lib/agents/core";
 import { categoryRates, listAgentsWithFigures } from "@repo/lib/agents/server";
 import type { Person } from "@repo/lib/assistant/panel/server";
 import { serverHealth } from "@repo/lib/assistant/panel/tools/health";
+import { accountsTools, databaseTools } from "@repo/lib/assistant/panel/tools/business";
 import { addFilesToOrderTool } from "@repo/lib/assistant/panel/tools/order-files";
 import { changeTool, outcome, readTool, type ChangeTool, type Toolbox } from "@repo/lib/assistant/panel/toolbox";
 import type { AssistantTool } from "@repo/lib/assistant/server/tools";
 import { addExpenseSchedule, recordExpense } from "@repo/lib/books/actions";
-import { openExpenses } from "@repo/lib/books/expenses-server";
 import { fetchApprovalQueueItems, fetchBoardItems, fetchDesignerItems } from "@repo/lib/queries";
 import { createAdminClient } from "@repo/lib/supabase/admin";
 import { createClient } from "@repo/lib/supabase/server";
@@ -94,19 +94,14 @@ function staffReads(role: AppRole, db: SupabaseClient, inApp: boolean): Assistan
     tools.push(
       readTool({
         name: "money_overview",
-        description: "Aming's money for a period, in UGX: money received and sales (with the period before), what clients owe and what's overdue, and money received by channel.",
+        description: "Aming's money for a period at a glance, in UGX: money received and sales (with the period before), what clients owe and what's overdue, and money received by channel. For each payment behind a figure, use payments.",
         inputSchema: z.object({ period: z.enum(PERIODS) }),
         run: async ({ period }) => {
           const view = await accounting.dashboard(await resolveTenantScope(), { preset: period });
-          return { period: view.period, received: view.received, sales: view.sales, owed: view.owed, byChannel: view.byChannel, latestPayments: view.payments.slice(0, 5) };
+          return { period: view.period, received: view.received, sales: view.sales, owed: view.owed, byChannel: view.byChannel };
         },
       }),
-      readTool({
-        name: "open_expenses",
-        description: "Expenses still owed or waiting for approval, in UGX.",
-        inputSchema: z.object({}),
-        run: async () => (await openExpenses()).slice(0, 30),
-      }),
+      ...accountsTools(),
       readTool({
         name: "expense_categories",
         description: "The expense categories (key and name), for recording an expense.",
@@ -122,6 +117,7 @@ function staffReads(role: AppRole, db: SupabaseClient, inApp: boolean): Assistan
   }
   if (role === "boss") {
     tools.push(
+      ...databaseTools(),
       readTool({
         name: "server_health",
         description: "Whether the sites are up (Uptime Kuma), how busy the server is (Beszel), and the money watch's open alerts.",
@@ -286,8 +282,8 @@ function staffChanges(role: AppRole): ChangeTool[] {
 function abilities(role: AppRole, change: ChangeTool[]): string {
   const parts = ["Look things up for their role:"];
   if (isManagerRole(role)) parts.push("orders, clients and orders waiting for review;");
-  if (canViewAccounts(role)) parts.push("money, expenses;");
-  if (role === "boss") parts.push("server health, agents, staff accounts and currencies;");
+  if (canViewAccounts(role)) parts.push("money at a glance, every payment, sale and expense for any period;");
+  if (role === "boss") parts.push("server health, agents, staff accounts, currencies, and everything else in the business through the database (every feature: orders, production, Drive files, chats, wallets, agents, vendors, studios, notifications…);");
   if (change.length) parts.push(`Prepare these changes for them to confirm: ${change.map((c) => c.name.replace(/_/g, " ")).join(", ")}.`);
   else parts.push("They can't make changes through you.");
   parts.push("No payments, refunds, withdrawals, payouts or deletions.");

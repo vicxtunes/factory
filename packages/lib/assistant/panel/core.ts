@@ -96,6 +96,11 @@ export function kampalaDay(now: Date): string {
   return new Date(now.getTime() + KAMPALA_MS).toISOString().slice(0, 10);
 }
 
+/** The time now in Kampala, HH:MM. */
+export function kampalaTime(now: Date): string {
+  return new Date(now.getTime() + KAMPALA_MS).toISOString().slice(11, 16);
+}
+
 /** The start of this month in Kampala, as an instant. */
 export function startOfKampalaMonth(now: Date): Date {
   const k = new Date(now.getTime() + KAMPALA_MS);

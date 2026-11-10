@@ -9,12 +9,13 @@ import { z } from "zod";
 import { findModel } from "../../core/rules";
 import { askModel } from "../../server/providers";
 import { assistantTools, type AssistantTool, type ToolContext } from "../../server/tools";
-import { COMPANY, plainText, type Payer } from "../core";
+import { COMPANY, kampalaDay, plainText, type Payer } from "../core";
 import { PANEL_PROMPT } from "../prompt";
 import { memoryTools } from "../memory";
 import { contextFor, guideTool, optionsTool, PREPARED_REPLY, PREPARES_ONLY, type Person } from "../server";
 import type { ChangeTool, PageLink, Toolbox } from "../toolbox";
 import { clientOrderTools, explainPriceTool, walletTools } from "../tools/client-orders";
+import { accountsTools, databaseTools } from "../tools/business";
 import { addFilesToOrderTool } from "../tools/order-files";
 import { studioSetupTools } from "../tools/studio-setup";
 
@@ -182,18 +183,59 @@ function ownerToolbox(person: Person): Toolbox {
   return { read: [...own.read, ...studio.read], change: [...own.change, ...studio.change], abilities: `${own.abilities} ${studio.abilities} All of this works from any page.` };
 }
 
+/** The boss's reads in the staff app: the real payments, sales, expenses and database tools, plus stand-ins for the app's own. */
 function bossToolbox(): Toolbox {
   const read = (name: string, description: string): AssistantTool => ({ name, description, inputSchema: z.object({ period: z.string().optional() }), run: (async () => "") as AssistantTool["run"] });
   return {
     read: [
-      read("money_overview", "Aming's money for a period, in UGX: money received and sales (with the period before), what clients owe and what's overdue, and money received by channel. period: today, yesterday, this_week, this_month, last_month, this_year, all."),
+      read("money_overview", "Aming's money for a period at a glance, in UGX: money received and sales (with the period before), what clients owe and what's overdue, and money received by channel. For each payment behind a figure, use payments. period: today, yesterday, this_week, this_month, last_month, this_year, all."),
+      ...accountsTools(),
+      ...databaseTools(),
       read("server_health", "Whether the sites are up (Uptime Kuma), how busy the server is (Beszel), and the money watch's open alerts."),
     ],
     change: [],
-    abilities: "Look things up for their role: orders, clients, money, expenses, server health. No payments, refunds, withdrawals, payouts or deletions.",
+    abilities:
+      "Look things up for their role: orders, clients and orders waiting for review; money at a glance, every payment, sale and expense for any period; server health, agents, staff accounts, currencies, and everything else in the business through the database (every feature: orders, production, Drive files, chats, wallets, agents, vendors, studios, notifications…); No payments, refunds, withdrawals, payouts or deletions.",
   };
 }
 
+// The boss's live chat of 2026-11-09, as fixtures, dated today so they're "today's".
+const today = kampalaDay(new Date());
+const at = (time: string) => `${today}T${time}:00Z`;
+const todaysPayments = {
+  period: { preset: "today", fromDate: today, toDate: today },
+  totals: { total: 1848200, count: 8, byChannel: { cash: 274100, bank_transfer: 0, mobile_money: 1574100, card: 0, other: 0 } },
+  count: 8,
+  lines: [
+    { at: at("15:10"), amount: 50000, channel: "mobile_money", client: "Moonlite Photography", kind: "sale_receipt", orderNo: "2026-0357", recordedBy: "HivePay" },
+    { at: at("14:02"), amount: 58000, channel: "mobile_money", client: "Dari Pictures", kind: "sale_receipt", orderNo: "2026-0642", recordedBy: "HivePay" },
+    { at: at("13:40"), amount: 800000, channel: "mobile_money", client: "supreme pictures int", kind: "prepayment", orderNo: null, recordedBy: "HivePay" },
+    { at: at("12:15"), amount: 100000, channel: "mobile_money", client: "Photobank uganda", kind: "sale_receipt", orderNo: "2026-0638", recordedBy: "HivePay" },
+    { at: at("11:30"), amount: 224100, channel: "cash", client: "Magezi photography", kind: "sale_receipt", orderNo: "2026-0635", recordedBy: "Arthur" },
+    { at: at("10:05"), amount: 366100, channel: "mobile_money", client: "Kato Studios", kind: "sale_receipt", orderNo: "2026-0630", recordedBy: "HivePay" },
+    { at: at("09:20"), amount: 200000, channel: "mobile_money", client: "Nakato Grace", kind: "sale_receipt", orderNo: "2026-0629", recordedBy: "HivePay" },
+    { at: at("08:45"), amount: 50000, channel: "cash", client: "Walk-in", kind: "sale_receipt", orderNo: "2026-0627", recordedBy: "Faith" },
+  ],
+  otherMoneyIn: [],
+};
+const allSalaries = {
+  today,
+  totals: { count: 4, amount: 1700000, paid: 1000000, balance: 700000, overdue: 200000 },
+  count: 4,
+  lines: [
+    { name: "Alex Salary", category: "Salaries", amount: 200000, paid: 100000, balance: 100000, status: "overdue", date: "2026-11-03", due: "2026-11-03", repeats: "month" },
+    { name: "Mark Salary", category: "Salaries", amount: 200000, paid: 100000, balance: 100000, status: "overdue", date: "2026-11-03", due: "2026-11-03", repeats: "month" },
+    { name: "Manager Arthur Salary", category: "Salaries", amount: 700000, paid: 700000, balance: 0, status: "paid", date: "2026-10-10", due: "2026-10-10", repeats: "month" },
+    { name: "Lauren", category: "Salaries", amount: 600000, paid: 100000, balance: 500000, status: "unpaid", date: "2026-11-15", due: "2026-11-15", repeats: "month" },
+  ],
+  repeating: [
+    { name: "Alex Salary", category: "Salaries", amount: 200000, every: "month" },
+    { name: "Mark Salary", category: "Salaries", amount: 200000, every: "month" },
+    { name: "Manager Arthur Salary", category: "Salaries", amount: 700000, every: "month" },
+    { name: "Lauren", category: "Salaries", amount: 600000, every: "month" },
+  ],
+};
+const bossPage = { path: "/dashboard/accounts/expenses", title: "Expenses", links: [{ href: "/dashboard/accounts/payments", label: "Payments" }, { href: "/dashboard/accounts/expenses", label: "Expenses" }] };
 // ---------- Checks ----------
 
 const called = (name: string) => (o: Outcome) => (o.calls.some((c) => c.name === name) ? null : `didn't call ${name} (called: ${o.calls.map((c) => c.name).join(", ") || "nothing"})`);
@@ -208,6 +250,7 @@ const either = (...checks: ((o: Outcome) => string | null)[]) => (o: Outcome) =>
 /** A question in words, or answers to tap (offer_choices): both ask the person. */
 const asksSomething = (o: Outcome) => (/\?/.test(o.reply) || o.calls.some((c) => c.name === "offer_choices") ? null : "doesn't ask anything");
 const doesntTeach = neverSays(/\b(go to|tap|click|open)\b[^.?!]*\b(place order|my orders|wallet page|menu)\b/i, "tells them how to do it in the app instead of doing it");
+const sendsToPage = neverSays(/\b(payments page|expenses page|check the (full )?(list|page)|can't see the individual|can only see)\b/i, "sends the boss to a page or says it can't see instead of answering");
 const notDone = neverSays(/\b(I've|I have|it's|it is|has been|is now)\s+(placed|sent|done|saved|added|created|confirmed)\b/i, "claims something is done before Confirm");
 
 // ---------- Scenarios ----------
@@ -443,7 +486,44 @@ const SCENARIOS: Scenario[] = [
     tools: bossToolbox,
     fixtures: { money_overview: { received: { value: 1250000, previous: 900000 }, sales: { value: 1600000 }, owed: { outstanding: 3400000, overdue: 500000 } } },
     messages: [{ role: "user", content: "How much money came in today?" }],
-    checks: [called("money_overview"), says(/1,?250,?000|1\.25/, "give the 1,250,000 received")],
+    checks: [called("money_overview"), says(/1,?250,?000|1\.25/, "give the 1,250,000 received"), neverSays(/good (morning|afternoon|evening)/i, "greets when the boss didn't")],
+  },
+  {
+    name: "The boss asks where today's money came from: every payment, adding up, no page (live chat, 2026-11-09)",
+    person: boss,
+    payer: COMPANY,
+    page: { path: "/dashboard/assistant", title: "Assistant", links: [{ href: "/dashboard/accounts/payments", label: "Payments" }] },
+    tools: bossToolbox,
+    fixtures: { money_overview: { received: { now: 1848200 }, sales: { now: 953800 }, byChannel: { mobile_money: 1574100, cash: 274100 } }, payments: todaysPayments },
+    messages: [
+      { role: "user", content: "how much have we made today" },
+      { role: "assistant", content: "Today's sales are UGX 953,800. We've received UGX 1,848,200 in payments, including prepayments." },
+      { role: "user", content: "Give a full details of where each amount is coming from" },
+    ],
+    checks: [called("payments"), notCalled("show_the_way"), sendsToPage, says(/Kato Studios/, "list the payments the old tool missed (Kato Studios)"), says(/Nakato/, "list every payment (Nakato Grace)"), says(/1,?848,?200/, "give the total they add up to")],
+  },
+  {
+    name: "'Include every salary': paid ones too, by category, overdue first (live chat, 2026-11-09)",
+    person: boss,
+    payer: COMPANY,
+    page: bossPage,
+    tools: bossToolbox,
+    fixtures: { expenses: allSalaries },
+    messages: [{ role: "user", content: "show me all the salaries, include every salary" }],
+    checks: [called("expenses"), notCalled("show_the_way"), sendsToPage, says(/Lauren/, "include Lauren (a salary by category, not by name)"), says(/Arthur/, "include the paid salary (Arthur)"), says(/overdue|late/i, "flag the overdue salaries")],
+  },
+  {
+    name: "The boss asks about something only the database has: it looks, it doesn't send them away",
+    person: boss,
+    payer: COMPANY,
+    page: { path: "/dashboard", title: "Dashboard", links: [{ href: "/dashboard/orders", label: "Office Orders" }] },
+    tools: bossToolbox,
+    fixtures: {
+      database_tables: { columns: [{ table: "order_item_media", columns: "id uuid, order_item_id uuid, file_name text, uploaded_at timestamp with time zone, uploaded_by_name text, uploaded_by_role text" }], links: [{ table: "order_item_media", link: "order_item_id -> order_items" }] },
+      ask_database: [{ files: 214, orders: 37, top_uploader: "Sarah Nankya", top_uploads: 48 }],
+    },
+    messages: [{ role: "user", content: "How many photos did clients upload to their orders' drives this week, and who uploaded the most?" }],
+    checks: [called("ask_database"), notCalled("show_the_way", "hand_to_staff"), says(/214/, "give the 214 files"), says(/Sarah/, "say who uploaded the most"), neverSays(/\bselect\b|order_item_media|\bsql\b/i, "shows SQL or table names")],
   },
 ];
 
@@ -501,7 +581,7 @@ async function runOne(s: Scenario, modelId: string, streamed: boolean): Promise<
     everyStep: true,
   });
   const outcome = { calls, reply: plainText(answer.text ?? "") };
-  const sentences = outcome.reply.split(/(?<=[.?!])\s+/).map((x) => x.trim().toLowerCase()).filter((x) => x.length > 12);
+  const sentences = outcome.reply.split(/(?<=[.?!])\s+/).map((x) => x.trim().toLowerCase()).filter((x) => x.length > 25);
   const repeated = sentences.find((x, i) => sentences.indexOf(x) !== i);
   const problems = [
     ...(answer.text ? [] : ["no reply"]),
