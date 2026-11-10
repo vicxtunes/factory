@@ -28,6 +28,7 @@ import { isManagerRole, STATUS_LABELS, type AppRole, type ProductionStatus } fro
 
 import { ordersAlexis } from "./alexis-orders";
 import { peopleTools } from "./alexis-people";
+import { settingsTools } from "./alexis-settings";
 import { addClient, overrideStatus, updateCurrency, updateUserRole } from "./dashboard/actions";
 
 // Alexis's tools in the staff app (packages/lib/assistant/panel). Each set is
@@ -289,11 +290,14 @@ function abilities(role: AppRole, change: ChangeTool[], read: AssistantTool[]): 
   if (read.some((t) => t.name === "announcements")) parts.push("announcements;");
   if (read.some((t) => t.name === "support_tickets")) parts.push("support tickets;");
   if (read.some((t) => t.name === "invoices")) parts.push("every invoice and the money accounts;");
+  if (read.some((t) => t.name === "order_files")) parts.push("the files and links on an order;");
+  if (read.some((t) => t.name === "catalog")) parts.push("the catalog, stations and top-up bonuses;");
   if (read.some((t) => t.name === "client_wallets")) parts.push("clients' wallets, deposits waiting to be confirmed, agents' clients that may already be on Aming;");
   if (canViewAccounts(role)) parts.push("money at a glance, every payment, sale and expense for any period;");
   if (role === "boss") parts.push("server health, agents, staff accounts, currencies, and everything else in the business through the database (every feature: orders, production, Drive files, chats, wallets, agents, vendors, studios, notifications…);");
   if (change.length) parts.push(`Prepare these changes for them to confirm: ${change.map((c) => c.name.replace(/_/g, " ")).join(", ")}.`);
   else parts.push("They can't make changes through you.");
+  parts.push("PINs and passwords are never set through you: they're changed on their pages.");
   parts.push("No money is sent out through you (payouts, refunds, withdrawals): those stay on their pages. Deleting only where a change above says so.");
   return parts.join(" ");
 }
@@ -343,8 +347,9 @@ export async function staffAppToolbox(person: Person, _page: string, channel: "a
     const orders = isManagerRole(role) ? ordersAlexis.managerTools(role) : { read: [], change: [] };
     const invoices = isManagerRole(role) ? invoiceTools() : { read: [], change: [] };
     const people = isManagerRole(role) ? peopleTools(role, canViewAccounts(role)) : { read: [], change: [] };
-    read.push(...admin.read, ...orders.read, ...invoices.read, ...people.read);
-    change.push(...admin.change, ...orders.change, ...invoices.change, ...(canViewAccounts(role) ? booksChanges(role === "boss") : []), ...people.change);
+    const settings = isManagerRole(role) ? settingsTools(role) : { read: [], change: [] };
+    read.push(...admin.read, ...orders.read, ...invoices.read, ...people.read, ...settings.read);
+    change.push(...admin.change, ...orders.change, ...invoices.change, ...(canViewAccounts(role) ? booksChanges(role === "boss") : []), ...people.change, ...settings.change);
   }
   return { read, change, abilities: abilities(role, change, read) + (channel === "whatsapp" ? " On WhatsApp they can only look things up: changes are made in the app." : "") };
 }

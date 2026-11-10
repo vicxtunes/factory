@@ -21,6 +21,7 @@ import { staffAdminTools } from "../tools/staff-admin";
 import { booksChanges, invoiceTools } from "../tools/money";
 import { ordersAlexis } from "../../../../../apps/factory/app/alexis-orders";
 import { peopleTools } from "../../../../../apps/factory/app/alexis-people";
+import { settingsTools } from "../../../../../apps/factory/app/alexis-settings";
 import { SUPPORT_OWNER_EMAIL } from "../../../support/constants";
 import { studioSetupTools } from "../tools/studio-setup";
 
@@ -237,6 +238,15 @@ function bossPeopleToolbox(): Toolbox {
   const p = peopleTools("boss", true);
   const agents: AssistantTool = { name: "agents", description: "Every agent with their id, orders, sales, commission and balance in UGX, their own commission % and pay-first % (null: the general setting).", inputSchema: z.object({}), run: (async () => "") as AssistantTool["run"] };
   return { read: [agents, ...p.read], change: p.change, abilities: `Look things up: agents, clients' wallets, deposits waiting to be confirmed, agents' clients. Prepare these changes for them to confirm: ${p.change.map((c) => c.name.replace(/_/g, " ")).join(", ")}. No money is sent out through you.` };
+}
+/** Everything the boss (who is also the developer) has in the staff app, as it is live: picking the right tool among them all. */
+function bossEverythingToolbox(): Toolbox {
+  const parts = [developerBossToolbox(), bossMoneyToolbox(), bossPeopleToolbox(), receptionToolbox()];
+  const extra = [ordersAlexis.managerTools("boss"), settingsTools("boss")];
+  const unique = <T extends { name: string }>(xs: T[]) => [...new Map(xs.map((x) => [x.name, x])).values()];
+  const read = unique([...parts.flatMap((p) => p.read), ...extra.flatMap((p) => p.read)]);
+  const change = unique([...parts.flatMap((p) => p.change), ...extra.flatMap((p) => p.change)]);
+  return { read, change, abilities: `Look things up: orders, clients, money, invoices, wallets, agents, the catalog, announcements, support tickets and everything in the database. Prepare these changes for them to confirm: ${change.map((c) => c.name.replace(/_/g, " ")).join(", ")}. PINs and passwords are never set through you. No money is sent out through you.` };
 }
 const faith: Person = { type: "staff", id: "u-2", name: "Faith", role: "receptionist", email: "faith@example.com", phone: null, alwaysInTest: true };
 const ordersPage = { path: "/dashboard/orders", title: "Orders", links: [{ href: "/dashboard/orders", label: "Orders" }, { href: "/dashboard/order-approvals", label: "Client Orders" }] };
@@ -799,6 +809,28 @@ const SCENARIOS: Scenario[] = [
     fixtures: { agents: [{ id: "7a8b9c0d-0000-4000-8000-000000000001", name: "Moses", active: true, rateOverride: null, payFirstOverride: null }, { id: "7a8b9c0d-0000-4000-8000-000000000002", name: "Ruth", active: true, rateOverride: 10, payFirstOverride: null }] },
     messages: [{ role: "user", content: "Moses should pay 50% before production from now on, the others stay as they are" }],
     checks: [(o) => (o.calls.some((c) => c.name === "edit_agent" && c.input.agentId === "7a8b9c0d-0000-4000-8000-000000000001" && c.input.payFirstOverride === 50) ? null : "didn't prepare 50% for Moses"), notCalled("set_pay_first_for_all", "show_the_way"), notDone],
+  },
+  {
+    name: "Among all the boss's tools: a variant's price from the catalog",
+    person: boss,
+    payer: COMPANY,
+    page: { path: "/dashboard/products", title: "Products", links: [{ href: "/dashboard/products", label: "Products" }] },
+    tools: bossEverythingToolbox,
+    fixtures: {
+      catalog: { showPrices: true, stations: [], categories: [{ id: "8b9c0d1e-0000-4000-8000-000000000001", name: "Prints", active: true, in_showroom: true, products: [{ id: "8b9c0d1e-0000-4000-8000-000000000002", name: "Photo prints", price: null, unit: "copy", active: true, variants: [{ id: "8b9c0d1e-0000-4000-8000-000000000003", name: "A4", price: 5000, active: true }, { id: "8b9c0d1e-0000-4000-8000-000000000004", name: "A3", price: 9000, active: true }] }] }] },
+    },
+    messages: [{ role: "user", content: "A4 prints are now 6,000" }],
+    checks: [(o) => (o.calls.some((c) => c.name === "set_price" && c.input.kind === "variant" && c.input.id === "8b9c0d1e-0000-4000-8000-000000000003" && c.input.price === 6000) ? null : "didn't prepare A4 at 6,000"), notCalled("show_the_way", "ask_database"), notDone],
+  },
+  {
+    name: "Among all the boss's tools: stop the announcement (live chat, 2026-11-10)",
+    person: boss,
+    payer: COMPANY,
+    page: dashboardPage,
+    tools: bossEverythingToolbox,
+    fixtures: { announcements: runningAnnouncement(true, "Victor") },
+    messages: [{ role: "user", content: "stop the mobile money announcement" }],
+    checks: [called("stop_or_start_announcement"), notCalled("show_the_way", "delete_announcement"), notDone],
   },
 ];
 
