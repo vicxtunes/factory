@@ -10,7 +10,8 @@ import type { AssistantModel, TokenUsage } from "../core/rules";
 import type { AssistantTool } from "./tools";
 
 const MAX_TOKENS = 4000;
-const MAX_STEPS = 8;
+// Enough for the boss's deeper questions: look at the tables, query, then query again.
+const MAX_STEPS = 12;
 const TIMEOUT_MS = 90_000;
 
 export interface ChatTurn {

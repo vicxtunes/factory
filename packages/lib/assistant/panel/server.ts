@@ -22,6 +22,7 @@ import {
   formatUsd,
   isWaived,
   kampalaDay,
+  kampalaTime,
   isAppPath,
   MAX_MESSAGE_CHARS,
   MAX_MESSAGES_PER_10_MIN,
@@ -630,7 +631,7 @@ export function contextFor(person: Person, page: { path: string; title: string; 
   const where = page.title ? `"${page.title}" (${page.path})` : page.path;
   const business = payer.type === "studio" || payer.type === "vendor" || payer.type === "agent" ? ` They're working in their ${payer.type} account.` : "";
   const lines = [
-    `Today is ${kampalaDay(new Date())}. You're talking to ${person.name}, signed in as: ${person.role}.${business}`,
+    `Today is ${kampalaDay(new Date())} and it's ${kampalaTime(new Date())} in Kampala. You're talking to ${person.name}, signed in as: ${person.role}.${business}`,
     page.path ? `The page they have open is ${where}.` : "They're writing on WhatsApp, not in the app.",
     `What you can do for them: ${abilities}`,
   ];
