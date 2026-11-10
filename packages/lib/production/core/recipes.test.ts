@@ -157,3 +157,12 @@ test("a part's typed cost for a size is a cost of one: how many multiplies it", 
   assert.equal(r.rate, 4_500, "2 × 1,500 typed + 1 × 1,500 own");
   assert.deepEqual(r.parts[0], { name: "Wood", qty: 2, rate: 1_500, cost: 3_000 });
 });
+
+test("a photo book stops at 10 sheets; other categories and books without sheets pass", async () => {
+  const { tooManySheets } = await import("./recipes");
+  assert.equal(tooManySheets("Photo Books", { "NOS (Number of Sheets)": "10" }), null);
+  assert.match(tooManySheets("Photo Books", { "NOS (Number of Sheets)": "11" }) ?? "", /at most 10 sheets \(this one has 11\)/);
+  assert.match(tooManySheets("photo books", { Sheets: "25" }) ?? "", /25/);
+  assert.equal(tooManySheets("Photo Books", { Size: "12x12" }), null);
+  assert.equal(tooManySheets("Banners", { Sheets: "40" }), null);
+});
