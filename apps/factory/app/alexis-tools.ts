@@ -13,6 +13,7 @@ import { categoryRates, listAgentsWithFigures } from "@repo/lib/agents/server";
 import type { Person } from "@repo/lib/assistant/panel/server";
 import { serverHealth } from "@repo/lib/assistant/panel/tools/health";
 import { accountsTools, databaseTools } from "@repo/lib/assistant/panel/tools/business";
+import { booksChanges, invoiceTools } from "@repo/lib/assistant/panel/tools/money";
 import { addFilesToOrderTool } from "@repo/lib/assistant/panel/tools/order-files";
 import { staffAdminTools } from "@repo/lib/assistant/panel/tools/staff-admin";
 import { changeTool, outcome, readTool, type ChangeTool, type Toolbox } from "@repo/lib/assistant/panel/toolbox";
@@ -286,11 +287,12 @@ function abilities(role: AppRole, change: ChangeTool[], read: AssistantTool[]): 
   if (isManagerRole(role)) parts.push("orders (and one order in full, with its invoice), clients, orders waiting for review, the workers and designers;");
   if (read.some((t) => t.name === "announcements")) parts.push("announcements;");
   if (read.some((t) => t.name === "support_tickets")) parts.push("support tickets;");
+  if (read.some((t) => t.name === "invoices")) parts.push("every invoice and the money accounts;");
   if (canViewAccounts(role)) parts.push("money at a glance, every payment, sale and expense for any period;");
   if (role === "boss") parts.push("server health, agents, staff accounts, currencies, and everything else in the business through the database (every feature: orders, production, Drive files, chats, wallets, agents, vendors, studios, notifications…);");
   if (change.length) parts.push(`Prepare these changes for them to confirm: ${change.map((c) => c.name.replace(/_/g, " ")).join(", ")}.`);
   else parts.push("They can't make changes through you.");
-  parts.push("No payments, refunds, withdrawals or payouts yet; deleting only where a change above says so.");
+  parts.push("No money is sent out through you (payouts, refunds, withdrawals): those stay on their pages. Deleting only where a change above says so.");
   return parts.join(" ");
 }
 
@@ -337,8 +339,9 @@ export async function staffAppToolbox(person: Person, _page: string, channel: "a
   if (channel === "app") {
     const admin = staffAdminTools({ userId: person.id, role, email: person.email });
     const orders = isManagerRole(role) ? ordersAlexis.managerTools(role) : { read: [], change: [] };
-    read.push(...admin.read, ...orders.read);
-    change.push(...admin.change, ...orders.change);
+    const invoices = isManagerRole(role) ? invoiceTools() : { read: [], change: [] };
+    read.push(...admin.read, ...orders.read, ...invoices.read);
+    change.push(...admin.change, ...orders.change, ...invoices.change, ...(canViewAccounts(role) ? booksChanges(role === "boss") : []));
   }
   return { read, change, abilities: abilities(role, change, read) + (channel === "whatsapp" ? " On WhatsApp they can only look things up: changes are made in the app." : "") };
 }

@@ -18,6 +18,7 @@ import { clientOrderTools, explainPriceTool, walletTools } from "../tools/client
 import { accountsTools, databaseTools } from "../tools/business";
 import { addFilesToOrderTool } from "../tools/order-files";
 import { staffAdminTools } from "../tools/staff-admin";
+import { booksChanges, invoiceTools } from "../tools/money";
 import { ordersAlexis } from "../../../../../apps/factory/app/alexis-orders";
 import { SUPPORT_OWNER_EMAIL } from "../../../support/constants";
 import { studioSetupTools } from "../tools/studio-setup";
@@ -218,6 +219,18 @@ function receptionToolbox(): Toolbox {
   const findOrders: AssistantTool = { name: "find_orders", description: "Find orders by order number, client name or phone, newest first. Each order has its id; each item its id, product, quantity, production status and unit price in UGX.", inputSchema: z.object({ search: z.string().nullable() }), run: (async () => "") as AssistantTool["run"] };
   return { read: [findOrders, ...orders.read], change: orders.change, abilities: `Look things up for their role: orders (and one order in full, with its invoice), clients, the workers and designers. Prepare these changes for them to confirm: ${orders.change.map((c) => c.name.replace(/_/g, " ")).join(", ")}. No payments, refunds, withdrawals or payouts yet.` };
 }
+/** The boss's money toolbox: the real reads and the real invoice and books changes. */
+function bossMoneyToolbox(): Toolbox {
+  const base = bossToolbox();
+  const inv = invoiceTools();
+  const change = [...inv.change, ...booksChanges(true)];
+  return { read: [...base.read, ...inv.read], change, abilities: `${base.abilities.replace(/No payments.*$/, "")} Every invoice and the money accounts. Prepare these changes for them to confirm: ${change.map((c) => c.name.replace(/_/g, " ")).join(", ")}. No money is sent out through you (payouts, refunds, withdrawals).` };
+}
+const CASH = "3c1d2e4f-0000-4000-8000-0000000000a1";
+const MOMO = "3c1d2e4f-0000-4000-8000-0000000000a2";
+const accounts = [{ id: CASH, name: "Cash", kind: "cash" }, { id: "3c1d2e4f-0000-4000-8000-0000000000a3", name: "Bank", kind: "bank" }, { id: MOMO, name: "Mobile money", kind: "mobile_money" }];
+const ALEX = "4d5e6f70-0000-4000-8000-0000000000e1";
+const salariesWithIds = () => ({ ...allSalaries, lines: allSalaries.lines.map((l, i) => ({ id: i === 0 ? ALEX : `4d5e6f70-0000-4000-8000-0000000000e${i + 2}`, ...l })) });
 const faith: Person = { type: "staff", id: "u-2", name: "Faith", role: "receptionist", email: "faith@example.com", phone: null, alwaysInTest: true };
 const ordersPage = { path: "/dashboard/orders", title: "Orders", links: [{ href: "/dashboard/orders", label: "Orders" }, { href: "/dashboard/order-approvals", label: "Client Orders" }] };
 const ORDER_ID = "9a3f1c20-5b7e-4d1a-8c2f-1e0d3b4a5c60";
@@ -735,6 +748,30 @@ const SCENARIOS: Scenario[] = [
       notCalled("show_the_way"),
       notDone,
     ],
+  },
+  {
+    name: "The boss paid Alex's salary balance in cash: it records the payment from Cash",
+    person: boss,
+    payer: COMPANY,
+    page: bossPage,
+    tools: bossMoneyToolbox,
+    fixtures: { expenses: salariesWithIds(), money_accounts: accounts },
+    messages: [{ role: "user", content: "I've just paid Alex the 100,000 balance of his salary in cash" }],
+    checks: [
+      (o) => (o.calls.some((c) => c.name === "pay_expense" && c.input.expenseId === ALEX && c.input.amount === 100000 && c.input.accountId === CASH && c.input.method === "cash") ? null : "didn't prepare 100,000 cash on Alex's salary from Cash"),
+      notCalled("show_the_way", "record_expense"),
+      notDone,
+    ],
+  },
+  {
+    name: "A client paid an invoice by mobile money: it asks for the sender's number, then records it",
+    person: boss,
+    payer: COMPANY,
+    page: bossPage,
+    tools: bossMoneyToolbox,
+    fixtures: { invoices: { count: 1, owed: 340000, invoices: [{ id: "5e6f7081-0000-4000-8000-000000000001", invoiceNo: "INV-0412", orderNo: "2026-0662", clientName: "Kato Studios", status: "unpaid", amount: 340000, paid: 0, balance: 340000 }] }, money_accounts: accounts },
+    messages: [{ role: "user", content: "Kato Studios sent 340,000 on mobile money for invoice 0412 today, record it" }],
+    checks: [either(asksSomething, called("record_invoice_payment")), (o) => (o.calls.some((c) => c.name === "record_invoice_payment" && !c.input.senderPhone) ? "recorded mobile money without the sender's phone" : null), notCalled("show_the_way"), notDone],
   },
 ];
 
