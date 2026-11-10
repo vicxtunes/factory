@@ -70,7 +70,7 @@ async function beszel(): Promise<unknown> {
 
 async function moneyWatch(): Promise<unknown> {
   const alerts = await openAlerts();
-  return { openAlerts: alerts.length, alerts: alerts.slice(0, 10).map((a) => ({ kind: a.kind, amountUgx: a.amount, detail: a.detail, at: a.createdAt })) };
+  return { openAlerts: alerts.length, alerts: alerts.slice(0, 10).map((a) => ({ id: a.id, kind: a.kind, amountUgx: a.amount, detail: a.detail, at: a.createdAt })) };
 }
 
 const settle = (p: Promise<unknown>) => p.catch((err: unknown) => `Couldn't check: ${err instanceof Error ? err.message : "no answer"}.`);
