@@ -25,6 +25,7 @@ import { SUPPORT_OWNER_EMAIL } from "@repo/lib/support/constants";
 import { resolveTenantScope } from "@repo/lib/tenancy/server/resolve";
 import { isManagerRole, STATUS_LABELS, type AppRole, type ProductionStatus } from "@repo/lib/types";
 
+import { ordersAlexis } from "./alexis-orders";
 import { addClient, overrideStatus, updateCurrency, updateUserRole } from "./dashboard/actions";
 
 // Alexis's tools in the staff app (packages/lib/assistant/panel). Each set is
@@ -282,7 +283,7 @@ function staffChanges(role: AppRole): ChangeTool[] {
 
 function abilities(role: AppRole, change: ChangeTool[], read: AssistantTool[]): string {
   const parts = ["Look things up for their role:"];
-  if (isManagerRole(role)) parts.push("orders, clients and orders waiting for review;");
+  if (isManagerRole(role)) parts.push("orders (and one order in full, with its invoice), clients, orders waiting for review, the workers and designers;");
   if (read.some((t) => t.name === "announcements")) parts.push("announcements;");
   if (read.some((t) => t.name === "support_tickets")) parts.push("support tickets;");
   if (canViewAccounts(role)) parts.push("money at a glance, every payment, sale and expense for any period;");
@@ -303,11 +304,11 @@ export async function staffAppToolbox(person: Person, _page: string, channel: "a
           description: "The orders assigned to this designer, with their items and statuses.",
           inputSchema: z.object({}),
           run: async () =>
-            (await fetchDesignerItems(person.id)).slice(0, 40).map((i) => ({ orderNo: i.order.order_no, client: i.order.client_name, product: i.product, stage: i.stage, status: i.production_status, deliveryDate: i.order.delivery_date })),
+            (await fetchDesignerItems(person.id)).slice(0, 40).map((i) => ({ itemId: i.id, orderId: i.order_id, orderNo: i.order.order_no, client: i.order.client_name, product: i.product, stage: i.stage, status: i.production_status, deliveryDate: i.order.delivery_date })),
         }),
       ],
-      change: [],
-      abilities: "Look up the orders assigned to them. They can't make changes through you.",
+      change: channel === "app" ? ordersAlexis.designerChanges() : [],
+      abilities: `Look up the orders assigned to them.${channel === "app" ? " Prepare these changes for them to confirm: send an item to the factory, finish the design of an order." : ""}`,
     };
   }
   if (person.type === "worker") {
@@ -318,11 +319,11 @@ export async function staffAppToolbox(person: Person, _page: string, channel: "a
           description: "The items on the factory board, with their statuses and delivery dates.",
           inputSchema: z.object({}),
           run: async () =>
-            (await fetchBoardItems()).slice(0, 60).map((i) => ({ orderNo: i.order.order_no, product: i.product, qty: i.qty, status: i.production_status, urgency: i.urgency, deliveryDate: i.order.delivery_date })),
+            (await fetchBoardItems()).slice(0, 60).map((i) => ({ itemId: i.id, orderNo: i.order.order_no, product: i.product, qty: i.qty, status: i.production_status, urgency: i.urgency, deliveryDate: i.order.delivery_date })),
         }),
       ],
-      change: [],
-      abilities: "Look up the factory board. They can't make changes through you.",
+      change: channel === "app" ? ordersAlexis.workerChanges() : [],
+      abilities: `Look up the factory board.${channel === "app" ? " Prepare these changes for them to confirm: move an item to its next step, flag or clear a delay." : ""}`,
     };
   }
   if (person.type !== "staff") return { read: [], change: [], abilities: "Nothing in this app." };
@@ -335,8 +336,9 @@ export async function staffAppToolbox(person: Person, _page: string, channel: "a
   // They read through the sign-in, which WhatsApp doesn't have.
   if (channel === "app") {
     const admin = staffAdminTools({ userId: person.id, role, email: person.email });
-    read.push(...admin.read);
-    change.push(...admin.change);
+    const orders = isManagerRole(role) ? ordersAlexis.managerTools(role) : { read: [], change: [] };
+    read.push(...admin.read, ...orders.read);
+    change.push(...admin.change, ...orders.change);
   }
   return { read, change, abilities: abilities(role, change, read) + (channel === "whatsapp" ? " On WhatsApp they can only look things up: changes are made in the app." : "") };
 }
