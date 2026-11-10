@@ -17,7 +17,15 @@ import type { ChangeTool, PageLink, Toolbox } from "../toolbox";
 import { clientOrderTools, explainPriceTool, walletTools } from "../tools/client-orders";
 import { accountsTools, databaseTools } from "../tools/business";
 import { addFilesToOrderTool } from "../tools/order-files";
+import { staffAdminTools } from "../tools/staff-admin";
+import { booksChanges, invoiceTools } from "../tools/money";
+import { ordersAlexis } from "../../../../../apps/factory/app/alexis-orders";
+import { peopleTools } from "../../../../../apps/factory/app/alexis-people";
+import { settingsTools } from "../../../../../apps/factory/app/alexis-settings";
+import { SUPPORT_OWNER_EMAIL } from "../../../support/constants";
 import { studioSetupTools } from "../tools/studio-setup";
+import { studioBusinessTools } from "../tools/studio-business";
+import { studioJobChanges, vendorJobChanges } from "../tools/vendor-jobs";
 
 interface Call {
   name: string;
@@ -199,6 +207,100 @@ function bossToolbox(): Toolbox {
   };
 }
 
+/** The boss who is also the apps' developer (Dementa, live chat of 2026-11-10): the real announcement and support ticket tools. */
+function developerBossToolbox(): Toolbox {
+  const base = bossToolbox();
+  const admin = staffAdminTools({ userId: "u-1", role: "boss", email: SUPPORT_OWNER_EMAIL });
+  return {
+    read: [...base.read, ...admin.read],
+    change: [...base.change, ...admin.change],
+    abilities: `${base.abilities} Also announcements and support tickets. Prepare these changes for them to confirm: ${admin.change.map((c) => c.name.replace(/_/g, " ")).join(", ")}.`,
+  };
+}
+/** Reception's toolbox for orders: the real order tools, find_orders as a stand-in. */
+function receptionToolbox(): Toolbox {
+  const orders = ordersAlexis.managerTools("receptionist");
+  const findOrders: AssistantTool = { name: "find_orders", description: "Find orders by order number, client name or phone, newest first. Each order has its id; each item its id, product, quantity, production status and unit price in UGX.", inputSchema: z.object({ search: z.string().nullable() }), run: (async () => "") as AssistantTool["run"] };
+  return { read: [findOrders, ...orders.read], change: orders.change, abilities: `Look things up for their role: orders (and one order in full, with its invoice), clients, the workers and designers. Prepare these changes for them to confirm: ${orders.change.map((c) => c.name.replace(/_/g, " ")).join(", ")}. No payments, refunds, withdrawals or payouts yet.` };
+}
+/** The boss's money toolbox: the real reads and the real invoice and books changes. */
+function bossMoneyToolbox(): Toolbox {
+  const base = bossToolbox();
+  const inv = invoiceTools();
+  const change = [...inv.change, ...booksChanges(true)];
+  return { read: [...base.read, ...inv.read], change, abilities: `${base.abilities.replace(/No payments.*$/, "")} Every invoice and the money accounts. Prepare these changes for them to confirm: ${change.map((c) => c.name.replace(/_/g, " ")).join(", ")}. No money is sent out through you (payouts, refunds, withdrawals).` };
+}
+const CASH = "3c1d2e4f-0000-4000-8000-0000000000a1";
+const MOMO = "3c1d2e4f-0000-4000-8000-0000000000a2";
+const accounts = [{ id: CASH, name: "Cash", kind: "cash" }, { id: "3c1d2e4f-0000-4000-8000-0000000000a3", name: "Bank", kind: "bank" }, { id: MOMO, name: "Mobile money", kind: "mobile_money" }];
+const ALEX = "4d5e6f70-0000-4000-8000-0000000000e1";
+const salariesWithIds = () => ({ ...allSalaries, lines: allSalaries.lines.map((l, i) => ({ id: i === 0 ? ALEX : `4d5e6f70-0000-4000-8000-0000000000e${i + 2}`, ...l })) });
+/** The boss's clients and agents toolbox: the real tools, agents as a stand-in. */
+function bossPeopleToolbox(): Toolbox {
+  const p = peopleTools("boss", true);
+  const agents: AssistantTool = { name: "agents", description: "Every agent with their id, orders, sales, commission and balance in UGX, their own commission % and pay-first % (null: the general setting).", inputSchema: z.object({}), run: (async () => "") as AssistantTool["run"] };
+  return { read: [agents, ...p.read], change: p.change, abilities: `Look things up: agents, clients' wallets, deposits waiting to be confirmed, agents' clients. Prepare these changes for them to confirm: ${p.change.map((c) => c.name.replace(/_/g, " ")).join(", ")}. No money is sent out through you.` };
+}
+/** Everything the boss (who is also the developer) has in the staff app, as it is live: picking the right tool among them all. */
+function bossEverythingToolbox(): Toolbox {
+  const parts = [developerBossToolbox(), bossMoneyToolbox(), bossPeopleToolbox(), receptionToolbox()];
+  const extra = [ordersAlexis.managerTools("boss"), settingsTools("boss")];
+  const unique = <T extends { name: string }>(xs: T[]) => [...new Map(xs.map((x) => [x.name, x])).values()];
+  const read = unique([...parts.flatMap((p) => p.read), ...extra.flatMap((p) => p.read)]);
+  const change = unique([...parts.flatMap((p) => p.change), ...extra.flatMap((p) => p.change)]);
+  return { read, change, abilities: `Look things up: orders, clients, money, invoices, wallets, agents, the catalog, announcements, support tickets and everything in the database. Prepare these changes for them to confirm: ${change.map((c) => c.name.replace(/_/g, " ")).join(", ")}. PINs and passwords are never set through you. No money is sent out through you.` };
+}
+/** An open studio's owner at work: the real bookings, projects, clients, money and vendor job tools. */
+function studioWorkToolbox(): Toolbox {
+  const work = studioBusinessTools(fakeStudio.scope, () => true);
+  const clients: AssistantTool = { name: "studio_clients", description: "The studio's clients: id, name, phone, email. Optionally only those whose name or phone contains some text.", inputSchema: z.object({ search: z.string().nullable() }), run: (async () => "") as AssistantTool["run"] };
+  const jobs: AssistantTool = { name: "studio_vendor_jobs", description: "The studio's jobs and rentals with vendors, newest first: id, vendor, what for, price, status.", inputSchema: z.object({}), run: (async () => "") as AssistantTool["run"] };
+  const change = [...work.change, ...studioJobChanges("t-1", { projects: true, money: true })];
+  return { read: [clients, jobs, ...work.read], change, abilities: `For Peter's Studio: ${work.words.join(", ")}; call off, pay in, approve or raise a problem with vendor jobs. All of this works from any page.` };
+}
+function vendorToolbox(): Toolbox {
+  const jobs: AssistantTool = { name: "vendor_jobs", description: "The vendor's jobs and rentals from studios, newest first: id, studio, what for, price, status, due.", inputSchema: z.object({}), run: (async () => "") as AssistantTool["run"] };
+  return { read: [jobs], change: vendorJobChanges("c-3"), abilities: "For their vendor account: see their jobs; accept or decline a request, say samples are ready, hand over or deliver, give up a job." };
+}
+const peter: Person = { type: "client", id: "c-2", name: "Peter", role: "client", email: "peter@example.com", phone: "+256772000002", alwaysInTest: false };
+const studioWorkPage = { path: "/studio/bookings", title: "Bookings", links: [{ href: "/studio/bookings", label: "Bookings" }, { href: "/studio/projects", label: "Projects" }] };
+const SHOOT = "a1b2c3d4-0000-4000-8000-000000000001";
+const REQUEST = "a1b2c3d4-0000-4000-8000-000000000002";
+const studioBookings = [
+  { id: SHOOT, client: "Sarah Nankya", customerId: "a1b2c3d4-0000-4000-8000-0000000000c1", title: "Sarah's wedding", date: "2026-11-21", start: "10:00", end: "16:00", location: "Munyonyo", package: "Standard", amount: 2500000, status: "confirmed", source: "studio" },
+  { id: REQUEST, client: "Brian Okello", customerId: "a1b2c3d4-0000-4000-8000-0000000000c2", title: "Family shoot", date: "2026-11-15", start: null, end: null, location: null, package: "Basic", amount: 1500000, status: "tentative", source: "online" },
+];
+const faith: Person = { type: "staff", id: "u-2", name: "Faith", role: "receptionist", email: "faith@example.com", phone: null, alwaysInTest: true };
+const ordersPage = { path: "/dashboard/orders", title: "Orders", links: [{ href: "/dashboard/orders", label: "Orders" }, { href: "/dashboard/order-approvals", label: "Client Orders" }] };
+const ORDER_ID = "9a3f1c20-5b7e-4d1a-8c2f-1e0d3b4a5c60";
+const BOOK_ITEM = "9a3f1c20-5b7e-4d1a-8c2f-1e0d3b4a5c61";
+const PRINT_ITEM = "9a3f1c20-5b7e-4d1a-8c2f-1e0d3b4a5c62";
+const foundOrder = [{ id: ORDER_ID, order_no: "2026-0662", client_name: "Kato Studios", delivery_date: "2026-11-20", approval_status: "pending_review", items: [{ id: BOOK_ITEM, product: "Photo Book", product_type: "12x12", qty: 1, production_status: "pending", unit_price: null }, { id: PRINT_ITEM, product: "Prints", product_type: "A4", qty: 20, production_status: "pending", unit_price: 5000 }] }];
+const orderInFull = {
+  id: ORDER_ID, order_no: "2026-0662", client_name: "Kato Studios", order_type: "normal", delivery_date: "2026-11-20", stage: "not confirmed yet", approval_status: "pending_review", released_at: null,
+  items: [
+    { id: BOOK_ITEM, product: "Photo Book", product_type: "12x12", qty: 1, attributes: { Sheets: "20", Lamination: "Glossy" }, production_status: "pending", list_unit_price: null, worker: null },
+    { id: PRINT_ITEM, product: "Prints", product_type: "A4", qty: 20, attributes: {}, production_status: "pending", list_unit_price: 5000, worker: null },
+  ],
+  invoice: null,
+  invoiceWouldBe: [{ itemId: BOOK_ITEM, line: "Photo Book 12x12", qty: 1, unitPrice: null }, { itemId: PRINT_ITEM, line: "Prints A4", qty: 20, unitPrice: 5000 }],
+};
+const dashboardPage = { path: "/dashboard/support", title: "Support", links: [{ href: "/dashboard/support", label: "Support" }, { href: "/dashboard/announcements", label: "Announcements" }] };
+const runningAnnouncement = (canChange: boolean, createdBy: string) => [
+  { id: "5b1c7a52-3f0e-4c47-9a51-0f7a3c1d2e01", title: "Mobile money is back ✅", message: "Mobile money payments and withdrawals are available again after maintenance.", audience: "clients", state: "running", createdBy, createdAt: "2026-11-08", canChange },
+  { id: "5b1c7a52-3f0e-4c47-9a51-0f7a3c1d2e02", title: "New photo book covers", message: "Try our new window covers.", audience: "clients", state: "stopped", createdBy, createdAt: "2026-10-30", canChange },
+];
+const ticket = (n: number, from: string, sent: string, message: string) => ({ id: `7d2e9b40-1a6c-4f3e-8b21-00000000000${n}`, from, role: "boss", sent, message, status: "open", resolvedOn: null });
+const openTickets = [
+  ticket(1, "Carol", "2026-10-15", "Allow client names to be edited after order submission."),
+  ticket(2, "Arthur", "2026-10-16", "Photo book orders don't appear on their submission date."),
+  ticket(3, "CEO", "2026-10-18", "Make client gallery sliding smoother."),
+  ticket(4, "CEO", "2026-10-18", "Make client gallery sliding smoother."),
+  ticket(5, "CEO", "2026-10-18", "Connect new customer chats directly to Aming Support."),
+];
+const ticketsListed =
+  "You have 5 open support tickets: / 1. 15 Oct — Carol: Allow client names to be edited after order submission. / 2. 16 Oct — Arthur: Photo book orders don't appear on their submission date. / 3. 18 Oct — CEO: Make client gallery sliding smoother. / 4. 18 Oct — CEO: The same gallery sliding request, submitted again. / 5. 18 Oct — CEO: Connect new customer chats directly to Aming Support. / The gallery sliding request appears twice.";
+
 // The boss's live chat of 2026-11-09, as fixtures, dated today so they're "today's".
 const today = kampalaDay(new Date());
 const at = (time: string) => `${today}T${time}:00Z`;
@@ -321,6 +423,47 @@ const SCENARIOS: Scenario[] = [
       { role: "user", content: "Eeeeee sente ezo zona zaki ntemela temela mu kulabye" },
     ],
     checks: [called("explain_price"), notCalled("hand_to_staff"), says(/300,?000|12,?000/, "give the sheets' part of the price")],
+  },
+  // The owner's photo book guidance (2026-11-10): understand first, recommend with reasons and exact prices, never past the limits.
+  {
+    name: "Photo book, 250 wedding photos: 12x12, 25 to 30 sheets, UGX 300,000 to 360,000, then asks about the layout",
+    person: sarah,
+    payer: { type: "client", id: sarah.id },
+    page: { path: "/", title: "Dashboard", links: clientLinks },
+    tools: () => clientToolbox(sarah),
+    fixtures: { get_catalog: bookCatalog },
+    messages: [{ role: "user", content: "I have 250 wedding photos. Which photobook do you recommend?" }],
+    checks: [says(/12x12/, "recommend the 12x12"), says(/25/, "suggest about 25 sheets"), says(/300,?000/, "price 25 sheets at UGX 300,000"), says(/360,?000/, "price 30 sheets at UGX 360,000"), neverSays(/\b(3[1-9]|[4-9]\d) sheets/i, "goes past 30 sheets"), asksSomething, notCalled("place_order", "hand_to_staff")],
+  },
+  {
+    name: "Photo book, 25 birthday photos: the 8x8, 10 to 15 sheets, UGX 80,000 to 120,000",
+    person: sarah,
+    payer: { type: "client", id: sarah.id },
+    page: { path: "/", title: "Dashboard", links: clientLinks },
+    tools: () => clientToolbox(sarah),
+    fixtures: { get_catalog: bookCatalog },
+    messages: [{ role: "user", content: "I have 25 birthday photos, I want a photobook" }],
+    checks: [says(/8x8/, "recommend the 8x8"), says(/80,?000/, "price 10 sheets at UGX 80,000"), says(/120,?000/, "price 15 sheets at UGX 120,000"), neverSays(/12x12/, "pushes the biggest book"), notCalled("place_order")],
+  },
+  {
+    name: "Photo book on a limited budget: it asks the budget before recommending",
+    person: sarah,
+    payer: { type: "client", id: sarah.id },
+    page: { path: "/", title: "Dashboard", links: clientLinks },
+    tools: () => clientToolbox(sarah),
+    fixtures: { get_catalog: bookCatalog },
+    messages: [{ role: "user", content: "I have 100 wedding photos but my budget is limited" }],
+    checks: [says(/budget/i, "ask about their budget"), asksSomething, notCalled("place_order", "hand_to_staff")],
+  },
+  {
+    name: "Photo book with 450 photos: a bigger book or splitting, never past the limits",
+    person: sarah,
+    payer: { type: "client", id: sarah.id },
+    page: { path: "/", title: "Dashboard", links: clientLinks },
+    tools: () => clientToolbox(sarah),
+    fixtures: { get_catalog: bookCatalog },
+    messages: [{ role: "user", content: "I want one 10x10 photobook for my 450 wedding photos" }],
+    checks: [says(/12x12|\b(two|three|four|[2-4])\b[^.?!]{0,20}books|split|more than one/i, "suggest the 12x12 or splitting"), neverSays(/\b(3[1-9]|[4-9]\d) sheets/i, "goes past 30 sheets"), notCalled("place_order")],
   },
   {
     name: "Luganda: after Confirm it follows up in Luganda, not English",
@@ -524,6 +667,222 @@ const SCENARIOS: Scenario[] = [
     },
     messages: [{ role: "user", content: "How many photos did clients upload to their orders' drives this week, and who uploaded the most?" }],
     checks: [called("ask_database"), notCalled("show_the_way", "hand_to_staff"), says(/214/, "give the 214 files"), says(/Sarah/, "say who uploaded the most"), neverSays(/\bselect\b|order_item_media|\bsql\b/i, "shows SQL or table names")],
+  },
+  {
+    name: "The boss asks to stop a running announcement: a card, not the page (live chat, 2026-11-10)",
+    person: boss,
+    payer: COMPANY,
+    page: dashboardPage,
+    tools: developerBossToolbox,
+    fixtures: { announcements: runningAnnouncement(true, "Victor") },
+    messages: [
+      { role: "user", content: "which announcemnets are running" },
+      { role: "assistant", content: "One announcement is running: “Mobile money is back ✅”. It tells clients that mobile money payments and withdrawals are available again after maintenance. Audience: clients." },
+      { role: "user", content: "can stop it for me" },
+    ],
+    checks: [
+      called("stop_or_start_announcement"),
+      (o) => (o.calls.some((c) => c.name === "stop_or_start_announcement" && c.input.running === false && String(c.input.id).endsWith("e01")) ? null : "didn't prepare stopping the running one"),
+      notCalled("show_the_way", "delete_announcement"),
+      notDone,
+      neverSays(/can(?:'|’)?t|cannot/i, "says it can't"),
+    ],
+  },
+  {
+    name: "Someone else's announcement: it says who can stop it, no card",
+    person: boss,
+    payer: COMPANY,
+    page: dashboardPage,
+    tools: developerBossToolbox,
+    fixtures: { announcements: runningAnnouncement(false, "Arthur") },
+    messages: [{ role: "user", content: "stop the mobile money announcement" }],
+    checks: [called("announcements"), notCalled("stop_or_start_announcement", "delete_announcement"), says(/Arthur/, "say Arthur made it and can stop it")],
+  },
+  {
+    name: "'Mark 3 and 4 as resolved': one card per ticket, not the page (live chat, 2026-11-10)",
+    person: boss,
+    payer: COMPANY,
+    page: dashboardPage,
+    tools: developerBossToolbox,
+    fixtures: { support_tickets: openTickets },
+    messages: [
+      { role: "user", content: "i what the one which open" },
+      { role: "assistant", content: ticketsListed },
+      { role: "user", content: "mark 3 and 4 as resolved" },
+    ],
+    checks: [
+      (o) => {
+        const ids = o.calls.filter((c) => c.name === "set_ticket_status" && c.input.resolved === true).map((c) => String(c.input.id).slice(-1));
+        return ids.includes("3") && ids.includes("4") && ids.length === 2 ? null : `resolved tickets ${ids.join(", ") || "none"}, not 3 and 4`;
+      },
+      notCalled("show_the_way", "delete_ticket"),
+      notDone,
+    ],
+  },
+  {
+    name: "Delete the duplicate ticket: only the second copy",
+    person: boss,
+    payer: COMPANY,
+    page: dashboardPage,
+    tools: developerBossToolbox,
+    fixtures: { support_tickets: openTickets },
+    messages: [
+      { role: "user", content: "show me the open tickets" },
+      { role: "assistant", content: ticketsListed },
+      { role: "user", content: "delete the duplicate one" },
+    ],
+    checks: [
+      (o) => {
+        const ids = o.calls.filter((c) => c.name === "delete_ticket").map((c) => String(c.input.id).slice(-1));
+        return ids.length === 1 && ["3", "4"].includes(ids[0]!) ? null : `deleted ${ids.join(", ") || "nothing"}, not one copy of the gallery ticket`;
+      },
+      notCalled("show_the_way"),
+      notDone,
+    ],
+  },
+  {
+    name: "Reception changes a photo book's sheets: it finds the order and prepares the edit",
+    person: faith,
+    payer: COMPANY,
+    page: ordersPage,
+    tools: receptionToolbox,
+    fixtures: { find_orders: foundOrder, order_details: orderInFull },
+    messages: [{ role: "user", content: "Kato Studios called, change their photo book on order 0662 to 25 sheets" }],
+    checks: [
+      called("edit_order_item"),
+      (o) => (o.calls.some((c) => c.name === "edit_order_item" && c.input.itemId === BOOK_ITEM && JSON.stringify(c.input.details ?? {}).includes("25")) ? null : "didn't prepare 25 sheets on the photo book"),
+      notCalled("show_the_way"),
+      notDone,
+    ],
+  },
+  {
+    name: "Reception confirms and invoices an order with an agreed photo book price",
+    person: faith,
+    payer: COMPANY,
+    page: ordersPage,
+    tools: receptionToolbox,
+    fixtures: { find_orders: foundOrder, order_details: orderInFull },
+    messages: [{ role: "user", content: "we agreed 240,000 for Kato's photo book on 0662. confirm the order" }],
+    checks: [
+      either(called("set_agreed_price"), called("confirm_order")),
+      (o) => (o.calls.some((c) => c.name === "set_agreed_price" && c.input.unitPrice === 240000) || o.calls.some((c) => c.name === "confirm_order") ? null : "didn't use the agreed 240,000"),
+      notCalled("show_the_way", "cancel_order"),
+      notDone,
+    ],
+  },
+  {
+    name: "Reception sends an invoiced order to a designer: it looks up the designer, one card",
+    person: faith,
+    payer: COMPANY,
+    page: ordersPage,
+    tools: receptionToolbox,
+    fixtures: {
+      find_orders: foundOrder,
+      order_details: { ...orderInFull, stage: "confirmed, not sent to production yet", approval_status: "approved", invoice: { number: "INV-0412", amount: 340000, paid: 0, balance: 340000 }, invoiceWouldBe: null },
+      team: { workers: [{ id: "1b2c3d4e-0000-4000-8000-000000000001", name: "Mark", station: "Printing", active: true }], designers: [{ id: "1b2c3d4e-0000-4000-8000-0000000000d1", name: "Brian", active: true }] },
+    },
+    messages: [{ role: "user", content: "send 0662 to Brian for design" }],
+    checks: [
+      (o) => (o.calls.some((c) => c.name === "send_to_production" && c.input.to === "designer" && c.input.designerId === "1b2c3d4e-0000-4000-8000-0000000000d1") ? null : "didn't prepare sending it to Brian"),
+      notCalled("show_the_way"),
+      notDone,
+    ],
+  },
+  {
+    name: "The boss paid Alex's salary balance in cash: it records the payment from Cash",
+    person: boss,
+    payer: COMPANY,
+    page: bossPage,
+    tools: bossMoneyToolbox,
+    fixtures: { expenses: salariesWithIds(), money_accounts: accounts },
+    messages: [{ role: "user", content: "I've just paid Alex the 100,000 balance of his salary in cash" }],
+    checks: [
+      (o) => (o.calls.some((c) => c.name === "pay_expense" && c.input.expenseId === ALEX && c.input.amount === 100000 && c.input.accountId === CASH && c.input.method === "cash") ? null : "didn't prepare 100,000 cash on Alex's salary from Cash"),
+      notCalled("show_the_way", "record_expense"),
+      notDone,
+    ],
+  },
+  {
+    name: "A client paid an invoice by mobile money: it asks for the sender's number, then records it",
+    person: boss,
+    payer: COMPANY,
+    page: bossPage,
+    tools: bossMoneyToolbox,
+    fixtures: { invoices: { count: 1, owed: 340000, invoices: [{ id: "5e6f7081-0000-4000-8000-000000000001", invoiceNo: "INV-0412", orderNo: "2026-0662", clientName: "Kato Studios", status: "unpaid", amount: 340000, paid: 0, balance: 340000 }] }, money_accounts: accounts },
+    messages: [{ role: "user", content: "Kato Studios sent 340,000 on mobile money for invoice 0412 today, record it" }],
+    checks: [either(asksSomething, called("record_invoice_payment")), (o) => (o.calls.some((c) => c.name === "record_invoice_payment" && !c.input.senderPhone) ? "recorded mobile money without the sender's phone" : null), notCalled("show_the_way"), notDone],
+  },
+  {
+    name: "A client's bank deposit arrived: it confirms that deposit",
+    person: boss,
+    payer: COMPANY,
+    page: { path: "/dashboard/wallets", title: "Wallets", links: [{ href: "/dashboard/wallets", label: "Wallets" }] },
+    tools: bossPeopleToolbox,
+    fixtures: { pending_deposits: [{ id: "6f708192-0000-4000-8000-000000000001", client: "Nakato Grace", amount: 150000, method: "bank_transfer", reference: "FT2611100042", by: "Nakato Grace" }, { id: "6f708192-0000-4000-8000-000000000002", client: "Dari Pictures", amount: 80000, method: "mobile_money", reference: "MP2611", by: "Dari Pictures" }] },
+    messages: [{ role: "user", content: "Nakato's 150k bank deposit has reflected" }],
+    checks: [(o) => (o.calls.some((c) => c.name === "confirm_deposit" && c.input.depositId === "6f708192-0000-4000-8000-000000000001") ? null : "didn't prepare confirming Nakato's deposit"), notCalled("reject_deposit", "show_the_way"), notDone],
+  },
+  {
+    name: "The boss gives one agent their own pay-first %: it uses edit_agent",
+    person: boss,
+    payer: COMPANY,
+    page: { path: "/dashboard/agents", title: "Agents", links: [{ href: "/dashboard/agents", label: "Agents" }] },
+    tools: bossPeopleToolbox,
+    fixtures: { agents: [{ id: "7a8b9c0d-0000-4000-8000-000000000001", name: "Moses", active: true, rateOverride: null, payFirstOverride: null }, { id: "7a8b9c0d-0000-4000-8000-000000000002", name: "Ruth", active: true, rateOverride: 10, payFirstOverride: null }] },
+    messages: [{ role: "user", content: "Moses should pay 50% before production from now on, the others stay as they are" }],
+    checks: [(o) => (o.calls.some((c) => c.name === "edit_agent" && c.input.agentId === "7a8b9c0d-0000-4000-8000-000000000001" && c.input.payFirstOverride === 50) ? null : "didn't prepare 50% for Moses"), notCalled("set_pay_first_for_all", "show_the_way"), notDone],
+  },
+  {
+    name: "Among all the boss's tools: a variant's price from the catalog",
+    person: boss,
+    payer: COMPANY,
+    page: { path: "/dashboard/products", title: "Products", links: [{ href: "/dashboard/products", label: "Products" }] },
+    tools: bossEverythingToolbox,
+    fixtures: {
+      catalog: { showPrices: true, stations: [], categories: [{ id: "8b9c0d1e-0000-4000-8000-000000000001", name: "Prints", active: true, in_showroom: true, products: [{ id: "8b9c0d1e-0000-4000-8000-000000000002", name: "Photo prints", price: null, unit: "copy", active: true, variants: [{ id: "8b9c0d1e-0000-4000-8000-000000000003", name: "A4", price: 5000, active: true }, { id: "8b9c0d1e-0000-4000-8000-000000000004", name: "A3", price: 9000, active: true }] }] }] },
+    },
+    messages: [{ role: "user", content: "A4 prints are now 6,000" }],
+    checks: [(o) => (o.calls.some((c) => c.name === "set_price" && c.input.kind === "variant" && c.input.id === "8b9c0d1e-0000-4000-8000-000000000003" && c.input.price === 6000) ? null : "didn't prepare A4 at 6,000"), notCalled("show_the_way", "ask_database"), notDone],
+  },
+  {
+    name: "Among all the boss's tools: stop the announcement (live chat, 2026-11-10)",
+    person: boss,
+    payer: COMPANY,
+    page: dashboardPage,
+    tools: bossEverythingToolbox,
+    fixtures: { announcements: runningAnnouncement(true, "Victor") },
+    messages: [{ role: "user", content: "stop the mobile money announcement" }],
+    checks: [called("stop_or_start_announcement"), notCalled("show_the_way", "delete_announcement"), notDone],
+  },
+  {
+    name: "A studio moves a shoot: it changes the booking's day and times",
+    person: peter,
+    payer: { type: "client", id: "c-2" },
+    page: studioWorkPage,
+    tools: studioWorkToolbox,
+    fixtures: { studio_bookings: studioBookings },
+    messages: [{ role: "user", content: "Sarah's wedding moved to Sunday 22nd, 2pm to 8pm" }],
+    checks: [(o) => (o.calls.some((c) => c.name === "edit_booking" && c.input.bookingId === SHOOT && c.input.date === "2026-11-22" && c.input.startTime === "14:00" && c.input.endTime === "20:00") ? null : "didn't prepare the 22nd, 14:00–20:00"), notCalled("create_booking", "show_the_way"), notDone],
+  },
+  {
+    name: "A studio accepts an online booking request",
+    person: peter,
+    payer: { type: "client", id: "c-2" },
+    page: studioWorkPage,
+    tools: studioWorkToolbox,
+    fixtures: { studio_bookings: studioBookings },
+    messages: [{ role: "user", content: "accept Brian's booking request" }],
+    checks: [(o) => (o.calls.some((c) => c.name === "answer_booking_request" && c.input.bookingId === REQUEST && c.input.accept === true) ? null : "didn't prepare accepting Brian's request"), notCalled("set_booking_status", "show_the_way"), notDone],
+  },
+  {
+    name: "A vendor finished a job: it marks it delivered",
+    person: { ...peter, id: "c-3", name: "Ivan" },
+    payer: { type: "client", id: "c-3" },
+    page: { path: "/vendors", title: "Jobs", links: [{ href: "/vendors", label: "Jobs" }] },
+    tools: vendorToolbox,
+    fixtures: { vendor_jobs: [{ id: "b2c3d4e5-0000-4000-8000-000000000001", studio: "Peter's Studio", for: "Sarah's wedding (editing)", price: 300000, status: "in_progress", dueOn: "2026-11-25" }, { id: "b2c3d4e5-0000-4000-8000-000000000002", studio: "Kato Studios", for: "2 × Godox AD600", price: 120000, status: "requested" }] },
+    messages: [{ role: "user", content: "I've finished editing Sarah's wedding for Peter's Studio, the photos are in the folder" }],
+    checks: [(o) => (o.calls.some((c) => c.name === "deliver_job" && c.input.jobId === "b2c3d4e5-0000-4000-8000-000000000001") ? null : "didn't prepare delivering the editing job"), notCalled("withdraw_from_job", "show_the_way"), notDone],
   },
 ];
 

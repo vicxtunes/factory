@@ -13,7 +13,9 @@ import { categoryRates, listAgentsWithFigures } from "@repo/lib/agents/server";
 import type { Person } from "@repo/lib/assistant/panel/server";
 import { serverHealth } from "@repo/lib/assistant/panel/tools/health";
 import { accountsTools, databaseTools } from "@repo/lib/assistant/panel/tools/business";
+import { booksChanges, invoiceTools } from "@repo/lib/assistant/panel/tools/money";
 import { addFilesToOrderTool } from "@repo/lib/assistant/panel/tools/order-files";
+import { staffAdminTools } from "@repo/lib/assistant/panel/tools/staff-admin";
 import { changeTool, outcome, readTool, type ChangeTool, type Toolbox } from "@repo/lib/assistant/panel/toolbox";
 import type { AssistantTool } from "@repo/lib/assistant/server/tools";
 import { addExpenseSchedule, recordExpense } from "@repo/lib/books/actions";
@@ -24,6 +26,9 @@ import { SUPPORT_OWNER_EMAIL } from "@repo/lib/support/constants";
 import { resolveTenantScope } from "@repo/lib/tenancy/server/resolve";
 import { isManagerRole, STATUS_LABELS, type AppRole, type ProductionStatus } from "@repo/lib/types";
 
+import { ordersAlexis } from "./alexis-orders";
+import { peopleTools } from "./alexis-people";
+import { settingsTools } from "./alexis-settings";
 import { addClient, overrideStatus, updateCurrency, updateUserRole } from "./dashboard/actions";
 
 // Alexis's tools in the staff app (packages/lib/assistant/panel). Each set is
@@ -279,14 +284,21 @@ function staffChanges(role: AppRole): ChangeTool[] {
   return tools;
 }
 
-function abilities(role: AppRole, change: ChangeTool[]): string {
+function abilities(role: AppRole, change: ChangeTool[], read: AssistantTool[]): string {
   const parts = ["Look things up for their role:"];
-  if (isManagerRole(role)) parts.push("orders, clients and orders waiting for review;");
+  if (isManagerRole(role)) parts.push("orders (and one order in full, with its invoice), clients, orders waiting for review, the workers and designers;");
+  if (read.some((t) => t.name === "announcements")) parts.push("announcements;");
+  if (read.some((t) => t.name === "support_tickets")) parts.push("support tickets;");
+  if (read.some((t) => t.name === "invoices")) parts.push("every invoice and the money accounts;");
+  if (read.some((t) => t.name === "order_files")) parts.push("the files and links on an order;");
+  if (read.some((t) => t.name === "catalog")) parts.push("the catalog, stations and top-up bonuses;");
+  if (read.some((t) => t.name === "client_wallets")) parts.push("clients' wallets, deposits waiting to be confirmed, agents' clients that may already be on Aming;");
   if (canViewAccounts(role)) parts.push("money at a glance, every payment, sale and expense for any period;");
   if (role === "boss") parts.push("server health, agents, staff accounts, currencies, and everything else in the business through the database (every feature: orders, production, Drive files, chats, wallets, agents, vendors, studios, notifications…);");
   if (change.length) parts.push(`Prepare these changes for them to confirm: ${change.map((c) => c.name.replace(/_/g, " ")).join(", ")}.`);
   else parts.push("They can't make changes through you.");
-  parts.push("No payments, refunds, withdrawals, payouts or deletions.");
+  parts.push("PINs and passwords are never set through you: they're changed on their pages.");
+  parts.push("No money is sent out through you (payouts, refunds, withdrawals): those stay on their pages. Deleting only where a change above says so.");
   return parts.join(" ");
 }
 
@@ -300,11 +312,11 @@ export async function staffAppToolbox(person: Person, _page: string, channel: "a
           description: "The orders assigned to this designer, with their items and statuses.",
           inputSchema: z.object({}),
           run: async () =>
-            (await fetchDesignerItems(person.id)).slice(0, 40).map((i) => ({ orderNo: i.order.order_no, client: i.order.client_name, product: i.product, stage: i.stage, status: i.production_status, deliveryDate: i.order.delivery_date })),
+            (await fetchDesignerItems(person.id)).slice(0, 40).map((i) => ({ itemId: i.id, orderId: i.order_id, orderNo: i.order.order_no, client: i.order.client_name, product: i.product, stage: i.stage, status: i.production_status, deliveryDate: i.order.delivery_date })),
         }),
       ],
-      change: [],
-      abilities: "Look up the orders assigned to them. They can't make changes through you.",
+      change: channel === "app" ? ordersAlexis.designerChanges() : [],
+      abilities: `Look up the orders assigned to them.${channel === "app" ? " Prepare these changes for them to confirm: send an item to the factory, finish the design of an order." : ""}`,
     };
   }
   if (person.type === "worker") {
@@ -315,11 +327,11 @@ export async function staffAppToolbox(person: Person, _page: string, channel: "a
           description: "The items on the factory board, with their statuses and delivery dates.",
           inputSchema: z.object({}),
           run: async () =>
-            (await fetchBoardItems()).slice(0, 60).map((i) => ({ orderNo: i.order.order_no, product: i.product, qty: i.qty, status: i.production_status, urgency: i.urgency, deliveryDate: i.order.delivery_date })),
+            (await fetchBoardItems()).slice(0, 60).map((i) => ({ itemId: i.id, orderNo: i.order.order_no, product: i.product, qty: i.qty, status: i.production_status, urgency: i.urgency, deliveryDate: i.order.delivery_date })),
         }),
       ],
-      change: [],
-      abilities: "Look up the factory board. They can't make changes through you.",
+      change: channel === "app" ? ordersAlexis.workerChanges() : [],
+      abilities: `Look up the factory board.${channel === "app" ? " Prepare these changes for them to confirm: move an item to its next step, flag or clear a delay." : ""}`,
     };
   }
   if (person.type !== "staff") return { read: [], change: [], abilities: "Nothing in this app." };
@@ -329,5 +341,15 @@ export async function staffAppToolbox(person: Person, _page: string, channel: "a
   const read = staffReads(role, db, channel === "app");
   const developer = person.email === SUPPORT_OWNER_EMAIL && role !== "boss";
   if (developer) read.push(readTool({ name: "server_health", description: "Whether the sites are up, server load, and money alerts.", inputSchema: z.object({}), run: serverHealth }));
-  return { read, change, abilities: abilities(role, change) + (channel === "whatsapp" ? " On WhatsApp they can only look things up: changes are made in the app." : "") };
+  // They read through the sign-in, which WhatsApp doesn't have.
+  if (channel === "app") {
+    const admin = staffAdminTools({ userId: person.id, role, email: person.email });
+    const orders = isManagerRole(role) ? ordersAlexis.managerTools(role) : { read: [], change: [] };
+    const invoices = isManagerRole(role) ? invoiceTools() : { read: [], change: [] };
+    const people = isManagerRole(role) ? peopleTools(role, canViewAccounts(role)) : { read: [], change: [] };
+    const settings = isManagerRole(role) ? settingsTools(role) : { read: [], change: [] };
+    read.push(...admin.read, ...orders.read, ...invoices.read, ...people.read, ...settings.read);
+    change.push(...admin.change, ...orders.change, ...invoices.change, ...(canViewAccounts(role) ? booksChanges(role === "boss") : []), ...people.change, ...settings.change);
+  }
+  return { read, change, abilities: abilities(role, change, read) + (channel === "whatsapp" ? " On WhatsApp they can only look things up: changes are made in the app." : "") };
 }

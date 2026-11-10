@@ -109,8 +109,8 @@ export function accountsTools(): AssistantTool[] {
         return {
           today: board.today,
           totals: { count: lines.length, amount: lines.reduce((s, e) => s + e.amount, 0), paid: lines.reduce((s, e) => s + Math.min(e.paid, e.amount), 0), balance: lines.reduce((s, e) => s + e.balance, 0), overdue: lines.filter((e) => e.state === "overdue").reduce((s, e) => s + e.balance, 0) },
-          ...listed(lines.map((e) => ({ name: e.name, category: e.categoryName, amount: e.amount, estimate: e.amountIsEstimate, paid: e.paid, balance: e.balance, status: e.state, date: e.spentOn, due: e.dueOn, repeats: e.scheduleEvery, paidTo: e.recipient, note: e.description, recordedBy: e.recordedBy }))),
-          repeating: schedules.map((s) => ({ name: s.name, category: s.categoryName, amount: s.amount, varies: s.varies, every: s.every, since: s.firstDueOn, paidTo: s.recipient })),
+          ...listed(lines.map((e) => ({ id: e.id, name: e.name, category: e.categoryName, amount: e.amount, estimate: e.amountIsEstimate, paid: e.paid, balance: e.balance, status: e.state, date: e.spentOn, due: e.dueOn, repeats: e.scheduleEvery, paidTo: e.recipient, note: e.description, recordedBy: e.recordedBy }))),
+          repeating: schedules.map((s) => ({ id: s.id, name: s.name, category: s.categoryName, amount: s.amount, varies: s.varies, every: s.every, since: s.firstDueOn, paidTo: s.recipient })),
         };
       },
     }),
