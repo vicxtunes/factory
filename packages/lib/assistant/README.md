@@ -42,10 +42,12 @@ studio's page without an Aming account, so they never see it. Plan: the "Alexis 
   allow. Reads run straight away. A **change** only prepares a card (`assistant_pending_actions`): it runs once, through
   the app's own server action (which checks the role again), when the person taps Confirm within 15 minutes. That table
   is also the record of every change (Dashboard → Assistant → Changes made through Alexis). No payments, refunds,
-  withdrawals, payouts or deletions.
+  withdrawals or payouts; deleting only through a tool made for deleting that one thing.
   - Staff: orders, clients, the review queue (managers); money and expenses, record an expense or a repeating one
     (boss, supervisors); server health, agents, staff accounts, currencies; set a currency rate, a staff role, a
-    commission rate, register an agent (boss). Item status and new clients (managers). Designers and workers: their board.
+    commission rate, register an agent (boss). Item status and new clients (managers). Announcements: see, create, and edit, stop,
+    start or delete their own; approve or reject others' (boss). Support tickets: anyone sends one; the developer sees,
+    resolves, reopens or deletes them (`tools/staff-admin.ts`). Designers and workers: their board.
   - Client app: everything the chat assistant does, on cards instead of a "yes" in chat (`tools/client-orders.ts`):
     place an order (checked and priced by the chat's `checkOrderItems`; approved and invoiced at once with a photo link, or
     left to the order form's review once attached photos have uploaded), create an invoice, send an MTN/Airtel prompt; plus
