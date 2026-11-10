@@ -17,6 +17,8 @@ import type { ChangeTool, PageLink, Toolbox } from "../toolbox";
 import { clientOrderTools, explainPriceTool, walletTools } from "../tools/client-orders";
 import { accountsTools, databaseTools } from "../tools/business";
 import { addFilesToOrderTool } from "../tools/order-files";
+import { staffAdminTools } from "../tools/staff-admin";
+import { SUPPORT_OWNER_EMAIL } from "../../../support/constants";
 import { studioSetupTools } from "../tools/studio-setup";
 
 interface Call {
@@ -198,6 +200,32 @@ function bossToolbox(): Toolbox {
       "Look things up for their role: orders, clients and orders waiting for review; money at a glance, every payment, sale and expense for any period; server health, agents, staff accounts, currencies, and everything else in the business through the database (every feature: orders, production, Drive files, chats, wallets, agents, vendors, studios, notifications…); No payments, refunds, withdrawals, payouts or deletions.",
   };
 }
+
+/** The boss who is also the apps' developer (Dementa, live chat of 2026-11-10): the real announcement and support ticket tools. */
+function developerBossToolbox(): Toolbox {
+  const base = bossToolbox();
+  const admin = staffAdminTools({ userId: "u-1", role: "boss", email: SUPPORT_OWNER_EMAIL });
+  return {
+    read: [...base.read, ...admin.read],
+    change: [...base.change, ...admin.change],
+    abilities: `${base.abilities} Also announcements and support tickets. Prepare these changes for them to confirm: ${admin.change.map((c) => c.name.replace(/_/g, " ")).join(", ")}.`,
+  };
+}
+const dashboardPage = { path: "/dashboard/support", title: "Support", links: [{ href: "/dashboard/support", label: "Support" }, { href: "/dashboard/announcements", label: "Announcements" }] };
+const runningAnnouncement = (canChange: boolean, createdBy: string) => [
+  { id: "5b1c7a52-3f0e-4c47-9a51-0f7a3c1d2e01", title: "Mobile money is back ✅", message: "Mobile money payments and withdrawals are available again after maintenance.", audience: "clients", state: "running", createdBy, createdAt: "2026-11-08", canChange },
+  { id: "5b1c7a52-3f0e-4c47-9a51-0f7a3c1d2e02", title: "New photo book covers", message: "Try our new window covers.", audience: "clients", state: "stopped", createdBy, createdAt: "2026-10-30", canChange },
+];
+const ticket = (n: number, from: string, sent: string, message: string) => ({ id: `7d2e9b40-1a6c-4f3e-8b21-00000000000${n}`, from, role: "boss", sent, message, status: "open", resolvedOn: null });
+const openTickets = [
+  ticket(1, "Carol", "2026-10-15", "Allow client names to be edited after order submission."),
+  ticket(2, "Arthur", "2026-10-16", "Photo book orders don't appear on their submission date."),
+  ticket(3, "CEO", "2026-10-18", "Make client gallery sliding smoother."),
+  ticket(4, "CEO", "2026-10-18", "Make client gallery sliding smoother."),
+  ticket(5, "CEO", "2026-10-18", "Connect new customer chats directly to Aming Support."),
+];
+const ticketsListed =
+  "You have 5 open support tickets: / 1. 15 Oct — Carol: Allow client names to be edited after order submission. / 2. 16 Oct — Arthur: Photo book orders don't appear on their submission date. / 3. 18 Oct — CEO: Make client gallery sliding smoother. / 4. 18 Oct — CEO: The same gallery sliding request, submitted again. / 5. 18 Oct — CEO: Connect new customer chats directly to Aming Support. / The gallery sliding request appears twice.";
 
 // The boss's live chat of 2026-11-09, as fixtures, dated today so they're "today's".
 const today = kampalaDay(new Date());
@@ -565,6 +593,78 @@ const SCENARIOS: Scenario[] = [
     },
     messages: [{ role: "user", content: "How many photos did clients upload to their orders' drives this week, and who uploaded the most?" }],
     checks: [called("ask_database"), notCalled("show_the_way", "hand_to_staff"), says(/214/, "give the 214 files"), says(/Sarah/, "say who uploaded the most"), neverSays(/\bselect\b|order_item_media|\bsql\b/i, "shows SQL or table names")],
+  },
+  {
+    name: "The boss asks to stop a running announcement: a card, not the page (live chat, 2026-11-10)",
+    person: boss,
+    payer: COMPANY,
+    page: dashboardPage,
+    tools: developerBossToolbox,
+    fixtures: { announcements: runningAnnouncement(true, "Victor") },
+    messages: [
+      { role: "user", content: "which announcemnets are running" },
+      { role: "assistant", content: "One announcement is running: “Mobile money is back ✅”. It tells clients that mobile money payments and withdrawals are available again after maintenance. Audience: clients." },
+      { role: "user", content: "can stop it for me" },
+    ],
+    checks: [
+      called("stop_or_start_announcement"),
+      (o) => (o.calls.some((c) => c.name === "stop_or_start_announcement" && c.input.running === false && String(c.input.id).endsWith("e01")) ? null : "didn't prepare stopping the running one"),
+      notCalled("show_the_way", "delete_announcement"),
+      notDone,
+      neverSays(/can(?:'|’)?t|cannot/i, "says it can't"),
+    ],
+  },
+  {
+    name: "Someone else's announcement: it says who can stop it, no card",
+    person: boss,
+    payer: COMPANY,
+    page: dashboardPage,
+    tools: developerBossToolbox,
+    fixtures: { announcements: runningAnnouncement(false, "Arthur") },
+    messages: [{ role: "user", content: "stop the mobile money announcement" }],
+    checks: [called("announcements"), notCalled("stop_or_start_announcement", "delete_announcement"), says(/Arthur/, "say Arthur made it and can stop it")],
+  },
+  {
+    name: "'Mark 3 and 4 as resolved': one card per ticket, not the page (live chat, 2026-11-10)",
+    person: boss,
+    payer: COMPANY,
+    page: dashboardPage,
+    tools: developerBossToolbox,
+    fixtures: { support_tickets: openTickets },
+    messages: [
+      { role: "user", content: "i what the one which open" },
+      { role: "assistant", content: ticketsListed },
+      { role: "user", content: "mark 3 and 4 as resolved" },
+    ],
+    checks: [
+      (o) => {
+        const ids = o.calls.filter((c) => c.name === "set_ticket_status" && c.input.resolved === true).map((c) => String(c.input.id).slice(-1));
+        return ids.includes("3") && ids.includes("4") && ids.length === 2 ? null : `resolved tickets ${ids.join(", ") || "none"}, not 3 and 4`;
+      },
+      notCalled("show_the_way", "delete_ticket"),
+      notDone,
+    ],
+  },
+  {
+    name: "Delete the duplicate ticket: only the second copy",
+    person: boss,
+    payer: COMPANY,
+    page: dashboardPage,
+    tools: developerBossToolbox,
+    fixtures: { support_tickets: openTickets },
+    messages: [
+      { role: "user", content: "show me the open tickets" },
+      { role: "assistant", content: ticketsListed },
+      { role: "user", content: "delete the duplicate one" },
+    ],
+    checks: [
+      (o) => {
+        const ids = o.calls.filter((c) => c.name === "delete_ticket").map((c) => String(c.input.id).slice(-1));
+        return ids.length === 1 && ["3", "4"].includes(ids[0]!) ? null : `deleted ${ids.join(", ") || "nothing"}, not one copy of the gallery ticket`;
+      },
+      notCalled("show_the_way"),
+      notDone,
+    ],
   },
 ];
 
