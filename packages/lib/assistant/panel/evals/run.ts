@@ -24,6 +24,8 @@ import { peopleTools } from "../../../../../apps/factory/app/alexis-people";
 import { settingsTools } from "../../../../../apps/factory/app/alexis-settings";
 import { SUPPORT_OWNER_EMAIL } from "../../../support/constants";
 import { studioSetupTools } from "../tools/studio-setup";
+import { studioBusinessTools } from "../tools/studio-business";
+import { studioJobChanges, vendorJobChanges } from "../tools/vendor-jobs";
 
 interface Call {
   name: string;
@@ -248,6 +250,26 @@ function bossEverythingToolbox(): Toolbox {
   const change = unique([...parts.flatMap((p) => p.change), ...extra.flatMap((p) => p.change)]);
   return { read, change, abilities: `Look things up: orders, clients, money, invoices, wallets, agents, the catalog, announcements, support tickets and everything in the database. Prepare these changes for them to confirm: ${change.map((c) => c.name.replace(/_/g, " ")).join(", ")}. PINs and passwords are never set through you. No money is sent out through you.` };
 }
+/** An open studio's owner at work: the real bookings, projects, clients, money and vendor job tools. */
+function studioWorkToolbox(): Toolbox {
+  const work = studioBusinessTools(fakeStudio.scope, () => true);
+  const clients: AssistantTool = { name: "studio_clients", description: "The studio's clients: id, name, phone, email. Optionally only those whose name or phone contains some text.", inputSchema: z.object({ search: z.string().nullable() }), run: (async () => "") as AssistantTool["run"] };
+  const jobs: AssistantTool = { name: "studio_vendor_jobs", description: "The studio's jobs and rentals with vendors, newest first: id, vendor, what for, price, status.", inputSchema: z.object({}), run: (async () => "") as AssistantTool["run"] };
+  const change = [...work.change, ...studioJobChanges("t-1", { projects: true, money: true })];
+  return { read: [clients, jobs, ...work.read], change, abilities: `For Peter's Studio: ${work.words.join(", ")}; call off, pay in, approve or raise a problem with vendor jobs. All of this works from any page.` };
+}
+function vendorToolbox(): Toolbox {
+  const jobs: AssistantTool = { name: "vendor_jobs", description: "The vendor's jobs and rentals from studios, newest first: id, studio, what for, price, status, due.", inputSchema: z.object({}), run: (async () => "") as AssistantTool["run"] };
+  return { read: [jobs], change: vendorJobChanges("c-3"), abilities: "For their vendor account: see their jobs; accept or decline a request, say samples are ready, hand over or deliver, give up a job." };
+}
+const peter: Person = { type: "client", id: "c-2", name: "Peter", role: "client", email: "peter@example.com", phone: "+256772000002", alwaysInTest: false };
+const studioWorkPage = { path: "/studio/bookings", title: "Bookings", links: [{ href: "/studio/bookings", label: "Bookings" }, { href: "/studio/projects", label: "Projects" }] };
+const SHOOT = "a1b2c3d4-0000-4000-8000-000000000001";
+const REQUEST = "a1b2c3d4-0000-4000-8000-000000000002";
+const studioBookings = [
+  { id: SHOOT, client: "Sarah Nankya", customerId: "a1b2c3d4-0000-4000-8000-0000000000c1", title: "Sarah's wedding", date: "2026-11-21", start: "10:00", end: "16:00", location: "Munyonyo", package: "Standard", amount: 2500000, status: "confirmed", source: "studio" },
+  { id: REQUEST, client: "Brian Okello", customerId: "a1b2c3d4-0000-4000-8000-0000000000c2", title: "Family shoot", date: "2026-11-15", start: null, end: null, location: null, package: "Basic", amount: 1500000, status: "tentative", source: "online" },
+];
 const faith: Person = { type: "staff", id: "u-2", name: "Faith", role: "receptionist", email: "faith@example.com", phone: null, alwaysInTest: true };
 const ordersPage = { path: "/dashboard/orders", title: "Orders", links: [{ href: "/dashboard/orders", label: "Orders" }, { href: "/dashboard/order-approvals", label: "Client Orders" }] };
 const ORDER_ID = "9a3f1c20-5b7e-4d1a-8c2f-1e0d3b4a5c60";
@@ -831,6 +853,36 @@ const SCENARIOS: Scenario[] = [
     fixtures: { announcements: runningAnnouncement(true, "Victor") },
     messages: [{ role: "user", content: "stop the mobile money announcement" }],
     checks: [called("stop_or_start_announcement"), notCalled("show_the_way", "delete_announcement"), notDone],
+  },
+  {
+    name: "A studio moves a shoot: it changes the booking's day and times",
+    person: peter,
+    payer: { type: "client", id: "c-2" },
+    page: studioWorkPage,
+    tools: studioWorkToolbox,
+    fixtures: { studio_bookings: studioBookings },
+    messages: [{ role: "user", content: "Sarah's wedding moved to Sunday 22nd, 2pm to 8pm" }],
+    checks: [(o) => (o.calls.some((c) => c.name === "edit_booking" && c.input.bookingId === SHOOT && c.input.date === "2026-11-22" && c.input.startTime === "14:00" && c.input.endTime === "20:00") ? null : "didn't prepare the 22nd, 14:00–20:00"), notCalled("create_booking", "show_the_way"), notDone],
+  },
+  {
+    name: "A studio accepts an online booking request",
+    person: peter,
+    payer: { type: "client", id: "c-2" },
+    page: studioWorkPage,
+    tools: studioWorkToolbox,
+    fixtures: { studio_bookings: studioBookings },
+    messages: [{ role: "user", content: "accept Brian's booking request" }],
+    checks: [(o) => (o.calls.some((c) => c.name === "answer_booking_request" && c.input.bookingId === REQUEST && c.input.accept === true) ? null : "didn't prepare accepting Brian's request"), notCalled("set_booking_status", "show_the_way"), notDone],
+  },
+  {
+    name: "A vendor finished a job: it marks it delivered",
+    person: { ...peter, id: "c-3", name: "Ivan" },
+    payer: { type: "client", id: "c-3" },
+    page: { path: "/vendors", title: "Jobs", links: [{ href: "/vendors", label: "Jobs" }] },
+    tools: vendorToolbox,
+    fixtures: { vendor_jobs: [{ id: "b2c3d4e5-0000-4000-8000-000000000001", studio: "Peter's Studio", for: "Sarah's wedding (editing)", price: 300000, status: "in_progress", dueOn: "2026-11-25" }, { id: "b2c3d4e5-0000-4000-8000-000000000002", studio: "Kato Studios", for: "2 × Godox AD600", price: 120000, status: "requested" }] },
+    messages: [{ role: "user", content: "I've finished editing Sarah's wedding for Peter's Studio, the photos are in the folder" }],
+    checks: [(o) => (o.calls.some((c) => c.name === "deliver_job" && c.input.jobId === "b2c3d4e5-0000-4000-8000-000000000001") ? null : "didn't prepare delivering the editing job"), notCalled("withdraw_from_job", "show_the_way"), notDone],
   },
 ];
 

@@ -41,8 +41,11 @@ studio's page without an Aming account, so they never see it. Plan: the "Alexis 
   `panel/tools/client-app.ts`), from the functions its own pages and buttons use, given only to the roles those already
   allow. Reads run straight away. A **change** only prepares a card (`assistant_pending_actions`): it runs once, through
   the app's own server action (which checks the role again), when the person taps Confirm within 15 minutes. That table
-  is also the record of every change (Dashboard → Assistant → Changes made through Alexis). No payments, refunds,
-  withdrawals or payouts; deleting only through a tool made for deleting that one thing.
+  is also the record of every change (Dashboard → Assistant → Changes made through Alexis). No money is sent out
+  (payouts, refunds, withdrawals) and no PIN or password is set; deleting only through a tool made for deleting that
+  one thing. Since 2026-11-10 Alexis does (almost) everything the pages do, area by area: staff `alexis-orders.ts`,
+  `alexis-people.ts`, `alexis-settings.ts` (in apps/factory/app), `tools/staff-admin.ts`, `tools/money.ts`; studios
+  `tools/studio-business.ts`; vendor jobs `tools/vendor-jobs.ts`. The boss has about 100 tools: the model's limit is 128.
   - Staff: orders, clients, the review queue (managers); money and expenses, record an expense or a repeating one
     (boss, supervisors); server health, agents, staff accounts, currencies; set a currency rate, a staff role, a
     commission rate, register an agent (boss). Item status and new clients (managers). Announcements: see, create, and edit, stop,

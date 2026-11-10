@@ -3,7 +3,7 @@ import "server-only";
 import { z } from "zod";
 
 import { accounting } from "@repo/lib/accounting/index.server";
-import { addAgentClient } from "@repo/lib/agents/actions";
+import { addAgentClient, editAgentClient, promptClientToPay } from "@repo/lib/agents/actions";
 import { agentClients, agentOfClient, figuresFor } from "@repo/lib/agents/server";
 import { createCustomer } from "@repo/lib/customers/actions";
 import { customers } from "@repo/lib/customers/server";
@@ -18,6 +18,8 @@ import type { Person } from "../server";
 import { changeTool, outcome, readTool, type ChangeTool, type Toolbox } from "../toolbox";
 import { cancellationTool, clientOrderTools, explainPriceTool, walletTools } from "./client-orders";
 import { addFilesToOrderTool } from "./order-files";
+import { studioBusinessTools } from "./studio-business";
+import { studioJobChanges, vendorJobChanges } from "./vendor-jobs";
 import { studioSetupTools } from "./studio-setup";
 import { marketPricesTool, packagePhotosTool, studioDocumentTool } from "./studio-work";
 
@@ -109,7 +111,7 @@ async function studioTools(widgets: Widgets): Promise<{ read: AssistantTool[]; c
           return list
             .filter((c) => !q || c.name.toLowerCase().includes(q) || (c.phone ?? "").includes(q))
             .slice(0, 30)
-            .map((c) => ({ name: c.name, phone: c.phone, email: c.email }));
+            .map((c) => ({ id: c.id, name: c.name, phone: c.phone, email: c.email }));
         },
       }),
     );
@@ -152,6 +154,13 @@ async function studioTools(widgets: Widgets): Promise<{ read: AssistantTool[]; c
     );
     can.push("see the studio's vendor jobs");
   }
+  const work = studioBusinessTools(scope, (area) => canUse(access, area));
+  read.push(...work.read);
+  change.push(...work.change);
+  can.push(...work.words);
+  const jobs = studioJobChanges(scope.tenantId, { projects: canUse(access, "projects"), money: canUse(access, "money") });
+  change.push(...jobs);
+  if (jobs.length) can.push("call off, pay in, approve or raise a problem with vendor jobs");
   const words = can.length ? `For ${studio.name}: ${can.join(", ")}.` : "";
   if (!access.owner) return { read, change, words };
   const page = studioSetupTools(caller, widgets);
@@ -191,8 +200,39 @@ async function agentTools(person: Person): Promise<{ read: AssistantTool[]; chan
           return { ok: true, done: res.data?.pending ? `${c.name} is waiting for Aming to confirm them.` : `${c.name} is now in your clients.` };
         },
       }),
+      changeTool({
+        name: "edit_agent_client",
+        description: "Change a client's name, phone or email on the agent's list (give all three, keeping what doesn't change). Use clientId from agent_clients. Clients who sign in themselves change their own details.",
+        inputSchema: agentClientSchema.extend({ clientId: z.string().uuid() }),
+        card: async ({ clientId, ...c }) => {
+          const now = (await agentClients(agent.id)).find((x) => x.clientId === clientId);
+          if (!now) throw new Error("That client isn't on your list.");
+          if (now.locked) throw new Error(`${now.name} signs in to Aming: their details are theirs to change.`);
+          return { title: `Edit ${now.name}`, lines: [`Name: ${c.name}`, `Phone: ${c.phone}`, c.email ? `Email: ${c.email}` : "No email"] };
+        },
+        run: async ({ clientId, ...c }) => {
+          const res = await editAgentClient(clientId, c);
+          return res.ok ? { ok: true, done: "The client is updated." } : { ok: false, error: res.error };
+        },
+      }),
+      changeTool({
+        name: "prompt_client_to_pay",
+        description: "Send an MTN or Airtel prompt to a client's phone for what's still due on one of the agent's orders (order id from agent_figures). The money goes straight to Aming.",
+        inputSchema: z.object({ orderId: z.string().uuid(), phone: z.string().trim().min(9).max(20) }),
+        card: async ({ orderId, phone }) => {
+          const o = (await figuresFor(agent.id)).orders.find((x) => x.id === orderId);
+          if (!o) throw new Error("That order isn't yours.");
+          const due = (o.price ?? 0) - o.paid;
+          if (o.price != null && due <= 0) throw new Error(`Order ${o.orderNo} is paid.`);
+          return { title: `Ask ${o.clientName} to pay order ${o.orderNo}`, lines: [`Prompt to ${phone}`, ...(o.price != null ? [`Due: UGX ${due.toLocaleString("en-UG")}`] : [])] };
+        },
+        run: async ({ orderId, phone }) => {
+          const res = await promptClientToPay(orderId, phone);
+          return res.ok ? { ok: true, done: "The prompt is on its way: the client approves it on their phone." } : { ok: false, error: res.error };
+        },
+      }),
     ],
-    words: "For their agent account: see their figures and clients, and add a client.",
+    words: "For their agent account: see their figures and clients, add or change a client, and send a client a mobile money prompt for what's due on an order.",
   };
 }
 
@@ -208,8 +248,8 @@ async function vendorTools(person: Person): Promise<{ read: AssistantTool[]; cha
         run: async () => (await vendorJobs.forVendor(person.id)).slice(0, 20),
       }),
     ],
-    change: [],
-    words: "For their vendor account: see their jobs.",
+    change: vendorJobChanges(person.id),
+    words: "For their vendor account: see their jobs; accept or decline a request, say samples are ready, hand over or deliver, give up a job.",
   };
 }
 
