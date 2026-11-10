@@ -202,26 +202,3 @@ export async function monthStats(): Promise<{ spent: number; replies: number; pe
   const replies = Number(rows[0]?.replies ?? 0);
   return { spent, replies, perReply: replies ? spent / replies : 0, projected: projectMonthTotal(spent, rows[0]?.first_at ?? null, now, daysInMonth) };
 }
-
-export interface RunRow {
-  id: string;
-  conversation_id: string | null;
-  reply: string | null;
-  actions: string[];
-  error: string | null;
-  cost_usd: number;
-  created_at: string;
-  clients: { name: string } | null;
-}
-
-export async function recentRuns(limit: number): Promise<RunRow[]> {
-  return must(
-    await createAdminClient()
-      .from("assistant_runs")
-      .select("id, conversation_id, reply, actions, error, cost_usd, created_at, clients(name)")
-      // Chat answers only: the Alexis panel's runs are in usageByPayer.
-      .is("person_type", null)
-      .order("created_at", { ascending: false })
-      .limit(limit),
-  ) as unknown as RunRow[];
-}

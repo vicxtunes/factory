@@ -1,11 +1,9 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { currentTerms, hasAiKey, panelSettings, recentChanges, recentPanelRuns, usageByPayer } from "@repo/lib/assistant/panel/server";
+import { currentTerms, hasAiKey, panelSettings, recentChanges, usageByPayer } from "@repo/lib/assistant/panel/server";
 import { findModel } from "@repo/lib/assistant/core/rules";
-import { monthStats, recentRuns, getSettings, spentToday } from "@repo/lib/assistant/server/store";
+import { monthStats, getSettings, spentToday } from "@repo/lib/assistant/server/store";
 import { getDashboardSession } from "@repo/lib/auth/session";
-import { chatHref } from "@repo/lib/chat/routes";
 import { SUPPORT_OWNER_EMAIL } from "@repo/lib/support/constants";
 
 import { AlexisPanelForm, PublishTermsButton } from "./alexis-panel-form";
@@ -15,7 +13,8 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Assistant" };
 
 // The boss's switch for the chat assistant (packages/lib/assistant): who it
-// answers, its daily limit, and what it has said and done.
+// answers, its daily limit, what it costs and what it changed. Its chats are
+// read in Chat, not here: this page only manages it (owner, 2026-11-09).
 const CAPABILITIES = [
   "Answers clients in support and order chats, and shows when it's typing",
   "Takes orders from the client's own words and asks for photos or a link",
@@ -32,16 +31,14 @@ export default async function AssistantPage() {
   const session = await getDashboardSession();
   const developer = session?.email === SUPPORT_OWNER_EMAIL;
   if (session?.role !== "boss" && !developer) redirect("/dashboard");
-  const [settings, spent, month, runs, panel, terms, payers, changes, panelRuns] = await Promise.all([
+  const [settings, spent, month, panel, terms, payers, changes] = await Promise.all([
     getSettings(),
     spentToday(),
     monthStats(),
-    recentRuns(50),
     panelSettings(),
     currentTerms(),
     usageByPayer(),
     recentChanges(30),
-    recentPanelRuns(30),
   ]);
 
   return (
@@ -102,7 +99,7 @@ export default async function AssistantPage() {
           </p>
         </div>
       </section>
-      <section className="min-w-0 lg:row-start-2">
+      <section className="min-w-0 lg:col-start-2 lg:row-span-2 lg:row-start-1">
         <h2 className="mb-2 text-sm font-semibold">Alexis usage this month</h2>
         {payers.length ? (
           <div className="overflow-x-auto rounded-xl border border-border bg-surface">
@@ -135,43 +132,6 @@ export default async function AssistantPage() {
           <p className="text-sm text-muted">Nobody has used Alexis this month.</p>
         )}
         <p className="mt-2 text-xs text-muted">All charges are waived while Alexis is free.</p>
-        <h2 className="mt-6 mb-2 text-sm font-semibold">Latest Alexis replies</h2>
-        {panelRuns.length ? (
-          <ul className="grid gap-2">
-            {panelRuns.map((r) => (
-              <li key={r.id} className="rounded-xl border border-border bg-surface p-3 text-sm">
-                <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
-                  <span className="font-medium">{r.who}</span>
-                  <span>
-                    {new Date(r.at).toLocaleString("en-UG", { timeZone: "Africa/Kampala", dateStyle: "medium", timeStyle: "short" })} · US${r.costUsd.toFixed(4)}
-                  </span>
-                </div>
-                {r.reply ? <p className="mt-1 line-clamp-3 whitespace-pre-wrap">{r.reply}</p> : null}
-                {r.error ? <p className="mt-1 text-error-600">{r.error}</p> : null}
-                {r.trace.length ? (
-                  <details className="mt-2">
-                    <summary className="cursor-pointer text-xs font-medium text-brand-600 dark:text-brand-400">
-                      {r.trace.length} step{r.trace.length === 1 ? "" : "s"}: {r.trace.map((t) => t.tool).join(" → ")}
-                    </summary>
-                    <ol className="mt-2 space-y-2">
-                      {r.trace.map((t, i) => (
-                        <li key={i} className="rounded-lg border border-border bg-background p-2 text-xs">
-                          <p className="font-medium">
-                            {t.tool} <span className={t.ok ? "text-muted" : "text-error-600"}>· {t.ok ? `${t.ms} ms` : `refused or failed · ${t.ms} ms`}</span>
-                          </p>
-                          <p className="mt-1 break-all text-muted">In: {t.input}</p>
-                          <p className="mt-1 break-all text-muted">Out: {t.output}</p>
-                        </li>
-                      ))}
-                    </ol>
-                  </details>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="text-sm text-muted">No replies yet.</p>
-        )}
         <h2 className="mt-6 mb-2 text-sm font-semibold">Changes made through Alexis</h2>
         {changes.length ? (
           <ul className="grid gap-2">
@@ -191,34 +151,6 @@ export default async function AssistantPage() {
           </ul>
         ) : (
           <p className="text-sm text-muted">None yet. Every change needs the person to tap Confirm, and each one is listed here.</p>
-        )}
-      </section>
-      <section className="min-w-0 lg:col-start-2 lg:row-start-1">
-        <h2 className="mb-2 text-sm font-semibold">Latest answers</h2>
-        {runs.length ? (
-          <ul className="grid gap-2">
-            {runs.map((run) => (
-              <li key={run.id} className="rounded-xl border border-border bg-surface p-3 text-sm">
-                <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
-                  <span className="font-medium">{run.clients?.name ?? "Client"}</span>
-                  <span>
-                    {new Date(run.created_at).toLocaleString("en-UG", { timeZone: "Africa/Kampala", dateStyle: "medium", timeStyle: "short" })} · US$
-                    {Number(run.cost_usd).toFixed(3)}
-                  </span>
-                </div>
-                {run.reply ? <p className="mt-1 whitespace-pre-wrap">{run.reply}</p> : null}
-                {run.error ? <p className="mt-1 text-error-600">{run.error}</p> : null}
-                {run.actions.length ? <p className="mt-1 text-xs text-muted">{run.actions.join(" · ")}</p> : null}
-                {run.conversation_id ? (
-                  <Link href={chatHref(run.conversation_id)} className="mt-1 inline-flex min-h-10 items-center text-xs font-medium text-brand-600 hover:underline dark:text-brand-400">
-                    Open chat
-                  </Link>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="text-sm text-muted">Nothing yet.</p>
         )}
       </section>
     </div>

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { capReached, chargeFor, COMPANY, formatUsd, isAppPath, plainText, isWaived, kampalaDay, mayUsePanel, payerForPage, startOfKampalaMonth, startOfNextKampalaMonth } from "./core";
+import { capReached, chargeFor, chatTitleFrom, COMPANY, formatUsd, isAppPath, plainText, isWaived, kampalaDay, mayUsePanel, payerForPage, startOfKampalaMonth, startOfNextKampalaMonth } from "./core";
 
 describe("Alexis panel rules", () => {
   it("charges the real cost times the multiplier", () => {
@@ -83,5 +83,15 @@ describe("Alexis's replies are plain text", () => {
   });
   it("leaves ordinary text alone", () => {
     assert.equal(plainText("25 × UGX 12,000 = UGX 300,000 - Sheets"), "25 × UGX 12,000 = UGX 300,000 - Sheets");
+  });
+});
+
+describe("Alexis names a chat after what it's about", () => {
+  it("skips greetings in English and Luganda", () => {
+    for (const g of ["Hey", "hello!", "Gwe ani?", "Oli otya", "ok", "Thanks"]) assert.equal(chatTitleFrom(g), null, g);
+  });
+  it("uses the first real message", () => {
+    assert.equal(chatTitleFrom("I need crystal boards"), "I need crystal boards");
+    assert.equal(chatTitleFrom("x".repeat(80))?.length, 60);
   });
 });

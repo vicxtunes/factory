@@ -17,10 +17,12 @@ import type { AssistantTool } from "../server/tools";
 import {
   capReached,
   chargeFor,
+  chatTitleFrom,
   COMPANY,
   formatUsd,
   isWaived,
   kampalaDay,
+  kampalaTime,
   isAppPath,
   MAX_MESSAGE_CHARS,
   MAX_MESSAGES_PER_10_MIN,
@@ -35,6 +37,7 @@ import {
   type PayerType,
   type PersonType,
 } from "./core";
+import { afterPhotosUploaded } from "./tools/client-orders";
 import { forgetKind, memoriesForModel, memoriesOf, memoryTools, remember, type Memory } from "./memory";
 import { PANEL_PROMPT } from "./prompt";
 import { MAX_GUIDE_STEPS, readTool, type ChangeOutcome, type ChangeTool, type GuideStep, type PageLink, type ReplyWidget, type Toolbox } from "./toolbox";
@@ -420,6 +423,14 @@ async function newChat(person: Person, title: string): Promise<string> {
   return row.id;
 }
 
+/** Names a chat still called "New chat" (or after a greeting) from a message that says what it's about. */
+async function nameChat(chatId: string, message: string): Promise<void> {
+  const title = chatTitleFrom(message);
+  if (!title) return;
+  const { data } = await createAdminClient().from("assistant_chats").select("title").eq("id", chatId).maybeSingle();
+  if (data && (data.title === "New chat" || chatTitleFrom(data.title) === null)) must(await createAdminClient().from("assistant_chats").update({ title }).eq("id", chatId));
+}
+
 /** WhatsApp is one ongoing chat, named WhatsApp. */
 async function whatsAppChat(person: Person): Promise<string> {
   const found = must(
@@ -620,7 +631,7 @@ export function contextFor(person: Person, page: { path: string; title: string; 
   const where = page.title ? `"${page.title}" (${page.path})` : page.path;
   const business = payer.type === "studio" || payer.type === "vendor" || payer.type === "agent" ? ` They're working in their ${payer.type} account.` : "";
   const lines = [
-    `Today is ${kampalaDay(new Date())}. You're talking to ${person.name}, signed in as: ${person.role}.${business}`,
+    `Today is ${kampalaDay(new Date())} and it's ${kampalaTime(new Date())} in Kampala. You're talking to ${person.name}, signed in as: ${person.role}.${business}`,
     page.path ? `The page they have open is ${where}.` : "They're writing on WhatsApp, not in the app.",
     `What you can do for them: ${abilities}`,
   ];
@@ -708,7 +719,9 @@ export async function send(
     return { ok: false, error: "Alexis isn't set up in this app yet. The team has been told." };
   }
 
-  const chat = chatId ?? (channel === "whatsapp" ? await whatsAppChat(person) : await newChat(person, body || attached.join(", ")));
+  const chat = chatId ?? (channel === "whatsapp" ? await whatsAppChat(person) : await newChat(person, chatTitleFrom(body) ?? "New chat"));
+  // A chat that opened with a greeting takes its name from the first message that says what it's about.
+  if (chatId && !event && channel === "app") await nameChat(chatId, body);
   const earlier = await history(chat, PANEL_HISTORY);
   const mine = event ? null : await saveMessage(person, chat, "user", body || "(files attached)", page.path, channel, attached.length ? { files: attached } : null);
   const memories = await memoriesOf(person);
@@ -852,6 +865,28 @@ export async function confirm(person: Person, id: string, toolbox: Toolbox, path
   return { ok: true, card: toCard(done), note };
 }
 
+/**
+ * The files a confirmed card uploaded have all arrived: the order goes on (confirmed and invoiced when it
+ * can be), and Alexis follows up in the card's chat, in its language.
+ */
+export async function afterUpload(person: Person, id: string, toolbox: Toolbox, path = "/"): Promise<DecideResult> {
+  const rows = must(
+    await createAdminClient().from("assistant_pending_actions").select(ACTION_COLUMNS).eq("id", id).eq("person_type", person.type).eq("person_id", person.id).eq("status", "done"),
+  ) as ActionRow[];
+  const row = rows[0];
+  if (!row?.upload_item_id) return { ok: false, error: "There's nothing to follow up for that card." };
+  const what = await afterPhotosUploaded(person, row.upload_item_id);
+  let note: PanelMessage | null = null;
+  if (row.chat_id) {
+    const followed = await send(person, row.chat_id, "", { path, title: "", links: [] }, toolbox, "app", [], undefined, `[The files they attached finished uploading. ${what} Tell them in a sentence or two, in the language of this chat, and carry on with what's next (an invoice to pay: ask how they'd like to pay).]`).catch((err) => {
+      console.error("alexis after upload failed:", err);
+      return null;
+    });
+    if (followed?.ok) note = followed.reply;
+  }
+  return { ok: true, card: toCard(row), note };
+}
+
 export async function cancel(person: Person, id: string): Promise<DecideResult> {
   const rows = must(
     await createAdminClient()
@@ -964,39 +999,4 @@ export async function bossById(userId: string): Promise<Person | null> {
   const row = must(await createAdminClient().from("profiles").select("role, full_name").eq("id", userId).maybeSingle()) as { role: string; full_name: string | null } | null;
   if (row?.role !== "boss") return null;
   return { type: "staff", id: userId, name: row.full_name || "Boss", role: "boss", email: null, phone: null, alwaysInTest: true };
-}
-
-export interface PanelRun {
-  id: string;
-  who: string;
-  reply: string | null;
-  error: string | null;
-  costUsd: number;
-  at: string;
-  trace: TraceStep[];
-}
-
-/** The latest Alexis replies (not the client chats'), with each one's steps: for finding out why it did what it did. */
-export async function recentPanelRuns(limit: number): Promise<PanelRun[]> {
-  const db = createAdminClient();
-  const rows = must(
-    await db
-      .from("assistant_runs")
-      .select("id, person_type, person_id, reply, error, cost_usd, created_at, trace")
-      .not("person_type", "is", null)
-      .not("payer_type", "is", null)
-      .order("created_at", { ascending: false })
-      .limit(limit),
-  ) as { id: string; person_type: PersonType; person_id: string; reply: string | null; error: string | null; cost_usd: number; created_at: string; trace: TraceStep[] | null }[];
-  const ids = (type: PersonType) => [...new Set(rows.filter((r) => r.person_type === type).map((r) => r.person_id))];
-  const [staff, clients, designers, workers] = await Promise.all([
-    ids("staff").length ? db.from("profiles").select("id, full_name").in("id", ids("staff")) : { data: [], error: null },
-    ids("client").length ? db.from("clients").select("id, name").in("id", ids("client")) : { data: [], error: null },
-    ids("designer").length ? db.from("designers").select("id, name").in("id", ids("designer")) : { data: [], error: null },
-    ids("worker").length ? db.from("workers").select("id, name").in("id", ids("worker")) : { data: [], error: null },
-  ]);
-  const names = new Map<string, string>();
-  for (const r of (must(staff) ?? []) as { id: string; full_name: string | null }[]) names.set(r.id, r.full_name ?? "Staff");
-  for (const res of [clients, designers, workers]) for (const r of (must(res) ?? []) as { id: string; name: string }[]) names.set(r.id, r.name);
-  return rows.map((r) => ({ id: r.id, who: names.get(r.person_id) ?? r.person_type, reply: r.reply, error: r.error, costUsd: Number(r.cost_usd), at: r.created_at, trace: r.trace ?? [] }));
 }
