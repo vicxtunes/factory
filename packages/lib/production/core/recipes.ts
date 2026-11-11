@@ -188,6 +188,28 @@ export function isPhotoBook(categoryName: string): boolean {
   return same(categoryName, "photo books");
 }
 
+/** The fewest sheets a photo book may have, whatever its size (owner, 2026-11-11). */
+export const MIN_PHOTO_BOOK_SHEETS = 10;
+/** The most sheets a photo book may have, by size (owner's photo book guidance, 2026-11-10). */
+export const MAX_PHOTO_BOOK_SHEETS: Record<string, number> = { "12x12": 30, "10x10": 25, "8x8": 15 };
+
+/** Why a photo book's sheets can't be ordered (under 10, or past its size's most); null when fine or not a photo book. */
+export function photoBookSheetsProblem(categoryName: string, details: Record<string, string | number>): string | null {
+  if (!isPhotoBook(categoryName)) return null;
+  const name = sheetsDetail(Object.keys(details));
+  const sheets = name ? Math.floor(detailAmount(details, name)) : 0;
+  // No sheets given: the form's own "required" check says so.
+  if (!sheets) return null;
+  if (sheets < MIN_PHOTO_BOOK_SHEETS) return `A photo book has at least ${MIN_PHOTO_BOOK_SHEETS} sheets (this one has ${sheets}).`;
+  const size = detailText(details, "Size").replace(/\s+/g, "").toLowerCase();
+  const most = MAX_PHOTO_BOOK_SHEETS[size];
+  if (most && sheets > most) {
+    const instead = size === "12x12" ? "order more than one book" : "choose a bigger size or order more than one book";
+    return `A ${size} photo book has at most ${most} sheets (this one has ${sheets}). For more photos, ${instead}.`;
+  }
+  return null;
+}
+
 /** A price from the margin on the whole book: the base reaches it with the add-ons' prices, rounded up to the next 500, never below 0. */
 export function priceFromMargin(cost: number, margin: number, addOnPrice: number): number {
   const base = Math.max(0, Math.ceil((cost / (1 - margin) - addOnPrice) / 500) * 500);

@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 
 import { createAdminClient } from "@repo/lib/supabase/admin";
+import { photoBookSheetsProblem } from "@repo/lib/production/core/recipes";
 import { DESIGNER_COOKIE, signPayload } from "@repo/lib/auth/cookies";
 import { getDesignerSession } from "@repo/lib/auth/session";
 import { verifyPin } from "@repo/lib/auth/pin";
@@ -334,6 +335,8 @@ export async function updateDesignerOrder(input: DesignerOrderEditInput): Promis
       }
       if (value) attributes[def.name] = value;
     }
+    const sheetsError = photoBookSheetsProblem(category.name, attributes);
+    if (sheetsError) return { ok: false, error: `Item ${idx + 1}: ${sheetsError}` };
 
     updates.push({
       id: item.id,

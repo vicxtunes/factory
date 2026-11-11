@@ -1,6 +1,7 @@
 "use server";
 
 import { recipeListPrice } from "@repo/lib/production/pricing";
+import { photoBookSheetsProblem } from "@repo/lib/production/core/recipes";
 import { randomBytes } from "crypto";
 
 import Papa from "papaparse";
@@ -486,7 +487,7 @@ export async function updateOrderItem(input: UpdateOrderItemInput): Promise<Resu
   // names — same pattern as buildAndInsertOrder/updateDesignerOrder.
   const { data: category } = await admin
     .from("product_categories")
-    .select("id")
+    .select("id, name")
     .eq("id", input.category_id)
     .maybeSingle();
   const { data: product } = await admin
@@ -512,6 +513,8 @@ export async function updateOrderItem(input: UpdateOrderItemInput): Promise<Resu
     if (def.required && !value) return { ok: false, error: `"${def.name}" is required.` };
     if (value) attributes[def.name] = value;
   }
+  const sheetsError = photoBookSheetsProblem(category.name, attributes);
+  if (sheetsError) return { ok: false, error: sheetsError };
 
   const newQty = Number.isFinite(input.qty) && input.qty > 0 ? Math.floor(input.qty) : 1;
   const newProductType = variant?.name ?? null;

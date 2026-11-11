@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { Costing, costRows, priceFromMargin, productCosts, recipeInputSchema, materialInputSchema, type CostBook, type CostMaterial, type RecipeLine } from "./index";
+import { Costing, costRows, photoBookSheetsProblem, priceFromMargin, productCosts, recipeInputSchema, materialInputSchema, type CostBook, type CostMaterial, type RecipeLine } from "./index";
 
 const material = (id: string, over: Partial<CostMaterial> = {}): CostMaterial => ({
   id,
@@ -156,4 +156,19 @@ test("a part's typed cost for a size is a cost of one: how many multiplies it", 
   const r = new Costing(b).rate(cover, "12x12");
   assert.equal(r.rate, 4_500, "2 × 1,500 typed + 1 × 1,500 own");
   assert.deepEqual(r.parts[0], { name: "Wood", qty: 2, rate: 1_500, cost: 3_000 });
+});
+
+test("a photo book has at least 10 sheets and at most its size's (8x8 15, 10x10 25, 12x12 30); other categories pass", () => {
+  const book = (size: string, sheets: string) => photoBookSheetsProblem("Photo Books", { Size: size, "NOS (Number of Sheets)": sheets });
+  assert.match(book("8x8", "5") ?? "", /at least 10 sheets \(this one has 5\)/);
+  assert.equal(book("8x8", "10"), null);
+  assert.equal(book("8x8", "15"), null);
+  assert.match(book("8x8", "16") ?? "", /8x8 photo book has at most 15 sheets.*bigger size/);
+  assert.equal(book("10x10", "25"), null);
+  assert.match(book("10x10", "26") ?? "", /at most 25/);
+  assert.equal(book("12x12", "30"), null);
+  assert.match(book("12x12", "31") ?? "", /at most 30 sheets.*more than one book/);
+  assert.equal(book("12 x 12", "20"), null);
+  assert.equal(photoBookSheetsProblem("Photo Books", { Size: "12x12" }), null, "no sheets given: the form's required check says so");
+  assert.equal(photoBookSheetsProblem("Prints", { "NOS (Number of Sheets)": "3" }), null);
 });
