@@ -5,7 +5,7 @@ const SAMPLE: DayBook = {
   day: "2026-11-03",
   today: "2026-11-03",
   close: null,
-  lastClosedDay: "2026-11-02",
+  closingOpen: true,
   accounts: [
     { id: "00000000-0000-4000-8000-000000000001", name: "Cash", kind: "cash", opening: 240_000, moneyIn: 150_000, moneyOut: 135_000, expected: 255_000, counted: null, difference: null, closing: 255_000 },
     { id: "00000000-0000-4000-8000-000000000002", name: "Bank", kind: "bank", opening: 1_200_000, moneyIn: 100_000, moneyOut: 0, expected: 1_300_000, counted: null, difference: null, closing: 1_300_000 },
