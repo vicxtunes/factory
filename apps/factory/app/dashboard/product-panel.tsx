@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 
@@ -17,7 +17,7 @@ import {
   deleteProductMedia,
 } from "@repo/lib/storage/product-media-actions";
 import { canOptimizeImage } from "@repo/lib/storage/client";
-import { uploadProductMedia } from "@repo/lib/storage/product-media-client";
+import { startUploads, useUploads, type UploadJob } from "@repo/ui/transfers/store";
 import type {
   AttributeType,
   CategoryAttribute,
@@ -873,11 +873,31 @@ function MediaPreview({
   );
 }
 
-interface GalleryUpload {
-  id: string;
-  previewUrl: string;
-  kind: "photo" | "video";
-  progress: number;
+/** A gallery file still uploading: its own picture, faded, with its progress. */
+function GalleryUploadTile({ job }: { job: UploadJob }) {
+  const video = useRef<HTMLVideoElement>(null);
+  const img = useRef<HTMLImageElement>(null);
+  useEffect(() => {
+    const u = URL.createObjectURL(job.file);
+    const el = video.current ?? img.current;
+    if (el) el.src = u;
+    return () => URL.revokeObjectURL(u);
+  }, [job.file]);
+  return (
+    <div className="relative aspect-square overflow-hidden rounded-lg border border-border">
+      {job.file.type.startsWith("video/") ? (
+        <video ref={video} className="h-full w-full object-cover opacity-50" muted />
+      ) : (
+        // eslint-disable-next-line @next/next/no-img-element -- local object URL preview, not a remote asset
+        <img ref={img} alt="" className="h-full w-full object-cover opacity-50" />
+      )}
+      {job.state === "failed" ? (
+        <p className="absolute inset-x-0 bottom-0 bg-error-600/90 p-1 text-[10px] text-white">{job.note ?? "Not uploaded"}</p>
+      ) : (
+        <ProgressOverlay progress={job.progress} />
+      )}
+    </div>
+  );
 }
 
 function ProductMediaSection({
@@ -889,9 +909,14 @@ function ProductMediaSection({
   run: (fn: () => Promise<MutationResult>) => void;
   pending: boolean;
 }) {
-  const [displayProgress, setDisplayProgress] = useState<number | null>(null);
-  const [videoProgress, setVideoProgress] = useState<number | null>(null);
-  const [galleryUploads, setGalleryUploads] = useState<GalleryUpload[]>([]);
+  // Uploads go in the background (packages/ui/transfers): the boss can leave
+  // this page; the transfers panel follows them and the page refreshes as each lands.
+  const jobs = useUploads((t) => t.kind === "product-media" && t.productId === product.id);
+  const going = (slot: string) => jobs.find((j) => j.target.kind === "product-media" && j.target.slot === slot && (j.state === "waiting" || j.state === "uploading"));
+  const displayProgress = going("display")?.progress ?? null;
+  const videoProgress = going("preview_video")?.progress ?? null;
+  const galleryUploads = jobs.filter((j) => j.target.kind === "product-media" && j.target.slot === "gallery" && j.state !== "done");
+  const where = `Product: ${product.name}`;
 
   // Hidden inputs whose pickers the Preview panel's Replace buttons open.
   // The visible pickers live inside the Upload panel's UploadRow components.
@@ -909,12 +934,7 @@ function ProductMediaSection({
     ) {
       return;
     }
-    setDisplayProgress(0);
-    run(async () => {
-      const res = await uploadProductMedia(product.id, "display", file, setDisplayProgress);
-      setDisplayProgress(null);
-      return res;
-    });
+    startUploads([{ file, where, target: { kind: "product-media", productId: product.id, slot: "display" } }]);
   }
 
   function uploadVideo(file: File) {
@@ -924,41 +944,12 @@ function ProductMediaSection({
     ) {
       return;
     }
-    setVideoProgress(0);
-    run(async () => {
-      const res = await uploadProductMedia(product.id, "preview_video", file, setVideoProgress);
-      setVideoProgress(null);
-      return res;
-    });
+    startUploads([{ file, where, target: { kind: "product-media", productId: product.id, slot: "preview_video" } }]);
   }
 
-  // One transition uploads the whole batch sequentially (same pattern as
-  // packages/ui/media/AddMediaButton.tsx) — each file gets its own ghost
-  // tile + progress bar in the grid below, and disappears the moment its
-  // own upload finishes rather than waiting for the whole batch.
+  // Each file gets its own faded tile with its progress below, gone once it's in.
   function uploadGalleryFiles(files: FileList | File[]) {
-    const entries: (GalleryUpload & { file: File })[] = Array.from(files).map((file) => ({
-      id: crypto.randomUUID(),
-      file,
-      previewUrl: URL.createObjectURL(file),
-      kind: file.type.startsWith("video/") ? "video" : "photo",
-      progress: 0,
-    }));
-    if (entries.length === 0) return;
-    setGalleryUploads((prev) => [...prev, ...entries]);
-
-    run(async () => {
-      let error: string | null = null;
-      for (const entry of entries) {
-        const res = await uploadProductMedia(product.id, "gallery", entry.file, (p) => {
-          setGalleryUploads((prev) => prev.map((u) => (u.id === entry.id ? { ...u, progress: p } : u)));
-        });
-        setGalleryUploads((prev) => prev.filter((u) => u.id !== entry.id));
-        URL.revokeObjectURL(entry.previewUrl);
-        if (!res.ok) error = res.error;
-      }
-      return error ? { ok: false, error } : { ok: true };
-    });
+    startUploads(Array.from(files).map((file) => ({ file, where, target: { kind: "product-media", productId: product.id, slot: "gallery" } })));
   }
 
   return (
@@ -1035,19 +1026,8 @@ function ProductMediaSection({
               </div>
             ))}
 
-            {galleryUploads.map((u) => (
-              <div
-                key={u.id}
-                className="relative aspect-square overflow-hidden rounded-lg border border-border"
-              >
-                {u.kind === "video" ? (
-                  <video src={u.previewUrl} className="h-full w-full object-cover opacity-50" muted />
-                ) : (
-                  // eslint-disable-next-line @next/next/no-img-element -- local object URL preview, not a remote asset
-                  <img src={u.previewUrl} alt="" className="h-full w-full object-cover opacity-50" />
-                )}
-                <ProgressOverlay progress={u.progress} />
-              </div>
+            {galleryUploads.map((job) => (
+              <GalleryUploadTile key={job.id} job={job} />
             ))}
 
             {product.media.length === 0 && galleryUploads.length === 0 ? (

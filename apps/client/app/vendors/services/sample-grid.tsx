@@ -4,13 +4,11 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
 import { Lightbox } from "@repo/ui/Lightbox";
-import { putSigned } from "@repo/ui/photos/browser";
 import { UploadRow } from "@repo/ui/UploadRow";
-import { UploadThumbs, uploadKey, type UploadThumb } from "@repo/ui/UploadThumbs";
-import { confirmVendorSample, deleteVendorSample, startVendorSampleUpload } from "@repo/lib/vendors/actions";
-import { SAMPLE_EDGE, SAMPLES_PER_SERVICE } from "@repo/lib/vendors/core";
-
-import { shrinkPicture } from "../shrink-picture";
+import { UploadThumbs, type UploadThumb } from "@repo/ui/UploadThumbs";
+import { retryUploads, startUploads, useUploads } from "@repo/ui/transfers/store";
+import { deleteVendorSample } from "@repo/lib/vendors/actions";
+import { SAMPLES_PER_SERVICE } from "@repo/lib/vendors/core";
 import { Button } from "@repo/ui/Button";
 
 /**
@@ -22,45 +20,29 @@ import { Button } from "@repo/ui/Button";
  */
 export function SampleGrid({ offerId, samples }: { offerId: string; samples: { id: string; url: string | null }[] }) {
   const router = useRouter();
-  const [uploads, setUploads] = useState<UploadThumb[]>([]);
   const [viewing, setViewing] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [removing, startRemoving] = useTransition();
+  // Shrunk and sent in the background (packages/ui/transfers): the vendor can
+  // leave the page; the transfers panel follows them.
+  const jobs = useUploads((t) => t.kind === "vendor-sample" && t.offerId === offerId);
+  const uploads: UploadThumb[] = jobs.map((j) => ({
+    key: j.id,
+    file: j.file,
+    state: j.state === "done" ? "done" : j.state === "failed" || j.state === "paused" ? "failed" : "uploading",
+    progress: j.progress,
+    error: j.note,
+  }));
   const busy = uploads.some((u) => u.state === "uploading");
-  const room = SAMPLES_PER_SERVICE - samples.length;
+  const going = jobs.filter((j) => j.state === "waiting" || j.state === "uploading").length;
+  const room = SAMPLES_PER_SERVICE - samples.length - going;
   const shown = samples.flatMap((s) => (s.url ? [{ key: s.id, src: s.url, alt: "A sample of this service" }] : []));
 
-  const update = (key: string, patch: Partial<UploadThumb>) => setUploads((all) => all.map((u) => (u.key === key ? { ...u, ...patch } : u)));
-
-  async function send(item: UploadThumb) {
-    update(item.key, { state: "uploading", progress: 0, error: undefined });
-    try {
-      const blob = await shrinkPicture(item.file, SAMPLE_EDGE);
-      const ticket = await startVendorSampleUpload(offerId);
-      if (!ticket.ok) throw new Error(ticket.error);
-      await putSigned(ticket.data.url, blob, (progress) => update(item.key, { progress }));
-      const done = await confirmVendorSample(offerId, ticket.data.key);
-      if (!done.ok) throw new Error(done.error);
-      update(item.key, { state: "done", progress: 1 });
-    } catch (e) {
-      update(item.key, { state: "failed", error: e instanceof Error ? e.message : "Upload failed." });
-    }
-  }
-
-  async function upload(files: File[]) {
+  function upload(files: File[]) {
     setError(null);
-    const fits = files.slice(0, room);
-    if (files.length > room) setError(`A service shows up to ${SAMPLES_PER_SERVICE} samples: the first ${room} are being added.`);
-    const items: UploadThumb[] = fits.map((file) => ({ key: uploadKey(file), file, state: "uploading", progress: 0 }));
-    setUploads(items);
-    // Three at a time, like album uploads.
-    let next = 0;
-    await Promise.all(
-      Array.from({ length: Math.min(3, items.length) }, async () => {
-        while (next < items.length) await send(items[next++]!);
-      }),
-    );
-    router.refresh();
+    const fits = files.slice(0, Math.max(0, room));
+    if (files.length > fits.length) setError(`A service shows up to ${SAMPLES_PER_SERVICE} samples: the first ${fits.length} are being added.`);
+    startUploads(fits.map((file) => ({ file, where: "Service samples", target: { kind: "vendor-sample", offerId } })));
   }
 
   const progress = busy && uploads.length ? uploads.reduce((sum, u) => sum + (u.state === "uploading" ? (u.progress ?? 0) : 1), 0) / uploads.length : null;
@@ -83,10 +65,7 @@ export function SampleGrid({ offerId, samples }: { offerId: string; samples: { i
       {uploads.length ? (
         <UploadThumbs
           items={uploads}
-          onRetry={(key) => {
-            const item = uploads.find((u) => u.key === key);
-            if (item) void send(item).then(() => router.refresh());
-          }}
+          onRetry={(key) => retryUploads(false, [key])}
         />
       ) : null}
       {error ? <p className="text-sm text-error-600 dark:text-error-400">{error}</p> : null}

@@ -50,7 +50,6 @@ import { formatDay } from "@repo/lib/tenancy/format";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
 type Entry = { kind: "folder"; id: string; name: string; folder: Folder } | { kind: "file"; id: string; name: string; file: FileView };
-type Upload = { name: string; state: "waiting" | "uploading" | "done" | "failed"; progress: number; error?: string };
 type View = "grid" | "list";
 
 /** A task being done in this folder: choosing photos (picks) or giving feedback (comments). */
@@ -424,7 +423,6 @@ export function FileBrowser({
   /** The right-click menu, and whether a long press opened it (it then offers Select). */
   const [menu, setMenu] = useState<{ x: number; y: number; entry: Entry | null; touch?: boolean } | null>(null);
   const [dropOn, setDropOn] = useState<string | null>(null);
-  const [uploads, setUploads] = useState<Upload[]>([]);
   const [uploading, setUploading] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1039,11 +1037,10 @@ export function FileBrowser({
   }
 
   async function uploadMedia(chosen: File[], serviceId: string, albumId: string | null) {
+    // They go in the background, shown in the transfers panel; the page refreshes as each lands.
     setUploading(true);
-    setUploads(chosen.map((f) => ({ name: f.name, state: "waiting", progress: 0 })));
-    const problem = await uploadServiceMedia(serviceId, albumId, chosen, (i, patch) => setUploads((u) => u.map((x, j) => (j === i ? { ...x, ...patch } : x))));
+    const problem = await uploadServiceMedia(serviceId, albumId, chosen);
     if (problem) setError(problem);
-    router.refresh();
     setUploading(false);
   }
 
@@ -1436,27 +1433,6 @@ export function FileBrowser({
       {listing.note ? <p className="text-sm text-muted">{listing.note}</p> : null}
       {listing.packages && mediaFolder ? <PackagesPanel serviceId={mediaFolder.serviceId} packages={listing.packages} /> : null}
       {error ? <p className="text-sm text-error-600 dark:text-error-400">{error}</p> : null}
-
-      {uploads.length > 0 ? (
-        <section aria-label="Uploads" className="space-y-2 rounded-2xl border border-border bg-surface p-3 shadow-theme-xs">
-          {uploads.map((u, i) => (
-            <div key={i} className="space-y-1">
-              <div className="flex items-center justify-between gap-3 text-sm">
-                <span className="truncate">{u.name}</span>
-                <span className={`shrink-0 text-xs ${u.state === "failed" ? "text-error-600 dark:text-error-400" : "text-muted"}`}>
-                  {u.state === "done" ? "Uploaded" : u.state === "failed" ? (u.error ?? "Failed") : u.state === "waiting" ? "Waiting" : `${Math.round(u.progress * 100)}%`}
-                </span>
-              </div>
-              <div className="h-1 overflow-hidden rounded-full bg-background">
-                <div
-                  className={`h-full rounded-full transition-[width] ${u.state === "failed" ? "bg-error-500" : "bg-brand-500"}`}
-                  style={{ width: `${u.state === "done" ? 100 : Math.round(u.progress * 100)}%` }}
-                />
-              </div>
-            </div>
-          ))}
-        </section>
-      ) : null}
 
       {/* The space the items sit in: right-click it for New folder / Upload / View; clicking it clears the selection. */}
       <div
