@@ -61,8 +61,8 @@ export function DayBookBoard({ book, timeZone }: { book: DayBook; timeZone: stri
   const late = book.lines.filter((l) => l.late);
   const unset = book.accounts.filter((a) => a.opening === null);
   const isToday = book.day === book.today;
-  // Only days after the last close can be closed, and only once every account has a balance.
-  const canClose = !book.close && unset.length === 0 && (book.lastClosedDay === null || book.day > book.lastClosedDay);
+  // Only today, from 8 pm, and only once every account has a balance; a day left open closes by itself at midnight.
+  const canClose = !book.close && unset.length === 0 && book.closingOpen;
   const open = (day: string) => router.push(day === book.today ? "?" : `?day=${day}`);
 
   return (
@@ -142,8 +142,16 @@ export function DayBookBoard({ book, timeZone }: { book: DayBook; timeZone: stri
         </Card>
       ) : null}
 
+      {!book.close && !canClose && unset.length === 0 ? (
+        <p className="text-sm text-muted">
+          {isToday
+            ? "You can close today from 8 pm to midnight. If nobody does, it closes by itself at midnight with nothing counted."
+            : "This day closes by itself in a minute or two, with nothing counted."}
+        </p>
+      ) : null}
+
       <div className="flex flex-wrap items-center gap-2">
-        {!book.close && canClose ? <Button onClick={() => setSheet("close")}>Close {isToday ? "today" : "this day"}</Button> : null}
+        {canClose ? <Button onClick={() => setSheet("close")}>Close today</Button> : null}
         <Button variant="secondary" onClick={() => setSheet("move")}>
           Move money
         </Button>

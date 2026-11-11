@@ -101,14 +101,17 @@ export interface DayLine {
   late: boolean;
 }
 
+/** A day is closed by hand on the day itself from this hour (local) to midnight; money_close_day checks it too. */
+export const CLOSE_FROM_HOUR = 20;
+
 export interface DayBook {
   day: string;
   today: string;
+  /** Today, from CLOSE_FROM_HOUR: the only time a day can be closed by hand. */
+  closingOpen: boolean;
   accounts: DayAccount[];
   lines: DayLine[];
   close: DayClose | null;
-  /** The last day closed: days up to it can't be closed any more. */
-  lastClosedDay: string | null;
 }
 
 /**
