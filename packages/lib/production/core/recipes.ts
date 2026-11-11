@@ -188,17 +188,6 @@ export function isPhotoBook(categoryName: string): boolean {
   return same(categoryName, "photo books");
 }
 
-/** The most sheets a photo book may have, whatever its size (owner, 2026-11-11). */
-export const MAX_PHOTO_BOOK_SHEETS = 10;
-
-/** Why an item's details can't be ordered: a photo book past the most sheets; null when fine. */
-export function tooManySheets(categoryName: string, details: Record<string, string | number>): string | null {
-  if (!isPhotoBook(categoryName)) return null;
-  const name = sheetsDetail(Object.keys(details));
-  const sheets = name ? detailAmount(details, name) : 0;
-  return sheets > MAX_PHOTO_BOOK_SHEETS ? `A photo book has at most ${MAX_PHOTO_BOOK_SHEETS} sheets (this one has ${sheets}). For more photos, order more than one book.` : null;
-}
-
 /** A price from the margin on the whole book: the base reaches it with the add-ons' prices, rounded up to the next 500, never below 0. */
 export function priceFromMargin(cost: number, margin: number, addOnPrice: number): number {
   const base = Math.max(0, Math.ceil((cost / (1 - margin) - addOnPrice) / 500) * 500);
