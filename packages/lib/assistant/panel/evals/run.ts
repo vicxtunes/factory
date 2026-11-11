@@ -446,6 +446,16 @@ const SCENARIOS: Scenario[] = [
     checks: [says(/8x8/, "recommend the 8x8"), says(/80,?000/, "price 10 sheets at UGX 80,000"), says(/120,?000/, "price 15 sheets at UGX 120,000"), neverSays(/12x12/, "pushes the biggest book"), notCalled("place_order")],
   },
   {
+    name: "Photo book, 8 photos asked as 5 sheets: never under 10 sheets",
+    person: sarah,
+    payer: { type: "client", id: sarah.id },
+    page: { path: "/", title: "Dashboard", links: clientLinks },
+    tools: () => clientToolbox(sarah),
+    fixtures: { get_catalog: bookCatalog },
+    messages: [{ role: "user", content: "I only have 8 photos, can I get an 8x8 photobook with 5 sheets? how much" }],
+    checks: [says(/\b10 sheets/, "say 10 sheets is the least"), says(/80,?000/, "price 10 sheets at UGX 80,000"), neverSays(/40,?000/, "prices 5 sheets"), notCalled("place_order")],
+  },
+  {
     name: "Photo book on a limited budget: it asks the budget before recommending",
     person: sarah,
     payer: { type: "client", id: sarah.id },

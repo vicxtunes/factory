@@ -16,6 +16,7 @@ import { payFirstPercent } from "@repo/lib/agents/server";
 import { buildAndInsertOrder } from "@repo/lib/orders/create";
 import { receiveOrder } from "@repo/lib/orders/receive";
 import { recipeListPrice } from "@repo/lib/production/pricing";
+import { photoBookSheetsProblem } from "@repo/lib/production/core/recipes";
 import { notifyActor } from "@repo/lib/push/send";
 import { MEDIA_BUCKET } from "@repo/lib/storage/client";
 import { createAdminClient } from "@repo/lib/supabase/admin";
@@ -136,6 +137,9 @@ export async function checkOrderItems(
     const { data: defs } = await db.from("category_attributes").select("name, required").eq("category_id", product.category_id);
     const missing = (defs ?? []).filter((d) => d.required && !item.attributes[d.name]?.trim()).map((d) => d.name);
     if (missing.length) return { ok: false, refusal: `Refused: ${product.name} still needs: ${missing.join(", ")}.` };
+    const { data: category } = await db.from("product_categories").select("name").eq("id", product.category_id).maybeSingle();
+    const sheetsError = photoBookSheetsProblem(category?.name ?? "", item.attributes);
+    if (sheetsError) return { ok: false, refusal: `Refused: ${sheetsError} Tell them and offer a number of sheets that fits.` };
 
     const unit = (variant?.price ?? product.price) ?? (await recipeListPrice(product.id, variant?.id ?? null, item.attributes));
     // The running offer, decided by the database as it will be on the order and its invoice.
