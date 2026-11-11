@@ -7,7 +7,7 @@ import { AppError } from "@repo/lib/kernel/core";
 import { createAdminClient } from "@repo/lib/supabase/admin";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
-import { DAY_CLOSED_MESSAGE, type DayAccount, type DayBook, type DayLineKind, type OtherMoneyLine, type OtherMoneyLineKind } from "./model";
+import { CLOSE_FROM_HOUR, DAY_CLOSED_MESSAGE, type DayAccount, type DayBook, type DayLineKind, type OtherMoneyLine, type OtherMoneyLineKind } from "./model";
 import type { CloseDayInput, MoneyMoveInput, OtherMoneyInput } from "./schema";
 
 const REFUSALS: Record<string, string> = {
@@ -15,7 +15,7 @@ const REFUSALS: Record<string, string> = {
   bad_amount: "Enter an amount of zero or more.",
   bad_account: "That account doesn't exist.",
   opening_set: "That account's opening balance was already set. If it was wrong, the difference shows at the next close.",
-  future_day: "That day hasn't happened yet.",
+  closing_window: "A day can be closed only on the day itself, from 8 pm to midnight. A day nobody closes closes by itself at midnight.",
   already_closed: "This day or a later one is already closed, so it can't be closed now.",
   opening_missing: "Set the opening balance of every account before closing a day.",
   count_cash: "Enter the cash you counted.",
@@ -158,21 +158,20 @@ const numberOrNull = (v: number | string | null) => (v === null ? null : Number(
 /** Everything Accounts → Today shows for one day. */
 export async function dayBook(scope: TenantScope, day: string): Promise<DayBook> {
   const db = createAdminClient();
-  const [balances, lines, last] = await Promise.all([
+  const [balances, lines] = await Promise.all([
     db.rpc("money_day_balances", { p_day: day }),
     db.from("money_day_lines").select("*").eq("tenant_id", scope.tenantId).eq("day", day).order("at").returns<LineRow[]>(),
-    db.from("day_closes").select("day").eq("tenant_id", scope.tenantId).order("day", { ascending: false }).limit(1).maybeSingle<{ day: string }>(),
   ]);
   if (balances.error) fail(balances.error);
   if (lines.error) fail(lines.error);
-  if (last.error) fail(last.error);
 
   const rows = (balances.data ?? []) as BalanceRow[];
   const closed = rows.find((r) => r.closed_at);
+  const today = localDate(new Date(), scope.timeZone);
   return {
     day,
-    today: localDate(new Date(), scope.timeZone),
-    lastClosedDay: last.data?.day ?? null,
+    today,
+    closingOpen: day === today && localHour(new Date(), scope.timeZone) >= CLOSE_FROM_HOUR,
     close: closed ? { closedAt: closed.closed_at!, closedBy: closed.closed_by ?? "", note: closed.close_note } : null,
     accounts: rows.map((r) => ({
       id: r.money_account_id,
@@ -227,6 +226,15 @@ export async function closeDay(input: CloseDayInput, actor: { id: string; name: 
   });
   if (error) fail(error);
 }
+
+/** Closes every past day nobody closed, with nothing counted (see money_close_past_days). */
+export async function closePastDays(): Promise<void> {
+  const { error } = await createAdminClient().rpc("money_close_past_days");
+  if (error) fail(error);
+}
+
+const localHour = (now: Date, timeZone: string) =>
+  Number(new Intl.DateTimeFormat("en-GB", { hour: "numeric", hourCycle: "h23", timeZone }).format(now));
 
 export async function moveMoney(input: MoneyMoveInput, actor: { id: string; name: string }): Promise<void> {
   const { error } = await createAdminClient().rpc("money_move", {

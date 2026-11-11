@@ -6,4 +6,5 @@ import "server-only";
 export { handleWebhook as handleHivepayWebhook, reconcileWaiting as reconcileWaitingHivepay } from "./server/mobile-money";
 export { reconcileAgentPayouts } from "./server/agent";
 export { reconcileExpensePayouts } from "@repo/lib/books/payouts-server";
+export { closePastDays } from "@repo/lib/books/server";
 export { sendDailyReport as sendDailyMoneyReport, sendExpenseReminder, sendLateMoneyNote, watchMoney } from "./server/watch";
