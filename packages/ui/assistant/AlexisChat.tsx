@@ -8,7 +8,7 @@ import { takeLines } from "@repo/lib/assistant/panel/lines";
 import { agreeToAlexisTerms, alexisServiceMedia, forgetAlexisMemory, openAlexis, openAlexisChat, searchAlexisChats } from "@repo/lib/assistant/panel/actions";
 import type { ActionCard, AskChoice, ChatSummary, DecideResult, PanelMessage, PanelState, SendResult, UsageView } from "@repo/lib/assistant/panel/server";
 import type { GuideStep, PageLink } from "@repo/lib/assistant/panel/toolbox";
-import { uploadFileToStorage } from "@repo/lib/storage/upload-client";
+import { retryUploads, startUploads, useTransfers, whenUploaded } from "@repo/ui/transfers/store";
 
 import { Button } from "../Button";
 import { Lightbox } from "../Lightbox";
@@ -17,7 +17,7 @@ import { AddMediaButton } from "../media/AddMediaButton";
 import { ServiceMediaPanel } from "../photos/ServiceMediaPanel";
 import { LogoUploader } from "../studio-access/LogoUploader";
 import { Spinner } from "../Spinner";
-import { UploadThumbs, uploadKey, type UploadThumb } from "../UploadThumbs";
+import { UploadThumbs, type UploadThumb } from "../UploadThumbs";
 
 // The pieces of Alexis shared by the side panel (AlexisPanel) and the full
 // page (AlexisPage): the chat state, messages with their cards, the message
@@ -223,36 +223,29 @@ const STATUS_WORDS: Record<ActionCard["status"], string> = {
   cancelled: "Cancelled",
 };
 
-/** After a confirmed "add files" card: the attached files upload here, or (without them, after a reload) the item's own Add photos. */
+/** After a confirmed "add files" card: the attached files upload in the background (packages/ui/transfers), or (without them, after a reload) the item's own Add photos. */
 function CardUpload({ itemId, files, onDone }: { itemId: string; files: File[] | undefined; onDone: () => void }) {
-  const [items, setItems] = useState<UploadThumb[]>(() => (files ?? []).map((file) => ({ key: uploadKey(file), file, state: "uploading" as const, progress: 0 })));
+  const [ids, setIds] = useState<string[]>([]);
   const started = useRef(false);
   const router = useRouter();
+  const all = useTransfers((s) => s.uploads);
+  const items: UploadThumb[] = ids.flatMap((id) => {
+    const j = all.find((u) => u.id === id);
+    return j ? [{ key: j.id, file: j.file, state: j.state === "done" ? "done" : j.state === "failed" || j.state === "paused" ? "failed" : "uploading", progress: j.progress, error: j.note }] : [];
+  });
 
   useEffect(() => {
     if (started.current || !files?.length) return;
     started.current = true;
-    const update = (key: string, p: Partial<UploadThumb>) => setItems((prev) => prev.map((i) => (i.key === key ? { ...i, ...p } : i)));
-    void (async () => {
-      let all = true;
-      for (const file of files) {
-        const key = uploadKey(file);
-        const res = await uploadFileToStorage(itemId, file, (progress) => update(key, { progress }));
-        update(key, res.ok ? { state: "done", progress: 1 } : { state: "failed", error: res.error });
-        all &&= res.ok;
-      }
-      // Every file in: the order goes on (confirmed and invoiced when it can be), and Alexis says so.
-      if (all) onDone();
-      else router.refresh();
-    })();
+    const started_ = startUploads(files.map((file) => ({ file, target: { kind: "order-item", orderItemId: itemId }, where: "Order item" })));
+    setIds(started_);
+    // Every file in: the order goes on (confirmed and invoiced when it can be), and Alexis says so.
+    void whenUploaded(started_).then(({ failed }) => (failed ? router.refresh() : onDone()));
   }, [files, itemId, router, onDone]);
 
-  async function retry(key: string) {
-    const item = items.find((i) => i.key === key);
-    if (!item) return;
-    setItems((prev) => prev.map((i) => (i.key === key ? { ...i, state: "uploading", progress: 0, error: undefined } : i)));
-    const res = await uploadFileToStorage(itemId, item.file, (progress) => setItems((prev) => prev.map((i) => (i.key === key ? { ...i, progress } : i))));
-    setItems((prev) => prev.map((i) => (i.key === key ? { ...i, ...(res.ok ? { state: "done" as const, progress: 1 } : { state: "failed" as const, error: res.error }) } : i)));
+  function retry(key: string) {
+    retryUploads(false, [key]);
+    void whenUploaded(ids).then(({ failed }) => !failed && onDone());
   }
 
   if (!files?.length) {

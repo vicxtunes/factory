@@ -39,6 +39,12 @@ deploy() {
     const env = { ...process.env };
     for (const line of fs.readFileSync(process.argv[1], "utf8").split("\n")) { const i = line.indexOf("="); if (i > 0) env[line.slice(0, i)] = line.slice(i + 1); }
     delete env.PORT; delete env.HOSTNAME;
+    // Each release has its own id: a page from an older one reloads instead of
+    // calling code that is gone (Next deploymentId). The actions key
+    // (NEXT_SERVER_ACTIONS_ENCRYPTION_KEY, in the server settings) stays the
+    // same, so unchanged actions keep their ids across releases.
+    env.NEXT_DEPLOYMENT_ID = process.argv[2] + "-" + new Date().toISOString().replace(/\D/g, "").slice(0, 14);
+    if (!env.NEXT_SERVER_ACTIONS_ENCRYPTION_KEY) console.error("Warning: no NEXT_SERVER_ACTIONS_ENCRYPTION_KEY in the server settings: every action gets a new id this release.");
     process.exit(spawnSync("npm", ["run", "build:" + process.argv[2]], { env, stdio: "inherit" }).status ?? 1);
   ' "$WORK/$app.env" "$app") > "$WORK/build.log" 2>&1 || { tail -30 "$WORK/build.log"; exit 1; }
 

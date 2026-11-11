@@ -5,11 +5,11 @@ import { useState, useTransition } from "react";
 
 import { Button } from "@repo/ui/Button";
 import { UploadRow } from "@repo/ui/UploadRow";
-import { confirmVideoUpload, openServiceGallery, removeServiceVideo, startVideoUpload } from "@repo/lib/photos/actions";
+import { openServiceGallery, removeServiceVideo } from "@repo/lib/photos/actions";
 import { formatBytes, MAX_VIDEO_BYTES, VIDEO_TYPES, type AlbumView, type PhotoView, type Usage, type VideoContentType } from "@repo/lib/photos/core";
 
 import { ManagePhotos } from "./AlbumControls";
-import { putSigned } from "./browser";
+import { startUploads, useUploads } from "../transfers/store";
 import { PhotoUploader } from "./PhotoUploader";
 import { UsageBar } from "./UsageBar";
 
@@ -18,30 +18,22 @@ const isVideoType = (type: string): type is VideoContentType => type in VIDEO_TY
 /** The preview video: upload (or replace) one file, with progress, or remove it. */
 function PreviewVideo({ album }: { album: AlbumView }) {
   const router = useRouter();
-  const [progress, setProgress] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  // In the background (packages/ui/transfers): the page refreshes once it's in.
+  const jobs = useUploads((t) => t.kind === "album-video" && t.albumId === album.id);
+  const going = jobs.find((j) => j.state === "waiting" || j.state === "uploading");
+  const failed = [...jobs].reverse().find((j) => j.state === "failed");
+  const progress = going ? going.progress : null;
   const busy = progress != null || pending;
 
-  async function upload(files: FileList) {
+  function upload(files: FileList) {
     const file = files[0];
     setError(null);
     if (!file) return;
     if (!isVideoType(file.type)) return setError("Choose an MP4, WebM or MOV video.");
     if (file.size > MAX_VIDEO_BYTES) return setError(`That video is ${formatBytes(file.size)}. Choose one under ${formatBytes(MAX_VIDEO_BYTES)}.`);
-    setProgress(0);
-    try {
-      const ticket = await startVideoUpload({ albumId: album.id, bytes: file.size, contentType: file.type });
-      if (!ticket.ok) return setError(ticket.error);
-      await putSigned(ticket.data.url, file, setProgress, file.type);
-      const done = await confirmVideoUpload({ albumId: album.id, videoId: ticket.data.videoId, contentType: file.type });
-      if (!done.ok) return setError(done.error);
-      router.refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Upload failed.");
-    } finally {
-      setProgress(null);
-    }
+    startUploads([{ file, where: "Preview video", target: { kind: "album-video", albumId: album.id } }]);
   }
 
   function remove() {
@@ -75,7 +67,7 @@ function PreviewVideo({ album }: { album: AlbumView }) {
         progress={progress}
         onFiles={upload}
       />
-      {error ? <p className="text-sm text-error-600 dark:text-error-400">{error}</p> : null}
+      {error || (failed && !going) ? <p className="text-sm text-error-600 dark:text-error-400">{error ?? failed?.note}</p> : null}
     </div>
   );
 }

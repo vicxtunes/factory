@@ -1,18 +1,18 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 
 import { Button } from "@repo/ui/Button";
 import { UploadRow } from "@repo/ui/UploadRow";
-import { UploadThumbs, uploadKey, type UploadThumb } from "@repo/ui/UploadThumbs";
+import { UploadThumbs, type UploadThumb } from "@repo/ui/UploadThumbs";
 import { addMediaLink } from "@repo/lib/storage/actions";
-import { uploadFileToStorage } from "@repo/lib/storage/upload-client";
-import { enqueueUpload, pendingUploadsFor, QUEUE_CHANGED_EVENT } from "@repo/lib/offline-queue/enqueue";
+import { retryUploads, startUploads, useUploads, whenUploaded } from "@repo/ui/transfers/store";
 
 // Lets a signed-in user (dashboard order entry, worker, or designer) attach
 // more photos — or paste a link (Drive, Dropbox, WeTransfer, etc.) — to an
-// existing order item after the fact. Reuses the same direct-to-Storage
-// upload path as order entry, so a failed upload there isn't a dead end.
+// existing order item after the fact. The files upload in the background
+// (packages/ui/transfers): the person can close this and carry on; the
+// transfers panel follows them, and they're kept on the device until they're in.
 export function AddMediaButton({
   orderItemId,
   onUploaded,
@@ -24,64 +24,26 @@ export function AddMediaButton({
   const [status, setStatus] = useState<string | null>(null);
   const [linkOpen, setLinkOpen] = useState(false);
   const [link, setLink] = useState("");
-  const [pendingUploads, setPendingUploads] = useState(0);
-  const [items, setItems] = useState<UploadThumb[]>([]);
-
-  useEffect(() => {
-    const refresh = () => pendingUploadsFor(orderItemId).then(setPendingUploads);
-    refresh();
-    window.addEventListener(QUEUE_CHANGED_EVENT, refresh);
-    return () => window.removeEventListener(QUEUE_CHANGED_EVENT, refresh);
-  }, [orderItemId]);
-
-  const update = (key: string, patch: Partial<UploadThumb>) =>
-    setItems((prev) => prev.map((i) => (i.key === key ? { ...i, ...patch } : i)));
-
-  // One file: upload with progress, or queue it when the connection's gone.
-  // Returns false only for a real failure (shown on its thumbnail).
-  async function uploadOne(key: string, file: File): Promise<boolean> {
-    // Skip the request entirely when we already know we're offline —
-    // avoids a doomed round trip before falling back to the queue.
-    if (!navigator.onLine) {
-      await enqueueUpload(orderItemId, file);
-      setItems((prev) => prev.filter((i) => i.key !== key)); // the queued line below covers it
-      return true;
-    }
-    update(key, { state: "uploading", progress: 0, error: undefined });
-    const res = await uploadFileToStorage(orderItemId, file, (progress) => update(key, { progress }));
-    if (res.ok) {
-      update(key, { state: "done", progress: 1 });
-      return true;
-    }
-    // Connectivity dropped mid-upload (still offline after the attempt) —
-    // queue it. Otherwise it's a genuine error (bad file, server rejection)
-    // and should surface, not silently retry forever.
-    if (!navigator.onLine) {
-      await enqueueUpload(orderItemId, file);
-      setItems((prev) => prev.filter((i) => i.key !== key));
-      return true;
-    }
-    update(key, { state: "failed", error: res.error });
-    return false;
-  }
+  const jobs = useUploads((t) => t.kind === "order-item" && t.orderItemId === orderItemId);
+  const items: UploadThumb[] = jobs.map((j) => ({
+    key: j.id,
+    file: j.file,
+    state: j.state === "done" ? "done" : j.state === "failed" || j.state === "paused" ? "failed" : "uploading",
+    progress: j.progress,
+    error: j.note,
+  }));
+  const waiting = jobs.filter((j) => j.state === "failed" && j.retryable).length;
 
   function handleFiles(files: FileList | null) {
     if (!files || files.length === 0) return;
-    const added = Array.from(files).map((file) => ({ key: `${uploadKey(file)}-${Date.now()}`, file, state: "uploading" as const, progress: 0 }));
-    setItems((prev) => [...prev, ...added]);
     setStatus(null);
-    startTransition(async () => {
-      for (const { key, file } of added) await uploadOne(key, file);
-      onUploaded?.();
-    });
+    const ids = startUploads(Array.from(files).map((file) => ({ file, target: { kind: "order-item", orderItemId }, where: "Order item" })));
+    void whenUploaded(ids).then(({ done }) => done && onUploaded?.());
   }
 
   function handleRetry(key: string) {
-    const item = items.find((i) => i.key === key);
-    if (!item) return;
-    startTransition(async () => {
-      if (await uploadOne(key, item.file)) onUploaded?.();
-    });
+    retryUploads(false, [key]);
+    void whenUploaded([key]).then(({ done }) => done && onUploaded?.());
   }
 
   function handleAddLink() {
@@ -111,7 +73,7 @@ export function AddMediaButton({
         disabled={pending}
         onFiles={handleFiles}
       />
-      <UploadThumbs items={items} onRetry={pending ? undefined : handleRetry} />
+      <UploadThumbs items={items} onRetry={handleRetry} />
 
       <button
         type="button"
@@ -145,9 +107,9 @@ export function AddMediaButton({
       ) : null}
 
       {status ? <span className="text-xs text-muted">{status}</span> : null}
-      {pendingUploads > 0 ? (
+      {waiting > 0 ? (
         <span className="text-xs text-[var(--urgent)]">
-          {pendingUploads} upload{pendingUploads === 1 ? "" : "s"} queued — sends automatically when back online.
+          {waiting} upload{waiting === 1 ? "" : "s"} waiting for the connection — they go again by themselves when it&apos;s back.
         </span>
       ) : null}
     </div>

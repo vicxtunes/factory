@@ -10,7 +10,7 @@ import { Spinner } from "@repo/ui/Spinner";
 import { getCurrentActor } from "@repo/lib/notes/actions";
 import { deleteOrderItemMedia, getMyMediaDownloads, markMediaDownloaded, updateMediaLink } from "@repo/lib/storage/actions";
 import { canOptimizeImage } from "@repo/lib/storage/client";
-import { replaceFileInStorage } from "@repo/lib/storage/upload-client";
+import { startUploads, whenUploaded } from "@repo/ui/transfers/store";
 import type { OrderItemMedia } from "@repo/lib/types";
 
 import { CheckCircleIcon, CheckIcon, CloudDownloadIcon, DocumentIcon, DownloadIcon, ExternalIcon, LinkIcon } from "./icons";
@@ -249,13 +249,15 @@ function useMediaActions(file: OrderItemMedia, actor: Viewer | null, onChanged?:
     else onChanged?.();
   }
 
+  // In the background (packages/ui/transfers): the transfers panel shows it.
   async function handleReplaceFile(f: File) {
     setBusy(true);
     setError(null);
-    const res = await replaceFileInStorage(file.id, file.order_item_id, f);
+    const [id] = startUploads([{ file: f, target: { kind: "order-item-replace", orderItemId: file.order_item_id, mediaId: file.id }, where: `Replacing ${resolveDisplayName(file)}` }]);
+    const { done } = await whenUploaded([id]);
     setBusy(false);
-    if (!res.ok) setError(res.error);
-    else onChanged?.();
+    if (done) onChanged?.();
+    else setError("Not replaced yet: see the uploads panel.");
   }
 
   async function saveLink() {

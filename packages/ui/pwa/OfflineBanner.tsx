@@ -1,19 +1,15 @@
 "use client";
 
-import { useEffect } from "react";
 import { useOffline } from "next/offline";
-
-import { startOfflineQueueFlush } from "@repo/lib/offline-queue/flush";
 
 // Mounted once in the root layout so it's visible on every surface
 // (dashboard, factory, graphics, display). Server Actions and navigations
 // started while offline stay pending and retry automatically once the
 // connection returns (see experimental.useOffline in next.config.ts) — this
-// banner just explains why things look stuck. Also the one place the
-// offline media-upload queue's flush listener gets started, since it needs
-// to run regardless of which surface the user is on.
+// banner just explains why things look stuck. Uploads wait for the connection
+// on their own (packages/ui/transfers).
 //
-// `showBanner={false}` keeps the queue flush but hides the banner — the
+// `showBanner={false}` hides the banner — the
 // client portal uses it: its connectivity reading flickers true/false while
 // the client is actually online (their network conditions and the extra
 // Realtime/notification-polling traffic that app carries make useOffline's
@@ -21,10 +17,6 @@ import { startOfflineQueueFlush } from "@repo/lib/offline-queue/flush";
 // see is working does more harm than good.
 export function OfflineBanner({ showBanner = true }: { showBanner?: boolean }) {
   const isOffline = useOffline();
-
-  useEffect(() => {
-    startOfflineQueueFlush();
-  }, []);
 
   if (!isOffline || !showBanner) return null;
 

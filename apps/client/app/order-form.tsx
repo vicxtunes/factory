@@ -21,8 +21,7 @@ import { isPhotobookCategory } from "@repo/lib/orders/photobook";
 import type { OrderItemInput } from "@repo/lib/orders/types";
 import { attachDriveToItem } from "@repo/lib/storage/actions";
 import { canOptimizeImage } from "@repo/lib/storage/client";
-import { enqueueUpload, flushQueuedUploads } from "@repo/lib/offline-queue/enqueue";
-import { uploadFileToStorage } from "@repo/lib/storage/upload-client";
+import { startUploads } from "@repo/ui/transfers/store";
 import type { Currency, OrderType, Product, ProductCategory } from "@repo/lib/types";
 
 import type { AgentPlaceResult } from "@repo/lib/agents/actions";
@@ -235,22 +234,15 @@ export function OrderForm({
       }
 
       // Staged files have no upload target until the items actually exist.
-      // Now that they do, each photo is kept on this device (offline queue)
-      // and uploaded in the background, so the order shows as placed at once
-      // and a dropped connection never loses a photo.
+      // Now that they do, each photo uploads in the background
+      // (packages/ui/transfers), kept on this device until it's in, so the
+      // order shows as placed at once and a dropped connection never loses one.
       const warnings: string[] = [...res.warnings];
       const queued: { id: string; name: string }[] = [];
       for (const { formIndex, itemId } of res.items) {
-        for (const file of items[formIndex]?.files ?? []) {
-          try {
-            queued.push({ id: await enqueueUpload(itemId, file), name: file.name });
-          } catch {
-            // No storage on this device (private browsing): upload it now instead.
-            setUploadStatus(`Uploading "${file.name}"…`);
-            const uploadRes = await uploadFileToStorage(itemId, file, (p) => setUploadStatus(`Uploading "${file.name}" — ${Math.round(p * 100)}%`));
-            if (!uploadRes.ok) warnings.push(`${uploadRes.error} Add it again on the order.`);
-          }
-        }
+        const files = items[formIndex]?.files ?? [];
+        const ids = startUploads(files.map((file) => ({ file, target: { kind: "order-item", orderItemId: itemId }, where: `Order ${res.orderNo}` })));
+        ids.forEach((id, i) => queued.push({ id, name: files[i].name }));
         const fromDrive = items[formIndex]?.driveFiles ?? [];
         if (fromDrive.length) {
           setUploadStatus("Attaching from your Drive…");
@@ -262,7 +254,6 @@ export function OrderForm({
         }
       }
       setQueuedUploads(queued);
-      if (queued.length) void flushQueuedUploads();
       setUploadStatus(null);
       setUploadWarnings(warnings);
 
