@@ -103,7 +103,7 @@ export function ChatApp({
   );
 
   return (
-    <div className={CHAT_FRAME_CLASS}>
+    <div data-chat-frame className={CHAT_FRAME_CLASS}>
       <aside
         className={`w-full shrink-0 border-r border-border md:block md:w-80 lg:w-96 ${activeId ? "hidden" : "block"}`}
       >

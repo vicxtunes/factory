@@ -395,6 +395,13 @@ html {
   textarea {
     font-size: 16px;
   }
+  /* Chat covers the whole phone screen (CHAT_FRAME_CLASS) and scrolls inside
+     itself; the page under it must not scroll or bounce. */
+  html:has([data-chat-frame]),
+  html:has([data-chat-frame]) body {
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
 }
 
 /* Scrollbars: thin and quiet, in the brand's orange — a soft thumb on no

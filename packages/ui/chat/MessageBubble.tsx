@@ -188,7 +188,7 @@ export function MessageBubble({
                   }`}
                 >
                   <span className="font-medium">{message.replyTo.senderName ?? "Unknown"}</span>
-                  <p className="line-clamp-2">{message.replyTo.body || "Attachment / deleted message"}</p>
+                  <p className="line-clamp-2 [overflow-wrap:anywhere]">{message.replyTo.body || "Attachment / deleted message"}</p>
                 </div>
               ) : null}
               {message.attachments.length ? (
@@ -211,7 +211,7 @@ export function MessageBubble({
               {message.body ? (
                 <Linkify
                   text={message.body}
-                  className={`whitespace-pre-wrap break-words ${message.attachments.length ? "mt-1.5" : ""} ${
+                  className={`whitespace-pre-wrap [overflow-wrap:anywhere] ${message.attachments.length ? "mt-1.5" : ""} ${
                     mine ? "[&_a]:!text-white" : ""
                   }`}
                 />
