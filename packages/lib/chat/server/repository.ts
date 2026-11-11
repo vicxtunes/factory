@@ -267,7 +267,7 @@ export async function getParticipant(conversationId: string, p: ParticipantRef):
 export async function listActiveParticipants(conversationIds: string[]): Promise<ParticipantRow[]> {
   if (!conversationIds.length) return [];
   const { data, error } = await selectByIds<ParticipantRow>(conversationIds, (batch) =>
-    db().from("chat_participants").select("*").in("conversation_id", batch).is("left_at", null).order("joined_at").order("id"),
+    db().from("chat_participants").select("*").in("conversation_id", batch).is("left_at", null).order("joined_at").order("conversation_id").order("participant_type").order("participant_id"),
   );
   if (error) fail("listActiveParticipants", error);
   // Batches come back one after another; keep the joining order across them.
