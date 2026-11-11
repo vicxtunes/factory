@@ -10,7 +10,7 @@ import { SUPPORT_OWNER_EMAIL } from "@repo/lib/support/constants";
 import { isManagerRole, type AppRole } from "@repo/lib/types";
 import { vendors } from "@repo/lib/vendors/server";
 
-import { costUsd, findModel, type AssistantMode, type TokenUsage } from "../core/rules";
+import { costUsd, findModel, outOfCredit, PANEL_PAUSED_MESSAGE, type AssistantMode, type TokenUsage } from "../core/rules";
 import { askModel } from "../server/providers";
 import { spentToday } from "../server/store";
 import type { AssistantTool } from "../server/tools";
@@ -791,7 +791,7 @@ export async function send(
     }),
   );
 
-  if (!reply) return { ok: false, error: "Sorry, Alexis couldn't answer just now. Try again in a moment." };
+  if (!reply) return { ok: false, error: outOfCredit(failure) ? PANEL_PAUSED_MESSAGE : "Sorry, Alexis couldn't answer just now. Try again in a moment." };
   const shown = toolbox.replyExtras?.() ?? { choices: [], images: [], widgets: [] };
   const widgets = shown.widgets ?? [];
   const extras: MessageExtras | null =
