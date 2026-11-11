@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { canAutoApprove, clientConfirmedAfter, costUsd, everyItemHasPhotos, findModel, mayAlertStaff, mayAnswer, projectMonthTotal, reviewOutcome } from "./rules";
+import { canAutoApprove, clientConfirmedAfter, costUsd, everyItemHasPhotos, findModel, mayAlertStaff, mayAnswer, outOfCredit, projectMonthTotal, reviewOutcome } from "./rules";
 
 describe("assistant rules", () => {
   it("approves only when every line has a price", () => {
@@ -51,5 +51,16 @@ describe("assistant rules", () => {
     assert.equal(costUsd(opus, { input: 1_000_000, output: 0, cacheRead: 0, cacheWrite: 0 }), 4);
     assert.equal(costUsd(findModel("gpt-6.1-terra")!, { input: 0, output: 1_000_000, cacheRead: 0, cacheWrite: 0 }), 5);
     assert.equal(findModel("nope"), null);
+  });
+});
+
+describe("out of AI credit", () => {
+  it("knows OpenAI's and Anthropic's out-of-credit errors, and nothing else", () => {
+    assert.equal(outOfCredit("429 You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/."), true);
+    assert.equal(outOfCredit("429 You exceeded your current quota, please check your plan and billing details."), true);
+    assert.equal(outOfCredit("400 Your credit balance is too low to access the Anthropic API."), true);
+    assert.equal(outOfCredit("429 Rate limit reached for requests"), false);
+    assert.equal(outOfCredit("The AI gave no reply."), false);
+    assert.equal(outOfCredit(null), false);
   });
 });
