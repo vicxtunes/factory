@@ -4,6 +4,7 @@ import "server-only";
 
 import { MARKETING_MEDIA_BUCKET } from "@repo/lib/storage/client";
 import { createAdminClient } from "@repo/lib/supabase/admin";
+import { selectByIds } from "@repo/lib/supabase/by-ids";
 
 import { InvoiceError, throwInvoiceDbError } from "./errors";
 
@@ -99,9 +100,9 @@ export async function listSales(clientId: string | null): Promise<SaleRow[]> {
 
 export async function shareTokens(invoiceIds: string[]): Promise<Record<string, string>> {
   if (!invoiceIds.length) return {};
-  const { data, error } = await createAdminClient().from("invoices").select("id, share_token").in("id", invoiceIds);
+  const { data, error } = await selectByIds(invoiceIds, (batch) => createAdminClient().from("invoices").select("id, share_token").in("id", batch).order("id"));
   if (error) fail(error);
-  return Object.fromEntries((data ?? []).map((i) => [i.id as string, i.share_token as string]));
+  return Object.fromEntries(data.map((i) => [i.id as string, i.share_token as string]));
 }
 
 /** Takes today's turn at reminding this client: false when they've already been reminded today. */

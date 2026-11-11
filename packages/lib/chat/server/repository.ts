@@ -7,6 +7,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { createAdminClient } from "@repo/lib/supabase/admin";
+import { selectByIds } from "@repo/lib/supabase/by-ids";
 
 import type { AttachmentKind, ConversationKind, MessageKind, OrderCardKind, ParticipantRef, ParticipantType } from "../types";
 
@@ -149,7 +150,7 @@ export async function createConversation(
 
 export async function getConversations(ids: string[]): Promise<ConversationRow[]> {
   if (!ids.length) return [];
-  const { data, error } = await db().from("chat_conversations").select("*").in("id", ids);
+  const { data, error } = await selectByIds<ConversationRow>(ids, (batch) => db().from("chat_conversations").select("*").in("id", batch).order("id"));
   if (error) fail("getConversations", error);
   return (data ?? []) as ConversationRow[];
 }
@@ -167,11 +168,9 @@ export interface IssueStateRow {
  */
 export async function getIssueStates(conversationIds: string[]): Promise<IssueStateRow[]> {
   if (!conversationIds.length) return [];
-  const { data, error } = await db()
-    .from("chat_conversations")
-    .select("id, support_reports(id, status, resolved_at)")
-    .in("id", conversationIds)
-    .eq("kind", "issue");
+  const { data, error } = await selectByIds(conversationIds, (batch) =>
+    db().from("chat_conversations").select("id, support_reports(id, status, resolved_at)").in("id", batch).eq("kind", "issue").order("id"),
+  );
   if (error) fail("getIssueStates", error);
   return ((data ?? []) as unknown as { id: string; support_reports: { id: string; status: "open" | "resolved"; resolved_at: string | null } | null }[])
     .filter((r) => r.support_reports)
@@ -208,13 +207,17 @@ export async function updateConversationTitle(id: string, title: string): Promis
 }
 
 export async function listInbox(viewer: ParticipantRef, includeTeam: boolean): Promise<InboxRow[]> {
-  const { data, error } = await db().rpc("chat_inbox", {
-    p_type: viewer.type,
-    p_id: viewer.id,
-    p_include_team: includeTeam,
-  });
-  if (error) fail("listInbox", error);
-  return (data ?? []) as InboxRow[];
+  // The API returns at most 1000 rows a call; staff see every chat, so read
+  // page by page (437 chats on 2026-11-11, ~25 more a day).
+  const rows: InboxRow[] = [];
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await db()
+      .rpc("chat_inbox", { p_type: viewer.type, p_id: viewer.id, p_include_team: includeTeam })
+      .range(from, from + 999);
+    if (error) fail("listInbox", error);
+    rows.push(...((data ?? []) as InboxRow[]));
+    if ((data ?? []).length < 1000) return rows;
+  }
 }
 
 export interface SearchRow {
@@ -263,14 +266,12 @@ export async function getParticipant(conversationId: string, p: ParticipantRef):
 /** Active (not-left) members of one or more conversations. */
 export async function listActiveParticipants(conversationIds: string[]): Promise<ParticipantRow[]> {
   if (!conversationIds.length) return [];
-  const { data, error } = await db()
-    .from("chat_participants")
-    .select("*")
-    .in("conversation_id", conversationIds)
-    .is("left_at", null)
-    .order("joined_at");
+  const { data, error } = await selectByIds<ParticipantRow>(conversationIds, (batch) =>
+    db().from("chat_participants").select("*").in("conversation_id", batch).is("left_at", null).order("joined_at").order("id"),
+  );
   if (error) fail("listActiveParticipants", error);
-  return (data ?? []) as ParticipantRow[];
+  // Batches come back one after another; keep the joining order across them.
+  return data.sort((a, b) => a.joined_at.localeCompare(b.joined_at));
 }
 
 /**
@@ -369,7 +370,7 @@ export async function latestOrderCard(conversationId: string, card: OrderCardKin
 
 export async function getMessagesByIds(ids: string[]): Promise<MessageRow[]> {
   if (!ids.length) return [];
-  const { data, error } = await db().from("chat_messages").select("*").in("id", ids);
+  const { data, error } = await selectByIds<MessageRow>(ids, (batch) => db().from("chat_messages").select("*").in("id", batch).order("id"));
   if (error) fail("getMessagesByIds", error);
   return (data ?? []) as MessageRow[];
 }
@@ -418,9 +419,11 @@ export async function insertAttachments(rows: Omit<AttachmentRow, "id" | "create
 
 export async function listAttachments(messageIds: string[]): Promise<AttachmentRow[]> {
   if (!messageIds.length) return [];
-  const { data, error } = await db().from("chat_attachments").select("*").in("message_id", messageIds).order("created_at");
+  const { data, error } = await selectByIds<AttachmentRow>(messageIds, (batch) =>
+    db().from("chat_attachments").select("*").in("message_id", batch).order("created_at").order("id"),
+  );
   if (error) fail("listAttachments", error);
-  return (data ?? []) as AttachmentRow[];
+  return data.sort((a, b) => a.created_at.localeCompare(b.created_at));
 }
 
 /** Deletes a message's attachment rows and returns their storage paths for cleanup. */

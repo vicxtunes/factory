@@ -6,6 +6,7 @@ import "server-only";
 // this file turns them into names/avatars and answers relationship questions.
 
 import { createAdminClient } from "@repo/lib/supabase/admin";
+import { selectByIds } from "@repo/lib/supabase/by-ids";
 import { mayAnswer } from "@repo/lib/assistant/core/rules";
 import { clientPath, clientUrl } from "@repo/lib/client-portal/paths";
 import { paidByOrders } from "@repo/lib/wallet/orders";
@@ -63,12 +64,12 @@ export async function resolvePeople(refs: ParticipantRef[]): Promise<Map<string,
     [...byType.entries()].map(async ([type, idSet]) => {
       const ids = [...idSet];
       if (type === "dashboard_user") {
-        const { data } = await admin.from("profiles").select("id, full_name, role, avatar_url").in("id", ids);
-        (data ?? []).forEach((row) => add(staffPerson(row)));
+        const { data } = await selectByIds(ids, (batch) => admin.from("profiles").select("id, full_name, role, avatar_url").in("id", batch).order("id"));
+        data.forEach((row) => add(staffPerson(row)));
       } else {
         const table = type === "worker" ? "workers" : type === "designer" ? "designers" : "clients";
-        const { data } = await admin.from(table).select("id, name, avatar_url").in("id", ids);
-        (data ?? []).forEach((row) => add(simplePerson(type, row)));
+        const { data } = await selectByIds(ids, (batch) => admin.from(table).select("id, name, avatar_url").in("id", batch).order("id"));
+        data.forEach((row) => add(simplePerson(type, row)));
       }
     }),
   );
