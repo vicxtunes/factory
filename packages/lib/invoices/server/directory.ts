@@ -9,6 +9,7 @@ import type { DiscountKind, LineDiscountChange, Offer } from "@repo/lib/discount
 import { lineDiscountOf } from "@repo/lib/discounts/core/rules";
 import { catalogListPrice, catalogUnitPrice, estimateUnitPrice, orderAmount } from "@repo/lib/orders/pricing";
 import { createAdminClient } from "@repo/lib/supabase/admin";
+import { selectByIds } from "@repo/lib/supabase/by-ids";
 import type { OrderStage, ProductionStatus } from "@repo/lib/types";
 
 import type { DiscountHistoryEntry, DraftLine, InvoiceLine } from "../types";
@@ -189,17 +190,17 @@ export async function loadOrder(orderId: string): Promise<InvoiceOrder | null> {
 
 export async function loadOrders(orderIds: string[]): Promise<Record<string, InvoiceOrder>> {
   if (!orderIds.length) return {};
-  const { data, error } = await createAdminClient().from("orders").select(SELECT).in("id", orderIds).returns<OrderRow[]>();
+  const { data, error } = await selectByIds<OrderRow>(orderIds, (batch) => createAdminClient().from("orders").select(SELECT).in("id", batch).order("id").returns<OrderRow[]>());
   if (error) throw new Error(error.message);
-  return Object.fromEntries((data ?? []).map((o) => [o.id, toOrder(o)]));
+  return Object.fromEntries(data.map((o) => [o.id, toOrder(o)]));
 }
 
 /** Name and email of each client, for the reminder staff send. */
 export async function loadClientContacts(clientIds: string[]): Promise<Record<string, { name: string; email: string | null }>> {
   if (!clientIds.length) return {};
-  const { data, error } = await createAdminClient().from("clients").select("id, name, email").in("id", clientIds);
+  const { data, error } = await selectByIds(clientIds, (batch) => createAdminClient().from("clients").select("id, name, email").in("id", batch).order("id"));
   if (error) throw new Error(error.message);
-  return Object.fromEntries((data ?? []).map((c) => [c.id as string, { name: c.name as string, email: (c.email as string | null) || null }]));
+  return Object.fromEntries(data.map((c) => [c.id as string, { name: c.name as string, email: (c.email as string | null) || null }]));
 }
 
 /** Every line discount given, changed or removed on the order (from its audit log), oldest first. */

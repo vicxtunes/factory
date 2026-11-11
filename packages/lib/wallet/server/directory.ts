@@ -8,6 +8,7 @@ import { logOrderEvent } from "@repo/lib/audit/log";
 import type { DiscountKind, Offer } from "@repo/lib/discounts/core/model";
 import { orderAmount } from "@repo/lib/orders/pricing";
 import { createAdminClient } from "@repo/lib/supabase/admin";
+import { selectByIds } from "@repo/lib/supabase/by-ids";
 
 import { WalletError } from "./errors";
 import type { WalletActor } from "./identity";
@@ -104,9 +105,9 @@ export async function loadClient(clientId: string): Promise<ClientInfo | null> {
 
 export async function loadClients(clientIds: string[]): Promise<Record<string, ClientInfo>> {
   if (!clientIds.length) return {};
-  const { data, error } = await createAdminClient().from("clients").select("id, name, phone").in("id", clientIds);
+  const { data, error } = await selectByIds(clientIds, (batch) => createAdminClient().from("clients").select("id, name, phone").in("id", batch).order("id"));
   if (error) throw new Error(error.message);
-  return Object.fromEntries((data ?? []).map((c) => [c.id, c as ClientInfo]));
+  return Object.fromEntries(data.map((c) => [c.id, c as ClientInfo]));
 }
 
 /**

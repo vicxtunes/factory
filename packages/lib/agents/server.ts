@@ -14,6 +14,7 @@ import type { OrderItemInput } from "@repo/lib/orders/types";
 import { notifyActor } from "@repo/lib/push/send";
 import { resendMailer } from "@repo/lib/studio-access/adapters/resend/mailer";
 import { createAdminClient } from "@repo/lib/supabase/admin";
+import { selectByIds } from "@repo/lib/supabase/by-ids";
 import type { OrderStage, OrderType, ProductionStatus } from "@repo/lib/types";
 import { paidByOrders } from "@repo/lib/wallet/orders";
 
@@ -327,7 +328,7 @@ export async function agentOrder(agentId: string, orderId: string): Promise<Agen
 /** For staff: among these orders, the agents' own ones that must be part paid before production, with what's paid, the % and the amount needed (null until priced). */
 export async function agentPaymentsFor(orderIds: string[]): Promise<Record<string, { paid: number; percent: number; needed: number | null }>> {
   if (!orderIds.length) return {};
-  const rows = must(await createAdminClient().from("orders").select("id, quoted_price, agent_id, pay_first_percent").in("id", orderIds).eq("placed_by_agent", true).returns<{ id: string; quoted_price: number | string | null; agent_id: string; pay_first_percent: number | null }[]>()) ?? [];
+  const rows = must(await selectByIds(orderIds, (batch) => createAdminClient().from("orders").select("id, quoted_price, agent_id, pay_first_percent").in("id", batch).eq("placed_by_agent", true).order("id").returns<{ id: string; quoted_price: number | string | null; agent_id: string; pay_first_percent: number | null }[]>()));
   const byAgent = new Map(await Promise.all([...new Set(rows.map((r) => r.agent_id))].map(async (a) => [a, await payFirstPercent(a)] as const)));
   const percents = new Map(rows.map((r) => [r.id, r.pay_first_percent ?? byAgent.get(r.agent_id)!]));
   const waiting = rows.filter((r) => percents.get(r.id)! > 0);
@@ -484,7 +485,7 @@ function toAgentClient(r: AgentClientRow, withLogin: Set<string>): AgentClient {
 
 async function clientsWithLogin(clientIds: string[]): Promise<Set<string>> {
   if (!clientIds.length) return new Set();
-  const rows = must(await createAdminClient().from("client_identities").select("client_id").in("client_id", clientIds)) ?? [];
+  const rows = must(await selectByIds(clientIds, (batch) => createAdminClient().from("client_identities").select("client_id").in("client_id", batch).order("client_id")));
   return new Set(rows.map((r) => r.client_id as string));
 }
 
@@ -633,7 +634,7 @@ export async function allAgentClients(): Promise<AgentClientListRow[]> {
         .eq("status", "active")
         .returns<{ client_id: string; agent_id: string; agent: { name: string } | null; client: { name: string; phone: string | null; email: string | null } | null }[]>(),
     ) ?? [];
-  const orders = rows.length ? (must(await db.from("orders").select("client_id").in("client_id", rows.map((r) => r.client_id))) ?? []) : [];
+  const orders = rows.length ? must(await selectByIds(rows.map((r) => r.client_id), (batch) => db.from("orders").select("client_id").in("client_id", batch).order("id"))) : [];
   const count = new Map<string, number>();
   for (const o of orders) count.set(o.client_id as string, (count.get(o.client_id as string) ?? 0) + 1);
   return rows

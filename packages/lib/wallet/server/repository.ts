@@ -8,6 +8,7 @@ import { randomUUID } from "node:crypto";
 // migration), which do their own locking and checks.
 
 import { createAdminClient } from "@repo/lib/supabase/admin";
+import { selectByIds } from "@repo/lib/supabase/by-ids";
 import { resolveTenantScope } from "@repo/lib/tenancy/server/resolve";
 
 import type { MoneyAccount, MoneyAlertKind, MoneySource, PaymentMethod, PaymentStatus, TransactionHistoryKind, WalletCard, WalletEntryKind } from "../types";
@@ -160,8 +161,8 @@ export async function paidByOrder(orderIds: string[]): Promise<Record<string, nu
   if (!orderIds.length) return {};
   const admin = createAdminClient();
   const [ledger, receipts] = await Promise.all([
-    admin.from("wallet_transactions").select("order_id, amount").in("order_id", orderIds),
-    admin.from("order_payment_receipts").select("order_id, amount_applied").in("order_id", orderIds),
+    selectByIds(orderIds, (batch) => admin.from("wallet_transactions").select("order_id, amount").in("order_id", batch).order("id")),
+    selectByIds(orderIds, (batch) => admin.from("order_payment_receipts").select("order_id, amount_applied").in("order_id", batch).order("id")),
   ]);
   if (ledger.error) throwDbError(ledger.error);
   if (receipts.error) throwDbError(receipts.error);
