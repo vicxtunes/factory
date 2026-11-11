@@ -279,7 +279,7 @@ const foundOrder = [{ id: ORDER_ID, order_no: "2026-0662", client_name: "Kato St
 const orderInFull = {
   id: ORDER_ID, order_no: "2026-0662", client_name: "Kato Studios", order_type: "normal", delivery_date: "2026-11-20", stage: "not confirmed yet", approval_status: "pending_review", released_at: null,
   items: [
-    { id: BOOK_ITEM, product: "Photo Book", product_type: "12x12", qty: 1, attributes: { Sheets: "20", Lamination: "Glossy" }, production_status: "pending", list_unit_price: null, worker: null },
+    { id: BOOK_ITEM, product: "Photo Book", product_type: "12x12", qty: 1, attributes: { Sheets: "10", Lamination: "Glossy" }, production_status: "pending", list_unit_price: null, worker: null },
     { id: PRINT_ITEM, product: "Prints", product_type: "A4", qty: 20, attributes: {}, production_status: "pending", list_unit_price: 5000, worker: null },
   ],
   invoice: null,
