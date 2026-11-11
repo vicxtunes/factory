@@ -348,7 +348,7 @@ export function Messages({ alexis, onGuide }: { alexis: Alexis; onGuide: (steps:
         <div key={m.id} className={`flex gap-2 ${m.role === "user" ? "justify-end" : "justify-start"}`}>
           {m.role === "assistant" ? <AlexisMark size="sm" /> : null}
           <div className={`min-w-0 ${m.role === "user" ? "max-w-[85%]" : "max-w-[85%] flex-1 sm:flex-none"}`}>
-            <p className={`rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap ${m.role === "user" ? "bg-brand-500 text-white" : "border border-border bg-surface"}`}>{m.body}</p>
+            <p className={`rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap [overflow-wrap:anywhere] ${m.role === "user" ? "bg-brand-500 text-white" : "border border-border bg-surface"}`}>{m.body}</p>
             {m.files.length ? (
               <p className={`mt-1 text-xs text-muted ${m.role === "user" ? "text-right" : ""}`}>
                 Attached: {m.files.length === 1 ? m.files[0] : `${m.files.length} files`}
@@ -378,7 +378,7 @@ export function Messages({ alexis, onGuide }: { alexis: Alexis; onGuide: (steps:
         <div className="flex gap-2">
           <AlexisMark size="sm" />
           <div className="min-w-0 max-w-[85%]">
-            {alexis.draft?.text ? <p className="rounded-2xl border border-border bg-surface px-3 py-2 text-sm whitespace-pre-wrap">{alexis.draft.text}</p> : null}
+            {alexis.draft?.text ? <p className="rounded-2xl border border-border bg-surface px-3 py-2 text-sm whitespace-pre-wrap [overflow-wrap:anywhere]">{alexis.draft.text}</p> : null}
             <p className="mt-1 inline-flex items-center gap-2 text-xs text-muted">
               <Spinner className="h-3 w-3" /> {alexis.draft?.doing ? `${alexis.draft.doing}…` : alexis.draft?.text ? "Writing…" : "Alexis is thinking…"}
             </p>

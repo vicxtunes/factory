@@ -80,7 +80,7 @@ export function ThreadSkeleton() {
  */
 export function ChatSkeleton() {
   return (
-    <div aria-busy="true" className={CHAT_FRAME_CLASS}>
+    <div data-chat-frame aria-busy="true" className={CHAT_FRAME_CLASS}>
       <span className="sr-only" role="status">
         Loading chat…
       </span>
