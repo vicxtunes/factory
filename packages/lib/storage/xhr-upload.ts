@@ -1,4 +1,4 @@
-export type XhrUploadResult = { ok: true } | { ok: false; error: string };
+export type XhrUploadResult = { ok: true } | { ok: false; error: string; /** HTTP status, when the server answered. */ status?: number };
 
 // Raw XHR PUT to Supabase Storage's signed-upload endpoint, matching
 // exactly what @supabase/storage-js's uploadToSignedUrl sends (same URL
@@ -47,7 +47,7 @@ export function putToSignedUrl(
         onProgress(1);
         resolve({ ok: true });
       } else {
-        resolve({ ok: false, error: `Upload of "${file.name}" failed (${xhr.status}).` });
+        resolve({ ok: false, error: `Upload of "${file.name}" failed (${xhr.status}).`, status: xhr.status });
       }
     };
     xhr.onerror = () => resolve({ ok: false, error: `Upload of "${file.name}" failed — check your connection.` });

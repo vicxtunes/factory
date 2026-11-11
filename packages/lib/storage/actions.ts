@@ -121,7 +121,7 @@ async function recordItemMedia(orderItemId: string, path: string, mimeType: stri
 }
 
 // A photo picked for an order still hasn't uploaded after its retries. It
-// stays queued on the uploader's device (packages/lib/offline-queue) and is
+// stays on the uploader's device (packages/ui/transfers) and is
 // tried again whenever the app is open, but nobody should be left guessing:
 // the order's history says so, the uploader is told what happens next, and so
 // is the office, so they can ask for it if it never arrives.

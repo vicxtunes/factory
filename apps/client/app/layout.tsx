@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { Geist_Mono, Outfit } from "next/font/google";
 import { SerwistProvider } from "@serwist/turbopack/react";
 import { OfflineBanner } from "@repo/ui/pwa/OfflineBanner";
+import { ReleaseWatch } from "@repo/ui/pwa/ReleaseWatch";
 import { TransferTray } from "@repo/ui/transfers/TransferTray";
 import { Alexis } from "@repo/ui/assistant/Alexis";
 import { InstallCapture } from "@repo/ui/pwa/InstallCapture";
@@ -95,6 +96,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
           <InstallCapture />
           <OfflineBanner showBanner={false} />
           <TransferTray />
+          <ReleaseWatch />
           <Alexis actions={{ confirm: confirmAlexis, cancel: cancelAlexis, uploaded: uploadedAlexis }} pages={ALEXIS_PAGES} />
           <NavigationProgress />
           <BackHistory />

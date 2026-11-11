@@ -9,7 +9,7 @@ import { changeTool, type ChangeTool } from "../toolbox";
 // "Add these photos to my order": the person attaches files in Alexis (they
 // stay on their device), Alexis prepares this card, and once it's confirmed
 // the device uploads them to the order item through the same path as the
-// order's own Add photos button (uploadFileToStorage, which checks again on
+// order's own Add photos button (the background uploads, which check again on
 // the server who may add files to that item).
 
 interface ItemRow {

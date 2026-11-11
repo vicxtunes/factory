@@ -15,8 +15,7 @@ import { formatMoney } from "@repo/lib/currency/format";
 import type { DiscountKind, LineDiscount, Offer } from "@repo/lib/discounts/core/model";
 import { discountedPrice, validateLineDiscount } from "@repo/lib/discounts/core/rules";
 import { addMediaLink } from "@repo/lib/storage/actions";
-import { enqueueUpload, flushQueuedUploads } from "@repo/lib/offline-queue/enqueue";
-import { uploadFileToStorage } from "@repo/lib/storage/upload-client";
+import { startUploads } from "@repo/ui/transfers/store";
 import { UploadQueueStatus } from "../media/UploadQueueStatus";
 import type {
   ClientDuplicateHit,
@@ -224,23 +223,14 @@ export function OrderForm({
 
       const notes: string[] = [...res.warnings];
       const warnings: string[] = [];
-      // Photos are kept on this device and uploaded in the background
-      // (packages/lib/offline-queue), so none is lost to a dropped connection.
+      // Photos upload in the background (packages/ui/transfers), kept on
+      // this device until they're in, so none is lost to a dropped connection
+      // and the person can carry on meanwhile.
       const uploads: { id: string; name: string }[] = [];
       for (const { formIndex, itemId } of res.items) {
         const files = items[formIndex]?.files ?? [];
-        for (const file of files) {
-          try {
-            uploads.push({ id: await enqueueUpload(itemId, file), name: file.name });
-          } catch {
-            // No storage on this device (private browsing): upload it now instead.
-            setUploadStatus(`Uploading "${file.name}"…`);
-            const uploadRes = await uploadFileToStorage(itemId, file, (p) =>
-              setUploadStatus(`Uploading "${file.name}" — ${Math.round(p * 100)}%`),
-            );
-            if (!uploadRes.ok) warnings.push(uploadRes.error);
-          }
-        }
+        const ids = startUploads(files.map((file) => ({ file, target: { kind: "order-item", orderItemId: itemId }, where: `Order ${res.orderNo}` })));
+        ids.forEach((id, i) => uploads.push({ id, name: files[i].name }));
 
         const links = parseLinks(items[formIndex]?.linksText ?? "");
         for (const link of links) {
@@ -258,7 +248,6 @@ export function OrderForm({
             : (designers.find((d) => d.id === general.designerId)?.name ?? "the designer")
           : null;
       setConfirmed({ orderNo: res.orderNo, route: general.route, routedTo, notes, warnings, uploads });
-      if (uploads.length) void flushQueuedUploads();
       setGeneral(emptyGeneral(variant));
       setItems([emptyItem()]);
       setStep(1);

@@ -1,40 +1,21 @@
 "use client";
 
-import { useEffect, useState } from "react";
-
-import { flushQueuedUploads, queuedState, QUEUE_CHANGED_EVENT, QUEUE_PROGRESS_EVENT } from "@repo/lib/offline-queue/enqueue";
-
+import { retryUploads, useTransfers } from "../transfers/store";
 import { Button } from "../Button";
 
-// The photos of an order just placed, uploading in the background from the
-// device's queue (packages/lib/offline-queue). The order already exists, so
-// the person can see it's placed while the photos go up, and is warned before
-// leaving the page while any are still on their way.
+// The photos of an order just placed, uploading in the background (the
+// transfers queue, packages/ui/transfers/store.ts). The order already exists,
+// so the person can see it's placed and carry on using Aming while the photos
+// go up; the transfers panel shows them on every page.
 export function UploadQueueStatus({ uploads }: { uploads: { id: string; name: string }[] }) {
-  const [, setTick] = useState(0);
-  useEffect(() => {
-    const rerender = () => setTick((t) => t + 1);
-    window.addEventListener(QUEUE_CHANGED_EVENT, rerender);
-    window.addEventListener(QUEUE_PROGRESS_EVENT, rerender);
-    return () => {
-      window.removeEventListener(QUEUE_CHANGED_EVENT, rerender);
-      window.removeEventListener(QUEUE_PROGRESS_EVENT, rerender);
-    };
-  }, []);
-
-  const rows = uploads.map((u) => ({ ...u, ...queuedState(u.id) }));
-  const done = rows.filter((r) => r.state === "done").length;
-  const failed = rows.filter((r) => r.state === "failed");
-  const busy = rows.some((r) => r.state === "waiting" || r.state === "uploading");
-
-  useEffect(() => {
-    if (!busy) return;
-    const warn = (e: BeforeUnloadEvent) => e.preventDefault();
-    window.addEventListener("beforeunload", warn);
-    return () => window.removeEventListener("beforeunload", warn);
-  }, [busy]);
-
+  const all = useTransfers((s) => s.uploads);
+  const rows = uploads.map((u) => ({ ...u, job: all.find((j) => j.id === u.id) }));
   if (!rows.length) return null;
+
+  const done = rows.filter((r) => r.job?.state === "done").length;
+  const failed = rows.filter((r) => r.job?.state === "failed" || r.job?.state === "paused");
+  const busy = rows.some((r) => r.job?.state === "waiting" || r.job?.state === "uploading");
+
   if (done === rows.length) {
     return (
       <p className="rounded-[var(--radius)] border border-success-100 bg-success-50 p-3 text-sm font-medium text-success-700">
@@ -43,24 +24,27 @@ export function UploadQueueStatus({ uploads }: { uploads: { id: string; name: st
     );
   }
 
-  const current = rows.find((r) => r.state === "uploading");
+  const current = rows.find((r) => r.job?.state === "uploading");
   return (
     <div className={`space-y-2 rounded-[var(--radius)] border p-3 text-sm ${failed.length && !busy ? "border-error-100 bg-error-50 text-error-700" : "border-warning-100 bg-warning-50 text-warning-700"}`}>
       <p className="font-medium">
         Photos: {done} of {rows.length} uploaded
-        {current ? ` · "${current.name}" ${Math.round(current.progress * 100)}%` : ""}
+        {current?.job ? ` · "${current.name}" ${Math.round(current.job.progress * 100)}%` : ""}
       </p>
-      {busy ? <p>Keep this page open until they finish. If you leave, they finish next time you open Aming with internet.</p> : null}
+      {busy ? <p>You can keep using Aming while they upload. If you close it, they carry on next time you open Aming with internet.</p> : null}
       {failed.length ? (
         <div className="space-y-2">
-          <p>Not uploaded yet (kept on this device, Aming has been told):</p>
+          <p>Not uploaded yet:</p>
           <ul className="list-disc space-y-0.5 pl-4">
             {failed.map((r) => (
-              <li key={r.id}>{r.name}</li>
+              <li key={r.id}>
+                {r.name}
+                {r.job?.note ? ` (${r.job.note})` : ""}
+              </li>
             ))}
           </ul>
-          {!busy ? (
-            <Button type="button" variant="secondary" size="sm" onClick={() => void flushQueuedUploads()}>
+          {!busy && failed.some((r) => r.job?.state === "paused" || r.job?.retryable) ? (
+            <Button type="button" variant="secondary" size="sm" onClick={() => retryUploads(false, failed.map((r) => r.id))}>
               Try again
             </Button>
           ) : null}

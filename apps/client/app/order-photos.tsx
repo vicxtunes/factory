@@ -8,44 +8,51 @@ import { BottomSheet } from "@repo/ui/BottomSheet";
 import { Field, TextInput } from "@repo/ui/Field";
 import { UploadRow } from "@repo/ui/UploadRow";
 import { UploadThumbs, uploadKey, type UploadThumb } from "@repo/ui/UploadThumbs";
-import { addOrderLink, saveOrderUpload, startOrderUpload } from "@repo/lib/product-requests/actions";
+import { addOrderLink } from "@repo/lib/product-requests/actions";
 import { orderLinkSchema } from "@repo/lib/product-requests/core";
-import { MEDIA_BUCKET } from "@repo/lib/storage/client";
-import { putToSignedUrl } from "@repo/lib/storage/xhr-upload";
+import { startUploads, useTransfers, whenUploaded } from "@repo/ui/transfers/store";
 
 /**
  * What a client sends to make their order from: photos and PDFs picked on
  * their phone, as they are (never shrunk: they get printed), or a link for a
  * big set. Picked first; sent to storage once the order exists, like a factory
- * order's. Files already in stay in, so trying again only sends the rest.
+ * order's, through the background uploads (packages/ui/transfers): they keep
+ * going if the client moves on, and are kept on the phone until they're in.
+ * Files already in stay in, so trying again only sends the rest.
  */
 export function useOrderPhotos(slug: string) {
-  const [items, setItems] = useState<UploadThumb[]>([]);
+  const [picked, setPicked] = useState<UploadThumb[]>([]);
   const [link, setLink] = useState("");
   const [linkSent, setLinkSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // While files go, the list stays as it is.
   const [sending, setSending] = useState(false);
+  // Picked file → its upload, once sent.
+  const [jobOf, setJobOf] = useState<Record<string, string>>({});
+  const jobs = useTransfers((s) => s.uploads);
 
-  const patch = (key: string, change: Partial<UploadThumb>) => setItems((all) => all.map((i) => (i.key === key ? { ...i, ...change } : i)));
+  const items: UploadThumb[] = picked.map((p) => {
+    const job = jobs.find((j) => j.id === jobOf[p.key]);
+    if (!job) return p;
+    return { ...p, state: job.state === "done" ? "done" : job.state === "failed" || job.state === "paused" ? "failed" : "uploading", progress: job.progress, error: job.note };
+  });
   const typedLink = link.trim();
   const linkOk = !typedLink || orderLinkSchema.safeParse(typedLink).success;
   const done = items.filter((i) => i.state === "done").length + (linkSent ? 1 : 0);
 
-  /** Sends what isn't in yet. True when everything picked is in. */
+  /** Sends what isn't in yet and waits for it. True when everything picked is in. */
   async function send(requestId: string): Promise<boolean> {
     setError(null);
     setSending(true);
     let failed = false;
-    for (const item of items) {
-      if (item.state === "done") continue;
-      patch(item.key, { state: "uploading", progress: 0, error: undefined });
-      const problem = await sendFile(slug, requestId, item.file, (progress) => patch(item.key, { progress }));
-      patch(item.key, problem ? { state: "failed", error: problem } : { state: "done" });
-      if (problem) {
-        failed = true;
-        setError(problem);
-      }
+    const todo = items.filter((i) => i.state !== "done");
+    const ids = startUploads(todo.map((i) => ({ file: i.file, where: "Your order", target: { kind: "product-request", slug, requestId } })));
+    setJobOf((m) => ({ ...m, ...Object.fromEntries(todo.map((i, k) => [i.key, ids[k]])) }));
+    const result = await whenUploaded(ids);
+    if (result.failed) {
+      failed = true;
+      const notes = useTransfers.getState().uploads.filter((u) => ids.includes(u.id) && u.state !== "done").map((u) => u.note);
+      setError(notes.find(Boolean) ?? "Some photos didn't upload.");
     }
     if (typedLink && !linkSent) {
       const res = await addOrderLink(slug, { requestId, url: typedLink });
@@ -67,7 +74,8 @@ export function useOrderPhotos(slug: string) {
     error,
     send,
     reset() {
-      setItems([]);
+      setPicked([]);
+      setJobOf({});
       setLink("");
       setLinkSent(false);
       setError(null);
@@ -81,14 +89,14 @@ export function useOrderPhotos(slug: string) {
           multiple
           disabled={sending}
           onFiles={(files) => {
-            const known = new Set(items.map((i) => i.key));
+            const known = new Set(picked.map((i) => i.key));
             const added = Array.from(files)
               .filter((file) => !known.has(uploadKey(file)))
               .map((file): UploadThumb => ({ key: uploadKey(file), file, state: "selected" }));
-            setItems([...items, ...added]);
+            setPicked([...picked, ...added]);
           }}
         />
-        <UploadThumbs items={items} onRemove={sending ? undefined : (key) => setItems(items.filter((i) => i.key !== key))} />
+        <UploadThumbs items={items} onRemove={sending ? undefined : (key) => setPicked(picked.filter((i) => i.key !== key))} />
         <Field label="Or a link to them" hint={linkOk ? "Drive, Dropbox, etc., for a big set" : "Paste the full link, starting with https://"}>
           <TextInput inputMode="url" value={link} disabled={linkSent || sending} onChange={(e) => setLink(e.target.value)} placeholder="https://…" />
         </Field>
@@ -97,31 +105,21 @@ export function useOrderPhotos(slug: string) {
   };
 }
 
-/** One file, straight to storage and saved on the order. The problem, if any. */
-async function sendFile(slug: string, requestId: string, file: File, onProgress: (fraction: number) => void): Promise<string | null> {
-  const started = await startOrderUpload(slug, { requestId, fileName: file.name, fileType: file.type });
-  if (!started.ok) return started.error;
-  const put = await putToSignedUrl(MEDIA_BUCKET, started.data.path, started.data.token, file, onProgress);
-  if (!put.ok) return put.error;
-  const saved = await saveOrderUpload(slug, { requestId, path: started.data.path });
-  return saved.ok ? null : saved.error;
-}
-
 /** On a client's orders: add photos to one, when they left or want to add to them. */
 export function AddOrderPhotos({ slug, requestId, missing }: { slug: string; requestId: string; missing: boolean }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [sending, setSending] = useState(false);
   const photos = useOrderPhotos(slug);
 
-  async function send() {
-    setSending(true);
-    const ok = await photos.send(requestId);
-    setSending(false);
-    if (!ok) return;
-    photos.reset();
+  // The sheet closes at once: the photos carry on in the background (the
+  // uploads panel shows them) and the order updates as they land. One that
+  // fails is there to try again.
+  function send() {
     setOpen(false);
-    router.refresh();
+    void photos.send(requestId).then((ok) => {
+      if (ok) photos.reset();
+      router.refresh();
+    });
   }
 
   return (
@@ -129,11 +127,11 @@ export function AddOrderPhotos({ slug, requestId, missing }: { slug: string; req
       <Button type="button" variant={missing ? "primary" : "secondary"} className="min-h-9 text-xs" onClick={() => setOpen(true)}>
         {missing ? "Add photos" : "Add more photos"}
       </Button>
-      <BottomSheet open={open} onClose={() => !sending && setOpen(false)} title="Add your photos">
+      <BottomSheet open={open} onClose={() => setOpen(false)} title="Add your photos">
         <div className="space-y-3">
           {photos.fields}
           {photos.error ? <p className="text-sm text-error-600 dark:text-error-400">{photos.error}</p> : null}
-          <Button type="button" className="w-full" loading={sending} disabled={!photos.ready} onClick={send}>
+          <Button type="button" className="w-full" disabled={!photos.ready} onClick={send}>
             Send
           </Button>
         </div>

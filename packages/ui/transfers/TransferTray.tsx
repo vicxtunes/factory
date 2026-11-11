@@ -8,7 +8,7 @@ import { clearUploads, dismissZip, restoreUploads, retryUploads, useTransfers, t
 
 const LABEL: Record<UploadJob["state"], string> = { waiting: "Waiting", uploading: "", done: "Uploaded", failed: "Not uploaded", paused: "Not finished" };
 
-// The uploads and zips going on in the background (./store.ts), on every
+// Every upload and zip going on in the background (./store.ts), on every
 // page: a card at the bottom right on a computer, a strip above the bottom
 // bar on a phone. It opens to the list; it can only be closed once nothing is
 // still going.
@@ -21,9 +21,15 @@ export function TransferTray() {
 
   useEffect(() => {
     void restoreUploads();
+    // Ones the connection failed go again when it's back, or when the person comes back to Aming.
     const back = () => retryUploads(true);
+    const visible = () => document.visibilityState === "visible" && back();
     window.addEventListener("online", back);
-    return () => window.removeEventListener("online", back);
+    document.addEventListener("visibilitychange", visible);
+    return () => {
+      window.removeEventListener("online", back);
+      document.removeEventListener("visibilitychange", visible);
+    };
   }, []);
 
   // The page shows the new files: once a second at most while they come in.
@@ -103,7 +109,7 @@ export function TransferTray() {
           <div className="h-full rounded-full bg-brand-500 transition-[width]" style={{ width: `${bytes ? Math.round((sent / bytes) * 100) : 0}%` }} />
         </div>
       ) : null}
-      {busy && !open ? <p className="-mt-1 px-3 pb-3 text-xs text-muted">You can keep using Aming. Don&apos;t close this tab until it&apos;s done.</p> : null}
+      {busy && !open ? <p className="-mt-1 px-3 pb-3 text-xs text-muted">You can keep using Aming. If you close it, uploads carry on next time you open Aming.</p> : null}
 
       {open ? (
         <ul className="max-h-[50dvh] space-y-2 overflow-y-auto border-t border-border p-3">
