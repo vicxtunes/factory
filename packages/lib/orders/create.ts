@@ -1,6 +1,7 @@
 import "server-only";
 
 import { recipeListPrice } from "@repo/lib/production/pricing";
+import { photoBookSheetsProblem } from "@repo/lib/production/core/recipes";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { logOrderEvent, resolveActor, type AuditActor } from "@repo/lib/audit/log";
@@ -134,6 +135,8 @@ export async function buildAndInsertOrder(
       }
       if (value) attributes[def.name] = value;
     }
+    const sheetsError = photoBookSheetsProblem(category.name, attributes);
+    if (sheetsError) return { ok: false, error: `Item ${formIndex + 1}: ${sheetsError}` };
 
     const discount = p.allowLineDiscounts ? (item.line_discount ?? null) : null;
     if (discount) {
