@@ -1,88 +1,152 @@
-# Handoff — 2026-09-15
+# Handover: 2026-11-04
 
-Written before moving to a new codespace. Read this first, then `README.md`
-(setup/stack) — `Factor Tracker Plan.md` is the **original v1 spec** and is
-now stale; the real system has grown well past it (see "What's actually
-built" below).
+For whoever picks this up next, including a new Claude account. Read this first, then `README.md` and
+`packages/lib/<module>/README.md` for the area you're touching. No passwords or keys are written here;
+this says where they live. Facts come from the notes below and a read-only look at the server on
+2026-11-04.
 
-## State right now
+**More detail:** the previous account's notes are in
+`~/.claude/projects/-Users-saniget-Documents-projects-factory/memory/` (start with `MEMORY.md`). A new
+account may not load them automatically, so read them directly. Old plans are in `~/.claude/plans/`.
 
-- `main` is up to date with `origin/main`; everything through PR #12 is
-  merged. Working tree clean, `npx tsc --noEmit` passes.
-- Branch `add-media-download-all` (this session's branch) is fully merged
-  into `main` — safe to delete locally/remotely, nothing outstanding on it.
-- Stale local branches from old merged PRs, safe to delete:
-  `switch-media-to-supabase-storage`. (Don't force-delete without checking
-  `git branch --merged main` yourself first, just in case.)
-- No open PRs, no TODO/FIXME markers in `app`/`lib`/`components`.
+## Do this first: unfinished work in the working tree
 
-## Environment (new codespace will need this again)
+Four files on `drive` have **uncommitted, unchecked** edits:
+`packages/lib/orders/create.ts`, `packages/lib/agents/server.ts`, `packages/lib/agents/README.md`,
+`packages/ui/order/OrderForm.tsx`.
 
-- `.env.local` **is currently populated** for Supabase
-  (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`,
-  `SUPABASE_SERVICE_ROLE_KEY`) and Google Drive
-  (`GOOGLE_CLIENT_ID/SECRET`, `GOOGLE_REFRESH_TOKEN`,
-  `GOOGLE_DRIVE_FOLDER_ID`). `CLOUDINARY_*` keys are present but **empty** —
-  expected, media moved from Cloudinary to Supabase Storage (PR #7). A prior
-  session found `.env.local` missing/empty entirely at times in this
-  codespace — verify values actually exist before assuming dynamic routes
-  work; if empty, every dynamic route 500s in dev via `proxy.ts`.
-  `.env.local` is gitignored, so **copy it over manually** to the new
-  codespace (or re-derive from Supabase/Google dashboards) — it will not
-  come from `git clone`.
-- Supabase CLI auth (`supabase login` / `SUPABASE_ACCESS_TOKEN`) does **not**
-  persist across codespace rebuilds — expect `LegacyPlatformAuthRequiredError`
-  on `supabase migration list --linked` / `db push --linked` until you log in
-  again. Production project ref: `efefpzzuzblroydxamjq` ("factory", org
-  `suttrfqkuiwrffijshpl`, eu-central-1).
-- `next build` reliably OOM-kills in resource-constrained codespaces (dies
-  silently at "Creating an optimized production build…"). Use
-  `npx tsc --noEmit` + `npx eslint` + a short `next dev` smoke test instead;
-  rely on the Vercel preview build for a real production-build check.
-- Newly opened dev-server ports on Codespaces can 404 for several
-  seconds–tens of seconds after `next dev` starts before the port-forwarding
-  tunnel registers — don't assume the port is dead if the first request
-  fails. If you run dev on a non-default port, add `localhost:<port>` to the
-  allowed origins in `next.config.ts` (Server Actions same-origin check).
+They do what the owner asked: "when we create an order in the name of an agent, it's their order."
+Any new order with an agent, whether staff or a designer creates it, shows in that agent's portal and
+earns commission (`commission_eligible: p.agentId !== null`). No migration is needed. Older orders don't earn.
 
-## What's actually built (well past the original plan)
+1. Review `git diff`.
+2. Run `npx tsc --noEmit -p .` in `apps/client` and `apps/factory`, then `npx eslint` on the changed files
+   and `npm run test`.
+3. Test a staff order with an agent, and one without.
+4. Commit on `drive`, then ask before releasing.
 
-Roles are now **Receptionist / Supervisor / Boss** (dashboard, shared write
-access, boss is read-only + super-admin), **Worker** (`/factory`, PIN),
-**Graphics designer** (`/graphics`, PIN) — the original plan's `/intake` +
-two-role dashboard was superseded by this. Chronological feature history
-(newest first, see `git log --oneline` for full detail):
+Tell the owner:
+- Once rates are set, tagged orders earn even for agents with no login yet. The balance waits for them.
+- The client isn't added to the agent's list, so the agent sees the name on the order but not the contact
+  details. Ask whether staff-tagged clients should join the list.
 
-- Media ownership fixes, notes/export fixes, CRUD drawers, Support page (PR
-  #12).
-- Receptionist worker-access split, order audit log, notes threads, full
-  order editing (PR #11).
-- Unified order card design; supers can hide with-designer items (PR #10).
-- "Download all" zip button for order-item media (PR #8), on top of the
-  Cloudinary → Supabase Storage media migration (PR #7).
-- Client de-duplication layer (`find_client_candidates` SQL fn, trigram +
-  exact-match on name/email/phone) + shared manager/designer order-creation
-  flow + Orders page filter/table redesign + FCFS-style display ordering
-  (newest on top, worked from the bottom) (PR #4, #5, #6).
-- Boss made super-admin, password/PIN resets, catalog locked to boss;
-  receptionist/designer roles + Cloudinary media (PRs #1–3).
+**Danger:** `scripts/deploy.sh` builds the working tree, not `main`. Edits like these go live with any
+deploy. Check `git status` is clean before deploying. This has already caught us once.
 
-Full narrative detail on the client-dedupe + order-flow + Orders-page work
-is in Claude Code's memory (`client-dedupe-and-order-refactor`,
-`env-and-supabase-access`) if you're continuing with Claude Code in the new
-codespace — it should carry over automatically since memory isn't tied to
-this working directory.
+## Working rules from the owner
 
-## Known gaps / not done
+- **Ask before every release.** Say what goes live and wait for "release it". Migrations need a clear
+  go-ahead too ("push db"). Commit on `drive` freely; stop before merging to `dev`.
+- **On a release,** list any uncommitted edits and ask whether they ship. Never drop the owner's silently.
+- **For a reported bug,** explain and propose. Don't change other features unasked.
+- **No Claude attribution** in commits or PRs. **Never run prettier**; the repo has no formatter.
+- **Next.js has local changes:** read `node_modules/next/dist/docs/` before relying on an API (`AGENTS.md`).
+- **YAGNI:** build only what the task needs.
+- **UI:** decide phone and desktop up front (grids on desktop, `FormSheet` for add and edit). Look in the
+  design room first (`apps/factory/app/dashboard/design-room/registry.ts`) and reuse what's there. Keep
+  wording short and professional.
+- **Charts and analysis:** use your own judgement as a pro analyst; don't ask the owner to pick.
+- **"Make the servers public"** means forward the Mac's dev servers, not build a test deploy.
+- **Pasted messages** may be limited to 4,000 characters, so keep briefs short or put them in a file.
 
-- Nothing currently tracked as in-progress or blocked — this session ended
-  with a clean, merged, typechecked tree. Next work has not been scoped yet;
-  pick it up from wherever the boss/product feedback lands next.
+## The apps
 
-## Quick start in the new codespace
+Monorepo: `apps/client` (clients, studios, vendors, agents), `apps/factory` (staff, workers, designers),
+`packages/lib`, `packages/ui`. Git flow: `drive` → `dev` → `main`, using `--no-ff` merges. Remote:
+`git@github.com:vicxtunes/factory.git`. Pushes sometimes fail with a key error or a GitHub 500; check the
+agent with `ssh-add -l` and try again.
 
-```bash
-npm install
-# copy your .env.local over, or recreate it per README.md
-npm run dev   # http://localhost:3000
-```
+| What | Where |
+| --- | --- |
+| Client app | https://www.amingspace.com, port 3001 on the server |
+| Staff app | https://factory.amingltd.com, port 3002 on the server |
+| Data API | https://api.amingspace.com |
+
+## VPS
+
+DigitalOcean droplet `46.101.15.110`, Ubuntu 24.04, 2 vCPU, 3.8 GB RAM, 77 GB disk. SSH: `ssh aming`, port
+**2222**, key `~/.ssh/aming_droplet`, root (port 22 is blocked on the owner's network).
+
+- **Apps:** systemd `aming-client` and `aming-factory`, user `aming`. Settings in
+  `/etc/aming-{client,factory}.env`. Releases in `/srv/aming/<app>/releases/<stamp>`, with a `current`
+  symlink. Memory limits in `/etc/systemd/system/aming-*.service.d/memory.conf`.
+- **Database and backend:** Supabase pieces in Docker, compose in `/srv/aming/supabase`. Containers:
+  `supabase-db`, `-auth`, `-rest`, `-storage`, `-envoy`, `realtime-dev.supabase-realtime`. Files are in
+  Cloudflare R2 behind the Storage API.
+- **Read-only query:** `ssh aming "docker exec -i supabase-db psql -U supabase_admin -d postgres"`.
+- **Nginx:** `/etc/nginx/sites-available/aming`, `snippets/aming-proxy.conf`, `conf.d/aming.conf`. Access log
+  with timings: `/var/log/nginx/aming.log`. Any new per-IP limit must keep the server's own IP exempt
+  (the `$aming_self` map); forgetting this caused an outage on 11-01. Caddy is stopped, not removed.
+- **Certificates:** Let's Encrypt via certbot webroot, renewed by `certbot.timer`.
+- **DNS:** on Vercel's nameservers. Only the owner can change records.
+- **Backups:** `aming-db-backup.timer` runs at 23:30 UTC (`/srv/aming/backup`, see its README), to R2. One-off
+  dumps before each migration are in `/root/pre-*.dump`; the latest is
+  `/root/pre-agents-202611041418.dump`.
+- **Monitoring:** `/srv/aming/monitoring`. Uptime Kuma on `127.0.0.1:3101`, Beszel on `127.0.0.1:3102`. Alerts
+  email through Resend SMTP on port 2465 (DigitalOcean blocks 465 and 587).
+- **Also on this server, not Aming:** `school-os-*` containers and the `sos.dementa.space` Nginx site. Don't
+  touch them. Good School also runs on the owner's Mac, so kill dev servers by port, never by name.
+
+### Deploying
+
+1. Get a go-ahead. Run `git status`; it must be clean, and the merge must have succeeded.
+2. Stop dev servers from this repo, then delete `apps/client/.next/dev` and `apps/factory/.next/dev`. Stale
+   files there break the production build.
+3. **Migrations go first:** back up with `ssh aming "docker exec supabase-db pg_dump -U supabase_admin -d postgres -Fc > /root/pre-<name>-<stamp>.dump"`,
+   then `node scripts/apply-migration.mjs supabase/migrations/<file>.sql`.
+4. Run `scripts/deploy.sh all` (or `client` / `factory`). It builds on the Mac, because the server is too
+   small. If the upload drops, tar the standalone build, send it with `rsync --partial`, and run the
+   script's switch steps.
+5. Rollback: `scripts/deploy.sh rollback client|factory`.
+
+`topup_bonuses` and some functions are owned by `supabase_admin`, so a migration touching them fails with
+"must be owner". Check ownership first.
+
+### Local and test environment
+
+- `apps/*/.env.local` points at **QA, the old Supabase project** (`efefpzzuzblroydxamjq`).
+- `.env.development.local.vps-is-live` and `/etc/aming-test-*.env.disabled-points-at-live` point at **live**.
+  Never restore them as they are.
+- **QA holds real push subscriptions.** Run dev with `VAPID_PRIVATE_KEY`, `RESEND_API_KEY` and `EMAIL_FROM`
+  empty, or a test can reach a real phone. Migrations reach QA through the Management API, using
+  `SUPABASE_ACCESS_TOKEN` from `.env.local`.
+- **QA is due to be cancelled around 2026-11-08,** when the safety week ends. That also ends the rollback to
+  Supabase, and there's **no other test database yet.** Decide on a replacement first.
+- Live HivePay payouts can't be tested on QA (no keys there).
+
+## Secrets: all must carry over
+
+Nothing here needs copying into the repo. Check the new setup can reach:
+- `~/.ssh/aming_droplet` and the GitHub key (`~/.ssh/id_ed25519`)
+- `/etc/aming-*.env` on the server: HivePay keys, VAPID, Resend, `OPENAI_API_KEY`, `APP_SECRET`, Supabase keys
+- `apps/*/.env.local` on the Mac
+- Accounts the owner holds: DigitalOcean, Cloudflare R2, Vercel (DNS), Resend, HivePay, OpenAI, GitHub
+
+## Open items
+
+**Agent platform (released 11-04, `main` 4a00581):** `packages/lib/agents/README.md`.
+- No agent has a login, and every commission rate is 0%. The sending fee setting is "the agent".
+- The owner wants to test in production before anyone joins. No real order has been confirmed since the
+  deploy, so the first test order also proves ordering still works.
+- Never run for real: a HivePay withdrawal and the fee credit-back, the payment prompt, real pushes and
+  emails. Do these with the owner present.
+- QA leftovers: inactive "QA Agent One", orders 2026-0534 and 2026-0535, two test clients.
+- Rerun the money rules with `packages/lib/agents/commission-check.sql`, on a test database only, inside its
+  rolled-back transaction.
+
+**Assistant (v3 live, cap US$1):** a full order through to a real payment, and an order-form review, have
+never been seen on live. `dementaacademy@gmail.com` switches the model on Dashboard → Assistant.
+
+**Money:**
+- Supreme Media's 1,297,000 needs correcting (phone or reference and date from the CEO); 12 past negative
+  adjustments (6,033,000) are unchecked.
+- CEO still to enter: opening balances and the approval limit.
+- Bill payouts are hidden until HivePay's price list is in `HIVEPAY_SEND_FEES`; never live-tested.
+- HivePay's double-transaction claim: waiting for their reference, date, amount and phone.
+- **Leave alone:** the 13 Oct 250,000 record. The owner said to keep it, so don't offer to correct it.
+- **HivePay rate-limits** per account, shared with live payments. Never burst status calls.
+
+**Others:**
+- Product order photos: real upload and the payment block are unverified on live.
+- Photo book sheet prices: real prices and materials must come from the owner. Cover Type has no client price.
+- Vendors: strict roles gap (opening My Business auto-creates a studio); calendar and invoices not built.
