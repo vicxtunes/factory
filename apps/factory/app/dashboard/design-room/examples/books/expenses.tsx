@@ -33,6 +33,10 @@ const base: ExpenseLine = {
   paidFrom: ["Cash box"],
   payPhone: "256772000000",
   payoutSending: false,
+  autopayAt: "2026-11-03T09:00:00Z",
+  autopayHeldAt: null,
+  autopayHeldBy: null,
+  autopayHoldReason: null,
 };
 
 const LINES: ExpenseLine[] = [
@@ -42,7 +46,7 @@ const LINES: ExpenseLine[] = [
   { ...base, id: "00000000-0000-4000-8000-000000000013", name: "Fuel", category: "transport", categoryName: "Transport", recipient: null, amount: 60_000, paid: 60_000, dueOn: null, scheduleId: null, scheduleEvery: null, scheduleEveryCount: null, spentOn: "2026-11-02" },
 ];
 
-// Accounts → Expenses on sample records: overdue part paid (on autopay, so Ready to send), an expected amount, one waiting for the boss, one paid.
+// Accounts → Expenses on sample records: overdue part paid (on autopay, going by itself at noon), an expected amount, one waiting for the boss, one paid.
 export default function BooksExpenses() {
   return (
     <ExpensesBoard
@@ -68,11 +72,12 @@ export default function BooksExpenses() {
       period={{ preset: "this_month", from: "2026-10-31T21:00:00.000Z", to: "2026-11-03T21:00:00.000Z", fromDate: "2026-11-01", toDate: "2026-11-03" }}
       categories={[{ key: "rent", name: "Rent", automatic: false }, { key: "utilities", name: "Utilities", automatic: false }]}
       schedules={[
-        { id: "00000000-0000-4000-8000-000000000020", name: "Office rent", description: null, category: "rent", categoryName: "Rent", recipient: "Sample Landlord", amount: 1_500_000, varies: false, every: "month", everyCount: 1, endsOn: null, times: null, nextCreatedOn: "2026-12-01", bills: 3, paidTotal: 3_500_000, recordedBy: "Boss", recordedAt: "2026-09-01T08:00:00Z", pausedAt: null, pausedBy: null, editedAt: null, editedBy: null, endedAt: null, endedBy: null, payPhone: "256772000000" },
-        { id: "00000000-0000-4000-8000-000000000021", name: "Cleaner", description: null, category: "salaries", categoryName: "Salaries", recipient: "Sample Cleaner", amount: 50_000, varies: false, every: "week", everyCount: 2, endsOn: null, times: 12, nextCreatedOn: "2026-11-14", bills: 4, paidTotal: 200_000, recordedBy: "Boss", recordedAt: "2026-09-05T08:00:00Z", pausedAt: "2026-11-02T08:00:00Z", pausedBy: "Boss", editedAt: null, editedBy: null, endedAt: null, endedBy: null, payPhone: null },
+        { id: "00000000-0000-4000-8000-000000000020", name: "Office rent", description: null, category: "rent", categoryName: "Rent", recipient: "Sample Landlord", amount: 1_500_000, varies: false, every: "month", everyCount: 1, endsOn: null, times: null, nextCreatedOn: "2026-12-01", bills: 3, paidTotal: 3_500_000, recordedBy: "Boss", recordedAt: "2026-09-01T08:00:00Z", pausedAt: null, pausedBy: null, editedAt: null, editedBy: null, endedAt: null, endedBy: null, payPhone: "256772000000", sendAt: "12:00" },
+        { id: "00000000-0000-4000-8000-000000000021", name: "Cleaner", description: null, category: "salaries", categoryName: "Salaries", recipient: "Sample Cleaner", amount: 50_000, varies: false, every: "week", everyCount: 2, endsOn: null, times: 12, nextCreatedOn: "2026-11-14", bills: 4, paidTotal: 200_000, recordedBy: "Boss", recordedAt: "2026-09-05T08:00:00Z", pausedAt: "2026-11-02T08:00:00Z", pausedBy: "Boss", editedAt: null, editedBy: null, endedAt: null, endedBy: null, payPhone: null, sendAt: "12:00" },
       ]}
       upcoming={[{ scheduleId: "00000000-0000-4000-8000-000000000020", dueOn: "2026-12-01" }]}
       approvalAbove={500_000}
+      autopayUpTo={2_000_000}
       isBoss
       canSend
       timeZone="Africa/Kampala"

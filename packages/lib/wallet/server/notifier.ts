@@ -157,6 +157,16 @@ export async function expensePayoutFailed(body: string): Promise<void> {
   await notifyMoneyWatchers({ title: "Payout failed", body, url: "/dashboard/accounts/expenses" });
 }
 
+/** The one warning before autopay bills go by themselves, with time to hold them. */
+export async function autopayWarning(title: string, body: string): Promise<void> {
+  await notifyMoneyWatchers({ title, body, url: "/dashboard/accounts/expenses" });
+}
+
+/** An autopay bill went by itself and arrived. */
+export async function autopaySent(body: string): Promise<void> {
+  await notifyMoneyWatchers({ title: "Bill paid by itself", body, url: "/dashboard/accounts/expenses" });
+}
+
 /** The morning reminder of what's due (watch.ts). */
 export async function expenseReminder(title: string, body: string): Promise<void> {
   await notifyMoneyWatchers({ title, body, url: "/dashboard/accounts/expenses" });

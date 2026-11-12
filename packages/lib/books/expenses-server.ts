@@ -55,6 +55,10 @@ interface LineRow {
   paid_from_accounts: string[] | null;
   pay_phone: string | null;
   payout_sending: boolean;
+  autopay_at: string | null;
+  autopay_held_at: string | null;
+  autopay_held_by_name: string | null;
+  autopay_hold_reason: string | null;
 }
 
 interface ScheduleRow {
@@ -82,6 +86,7 @@ interface ScheduleRow {
   ended_at: string | null;
   ended_by_name: string | null;
   pay_phone: string | null;
+  send_at: string;
 }
 
 function toSchedule(s: ScheduleRow): ExpenseSchedule {
@@ -110,6 +115,7 @@ function toSchedule(s: ScheduleRow): ExpenseSchedule {
     endedAt: s.ended_at,
     endedBy: s.ended_by_name,
     payPhone: s.pay_phone,
+    sendAt: s.send_at,
   };
 }
 
@@ -146,6 +152,10 @@ function toLine(r: LineRow): ExpenseLine {
     paidFrom: r.paid_from_accounts ?? [],
     payPhone: r.pay_phone,
     payoutSending: r.payout_sending,
+    autopayAt: r.autopay_at,
+    autopayHeldAt: r.autopay_held_at,
+    autopayHeldBy: r.autopay_held_by_name,
+    autopayHoldReason: r.autopay_hold_reason,
   };
 }
 
@@ -172,7 +182,7 @@ export async function expensesBoard(scope: TenantScope, period: { fromDate: stri
     db.from("expense_categories").select("key, name, automatic").eq("tenant_id", scope.tenantId).order("created_at").order("name").returns<ExpenseCategory[]>(),
     db.from("expense_schedule_lines").select("*").eq("tenant_id", scope.tenantId).order("created_at", { ascending: false }).returns<ScheduleRow[]>(),
     db.rpc("expense_schedule_upcoming", { p_today: today, p_days: UPCOMING_DAYS }),
-    db.from("expense_settings").select("approval_above").eq("tenant_id", scope.tenantId).maybeSingle<{ approval_above: number | string | null }>(),
+    db.from("expense_settings").select("approval_above, autopay_up_to").eq("tenant_id", scope.tenantId).maybeSingle<{ approval_above: number | string | null; autopay_up_to: number | string | null }>(),
   ]);
   for (const r of [lines, open, restorable, categories, schedules, upcoming, settings]) if (r.error) fail(r.error);
   const byId = new Map<string, LineRow>();
@@ -182,6 +192,7 @@ export async function expensesBoard(scope: TenantScope, period: { fromDate: stri
     lines: [...byId.values()].map(toLine),
     categories: categories.data ?? [],
     approvalAbove: settings.data?.approval_above == null ? null : Number(settings.data.approval_above),
+    autopayUpTo: settings.data?.autopay_up_to == null ? null : Number(settings.data.autopay_up_to),
     schedules: (schedules.data ?? []).map(toSchedule),
     upcoming: ((upcoming.data ?? []) as { schedule_id: string; due_on: string }[]).map((u): UpcomingBill => ({ scheduleId: u.schedule_id, dueOn: u.due_on })),
   };
@@ -296,9 +307,9 @@ export async function stopSchedule(input: ScheduleStopInput, byName: string): Pr
 }
 
 /** What fell due while paused is skipped. */
-/** Autopay's number for a recurring bill (null stops it), on its bills not yet paid too. */
-export async function setSchedulePayPhone(id: string, phone: string | null): Promise<void> {
-  const { error } = await createAdminClient().rpc("expense_schedule_set_pay_phone", { p_id: id, p_phone: phone });
+/** Autopay's number (null stops it) and time of day for a recurring bill, on its bills not yet paid too. */
+export async function setScheduleAutopay(id: string, phone: string | null, sendAt: string): Promise<void> {
+  const { error } = await createAdminClient().rpc("expense_schedule_set_autopay", { p_id: id, p_phone: phone, p_send_at: sendAt });
   if (error) fail(error);
 }
 
@@ -349,6 +360,26 @@ export async function decide(id: string, approve: boolean, note: string | null, 
 
 export async function setApprovalLimit(above: number | null, byName: string): Promise<void> {
   const { error } = await createAdminClient().from("expense_settings").upsert({ approval_above: above, updated_by_name: byName, updated_at: new Date().toISOString() });
+  if (error) fail(error);
+}
+
+/** Autopay sends by itself up to this much (null: no limit). Bills warned of that are now above it wait again. */
+export async function setAutopayLimit(upTo: number | null, byName: string, today: string): Promise<void> {
+  const db = createAdminClient();
+  const { error } = await db.from("expense_settings").upsert({ autopay_up_to: upTo, updated_by_name: byName, updated_at: new Date().toISOString() });
+  if (error) fail(error);
+  const { error: forgot } = await db.rpc("expense_autopay_forget", { p_today: today });
+  if (forgot) fail(forgot);
+}
+
+/** The boss holds a bill that would go by itself: it waits for Approve and send. */
+export async function holdAutopay(id: string, byName: string): Promise<void> {
+  const { error } = await createAdminClient()
+    .from("expenses")
+    .update({ autopay_held_at: new Date().toISOString(), autopay_held_by_name: byName })
+    .eq("id", id)
+    .is("autopay_held_at", null)
+    .is("voided_at", null);
   if (error) fail(error);
 }
 
