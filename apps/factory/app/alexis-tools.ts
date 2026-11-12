@@ -25,7 +25,7 @@ import { createAdminClient } from "@repo/lib/supabase/admin";
 import { createClient } from "@repo/lib/supabase/server";
 import { SUPPORT_OWNER_EMAIL } from "@repo/lib/support/constants";
 import { resolveTenantScope } from "@repo/lib/tenancy/server/resolve";
-import { isManagerRole, STATUS_LABELS, type AppRole, type ProductionStatus } from "@repo/lib/types";
+import { canManageBusiness, isManagerRole, STATUS_LABELS, type AppRole, type ProductionStatus } from "@repo/lib/types";
 
 import { ordersAlexis } from "./alexis-orders";
 import { peopleTools } from "./alexis-people";
@@ -63,6 +63,9 @@ function staffReads(role: AppRole, db: SupabaseClient, inApp: boolean): Assistan
           return data;
         },
       }),
+    );
+    // Clients' records aren't supervisors' (canManageBusiness).
+    if (canManageBusiness(role)) tools.push(
       readTool({
         name: "find_clients",
         description: "Find Aming's clients by name, phone or email.",
@@ -181,6 +184,9 @@ function staffChanges(role: AppRole): ChangeTool[] {
         },
         run: async ({ itemId, status }) => outcome(await overrideStatus(itemId, status), `The item is now ${STATUS_LABELS[status]}.`),
       }),
+      addFilesToOrderTool(null),
+    );
+    if (canManageBusiness(role)) tools.push(
       changeTool({
         name: "add_client",
         description: "Add a new client to Aming. Phone is required; email can be empty.",
@@ -188,7 +194,6 @@ function staffChanges(role: AppRole): ChangeTool[] {
         card: async (c) => ({ title: `Add client ${c.name}`, lines: [`Phone: ${c.phone}`, c.email ? `Email: ${c.email}` : "No email"] }),
         run: async (c) => outcome(await addClient(c), `${c.name} is now a client.`),
       }),
-      addFilesToOrderTool(null),
     );
   }
   if (canViewAccounts(role)) {
@@ -296,7 +301,7 @@ function staffChanges(role: AppRole): ChangeTool[] {
 
 function abilities(role: AppRole, change: ChangeTool[], read: AssistantTool[]): string {
   const parts = ["Look things up for their role:"];
-  if (isManagerRole(role)) parts.push("orders (and one order in full, with its invoice), clients, orders waiting for review, the workers and designers;");
+  if (isManagerRole(role)) parts.push(`orders (and one order in full, with its invoice)${canManageBusiness(role) ? ", clients" : ""}, orders waiting for review, the workers and designers;`);
   if (read.some((t) => t.name === "announcements")) parts.push("announcements;");
   if (read.some((t) => t.name === "support_tickets")) parts.push("support tickets;");
   if (read.some((t) => t.name === "invoices")) parts.push("every invoice and the money accounts;");
@@ -355,8 +360,8 @@ export async function staffAppToolbox(person: Person, _page: string, channel: "a
   if (channel === "app") {
     const admin = staffAdminTools({ userId: person.id, role, email: person.email });
     const orders = isManagerRole(role) ? ordersAlexis.managerTools(role) : { read: [], change: [] };
-    const invoices = isManagerRole(role) ? invoiceTools() : { read: [], change: [] };
-    const people = isManagerRole(role) ? peopleTools(role, canViewAccounts(role)) : { read: [], change: [] };
+    const invoices = canManageBusiness(role) ? invoiceTools() : { read: [], change: [] };
+    const people = canManageBusiness(role) ? peopleTools(role, canViewAccounts(role)) : { read: [], change: [] };
     const settings = isManagerRole(role) ? settingsTools(role) : { read: [], change: [] };
     read.push(...admin.read, ...orders.read, ...invoices.read, ...people.read, ...settings.read);
     change.push(...admin.change, ...orders.change, ...invoices.change, ...(canViewAccounts(role) ? booksChanges(role === "boss") : []), ...people.change, ...settings.change);

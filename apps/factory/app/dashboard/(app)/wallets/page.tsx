@@ -7,14 +7,14 @@ import { WalletsAdmin } from "@repo/ui/wallet/WalletsAdmin";
 import { WithdrawalsQueue } from "@repo/ui/wallet/WithdrawalsQueue";
 import { getDashboardSession } from "@repo/lib/auth/session";
 import { fetchClients } from "@repo/lib/queries";
-import { isManagerRole } from "@repo/lib/types";
+import { canManageBusiness } from "@repo/lib/types";
 import { listPendingDeposits, listPendingWithdrawals, listWallets } from "@repo/lib/wallet/actions";
 
 export const dynamic = "force-dynamic";
 
 export default async function WalletsPage() {
   const session = await getDashboardSession();
-  if (!session || !isManagerRole(session.role)) redirect("/dashboard");
+  if (!session || !canManageBusiness(session.role)) redirect("/dashboard");
 
   return (
     <div className="space-y-6">

@@ -5,7 +5,7 @@ import { RowsSkeleton } from "@repo/ui/skeletons/blocks";
 import { Loading } from "@repo/ui/skeletons/Loading";
 import { fetchClientOrderCounts, fetchClients } from "@repo/lib/queries";
 import { getDashboardSession } from "@repo/lib/auth/session";
-import { isManagerRole } from "@repo/lib/types";
+import { canManageBusiness } from "@repo/lib/types";
 
 import { ClientPanel } from "../../client-panel";
 
@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 
 export default async function ClientsPage() {
   const session = await getDashboardSession();
-  if (!session || !isManagerRole(session.role)) redirect("/dashboard");
+  if (!session || !canManageBusiness(session.role)) redirect("/dashboard");
 
   return (
     <div className="space-y-6">

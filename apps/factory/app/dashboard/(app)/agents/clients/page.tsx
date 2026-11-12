@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { SectionLabel } from "@repo/ui/SectionLabel";
 import { allAgentClients, listAgents, pendingClientMatches } from "@repo/lib/agents/server";
 import { getDashboardSession } from "@repo/lib/auth/session";
-import { isManagerRole } from "@repo/lib/types";
+import { canManageBusiness } from "@repo/lib/types";
 
 import { AgentTabs } from "../agent-tabs";
 import { AgentClientsBoard } from "./agent-clients-board";
@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 // Agents' clients: registrations to check first, then everyone on an agent's list.
 export default async function AgentClientsPage() {
   const session = await getDashboardSession();
-  if (!session || !isManagerRole(session.role)) redirect("/dashboard");
+  if (!session || !canManageBusiness(session.role)) redirect("/dashboard");
   const [matches, clients, agents] = await Promise.all([pendingClientMatches(), allAgentClients(), listAgents()]);
   return (
     <div className="space-y-6">

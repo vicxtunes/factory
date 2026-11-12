@@ -6,7 +6,7 @@ import "server-only";
 // sign-in at all — holding the link is the permission (see ../public.ts).
 
 import { getClientSession, getDashboardSession } from "@repo/lib/auth/session";
-import { isManagerRole } from "@repo/lib/types";
+import { canManageBusiness, isManagerRole, type AppRole } from "@repo/lib/types";
 
 import { InvoiceError } from "./errors";
 
@@ -26,6 +26,13 @@ export async function requireStaff(): Promise<InvoiceStaff> {
     name: session.fullName || session.email || "Staff",
     role: session.role,
   };
+}
+
+/** Staff who take payments and see the invoice lists: not supervisors, who only make an order's invoice to route it. */
+export async function requireCashier(): Promise<InvoiceStaff> {
+  const staff = await requireStaff();
+  if (!canManageBusiness(staff.role as AppRole)) throw new InvoiceError("Payments are recorded by the boss or reception.");
+  return staff;
 }
 
 /** Company-wide invoice settings are the boss's to change. */

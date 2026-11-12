@@ -9,7 +9,7 @@ import { canManageProduction } from "@repo/lib/production/policy";
 import { canViewAnnouncements } from "@repo/lib/announcements/access";
 import { canViewAllStudios } from "@repo/lib/studios/policy";
 import { SUPPORT_OWNER_EMAIL } from "@repo/lib/support/constants";
-import { isManagerRole, type AppRole } from "@repo/lib/types";
+import { canManageBusiness, isManagerRole, type AppRole } from "@repo/lib/types";
 
 export interface NavViewer {
   role: AppRole;
@@ -36,6 +36,8 @@ export interface NavGroup {
 const everyone = () => true;
 const managers = (v: NavViewer) => isManagerRole(v.role);
 const boss = (v: NavViewer) => v.role === "boss";
+// Not supervisors: they manage production only (see canManageBusiness).
+const business = (v: NavViewer) => canManageBusiness(v.role);
 const accountsViewers = (v: NavViewer) => canViewAccounts(v.role);
 const production = (v: NavViewer) => canManageProduction(v.role);
 const studiosOverseers = (v: NavViewer) => canViewAllStudios(v.role);
@@ -69,16 +71,16 @@ export const NAV_GROUPS: NavGroup[] = [
     id: "payments",
     label: "Payments",
     items: [
-      { href: "/dashboard/invoices", label: "Invoices", icon: "invoice", visible: managers },
-      { href: "/dashboard/wallets", label: "Wallets", icon: "payment", visible: managers },
-      { href: "/dashboard/transactions", label: "Transactions", icon: "payment", visible: managers },
+      { href: "/dashboard/invoices", label: "Invoices", icon: "invoice", visible: business },
+      { href: "/dashboard/wallets", label: "Wallets", icon: "payment", visible: business },
+      { href: "/dashboard/transactions", label: "Transactions", icon: "payment", visible: business },
       // Studios' payments to vendors that Aming holds: disputes to settle, work waiting on studios.
       { href: "/dashboard/vendor-jobs", label: "Vendor jobs", icon: "agents", visible: boss },
     ],
   },
   {
     // The business's money at a glance: sales, money received, what clients
-    // owe and hold (packages/lib/accounting). Boss and supervisors only.
+    // owe and hold (packages/lib/accounting). Boss only.
     id: "accounts",
     label: "Accounts",
     items: [
@@ -108,9 +110,9 @@ export const NAV_GROUPS: NavGroup[] = [
     id: "catalog",
     label: "Catalog & Marketing",
     items: [
-      { href: "/dashboard/products", label: "Products", icon: "products", visible: managers },
+      { href: "/dashboard/products", label: "Products", icon: "products", visible: business },
       { href: "/dashboard/showroom", label: "Showroom", icon: "showroom", visible: everyone },
-      { href: "/dashboard/marketing", label: "Carousel & discounts", icon: "marketing", visible: managers },
+      { href: "/dashboard/marketing", label: "Carousel & discounts", icon: "marketing", visible: business },
       { href: "/dashboard/announcements", label: "Announcements", icon: "announcements", visible: canViewAnnouncements },
     ],
   },
@@ -118,12 +120,12 @@ export const NAV_GROUPS: NavGroup[] = [
     id: "people",
     label: "People",
     items: [
-      { href: "/dashboard/clients", label: "Clients", icon: "clients", visible: managers },
+      { href: "/dashboard/clients", label: "Clients", icon: "clients", visible: business },
       // Clients' own photography studios (packages/lib/studios). The boss oversees them all.
       { href: "/dashboard/studios", label: "Businesses", icon: "studio", visible: studiosOverseers },
       // Ready-made services with packages that businesses start from (packages/lib/offerings, "Templates").
       { href: "/dashboard/service-templates", label: "Service templates", icon: "products", visible: studiosOverseers },
-      { href: "/dashboard/agents", label: "Agents", icon: "agents", visible: managers },
+      { href: "/dashboard/agents", label: "Agents", icon: "agents", visible: business },
       { href: "/dashboard/workers", label: "Workers", icon: "workers", visible: managers },
       { href: "/dashboard/designers", label: "Designers", icon: "designers", visible: managers },
       { href: "/dashboard/admins", label: "Admins", icon: "admins", visible: boss },

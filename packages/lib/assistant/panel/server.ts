@@ -921,7 +921,7 @@ export function suggestionsFor(person: Person, page: string): string[] {
     return ["Where is my latest order?", "Do I owe anything?", "Add photos to my order", "Show me where to top up my wallet"];
   }
   if (person.role === "boss") return ["How much money came in today?", "Is everything OK on the server?", "Which orders are waiting for review?", "Record an expense"];
-  if (person.role === "supervisor") return ["How much money came in today?", "Which orders are waiting for review?", "Record an expense", "What expenses are still owed?"];
+  if (person.role === "supervisor") return ["Which orders are waiting for review?", "Find an order", "Mark an item as finished", "Show me where to assign an order"];
   return ["Find an order", "Which orders are waiting for review?", "Add a new client", "Show me where to place an order"];
 }
 

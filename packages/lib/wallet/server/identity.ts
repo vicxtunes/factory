@@ -7,7 +7,7 @@ import "server-only";
 import { AppError } from "@repo/lib/kernel/core";
 import { getClientSession, getDashboardSession } from "@repo/lib/auth/session";
 import { studioOfCaller } from "@repo/lib/studios/server";
-import { isManagerRole } from "@repo/lib/types";
+import { canManageBusiness } from "@repo/lib/types";
 
 import { WalletError } from "./errors";
 
@@ -51,10 +51,10 @@ export async function requireBusinessOwner(): Promise<{ tenantId: string; owner:
   }
 }
 
-/** A signed-in dashboard user allowed to manage wallets, or throws. */
+/** A signed-in dashboard user allowed to manage wallets (not supervisors), or throws. */
 export async function requireStaff(): Promise<StaffViewer> {
   const session = await getDashboardSession();
-  if (!session || !isManagerRole(session.role)) throw new WalletError("You don't have access to client wallets.");
+  if (!session || !canManageBusiness(session.role)) throw new WalletError("You don't have access to client wallets.");
   return {
     type: "dashboard_user",
     id: session.userId,
@@ -66,7 +66,7 @@ export async function requireStaff(): Promise<StaffViewer> {
 /** Whoever is signed in, client or staff; null for anyone else. */
 export async function getViewer(): Promise<ClientViewer | StaffViewer | null> {
   const dashboard = await getDashboardSession();
-  if (dashboard && isManagerRole(dashboard.role)) {
+  if (dashboard && canManageBusiness(dashboard.role)) {
     return {
       type: "dashboard_user",
       id: dashboard.userId,

@@ -47,6 +47,15 @@ export function isManagerRole(role: AppRole): boolean {
   return role === "supervisor" || role === "receptionist" || role === "boss";
 }
 
+// Supervisors manage production only (owner, 2026-11-12): orders (office and
+// client, including making the invoice to route one), the Production pages,
+// workers, designers and stations. Clients, agents, payments, wallets,
+// invoices lists, the catalog, marketing and Accounts are the boss's and the
+// receptionist's (receptionist unchanged).
+export function canManageBusiness(role: AppRole): boolean {
+  return role === "boss" || role === "receptionist";
+}
+
 // Receptionist is the data-entry role (orders, clients, agents) and does
 // NOT get worker login-credential actions — setting a worker's initial PIN,
 // resetting a PIN, or activating/deactivating a worker's account. Those stay

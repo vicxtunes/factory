@@ -54,8 +54,11 @@ export function StaffInvoicePanel({
   onChanged,
   onInvoiceStatusChange,
   asViewer,
+  takesPayments = true,
 }: {
   orderId: string;
+  /** False for supervisors: they make an order's invoice to route it, but don't record payments. */
+  takesPayments?: boolean;
   onChanged?: () => void;
   onInvoiceStatusChange?: (exists: boolean) => void;
   /** Show the invoice straight away, full screen, with no card (the Invoices list); `onClose` when it's closed. */
@@ -122,7 +125,7 @@ export function StaffInvoicePanel({
   }
 
   const inv = invoice;
-  const canTakeMoney = !inv.order.cancelled && inv.balance > 0;
+  const canTakeMoney = takesPayments && !inv.order.cancelled && inv.balance > 0;
 
   async function copy() {
     try {
@@ -241,7 +244,7 @@ export function StaffInvoicePanel({
 
       {mode === "pay" && canTakeMoney ? walletButton : null}
 
-      {mode === "pay" ? (
+      {mode === "pay" && canTakeMoney ? (
         <PaymentForm
           balance={inv.balance}
           clientName={inv.client.name}

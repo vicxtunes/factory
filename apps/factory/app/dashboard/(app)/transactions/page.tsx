@@ -8,7 +8,7 @@ import { Loading } from "@repo/ui/skeletons/Loading";
 import { getDashboardSession } from "@repo/lib/auth/session";
 import { METHOD_LABELS } from "@repo/lib/wallet/policy";
 import { getAllTransactionHistory } from "@repo/lib/wallet/actions";
-import { isManagerRole } from "@repo/lib/types";
+import { canManageBusiness } from "@repo/lib/types";
 import type { PaymentStatus, TransactionHistoryKind } from "@repo/lib/wallet/types";
 
 export const dynamic = "force-dynamic";
@@ -35,7 +35,7 @@ export default async function TransactionsPage({
   searchParams?: Promise<{ q?: string | string[]; kind?: string | string[]; status?: string | string[]; page?: string | string[] }>;
 }) {
   const session = await getDashboardSession();
-  if (!session || !isManagerRole(session.role)) redirect("/dashboard");
+  if (!session || !canManageBusiness(session.role)) redirect("/dashboard");
 
   const params = searchParams ? await searchParams : {};
   const q = getQueryParam(params.q);

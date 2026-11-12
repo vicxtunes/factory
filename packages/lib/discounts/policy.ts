@@ -1,6 +1,6 @@
 // Who may see and change discounts. Pure.
 
-import { isManagerRole, type AppRole } from "@repo/lib/types";
+import { canManageBusiness, type AppRole } from "@repo/lib/types";
 
 /** Creating and ending discounts changes prices for everyone: the boss only, like the carousel. */
 export function canManageDiscounts(role: AppRole): boolean {
@@ -8,5 +8,5 @@ export function canManageDiscounts(role: AppRole): boolean {
 }
 
 export function canViewDiscounts(role: AppRole): boolean {
-  return isManagerRole(role);
+  return canManageBusiness(role);
 }

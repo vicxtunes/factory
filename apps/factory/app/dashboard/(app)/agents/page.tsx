@@ -5,7 +5,7 @@ import { RowsSkeleton } from "@repo/ui/skeletons/blocks";
 import { Loading } from "@repo/ui/skeletons/Loading";
 import { listAgentsWithFigures, payFirstForAll } from "@repo/lib/agents/server";
 import { getDashboardSession } from "@repo/lib/auth/session";
-import { isManagerRole } from "@repo/lib/types";
+import { canManageBusiness } from "@repo/lib/types";
 
 import { AgentTabs } from "./agent-tabs";
 import { AgentsBoard } from "./agents-board";
@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 
 export default async function AgentsPage() {
   const session = await getDashboardSession();
-  if (!session || !isManagerRole(session.role)) redirect("/dashboard");
+  if (!session || !canManageBusiness(session.role)) redirect("/dashboard");
   const boss = session.role === "boss";
 
   return (

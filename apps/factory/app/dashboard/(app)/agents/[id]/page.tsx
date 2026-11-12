@@ -8,7 +8,7 @@ import { agentById, agentClients, figuresFor, payFirstForAll } from "@repo/lib/a
 import { getDashboardSession } from "@repo/lib/auth/session";
 import { formatMoney } from "@repo/lib/currency/format";
 import { fetchBaseCurrencySymbol } from "@repo/lib/queries";
-import { isManagerRole } from "@repo/lib/types";
+import { canManageBusiness } from "@repo/lib/types";
 import { agentWallet } from "@repo/lib/wallet/agent";
 
 import { AgentActions } from "./agent-actions";
@@ -29,7 +29,7 @@ function Section({ title, empty, children }: { title: string; empty: string; chi
 // One agent: performance, orders, clients and every transaction.
 export default async function AgentPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await getDashboardSession();
-  if (!session || !isManagerRole(session.role)) redirect("/dashboard");
+  if (!session || !canManageBusiness(session.role)) redirect("/dashboard");
   const { id } = await params;
   if (!z.string().uuid().safeParse(id).success) notFound();
   const agent = await agentById(id);

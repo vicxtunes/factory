@@ -20,7 +20,7 @@ import type { AppRole } from "@repo/lib/types";
 
 import { InvoiceError } from "./server/errors";
 import { sendOwingReminders, type RemindersSent } from "./server/reminders";
-import { getClientIdOrNull, requireBoss, requireClientId, requireStaff } from "./server/identity";
+import { getClientIdOrNull, requireBoss, requireCashier, requireClientId, requireStaff } from "./server/identity";
 import * as directory from "./server/directory";
 import * as service from "./server/service";
 import type {
@@ -154,7 +154,7 @@ export async function recordInvoicePayment(
   input: InvoicePaymentInput,
 ): Promise<InvoiceResult<{ applied: number; toWallet: number; physicallyRefunded: number; invoice: StaffInvoiceView }>> {
   return run(async () => {
-    const result = await service.recordPayment(await requireStaff(), invoiceId, input);
+    const result = await service.recordPayment(await requireCashier(), invoiceId, input);
     refresh();
     return result;
   });
@@ -164,7 +164,7 @@ export async function applyWalletToInvoice(
   invoiceId: string,
 ): Promise<InvoiceResult<{ applied: number; invoice: StaffInvoiceView }>> {
   return run(async () => {
-    const result = await service.applyWallet(await requireStaff(), invoiceId);
+    const result = await service.applyWallet(await requireCashier(), invoiceId);
     refresh();
     return result;
   });
@@ -172,7 +172,7 @@ export async function applyWalletToInvoice(
 
 export async function listInvoices(): Promise<InvoiceResult<InvoiceListRow[]>> {
   return run(async () => {
-    await requireStaff();
+    await requireCashier();
     return service.list();
   });
 }
@@ -180,7 +180,7 @@ export async function listInvoices(): Promise<InvoiceResult<InvoiceListRow[]>> {
 /** Invoices matching a search, however old (the list itself shows the latest). */
 export async function searchInvoices(query: string): Promise<InvoiceResult<InvoiceListRow[]>> {
   return run(async () => {
-    await requireStaff();
+    await requireCashier();
     return service.search(String(query ?? "").slice(0, 80));
   });
 }
@@ -225,7 +225,7 @@ export async function saveInvoiceSettings(input: InvoiceSettingsInput): Promise<
 /** "Send reminders": a push and an email to every client who owes, at most once a day each. Whoever may see Accounts. */
 export async function sendInvoiceReminders(): Promise<InvoiceResult<RemindersSent>> {
   return run(async () => {
-    const staff = await requireStaff();
+    const staff = await requireCashier();
     if (!canViewAccounts(staff.role as AppRole)) throw new InvoiceError("Only the boss and supervisors can send reminders.");
     return sendOwingReminders();
   });

@@ -6,7 +6,7 @@ import { getDashboardSession, type DashboardSession } from "@repo/lib/auth/sessi
 
 import { canViewAccounts } from "./policy";
 
-/** For Accounts pages: the signed-in boss or supervisor, else back to the dashboard. */
+/** For Accounts pages: the signed-in boss, else back to the dashboard. */
 export async function requireAccountsAccess(): Promise<DashboardSession> {
   const session = await getDashboardSession();
   if (!session || !canViewAccounts(session.role)) redirect("/dashboard");
