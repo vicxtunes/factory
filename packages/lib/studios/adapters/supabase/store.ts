@@ -75,10 +75,13 @@ export const supabaseStudioStore: StudioStore = {
       .select(COLUMNS)
       .single<Row>();
     if (data) return toStudio(data);
-    // Opened twice at once: the other request created it first.
+    // Opened twice at once: the other request created it first. Asked afresh:
+    // Next.js would otherwise hand back this render's earlier identical read
+    // (no business yet), as it did on live on 2026-11-12. A signal opts out.
     if (error?.code === UNIQUE_VIOLATION) {
-      const existing = await this.findByOwner(owner.clientId);
-      if (existing) return existing;
+      const { data: existing, error: again } = await studios().eq("owner_client_id", owner.clientId).abortSignal(new AbortController().signal).maybeSingle<Row>();
+      if (again) fail("load the business", again);
+      if (existing) return toStudio(existing);
     }
     fail("create the business", error ?? { message: "no row returned" });
   },
