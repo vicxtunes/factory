@@ -7,6 +7,7 @@ import { createAdminClient } from "@repo/lib/supabase/admin";
 import { selectByIds } from "@repo/lib/supabase/by-ids";
 
 import { InvoiceError, throwInvoiceDbError } from "./errors";
+import { searchOrFilters } from "@repo/lib/search";
 
 export interface InvoiceRow {
   id: string;
@@ -52,6 +53,29 @@ export async function byToken(token: string): Promise<InvoiceRow | null> {
     .maybeSingle<InvoiceRow>();
   if (error) fail(error);
   return data;
+}
+
+/** Every word in the invoice number or the order's number, client or phone. */
+export async function search(query: string, limit: number): Promise<InvoiceRow[]> {
+  const db = createAdminClient();
+  const byInvoice = searchOrFilters(query, ["invoice_no"]);
+  if (!byInvoice.length) return [];
+  let orders = db.from("orders").select("id");
+  for (const f of searchOrFilters(query, ["order_no", "client_name", "client_phone"])) orders = orders.or(f);
+  let own = db.from("invoices").select(COLUMNS);
+  for (const f of byInvoice) own = own.or(f);
+  const [matchedOrders, matchedInvoices] = await Promise.all([orders.order("created_at", { ascending: false }).limit(limit), own.order("issued_at", { ascending: false }).limit(limit).returns<InvoiceRow[]>()]);
+  if (matchedOrders.error) fail(matchedOrders.error);
+  if (matchedInvoices.error) fail(matchedInvoices.error);
+  const ids = (matchedOrders.data ?? []).map((o) => o.id as string);
+  const byOrder: InvoiceRow[] = [];
+  for (let i = 0; i < ids.length; i += 150) {
+    const { data, error } = await db.from("invoices").select(COLUMNS).in("order_id", ids.slice(i, i + 150)).returns<InvoiceRow[]>();
+    if (error) fail(error);
+    byOrder.push(...(data ?? []));
+  }
+  const seen = new Map([...(matchedInvoices.data ?? []), ...byOrder].map((r) => [r.id, r]));
+  return [...seen.values()].sort((a, b) => b.issued_at.localeCompare(a.issued_at)).slice(0, limit);
 }
 
 export async function list(limit: number): Promise<InvoiceRow[]> {

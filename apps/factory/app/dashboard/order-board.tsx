@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { CreateOrderDrawer } from "@repo/ui/order/CreateOrderDrawer";
 import { ExportButtons } from "@repo/ui/order/ExportButtons";
@@ -12,7 +12,8 @@ import { Popover } from "@repo/ui/Popover";
 import { SectionLabel } from "@repo/ui/SectionLabel";
 import { createClient } from "@repo/lib/supabase/browser";
 import { useLiveOrderItems, type LoadItems } from "@repo/lib/supabase/useLiveOrderItems";
-import { ORDER_ITEM_SELECT, RECENT_DAYS, selectRecentItems } from "@repo/lib/item-select";
+import { ORDER_ITEM_SELECT, RECENT_DAYS, searchOrderItems, selectRecentItems } from "@repo/lib/item-select";
+import { searchWords } from "@repo/lib/search";
 import {
   activeChips,
   activeFilterCount,
@@ -190,6 +191,28 @@ export function OrderBoard({
     setOlderLoaded(true);
   }
 
+  // Older orders matching the search, fetched while typing: the board only
+  // loads recent work, and a search must still find the rest.
+  const [found, setFound] = useState<{ search: string; rows: OrderItemWithOrder[] }>({ search: "", rows: [] });
+  useEffect(() => {
+    if (olderLoaded || !searchWords(filters.search).length) return;
+    let current = true;
+    const timer = setTimeout(async () => {
+      const rows = await searchOrderItems(supabaseRef.current, filters.search);
+      if (current) setFound({ search: filters.search, rows });
+    }, 350);
+    return () => {
+      current = false;
+      clearTimeout(timer);
+    };
+  }, [filters.search, olderLoaded]);
+  const allItems = useMemo(() => {
+    // Only what was found for the search on screen, and not once everything is loaded anyway.
+    if (olderLoaded || found.search !== filters.search || !found.rows.length) return items;
+    const have = new Set(items.map((i) => i.id));
+    return [...items, ...found.rows.filter((i) => !have.has(i.id))];
+  }, [items, found, filters.search, olderLoaded]);
+
   // Ready + Delivered and with-designer items are hidden by default — the
   // board tracks work in progress. Checking either toggle switches the whole
   // view to just that bucket (or both, if both are checked) instead of
@@ -197,12 +220,18 @@ export function OrderBoard({
   // "show delivered" is to review delivered orders without scrolling past
   // everything still in progress first.
   const matched = useMemo(
-    () => filterItems(items, filters, workerById),
-    [items, filters, workerById],
+    () => filterItems(allItems, filters, workerById),
+    [allItems, filters, workerById],
   );
   const statusFilterIsFinished =
     filters.status !== "" && FINISHED_STATUSES.includes(filters.status);
   const showingFinished = showFinished || statusFilterIsFinished;
+  // A search looks everywhere: delivered, with the designer and cancelled
+  // orders show with the active ones instead of hiding behind their boxes.
+  const searching = searchWords(filters.search).length > 0;
+  const seeFinished = showingFinished || searching;
+  const seeWithDesigner = showWithDesigner || searching;
+  const seeCancelled = showCancelled || searching;
 
   // Cancelled orders are their own bucket, hidden unless asked for, and never
   // mixed into the active / delivered / with-designer buckets below.
@@ -227,10 +256,10 @@ export function OrderBoard({
       ),
     [liveMatched],
   );
-  const hiddenFinished = showingFinished ? 0 : deliveredItems.length;
-  const hiddenWithDesigner = showWithDesigner ? 0 : withDesignerItems.length;
-  const hiddenCancelled = showCancelled ? 0 : cancelledItems.length;
-  const anyBucketToggled = showingFinished || showWithDesigner || showCancelled;
+  const hiddenFinished = seeFinished ? 0 : deliveredItems.length;
+  const hiddenWithDesigner = seeWithDesigner ? 0 : withDesignerItems.length;
+  const hiddenCancelled = seeCancelled ? 0 : cancelledItems.length;
+  const anyBucketToggled = seeFinished || seeWithDesigner || seeCancelled;
 
   // When neither toggle is on: active work only (the default). When either
   // is on: active work is hidden entirely and only the checked bucket(s)
@@ -240,9 +269,10 @@ export function OrderBoard({
     () =>
       anyBucketToggled
         ? [
-            ...(showingFinished ? deliveredItems : []),
-            ...(showWithDesigner ? withDesignerItems : []),
-            ...(showCancelled ? cancelledItems : []),
+            ...(searching ? activeItems : []),
+            ...(seeFinished ? deliveredItems : []),
+            ...(seeWithDesigner ? withDesignerItems : []),
+            ...(seeCancelled ? cancelledItems : []),
           ]
         : activeItems,
     [
@@ -250,10 +280,11 @@ export function OrderBoard({
       deliveredItems,
       withDesignerItems,
       cancelledItems,
-      showingFinished,
-      showWithDesigner,
-      showCancelled,
+      seeFinished,
+      seeWithDesigner,
+      seeCancelled,
       anyBucketToggled,
+      searching,
     ],
   );
 
@@ -267,7 +298,7 @@ export function OrderBoard({
     [filters, workerById],
   );
 
-  const selectedItem = items.find((i) => i.id === selectedId) ?? null;
+  const selectedItem = allItems.find((i) => i.id === selectedId) ?? null;
   const selectedAssignedName = selectedItem?.assigned_worker_id
     ? (workerById.get(selectedItem.assigned_worker_id)?.name ?? null)
     : null;
@@ -297,16 +328,16 @@ export function OrderBoard({
 
   const groups = useMemo(() => groupByCategory(activeItems), [groupByCategory, activeItems]);
   const deliveredGroups = useMemo(
-    () => (showingFinished ? groupByCategory(deliveredItems) : []),
-    [groupByCategory, deliveredItems, showingFinished],
+    () => (seeFinished ? groupByCategory(deliveredItems) : []),
+    [groupByCategory, deliveredItems, seeFinished],
   );
   const withDesignerGroups = useMemo(
-    () => (showWithDesigner ? groupByCategory(withDesignerItems) : []),
-    [groupByCategory, withDesignerItems, showWithDesigner],
+    () => (seeWithDesigner ? groupByCategory(withDesignerItems) : []),
+    [groupByCategory, withDesignerItems, seeWithDesigner],
   );
   const cancelledGroups = useMemo(
-    () => (showCancelled ? groupByCategory(cancelledItems) : []),
-    [groupByCategory, cancelledItems, showCancelled],
+    () => (seeCancelled ? groupByCategory(cancelledItems) : []),
+    [groupByCategory, cancelledItems, seeCancelled],
   );
 
   const tableItems = useMemo(() => sortOrderListItems(filtered), [filtered]);
@@ -319,7 +350,7 @@ export function OrderBoard({
         <TextInput
           className="w-full"
           value={filters.search}
-          placeholder="Search order no or client…"
+          placeholder="Search order no, client, phone or product…"
           onChange={(e) => patch({ search: e.target.value })}
         />
       </div>
@@ -688,8 +719,17 @@ export function OrderBoard({
         // Either toggle on: active work is hidden entirely, not scrolled
         // past — only the checked bucket(s) render, right at the top.
         <div className="space-y-8">
-          {showingFinished && deliveredGroups.length > 0 ? (
+          {searching && groups.length > 0 ? (
             <div className="space-y-6">
+              <h2 className="text-sm font-semibold text-foreground">
+                In progress <span className="tnum text-muted">({activeItems.length})</span>
+              </h2>
+              <CategoryGroups groups={groups} workerById={workerById} onOpen={setSelectedId} />
+            </div>
+          ) : null}
+
+          {seeFinished && deliveredGroups.length > 0 ? (
+            <div className={`space-y-6 ${searching && groups.length > 0 ? "border-t border-border pt-6" : ""}`}>
               <h2 className="text-sm font-semibold text-foreground">
                 Delivered <span className="tnum text-muted">({deliveredItems.length})</span>
               </h2>
@@ -697,9 +737,9 @@ export function OrderBoard({
             </div>
           ) : null}
 
-          {showWithDesigner && withDesignerGroups.length > 0 ? (
+          {seeWithDesigner && withDesignerGroups.length > 0 ? (
             <div
-              className={`space-y-6 ${showingFinished && deliveredGroups.length > 0 ? "border-t border-border pt-6" : ""}`}
+              className={`space-y-6 ${seeFinished && deliveredGroups.length > 0 ? "border-t border-border pt-6" : ""}`}
             >
               <h2 className="text-sm font-semibold text-foreground">
                 With designer <span className="tnum text-muted">({withDesignerItems.length})</span>
@@ -708,10 +748,10 @@ export function OrderBoard({
             </div>
           ) : null}
 
-          {showCancelled && cancelledGroups.length > 0 ? (
+          {seeCancelled && cancelledGroups.length > 0 ? (
             <div
               className={`space-y-6 ${
-                (showingFinished && deliveredGroups.length > 0) || (showWithDesigner && withDesignerGroups.length > 0)
+                (seeFinished && deliveredGroups.length > 0) || (seeWithDesigner && withDesignerGroups.length > 0)
                   ? "border-t border-border pt-6"
                   : ""
               }`}

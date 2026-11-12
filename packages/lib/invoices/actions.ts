@@ -177,6 +177,14 @@ export async function listInvoices(): Promise<InvoiceResult<InvoiceListRow[]>> {
   });
 }
 
+/** Invoices matching a search, however old (the list itself shows the latest). */
+export async function searchInvoices(query: string): Promise<InvoiceResult<InvoiceListRow[]>> {
+  return run(async () => {
+    await requireStaff();
+    return service.search(String(query ?? "").slice(0, 80));
+  });
+}
+
 // --- Settings (boss) ---------------------------------------------------------
 
 /** What's printed on every invoice: company details, terms, signature line. */

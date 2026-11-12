@@ -16,6 +16,7 @@ import { formatMoney } from "@repo/lib/currency/format";
 import { Costing, fromPlainCostBook, type CostMaterial, type PlainCostBook } from "@repo/lib/production/core";
 
 import { COST_BY_LABELS, MaterialSheet, costSummary } from "./costing";
+import { matchesSearch } from "@repo/lib/search";
 
 function sellSummary(m: CostMaterial, money: (n: number) => string): string {
   const sizes = Object.entries(m.sizeSells);
@@ -38,8 +39,7 @@ export function MaterialsBoard({ book: plain, sizes, setsPrices }: { book: Plain
     const u = costing.usedBy(m.id);
     return [...u.products.map(productName), ...u.materials.map((id) => costing.material(id)?.name ?? "a material")];
   };
-  const q = query.trim().toLowerCase();
-  const shown = materials.filter((m) => (showInactive || m.active) && (!q || m.name.toLowerCase().includes(q)));
+  const shown = materials.filter((m) => (showInactive || m.active) && matchesSearch(query, [m.name]));
   const inactive = materials.filter((m) => !m.active).length;
 
   const columns: DataTableColumn<CostMaterial>[] = [

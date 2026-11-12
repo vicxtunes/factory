@@ -11,6 +11,7 @@ import type { AppRole } from "@repo/lib/types";
 import { confirmDeposit, listPendingDeposits, listWallets, recordDeposit, rejectDeposit, resolveMoneyAlert } from "@repo/lib/wallet/actions";
 
 import { deleteClient, updateClient } from "./dashboard/actions";
+import { matchesSearch } from "@repo/lib/search";
 
 // Clients, their wallets and agents through Alexis (2026-11-10), on cards that
 // run the pages' own server actions. Wallet money only comes in here (a
@@ -52,8 +53,7 @@ function managerTools(): { read: AssistantTool[]; change: ChangeTool[] } {
         run: async ({ search }) => {
           const res = await listWallets();
           if (!res.ok) return res.error;
-          const q = search?.toLowerCase() ?? "";
-          const rows = res.data.filter((w) => !q || [w.clientName, w.phone ?? ""].some((t) => t.toLowerCase().includes(q)));
+          const rows = res.data.filter((w) => matchesSearch(search ?? "", [w.clientName, w.phone]));
           return { count: rows.length, total: rows.reduce((s, w) => s + w.balance, 0), wallets: rows.slice(0, 100) };
         },
       }),
@@ -164,8 +164,7 @@ function bossTools(): { read: AssistantTool[]; change: ChangeTool[] } {
         description: "Everyone on any agent's list as they are on Aming: client id, agent id and name, name, phone, email, orders. Also the % agents pay before production for all agents.",
         inputSchema: z.object({ search: z.string().max(60).nullable() }),
         run: async ({ search }) => {
-          const q = search?.toLowerCase() ?? "";
-          const rows = (await allAgentClients()).filter((r) => !q || [r.name, r.phone ?? "", r.agentName].some((t) => t.toLowerCase().includes(q)));
+          const rows = (await allAgentClients()).filter((r) => matchesSearch(search ?? "", [r.name, r.phone, r.email, r.agentName]));
           return { payFirstForAll: await payFirstForAll(), count: rows.length, clients: rows.slice(0, 100) };
         },
       }),

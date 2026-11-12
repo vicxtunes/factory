@@ -12,6 +12,7 @@ import type { AgentClientListRow, MergeTarget } from "@repo/lib/agents/server";
 import { matchReasonLabel } from "@repo/lib/clients/match";
 
 import { updateClient } from "../../../actions";
+import { matchesSearch } from "@repo/lib/search";
 
 type Sheet = { kind: "edit" | "merge" | "move"; client: AgentClientListRow } | null;
 
@@ -25,8 +26,8 @@ const contacts = (c: { phone: string | null; email: string | null }) => [c.phone
 export function AgentClientsBoard({ clients, agents, boss }: { clients: AgentClientListRow[]; agents: { id: string; name: string }[]; boss: boolean }) {
   const [query, setQuery] = useState("");
   const [sheet, setSheet] = useState<Sheet>(null);
-  const q = query.trim().toLowerCase();
-  const shown = q ? clients.filter((c) => [c.name, c.phone, c.email, c.agentName].some((v) => v?.toLowerCase().includes(q))) : clients;
+  const q = query.trim();
+  const shown = clients.filter((c) => matchesSearch(q, [c.name, c.phone, c.email, c.agentName]));
   const noContacts = clients.filter((c) => !c.phone && !c.email).length;
 
   const actions = (c: AgentClientListRow) =>

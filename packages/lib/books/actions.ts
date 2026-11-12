@@ -25,7 +25,9 @@ import {
   moneyMoveInputSchema,
   openingInputSchema,
   otherMoneyInputSchema,
+  scheduleEditSchema,
   scheduleInputSchema,
+  scheduleStopSchema,
   voidInputSchema,
   voidMoneyMoveSchema,
   voidOtherMoneySchema,
@@ -127,10 +129,45 @@ export async function addExpenseSchedule(input: unknown): Promise<Result> {
   });
 }
 
+export async function editExpenseSchedule(input: unknown): Promise<Result> {
+  return runAction("books", async () => {
+    const { actor, isBoss } = await staff();
+    await expenses.editSchedule(parseInput(scheduleEditSchema, input), isBoss, actor);
+    expensesChanged();
+  });
+}
+
+/** Pause or cancel; the unpaid bills chosen are voided with it. Returns how many were. */
+export async function stopExpenseSchedule(input: unknown): Promise<Result<number>> {
+  return runAction("books", async () => {
+    const { actor } = await staff();
+    const voided = await expenses.stopSchedule(parseInput(scheduleStopSchema, input), actor.name);
+    expensesChanged();
+    return voided;
+  });
+}
+
+/** Cancel with nothing voided (Alexis). */
 export async function endExpenseSchedule(id: unknown): Promise<Result> {
   return runAction("books", async () => {
     const { actor } = await staff();
-    await expenses.endSchedule(parseInput(voidInputSchema.pick({ id: true }), { id }).id, actor.name);
+    await expenses.stopSchedule({ id: parseInput(voidInputSchema.pick({ id: true }), { id }).id, end: true, voidIds: [] }, actor.name);
+    expensesChanged();
+  });
+}
+
+export async function resumeExpenseSchedule(id: unknown): Promise<Result> {
+  return runAction("books", async () => {
+    const { actor } = await staff();
+    await expenses.resumeSchedule(parseInput(voidInputSchema.pick({ id: true }), { id }).id, actor.name);
+    expensesChanged();
+  });
+}
+
+export async function restoreExpense(id: unknown): Promise<Result> {
+  return runAction("books", async () => {
+    const { actor } = await staff();
+    await expenses.restoreExpense(parseInput(voidInputSchema.pick({ id: true }), { id }).id, actor.name);
     expensesChanged();
   });
 }

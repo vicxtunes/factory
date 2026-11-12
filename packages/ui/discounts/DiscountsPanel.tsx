@@ -11,6 +11,7 @@ import { formatMoney } from "@repo/lib/currency/format";
 import { createDiscount, stopDiscount } from "@repo/lib/discounts/actions";
 import { offerBadge, type DiscountInput, type DiscountStatus } from "@repo/lib/discounts/core";
 import type { DiscountView } from "@repo/lib/discounts/service";
+import { matchesSearch } from "@repo/lib/search";
 
 export interface DiscountProductOption {
   id: string;
@@ -184,8 +185,7 @@ function DiscountForm({
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
-  const query = search.trim().toLowerCase();
-  const shown = products.filter((p) => !query || `${p.name} ${p.category}`.toLowerCase().includes(query));
+  const shown = products.filter((p) => matchesSearch(search, [p.name, p.category]));
   const amount = Number(value.replace(/[,\s]/g, ""));
 
   function toggle(id: string) {

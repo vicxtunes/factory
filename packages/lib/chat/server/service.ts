@@ -46,6 +46,7 @@ import {
 import * as repo from "./repository";
 import { channelsFor, conversationChannel, ringPeople } from "./signals";
 import * as storage from "./storage";
+import { matchesSearch, searchWords } from "@repo/lib/search";
 
 // Deliberately vague: "not found" and "not allowed" look identical, so the
 // API can't be used to probe which conversations exist.
@@ -227,9 +228,14 @@ export async function searchMessages(viewer: ParticipantRef, query: string): Pro
   const q = query.trim();
   if (q.length < CHAT_LIMITS.minSearchLength) return [];
 
-  // Escape ILIKE wildcards so "50%" searches for a literal percent sign.
-  const pattern = `%${q.replace(/[\\%_]/g, (m) => `\\${m}`)}%`;
-  const rows = await repo.searchMessages(viewer, policy.isStaff(viewer), pattern, CHAT_LIMITS.maxSearchResults);
+  // The database looks for the longest word; every word, in any order, is
+  // then checked here (packages/lib/search.ts), so more are asked for.
+  const words = searchWords(q);
+  const longest = words.reduce((a, w) => (w.length > a.length ? w : a), "");
+  if (!longest) return [];
+  const pattern = `%${longest.replace(/[\\%_]/g, (m) => `\\${m}`)}%`;
+  const found = await repo.searchMessages(viewer, policy.isStaff(viewer), pattern, CHAT_LIMITS.maxSearchResults * (words.length > 1 ? 4 : 1));
+  const rows = found.filter((r) => matchesSearch(q, [r.body, r.sender_name])).slice(0, CHAT_LIMITS.maxSearchResults);
   if (!rows.length) return [];
 
   const conversations = (await repo.getConversations([...new Set(rows.map((r) => r.conversation_id))])).filter((c) =>
