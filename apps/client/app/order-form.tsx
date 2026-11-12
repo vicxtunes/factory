@@ -21,7 +21,10 @@ import { isPhotobookCategory } from "@repo/lib/orders/photobook";
 import type { OrderItemInput } from "@repo/lib/orders/types";
 import { attachDriveToItem } from "@repo/lib/storage/actions";
 import { canOptimizeImage } from "@repo/lib/storage/client";
-import { startUploads } from "@repo/ui/transfers/store";
+import { startUploads, uploadToDrive } from "@repo/ui/transfers/store";
+import { createFolder } from "@repo/lib/files/actions";
+import { MAX_FILE_BYTES } from "@repo/lib/files/core";
+import { formatBytes } from "@repo/lib/photos/core";
 import type { Currency, OrderType, Product, ProductCategory } from "@repo/lib/types";
 
 import type { AgentPlaceResult } from "@repo/lib/agents/actions";
@@ -555,6 +558,18 @@ function ItemRow({
         </div>
       ) : null}
 
+      {hasDrive && category ? (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-brand-200 bg-brand-50 p-3 text-sm dark:border-brand-500/30 dark:bg-brand-500/10">
+          <p className="min-w-0 flex-1">
+            <span className="font-semibold">Many photos or big files?</span> Put them in your Drive, then tap <span className="font-medium">From my Drive</span> below. They upload in the
+            background and carry on if the connection drops.
+          </p>
+          <a href="/drive" target="_blank" rel="noreferrer" className="shrink-0 text-sm font-semibold text-brand-600 underline">
+            Open my Drive
+          </a>
+        </div>
+      ) : null}
+
       <div className="mt-4 grid gap-4 border-t border-border pt-4 sm:grid-cols-2">
         <Field label="Photo link" hint="Drive, Dropbox, etc. — optional">
           <TextInput
@@ -580,6 +595,13 @@ function ItemRow({
               items={item.files.map((file) => ({ key: uploadKey(file), file, state: "selected" as const }))}
               onRemove={(key) => onChange({ files: item.files.filter((f) => uploadKey(f) !== key) })}
             />
+            {hasDrive ? (
+              <SendBigFilesToDrive
+                files={item.files}
+                label={category?.name ?? "Order"}
+                onSent={(folder) => onChange({ files: [], driveFiles: [...item.driveFiles, folder] })}
+              />
+            ) : null}
           </div>
         ) : null}
         {hasDrive && category ? (
@@ -881,5 +903,51 @@ function OrderSummary({
         ))}
       </div>
     </aside>
+  );
+}
+
+/** A file this big, or files this big together, are better sent through the Drive. */
+const BIG_FILE_BYTES = 25 * 1024 ** 2;
+const BIG_TOTAL_BYTES = 100 * 1024 ** 2;
+
+/**
+ * Big files picked on the order form (owner, 2026-11-12): offers to send them
+ * to the client's Drive instead, into a new folder that's attached to the
+ * item once the order is placed. They upload in the background
+ * (packages/ui/transfers), keep going after the order is sent, and the
+ * factory sees the folder's files as they land.
+ */
+function SendBigFilesToDrive({ files, label, onSent }: { files: File[]; label: string; onSent: (folder: DrivePick) => void }) {
+  const [error, setError] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+  const total = files.reduce((sum, f) => sum + f.size, 0);
+  if (!files.some((f) => f.size >= BIG_FILE_BYTES) && total < BIG_TOTAL_BYTES) return null;
+  const tooBig = files.filter((f) => f.size > MAX_FILE_BYTES);
+
+  function send() {
+    setError(null);
+    start(async () => {
+      const when = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date()).replace(":", ".");
+      const name = `${label} files, ${when}`.slice(0, 120);
+      const res = await createFolder({ as: "studio" }, { parentId: null, name });
+      if (!res.ok) return setError(res.error);
+      const sending = files.filter((f) => f.size <= MAX_FILE_BYTES);
+      uploadToDrive({ as: "studio" }, res.data!, name, sending);
+      onSent({ kind: "folder", id: res.data!, name });
+    });
+  }
+
+  return (
+    <div className="space-y-2 rounded-xl border border-warning-300 bg-warning-50 p-3 text-sm dark:border-warning-500/40 dark:bg-warning-500/10">
+      <p>
+        These are big ({formatBytes(total)}). Send them to your Drive instead: they upload in the background, carry on if the connection drops, and stay in your Drive for next time. The folder is
+        added to this order.
+      </p>
+      {tooBig.length ? <p className="text-xs text-error-600">{tooBig.map((f) => f.name).join(", ")}: over 1 GB, so left out.</p> : null}
+      {error ? <p className="text-xs text-error-600">{error}</p> : null}
+      <Button type="button" size="sm" loading={pending} onClick={send}>
+        Send them to my Drive
+      </Button>
+    </div>
   );
 }

@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 
 import { createAdminClient } from "@repo/lib/supabase/admin";
 import { getClientSession, requireMediaUploadAccess } from "@repo/lib/auth/session";
-import { filesCaller } from "@repo/lib/files/access";
+import { filesCaller, orderItemDriveLinks } from "@repo/lib/files/access";
 import { clientPath } from "@repo/lib/client-portal/paths";
 import { notifyActor } from "@repo/lib/push/send";
 import { logOrderEvent, resolveActor, type AuditActor } from "@repo/lib/audit/log";
@@ -232,6 +232,77 @@ export async function attachDriveToItem(orderItemId: string, picks: { folderIds:
     return { ok: true };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Your Drive files couldn't be attached." };
+  }
+}
+
+/** The signed-in client's own order item, or null. */
+async function myOrderItem(orderItemId: string): Promise<{ orderNo: string; product: string } | null> {
+  const session = await getClientSession();
+  if (!session) return null;
+  const { data: item } = await createAdminClient()
+    .from("order_items")
+    .select("product, order:orders!inner (client_id, order_no)")
+    .eq("id", orderItemId)
+    .maybeSingle<{ product: string; order: { client_id: string | null; order_no: string } }>();
+  if (!item || item.order.client_id !== session.client_id) return null;
+  return { orderNo: item.order.order_no, product: item.product };
+}
+
+/**
+ * What a client's order item has from their own Drive, for its page
+ * (owner, 2026-11-12: each order shows its Drive): the folders and files, by
+ * name. Empty when nothing is attached, or it came from another business's Drive.
+ */
+export async function myOrderItemDrive(
+  orderItemId: string,
+): Promise<{ ok: true; data: { folders: { id: string; name: string }[]; files: { id: string; name: string }[] } } | { ok: false; error: string }> {
+  try {
+    if (!(await myOrderItem(orderItemId))) return { ok: false, error: "Order item not found." };
+    const links = await orderItemDriveLinks(orderItemId);
+    const { drive, scope, access } = await filesCaller({ as: "studio" });
+    if (!links || links.tenantId !== scope.tenantId) return { ok: true, data: { folders: [], files: [] } };
+    const listed = await Promise.all(links.folderIds.map((id) => drive.list(scope, id, access)));
+    const folders = listed.flatMap((l) => (l?.folder ? [{ id: l.folder.id, name: l.folder.name }] : []));
+    const files = await Promise.all(
+      links.fileIds.map(async (id) => {
+        const [f] = await drive.downloads(scope, { fileIds: [id] }, "original", access);
+        return f ? [{ id, name: f.path }] : [];
+      }),
+    );
+    return { ok: true, data: { folders, files: files.flat() } };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Your Drive couldn't be read." };
+  }
+}
+
+/**
+ * The order item's folder in the client's Drive, to upload big files into:
+ * the first folder already attached from their Drive, or a new one at the top
+ * ("Order 2026-0042, Photo book"), attached to the item.
+ */
+export async function myOrderItemDriveFolder(orderItemId: string): Promise<{ ok: true; data: { id: string; name: string } } | { ok: false; error: string }> {
+  try {
+    const item = await myOrderItem(orderItemId);
+    if (!item) return { ok: false, error: "Order item not found." };
+    const { drive, scope, access } = await filesCaller({ as: "studio" });
+    const links = await orderItemDriveLinks(orderItemId);
+    if (links && links.tenantId === scope.tenantId) {
+      for (const id of links.folderIds) {
+        const listed = await drive.list(scope, id, access);
+        if (listed?.folder) return { ok: true, data: { id: listed.folder.id, name: listed.folder.name } };
+      }
+    }
+    const top = await drive.list(scope, null, access);
+    const base = `Order ${item.orderNo}, ${item.product}`.slice(0, 80);
+    const taken = new Set((top?.folders ?? []).map((f) => f.name.toLowerCase()));
+    let name = base;
+    for (let n = 2; taken.has(name.toLowerCase()); n++) name = `${base} (${n})`;
+    const id = await drive.createFolder(scope, { parentId: null, name }, access);
+    const attached = await attachDriveToItem(orderItemId, { folderIds: [id], fileIds: [] });
+    if (!attached.ok) return attached;
+    return { ok: true, data: { id, name } };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Your Drive folder couldn't be made." };
   }
 }
 

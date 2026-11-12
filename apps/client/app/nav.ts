@@ -32,6 +32,8 @@ export const CLIENT_NAV: ClientNavSection[] = [
       // Used all the time, so it stands alone rather than in a section — same as the staff dashboard.
       { href: "/chat", label: "Chat", icon: "chat", requiresSignIn: true },
       { href: "/showroom", label: "Showroom", icon: "showroom", requiresSignIn: true },
+      // The client's Drive (the same as My Business → Drive), kept close for big order files. Needs studios on.
+      ...(STUDIOS_ENABLED ? [{ href: "/drive", label: "Drive", icon: "files" as const, requiresSignIn: true }] : []),
     ],
   },
   {
