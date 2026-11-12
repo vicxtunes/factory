@@ -13,6 +13,8 @@ import { CLIENT_STATUS_LABELS, clientStatus } from "@repo/lib/orders/clientStatu
 import { orderAmount } from "@repo/lib/orders/pricing";
 import { lineDiscountOf } from "@repo/lib/discounts/core/rules";
 import { LinePrice } from "@repo/ui/order/LinePrice";
+import { OrderDrive } from "@repo/ui/files/OrderDrive";
+import { STUDIOS_ENABLED } from "@repo/lib/studios/feature";
 import type { OrderItemWithOrder } from "@repo/lib/types";
 
 import { OrderProgressTracker } from "./progress-tracker";
@@ -125,6 +127,13 @@ export function ClientItemDetail({ item, orderItems }: { item: OrderItemWithOrde
       {photoCount > 0 ? (
         <Collapsible title="Photos" summary={item.media.length ? `${item.media.length} file${item.media.length === 1 ? "" : "s"}` : "Link"}>
           <MediaLinks media={item.media} legacyLink={photoLink} editable={false} />
+        </Collapsible>
+      ) : null}
+
+      {/* Big files for this order, through the client's Drive (owner, 2026-11-12). */}
+      {STUDIOS_ENABLED ? (
+        <Collapsible title="Your Drive" summary="Big photo sets and videos">
+          <OrderDrive itemId={item.id} />
         </Collapsible>
       ) : null}
     </div>

@@ -12,7 +12,7 @@ import { localDate } from "@repo/lib/accounting/core/period";
 import { getClientSession, getDashboardSession } from "@repo/lib/auth/session";
 import { createAdminClient } from "@repo/lib/supabase/admin";
 import { portalClient, studioAtSlug } from "@repo/lib/studio-portal/server";
-import { studioOfCaller, studios } from "@repo/lib/studios/server";
+import { driveOfCaller, studios } from "@repo/lib/studios/server";
 import { tasks } from "@repo/lib/tasks/server";
 import { canUse } from "@repo/lib/team/core";
 import { studioScope } from "@repo/lib/studios/core";
@@ -106,7 +106,7 @@ export async function filesCaller(via: Via): Promise<FilesCaller> {
     };
   }
   if (via.as === "studio") {
-    const { scope, access, session, studio } = await studioOfCaller("anyone");
+    const { scope, access, session, studio } = await driveOfCaller();
     const who: Commenter = { kind: access.owner ? "studio" : "member", name: session.name };
     const base = { drive: files, scope, who, studio: { name: studio.name, ownerClientId: studio.ownerClientId } };
     const person = access.owner ? ({ kind: "owner" } as const) : ({ kind: "member", memberId: access.memberId } as const);
