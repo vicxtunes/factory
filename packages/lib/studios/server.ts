@@ -123,6 +123,18 @@ export async function studioOfCaller(need?: StudioNeed): Promise<CallerStudio> {
 }
 
 /**
+ * For the Drive: the caller's working studio, like studioOfCaller("anyone"),
+ * except that an owner's own Drive works before Aming approves the business
+ * (owner, 2026-11-12: every client has a Drive, the same one as in My
+ * Business, opened from the marketplace and the order form for big files).
+ */
+export async function driveOfCaller(): Promise<CallerStudio> {
+  const caller = await callerStudio();
+  if (!caller) throw new StudioError("Sign in to use your Drive.");
+  return caller;
+}
+
+/**
  * For actions that are part of setting up (the address, the logo): the
  * caller's studio while it's being set up, or once it works.
  */
