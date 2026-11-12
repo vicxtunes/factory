@@ -71,6 +71,7 @@ export function OrderBoard({
   canManage,
   canViewAudit,
   canCancel = false,
+  takesPayments = false,
   catalog,
   clients,
   agents,
@@ -84,6 +85,8 @@ export function OrderBoard({
   canViewAudit: boolean;
   // Boss only — see cancelOrder in ./actions.ts.
   canCancel?: boolean;
+  /** Boss and reception record payments; supervisors don't (canManageBusiness). */
+  takesPayments?: boolean;
   catalog: ProductCategory[];
   clients: Client[];
   agents: Agent[];
@@ -778,6 +781,7 @@ export function OrderBoard({
             assignedName={selectedAssignedName}
             canManage={canManage}
             canViewAudit={canViewAudit}
+            takesPayments={takesPayments}
             canCancel={
               canCancel &&
               !selectedItem.order.cancelled_at &&

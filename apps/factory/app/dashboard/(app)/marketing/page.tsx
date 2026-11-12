@@ -9,7 +9,7 @@ import { getDashboardSession } from "@repo/lib/auth/session";
 import { listDiscounts } from "@repo/lib/discounts/actions";
 import { canManageDiscounts } from "@repo/lib/discounts/policy";
 import { fetchMarketingSlides, fetchProductCatalog } from "@repo/lib/queries";
-import { isManagerRole } from "@repo/lib/types";
+import { canManageBusiness } from "@repo/lib/types";
 import { listTopupBonuses } from "@repo/lib/wallet/actions";
 
 import { MarketingPanel } from "../../marketing-panel";
@@ -19,7 +19,7 @@ export const dynamic = "force-dynamic";
 
 export default async function MarketingPage() {
   const session = await getDashboardSession();
-  if (!session || !isManagerRole(session.role)) redirect("/dashboard");
+  if (!session || !canManageBusiness(session.role)) redirect("/dashboard");
 
   const canManage = session.role === "boss";
 

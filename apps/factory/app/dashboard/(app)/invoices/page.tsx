@@ -6,13 +6,13 @@ import { RowsSkeleton } from "@repo/ui/skeletons/blocks";
 import { Loading } from "@repo/ui/skeletons/Loading";
 import { getDashboardSession } from "@repo/lib/auth/session";
 import { listInvoices } from "@repo/lib/invoices/actions";
-import { isManagerRole } from "@repo/lib/types";
+import { canManageBusiness } from "@repo/lib/types";
 
 export const dynamic = "force-dynamic";
 
 export default async function InvoicesPage() {
   const session = await getDashboardSession();
-  if (!session || !isManagerRole(session.role)) redirect("/dashboard");
+  if (!session || !canManageBusiness(session.role)) redirect("/dashboard");
 
   return (
     <div className="space-y-6">

@@ -9,7 +9,7 @@ import { getClientSession, getDashboardSession } from "@repo/lib/auth/session";
 import { AppError, parseInput, type Result } from "@repo/lib/kernel/core";
 import { runAction } from "@repo/lib/kernel/server/action";
 import type { OrderItemInput } from "@repo/lib/orders/types";
-import { isManagerRole, type OrderType } from "@repo/lib/types";
+import { canManageBusiness, type OrderType } from "@repo/lib/types";
 import { WalletError, checkOrderLinkPayment, startOrderLinkPayment } from "@repo/lib/wallet/orders";
 import type { MobileMoneyCollection } from "@repo/lib/wallet/types";
 
@@ -34,7 +34,7 @@ async function requireBoss(): Promise<string> {
 
 async function requireManagerName(): Promise<string> {
   const session = await getDashboardSession();
-  if (!session || !isManagerRole(session.role)) throw new AppError("You don't have access to this.");
+  if (!session || !canManageBusiness(session.role)) throw new AppError("You don't have access to this.");
   return session.fullName || session.email || "Staff";
 }
 

@@ -58,6 +58,7 @@ export function OrderApprovalQueue({
   costs,
   driveLinks,
   canCancel = false,
+  takesPayments = false,
 }: {
   items: OrderItemWithOrder[];
   designers: DesignerPublic[];
@@ -69,6 +70,8 @@ export function OrderApprovalQueue({
   /** Agents' own orders: paid so far and the % (set by the boss) needed before production (packages/lib/agents). */
   agentPayments: Record<string, { paid: number; percent: number; needed: number | null }>;
   canCancel?: boolean;
+  /** Boss and reception record payments on the invoice; supervisors only make it. */
+  takesPayments?: boolean;
 }) {
   const groups = useMemo(() => groupByOrder(items), [items]);
   // Every client order that hasn't been sent on yet: check it, confirm it,
@@ -91,6 +94,7 @@ export function OrderApprovalQueue({
             agentPayment={agentPayments[g.orderId] ?? null}
             costs={costs}
             canCancel={canCancel}
+            takesPayments={takesPayments}
           />
         ))}
         {incoming.length === 0 ? <p className="text-sm text-muted">No new client orders.</p> : null}
@@ -273,6 +277,7 @@ function RouteCard({
   costs,
   driveLinks,
   canCancel = false,
+  takesPayments = false,
 }: {
   group: OrderGroup;
   designers: DesignerPublic[];
@@ -283,6 +288,7 @@ function RouteCard({
   // client — photo books have no catalog price (see ./order-confirmation.tsx).
   call?: boolean;
   canCancel?: boolean;
+  takesPayments?: boolean;
 }) {
   const symbol = useCurrencySymbol();
   const router = useRouter();
@@ -328,6 +334,7 @@ function RouteCard({
           <AgreedPrices items={group.items} invoiced={invoiceReady} onChanged={() => router.refresh()} />
           <StaffInvoicePanel
             orderId={group.orderId}
+            takesPayments={takesPayments}
             onChanged={() => router.refresh()}
             onInvoiceStatusChange={setInvoiceReady}
           />

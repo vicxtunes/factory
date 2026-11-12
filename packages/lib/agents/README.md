@@ -56,7 +56,7 @@ for. **Only the boss** answers (`/dashboard/agents/withdrawals`):
 - **Mobile money:** approving hands it to HivePay, whose answer settles it. HivePay takes its fee from
   what it sends. The boss's setting says who carries that: `agent`, nothing more happens; `aming`,
   the fee goes back on the balance once HivePay reports it. Sending extra up front isn't possible
-  without HivePay's price list (`HIVEPAY_SEND_FEES`). The setting in force when they asked applies.
+  without HivePay's price list, which it doesn't publish. The setting in force when they asked applies.
 - **Bank:** the boss sends it by hand and records the reference and account. Any bank charge is a
   normal expense.
 
