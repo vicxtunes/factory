@@ -9,6 +9,7 @@ import { Tabs } from "@repo/ui/Tabs";
 import type { SaleLine } from "@repo/lib/accounting/core/figures";
 
 import { STATUS_LABELS, StatusBadge, formatDate, useMoney } from "./shared";
+import { matchesSearch } from "@repo/lib/search";
 
 export type SalesFilter = "all" | "unpaid" | "partially_paid" | "paid" | "overdue" | "cancelled";
 
@@ -27,9 +28,8 @@ function matches(line: SaleLine, filter: SalesFilter): boolean {
   return line.status === filter;
 }
 
-function matchesSearch(line: SaleLine, query: string): boolean {
-  if (!query) return true;
-  return [line.number, line.orderNo ?? "", line.customerName, line.products].some((f) => f.toLowerCase().includes(query));
+function lineMatches(line: SaleLine, query: string): boolean {
+  return matchesSearch(query, [line.number, line.orderNo, line.customerName, line.products, line.total]);
 }
 
 /** Sales (invoiced orders) with status filters, search, totals and export. */
@@ -48,9 +48,9 @@ export function SalesTable({
   const money = useMoney();
   const [filter, setFilter] = useState<SalesFilter>(initialFilter);
   const [search, setSearch] = useState("");
-  const query = search.trim().toLowerCase();
+  const query = search;
 
-  const searched = useMemo(() => lines.filter((l) => matchesSearch(l, query)), [lines, query]);
+  const searched = useMemo(() => lines.filter((l) => lineMatches(l, query)), [lines, query]);
   const visible = useMemo(() => searched.filter((l) => matches(l, filter)), [searched, filter]);
   const counts = useMemo(
     () => Object.fromEntries(FILTERS.map((f) => [f.key, searched.filter((l) => matches(l, f.key)).length])) as Record<SalesFilter, number>,

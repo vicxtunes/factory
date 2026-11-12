@@ -3,7 +3,7 @@ import "server-only";
 import { z } from "zod";
 
 import { accounting } from "@repo/lib/accounting/index.server";
-import { expenseBalance, expenseStatus } from "@repo/lib/books/expenses";
+import { expenseBalance, expenseStatus, repeatLabel, scheduleState } from "@repo/lib/books/expenses";
 import { expensesBoard } from "@repo/lib/books/expenses-server";
 import { otherMoneyIn } from "@repo/lib/books/server";
 import { createAdminClient } from "@repo/lib/supabase/admin";
@@ -92,7 +92,7 @@ export function accountsTools(): AssistantTool[] {
         search: z.string().max(60).nullable().describe("Name, recipient or description."),
       }),
       run: async ({ status, category, from, to, search }) => {
-        const board = await expensesBoard(await resolveTenantScope());
+        const board = await expensesBoard(await resolveTenantScope(), { fromDate: from, toDate: to });
         const lines = board.lines
           .map((e) => ({ ...e, state: expenseStatus(e, board.today), balance: expenseBalance(e) }))
           .filter(
@@ -105,12 +105,12 @@ export function accountsTools(): AssistantTool[] {
               (!search || [e.name, e.recipient, e.description].some((t) => has(t, search))),
           )
           .sort((a, b) => Number(b.state === "overdue") - Number(a.state === "overdue") || b.spentOn.localeCompare(a.spentOn));
-        const schedules = board.schedules.filter((s) => !s.endedAt && (!category || has(s.categoryName, category)) && (!search || [s.name, s.recipient].some((t) => has(t, search))));
+        const schedules = board.schedules.filter((s) => (!category || has(s.categoryName, category)) && (!search || [s.name, s.recipient].some((t) => has(t, search))));
         return {
           today: board.today,
           totals: { count: lines.length, amount: lines.reduce((s, e) => s + e.amount, 0), paid: lines.reduce((s, e) => s + Math.min(e.paid, e.amount), 0), balance: lines.reduce((s, e) => s + e.balance, 0), overdue: lines.filter((e) => e.state === "overdue").reduce((s, e) => s + e.balance, 0) },
-          ...listed(lines.map((e) => ({ id: e.id, name: e.name, category: e.categoryName, amount: e.amount, estimate: e.amountIsEstimate, paid: e.paid, balance: e.balance, status: e.state, date: e.spentOn, due: e.dueOn, repeats: e.scheduleEvery, paidTo: e.recipient, note: e.description, recordedBy: e.recordedBy }))),
-          repeating: schedules.map((s) => ({ id: s.id, name: s.name, category: s.categoryName, amount: s.amount, varies: s.varies, every: s.every, since: s.firstDueOn, paidTo: s.recipient })),
+          ...listed(lines.map((e) => ({ id: e.id, name: e.name, category: e.categoryName, amount: e.amount, estimate: e.amountIsEstimate, paid: e.paid, balance: e.balance, status: e.state, date: e.spentOn, due: e.dueOn, repeats: e.scheduleEvery ? repeatLabel(e.scheduleEvery, e.scheduleEveryCount ?? 1, e.dueOn) : null, paidTo: e.recipient, note: e.description, recordedBy: e.recordedBy }))),
+          repeating: schedules.map((s) => ({ id: s.id, name: s.name, category: s.categoryName, amount: s.amount, varies: s.varies, every: repeatLabel(s.every, s.everyCount, s.nextCreatedOn), state: scheduleState(s), nextBillMadeOn: s.nextCreatedOn, endsOn: s.endsOn, maxBills: s.times, billsSoFar: s.bills, paidSoFar: s.paidTotal, paidTo: s.recipient })),
         };
       },
     }),

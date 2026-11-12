@@ -5,6 +5,7 @@ import { useState } from "react";
 
 import type { FeedItem } from "@repo/lib/studio-portal/core";
 import { studioInitials } from "@repo/lib/studios/core";
+import { matchesSearch } from "@repo/lib/search";
 
 // The work grid on Aming's front page (landing.tsx), like Behance's: a
 // search on top, then the work as big tiles, each one opening its studio's
@@ -12,11 +13,7 @@ import { studioInitials } from "@repo/lib/studios/core";
 
 export function ExploreFeed({ items }: { items: FeedItem[] }) {
   const [query, setQuery] = useState("");
-  const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
-  const shown = items.filter((item) => {
-    const text = `${item.title} ${item.business.name}`.toLowerCase();
-    return words.every((w) => text.includes(w));
-  });
+  const shown = items.filter((item) => matchesSearch(query, [item.title, item.business.name]));
 
   return (
     <section aria-label="Work on Aming">

@@ -19,6 +19,7 @@ import { staffAdminTools } from "@repo/lib/assistant/panel/tools/staff-admin";
 import { changeTool, outcome, readTool, type ChangeTool, type Toolbox } from "@repo/lib/assistant/panel/toolbox";
 import type { AssistantTool } from "@repo/lib/assistant/server/tools";
 import { addExpenseSchedule, recordExpense } from "@repo/lib/books/actions";
+import { repeatLabel } from "@repo/lib/books/expenses";
 import { fetchApprovalQueueItems, fetchBoardItems, fetchDesignerItems } from "@repo/lib/queries";
 import { createAdminClient } from "@repo/lib/supabase/admin";
 import { createClient } from "@repo/lib/supabase/server";
@@ -30,6 +31,7 @@ import { ordersAlexis } from "./alexis-orders";
 import { peopleTools } from "./alexis-people";
 import { settingsTools } from "./alexis-settings";
 import { addClient, overrideStatus, updateCurrency, updateUserRole } from "./dashboard/actions";
+import { searchOrFilters } from "@repo/lib/search";
 
 // Alexis's tools in the staff app (packages/lib/assistant/panel). Each set is
 // given only to the roles the app already lets do that thing (the same
@@ -39,9 +41,6 @@ import { addClient, overrideStatus, updateCurrency, updateUserRole } from "./das
 const PERIODS = ["today", "yesterday", "this_week", "this_month", "last_month", "this_year", "all"] as const;
 const STATUSES = Object.keys(STATUS_LABELS) as [ProductionStatus, ...ProductionStatus[]];
 const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "A date as YYYY-MM-DD.");
-
-/** Words safe inside a PostgREST or() filter. */
-const searchable = (s: string) => s.replace(/[,()*%\\]/g, " ").trim().slice(0, 60);
 
 const ORDER_COLUMNS =
   "id, order_no, client_name, client_phone, delivery_date, status, approval_status, order_type, agent_name, cancelled_at, created_at, items:order_items (id, product, product_type, qty, production_status, unit_price)";
@@ -58,8 +57,7 @@ function staffReads(role: AppRole, db: SupabaseClient, inApp: boolean): Assistan
         inputSchema: z.object({ search: z.string().max(60).nullable(), limit: z.number().int().min(1).max(20).nullable() }),
         run: async ({ search, limit }) => {
           let query = db.from("orders").select(ORDER_COLUMNS).order("created_at", { ascending: false }).limit(limit ?? 10);
-          const q = search ? searchable(search) : "";
-          if (q) query = query.or(`order_no.ilike.%${q}%,client_name.ilike.%${q}%,client_phone.ilike.%${q}%`);
+          for (const f of searchOrFilters(search ?? "", ["order_no", "client_name", "client_phone"])) query = query.or(f);
           const { data, error } = await query;
           if (error) throw new Error(error.message);
           return data;
@@ -70,13 +68,9 @@ function staffReads(role: AppRole, db: SupabaseClient, inApp: boolean): Assistan
         description: "Find Aming's clients by name, phone or email.",
         inputSchema: z.object({ search: z.string().min(1).max(60) }),
         run: async ({ search }) => {
-          const q = searchable(search);
-          const { data, error } = await db
-            .from("clients")
-            .select("id, name, phone, email, active, created_at")
-            .or(`name.ilike.%${q}%,phone.ilike.%${q}%,email.ilike.%${q}%`)
-            .order("name")
-            .limit(15);
+          let query = db.from("clients").select("id, name, phone, email, active, created_at");
+          for (const f of searchOrFilters(search, ["name", "phone", "email"])) query = query.or(f);
+          const { data, error } = await query.order("name").limit(15);
           if (error) throw new Error(error.message);
           return data;
         },
@@ -218,13 +212,29 @@ function staffChanges(role: AppRole): ChangeTool[] {
       }),
       changeTool({
         name: "add_expense_reminder",
-        description: "Add a repeating expense (rent, salaries, internet…) that comes due every week, month or year, with a reminder.",
-        inputSchema: expense.extend({ every: z.enum(["week", "month", "year"]), firstDueOn: day, varies: z.boolean().describe("The amount changes each time.") }),
-        card: async (e) => ({
-          title: `Repeating expense: ${e.name}, UGX ${e.amount.toLocaleString("en-UG")} every ${e.every}`,
-          lines: [`Category: ${e.category}`, `First due: ${e.firstDueOn}`, e.varies ? "The amount varies" : "Same amount each time", ...(e.recipient ? [`Paid to: ${e.recipient}`] : [])],
+        description:
+          "Add a repeating expense (rent, salaries, internet…) that comes due every N days, weeks, months or years, with a reminder. For a weekly one on a set weekday, make firstDueOn that weekday. It can stop on a date or after a number of bills.",
+        inputSchema: expense.extend({
+          every: z.enum(["day", "week", "month", "year"]),
+          everyCount: z.number().int().min(1).max(366).describe("2 with week: every 2 weeks."),
+          firstDueOn: day,
+          endsOn: day.nullable().describe("No bill due after this day."),
+          times: z.number().int().min(1).max(1000).nullable().describe("At most this many bills."),
+          varies: z.boolean().describe("The amount changes each time."),
         }),
-        run: async (e) => outcome(await addExpenseSchedule({ ...e, id: randomUUID(), recipient: e.recipient ?? "", description: e.description ?? "" }), `${e.name} will come due every ${e.every}.`),
+        card: async (e) => ({
+          title: `Repeating expense: ${e.name}, UGX ${e.amount.toLocaleString("en-UG")}, ${repeatLabel(e.every, e.everyCount, e.firstDueOn).toLowerCase()}`,
+          lines: [
+            `Category: ${e.category}`,
+            `First due: ${e.firstDueOn}`,
+            e.varies ? "The amount varies" : "Same amount each time",
+            ...(e.endsOn ? [`Ends: ${e.endsOn}`] : []),
+            ...(e.times ? [`${e.times} bills in all`] : []),
+            ...(e.recipient ? [`Paid to: ${e.recipient}`] : []),
+          ],
+        }),
+        run: async (e) =>
+          outcome(await addExpenseSchedule({ ...e, id: randomUUID(), recipient: e.recipient ?? "", description: e.description ?? "" }), `${e.name} will come due ${repeatLabel(e.every, e.everyCount, e.firstDueOn).toLowerCase()}.`),
       }),
     );
   }

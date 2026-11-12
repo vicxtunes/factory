@@ -48,6 +48,7 @@ import {
 import { formatBytes } from "@repo/lib/photos/core";
 import { formatDay } from "@repo/lib/tenancy/format";
 import type { TenantScope } from "@repo/lib/tenancy/types";
+import { matchesSearch } from "@repo/lib/search";
 
 type Entry = { kind: "folder"; id: string; name: string; folder: Folder } | { kind: "file"; id: string; name: string; file: FileView };
 type View = "grid" | "list";
@@ -446,7 +447,7 @@ export function FileBrowser({
     });
   }
 
-  const match = (name: string) => name.toLowerCase().includes(query.trim().toLowerCase());
+  const match = (name: string) => matchesSearch(query, [name]);
   const entries: Entry[] = [
     ...(onlyPicked ? [] : listing.folders.filter((f) => match(f.name)).map((f): Entry => ({ kind: "folder", id: f.id, name: f.name, folder: f }))),
     ...listing.files.filter((f) => match(f.name) && (!onlyPicked || picks.has(f.id))).map((f): Entry => ({ kind: "file", id: f.id, name: f.name, file: f })),

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@repo/ui/Button";
@@ -13,6 +13,8 @@ import type { InvoiceListRow, InvoiceStatus } from "@repo/lib/invoices/types";
 import { InvoiceStatusBadge } from "./InvoiceStatusBadge";
 import { InvoiceSettingsDrawer } from "./InvoiceSettingsDrawer";
 import { StaffInvoicePanel } from "./StaffInvoicePanel";
+import { matchesSearch, searchWords } from "@repo/lib/search";
+import { searchInvoices } from "@repo/lib/invoices/actions";
 
 // Staff's Invoices page: every invoice with what's paid and outstanding,
 // filterable by status. Opening one shows the invoice itself full screen,
@@ -30,12 +32,27 @@ export function InvoicesList({ invoices, canEditSettings }: { invoices: InvoiceL
   const [open, setOpen] = useState<InvoiceListRow | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
-  const q = search.trim().toLowerCase();
-  const visible = invoices.filter(
-    (i) =>
-      (filter === "all" || i.status === filter) &&
-      (!q || [i.invoiceNo, i.orderNo, i.clientName].some((v) => v.toLowerCase().includes(q))),
-  );
+  // The list holds the latest invoices; a search also asks for older ones.
+  const [older, setOlder] = useState<InvoiceListRow[]>([]);
+  useEffect(() => {
+    if (!searchWords(search).length) return;
+    let current = true;
+    const timer = setTimeout(async () => {
+      const res = await searchInvoices(search);
+      if (current && res.ok) setOlder(res.data);
+    }, 350);
+    return () => {
+      current = false;
+      clearTimeout(timer);
+    };
+  }, [search]);
+  const searched = useMemo(() => {
+    if (!searchWords(search).length) return invoices;
+    const have = new Set(invoices.map((i) => i.id));
+    return [...invoices, ...older.filter((i) => !have.has(i.id))];
+  }, [invoices, older, search]);
+
+  const visible = searched.filter((i) => (filter === "all" || i.status === filter) && matchesSearch(search, [i.invoiceNo, i.orderNo, i.clientName, i.amount]));
   const outstanding = invoices.filter((i) => i.status !== "cancelled").reduce((sum, i) => sum + i.balance, 0);
   const count = (f: Filter) => (f === "all" ? invoices.length : invoices.filter((i) => i.status === f).length);
 

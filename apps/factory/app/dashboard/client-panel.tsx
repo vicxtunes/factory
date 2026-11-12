@@ -20,6 +20,7 @@ import {
   type BulkImportRowError,
   type BulkImportRowSkip,
 } from "./actions";
+import { matchesSearch } from "@repo/lib/search";
 
 interface ClientExportRow extends Record<string, unknown> {
   name: string;
@@ -62,12 +63,7 @@ export function ClientPanel({
   const [phone, setPhone] = useState("");
   const [formOpen, setFormOpen] = useState(false);
 
-  const q = search.trim().toLowerCase();
-  const visibleClients = q
-    ? clients.filter((c) =>
-        [c.name, c.email, c.phone].some((v) => v?.toLowerCase().includes(q)),
-      )
-    : clients;
+  const visibleClients = clients.filter((c) => matchesSearch(search, [c.name, c.email, c.phone]));
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
@@ -229,7 +225,7 @@ export function ClientPanel({
         />
         <span className="text-xs text-muted tnum">
           {visibleClients.length}
-          {q ? ` of ${clients.length}` : ""} client{visibleClients.length === 1 ? "" : "s"}
+          {search.trim() ? ` of ${clients.length}` : ""} client{visibleClients.length === 1 ? "" : "s"}
         </span>
       </div>
 

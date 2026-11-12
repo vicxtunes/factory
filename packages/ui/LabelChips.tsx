@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 
 import { Popover } from "./Popover";
+import { matchesSearch } from "@repo/lib/search";
 
 // Coloured tag chips on a task. Read-only without `onChange`; with it,
 // each chip gets a ✕ and a "+ Label" button opens a searchable list of the
@@ -65,7 +66,7 @@ export function LabelChips({
   const [query, setQuery] = useState("");
   const applied = value.map((k) => available.find((l) => l.key === k)).filter((l): l is Label => !!l);
   const q = query.trim();
-  const matches = available.filter((l) => l.name.toLowerCase().includes(q.toLowerCase()));
+  const matches = available.filter((l) => matchesSearch(q, [l.name]));
   const canCreate = !!onCreate && q !== "" && !available.some((l) => l.name.toLowerCase() === q.toLowerCase());
 
   function toggle(key: string) {

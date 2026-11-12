@@ -9,6 +9,7 @@ import { Tabs } from "@repo/ui/Tabs";
 import type { CustomerAccount } from "@repo/lib/accounting/core/figures";
 
 import { useMoney } from "./shared";
+import { matchesSearch } from "@repo/lib/search";
 
 type AccountsFilter = "owing" | "overdue" | "held" | "all";
 
@@ -24,12 +25,12 @@ export function CustomerAccountsTable({ accounts }: { accounts: CustomerAccount[
   const money = useMoney();
   const [filter, setFilter] = useState<AccountsFilter>("owing");
   const [search, setSearch] = useState("");
-  const query = search.trim().toLowerCase();
+  const query = search;
 
   const searched = useMemo(
     () =>
       accounts
-        .filter((a) => !query || a.name.toLowerCase().includes(query) || (a.phone ?? "").includes(query))
+        .filter((a) => matchesSearch(query, [a.name, a.phone]))
         .sort((a, b) => b.outstanding - a.outstanding || b.invoiced - a.invoiced || a.name.localeCompare(b.name)),
     [accounts, query],
   );

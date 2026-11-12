@@ -16,6 +16,7 @@ import { Card, EmptyState, FigureTile, formatDayTime, useMoney } from "@repo/ui/
 import { VoidSheet, parseNumber } from "@repo/ui/production/sheets";
 import { closeDay, moveMoney, setOpeningBalances, voidMoneyMove } from "@repo/lib/books/actions";
 import { DAY_LINE_LABELS, accountMoves, dayTotals, type DayAccount, type DayBook, type DayLine } from "@repo/lib/books/model";
+import { matchesSearch } from "@repo/lib/search";
 
 const METHODS: Record<string, string> = { cash: "Cash", mobile_money: "Mobile money", bank_transfer: "Bank transfer", card: "Card", other: "Other", move: "Own accounts" };
 
@@ -39,10 +40,7 @@ function who(l: DayLine): string {
 }
 
 function matches(l: DayLine, query: string, accountName: string): boolean {
-  if (!query) return true;
-  return [l.party, l.senderName ?? "", l.phone ?? "", l.reference ?? "", l.detail ?? "", l.recordedBy ?? "", METHODS[l.method] ?? l.method, accountName, DAY_LINE_LABELS[l.kind]].some((f) =>
-    f.toLowerCase().includes(query),
-  );
+  return matchesSearch(query, [l.party, l.senderName, l.phone, l.reference, l.detail, l.recordedBy, METHODS[l.method] ?? l.method, accountName, DAY_LINE_LABELS[l.kind], l.amount]);
 }
 
 export function DayBookBoard({ book, timeZone }: { book: DayBook; timeZone: string }) {
@@ -51,7 +49,7 @@ export function DayBookBoard({ book, timeZone }: { book: DayBook; timeZone: stri
   const [search, setSearch] = useState("");
   const [sheet, setSheet] = useState<"opening" | "close" | "move" | null>(null);
   const [voidingMove, setVoidingMove] = useState<DayLine | null>(null);
-  const query = search.trim().toLowerCase();
+  const query = search;
   const accountName = useMemo(() => new Map(book.accounts.map((a) => [a.id, a.name])), [book.accounts]);
   const nameOf = (l: DayLine) => (l.accountId ? accountName.get(l.accountId) ?? "" : "No account");
 

@@ -12,7 +12,9 @@ const base: ExpenseLine = {
   amountIsEstimate: false,
   spentOn: "2026-11-01",
   dueOn: "2026-11-01",
+  scheduleId: "00000000-0000-4000-8000-000000000020",
   scheduleEvery: "month",
+  scheduleEveryCount: 1,
   automatic: false,
   onCredit: false,
   paid: 500_000,
@@ -25,13 +27,17 @@ const base: ExpenseLine = {
   voidedAt: null,
   voidReason: null,
   voidedBy: null,
+  voidedWithSchedule: false,
+  restoredAt: null,
+  restoredBy: null,
+  paidFrom: ["Cash box"],
 };
 
 const LINES: ExpenseLine[] = [
   base,
   { ...base, id: "00000000-0000-4000-8000-000000000011", name: "Electricity", category: "utilities", categoryName: "Utilities", recipient: "Sample Power", amount: 180_000, amountIsEstimate: true, paid: 0, dueOn: "2026-11-10", spentOn: "2026-11-03" },
-  { ...base, id: "00000000-0000-4000-8000-000000000012", name: "Generator repair", category: "other", categoryName: "Other", recipient: "Sample Mechanic", amount: 900_000, paid: 0, dueOn: null, scheduleEvery: null, approval: "waiting", recordedBy: "Carol", spentOn: "2026-11-03" },
-  { ...base, id: "00000000-0000-4000-8000-000000000013", name: "Fuel", category: "transport", categoryName: "Transport", recipient: null, amount: 60_000, paid: 60_000, dueOn: null, scheduleEvery: null, spentOn: "2026-11-02" },
+  { ...base, id: "00000000-0000-4000-8000-000000000012", name: "Generator repair", category: "other", categoryName: "Other", recipient: "Sample Mechanic", amount: 900_000, paid: 0, dueOn: null, scheduleId: null, scheduleEvery: null, scheduleEveryCount: null, approval: "waiting", recordedBy: "Carol", spentOn: "2026-11-03" },
+  { ...base, id: "00000000-0000-4000-8000-000000000013", name: "Fuel", category: "transport", categoryName: "Transport", recipient: null, amount: 60_000, paid: 60_000, dueOn: null, scheduleId: null, scheduleEvery: null, scheduleEveryCount: null, spentOn: "2026-11-02" },
 ];
 
 // Accounts → Expenses on sample records: overdue part paid, an expected amount, one waiting for the boss, one paid.
@@ -56,9 +62,14 @@ export default function BooksExpenses() {
           { key: "transport", name: "Transport", total: 60_000, paid: 60_000, owing: 0 },
         ],
       }}
+      months={["2025-12", "2026-01", "2026-02", "2026-03", "2026-04", "2026-05", "2026-06", "2026-07", "2026-08", "2026-09", "2026-10", "2026-11"].map((m, i) => ({ month: `${m}-01`, total: 1_600_000 + ((i * 370_000) % 900_000), paid: i === 11 ? 560_000 : 1_600_000 + ((i * 370_000) % 900_000) }))}
       period={{ preset: "this_month", from: "2026-10-31T21:00:00.000Z", to: "2026-11-03T21:00:00.000Z", fromDate: "2026-11-01", toDate: "2026-11-03" }}
       categories={[{ key: "rent", name: "Rent", automatic: false }, { key: "utilities", name: "Utilities", automatic: false }]}
-      schedules={[{ id: "00000000-0000-4000-8000-000000000020", name: "Office rent", categoryName: "Rent", recipient: "Sample Landlord", amount: 1_500_000, varies: false, every: "month", firstDueOn: "2026-11-01", recordedBy: "Boss", endedAt: null, endedBy: null }]}
+      schedules={[
+        { id: "00000000-0000-4000-8000-000000000020", name: "Office rent", description: null, category: "rent", categoryName: "Rent", recipient: "Sample Landlord", amount: 1_500_000, varies: false, every: "month", everyCount: 1, endsOn: null, times: null, nextCreatedOn: "2026-12-01", bills: 3, paidTotal: 3_500_000, recordedBy: "Boss", recordedAt: "2026-09-01T08:00:00Z", pausedAt: null, pausedBy: null, editedAt: null, editedBy: null, endedAt: null, endedBy: null },
+        { id: "00000000-0000-4000-8000-000000000021", name: "Cleaner", description: null, category: "salaries", categoryName: "Salaries", recipient: "Sample Cleaner", amount: 50_000, varies: false, every: "week", everyCount: 2, endsOn: null, times: 12, nextCreatedOn: "2026-11-14", bills: 4, paidTotal: 200_000, recordedBy: "Boss", recordedAt: "2026-09-05T08:00:00Z", pausedAt: "2026-11-02T08:00:00Z", pausedBy: "Boss", editedAt: null, editedBy: null, endedAt: null, endedBy: null },
+      ]}
+      upcoming={[{ scheduleId: "00000000-0000-4000-8000-000000000020", dueOn: "2026-12-01" }]}
       approvalAbove={500_000}
       isBoss
       timeZone="Africa/Kampala"

@@ -12,14 +12,16 @@ import { safeStorageSegment } from "@repo/lib/storage/client";
 import { createAdminClient } from "@repo/lib/supabase/admin";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
-import type { ExpenseCategory, ExpenseDetail, ExpenseEvery, ExpenseLine, ExpenseSchedule, ExpenseSummary } from "./expenses";
+import type { ExpenseCategory, ExpenseDetail, ExpenseEvery, ExpenseLine, ExpenseMonth, ExpenseSchedule, ExpenseSummary, UpcomingBill } from "./expenses";
 import { EXPENSE_DOCUMENTS_BUCKET } from "./expenses";
-import type { ExpenseInput, ExpensePaymentInput, ScheduleInput } from "./schema";
+import type { ExpenseInput, ExpensePaymentInput, ScheduleEditInput, ScheduleInput, ScheduleStopInput } from "./schema";
 import { failBooks as fail } from "./server";
 
 type Actor = { id: string; name: string };
 
 const LINK_SECONDS = 60 * 10;
+/** How far ahead Coming up looks. */
+export const UPCOMING_DAYS = 30;
 
 interface LineRow {
   id: string;
@@ -32,7 +34,9 @@ interface LineRow {
   amount_is_estimate: boolean;
   spent_on: string;
   due_on: string | null;
+  schedule_id: string | null;
   schedule_every: ExpenseEvery | null;
+  schedule_every_count: number | null;
   paid_from: string | null;
   automatic: boolean;
   paid: number | string;
@@ -45,6 +49,64 @@ interface LineRow {
   voided_at: string | null;
   void_reason: string | null;
   voided_by_name: string | null;
+  voided_with_schedule: boolean;
+  restored_at: string | null;
+  restored_by_name: string | null;
+  paid_from_accounts: string[] | null;
+}
+
+interface ScheduleRow {
+  id: string;
+  name: string;
+  description: string | null;
+  category: string;
+  category_name: string;
+  recipient: string | null;
+  amount: number | string;
+  varies: boolean;
+  every: ExpenseEvery;
+  every_count: number;
+  ends_on: string | null;
+  times: number | null;
+  next_created_on: string | null;
+  bills: number;
+  paid_total: number | string;
+  actor_name: string;
+  created_at: string;
+  paused_at: string | null;
+  paused_by_name: string | null;
+  edited_at: string | null;
+  edited_by_name: string | null;
+  ended_at: string | null;
+  ended_by_name: string | null;
+}
+
+function toSchedule(s: ScheduleRow): ExpenseSchedule {
+  return {
+    id: s.id,
+    name: s.name,
+    description: s.description,
+    category: s.category,
+    categoryName: s.category_name,
+    recipient: s.recipient,
+    amount: Number(s.amount),
+    varies: s.varies,
+    every: s.every,
+    everyCount: s.every_count,
+    endsOn: s.ends_on,
+    times: s.times,
+    nextCreatedOn: s.next_created_on,
+    bills: s.bills,
+    paidTotal: Number(s.paid_total),
+    recordedBy: s.actor_name,
+    recordedAt: s.created_at,
+    pausedAt: s.paused_at,
+    pausedBy: s.paused_by_name,
+    editedAt: s.edited_at,
+    editedBy: s.edited_by_name,
+    endedAt: s.ended_at,
+    endedBy: s.ended_by_name,
+  };
 }
 
 function toLine(r: LineRow): ExpenseLine {
@@ -59,7 +121,9 @@ function toLine(r: LineRow): ExpenseLine {
     amountIsEstimate: r.amount_is_estimate,
     spentOn: r.spent_on,
     dueOn: r.due_on,
+    scheduleId: r.schedule_id,
     scheduleEvery: r.schedule_every,
+    scheduleEveryCount: r.schedule_every_count,
     automatic: r.automatic,
     onCredit: r.paid_from === "on_credit",
     paid: Number(r.paid),
@@ -72,46 +136,48 @@ function toLine(r: LineRow): ExpenseLine {
     voidedAt: r.voided_at,
     voidReason: r.void_reason,
     voidedBy: r.voided_by_name,
+    voidedWithSchedule: r.voided_with_schedule,
+    restoredAt: r.restored_at,
+    restoredBy: r.restored_by_name,
+    paidFrom: r.paid_from_accounts ?? [],
   };
 }
 
-/** Everything Accounts → Expenses lists. Anything a schedule now owes is created first. */
-export async function expensesBoard(scope: TenantScope) {
+/**
+ * Everything Accounts → Expenses lists: the period's expenses, plus whatever is
+ * still owed and whatever a pause or cancel voided (it can be restored),
+ * however old. Anything a schedule now owes is created first.
+ */
+export async function expensesBoard(scope: TenantScope, period: { fromDate: string | null; toDate: string | null }) {
   const db = createAdminClient();
   const today = localDate(new Date(), scope.timeZone);
   const { error: dueError } = await db.rpc("expense_generate_due", { p_today: today });
   if (dueError) fail(dueError);
-  const [lines, open, categories, schedules, settings] = await Promise.all([
-    db.from("expense_lines").select("*").eq("tenant_id", scope.tenantId).order("spent_on", { ascending: false }).order("created_at", { ascending: false }).limit(2000).returns<LineRow[]>(),
-    // However old, what's still owed stays on the list.
+  let inPeriod = db.from("expense_lines").select("*").eq("tenant_id", scope.tenantId);
+  // A recurring bill belongs to its due day, the rest to the day spent: both are asked for, the screen keeps the right one.
+  const { fromDate: from, toDate: to } = period;
+  if (from && to) inPeriod = inPeriod.or(`and(spent_on.gte.${from},spent_on.lte.${to}),and(due_on.gte.${from},due_on.lte.${to})`);
+  else if (from) inPeriod = inPeriod.or(`spent_on.gte.${from},due_on.gte.${from}`);
+  else if (to) inPeriod = inPeriod.or(`spent_on.lte.${to},due_on.lte.${to}`);
+  const [lines, open, restorable, categories, schedules, upcoming, settings] = await Promise.all([
+    inPeriod.order("spent_on", { ascending: false }).order("created_at", { ascending: false }).limit(5000).returns<LineRow[]>(),
     db.rpc("expense_open_lines"),
+    db.from("expense_lines").select("*").eq("tenant_id", scope.tenantId).eq("voided_with_schedule", true).not("voided_at", "is", null).returns<LineRow[]>(),
     db.from("expense_categories").select("key, name, automatic").eq("tenant_id", scope.tenantId).order("created_at").order("name").returns<ExpenseCategory[]>(),
-    db.from("expense_schedules").select("id, name, category, recipient, amount, varies, every, first_due_on, actor_name, ended_at, ended_by_name").eq("tenant_id", scope.tenantId).order("created_at", { ascending: false }),
+    db.from("expense_schedule_lines").select("*").eq("tenant_id", scope.tenantId).order("created_at", { ascending: false }).returns<ScheduleRow[]>(),
+    db.rpc("expense_schedule_upcoming", { p_today: today, p_days: UPCOMING_DAYS }),
     db.from("expense_settings").select("approval_above").eq("tenant_id", scope.tenantId).maybeSingle<{ approval_above: number | string | null }>(),
   ]);
-  for (const r of [lines, open, categories, schedules, settings]) if (r.error) fail(r.error);
-  const names = new Map((categories.data ?? []).map((c) => [c.key, c.name]));
-  const listed = new Set((lines.data ?? []).map((l) => l.id));
+  for (const r of [lines, open, restorable, categories, schedules, upcoming, settings]) if (r.error) fail(r.error);
+  const byId = new Map<string, LineRow>();
+  for (const l of [...(lines.data ?? []), ...((open.data ?? []) as LineRow[]), ...(restorable.data ?? [])]) byId.set(l.id, l);
   return {
     today,
-    lines: [...(lines.data ?? []), ...((open.data ?? []) as LineRow[]).filter((l) => !listed.has(l.id))].map(toLine),
+    lines: [...byId.values()].map(toLine),
     categories: categories.data ?? [],
     approvalAbove: settings.data?.approval_above == null ? null : Number(settings.data.approval_above),
-    schedules: (schedules.data ?? []).map(
-      (s): ExpenseSchedule => ({
-        id: s.id,
-        name: s.name,
-        categoryName: names.get(s.category) ?? s.category,
-        recipient: s.recipient,
-        amount: Number(s.amount),
-        varies: s.varies,
-        every: s.every as ExpenseEvery,
-        firstDueOn: s.first_due_on,
-        recordedBy: s.actor_name,
-        endedAt: s.ended_at,
-        endedBy: s.ended_by_name,
-      }),
-    ),
+    schedules: (schedules.data ?? []).map(toSchedule),
+    upcoming: ((upcoming.data ?? []) as { schedule_id: string; due_on: string }[]).map((u): UpcomingBill => ({ scheduleId: u.schedule_id, dueOn: u.due_on })),
   };
 }
 
@@ -120,6 +186,14 @@ export async function expenseDashboard(scope: TenantScope, period: { fromDate: s
   const { data, error } = await createAdminClient().rpc("expense_dashboard", { p_from: period.fromDate, p_to: period.toDate, p_today: localDate(new Date(), scope.timeZone) });
   if (error) fail(error);
   return data as ExpenseSummary;
+}
+
+/** What was spent each month, the 12 months up to the period's end (or today). */
+export async function expenseMonths(scope: TenantScope, period: { toDate: string | null }): Promise<ExpenseMonth[]> {
+  const to = period.toDate ?? localDate(new Date(), scope.timeZone);
+  const { data, error } = await createAdminClient().rpc("expense_months", { p_to: to, p_months: 12 });
+  if (error) fail(error);
+  return ((data ?? []) as { month: string; total: number | string; paid: number | string }[]).map((m) => ({ month: m.month, total: Number(m.total), paid: Number(m.paid) }));
 }
 
 /** All the money in and out over a period, as Today counts it, for Accounts → Overview. */
@@ -175,7 +249,10 @@ export async function addSchedule(input: ScheduleInput, isBoss: boolean, actor: 
     p_amount: input.amount,
     p_varies: input.varies,
     p_every: input.every,
+    p_every_count: input.everyCount,
     p_first_due_on: input.firstDueOn,
+    p_ends_on: input.endsOn,
+    p_times: input.times,
     p_recipient: input.recipient,
     p_is_boss: isBoss,
     p_actor_id: actor.id,
@@ -184,9 +261,43 @@ export async function addSchedule(input: ScheduleInput, isBoss: boolean, actor: 
   if (error) fail(error);
 }
 
-/** No more are created. Ones already created stay owed until paid or voided. */
-export async function endSchedule(id: string, byName: string): Promise<void> {
-  const { error } = await createAdminClient().from("expense_schedules").update({ ended_at: new Date().toISOString(), ended_by_name: byName }).eq("id", id).is("ended_at", null);
+/** Bills already created stay as they are; the next one is due on nextDueOn. */
+export async function editSchedule(input: ScheduleEditInput, isBoss: boolean, actor: Actor): Promise<void> {
+  const { error } = await createAdminClient().rpc("expense_schedule_edit", {
+    p_id: input.id,
+    p_name: input.name,
+    p_description: input.description,
+    p_category: input.category,
+    p_amount: input.amount,
+    p_varies: input.varies,
+    p_every: input.every,
+    p_every_count: input.everyCount,
+    p_next_due_on: input.nextDueOn,
+    p_ends_on: input.endsOn,
+    p_times: input.times,
+    p_recipient: input.recipient,
+    p_is_boss: isBoss,
+    p_actor_name: actor.name,
+  });
+  if (error) fail(error);
+}
+
+/** Pause or cancel, voiding the unpaid bills chosen. Returns how many were voided. */
+export async function stopSchedule(input: ScheduleStopInput, byName: string): Promise<number> {
+  const { data, error } = await createAdminClient().rpc("expense_schedule_stop", { p_id: input.id, p_end: input.end, p_void: input.voidIds, p_actor_name: byName });
+  if (error) fail(error);
+  return Number(data ?? 0);
+}
+
+/** What fell due while paused is skipped. */
+export async function resumeSchedule(id: string, byName: string): Promise<void> {
+  const { error } = await createAdminClient().rpc("expense_schedule_resume", { p_id: id, p_actor_name: byName });
+  if (error) fail(error);
+}
+
+/** Undoes a void made with a pause or cancel. */
+export async function restoreExpense(id: string, byName: string): Promise<void> {
+  const { error } = await createAdminClient().rpc("expense_restore", { p_expense: id, p_actor_name: byName });
   if (error) fail(error);
 }
 

@@ -12,6 +12,7 @@ import { DAY_PERIOD_PRESETS, type Period } from "@repo/lib/accounting/core/perio
 import type { Compared, DashboardView } from "@repo/lib/accounting/service";
 
 import { CHANNEL_LABELS, FigureTile, useMoney } from "../accounting/shared";
+import { matchesSearch } from "@repo/lib/search";
 
 // The bosses' money dashboard: three headline cards, money in by channel,
 // cash flow over the last 12 months and the latest payments, from the
@@ -339,10 +340,7 @@ function CashFlow({ series }: { series: MonthPoint[] }) {
 function RecentPayments({ payments, timeZone }: { payments: PaymentLine[]; timeZone: string }) {
   const money = useMoney();
   const [query, setQuery] = useState("");
-  const q = query.trim().toLowerCase();
-  const shown = q
-    ? payments.filter((p) => [p.customerName, p.orderNo, p.reference].some((v) => v?.toLowerCase().includes(q)))
-    : payments;
+  const shown = payments.filter((p) => matchesSearch(query, [p.customerName, p.orderNo, p.reference, p.senderName, p.senderPhone, p.amount]));
   const day = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { timeZone, day: "numeric", month: "short", year: "numeric" });
   const time = (iso: string) => new Date(iso).toLocaleTimeString("en-GB", { timeZone, hour: "2-digit", minute: "2-digit" });
 
@@ -361,7 +359,7 @@ function RecentPayments({ payments, timeZone }: { payments: PaymentLine[]; timeZ
       </div>
 
       {shown.length === 0 ? (
-        <p className="py-6 text-center text-sm text-muted">{q ? "No payments match." : "No payments in this period."}</p>
+        <p className="py-6 text-center text-sm text-muted">{query.trim() ? "No payments match." : "No payments in this period."}</p>
       ) : (
         <>
           <ul className="mt-4 divide-y divide-border @xl:hidden">
