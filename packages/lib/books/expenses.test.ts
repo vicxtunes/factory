@@ -36,6 +36,10 @@ const line = (o: Partial<ExpenseLine> = {}): ExpenseLine => ({
   paidFrom: [],
   payPhone: null,
   payoutSending: false,
+  autopayAt: null,
+  autopayHeldAt: null,
+  autopayHeldBy: null,
+  autopayHoldReason: null,
   ...o,
 });
 
@@ -130,6 +134,19 @@ test("ready to send: a number to pay to, due, something left, nothing on its way
 test("the reminder names a bill ready to send once, before the rest", () => {
   const r = expenseReminder([line({ name: "Rent", payPhone: "256772000000", dueOn: "2026-11-01" }), line({ name: "Power", dueOn: "2026-11-01" })], TODAY, money);
   assert.deepEqual(r, { title: "To pay: 1 ready to send, 1 overdue", body: "Ready to send by mobile money: Rent 100. Overdue: Power 100." });
+});
+
+test("a bill going by itself is left out of the reminder: its warning named it; a held one is back in", () => {
+  const phone = "256772000000";
+  const r = expenseReminder(
+    [
+      line({ name: "Rent", payPhone: phone, dueOn: "2026-11-01", autopayAt: "2026-11-03T09:00:00Z" }),
+      line({ name: "Power", payPhone: phone, dueOn: "2026-11-01", autopayAt: "2026-11-03T09:00:00Z", autopayHeldAt: "2026-11-03T06:00:00Z" }),
+    ],
+    TODAY,
+    money,
+  );
+  assert.deepEqual(r, { title: "To pay: 1 ready to send", body: "Ready to send by mobile money: Power 100." });
 });
 
 test("repeat labels", () => {

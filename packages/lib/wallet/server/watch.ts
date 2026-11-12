@@ -12,6 +12,7 @@ import { addDays, localDate } from "@repo/lib/accounting/core/period";
 import { accounting } from "@repo/lib/accounting/index.server";
 import { expenseReminder } from "@repo/lib/books/expenses";
 import { claimExpenseReminder, createDueExpenses, openExpenses } from "@repo/lib/books/expenses-server";
+import { warnAutopay } from "@repo/lib/books/payouts-server";
 import { otherMoneyIn } from "@repo/lib/books/server";
 import { formatMoney } from "@repo/lib/currency/format";
 import { moneyWeOwe } from "@repo/lib/production/server";
@@ -252,6 +253,8 @@ export async function sendExpenseReminder(now = new Date()): Promise<boolean> {
   if (hour < EXPENSE_REMINDER_HOUR) return false;
   const today = localDate(now, scope.timeZone);
   await createDueExpenses(today);
+  // Bills going by themselves get their own warning first, and the reminder leaves them out.
+  await warnAutopay(now);
   if (!(await claimExpenseReminder(today))) return false;
   const [bills, debts] = await Promise.all([openExpenses(), moneyWeOwe.overview(scope, today)]);
   const reminder = expenseReminder(
@@ -268,6 +271,8 @@ export async function sendExpenseReminder(now = new Date()): Promise<boolean> {
         amountIsEstimate: false,
         payPhone: null,
         payoutSending: false,
+        autopayAt: null,
+        autopayHeldAt: null,
       })),
     ],
     today,
