@@ -76,6 +76,12 @@ export interface ExpenseLine {
   payPhone: string | null;
   /** A HivePay payout for it is on its way: it can't be paid again until that settles. */
   payoutSending: boolean;
+  /** Autopay: when it goes by itself, set when the boss was warned of it. */
+  autopayAt: string | null;
+  /** Held: it waits for Approve and send (the boss held it, or a send failed). */
+  autopayHeldAt: string | null;
+  autopayHeldBy: string | null;
+  autopayHoldReason: string | null;
 }
 
 /** A recurring expense belongs to its due day; anything else to the day it was spent. */
@@ -151,8 +157,10 @@ export interface ExpenseSchedule {
   editedBy: string | null;
   endedAt: string | null;
   endedBy: string | null;
-  /** Autopay: its bills go to Ready to send for the boss, by mobile money to this number. */
+  /** Autopay: its due bills are sent by mobile money to this number, by themselves up to the boss's limit. */
   payPhone: string | null;
+  /** The time of day ("12:00") its bills go by themselves. */
+  sendAt: string;
 }
 
 export type ScheduleState = "running" | "paused" | "finished" | "cancelled";
@@ -204,9 +212,15 @@ export function expenseStatus(e: Pick<ExpenseLine, "amount" | "paid" | "dueOn" |
 
 /**
  * Bills to send by mobile money now (owner, 2026-11-12): a number to pay to,
- * due today or before, something left, nothing already on its way. The boss
- * approves each one by sending it; nothing goes out by itself.
+ * due today or before, something left, nothing already on its way. Those the
+ * boss was warned of go by themselves at their time (owner, 2026-11-13); the
+ * rest wait for Approve and send.
  */
+/** Warned of and not held: it goes by itself at autopayAt (the database checks everything again then). */
+export function goesByItself(e: Pick<ExpenseLine, "autopayAt" | "autopayHeldAt">): boolean {
+  return e.autopayAt !== null && e.autopayHeldAt === null;
+}
+
 export function readyToSend<T extends Pick<ExpenseLine, "payPhone" | "payoutSending" | "dueOn" | "amount" | "paid" | "voidedAt" | "approval" | "onCredit">>(lines: T[], today: string): T[] {
   return lines
     .filter((e) => e.payPhone && !e.payoutSending && e.dueOn !== null && e.dueOn <= today && expenseBalance(e) > 0)
@@ -240,16 +254,17 @@ const REMIND_WITHIN_DAYS = 3;
 const NAMED_IN_REMINDER = 4;
 
 /** Bills, and debts put in the same shape. */
-export type Reminded = Pick<ExpenseLine, "name" | "amount" | "paid" | "dueOn" | "voidedAt" | "approval" | "onCredit" | "amountIsEstimate" | "payPhone" | "payoutSending">;
+export type Reminded = Pick<ExpenseLine, "name" | "amount" | "paid" | "dueOn" | "voidedAt" | "approval" | "onCredit" | "amountIsEstimate" | "payPhone" | "payoutSending" | "autopayAt" | "autopayHeldAt">;
 
 /**
  * The morning reminder: one message, whatever the number of bills, or null
  * when nothing needs attention. Every overdue or nearly due bill is counted
- * each day until it's paid or voided.
+ * each day until it's paid or voided. Bills going by themselves are left out:
+ * their own warning names them.
  */
 export function expenseReminder(lines: Reminded[], today: string, money: (amount: number) => string): { title: string; body: string } | null {
   const soonBy = addDays(today, REMIND_WITHIN_DAYS);
-  const open = lines.filter((e) => expenseBalance(e) > 0);
+  const open = lines.filter((e) => expenseBalance(e) > 0 && !goesByItself(e));
   const byDue = (a: Reminded, b: Reminded) => (a.dueOn ?? "").localeCompare(b.dueOn ?? "");
   // Each bill is named once: ready to send first, as it only needs the boss's yes.
   const ready = readyToSend(open, today);

@@ -16,6 +16,7 @@ import { checkMoneySource, networkOfPhone } from "@repo/lib/wallet/policy";
 import type { ExpenseDetail } from "./expenses";
 import {
   approvalLimitSchema,
+  autopayLimitSchema,
   categoryInputSchema,
   closeDayInputSchema,
   decideInputSchema,
@@ -147,15 +148,36 @@ function sendablePhone(text: string): string {
 }
 
 /**
- * Autopay for a recurring bill (boss only): each bill goes to Ready to send
- * when it's due, by mobile money to this number. An empty number stops it.
+ * Autopay for a recurring bill (boss only): each due bill is sent by mobile
+ * money to this number at this time, by itself up to the autopay limit
+ * (owner, 2026-11-13). An empty number stops it.
  */
 export async function setExpenseSchedulePayPhone(input: unknown): Promise<Result> {
   return runAction("books", async () => {
     const { isBoss } = await staff();
     if (!isBoss) throw new AppError("Only the boss sets where bills are paid.");
-    const { id, phone } = parseInput(schedulePayPhoneSchema, input);
-    await expenses.setSchedulePayPhone(id, phone ? sendablePhone(phone) : null);
+    const { id, phone, sendAt } = parseInput(schedulePayPhoneSchema, input);
+    await expenses.setScheduleAutopay(id, phone ? sendablePhone(phone) : null, sendAt);
+    expensesChanged();
+  });
+}
+
+/** How much autopay sends without the boss (null: no limit). Boss only. */
+export async function setExpenseAutopayLimit(input: unknown): Promise<Result> {
+  return runAction("books", async () => {
+    const { actor, isBoss, scope } = await staff();
+    if (!isBoss) throw new AppError("Only the boss sets what goes by itself.");
+    await expenses.setAutopayLimit(parseInput(autopayLimitSchema, input).upTo, actor.name, localDate(new Date(), scope.timeZone));
+    expensesChanged();
+  });
+}
+
+/** Stops a bill going by itself: it waits for Approve and send. Boss only. */
+export async function holdExpenseAutopay(id: unknown): Promise<Result> {
+  return runAction("books", async () => {
+    const { actor, isBoss } = await staff();
+    if (!isBoss) throw new AppError("Only the boss can hold a bill.");
+    await expenses.holdAutopay(parseInput(voidInputSchema.pick({ id: true }), { id }).id, actor.name);
     expensesChanged();
   });
 }

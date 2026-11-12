@@ -29,6 +29,7 @@ import {
   decideExpense,
   editExpenseSchedule,
   getExpenseDetail,
+  holdExpenseAutopay,
   payExpense,
   restoreExpense,
   resumeExpenseSchedule,
@@ -36,6 +37,7 @@ import {
   setExpenseSchedulePayPhone,
   recordExpense,
   setExpenseApprovalLimit,
+  setExpenseAutopayLimit,
   stopExpenseSchedule,
   voidExpense,
   voidExpensePayment,
@@ -50,6 +52,7 @@ import {
   expenseBalance,
   expenseBelongsOn,
   expenseStatus,
+  goesByItself,
   readyToSend,
   onOrAfterWeekday,
   repeatLabel,
@@ -125,6 +128,7 @@ export function ExpensesBoard({
   schedules,
   upcoming,
   approvalAbove,
+  autopayUpTo,
   isBoss,
   canSend,
   timeZone,
@@ -138,6 +142,8 @@ export function ExpensesBoard({
   schedules: ExpenseSchedule[];
   upcoming: UpcomingBill[];
   approvalAbove: number | null;
+  /** Autopay bills go by themselves up to this much; null: no limit. */
+  autopayUpTo: number | null;
   isBoss: boolean;
   /** The boss, with HivePay set up on this server: bills can be paid by mobile money. */
   canSend: boolean;
@@ -152,7 +158,7 @@ export function ExpensesBoard({
   const [account, setAccount] = useState("");
   const [kind, setKind] = useState<"" | "one_time" | "recurring">("");
   const [sort, setSort] = useState<Sort>("newest");
-  const [sheet, setSheet] = useState<"new" | "limit" | null>(null);
+  const [sheet, setSheet] = useState<"new" | "limit" | "autopay_limit" | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   // Opened from Ready to send: straight to sending it.
   const [openToSend, setOpenToSend] = useState(false);
@@ -267,17 +273,25 @@ export function ExpensesBoard({
           <Button variant="secondary" onClick={() => setSheet("limit")}>
             Approval limit: {approvalAbove === null ? "none" : money(approvalAbove)}
           </Button>
-        ) : approvalAbove !== null ? (
+        ) : null}
+        {canSend ? (
+          <Button variant="secondary" onClick={() => setSheet("autopay_limit")}>
+            Autopay sends by itself: {autopayUpTo === null ? "any amount" : `up to ${money(autopayUpTo)}`}
+          </Button>
+        ) : null}
+        {isBoss ? null : approvalAbove !== null ? (
           <p className="text-xs text-muted">The boss approves anything above {money(approvalAbove)}.</p>
         ) : null}
       </div>
 
       {ready.length ? (
         <Card title={`Ready to send (${ready.length})`}>
-          <p className="mb-2 text-xs text-muted">Due bills with a number to pay to. Each goes only when you approve and send it.</p>
+          <p className="mb-2 text-xs text-muted">
+            Due bills with a number to pay to. Those you were told about go by themselves at their time; hold one to send it yourself. The rest go only when you approve and send them.
+          </p>
           <ul className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
             {ready.map((e) => (
-              <li key={e.id} className="flex items-center justify-between gap-3 rounded-2xl border border-border p-3">
+              <li key={e.id} className="flex flex-col gap-2 rounded-2xl border border-border p-3">
                 <span className="min-w-0">
                   <span className="block truncate font-medium">{e.name}</span>
                   <span className="block text-xs text-muted">
@@ -287,10 +301,14 @@ export function ExpensesBoard({
                     {e.amountIsEstimate ? "About " : ""}
                     {money(expenseBalance(e))}
                   </span>
+                  <AutopayNote expense={e} today={today} timeZone={timeZone} />
                 </span>
-                <Button className="shrink-0" onClick={() => open(e.id, true)}>
-                  Approve and send
-                </Button>
+                <span className="flex gap-2">
+                  {goesByItself(e) ? <HoldButton id={e.id} /> : null}
+                  <Button className="flex-1" variant={goesByItself(e) ? "secondary" : undefined} onClick={() => open(e.id, true)}>
+                    {goesByItself(e) ? "Send now" : "Approve and send"}
+                  </Button>
+                </span>
               </li>
             ))}
           </ul>
@@ -532,6 +550,7 @@ export function ExpensesBoard({
 
       {sheet === "new" ? <NewExpenseSheet categories={categories} today={today} onClose={() => setSheet(null)} /> : null}
       {sheet === "limit" ? <LimitSheet above={approvalAbove} onClose={() => setSheet(null)} /> : null}
+      {sheet === "autopay_limit" ? <AutopayLimitSheet upTo={autopayUpTo} onClose={() => setSheet(null)} /> : null}
       {opened ? <ExpenseSheet key={opened.id} expense={opened} today={today} isBoss={isBoss} canSend={canSend} startSending={openToSend} timeZone={timeZone} onClose={() => setOpenId(null)} /> : null}
       {scheduleOpened ? (
         <ScheduleSheet
@@ -920,6 +939,87 @@ function LimitSheet({ above, onClose }: { above: number | null; onClose: () => v
         }}
       >
         <Field label="You approve anything above" hint="Leave empty if nothing needs approval. What you record yourself never waits.">
+          <TextInput inputMode="numeric" value={value} onChange={(e) => setValue(e.target.value)} />
+        </Field>
+        <ErrorLine error={error} />
+        <Button type="submit" loading={pending} className="w-full">
+          Save limit
+        </Button>
+      </form>
+    </FormSheet>
+  );
+}
+
+/** Why a bill in Ready to send goes by itself, or why it waits for you. */
+function AutopayNote({ expense: e, today, timeZone }: { expense: ExpenseLine; today: string; timeZone: string }) {
+  if (e.autopayHeldAt) {
+    return (
+      <span className="mt-1 block text-xs text-warning-700 dark:text-warning-500">
+        {e.autopayHoldReason ?? `Held by ${e.autopayHeldBy ?? "you"}`}. Waits for you.
+      </span>
+    );
+  }
+  if (e.autopayAt) {
+    const at = new Date(e.autopayAt);
+    const time = at.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone });
+    const onDay = new Intl.DateTimeFormat("en-CA", { timeZone }).format(at);
+    return <span className="mt-1 block text-xs text-success-700 dark:text-success-500">Sends by itself {onDay === today ? "today" : day(onDay)} at {time}</span>;
+  }
+  return null;
+}
+
+function HoldButton({ id }: { id: string }) {
+  const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+  return (
+    <span className="flex flex-1 flex-col">
+      <Button
+        variant="secondary"
+        loading={pending}
+        onClick={() =>
+          start(async () => {
+            setError(null);
+            const res = await holdExpenseAutopay(id);
+            if (!res.ok) return setError(res.error);
+            router.refresh();
+          })
+        }
+      >
+        Hold
+      </Button>
+      <ErrorLine error={error} />
+    </span>
+  );
+}
+
+/**
+ * How much autopay sends without the boss (owner, 2026-11-13). Empty: any
+ * amount. Above it, a bill waits in Ready to send for Approve and send.
+ */
+function AutopayLimitSheet({ upTo, onClose }: { upTo: number | null; onClose: () => void }) {
+  const router = useRouter();
+  const [value, setValue] = useState(upTo === null ? "" : String(upTo));
+  const [error, setError] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+  return (
+    <FormSheet open onClose={onClose} title="Autopay limit">
+      <form
+        className="space-y-3"
+        onSubmit={(e) => {
+          e.preventDefault();
+          start(async () => {
+            const res = await setExpenseAutopayLimit({ upTo: value.trim() ? parseNumber(value) : null });
+            if (!res.ok) return setError(res.error);
+            router.refresh();
+            onClose();
+          });
+        }}
+      >
+        <p className="text-sm text-muted">
+          A due bill on autopay is sent by mobile money by itself at its time, after one message to you. Anything above this amount waits in Ready to send for you to approve and send.
+        </p>
+        <Field label="Send by itself up to" hint="Leave empty to let bills of any amount go by themselves.">
           <TextInput inputMode="numeric" value={value} onChange={(e) => setValue(e.target.value)} />
         </Field>
         <ErrorLine error={error} />
@@ -1553,7 +1653,7 @@ function ScheduleSheet({
           <Row label="Category">{s.categoryName}</Row>
           {s.recipient ? <Row label="To">{s.recipient}</Row> : null}
           <Row label="Ends">{s.endsOn ? day(s.endsOn) : s.times ? `After ${s.times} bills` : "Never, until cancelled"}</Row>
-          {s.payPhone || canSend ? <Row label="Autopay">{s.payPhone ? `To ${localPhone(s.payPhone)}, approved bill by bill` : "Off"}</Row> : null}
+          {s.payPhone || canSend ? <Row label="Autopay">{s.payPhone ? `To ${localPhone(s.payPhone)} at ${s.sendAt}, by itself up to your limit` : "Off"}</Row> : null}
           <Row label="Bills so far">{s.bills}</Row>
           <Row label="Paid so far">{money(s.paidTotal)}</Row>
           {s.description ? <Row label="Description">{s.description}</Row> : null}
@@ -1660,20 +1760,25 @@ function ScheduleSheet({
   );
 }
 
+/** The times a bill can go by itself: after the 08:00 messages, before evening. */
+const SEND_TIMES = Array.from({ length: 12 }, (_, i) => `${String(9 + i).padStart(2, "0")}:00`);
+
 /**
- * Autopay (owner, 2026-11-12): each bill goes to Ready to send when it's due,
- * by mobile money to this number. The boss still approves each one by sending it.
+ * Autopay (owner, 2026-11-12, by itself 2026-11-13): when a bill is due it's
+ * sent by mobile money to this number at this time, after one message to the
+ * boss, unless it's above the autopay limit or held.
  */
 function AutopaySheet({ schedule: s, onClose }: { schedule: ExpenseSchedule; onClose: () => void }) {
   const router = useRouter();
   const [phone, setPhone] = useState(s.payPhone ? localPhone(s.payPhone) : "");
+  const [sendAt, setSendAt] = useState(s.sendAt);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
   const save = (next: string) =>
     start(async () => {
       setError(null);
-      const res = await setExpenseSchedulePayPhone({ id: s.id, phone: next });
+      const res = await setExpenseSchedulePayPhone({ id: s.id, phone: next, sendAt });
       if (!res.ok) return setError(res.error);
       router.refresh();
       onClose();
@@ -1689,10 +1794,19 @@ function AutopaySheet({ schedule: s, onClose }: { schedule: ExpenseSchedule; onC
         }}
       >
         <p className="text-sm text-muted">
-          When a bill is due it waits in Ready to send, and you get the morning reminder. It&apos;s sent by mobile money only when you approve and send it. Bills not yet paid use the new number too.
+          When a bill is due it&apos;s sent by mobile money by itself at this time. You get one message first, so you can hold it in Ready to send. A bill above your autopay limit, or one whose amount varies, waits for you to approve and send it. Bills not yet paid use the new number and time too.
         </p>
         <Field label="MTN or Airtel number">
           <TextInput type="tel" value={phone} onChange={(ev) => setPhone(ev.target.value)} placeholder="e.g. 0772 000 000" />
+        </Field>
+        <Field label="Send at" hint="Kampala time, on the day it's due. If you're told less than an hour before, it goes the next day at this time.">
+          <Select value={sendAt} onChange={(ev) => setSendAt(ev.target.value)}>
+            {SEND_TIMES.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </Select>
         </Field>
         <ErrorLine error={error} />
         <div className="flex flex-col gap-2 sm:flex-row">
