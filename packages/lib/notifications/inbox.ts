@@ -7,6 +7,7 @@ import "server-only";
 
 import { createAdminClient } from "@repo/lib/supabase/admin";
 import type { AuditActorType, NotificationRow } from "@repo/lib/types";
+import { searchOrFilters } from "@repo/lib/search";
 
 type Recipient = { type: AuditActorType; id: string };
 
@@ -91,8 +92,7 @@ export async function inboxPage(
     .limit(INBOX_PAGE + 1);
   if (options.unreadOnly) query = query.is("read_at", null);
   if (options.before) query = query.lt("created_at", options.before);
-  const words = options.search.replace(/[%_\\,()]/g, " ").trim().slice(0, 60);
-  if (words) query = query.or(`title.ilike.%${words}%,body.ilike.%${words}%`);
+  for (const f of searchOrFilters(options.search.slice(0, 60), ["title", "body"])) query = query.or(f);
   const [{ data, error }, unread] = await Promise.all([
     query.returns<InboxRow[]>(),
     db.from("inbox").select("id", { count: "exact", head: true }).eq("recipient_type", recipient.type).eq("recipient_id", recipient.id).is("read_at", null),

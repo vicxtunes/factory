@@ -4,9 +4,32 @@ import { addDays } from "@repo/lib/accounting/core/period";
 
 export const EXPENSE_DOCUMENTS_BUCKET = "expense-documents";
 
-export type ExpenseEvery = "week" | "month" | "year";
+export type ExpenseEvery = "day" | "week" | "month" | "year";
 
-export const EVERY_LABELS: Record<ExpenseEvery, string> = { week: "Every week", month: "Every month", year: "Every year" };
+const UNITS: Record<ExpenseEvery, [string, string]> = { day: ["day", "days"], week: ["week", "weeks"], month: ["month", "months"], year: ["year", "years"] };
+export const EVERY_UNITS: ExpenseEvery[] = ["day", "week", "month", "year"];
+export const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+export function everyUnit(every: ExpenseEvery, count: number): string {
+  return UNITS[every][count === 1 ? 0 : 1];
+}
+
+/** The day of the week of a date, 0 Sunday. */
+export function weekdayOf(iso: string): number {
+  return new Date(`${iso}T00:00:00Z`).getUTCDay();
+}
+
+/** The first date on or after `from` that falls on `weekday`. */
+export function onOrAfterWeekday(from: string, weekday: number): string {
+  return addDays(from, (weekday - weekdayOf(from) + 7) % 7);
+}
+
+/** "Every month", "Every 2 weeks on Friday". `on`: a due date, for the weekday of weekly ones. */
+export function repeatLabel(every: ExpenseEvery, count: number, on?: string | null): string {
+  const base = count === 1 ? `Every ${UNITS[every][0]}` : `Every ${count} ${UNITS[every][1]}`;
+  if (every !== "week" || !on) return base;
+  return count === 1 ? `Every ${WEEKDAYS[weekdayOf(on)]}` : `${base} on ${WEEKDAYS[weekdayOf(on)]}`;
+}
 
 export interface ExpenseCategory {
   key: string;
@@ -27,7 +50,9 @@ export interface ExpenseLine {
   amountIsEstimate: boolean;
   spentOn: string;
   dueOn: string | null;
+  scheduleId: string | null;
   scheduleEvery: ExpenseEvery | null;
+  scheduleEveryCount: number | null;
   automatic: boolean;
   /** Bought on credit: paid later, through Money we owe. */
   onCredit: boolean;
@@ -41,6 +66,17 @@ export interface ExpenseLine {
   voidedAt: string | null;
   voidReason: string | null;
   voidedBy: string | null;
+  /** Voided with its recurring expense's pause or cancel: can be restored. */
+  voidedWithSchedule: boolean;
+  restoredAt: string | null;
+  restoredBy: string | null;
+  /** The accounts its payments came out of. */
+  paidFrom: string[];
+}
+
+/** A recurring expense belongs to its due day; anything else to the day it was spent. */
+export function expenseBelongsOn(e: Pick<ExpenseLine, "scheduleId" | "dueOn" | "spentOn">): string {
+  return e.scheduleId ? (e.dueOn ?? e.spentOn) : e.spentOn;
 }
 
 export interface ExpensePayment {
@@ -88,15 +124,47 @@ export interface ExpenseDetail {
 export interface ExpenseSchedule {
   id: string;
   name: string;
+  description: string | null;
+  category: string;
   categoryName: string;
   recipient: string | null;
   amount: number;
   varies: boolean;
   every: ExpenseEvery;
-  firstDueOn: string;
+  everyCount: number;
+  endsOn: string | null;
+  times: number | null;
+  /** The next bill not yet created; null once it has ended. */
+  nextCreatedOn: string | null;
+  /** Bills it has made so far, voided ones included. */
+  bills: number;
+  paidTotal: number;
   recordedBy: string;
+  recordedAt: string;
+  pausedAt: string | null;
+  pausedBy: string | null;
+  editedAt: string | null;
+  editedBy: string | null;
   endedAt: string | null;
   endedBy: string | null;
+}
+
+export type ScheduleState = "running" | "paused" | "finished" | "cancelled";
+
+export const SCHEDULE_STATE_LABELS: Record<ScheduleState, string> = { running: "Running", paused: "Paused", finished: "Finished", cancelled: "Cancelled" };
+
+/** Who ends a schedule that reached its end date or number of bills. */
+export const AUTOMATIC_ACTOR = "Aming (automatic)";
+
+export function scheduleState(s: Pick<ExpenseSchedule, "pausedAt" | "endedAt" | "endedBy">): ScheduleState {
+  if (s.endedAt) return s.endedBy === AUTOMATIC_ACTOR ? "finished" : "cancelled";
+  return s.pausedAt ? "paused" : "running";
+}
+
+/** A bill a running schedule will make soon, not yet created. */
+export interface UpcomingBill {
+  scheduleId: string;
+  dueOn: string;
 }
 
 export type ExpenseStatus = "voided" | "rejected" | "waiting" | "on_credit" | "paid" | "overdue" | "part_paid" | "unpaid";
@@ -155,6 +223,13 @@ export interface ExpenseSummary {
   paid: number;
   owing: number;
   byCategory: { key: string; name: string; total: number; paid: number; owing: number }[];
+}
+
+/** One month on the month-by-month chart. `month` is its first day. */
+export interface ExpenseMonth {
+  month: string;
+  total: number;
+  paid: number;
 }
 
 /** A bill is mentioned this many days before it's due. */

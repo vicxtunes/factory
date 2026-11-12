@@ -1,4 +1,5 @@
 import type { OrderItemWithOrder, ProductionStatus, Urgency } from "@repo/lib/types";
+import { matchesSearch, prepareSearch } from "@repo/lib/search";
 
 // Shared filter model for the Orders page (cards + table views).
 
@@ -154,7 +155,7 @@ export function filterItems(
   f: OrderFilterState,
   workerById: WorkerStationLookup,
 ): OrderItemWithOrder[] {
-  const q = f.search.trim().toLowerCase();
+  const q = prepareSearch(f.search);
   const today = todayISO();
 
   let rangeFrom: string | null = null;
@@ -180,7 +181,7 @@ export function filterItems(
   }
 
   return items.filter((i) => {
-    if (q && !`${i.order.order_no} ${i.order.client_name}`.toLowerCase().includes(q)) return false;
+    if (q.words.length && !matchesSearch(q, [i.order.order_no, i.order.client_name, i.order.client_phone, i.product, i.size, i.category?.name, i.order.agent_name, i.order.designer_name, i.order.created_by_name])) return false;
     if (f.status && i.production_status !== f.status) return false;
     if (f.urgency && i.urgency !== f.urgency) return false;
     if (f.delayed && !i.is_delayed) return false;

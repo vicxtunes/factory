@@ -31,6 +31,7 @@ import type {
   ProductCategory,
   WorkerPublic,
 } from "@repo/lib/types";
+import { matchesSearch } from "@repo/lib/search";
 
 type Variant = "manager" | "designer";
 
@@ -696,12 +697,7 @@ function ClientPicker({
     );
   }
 
-  const q = query.trim().toLowerCase();
-  const filtered = q
-    ? clients.filter((c) =>
-        [c.name, c.email, c.phone].some((v) => v?.toLowerCase().includes(q)),
-      )
-    : clients;
+  const filtered = clients.filter((c) => matchesSearch(query, [c.name, c.email, c.phone]));
 
   return (
     <div>

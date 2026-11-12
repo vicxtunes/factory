@@ -41,6 +41,7 @@ import { afterPhotosUploaded } from "./tools/client-orders";
 import { forgetKind, memoriesForModel, memoriesOf, memoryTools, remember, type Memory } from "./memory";
 import { PANEL_PROMPT } from "./prompt";
 import { MAX_GUIDE_STEPS, readTool, type ChangeOutcome, type ChangeTool, type GuideStep, type PageLink, type ReplyWidget, type Toolbox } from "./toolbox";
+import { searchOrFilters } from "@repo/lib/search";
 
 function must<T>(res: { data: T; error: { message: string } | null }): NonNullable<T> {
   if (res.error) throw new Error(res.error.message);
@@ -345,16 +346,20 @@ function cardNote(a: ActionRow): string {
 /** This person's chats, newest first; with `search`, those whose title or messages contain it. */
 export async function chatsOf(person: Person, search = ""): Promise<ChatSummary[]> {
   const db = createAdminClient();
-  const q = search.replace(/[%_\\]/g, " ").trim().slice(0, 60);
+  const words = searchOrFilters(search.slice(0, 60), ["body"]);
   let ids: string[] | null = null;
-  if (q) {
-    const hits = must(
-      await db.from("assistant_messages").select("chat_id").eq("person_type", person.type).eq("person_id", person.id).ilike("body", `%${q}%`).limit(200),
-    ) as { chat_id: string }[];
-    ids = [...new Set(hits.map((h) => h.chat_id))];
+  if (words.length) {
+    // Every word in one message, or every word in the title.
+    let inMessages = db.from("assistant_messages").select("chat_id").eq("person_type", person.type).eq("person_id", person.id);
+    for (const f of words) inMessages = inMessages.or(f);
+    let inTitles = db.from("assistant_chats").select("id").eq("person_type", person.type).eq("person_id", person.id);
+    for (const f of searchOrFilters(search.slice(0, 60), ["title"])) inTitles = inTitles.or(f);
+    const [hits, titles] = await Promise.all([inMessages.limit(200), inTitles.limit(50)]);
+    ids = [...new Set([...(must(hits) as { chat_id: string }[]).map((h) => h.chat_id), ...(must(titles) as { id: string }[]).map((t) => t.id)])];
+    if (!ids.length) return [];
   }
   let query = db.from("assistant_chats").select("id, title, last_at").eq("person_type", person.type).eq("person_id", person.id);
-  if (q) query = query.or(`title.ilike.%${q.replace(/[,()]/g, " ")}%${ids?.length ? `,id.in.(${ids.join(",")})` : ""}`);
+  if (ids) query = query.in("id", ids);
   const rows = must(await query.order("last_at", { ascending: false }).limit(50)) as { id: string; title: string; last_at: string }[];
   return rows.map((r) => ({ id: r.id, title: r.title, lastAt: r.last_at }));
 }

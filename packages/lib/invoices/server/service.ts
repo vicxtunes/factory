@@ -419,7 +419,19 @@ export async function applyWallet(staff: InvoiceStaff, invoiceId: string): Promi
 }
 
 export async function list(): Promise<InvoiceListRow[]> {
-  const invoices = await repo.list(LIST_LIMIT);
+  return toListRows(await repo.list(LIST_LIMIT));
+}
+
+/**
+ * Invoices matching a search however old: the list shows the latest
+ * LIST_LIMIT, and a search must still find the rest. By invoice number, or
+ * the order's number, client or phone.
+ */
+export async function search(query: string): Promise<InvoiceListRow[]> {
+  return toListRows(await repo.search(query, LIST_LIMIT));
+}
+
+async function toListRows(invoices: Awaited<ReturnType<typeof repo.list>>): Promise<InvoiceListRow[]> {
   const orderIds = invoices.map((i) => i.order_id);
   const batches: string[][] = [];
   for (let i = 0; i < orderIds.length; i += ORDER_BATCH) batches.push(orderIds.slice(i, i + ORDER_BATCH));

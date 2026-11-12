@@ -13,6 +13,7 @@ import { paidByOrders } from "@repo/lib/wallet/orders";
 
 import { participantKey, reachableTypes, requiresRelationship } from "../policy";
 import type { ChatPerson, ParticipantRef, ParticipantType } from "../types";
+import { searchOrFilters } from "@repo/lib/search";
 
 const STAFF_ROLE_LABELS: Record<string, string> = {
   boss: "Boss",
@@ -149,14 +150,13 @@ export async function haveRelationship(a: ParticipantRef, b: ParticipantRef): Pr
 export async function searchContacts(viewer: ParticipantRef, query: string): Promise<ChatPerson[]> {
   const admin = createAdminClient();
   const q = query.trim();
-  const like = `%${q.replace(/[%_]/g, (m) => `\\${m}`)}%`;
   const results: ChatPerson[] = [];
 
   await Promise.all(
     reachableTypes(viewer.type).map(async (type) => {
       if (type === "dashboard_user") {
         let req = admin.from("profiles").select("id, full_name, role, avatar_url").order("full_name").limit(CONTACT_LIMIT_PER_TYPE);
-        if (q) req = req.ilike("full_name", like);
+        for (const f of searchOrFilters(q, ["full_name"])) req = req.or(f);
         const { data } = await req;
         (data ?? []).forEach((row) => results.push(staffPerson(row)));
         return;
@@ -164,7 +164,7 @@ export async function searchContacts(viewer: ParticipantRef, query: string): Pro
 
       const table = type === "worker" ? "workers" : type === "designer" ? "designers" : "clients";
       let req = admin.from(table).select("id, name, avatar_url").eq("active", true).order("name").limit(CONTACT_LIMIT_PER_TYPE);
-      if (q) req = req.ilike("name", like);
+      for (const f of searchOrFilters(q, type === "client" ? ["name", "phone"] : ["name"])) req = req.or(f);
 
       if (requiresRelationship(viewer.type, type)) {
         const ids =

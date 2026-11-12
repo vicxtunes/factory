@@ -10,6 +10,7 @@ import { formatListTime, KIND_LABELS } from "./format";
 import { BackIcon, GroupIcon, IssueIcon, OrderIcon, PlusIcon, SupportIcon } from "./icons";
 import { ConversationListSkeleton } from "./ChatSkeleton";
 import { MessageSearchResults } from "./MessageSearchResults";
+import { matchesSearch } from "@repo/lib/search";
 
 type Filter = "all" | "unread" | "people" | "orders" | "help";
 
@@ -96,12 +97,11 @@ export function ConversationList({
   }, [conversations]);
 
   const visible = useMemo(() => {
-    const q = query.trim().toLowerCase();
     const kinds = GROUPS.find((g) => g.value === filter)?.kinds;
     return conversations.filter((c) => {
       if (filter === "unread" && c.unreadCount === 0) return false;
       if (kinds && !kinds.includes(c.kind)) return false;
-      return !q || c.title.toLowerCase().includes(q) || (c.lastMessagePreview ?? "").toLowerCase().includes(q);
+      return matchesSearch(query, [c.title, c.lastMessagePreview, c.lastMessageSenderName]);
     });
   }, [conversations, filter, query]);
   // Finished orders and resolved issues wait at the bottom, folded, unless something new came in.

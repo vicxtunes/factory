@@ -1,12 +1,13 @@
 "use client";
 
-// Accounts → Expenses: one-time, fixed recurring and varying recurring, all in
-// one list. Status comes from the payments. Forms sit in form sheets; the list
-// is cards on a phone and a table from md. Boss and supervisors record and pay;
-// the boss approves what's above the limit.
+// Accounts → Expenses: one-time and recurring, all in one list. Status comes
+// from the payments. Forms sit in form sheets; the list is cards on a phone
+// and a table from md, recurring expenses a grid of cards. Boss and
+// supervisors record, pay and manage recurring ones; the boss approves what's
+// above the limit.
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState, useTransition, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, useTransition, type ReactNode } from "react";
 
 import { Button } from "@repo/ui/Button";
 import { DataTable, type DataTableColumn } from "@repo/ui/DataTable";
@@ -16,8 +17,9 @@ import { TableFilters } from "@repo/ui/TableFilters";
 import { UploadRow } from "@repo/ui/UploadRow";
 import { PeriodPicker } from "@repo/ui/accounting/PeriodPicker";
 import { Card, EmptyState, FigureTile, formatDayTime, useMoney } from "@repo/ui/accounting/shared";
-import { ChartCard, RankBars, SERIES } from "@repo/ui/charts/kit";
-import { DAY_PERIOD_PRESETS, type Period } from "@repo/lib/accounting/core/period";
+import { compactNumber, monthLabel } from "@repo/ui/charts/format";
+import { ChartCard, GroupedColumns, RankBars, SERIES } from "@repo/ui/charts/kit";
+import { DAY_PERIOD_PRESETS, addDays, type Period } from "@repo/lib/accounting/core/period";
 import { VoidSheet, parseNumber } from "@repo/ui/production/sheets";
 import { localPhone } from "@repo/lib/wallet/policy";
 import { todayHere, useMoneySource } from "@repo/ui/wallet/MoneySourceFields";
@@ -25,38 +27,60 @@ import {
   addExpenseCategory,
   addExpenseSchedule,
   decideExpense,
-  endExpenseSchedule,
+  editExpenseSchedule,
   getExpenseDetail,
   payExpense,
+  restoreExpense,
+  resumeExpenseSchedule,
   sendExpensePayout,
   recordExpense,
   setExpenseApprovalLimit,
+  stopExpenseSchedule,
   voidExpense,
   voidExpensePayment,
 } from "@repo/lib/books/actions";
 import { uploadExpenseDocument } from "@repo/lib/books/expense-documents";
 import {
-  EVERY_LABELS,
+  EVERY_UNITS,
   EXPENSE_STATUS_LABELS,
   HIVEPAY_SEND_FEES,
+  SCHEDULE_STATE_LABELS,
+  WEEKDAYS,
+  everyUnit,
   expenseBalance,
+  expenseBelongsOn,
   expenseStatus,
   hivepaySendFee,
+  onOrAfterWeekday,
+  repeatLabel,
+  scheduleState,
+  weekdayOf,
   type ExpenseCategory,
   type ExpenseDetail,
   type ExpenseEvery,
   type ExpenseLine,
+  type ExpenseMonth,
   type ExpensePayment,
   type ExpenseSchedule,
   type ExpenseStatus,
   type ExpenseSummary,
+  type ScheduleState,
+  type UpcomingBill,
 } from "@repo/lib/books/expenses";
+import { matchesSearch } from "@repo/lib/search";
 import type { PaymentMethod } from "@repo/lib/wallet/types";
 
 const METHODS: Record<string, string> = { cash: "Cash", mobile_money: "Mobile money", bank_transfer: "Bank transfer", other: "Other" };
 const FILE_TYPES = "image/*,application/pdf";
+/** How far ahead Coming up looks; the server projects recurring bills as far (UPCOMING_DAYS). */
+const COMING_UP_DAYS = 30;
 
-type Tab = "to_pay" | "overdue" | "waiting" | "paid" | "recurring" | "voided" | "all";
+type Tab = "to_pay" | "overdue" | "waiting" | "coming_up" | "paid" | "recurring" | "voided" | "all";
+/** These are as of today, whatever the period. */
+const OWED_TABS: Tab[] = ["to_pay", "overdue", "waiting", "coming_up"];
+type Sort = "newest" | "oldest" | "due" | "largest" | "smallest";
+
+const SORTS: Record<Sort, string> = { newest: "Newest first", oldest: "Oldest first", due: "Due soonest", largest: "Largest first", smallest: "Smallest first" };
 
 const STATUS_STYLES: Record<ExpenseStatus, string> = {
   voided: "bg-gray-100 text-gray-500 line-through dark:bg-white/5",
@@ -69,24 +93,37 @@ const STATUS_STYLES: Record<ExpenseStatus, string> = {
   unpaid: "bg-gray-100 text-gray-700 dark:bg-white/5 dark:text-gray-300",
 };
 
+const STATE_STYLES: Record<ScheduleState, string> = {
+  running: "bg-success-50 text-success-700 dark:bg-success-500/15 dark:text-success-500",
+  paused: "bg-warning-50 text-warning-700 dark:bg-warning-500/15 dark:text-warning-500",
+  finished: "bg-gray-100 text-gray-700 dark:bg-white/5 dark:text-gray-300",
+  cancelled: "bg-gray-100 text-gray-500 dark:bg-white/5",
+};
+
 const day = (iso: string) => new Intl.DateTimeFormat("en-GB", { timeZone: "UTC", day: "numeric", month: "short", year: "numeric" }).format(new Date(`${iso}T00:00:00Z`));
 
 function StatusBadge({ status }: { status: ExpenseStatus }) {
   return <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_STYLES[status]}`}>{EXPENSE_STATUS_LABELS[status]}</span>;
 }
 
-function matches(e: ExpenseLine, query: string): boolean {
-  if (!query) return true;
-  return [e.name, e.recipient ?? "", e.categoryName, e.description ?? "", e.recordedBy].some((f) => f.toLowerCase().includes(query));
+function StateBadge({ state }: { state: ScheduleState }) {
+  return <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${STATE_STYLES[state]}`}>{SCHEDULE_STATE_LABELS[state]}</span>;
 }
+
+const uniq = (values: (string | null)[]) => [...new Set(values.filter((v): v is string => !!v))].sort((a, b) => a.localeCompare(b));
+
+/** A bill in Coming up: one already created, or one a recurring expense will create. */
+type ComingBill = { kind: "bill"; line: ExpenseLine; dueOn: string } | { kind: "planned"; schedule: ExpenseSchedule; dueOn: string };
 
 export function ExpensesBoard({
   today,
   lines,
   summary,
+  months,
   period,
   categories,
   schedules,
+  upcoming,
   approvalAbove,
   isBoss,
   timeZone,
@@ -94,9 +131,11 @@ export function ExpensesBoard({
   today: string;
   lines: ExpenseLine[];
   summary: ExpenseSummary;
+  months: ExpenseMonth[];
   period: Period;
   categories: ExpenseCategory[];
   schedules: ExpenseSchedule[];
+  upcoming: UpcomingBill[];
   approvalAbove: number | null;
   isBoss: boolean;
   timeZone: string;
@@ -104,28 +143,101 @@ export function ExpensesBoard({
   const money = useMoney();
   const [tab, setTab] = useState<Tab>("to_pay");
   const [search, setSearch] = useState("");
+  const [category, setCategory] = useState("");
+  const [recipient, setRecipient] = useState("");
+  const [recorder, setRecorder] = useState("");
+  const [account, setAccount] = useState("");
+  const [kind, setKind] = useState<"" | "one_time" | "recurring">("");
+  const [sort, setSort] = useState<Sort>("newest");
   const [sheet, setSheet] = useState<"new" | "limit" | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
-  const query = search.trim().toLowerCase();
+  const [openSchedule, setOpenSchedule] = useState<string | null>(null);
   const opened = lines.find((l) => l.id === openId) ?? null;
+  const scheduleOpened = schedules.find((s) => s.id === openSchedule) ?? null;
 
   const status = (e: ExpenseLine) => expenseStatus(e, today);
+  const inPeriod = (e: ExpenseLine) => {
+    const on = expenseBelongsOn(e);
+    return (!period.fromDate || on >= period.fromDate) && (!period.toDate || on <= period.toDate);
+  };
+  const comingBy = addDays(today, COMING_UP_DAYS);
   const inTab: Record<Exclude<Tab, "recurring">, (e: ExpenseLine) => boolean> = {
     to_pay: (e) => ["unpaid", "part_paid", "overdue", "waiting"].includes(status(e)),
     overdue: (e) => status(e) === "overdue",
     waiting: (e) => status(e) === "waiting",
-    paid: (e) => status(e) === "paid" || status(e) === "on_credit",
-    voided: (e) => status(e) === "voided" || status(e) === "rejected",
-    all: () => true,
+    coming_up: (e) => expenseBalance(e) > 0 && e.dueOn !== null && e.dueOn >= today && e.dueOn <= comingBy,
+    paid: (e) => inPeriod(e) && (status(e) === "paid" || status(e) === "on_credit"),
+    voided: (e) => inPeriod(e) && (status(e) === "voided" || status(e) === "rejected"),
+    all: (e) => inPeriod(e),
   };
-  const count = (k: Exclude<Tab, "recurring">) => lines.filter(inTab[k]).length;
+  const filtersOn = !!(search.trim() || category || recipient || recorder || account || kind);
+  const passes = (e: ExpenseLine) =>
+    (!category || e.category === category) &&
+    (!recipient || e.recipient === recipient) &&
+    (!recorder || e.recordedBy === recorder) &&
+    (!account || e.paidFrom.includes(account)) &&
+    (!kind || (kind === "recurring") === (e.scheduleId !== null)) &&
+    matchesSearch(search, [e.name, e.recipient, e.categoryName, e.description, e.recordedBy, e.amount, ...e.paidFrom]);
+  const count = (k: Exclude<Tab, "recurring">) => lines.filter((e) => inTab[k](e) && passes(e)).length;
 
-  const shown = tab === "recurring" ? [] : lines.filter(inTab[tab]).filter((e) => matches(e, query));
-  // What's still to pay: soonest first, so the next thing due is at the top.
-  const visible = tab === "to_pay" || tab === "overdue" || tab === "waiting" ? [...shown].sort((a, b) => (a.dueOn ?? a.spentOn).localeCompare(b.dueOn ?? b.spentOn)) : shown;
+  const shown = tab === "recurring" ? [] : lines.filter((e) => inTab[tab](e) && passes(e));
+  const byDue = (a: ExpenseLine, b: ExpenseLine) => (a.dueOn ?? a.spentOn).localeCompare(b.dueOn ?? b.spentOn);
+  const sorted = [...shown].sort((a, b) => {
+    if (sort === "due") return byDue(a, b);
+    if (sort === "largest") return b.amount - a.amount;
+    if (sort === "smallest") return a.amount - b.amount;
+    const on = expenseBelongsOn(a).localeCompare(expenseBelongsOn(b)) || a.recordedAt.localeCompare(b.recordedAt);
+    return sort === "oldest" ? on : -on;
+  });
+  // What's still to pay: soonest first unless another order was chosen.
+  const visible = OWED_TABS.includes(tab) && sort === "newest" ? [...shown].sort(byDue) : sorted;
+
+  // Coming up: bills already created plus what recurring expenses will create.
+  const running = new Map(schedules.map((s) => [s.id, s]));
+  const coming: ComingBill[] = [
+    ...lines.filter((e) => inTab.coming_up(e) && passes(e)).map((line): ComingBill => ({ kind: "bill", line, dueOn: line.dueOn ?? line.spentOn })),
+    ...upcoming.flatMap((u): ComingBill[] => {
+      const s = running.get(u.scheduleId);
+      if (!s || (category && s.category !== category) || (recipient && s.recipient !== recipient) || (recorder && s.recordedBy !== recorder) || kind === "one_time" || account) return [];
+      if (!matchesSearch(search, [s.name, s.recipient, s.categoryName, s.description, s.recordedBy, s.amount])) return [];
+      return [{ kind: "planned", schedule: s, dueOn: u.dueOn }];
+    }),
+  ].sort((a, b) => a.dueOn.localeCompare(b.dueOn));
+  const comingTotal = coming.reduce((sum, c) => sum + (c.kind === "bill" ? expenseBalance(c.line) : c.schedule.amount), 0);
+
+  const shownTotal = visible.reduce((sum, e) => sum + e.amount, 0);
+  const shownLeft = visible.reduce((sum, e) => sum + expenseBalance(e), 0);
+
+  const options = useMemo(
+    () => ({
+      recipients: uniq(lines.map((l) => l.recipient)),
+      recorders: uniq(lines.map((l) => l.recordedBy)),
+      accounts: uniq(lines.flatMap((l) => l.paidFrom)),
+      categories: categories.filter((c) => lines.some((l) => l.category === c.key)),
+    }),
+    [lines, categories],
+  );
+
+  function clearFilters() {
+    setSearch("");
+    setCategory("");
+    setRecipient("");
+    setRecorder("");
+    setAccount("");
+    setKind("");
+  }
 
   const columns: DataTableColumn<ExpenseLine>[] = [
-    { key: "name", header: "Expense", render: (e) => <span className="font-medium">{e.name}</span> },
+    {
+      key: "name",
+      header: "Expense",
+      render: (e) => (
+        <span className="font-medium">
+          {e.name}
+          {e.scheduleId ? <span className="ml-1.5 text-xs font-normal text-muted">Recurring</span> : null}
+        </span>
+      ),
+    },
     { key: "recipient", header: "To", render: (e) => e.recipient ?? "—" },
     { key: "category", header: "Category", render: (e) => e.categoryName },
     { key: "date", header: "Date", render: (e) => day(e.spentOn) },
@@ -134,6 +246,8 @@ export function ExpensesBoard({
     { key: "left", header: "Left to pay", align: "right", render: (e) => money(expenseBalance(e)) },
     { key: "status", header: "Status", render: (e) => <StatusBadge status={status(e)} /> },
   ];
+
+  const live = schedules.filter((s) => !s.endedAt);
 
   return (
     <div className="space-y-4">
@@ -165,35 +279,64 @@ export function ExpensesBoard({
         <FigureTile label="Paid" value={money(summary.paid)} />
         <FigureTile label="Left to pay" value={money(summary.owing)} />
       </div>
-      <ChartCard
-        title="Expenses by category"
-        subtitle="Largest first, for this period"
-        empty={summary.byCategory.length ? null : "No expenses in this period."}
-        table={{
-          columns: [
-            { key: "name", label: "Category" },
-            { key: "total", label: "Expenses", align: "right" },
-            { key: "paid", label: "Paid", align: "right" },
-            { key: "owing", label: "Left to pay", align: "right" },
-          ],
-          rows: summary.byCategory.map((c) => ({ name: c.name, total: money(c.total), paid: money(c.paid), owing: money(c.owing) })),
-        }}
-      >
-        {(w) => (
-          <RankBars
-            width={w}
-            format={money}
-            color={SERIES[1]}
-            limit={summary.byCategory.length}
-            rows={summary.byCategory.map((c) => ({ key: c.key, label: c.name, value: c.total, detail: `${money(c.owing)} left to pay` }))}
-          />
-        )}
-      </ChartCard>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <ChartCard
+          title="Expenses by category"
+          subtitle="Largest first, for this period"
+          empty={summary.byCategory.length ? null : "No expenses in this period."}
+          table={{
+            columns: [
+              { key: "name", label: "Category" },
+              { key: "total", label: "Expenses", align: "right" },
+              { key: "paid", label: "Paid", align: "right" },
+              { key: "owing", label: "Left to pay", align: "right" },
+            ],
+            rows: summary.byCategory.map((c) => ({ name: c.name, total: money(c.total), paid: money(c.paid), owing: money(c.owing) })),
+          }}
+        >
+          {(w) => (
+            <RankBars
+              width={w}
+              format={money}
+              color={SERIES[1]}
+              limit={summary.byCategory.length}
+              rows={summary.byCategory.map((c) => ({ key: c.key, label: c.name, value: c.total, detail: `${money(c.owing)} left to pay` }))}
+            />
+          )}
+        </ChartCard>
+        <ChartCard
+          title="Expenses by month"
+          subtitle="The 12 months up to the end of this period"
+          empty={months.some((m) => m.total > 0) ? null : "No expenses in these months."}
+          table={{
+            columns: [
+              { key: "month", label: "Month" },
+              { key: "total", label: "Expenses", align: "right" },
+              { key: "paid", label: "Paid", align: "right" },
+            ],
+            rows: months.map((m) => ({ month: monthLabel(m.month.slice(0, 7), true), total: money(m.total), paid: money(m.paid) })),
+          }}
+        >
+          {(w) => (
+            <GroupedColumns
+              width={w}
+              data={months.map((m, i) => ({ key: m.month, label: monthLabel(m.month.slice(0, 7), i === 0), values: [m.total, m.paid] }))}
+              series={[
+                { label: "Expenses", color: SERIES[1] },
+                { label: "Paid", color: SERIES[0] },
+              ]}
+              format={money}
+              axisFormat={compactNumber}
+              extra={(i) => [{ label: "Left to pay", value: money(Math.max(months[i].total - months[i].paid, 0)) }]}
+            />
+          )}
+        </ChartCard>
+      </div>
 
       <TableFilters
         search={search}
         onSearchChange={setSearch}
-        searchPlaceholder="Search expense, who it's for, category or staff…"
+        searchPlaceholder="Search expense, who it's for, amount…"
         searchLabel="Search expenses"
         value={tab}
         onChange={(k: Tab) => setTab(k)}
@@ -201,10 +344,11 @@ export function ExpensesBoard({
           { key: "to_pay", label: "To pay", count: count("to_pay") },
           { key: "overdue", label: "Overdue", count: count("overdue"), tone: "warning" },
           { key: "waiting", label: "Waiting for approval", count: count("waiting"), tone: "warning" },
+          { key: "coming_up", label: `Next ${COMING_UP_DAYS} days`, count: coming.length },
           { key: "paid", label: "Paid", count: count("paid") },
-          { key: "recurring", label: "Recurring", count: schedules.filter((s) => !s.endedAt).length },
+          { key: "recurring", label: "Recurring", count: live.length },
           { key: "voided", label: "Voided or rejected", count: count("voided") },
-          { key: "all", label: "All" },
+          { key: "all", label: "All", count: count("all") },
         ]}
         exportFilename="expenses"
         exportRows={visible.map((e) => ({
@@ -217,6 +361,8 @@ export function ExpensesBoard({
           paid: e.paid,
           left: expenseBalance(e),
           status: EXPENSE_STATUS_LABELS[status(e)],
+          paidFrom: e.paidFrom.join(", "),
+          recurring: e.scheduleEvery ? repeatLabel(e.scheduleEvery, e.scheduleEveryCount ?? 1, e.dueOn) : "",
           recordedBy: e.recordedBy,
         }))}
         exportColumns={[
@@ -229,14 +375,101 @@ export function ExpensesBoard({
           { key: "paid", label: "Paid" },
           { key: "left", label: "Left to pay" },
           { key: "status", label: "Status" },
+          { key: "paidFrom", label: "Paid from" },
+          { key: "recurring", label: "Repeats" },
           { key: "recordedBy", label: "Recorded by" },
         ]}
       />
 
+      {tab === "recurring" ? null : (
+        <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-6">
+          <Select aria-label="Category" value={category} onChange={(e) => setCategory(e.target.value)}>
+            <option value="">All categories</option>
+            {options.categories.map((c) => (
+              <option key={c.key} value={c.key}>
+                {c.name}
+              </option>
+            ))}
+          </Select>
+          <Select aria-label="Who it's for" value={recipient} onChange={(e) => setRecipient(e.target.value)}>
+            <option value="">Anyone it&apos;s for</option>
+            {options.recipients.map((r) => (
+              <option key={r} value={r}>
+                {r}
+              </option>
+            ))}
+          </Select>
+          <Select aria-label="Recorded by" value={recorder} onChange={(e) => setRecorder(e.target.value)}>
+            <option value="">Recorded by anyone</option>
+            {options.recorders.map((r) => (
+              <option key={r} value={r}>
+                {r}
+              </option>
+            ))}
+          </Select>
+          <Select aria-label="Paid from" value={account} onChange={(e) => setAccount(e.target.value)}>
+            <option value="">Paid from any account</option>
+            {options.accounts.map((a) => (
+              <option key={a} value={a}>
+                {a}
+              </option>
+            ))}
+          </Select>
+          <Select aria-label="One-time or recurring" value={kind} onChange={(e) => setKind(e.target.value as typeof kind)}>
+            <option value="">One-time and recurring</option>
+            <option value="one_time">One-time only</option>
+            <option value="recurring">Recurring only</option>
+          </Select>
+          <Select aria-label="Sort" value={sort} onChange={(e) => setSort(e.target.value as Sort)}>
+            {(Object.keys(SORTS) as Sort[]).map((k) => (
+              <option key={k} value={k}>
+                {SORTS[k]}
+              </option>
+            ))}
+          </Select>
+        </div>
+      )}
+
+      {tab === "recurring" ? null : (
+        <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+          <p className="text-muted">
+            {tab === "coming_up" ? (
+              <>
+                <span className="font-semibold text-foreground tnum">{coming.length}</span> {coming.length === 1 ? "bill" : "bills"} due by {day(comingBy)} ·{" "}
+                <span className="font-semibold text-foreground tnum">{money(comingTotal)}</span> to pay
+              </>
+            ) : (
+              <>
+                <span className="font-semibold text-foreground tnum">{visible.length}</span> {visible.length === 1 ? "expense" : "expenses"} ·{" "}
+                <span className="font-semibold text-foreground tnum">{money(shownTotal)}</span>
+                {shownLeft > 0 ? (
+                  <>
+                    {" "}
+                    · <span className="font-semibold text-foreground tnum">{money(shownLeft)}</span> left to pay
+                  </>
+                ) : null}
+                {OWED_TABS.includes(tab) ? " · everything still owed, whatever the period" : ` · ${period.fromDate ? `${day(period.fromDate)} to ${day(period.toDate ?? today)}` : "all time"}`}
+              </>
+            )}
+          </p>
+          {filtersOn ? (
+            <button type="button" className="text-xs font-medium text-brand-600 underline" onClick={clearFilters}>
+              Clear search and filters
+            </button>
+          ) : null}
+        </div>
+      )}
+
       {tab === "recurring" ? (
-        <SchedulesList schedules={schedules} />
+        <SchedulesList schedules={schedules} lines={lines} today={today} categories={categories} onOpenLine={setOpenId} />
+      ) : tab === "coming_up" ? (
+        coming.length === 0 ? (
+          <EmptyState>{filtersOn ? "Nothing coming up matches the search and filters." : `Nothing due in the next ${COMING_UP_DAYS} days.`}</EmptyState>
+        ) : (
+          <ComingUpList bills={coming} today={today} onOpenLine={setOpenId} onOpenSchedule={setOpenSchedule} />
+        )
       ) : visible.length === 0 ? (
-        <EmptyState>{query ? `Nothing matches “${search.trim()}”.` : "Nothing here."}</EmptyState>
+        <EmptyState>{filtersOn ? "Nothing matches the search and filters." : "Nothing here."}</EmptyState>
       ) : (
         <>
           <ul className="space-y-2 md:hidden">
@@ -248,7 +481,7 @@ export function ExpensesBoard({
                     <span className="shrink-0 font-semibold tnum">{money(e.amount)}</span>
                   </span>
                   <span className="mt-1 block text-xs text-muted">
-                    {[e.recipient, e.categoryName, e.dueOn ? `Due ${day(e.dueOn)}` : day(e.spentOn)].filter(Boolean).join(" · ")}
+                    {[e.recipient, e.categoryName, e.dueOn ? `Due ${day(e.dueOn)}` : day(e.spentOn), e.scheduleId ? "Recurring" : null].filter(Boolean).join(" · ")}
                   </span>
                   <span className="mt-2 flex items-center justify-between gap-2">
                     <StatusBadge status={status(e)} />
@@ -265,12 +498,145 @@ export function ExpensesBoard({
       {sheet === "new" ? <NewExpenseSheet categories={categories} today={today} onClose={() => setSheet(null)} /> : null}
       {sheet === "limit" ? <LimitSheet above={approvalAbove} onClose={() => setSheet(null)} /> : null}
       {opened ? <ExpenseSheet key={opened.id} expense={opened} today={today} isBoss={isBoss} timeZone={timeZone} onClose={() => setOpenId(null)} /> : null}
+      {scheduleOpened ? (
+        <ScheduleSheet
+          key={scheduleOpened.id}
+          schedule={scheduleOpened}
+          lines={lines}
+          today={today}
+          categories={categories}
+          onOpenLine={(id) => {
+            setOpenSchedule(null);
+            setOpenId(id);
+          }}
+          onClose={() => setOpenSchedule(null)}
+        />
+      ) : null}
     </div>
+  );
+}
+
+/** Coming up, soonest first: created bills open themselves, planned ones their recurring expense. */
+function ComingUpList({ bills, today, onOpenLine, onOpenSchedule }: { bills: ComingBill[]; today: string; onOpenLine: (id: string) => void; onOpenSchedule: (id: string) => void }) {
+  const money = useMoney();
+  return (
+    <ul className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+      {bills.map((b) => {
+        const name = b.kind === "bill" ? b.line.name : b.schedule.name;
+        const who = b.kind === "bill" ? b.line.recipient : b.schedule.recipient;
+        const amount = b.kind === "bill" ? expenseBalance(b.line) : b.schedule.amount;
+        const estimate = b.kind === "bill" ? b.line.amountIsEstimate : b.schedule.varies;
+        return (
+          <li key={b.kind === "bill" ? b.line.id : `${b.schedule.id}-${b.dueOn}`}>
+            <button
+              type="button"
+              onClick={() => (b.kind === "bill" ? onOpenLine(b.line.id) : onOpenSchedule(b.schedule.id))}
+              className="flex w-full items-start gap-3 rounded-2xl border border-border bg-surface p-3 text-left shadow-theme-xs"
+            >
+              <span className="w-12 shrink-0 rounded-xl bg-gray-100 py-1 text-center dark:bg-white/5">
+                <span className="block text-lg font-bold leading-tight tnum">{Number(b.dueOn.slice(8, 10))}</span>
+                <span className="block text-[11px] uppercase text-muted">{day(b.dueOn).split(" ")[1]}</span>
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="flex items-start justify-between gap-2">
+                  <span className="min-w-0 truncate font-medium">{name}</span>
+                  <span className="shrink-0 font-semibold tnum">
+                    {estimate ? "About " : ""}
+                    {money(amount)}
+                  </span>
+                </span>
+                <span className="mt-1 block text-xs text-muted">
+                  {[who, b.dueOn === today ? "Due today" : `Due ${day(b.dueOn)}`, b.kind === "planned" ? "Not created yet" : b.line.paid > 0 ? "Part paid" : null].filter(Boolean).join(" · ")}
+                </span>
+              </span>
+            </button>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
 function ErrorLine({ error }: { error: string | null }) {
   return error ? <p className="text-xs text-error-600">{error}</p> : null;
+}
+
+/** How often, from when, and until when: the same fields to add and to edit a recurring expense. */
+interface RepeatValue {
+  every: ExpenseEvery;
+  everyCount: string;
+  /** The first due date (new) or the next one (edit). */
+  dueOn: string;
+  end: "never" | "on" | "after";
+  endsOn: string;
+  times: string;
+}
+
+function repeatInput(r: RepeatValue): { error: string } | { every: ExpenseEvery; everyCount: number; endsOn: string | null; times: number | null } {
+  const everyCount = parseNumber(r.everyCount);
+  if (!Number.isInteger(everyCount) || everyCount < 1 || everyCount > 366) return { error: "Say how many days, weeks, months or years between bills (1 to 366)." };
+  if (!r.dueOn) return { error: "Enter the due date." };
+  if (r.end === "on" && (!r.endsOn || r.endsOn < r.dueOn)) return { error: "The end date must be on or after the due date." };
+  const times = parseNumber(r.times);
+  if (r.end === "after" && (!Number.isInteger(times) || times < 1 || times > 1000)) return { error: "Enter how many bills in all, from 1 to 1,000." };
+  return { every: r.every, everyCount, endsOn: r.end === "on" ? r.endsOn : null, times: r.end === "after" ? times : null };
+}
+
+function RepeatFields({ value: r, onChange, dueLabel, min, madeSoFar }: { value: RepeatValue; onChange: (r: RepeatValue) => void; dueLabel: string; min?: string; madeSoFar?: number }) {
+  const set = (patch: Partial<RepeatValue>) => onChange({ ...r, ...patch });
+  const count = parseNumber(r.everyCount);
+  return (
+    <div className="space-y-3 rounded-2xl border border-border p-3">
+      <div className="grid grid-cols-[5rem_1fr] gap-2">
+        <Field label="Every">
+          <TextInput inputMode="numeric" value={r.everyCount} onChange={(e) => set({ everyCount: e.target.value })} aria-label="How many" />
+        </Field>
+        <Field label="&nbsp;">
+          <Select value={r.every} onChange={(e) => set({ every: e.target.value as ExpenseEvery })} aria-label="Days, weeks, months or years">
+            {EVERY_UNITS.map((u) => (
+              <option key={u} value={u}>
+                {everyUnit(u, count > 0 ? count : 1)}
+              </option>
+            ))}
+          </Select>
+        </Field>
+      </div>
+      <div className={`grid gap-2 ${r.every === "week" ? "sm:grid-cols-2" : ""}`}>
+        {r.every === "week" ? (
+          <Field label="On">
+            <Select value={r.dueOn ? weekdayOf(r.dueOn) : ""} onChange={(e) => set({ dueOn: onOrAfterWeekday(r.dueOn && (!min || r.dueOn >= min) ? r.dueOn : (min ?? todayHere()), Number(e.target.value)) })}>
+              {WEEKDAYS.map((d, i) => (
+                <option key={d} value={i}>
+                  {d}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        ) : null}
+        <Field label={dueLabel}>
+          <TextInput type="date" value={r.dueOn} min={min} onChange={(e) => set({ dueOn: e.target.value })} />
+        </Field>
+      </div>
+      <Field label="Stops">
+        <Select value={r.end} onChange={(e) => set({ end: e.target.value as RepeatValue["end"] })}>
+          <option value="never">Never, until cancelled</option>
+          <option value="on">On a date</option>
+          <option value="after">After a number of bills</option>
+        </Select>
+      </Field>
+      {r.end === "on" ? (
+        <Field label="Last possible due date">
+          <TextInput type="date" value={r.endsOn} min={r.dueOn || min} onChange={(e) => set({ endsOn: e.target.value })} />
+        </Field>
+      ) : null}
+      {r.end === "after" ? (
+        <Field label="Bills in all" hint={madeSoFar ? `${madeSoFar} made so far count toward it.` : undefined}>
+          <TextInput inputMode="numeric" value={r.times} onChange={(e) => set({ times: e.target.value })} />
+        </Field>
+      ) : null}
+      {r.dueOn && count > 0 ? <p className="text-xs text-muted">{repeatLabel(r.every, count, r.dueOn)}, from {day(r.dueOn)}. Each bill appears 14 days before it&apos;s due.</p> : null}
+    </div>
+  );
 }
 
 /** One-time, fixed recurring or varying recurring: the same form, what differs follows the choice. */
@@ -287,8 +653,7 @@ function NewExpenseSheet({ categories, today, onClose }: { categories: ExpenseCa
   const [recipient, setRecipient] = useState("");
   const [spentOn, setSpentOn] = useState(today);
   const [dueOn, setDueOn] = useState("");
-  const [every, setEvery] = useState<ExpenseEvery>("month");
-  const [firstDue, setFirstDue] = useState(today);
+  const [repeat, setRepeat] = useState<RepeatValue>({ every: "month", everyCount: "1", dueOn: today, end: "never", endsOn: "", times: "" });
   const [paidNow, setPaidNow] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
   const pay = usePayFields(today);
@@ -303,6 +668,8 @@ function NewExpenseSheet({ categories, today, onClose }: { categories: ExpenseCa
     if (!(value > 0) || !Number.isInteger(value)) return setError("Enter the amount in whole shillings.");
     if (!category) return setError("Choose a category.");
     if (category === "__new" && !newCategory.trim()) return setError("Give the new category a name.");
+    const how = repeatInput(repeat);
+    if (recurring && "error" in how) return setError(how.error);
     setError(null);
     start(async () => {
       let categoryKey = category;
@@ -314,8 +681,8 @@ function NewExpenseSheet({ categories, today, onClose }: { categories: ExpenseCa
         setCategory(categoryKey);
       }
       const shared = { name, description, category: categoryKey, amount: value, recipient };
-      if (recurring) {
-        const res = await addExpenseSchedule({ ...shared, id: ids.schedule, varies: type === "varying", every, firstDueOn: firstDue });
+      if (recurring && !("error" in how)) {
+        const res = await addExpenseSchedule({ ...shared, ...how, id: ids.schedule, varies: type === "varying", firstDueOn: repeat.dueOn });
         if (!res.ok) return setError(res.error);
         router.refresh();
         return onClose();
@@ -338,7 +705,7 @@ function NewExpenseSheet({ categories, today, onClose }: { categories: ExpenseCa
   return (
     <FormSheet open onClose={onClose} title="Record expense">
       <form onSubmit={submit} className="space-y-3">
-        <Field label="What kind?" hint={type === "one_time" ? "A repair, a one-off purchase." : type === "fixed" ? "Rent, salaries: the same amount each time. The next one appears by itself." : "Electricity, water: enter what you expect now, and the real amount when paying."}>
+        <Field label="What kind?" hint={type === "one_time" ? "A repair, a one-off purchase." : type === "fixed" ? "Rent, salaries: the same amount each time. Each bill appears by itself." : "Electricity, water: enter what you expect now, and the real amount when paying."}>
           <Select value={type} onChange={(e) => setType(e.target.value as typeof type)}>
             <option value="one_time">One-time</option>
             <option value="fixed">Recurring, same amount</option>
@@ -348,24 +715,7 @@ function NewExpenseSheet({ categories, today, onClose }: { categories: ExpenseCa
         <Field label="What is it?">
           <TextInput value={name} onChange={(e) => setName(e.target.value)} maxLength={120} placeholder={recurring ? "e.g. Office rent" : "e.g. Generator repair"} />
         </Field>
-        <Field label="Category" hint="Materials are recorded under Production and loan repayments under Money we owe, so they aren't counted twice.">
-          <Select value={category} onChange={(e) => setCategory(e.target.value)}>
-            <option value="" disabled>
-              Choose…
-            </option>
-            {choices.map((c) => (
-              <option key={c.key} value={c.key}>
-                {c.name}
-              </option>
-            ))}
-            <option value="__new">New category…</option>
-          </Select>
-        </Field>
-        {category === "__new" ? (
-          <Field label="New category name">
-            <TextInput value={newCategory} onChange={(e) => setNewCategory(e.target.value)} maxLength={60} />
-          </Field>
-        ) : null}
+        <CategoryField choices={choices} category={category} setCategory={setCategory} newCategory={newCategory} setNewCategory={setNewCategory} />
         <div className="grid gap-2 sm:grid-cols-2">
           <Field label={type === "varying" ? "Expected amount" : "Amount"}>
             <TextInput inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value)} />
@@ -375,20 +725,7 @@ function NewExpenseSheet({ categories, today, onClose }: { categories: ExpenseCa
           </Field>
         </div>
         {recurring ? (
-          <div className="grid gap-2 sm:grid-cols-2">
-            <Field label="How often">
-              <Select value={every} onChange={(e) => setEvery(e.target.value as ExpenseEvery)}>
-                {(Object.keys(EVERY_LABELS) as ExpenseEvery[]).map((k) => (
-                  <option key={k} value={k}>
-                    {EVERY_LABELS[k]}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <Field label="First due date">
-              <TextInput type="date" value={firstDue} onChange={(e) => setFirstDue(e.target.value)} />
-            </Field>
-          </div>
+          <RepeatFields value={repeat} onChange={setRepeat} dueLabel="First due date" />
         ) : (
           <div className="grid gap-2 sm:grid-cols-2">
             <Field label="Date">
@@ -425,6 +762,43 @@ function NewExpenseSheet({ categories, today, onClose }: { categories: ExpenseCa
         </Button>
       </form>
     </FormSheet>
+  );
+}
+
+function CategoryField({
+  choices,
+  category,
+  setCategory,
+  newCategory,
+  setNewCategory,
+}: {
+  choices: ExpenseCategory[];
+  category: string;
+  setCategory: (v: string) => void;
+  newCategory: string;
+  setNewCategory: (v: string) => void;
+}) {
+  return (
+    <>
+      <Field label="Category" hint="Materials are recorded under Production and loan repayments under Money we owe, so they aren't counted twice.">
+        <Select value={category} onChange={(e) => setCategory(e.target.value)}>
+          <option value="" disabled>
+            Choose…
+          </option>
+          {choices.map((c) => (
+            <option key={c.key} value={c.key}>
+              {c.name}
+            </option>
+          ))}
+          <option value="__new">New category…</option>
+        </Select>
+      </Field>
+      {category === "__new" ? (
+        <Field label="New category name">
+          <TextInput value={newCategory} onChange={(e) => setNewCategory(e.target.value)} maxLength={60} />
+        </Field>
+      ) : null}
+    </>
   );
 }
 
@@ -592,7 +966,8 @@ function ExpenseSheet({ expense: e, today, isBoss, timeZone, onClose }: { expens
             {e.recipient ? <Row label="To">{e.recipient}</Row> : null}
             <Row label="Date">{day(e.spentOn)}</Row>
             {e.dueOn ? <Row label="Due">{day(e.dueOn)}</Row> : null}
-            {e.scheduleEvery ? <Row label="Repeats">{EVERY_LABELS[e.scheduleEvery]}</Row> : null}
+            {e.scheduleEvery ? <Row label="Repeats">{repeatLabel(e.scheduleEvery, e.scheduleEveryCount ?? 1, e.dueOn)}</Row> : null}
+            {e.paidFrom.length ? <Row label="Paid from">{e.paidFrom.join(", ")}</Row> : null}
             <Row label="Paid">{money(e.paid)}</Row>
             <Row label="Left to pay">{money(left)}</Row>
             {e.description ? <Row label="Description">{e.description}</Row> : null}
@@ -610,7 +985,27 @@ function ExpenseSheet({ expense: e, today, isBoss, timeZone, onClose }: { expens
                 {e.voidedBy}: {e.voidReason}
               </Row>
             ) : null}
+            {e.restoredBy ? <Row label="Restored by">{e.restoredBy}</Row> : null}
           </dl>
+
+          {e.voidedWithSchedule && e.voidedAt ? (
+            <div className="space-y-2 rounded-2xl border border-border p-3">
+              <p className="text-sm text-muted">Voided with its recurring expense&apos;s pause or cancel. Restore it if that was a mistake: it&apos;s owed again, as it was.</p>
+              <Button
+                variant="secondary"
+                loading={pending}
+                onClick={() =>
+                  start(async () => {
+                    const res = await restoreExpense(e.id);
+                    if (!res.ok) return setError(res.error);
+                    router.refresh();
+                  })
+                }
+              >
+                Restore this bill
+              </Button>
+            </div>
+          ) : null}
 
           {e.automatic ? (
             <p className="text-sm text-muted">This one records itself from a material purchase, a loan repayment or a HivePay collection.</p>
@@ -916,59 +1311,479 @@ function SendForm({ expense: e, onDone, onCancel }: { expense: ExpenseLine; onDo
   );
 }
 
-function SchedulesList({ schedules }: { schedules: ExpenseSchedule[] }) {
+/** A recurring expense's bills: still owed, and voided with its pause or cancel (they can be restored). */
+function billsOf(s: ExpenseSchedule, lines: ExpenseLine[]) {
+  const mine = lines.filter((l) => l.scheduleId === s.id).sort((a, b) => (a.dueOn ?? "").localeCompare(b.dueOn ?? ""));
+  return { owed: mine.filter((l) => expenseBalance(l) > 0), restorable: mine.filter((l) => l.voidedWithSchedule && l.voidedAt) };
+}
+
+/** When the next bill is due: the earliest still owed from today on, or the next to be created. */
+function nextDue(s: ExpenseSchedule, owed: ExpenseLine[], today: string): string | null {
+  const created = owed.map((l) => l.dueOn).find((d): d is string => !!d && d >= today) ?? null;
+  const planned = scheduleState(s) === "running" ? s.nextCreatedOn : null;
+  if (!created) return planned;
+  if (!planned) return created;
+  return created < planned ? created : planned;
+}
+
+function SchedulesList({
+  schedules,
+  lines,
+  today,
+  categories,
+  onOpenLine,
+}: {
+  schedules: ExpenseSchedule[];
+  lines: ExpenseLine[];
+  today: string;
+  categories: ExpenseCategory[];
+  onOpenLine: (id: string) => void;
+}) {
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [showEnded, setShowEnded] = useState(false);
+  const opened = schedules.find((s) => s.id === openId) ?? null;
+  if (!schedules.length) return <EmptyState>Nothing repeats yet. Record rent, salaries or electricity as a recurring expense.</EmptyState>;
+  const live = schedules.filter((s) => !s.endedAt);
+  const ended = schedules.filter((s) => s.endedAt);
+  return (
+    <div className="space-y-4">
+      {live.length ? (
+        <ul className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {live.map((s) => (
+            <li key={s.id}>
+              <ScheduleCard schedule={s} lines={lines} today={today} onOpen={() => setOpenId(s.id)} />
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <EmptyState>No recurring expense is running. Ended ones are below.</EmptyState>
+      )}
+      {ended.length ? (
+        <div className="space-y-3">
+          <button type="button" className="text-sm font-medium text-brand-600 underline" onClick={() => setShowEnded((v) => !v)}>
+            {showEnded ? "Hide" : "Show"} finished and cancelled ({ended.length})
+          </button>
+          {showEnded ? (
+            <ul className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {ended.map((s) => (
+                <li key={s.id}>
+                  <ScheduleCard schedule={s} lines={lines} today={today} onOpen={() => setOpenId(s.id)} />
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
+      {opened ? (
+        <ScheduleSheet
+          key={opened.id}
+          schedule={opened}
+          lines={lines}
+          today={today}
+          categories={categories}
+          onOpenLine={(id) => {
+            setOpenId(null);
+            onOpenLine(id);
+          }}
+          onClose={() => setOpenId(null)}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function ScheduleCard({ schedule: s, lines, today, onOpen }: { schedule: ExpenseSchedule; lines: ExpenseLine[]; today: string; onOpen: () => void }) {
+  const money = useMoney();
+  const state = scheduleState(s);
+  const { owed, restorable } = billsOf(s, lines);
+  const next = nextDue(s, owed, today);
+  const overdue = owed.filter((l) => expenseStatus(l, today) === "overdue");
+  return (
+    <button type="button" onClick={onOpen} className="flex h-full w-full flex-col gap-2 rounded-2xl border border-border bg-surface p-3 text-left shadow-theme-xs">
+      <span className="flex items-start justify-between gap-2">
+        <span className="min-w-0">
+          <span className="block truncate font-medium">{s.name}</span>
+          <span className="block text-xs text-muted">{repeatLabel(s.every, s.everyCount, s.nextCreatedOn ?? owed[0]?.dueOn)}</span>
+        </span>
+        <span className="shrink-0 text-right">
+          <span className="block font-semibold tnum">
+            {s.varies ? "About " : ""}
+            {money(s.amount)}
+          </span>
+          <StateBadge state={state} />
+        </span>
+      </span>
+      <span className="text-xs text-muted">{[s.categoryName, s.recipient].filter(Boolean).join(" · ")}</span>
+      <span className="grid grid-cols-2 gap-2 text-xs">
+        <span>
+          <span className="block text-muted">Next due</span>
+          <span className="font-medium">{next ? day(next) : state === "paused" ? "Paused" : "—"}</span>
+        </span>
+        <span>
+          <span className="block text-muted">Still owed</span>
+          <span className={`font-medium tnum ${overdue.length ? "text-error-600 dark:text-error-400" : ""}`}>
+            {owed.length ? `${money(owed.reduce((sum, l) => sum + expenseBalance(l), 0))} · ${owed.length} ${owed.length === 1 ? "bill" : "bills"}` : "Nothing"}
+          </span>
+        </span>
+        <span>
+          <span className="block text-muted">Paid so far</span>
+          <span className="font-medium tnum">{money(s.paidTotal)}</span>
+        </span>
+        <span>
+          <span className="block text-muted">Ends</span>
+          <span className="font-medium">{s.endedAt ? (state === "finished" ? "Finished" : "Cancelled") : s.endsOn ? day(s.endsOn) : s.times ? `After ${s.times} bills (${s.bills} made)` : "Never"}</span>
+        </span>
+      </span>
+      {restorable.length ? (
+        <span className="text-xs text-warning-700 dark:text-warning-500">
+          {restorable.length} {restorable.length === 1 ? "bill" : "bills"} voided with its {state === "paused" ? "pause" : "cancel"}: open to restore
+        </span>
+      ) : null}
+    </button>
+  );
+}
+
+/** One recurring expense: its bills, and edit, pause or resume, cancel. */
+function ScheduleSheet({
+  schedule: s,
+  lines,
+  today,
+  categories,
+  onOpenLine,
+  onClose,
+}: {
+  schedule: ExpenseSchedule;
+  lines: ExpenseLine[];
+  today: string;
+  categories: ExpenseCategory[];
+  onOpenLine: (id: string) => void;
+  onClose: () => void;
+}) {
   const money = useMoney();
   const router = useRouter();
-  const [ending, setEnding] = useState<ExpenseSchedule | null>(null);
+  const [mode, setMode] = useState<"view" | "edit" | "pause" | "cancel" | "resume">("view");
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
-  if (!schedules.length) return <EmptyState>Nothing repeats yet. Record rent, salaries or electricity as a recurring expense.</EmptyState>;
+  const state = scheduleState(s);
+  const { owed, restorable } = billsOf(s, lines);
+  const next = nextDue(s, owed, today);
+
+  const restore = (id: string) =>
+    start(async () => {
+      setError(null);
+      const res = await restoreExpense(id);
+      if (!res.ok) return setError(res.error);
+      router.refresh();
+    });
+
+  if (mode === "edit") return <EditScheduleSheet schedule={s} today={today} categories={categories} onClose={() => setMode("view")} />;
+  if (mode === "pause" || mode === "cancel") return <StopScheduleSheet schedule={s} end={mode === "cancel"} lines={lines} today={today} onClose={() => setMode("view")} />;
+
   return (
-    <>
-      <ul className="grid gap-2 lg:grid-cols-2">
-        {schedules.map((s) => (
-          <li key={s.id} className="rounded-2xl border border-border bg-surface p-3 shadow-theme-xs">
-            <div className="flex items-start justify-between gap-2">
-              <p className="min-w-0 truncate font-medium">{s.name}</p>
-              <p className="shrink-0 font-semibold tnum">
-                {s.varies ? "About " : ""}
-                {money(s.amount)}
-              </p>
-            </div>
-            <p className="mt-1 text-xs text-muted">{[EVERY_LABELS[s.every], s.categoryName, s.recipient, `From ${day(s.firstDueOn)}`, `By ${s.recordedBy}`].filter(Boolean).join(" · ")}</p>
-            {s.endedAt ? (
-              <p className="mt-2 text-xs text-muted">Ended by {s.endedBy}</p>
+    <FormSheet open onClose={onClose} title={s.name}>
+      <div className="space-y-4">
+        <div className="flex items-center justify-between gap-2">
+          <StateBadge state={state} />
+          <span className="text-lg font-bold tnum">
+            {s.varies ? "About " : ""}
+            {money(s.amount)}
+          </span>
+        </div>
+        <dl className="divide-y divide-border">
+          <Row label="Repeats">{repeatLabel(s.every, s.everyCount, s.nextCreatedOn ?? owed[0]?.dueOn)}</Row>
+          <Row label="Next due">{next ? day(next) : state === "paused" ? "Paused" : "—"}</Row>
+          <Row label="Category">{s.categoryName}</Row>
+          {s.recipient ? <Row label="To">{s.recipient}</Row> : null}
+          <Row label="Ends">{s.endsOn ? day(s.endsOn) : s.times ? `After ${s.times} bills` : "Never, until cancelled"}</Row>
+          <Row label="Bills so far">{s.bills}</Row>
+          <Row label="Paid so far">{money(s.paidTotal)}</Row>
+          {s.description ? <Row label="Description">{s.description}</Row> : null}
+          <Row label="Set up by">{s.recordedBy}</Row>
+          {s.editedBy ? <Row label="Last changed by">{s.editedBy}</Row> : null}
+          {s.pausedBy ? <Row label="Paused by">{s.pausedBy}</Row> : null}
+          {s.endedAt ? <Row label={state === "finished" ? "Finished" : "Cancelled by"}>{state === "finished" ? "Reached its end" : s.endedBy}</Row> : null}
+        </dl>
+
+        {s.endedAt ? null : (
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            <Button variant="secondary" onClick={() => setMode("edit")}>
+              Edit
+            </Button>
+            {state === "paused" ? (
+              <Button variant="secondary" onClick={() => setMode("resume")}>
+                Resume
+              </Button>
             ) : (
-              <button type="button" className="mt-2 text-xs text-muted underline" onClick={() => setEnding(s)}>
-                End it
-              </button>
+              <Button variant="secondary" onClick={() => setMode("pause")}>
+                Pause
+              </Button>
             )}
-          </li>
-        ))}
-      </ul>
-      {ending ? (
-        <FormSheet open onClose={() => setEnding(null)} title={`End ${ending.name}?`}>
-          <div className="space-y-3">
-            <p className="text-sm text-muted">No more will be created. Any already created stay owed until they&apos;re paid or voided. To change the amount, end it and record a new one.</p>
-            <ErrorLine error={error} />
-            <Button
-              variant="danger"
-              className="w-full"
-              loading={pending}
-              onClick={() =>
-                start(async () => {
-                  const res = await endExpenseSchedule(ending.id);
-                  if (!res.ok) return setError(res.error);
-                  router.refresh();
-                  setEnding(null);
-                })
-              }
-            >
-              End it
+            <Button variant="danger" className="col-span-2 sm:col-span-1" onClick={() => setMode("cancel")}>
+              Cancel it
             </Button>
           </div>
-        </FormSheet>
-      ) : null}
-    </>
+        )}
+
+        {mode === "resume" ? (
+          <div className="space-y-2 rounded-2xl border border-border p-3">
+            <p className="text-sm">Bills that would have come due while it was paused are skipped: nothing is owed for that time. The next bill is the first due date from today.</p>
+            <div className="flex gap-2">
+              <Button
+                className="flex-1"
+                loading={pending}
+                onClick={() =>
+                  start(async () => {
+                    setError(null);
+                    const res = await resumeExpenseSchedule(s.id);
+                    if (!res.ok) return setError(res.error);
+                    router.refresh();
+                    setMode("view");
+                  })
+                }
+              >
+                Resume it
+              </Button>
+              <Button variant="secondary" onClick={() => setMode("view")}>
+                Not now
+              </Button>
+            </div>
+          </div>
+        ) : null}
+
+        <Card title={`Still owed (${owed.length})`}>
+          {owed.length === 0 ? (
+            <p className="text-sm text-muted">Nothing.</p>
+          ) : (
+            <ul className="divide-y divide-border text-sm">
+              {owed.map((l) => (
+                <li key={l.id}>
+                  <button type="button" className="flex w-full items-center justify-between gap-2 py-2 text-left" onClick={() => onOpenLine(l.id)}>
+                    <span>
+                      <span className="block">{l.dueOn ? `Due ${day(l.dueOn)}` : day(l.spentOn)}</span>
+                      <StatusBadge status={expenseStatus(l, today)} />
+                    </span>
+                    <span className="font-semibold tnum">{money(expenseBalance(l))}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+
+        {restorable.length ? (
+          <Card title="Voided with a pause or cancel">
+            <p className="mb-2 text-xs text-muted">Restore one if it was a mistake: it&apos;s owed again, as it was.</p>
+            <ul className="divide-y divide-border text-sm">
+              {restorable.map((l) => (
+                <li key={l.id} className="flex items-center justify-between gap-2 py-2">
+                  <span>
+                    <span className="block">{l.dueOn ? `Due ${day(l.dueOn)}` : day(l.spentOn)}</span>
+                    <span className="text-xs text-muted">
+                      {money(l.amount)} · voided by {l.voidedBy}
+                    </span>
+                  </span>
+                  <Button variant="secondary" loading={pending} onClick={() => restore(l.id)}>
+                    Restore
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          </Card>
+        ) : null}
+        <ErrorLine error={error} />
+      </div>
+    </FormSheet>
+  );
+}
+
+function EditScheduleSheet({ schedule: s, today, categories, onClose }: { schedule: ExpenseSchedule; today: string; categories: ExpenseCategory[]; onClose: () => void }) {
+  const router = useRouter();
+  const [name, setName] = useState(s.name);
+  const [description, setDescription] = useState(s.description ?? "");
+  const [choices, setChoices] = useState(categories.filter((c) => !c.automatic));
+  const [category, setCategory] = useState(s.category);
+  const [newCategory, setNewCategory] = useState("");
+  const [amount, setAmount] = useState(String(s.amount));
+  const [varies, setVaries] = useState(s.varies);
+  const [recipient, setRecipient] = useState(s.recipient ?? "");
+  const next = s.nextCreatedOn && s.nextCreatedOn >= today ? s.nextCreatedOn : today;
+  const [repeat, setRepeat] = useState<RepeatValue>({
+    every: s.every,
+    everyCount: String(s.everyCount),
+    dueOn: next,
+    end: s.endsOn ? "on" : s.times ? "after" : "never",
+    endsOn: s.endsOn ?? "",
+    times: s.times ? String(s.times) : "",
+  });
+  const [error, setError] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+
+  function submit(e: React.FormEvent) {
+    e.preventDefault();
+    const value = parseNumber(amount);
+    if (!name.trim()) return setError("Say what the expense is.");
+    if (!(value > 0) || !Number.isInteger(value)) return setError("Enter the amount in whole shillings.");
+    if (category === "__new" && !newCategory.trim()) return setError("Give the new category a name.");
+    if (repeat.dueOn < today) return setError("The next due date can't be in the past.");
+    const how = repeatInput(repeat);
+    if ("error" in how) return setError(how.error);
+    setError(null);
+    start(async () => {
+      let categoryKey = category;
+      if (category === "__new") {
+        const added = await addExpenseCategory({ name: newCategory });
+        if (!added.ok) return setError(added.error);
+        categoryKey = added.data!.key;
+        setChoices((c) => [...c, added.data!]);
+        setCategory(categoryKey);
+      }
+      const res = await editExpenseSchedule({ id: s.id, name, description, category: categoryKey, amount: value, varies, recipient, ...how, nextDueOn: repeat.dueOn });
+      if (!res.ok) return setError(res.error);
+      router.refresh();
+      onClose();
+    });
+  }
+
+  return (
+    <FormSheet open onClose={onClose} title={`Edit ${s.name}`}>
+      <form onSubmit={submit} className="space-y-3">
+        <p className="rounded-xl bg-gray-100 p-3 text-sm text-muted dark:bg-white/5">Only bills not made yet follow your changes. Bills already made keep their amount and date; pay or void them as they are.</p>
+        <Field label="What is it?">
+          <TextInput value={name} onChange={(e) => setName(e.target.value)} maxLength={120} />
+        </Field>
+        <CategoryField choices={choices} category={category} setCategory={setCategory} newCategory={newCategory} setNewCategory={setNewCategory} />
+        <div className="grid gap-2 sm:grid-cols-2">
+          <Field label={varies ? "Expected amount" : "Amount"}>
+            <TextInput inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value)} />
+          </Field>
+          <Field label="Who it's for (optional)">
+            <TextInput value={recipient} onChange={(e) => setRecipient(e.target.value)} maxLength={120} />
+          </Field>
+        </div>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={varies} onChange={(e) => setVaries(e.target.checked)} />
+          The amount varies (the real one is entered when paying)
+        </label>
+        <RepeatFields value={repeat} onChange={setRepeat} dueLabel="Next bill due" min={today} madeSoFar={s.bills} />
+        <Field label="Description (optional)">
+          <TextArea value={description} onChange={(e) => setDescription(e.target.value)} maxLength={500} rows={2} />
+        </Field>
+        <ErrorLine error={error} />
+        <Button type="submit" loading={pending} className="w-full">
+          Save changes
+        </Button>
+      </form>
+    </FormSheet>
+  );
+}
+
+/**
+ * Pause or cancel. Its unpaid bills are listed one by one, so nobody stops it
+ * without seeing what's still owed; ticked ones are voided with it, and can be
+ * restored. A bill with a payment on it can't be voided here.
+ */
+function StopScheduleSheet({ schedule: s, end, lines, today, onClose }: { schedule: ExpenseSchedule; end: boolean; lines: ExpenseLine[]; today: string; onClose: () => void }) {
+  const money = useMoney();
+  const router = useRouter();
+  const { owed } = billsOf(s, lines);
+  // A pause only touches bills from today on; a cancel, every unpaid one.
+  const bills = end ? owed : owed.filter((l) => (l.dueOn ?? l.spentOn) >= today);
+  const voidable = bills.filter((l) => l.paid === 0);
+  const [chosen, setChosen] = useState<Set<string>>(() => new Set());
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState<number | null>(null);
+  const [pending, start] = useTransition();
+  const all = voidable.length > 0 && voidable.every((l) => chosen.has(l.id));
+  const verb = end ? "Cancel" : "Pause";
+  const chosenTotal = voidable.filter((l) => chosen.has(l.id)).reduce((sum, l) => sum + l.amount, 0);
+
+  const toggle = (id: string) =>
+    setChosen((c) => {
+      const n = new Set(c);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+
+  if (done !== null) {
+    return (
+      <FormSheet open onClose={onClose} title={end ? `${s.name} is cancelled` : `${s.name} is paused`}>
+        <div className="space-y-3">
+          <p className="text-sm">
+            {end ? "No more bills will be made." : "No bills will be made until you resume it."}{" "}
+            {done ? `${done} unpaid ${done === 1 ? "bill was" : "bills were"} voided with it. You can restore ${done === 1 ? "it" : "them"} from this recurring expense.` : "Its bills already made stay owed."}
+          </p>
+          <Button className="w-full" onClick={onClose}>
+            Done
+          </Button>
+        </div>
+      </FormSheet>
+    );
+  }
+
+  return (
+    <FormSheet open onClose={onClose} title={`${verb} ${s.name}?`}>
+      <div className="space-y-4">
+        <p className="text-sm text-muted">
+          {end ? "No more bills will be made. This can't be undone: to start again, record it anew." : "No bills will be made while it's paused. When you resume, what would have come due meanwhile is skipped."}
+        </p>
+
+        <div className="space-y-2 rounded-2xl border-2 border-warning-300 bg-warning-50 p-3 dark:border-warning-500/40 dark:bg-warning-500/10">
+          <p className="text-sm font-semibold">
+            {bills.length === 0 ? "It has no unpaid bills" : `It has ${bills.length} unpaid ${bills.length === 1 ? "bill" : "bills"}${end ? "" : " from today on"}`}
+          </p>
+          {bills.length ? (
+            <>
+              <label className="flex items-center gap-2 text-sm font-medium">
+                <input type="checkbox" checked={all} disabled={!voidable.length} onChange={(e) => setChosen(e.target.checked ? new Set(voidable.map((l) => l.id)) : new Set())} />
+                Also void its unpaid bills
+              </label>
+              <ul className="divide-y divide-warning-200 text-sm dark:divide-white/10">
+                {bills.map((l) => (
+                  <li key={l.id} className="flex items-center justify-between gap-2 py-2">
+                    <label className="flex min-w-0 items-center gap-2">
+                      <input type="checkbox" checked={chosen.has(l.id)} disabled={l.paid > 0} onChange={() => toggle(l.id)} />
+                      <span className="min-w-0">
+                        <span className="block">{l.dueOn ? `Due ${day(l.dueOn)}` : day(l.spentOn)}</span>
+                        <span className="block text-xs text-muted">{l.paid > 0 ? `${money(l.paid)} already paid: stays owed, pay or void it from the bill` : EXPENSE_STATUS_LABELS[expenseStatus(l, today)]}</span>
+                      </span>
+                    </label>
+                    <span className="shrink-0 font-semibold tnum">{money(expenseBalance(l))}</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="text-xs text-muted">
+                {chosen.size
+                  ? `${chosen.size} ${chosen.size === 1 ? "bill" : "bills"} (${money(chosenTotal)}) will be voided. They stay on record and can be restored later.`
+                  : "Nothing ticked: these bills stay owed."}
+              </p>
+            </>
+          ) : null}
+        </div>
+
+        <ErrorLine error={error} />
+        <div className="flex gap-2">
+          <Button
+            variant={end ? "danger" : "primary"}
+            className="flex-1"
+            loading={pending}
+            onClick={() =>
+              start(async () => {
+                setError(null);
+                const res = await stopExpenseSchedule({ id: s.id, end, voidIds: [...chosen] });
+                if (!res.ok) return setError(res.error);
+                router.refresh();
+                setDone(res.data ?? 0);
+              })
+            }
+          >
+            {verb} it{chosen.size ? ` and void ${chosen.size}` : ""}
+          </Button>
+          <Button variant="secondary" onClick={onClose}>
+            Back
+          </Button>
+        </div>
+      </div>
+    </FormSheet>
   );
 }

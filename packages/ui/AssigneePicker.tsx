@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import { Avatar, AvatarStack, type AvatarPerson } from "./Avatar";
 import { Popover } from "./Popover";
+import { matchesSearch } from "@repo/lib/search";
 
 // Who's on a task: the trigger shows their AvatarStack (or a dashed
 // "Assign" circle when nobody is), and opens a searchable checklist of
@@ -30,8 +31,7 @@ export function AssigneePicker({
 }) {
   const [query, setQuery] = useState("");
   const chosen = people.filter((p) => selected.includes(p.id));
-  const q = query.trim().toLowerCase();
-  const matches = people.filter((p) => !q || p.name.toLowerCase().includes(q));
+  const matches = people.filter((p) => matchesSearch(query, [p.name]));
 
   function toggle(id: string) {
     onChange(selected.includes(id) ? selected.filter((s) => s !== id) : [...selected, id]);

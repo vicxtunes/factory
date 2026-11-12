@@ -6,6 +6,7 @@ import { useState } from "react";
 import { TextInput } from "@repo/ui/Field";
 import { Tabs } from "@repo/ui/Tabs";
 import type { Customer } from "@repo/lib/customers/core";
+import { matchesSearch } from "@repo/lib/search";
 
 type View = "active" | "archived";
 
@@ -16,16 +17,7 @@ type View = "active" | "archived";
 export function CustomersList({ active, archived, basePath }: { active: Customer[]; archived: Customer[]; basePath: string | null }) {
   const [view, setView] = useState<View>("active");
   const [search, setSearch] = useState("");
-  const query = search.trim().toLowerCase();
-  const digits = query.replace(/\D/g, "");
-
-  const shown = (view === "active" ? active : archived).filter(
-    (c) =>
-      !query ||
-      c.name.toLowerCase().includes(query) ||
-      (c.email ?? "").toLowerCase().includes(query) ||
-      (!!digits && (c.phone ?? "").replace(/\D/g, "").includes(digits)),
-  );
+  const shown = (view === "active" ? active : archived).filter((c) => matchesSearch(search, [c.name, c.email, c.phone]));
 
   return (
     <div className="space-y-4">
@@ -47,7 +39,7 @@ export function CustomersList({ active, archived, basePath }: { active: Customer
       />
       {shown.length === 0 ? (
         <p className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted">
-          {query ? `No clients match “${search.trim()}”.` : view === "active" ? "No clients yet." : "No archived clients."}
+          {search.trim() ? `No clients match “${search.trim()}”.` : view === "active" ? "No clients yet." : "No archived clients."}
         </p>
       ) : (
         <ul className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-surface shadow-theme-xs">

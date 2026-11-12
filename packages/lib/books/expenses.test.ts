@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { expenseBalance, expenseReminder, expenseStatus, hivepaySendFee, type ExpenseLine } from "./expenses";
+import { AUTOMATIC_ACTOR, expenseBalance, expenseBelongsOn, expenseReminder, expenseStatus, hivepaySendFee, onOrAfterWeekday, repeatLabel, scheduleState, type ExpenseLine } from "./expenses";
 
 const TODAY = "2026-11-03";
 const line = (o: Partial<ExpenseLine> = {}): ExpenseLine => ({
@@ -15,7 +15,9 @@ const line = (o: Partial<ExpenseLine> = {}): ExpenseLine => ({
   amountIsEstimate: false,
   spentOn: "2026-11-01",
   dueOn: null,
+  scheduleId: null,
   scheduleEvery: null,
+  scheduleEveryCount: null,
   automatic: false,
   onCredit: false,
   paid: 0,
@@ -28,6 +30,10 @@ const line = (o: Partial<ExpenseLine> = {}): ExpenseLine => ({
   voidedAt: null,
   voidReason: null,
   voidedBy: null,
+  voidedWithSchedule: false,
+  restoredAt: null,
+  restoredBy: null,
+  paidFrom: [],
   ...o,
 });
 
@@ -111,4 +117,31 @@ test("the sending fee goes by what's sent, the amount plus the fee", () => {
   assert.equal(hivepaySendFee(98_000, bands), 2_000);
   assert.equal(hivepaySendFee(98_001, bands), null, "beyond the list: not offered");
   assert.equal(hivepaySendFee(1_000, []), null);
+});
+
+test("repeat labels", () => {
+  assert.equal(repeatLabel("month", 1), "Every month");
+  assert.equal(repeatLabel("day", 1), "Every day");
+  assert.equal(repeatLabel("month", 3), "Every 3 months");
+  assert.equal(repeatLabel("week", 1, "2026-11-13"), "Every Friday");
+  assert.equal(repeatLabel("week", 2, "2026-11-13"), "Every 2 weeks on Friday");
+});
+
+test("the next chosen weekday on or after a day", () => {
+  assert.equal(onOrAfterWeekday("2026-11-12", 5), "2026-11-13");
+  assert.equal(onOrAfterWeekday("2026-11-13", 5), "2026-11-13");
+  assert.equal(onOrAfterWeekday("2026-11-14", 5), "2026-11-20");
+});
+
+test("a recurring bill belongs to its due day, others to the day spent", () => {
+  assert.equal(expenseBelongsOn({ scheduleId: "s", dueOn: "2026-12-01", spentOn: "2026-11-17" }), "2026-12-01");
+  assert.equal(expenseBelongsOn({ scheduleId: null, dueOn: "2026-12-01", spentOn: "2026-11-17" }), "2026-11-17");
+});
+
+test("a schedule's state", () => {
+  const s = { pausedAt: null, endedAt: null, endedBy: null };
+  assert.equal(scheduleState(s), "running");
+  assert.equal(scheduleState({ ...s, pausedAt: "x" }), "paused");
+  assert.equal(scheduleState({ ...s, endedAt: "x", endedBy: AUTOMATIC_ACTOR }), "finished");
+  assert.equal(scheduleState({ ...s, endedAt: "x", endedBy: "Boss" }), "cancelled");
 });

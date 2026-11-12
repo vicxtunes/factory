@@ -4,7 +4,7 @@ import { Loading } from "@repo/ui/skeletons/Loading";
 import { resolvePeriod } from "@repo/lib/accounting/core/period";
 import { requireAccountsAccess } from "@repo/lib/accounting/index.server";
 import { periodFrom } from "@repo/lib/accounting/params";
-import { expenseDashboard, expensesBoard } from "@repo/lib/books/expenses-server";
+import { expenseDashboard, expenseMonths, expensesBoard } from "@repo/lib/books/expenses-server";
 import { resolveTenantScope } from "@repo/lib/tenancy/server/resolve";
 
 export const dynamic = "force-dynamic";
@@ -16,7 +16,7 @@ export default async function AccountsExpensesPage({ searchParams }: { searchPar
 
   return (
     <div className="space-y-6">
-      <p className="text-sm text-muted">Everything the business spends: one-time, and what repeats. Each payment comes out of an account and shows on Today.</p>
+      <p className="text-sm text-muted">Everything the business spends, one-time and recurring. Each payment comes out of an account and shows on Today.</p>
       <Loading
         skeleton={
           <div className="space-y-4">
@@ -35,7 +35,7 @@ async function Board({ isBoss, searchParams }: { isBoss: boolean; searchParams: 
   const [scope, params] = await Promise.all([resolveTenantScope(), searchParams]);
   const period = resolvePeriod(periodFrom(params), new Date(), scope.timeZone);
   // The board first: it creates what recurring expenses now owe, and the figures must include them.
-  const board = await expensesBoard(scope);
-  const summary = await expenseDashboard(scope, period);
-  return <ExpensesBoard {...board} summary={summary} period={period} isBoss={isBoss} timeZone={scope.timeZone} />;
+  const board = await expensesBoard(scope, period);
+  const [summary, months] = await Promise.all([expenseDashboard(scope, period), expenseMonths(scope, period)]);
+  return <ExpensesBoard {...board} summary={summary} months={months} period={period} isBoss={isBoss} timeZone={scope.timeZone} />;
 }

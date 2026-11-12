@@ -18,6 +18,7 @@ import type { PaymentMethod, PendingDeposit, WalletEntry, WalletListRow, WalletV
 import { MoneySourceFields, todayHere, useMoneySource } from "./MoneySourceFields";
 
 import { BalanceCard, EntryLine, MethodOptions, Panel, PaymentLine, formatWhen, parseAmount, useMoney } from "./shared";
+import { matchesSearch } from "@repo/lib/search";
 
 export interface WalletClientOption {
   id: string;
@@ -46,10 +47,7 @@ export function WalletsAdmin({
   const [search, setSearch] = useState("");
   const [newClientId, setNewClientId] = useState("");
 
-  const q = search.trim().toLowerCase();
-  const visible = q
-    ? wallets.filter((w) => [w.clientName, w.phone].some((v) => v?.toLowerCase().includes(q)))
-    : wallets;
+  const visible = wallets.filter((w) => matchesSearch(search, [w.clientName, w.phone]));
   const withWallet = new Set(wallets.map((w) => w.clientId));
   const withoutWallet = clients.filter((c) => !withWallet.has(c.id));
   const total = wallets.reduce((sum, w) => sum + w.balance, 0);
@@ -121,7 +119,7 @@ export function WalletsAdmin({
             ))}
           </ul>
         ) : (
-          <p className="py-2 text-sm text-muted">{q ? "No wallet matches." : "No client has a wallet yet."}</p>
+          <p className="py-2 text-sm text-muted">{search.trim() ? "No wallet matches." : "No client has a wallet yet."}</p>
         )}
       </Panel>
 

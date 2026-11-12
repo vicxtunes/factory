@@ -18,6 +18,7 @@ import type { ProductCost } from "@repo/lib/production/core";
 
 import { MarginSheet } from "./costing";
 import { Tile } from "./MaterialsBoard";
+import { matchesSearch } from "@repo/lib/search";
 
 export const pct = (m: number) => `${Math.round(m * 1000) / 10}%`;
 
@@ -35,8 +36,7 @@ export function ProductCostsBoard({ products, basePath, margin, setsPrices }: { 
   const [missingOnly, setMissingOnly] = useState(false);
   const [marginOpen, setMarginOpen] = useState(false);
 
-  const q = query.trim().toLowerCase();
-  const shown = products.filter((p) => (!missingOnly || !p.hasRecipe) && (!q || `${p.name} ${p.categoryName}`.toLowerCase().includes(q)));
+  const shown = products.filter((p) => (!missingOnly || !p.hasRecipe) && matchesSearch(query, [p.name, p.categoryName]));
   const withRecipe = products.filter((p) => p.hasRecipe).length;
   const margins = products.flatMap((p) => p.rows.flatMap((r) => (r.margin ? [r.margin.percent] : [])));
   const atLoss = products.flatMap((p) => p.rows.filter((r) => r.margin && r.margin.profit < 0)).length;

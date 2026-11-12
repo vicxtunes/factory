@@ -21,6 +21,7 @@ import { checkClientDuplicates, createDesignerOrder } from "./actions";
 import { OrderCard } from "./order-card";
 import { OrderDetail } from "./order-detail";
 import { isLate, phaseOf, sortForPhase, type DesignerOrder } from "./order-status";
+import { matchesSearch } from "@repo/lib/search";
 
 function groupByOrder(items: OrderItemWithOrder[]): DesignerOrder[] {
   const byOrder = new Map<string, DesignerOrder>();
@@ -47,11 +48,8 @@ function groupByOrder(items: OrderItemWithOrder[]): DesignerOrder[] {
 
 type BoardTab = "all" | "in_design" | "submitted" | "late" | "completed";
 
-function matchesSearch(order: DesignerOrder, query: string): boolean {
-  if (!query) return true;
-  return [order.orderNo, order.clientName, ...order.items.map((i) => i.product)].some((field) =>
-    field?.toLowerCase().includes(query),
-  );
+function orderMatches(order: DesignerOrder, query: string): boolean {
+  return matchesSearch(query, [order.orderNo, order.clientName, ...order.items.map((i) => i.product)]);
 }
 
 const EMPTY_MESSAGE: Record<BoardTab, string> = {
@@ -97,11 +95,11 @@ export function Board({
   // Search narrows every tab, and the counts follow it, so a designer can see
   // which tab their match landed in. "Late" overlaps In design / Submitted:
   // it's a cross-cut of the work tabs, not a stage of its own.
-  const query = search.trim().toLowerCase();
+  const query = search;
   const byTab = useMemo(() => {
     const groups: Record<BoardTab, DesignerOrder[]> = { all: [], in_design: [], submitted: [], late: [], completed: [] };
     for (const order of orders) {
-      if (!matchesSearch(order, query)) continue;
+      if (!orderMatches(order, query)) continue;
       groups.all.push(order);
       groups[phaseOf(order)].push(order);
       if (isLate(order, now)) groups.late.push(order);

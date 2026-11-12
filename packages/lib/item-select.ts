@@ -1,5 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { searchOrFilters } from "@repo/lib/search";
+import type { OrderItemWithOrder } from "@repo/lib/types";
+
 // Shared order_items select fragment — used by both server-side queries
 // (packages/lib/queries.ts) and client-side Realtime refetches (factory/dashboard
 // boards). Kept in one place so a live board's refetch never drifts from
@@ -36,4 +39,29 @@ export const RECENT_DAYS = 30;
 // hardcodes the same 30 days). Filter, embed and sort it like order_items.
 export function selectRecentItems(supabase: SupabaseClient) {
   return supabase.from("recent_order_items").select(ORDER_ITEM_SELECT);
+}
+
+/** At most this many orders come back from a search of older ones. */
+const SEARCH_ORDERS = 100;
+
+/**
+ * Released order items whose order matches a search (order number, client,
+ * phone) or whose product does, however old: a board only loads recent work,
+ * and a search must still find the rest. Empty when nothing was typed.
+ */
+export async function searchOrderItems(supabase: SupabaseClient, query: string): Promise<OrderItemWithOrder[]> {
+  const orderFilters = searchOrFilters(query, ["order_no", "client_name", "client_phone"]);
+  if (!orderFilters.length) return [];
+  let orders = supabase.from("orders").select("id").not("released_at", "is", null);
+  for (const f of orderFilters) orders = orders.or(f);
+  let products = supabase.from("order_items").select("order_id");
+  for (const f of searchOrFilters(query, ["product"])) products = products.or(f);
+  const [byOrder, byProduct] = await Promise.all([
+    orders.order("created_at", { ascending: false }).limit(SEARCH_ORDERS),
+    products.order("created_at", { ascending: false }).limit(SEARCH_ORDERS),
+  ]);
+  const ids = [...new Set([...(byOrder.data ?? []).map((r) => r.id as string), ...(byProduct.data ?? []).map((r) => r.order_id as string)])].slice(0, SEARCH_ORDERS);
+  if (!ids.length) return [];
+  const { data } = await supabase.from("order_items").select(ORDER_ITEM_SELECT).in("order_id", ids).not("order.released_at", "is", null).order("created_at", { ascending: false });
+  return (data ?? []) as unknown as OrderItemWithOrder[];
 }

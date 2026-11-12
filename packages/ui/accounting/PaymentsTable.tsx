@@ -9,17 +9,15 @@ import { CHANNELS } from "@repo/lib/accounting/core/model";
 import { paymentsTotals, type PaymentLine } from "@repo/lib/accounting/core/figures";
 
 import { CHANNEL_LABELS, Card, EmptyState, FigureTile, formatDayTime, useMoney } from "./shared";
+import { matchesSearch } from "@repo/lib/search";
 
 /** Who the money came from, as recorded. Older hand-recorded money has no sender. */
 const cameFrom = (l: PaymentLine) => [l.senderName, l.senderPhone].filter(Boolean).join(" · ");
 
 const forWhat = (l: PaymentLine) => (l.orderNo ? `Order ${l.orderNo}` : "Wallet top-up");
 
-function matchesSearch(l: PaymentLine, query: string): boolean {
-  if (!query) return true;
-  return [l.customerName, l.orderNo ?? "", l.reference ?? "", l.recordedBy ?? "", l.senderName ?? "", l.senderPhone ?? "", l.accountName ?? "", CHANNEL_LABELS[l.channel]].some((f) =>
-    f.toLowerCase().includes(query),
-  );
+function lineMatches(l: PaymentLine, query: string): boolean {
+  return matchesSearch(query, [l.customerName, l.orderNo, l.reference, l.recordedBy, l.senderName, l.senderPhone, l.accountName, CHANNEL_LABELS[l.channel], l.amount]);
 }
 
 /**
@@ -31,9 +29,9 @@ export function PaymentsTable({ lines, exportName, timeZone }: { lines: PaymentL
   const money = useMoney();
   const time = (iso: string) => formatDayTime(iso, timeZone);
   const [search, setSearch] = useState("");
-  const query = search.trim().toLowerCase();
+  const query = search;
 
-  const visible = useMemo(() => lines.filter((l) => matchesSearch(l, query)), [lines, query]);
+  const visible = useMemo(() => lines.filter((l) => lineMatches(l, query)), [lines, query]);
   const totals = useMemo(() => paymentsTotals(visible), [visible]);
   const channels = CHANNELS.filter((c) => totals.byChannel[c] > 0);
 

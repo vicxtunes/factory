@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 
 import { addExpenseCategory, decideExpense, endExpenseSchedule, moveMoney, payExpense, recordOtherMoney, voidExpense, voidOtherMoney } from "@repo/lib/books/actions";
+import { repeatLabel } from "@repo/lib/books/expenses";
 import { applyWalletToInvoice, listInvoices, recordInvoicePayment, sendInvoiceReminders, updateInvoice } from "@repo/lib/invoices/actions";
 import { createAdminClient } from "@repo/lib/supabase/admin";
 import { resolveTenantScope } from "@repo/lib/tenancy/server/resolve";
@@ -190,10 +191,10 @@ export function booksChanges(boss: boolean): ChangeTool[] {
       description: "Stop a repeating expense (id from expenses' repeating list): no more come due.",
       inputSchema: z.object({ scheduleId: id }),
       card: async ({ scheduleId }) => {
-        const { data } = await createAdminClient().from("expense_schedules").select("name, amount, every, ended_at").eq("id", scheduleId).maybeSingle();
+        const { data } = await createAdminClient().from("expense_schedules").select("name, amount, every, every_count, first_due_on, ended_at").eq("id", scheduleId).maybeSingle();
         if (!data) throw new Error("That repeating expense doesn't exist.");
         if (data.ended_at) throw new Error(`"${data.name}" has already ended.`);
-        return { title: `Stop repeating ${data.name}`, lines: [`${ugx(Number(data.amount))} every ${data.every}`, "Ones already due stay"] };
+        return { title: `Stop repeating ${data.name}`, lines: [`${ugx(Number(data.amount))}, ${repeatLabel(data.every, data.every_count, data.first_due_on).toLowerCase()}`, "Bills already made stay owed"] };
       },
       run: async ({ scheduleId }) => outcome(await endExpenseSchedule(scheduleId), "It won't come due again."),
     }),

@@ -12,6 +12,7 @@ import { Popover } from "@repo/ui/Popover";
 import { createClient } from "@repo/lib/supabase/browser";
 import { useLiveOrderItems, type LoadItems } from "@repo/lib/supabase/useLiveOrderItems";
 import { ORDER_ITEM_SELECT } from "@repo/lib/item-select";
+import { searchWords } from "@repo/lib/search";
 import {
   activeChips,
   activeFilterCount,
@@ -129,12 +130,17 @@ export function ClientOrdersBoard({
     return done;
   }, [items]);
 
+  // A search looks in both active and finished orders, so nothing typed hides
+  // behind the other tab.
+  const searching = searchWords(filters.search).length > 0;
   const bucketItems = useMemo(
     () =>
-      items.filter((i) =>
-        bucket === "history" ? completedOrderIds.has(i.order_id) : !completedOrderIds.has(i.order_id),
-      ),
-    [items, completedOrderIds, bucket],
+      searching
+        ? items
+        : items.filter((i) =>
+            bucket === "history" ? completedOrderIds.has(i.order_id) : !completedOrderIds.has(i.order_id),
+          ),
+    [items, completedOrderIds, bucket, searching],
   );
 
   const matched = useMemo(
@@ -162,7 +168,7 @@ export function ClientOrdersBoard({
         <TextInput
           className="max-w-xs"
           value={filters.search}
-          placeholder="Search order number…"
+          placeholder="Search order number or product…"
           onChange={(e) => patch({ search: e.target.value })}
         />
 

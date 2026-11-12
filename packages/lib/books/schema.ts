@@ -61,17 +61,25 @@ export const expenseInputSchema = z.object({
   dueOn: day.nullish().transform((v) => v || null),
 });
 
-export const scheduleInputSchema = z.object({
+const scheduleFields = {
   id: z.string().uuid(),
   name: z.string().trim().min(1, "Say what the expense is.").max(120),
   description: text(500),
   category: z.string().min(1, "Choose a category."),
   amount: z.number().int().positive("Enter the amount."),
   varies: z.boolean(),
-  every: z.enum(["week", "month", "year"]),
-  firstDueOn: day,
+  every: z.enum(["day", "week", "month", "year"]),
+  everyCount: z.number().int().min(1, "Repeat at least every 1.").max(366).default(1),
+  endsOn: day.nullish().transform((v) => v || null),
+  times: z.number().int().min(1, "At least 1 bill.").max(1000).nullish().transform((v) => v ?? null),
   recipient: text(120),
-});
+};
+
+export const scheduleInputSchema = z.object({ ...scheduleFields, firstDueOn: day });
+/** Only bills not yet created follow an edit; the next one is due on nextDueOn. */
+export const scheduleEditSchema = z.object({ ...scheduleFields, nextDueOn: day });
+/** Pause or cancel, with the unpaid bills the person chose to void too. */
+export const scheduleStopSchema = z.object({ id: z.string().uuid(), end: z.boolean(), voidIds: z.array(z.string().uuid()).max(500) });
 
 export const expensePaymentInputSchema = z.object({
   id: z.string().uuid(),
@@ -101,5 +109,7 @@ export const categoryInputSchema = z.object({ name: z.string().trim().min(2, "Gi
 
 export type ExpenseInput = z.output<typeof expenseInputSchema>;
 export type ScheduleInput = z.output<typeof scheduleInputSchema>;
+export type ScheduleEditInput = z.output<typeof scheduleEditSchema>;
+export type ScheduleStopInput = z.output<typeof scheduleStopSchema>;
 export type ExpensePayoutInput = z.output<typeof expensePayoutInputSchema>;
 export type ExpensePaymentInput = z.output<typeof expensePaymentInputSchema>;
