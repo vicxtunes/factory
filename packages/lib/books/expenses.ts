@@ -72,6 +72,10 @@ export interface ExpenseLine {
   restoredBy: string | null;
   /** The accounts its payments came out of. */
   paidFrom: string[];
+  /** Where it's paid by mobile money: a recurring bill takes its schedule's number. */
+  payPhone: string | null;
+  /** A HivePay payout for it is on its way: it can't be paid again until that settles. */
+  payoutSending: boolean;
 }
 
 /** A recurring expense belongs to its due day; anything else to the day it was spent. */
@@ -147,6 +151,8 @@ export interface ExpenseSchedule {
   editedBy: string | null;
   endedAt: string | null;
   endedBy: string | null;
+  /** Autopay: its bills go to Ready to send for the boss, by mobile money to this number. */
+  payPhone: string | null;
 }
 
 export type ScheduleState = "running" | "paused" | "finished" | "cancelled";
@@ -197,18 +203,14 @@ export function expenseStatus(e: Pick<ExpenseLine, "amount" | "paid" | "dueOn" |
 }
 
 /**
- * HivePay's prices for sending money: the fee on anything up to `upTo`. It
- * publishes no table and no way to ask, so they come from HivePay directly.
- * While this is empty, the app doesn't offer sending at all.
+ * Bills to send by mobile money now (owner, 2026-11-12): a number to pay to,
+ * due today or before, something left, nothing already on its way. The boss
+ * approves each one by sending it; nothing goes out by itself.
  */
-export const HIVEPAY_SEND_FEES: { upTo: number; fee: number }[] = [];
-
-/**
- * The fee to send on top so the phone receives exactly `amount`, or null when
- * it's beyond the list. The band goes by what's sent, the amount plus the fee.
- */
-export function hivepaySendFee(amount: number, bands = HIVEPAY_SEND_FEES): number | null {
-  return bands.find((b) => amount + b.fee <= b.upTo)?.fee ?? null;
+export function readyToSend<T extends Pick<ExpenseLine, "payPhone" | "payoutSending" | "dueOn" | "amount" | "paid" | "voidedAt" | "approval" | "onCredit">>(lines: T[], today: string): T[] {
+  return lines
+    .filter((e) => e.payPhone && !e.payoutSending && e.dueOn !== null && e.dueOn <= today && expenseBalance(e) > 0)
+    .sort((a, b) => (a.dueOn ?? "").localeCompare(b.dueOn ?? ""));
 }
 
 /** What the dashboard shows: expense_dashboard in the database. */
@@ -238,7 +240,7 @@ const REMIND_WITHIN_DAYS = 3;
 const NAMED_IN_REMINDER = 4;
 
 /** Bills, and debts put in the same shape. */
-export type Reminded = Pick<ExpenseLine, "name" | "amount" | "paid" | "dueOn" | "voidedAt" | "approval" | "onCredit" | "amountIsEstimate">;
+export type Reminded = Pick<ExpenseLine, "name" | "amount" | "paid" | "dueOn" | "voidedAt" | "approval" | "onCredit" | "amountIsEstimate" | "payPhone" | "payoutSending">;
 
 /**
  * The morning reminder: one message, whatever the number of bills, or null
@@ -249,10 +251,13 @@ export function expenseReminder(lines: Reminded[], today: string, money: (amount
   const soonBy = addDays(today, REMIND_WITHIN_DAYS);
   const open = lines.filter((e) => expenseBalance(e) > 0);
   const byDue = (a: Reminded, b: Reminded) => (a.dueOn ?? "").localeCompare(b.dueOn ?? "");
-  const overdue = open.filter((e) => expenseStatus(e, today) === "overdue").sort(byDue);
-  const waiting = open.filter((e) => e.approval === "waiting");
-  const soon = open.filter((e) => e.approval === "approved" && e.dueOn !== null && e.dueOn >= today && e.dueOn <= soonBy).sort(byDue);
-  if (overdue.length + soon.length + waiting.length === 0) return null;
+  // Each bill is named once: ready to send first, as it only needs the boss's yes.
+  const ready = readyToSend(open, today);
+  const rest = open.filter((e) => !ready.includes(e));
+  const overdue = rest.filter((e) => expenseStatus(e, today) === "overdue").sort(byDue);
+  const waiting = rest.filter((e) => e.approval === "waiting");
+  const soon = rest.filter((e) => e.approval === "approved" && e.dueOn !== null && e.dueOn >= today && e.dueOn <= soonBy).sort(byDue);
+  if (ready.length + overdue.length + soon.length + waiting.length === 0) return null;
 
   const named = (list: Reminded[]) => {
     const shown = list.slice(0, NAMED_IN_REMINDER).map((e) => `${e.name} ${e.amountIsEstimate ? "about " : ""}${money(expenseBalance(e))}`);
@@ -260,11 +265,13 @@ export function expenseReminder(lines: Reminded[], today: string, money: (amount
     return shown.join(", ") + (more > 0 ? ` and ${more} more` : "");
   };
   const parts = [
+    ready.length ? `Ready to send by mobile money: ${named(ready)}.` : "",
     overdue.length ? `Overdue: ${named(overdue)}.` : "",
     soon.length ? `Due soon: ${named(soon)}.` : "",
     waiting.length ? `Waiting for approval: ${named(waiting)}.` : "",
   ];
   const counts = [
+    ready.length ? `${ready.length} ready to send` : "",
     overdue.length ? `${overdue.length} overdue` : "",
     soon.length ? `${soon.length} due soon` : "",
     waiting.length ? `${waiting.length} waiting for approval` : "",

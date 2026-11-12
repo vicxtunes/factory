@@ -27,6 +27,7 @@ import {
   otherMoneyInputSchema,
   scheduleEditSchema,
   scheduleInputSchema,
+  schedulePayPhoneSchema,
   scheduleStopSchema,
   voidInputSchema,
   voidMoneyMoveSchema,
@@ -137,6 +138,28 @@ export async function editExpenseSchedule(input: unknown): Promise<Result> {
   });
 }
 
+/** A number HivePay can send to, in the form it's stored, or throws. */
+function sendablePhone(text: string): string {
+  const phone = parsePhone(text);
+  if (!phone.ok) throw new AppError(phone.error);
+  if (!networkOfPhone(phone.store)) throw new AppError("HivePay can only send to MTN and Airtel Uganda numbers.");
+  return phone.store;
+}
+
+/**
+ * Autopay for a recurring bill (boss only): each bill goes to Ready to send
+ * when it's due, by mobile money to this number. An empty number stops it.
+ */
+export async function setExpenseSchedulePayPhone(input: unknown): Promise<Result> {
+  return runAction("books", async () => {
+    const { isBoss } = await staff();
+    if (!isBoss) throw new AppError("Only the boss sets where bills are paid.");
+    const { id, phone } = parseInput(schedulePayPhoneSchema, input);
+    await expenses.setSchedulePayPhone(id, phone ? sendablePhone(phone) : null);
+    expensesChanged();
+  });
+}
+
 /** Pause or cancel; the unpaid bills chosen are voided with it. Returns how many were. */
 export async function stopExpenseSchedule(input: unknown): Promise<Result<number>> {
   return runAction("books", async () => {
@@ -180,16 +203,13 @@ export async function payExpense(input: unknown): Promise<Result> {
   });
 }
 
-/** Real money: only the boss. The person gets the amount; the fee goes on top. */
+/** Real money: only the boss, and sending is the boss's approval. HivePay keeps its fee out of the amount. */
 export async function sendExpensePayout(input: unknown): Promise<Result> {
   return runAction("books", async () => {
     const { actor, isBoss } = await staff();
     if (!isBoss) throw new AppError("Only the boss can send money from the app.");
     const payout = parseInput(expensePayoutInputSchema, input);
-    const phone = parsePhone(payout.phone);
-    if (!phone.ok) throw new AppError(phone.error);
-    if (!networkOfPhone(phone.store)) throw new AppError("HivePay can only send to MTN and Airtel Uganda numbers.");
-    await sendPayout(payout, phone.store, actor);
+    await sendPayout(payout, sendablePhone(payout.phone), actor);
     expensesChanged();
   });
 }

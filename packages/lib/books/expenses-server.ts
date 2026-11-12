@@ -53,6 +53,8 @@ interface LineRow {
   restored_at: string | null;
   restored_by_name: string | null;
   paid_from_accounts: string[] | null;
+  pay_phone: string | null;
+  payout_sending: boolean;
 }
 
 interface ScheduleRow {
@@ -79,6 +81,7 @@ interface ScheduleRow {
   edited_by_name: string | null;
   ended_at: string | null;
   ended_by_name: string | null;
+  pay_phone: string | null;
 }
 
 function toSchedule(s: ScheduleRow): ExpenseSchedule {
@@ -106,6 +109,7 @@ function toSchedule(s: ScheduleRow): ExpenseSchedule {
     editedBy: s.edited_by_name,
     endedAt: s.ended_at,
     endedBy: s.ended_by_name,
+    payPhone: s.pay_phone,
   };
 }
 
@@ -140,6 +144,8 @@ function toLine(r: LineRow): ExpenseLine {
     restoredAt: r.restored_at,
     restoredBy: r.restored_by_name,
     paidFrom: r.paid_from_accounts ?? [],
+    payPhone: r.pay_phone,
+    payoutSending: r.payout_sending,
   };
 }
 
@@ -290,6 +296,12 @@ export async function stopSchedule(input: ScheduleStopInput, byName: string): Pr
 }
 
 /** What fell due while paused is skipped. */
+/** Autopay's number for a recurring bill (null stops it), on its bills not yet paid too. */
+export async function setSchedulePayPhone(id: string, phone: string | null): Promise<void> {
+  const { error } = await createAdminClient().rpc("expense_schedule_set_pay_phone", { p_id: id, p_phone: phone });
+  if (error) fail(error);
+}
+
 export async function resumeSchedule(id: string, byName: string): Promise<void> {
   const { error } = await createAdminClient().rpc("expense_schedule_resume", { p_id: id, p_actor_name: byName });
   if (error) fail(error);
