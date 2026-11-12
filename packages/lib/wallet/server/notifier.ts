@@ -136,9 +136,9 @@ const MONEY_ALERT_TITLES: Record<MoneyAlertKind, string> = {
   money_not_in_books: "Money not in the books",
 };
 
-/** The boss and supervisors: who sees Accounts, and hears from the money watch. */
+/** The boss: who sees Accounts (canViewAccounts), and hears from the money watch. */
 async function notifyMoneyWatchers(payload: { title: string; body: string; url: string }): Promise<void> {
-  const { data: watchers } = await createAdminClient().from("profiles").select("id").in("role", ["supervisor", "boss"]);
+  const { data: watchers } = await createAdminClient().from("profiles").select("id").eq("role", "boss");
   await Promise.all((watchers ?? []).map((w: { id: string }) => notifyActor({ type: "dashboard_user", id: w.id }, payload)));
 }
 

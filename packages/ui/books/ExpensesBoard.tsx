@@ -33,6 +33,7 @@ import {
   restoreExpense,
   resumeExpenseSchedule,
   sendExpensePayout,
+  setExpenseSchedulePayPhone,
   recordExpense,
   setExpenseApprovalLimit,
   stopExpenseSchedule,
@@ -43,14 +44,13 @@ import { uploadExpenseDocument } from "@repo/lib/books/expense-documents";
 import {
   EVERY_UNITS,
   EXPENSE_STATUS_LABELS,
-  HIVEPAY_SEND_FEES,
   SCHEDULE_STATE_LABELS,
   WEEKDAYS,
   everyUnit,
   expenseBalance,
   expenseBelongsOn,
   expenseStatus,
-  hivepaySendFee,
+  readyToSend,
   onOrAfterWeekday,
   repeatLabel,
   scheduleState,
@@ -126,6 +126,7 @@ export function ExpensesBoard({
   upcoming,
   approvalAbove,
   isBoss,
+  canSend,
   timeZone,
 }: {
   today: string;
@@ -138,6 +139,8 @@ export function ExpensesBoard({
   upcoming: UpcomingBill[];
   approvalAbove: number | null;
   isBoss: boolean;
+  /** The boss, with HivePay set up on this server: bills can be paid by mobile money. */
+  canSend: boolean;
   timeZone: string;
 }) {
   const money = useMoney();
@@ -151,6 +154,8 @@ export function ExpensesBoard({
   const [sort, setSort] = useState<Sort>("newest");
   const [sheet, setSheet] = useState<"new" | "limit" | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
+  // Opened from Ready to send: straight to sending it.
+  const [openToSend, setOpenToSend] = useState(false);
   const [openSchedule, setOpenSchedule] = useState<string | null>(null);
   const opened = lines.find((l) => l.id === openId) ?? null;
   const scheduleOpened = schedules.find((s) => s.id === openSchedule) ?? null;
@@ -248,6 +253,11 @@ export function ExpensesBoard({
   ];
 
   const live = schedules.filter((s) => !s.endedAt);
+  const ready = canSend ? readyToSend(lines, today) : [];
+  const open = (id: string, toSend = false) => {
+    setOpenToSend(toSend);
+    setOpenId(id);
+  };
 
   return (
     <div className="space-y-4">
@@ -261,6 +271,31 @@ export function ExpensesBoard({
           <p className="text-xs text-muted">The boss approves anything above {money(approvalAbove)}.</p>
         ) : null}
       </div>
+
+      {ready.length ? (
+        <Card title={`Ready to send (${ready.length})`}>
+          <p className="mb-2 text-xs text-muted">Due bills with a number to pay to. Each goes only when you approve and send it.</p>
+          <ul className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+            {ready.map((e) => (
+              <li key={e.id} className="flex items-center justify-between gap-3 rounded-2xl border border-border p-3">
+                <span className="min-w-0">
+                  <span className="block truncate font-medium">{e.name}</span>
+                  <span className="block text-xs text-muted">
+                    {e.dueOn ? `Due ${day(e.dueOn)}` : null} · {localPhone(e.payPhone!)}
+                  </span>
+                  <span className="block font-semibold tnum">
+                    {e.amountIsEstimate ? "About " : ""}
+                    {money(expenseBalance(e))}
+                  </span>
+                </span>
+                <Button className="shrink-0" onClick={() => open(e.id, true)}>
+                  Approve and send
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      ) : null}
 
       <div className="grid gap-3 sm:grid-cols-3">
         <FigureTile label="To pay" value={money(summary.toPay)} hint="Everything still owed, as of today" />
@@ -461,12 +496,12 @@ export function ExpensesBoard({
       )}
 
       {tab === "recurring" ? (
-        <SchedulesList schedules={schedules} lines={lines} today={today} categories={categories} onOpenLine={setOpenId} />
+        <SchedulesList schedules={schedules} lines={lines} today={today} categories={categories} canSend={canSend} onOpenLine={open} />
       ) : tab === "coming_up" ? (
         coming.length === 0 ? (
           <EmptyState>{filtersOn ? "Nothing coming up matches the search and filters." : `Nothing due in the next ${COMING_UP_DAYS} days.`}</EmptyState>
         ) : (
-          <ComingUpList bills={coming} today={today} onOpenLine={setOpenId} onOpenSchedule={setOpenSchedule} />
+          <ComingUpList bills={coming} today={today} onOpenLine={open} onOpenSchedule={setOpenSchedule} />
         )
       ) : visible.length === 0 ? (
         <EmptyState>{filtersOn ? "Nothing matches the search and filters." : "Nothing here."}</EmptyState>
@@ -475,7 +510,7 @@ export function ExpensesBoard({
           <ul className="space-y-2 md:hidden">
             {visible.map((e) => (
               <li key={e.id}>
-                <button type="button" onClick={() => setOpenId(e.id)} className="w-full rounded-2xl border border-border bg-surface p-3 text-left shadow-theme-xs">
+                <button type="button" onClick={() => open(e.id)} className="w-full rounded-2xl border border-border bg-surface p-3 text-left shadow-theme-xs">
                   <span className="flex items-start justify-between gap-2">
                     <span className="min-w-0 truncate font-medium">{e.name}</span>
                     <span className="shrink-0 font-semibold tnum">{money(e.amount)}</span>
@@ -491,13 +526,13 @@ export function ExpensesBoard({
               </li>
             ))}
           </ul>
-          <DataTable className="hidden md:block" columns={columns} rows={visible} rowKey={(e) => e.id} onRowClick={(e) => setOpenId(e.id)} />
+          <DataTable className="hidden md:block" columns={columns} rows={visible} rowKey={(e) => e.id} onRowClick={(e) => open(e.id)} />
         </>
       )}
 
       {sheet === "new" ? <NewExpenseSheet categories={categories} today={today} onClose={() => setSheet(null)} /> : null}
       {sheet === "limit" ? <LimitSheet above={approvalAbove} onClose={() => setSheet(null)} /> : null}
-      {opened ? <ExpenseSheet key={opened.id} expense={opened} today={today} isBoss={isBoss} timeZone={timeZone} onClose={() => setOpenId(null)} /> : null}
+      {opened ? <ExpenseSheet key={opened.id} expense={opened} today={today} isBoss={isBoss} canSend={canSend} startSending={openToSend} timeZone={timeZone} onClose={() => setOpenId(null)} /> : null}
       {scheduleOpened ? (
         <ScheduleSheet
           key={scheduleOpened.id}
@@ -505,9 +540,10 @@ export function ExpensesBoard({
           lines={lines}
           today={today}
           categories={categories}
+          canSend={canSend}
           onOpenLine={(id) => {
             setOpenSchedule(null);
-            setOpenId(id);
+            open(id);
           }}
           onClose={() => setOpenSchedule(null)}
         />
@@ -905,12 +941,28 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
 }
 
 /** One expense: what it is, every payment, its documents, and what can be done next. */
-function ExpenseSheet({ expense: e, today, isBoss, timeZone, onClose }: { expense: ExpenseLine; today: string; isBoss: boolean; timeZone: string; onClose: () => void }) {
+function ExpenseSheet({
+  expense: e,
+  today,
+  isBoss,
+  canSend,
+  startSending,
+  timeZone,
+  onClose,
+}: {
+  expense: ExpenseLine;
+  today: string;
+  isBoss: boolean;
+  canSend: boolean;
+  startSending: boolean;
+  timeZone: string;
+  onClose: () => void;
+}) {
   const money = useMoney();
   const router = useRouter();
   const [detail, setDetail] = useState<ExpenseDetail | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [mode, setMode] = useState<"view" | "pay" | "send" | "void" | "reject">("view");
+  const [mode, setMode] = useState<"view" | "pay" | "send" | "void" | "reject">(startSending && canSend ? "send" : "view");
   const [voidingPayment, setVoidingPayment] = useState<ExpensePayment | null>(null);
   const [uploading, setUploading] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -1043,9 +1095,9 @@ function ExpenseSheet({ expense: e, today, isBoss, timeZone, onClose }: { expens
                 <Button className="flex-1" onClick={() => setMode("pay")} disabled={sending}>
                   Record a payment
                 </Button>
-                {isBoss && HIVEPAY_SEND_FEES.length > 0 ? (
-                  <Button variant="secondary" className="flex-1" onClick={() => setMode("send")} disabled={sending}>
-                    Send by HivePay
+                {canSend ? (
+                  <Button variant="secondary" className="flex-1" onClick={() => setMode("send")} disabled={sending || e.payoutSending}>
+                    Pay by mobile money
                   </Button>
                 ) : null}
               </div>
@@ -1238,16 +1290,15 @@ function SendForm({ expense: e, onDone, onCancel }: { expense: ExpenseLine; onDo
   const left = expenseBalance(e);
   const [actual, setActual] = useState("");
   const [amount, setAmount] = useState(e.amountIsEstimate ? "" : String(left));
-  const [phone, setPhone] = useState("");
+  const [phone, setPhone] = useState(e.payPhone ? localPhone(e.payPhone) : "");
   const [sure, setSure] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const real = e.amountIsEstimate ? parseNumber(actual) : null;
   const value = parseNumber(amount || actual);
-  const fee = value > 0 && Number.isInteger(value) ? hivepaySendFee(value) : null;
   const most = real ?? left;
-  const problem = !(value > 0) ? null : value > most ? `That's more than the ${money(most)} left to pay.` : fee === null ? "That amount isn't on HivePay's price list. Pay in parts or another way." : null;
-  const ready = value > 0 && fee !== null && !problem && phone.trim() !== "" && (!e.amountIsEstimate || real! > 0);
+  const problem = !(value > 0) ? null : value > most ? `That's more than the ${money(most)} left to pay.` : value < 500 || value > 5_000_000 ? "HivePay sends from 500 to 5,000,000 at a time." : null;
+  const ready = value > 0 && !problem && phone.trim() !== "" && (!e.amountIsEstimate || real! > 0);
 
   function send() {
     setError(null);
@@ -1264,13 +1315,14 @@ function SendForm({ expense: e, onDone, onCancel }: { expense: ExpenseLine; onDo
 
   return (
     <div className="space-y-3 rounded-2xl border border-border p-3">
-      <p className="text-sm font-semibold">Send by HivePay</p>
+      <p className="text-sm font-semibold">Pay by mobile money</p>
+      {e.approval === "waiting" ? <p className="text-sm text-muted">Sending it approves it.</p> : null}
       {e.amountIsEstimate ? (
         <Field label="Real amount this time" hint={`Expected about ${money(e.amount)}.`}>
           <TextInput inputMode="numeric" value={actual} disabled={sure} onChange={(ev) => setActual(ev.target.value)} />
         </Field>
       ) : null}
-      <Field label="They receive" hint={e.amountIsEstimate ? "Leave empty if it's the whole amount." : `${money(left)} left. Send less for a part payment.`}>
+      <Field label="Amount to send" hint={e.amountIsEstimate ? "Leave empty if it's the whole amount." : `${money(left)} left. Send less for a part payment.`}>
         <TextInput inputMode="numeric" value={amount} disabled={sure} onChange={(ev) => setAmount(ev.target.value)} />
       </Field>
       <Field label="MTN or Airtel number">
@@ -1279,7 +1331,7 @@ function SendForm({ expense: e, onDone, onCancel }: { expense: ExpenseLine; onDo
       {problem ? <p className="text-sm text-error-600 dark:text-error-400">{problem}</p> : null}
       {ready ? (
         <p className="text-sm text-muted">
-          HivePay&apos;s fee is {money(fee)}, recorded as its own expense. {money(value + fee)} leaves the HivePay account.
+          {money(value)} leaves Aming&apos;s HivePay account. HivePay keeps its fee out of it, so the phone gets a little less; the bill counts as paid with {money(value)}.
         </p>
       ) : null}
       <ErrorLine error={error} />
@@ -1331,12 +1383,14 @@ function SchedulesList({
   lines,
   today,
   categories,
+  canSend,
   onOpenLine,
 }: {
   schedules: ExpenseSchedule[];
   lines: ExpenseLine[];
   today: string;
   categories: ExpenseCategory[];
+  canSend: boolean;
   onOpenLine: (id: string) => void;
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
@@ -1381,6 +1435,7 @@ function SchedulesList({
           lines={lines}
           today={today}
           categories={categories}
+          canSend={canSend}
           onOpenLine={(id) => {
             setOpenId(null);
             onOpenLine(id);
@@ -1449,6 +1504,7 @@ function ScheduleSheet({
   lines,
   today,
   categories,
+  canSend,
   onOpenLine,
   onClose,
 }: {
@@ -1456,12 +1512,13 @@ function ScheduleSheet({
   lines: ExpenseLine[];
   today: string;
   categories: ExpenseCategory[];
+  canSend: boolean;
   onOpenLine: (id: string) => void;
   onClose: () => void;
 }) {
   const money = useMoney();
   const router = useRouter();
-  const [mode, setMode] = useState<"view" | "edit" | "pause" | "cancel" | "resume">("view");
+  const [mode, setMode] = useState<"view" | "edit" | "pause" | "cancel" | "resume" | "autopay">("view");
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const state = scheduleState(s);
@@ -1477,6 +1534,7 @@ function ScheduleSheet({
     });
 
   if (mode === "edit") return <EditScheduleSheet schedule={s} today={today} categories={categories} onClose={() => setMode("view")} />;
+  if (mode === "autopay") return <AutopaySheet schedule={s} onClose={() => setMode("view")} />;
   if (mode === "pause" || mode === "cancel") return <StopScheduleSheet schedule={s} end={mode === "cancel"} lines={lines} today={today} onClose={() => setMode("view")} />;
 
   return (
@@ -1495,6 +1553,7 @@ function ScheduleSheet({
           <Row label="Category">{s.categoryName}</Row>
           {s.recipient ? <Row label="To">{s.recipient}</Row> : null}
           <Row label="Ends">{s.endsOn ? day(s.endsOn) : s.times ? `After ${s.times} bills` : "Never, until cancelled"}</Row>
+          {s.payPhone || canSend ? <Row label="Autopay">{s.payPhone ? `To ${localPhone(s.payPhone)}, approved bill by bill` : "Off"}</Row> : null}
           <Row label="Bills so far">{s.bills}</Row>
           <Row label="Paid so far">{money(s.paidTotal)}</Row>
           {s.description ? <Row label="Description">{s.description}</Row> : null}
@@ -1521,6 +1580,11 @@ function ScheduleSheet({
             <Button variant="danger" className="col-span-2 sm:col-span-1" onClick={() => setMode("cancel")}>
               Cancel it
             </Button>
+            {canSend ? (
+              <Button variant="secondary" className="col-span-2 sm:col-span-3" onClick={() => setMode("autopay")}>
+                {s.payPhone ? "Change autopay" : "Set up autopay"}
+              </Button>
+            ) : null}
           </div>
         )}
 
@@ -1592,6 +1656,59 @@ function ScheduleSheet({
         ) : null}
         <ErrorLine error={error} />
       </div>
+    </FormSheet>
+  );
+}
+
+/**
+ * Autopay (owner, 2026-11-12): each bill goes to Ready to send when it's due,
+ * by mobile money to this number. The boss still approves each one by sending it.
+ */
+function AutopaySheet({ schedule: s, onClose }: { schedule: ExpenseSchedule; onClose: () => void }) {
+  const router = useRouter();
+  const [phone, setPhone] = useState(s.payPhone ? localPhone(s.payPhone) : "");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+
+  const save = (next: string) =>
+    start(async () => {
+      setError(null);
+      const res = await setExpenseSchedulePayPhone({ id: s.id, phone: next });
+      if (!res.ok) return setError(res.error);
+      router.refresh();
+      onClose();
+    });
+
+  return (
+    <FormSheet open onClose={onClose} title={`Autopay: ${s.name}`}>
+      <form
+        className="space-y-4"
+        onSubmit={(ev) => {
+          ev.preventDefault();
+          save(phone);
+        }}
+      >
+        <p className="text-sm text-muted">
+          When a bill is due it waits in Ready to send, and you get the morning reminder. It&apos;s sent by mobile money only when you approve and send it. Bills not yet paid use the new number too.
+        </p>
+        <Field label="MTN or Airtel number">
+          <TextInput type="tel" value={phone} onChange={(ev) => setPhone(ev.target.value)} placeholder="e.g. 0772 000 000" />
+        </Field>
+        <ErrorLine error={error} />
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Button type="submit" className="flex-1" loading={pending} disabled={!phone.trim()}>
+            Save
+          </Button>
+          {s.payPhone ? (
+            <Button type="button" variant="secondary" disabled={pending} onClick={() => save("")}>
+              Turn off autopay
+            </Button>
+          ) : null}
+          <Button type="button" variant="secondary" onClick={onClose}>
+            Cancel
+          </Button>
+        </div>
+      </form>
     </FormSheet>
   );
 }

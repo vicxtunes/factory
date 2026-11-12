@@ -102,6 +102,8 @@ export const expensePayoutInputSchema = z.object({
   phone: z.string().trim().min(1, "Enter the phone number to send it to."),
 });
 
+export const schedulePayPhoneSchema = z.object({ id: z.string().uuid(), phone: z.string().trim().max(30) });
+
 export const voidInputSchema = z.object({ id: z.string().uuid(), reason: z.string().trim().min(3, "Say why.").max(500) });
 export const decideInputSchema = z.object({ id: z.string().uuid(), approve: z.boolean(), note: text(500) });
 export const approvalLimitSchema = z.object({ above: z.number().int().min(0, "The limit can't be negative.").nullable() });

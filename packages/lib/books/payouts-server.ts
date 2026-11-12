@@ -13,7 +13,6 @@ import * as notifier from "@repo/lib/wallet/server/notifier";
 import * as hivepay from "@repo/lib/wallet/server/providers/hivepay";
 import { toExpensePayoutReference } from "@repo/lib/wallet/server/providers/hivepay-reference";
 
-import { hivepaySendFee } from "./expenses";
 import type { ExpensePayoutInput } from "./schema";
 import { failBooks as fail } from "./server";
 
@@ -26,9 +25,9 @@ const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export async function sendPayout(input: ExpensePayoutInput, phone: string, actor: { id: string; name: string }): Promise<void> {
   if (!hivepay.isConfigured()) throw new AppError("Payouts aren't set up on this server (HivePay keys).");
-  const fee = hivepaySendFee(input.amount);
-  if (fee === null) throw new AppError("That amount isn't on HivePay's price list, so the fee can't be worked out. Pay it another way or in parts.");
-  const sent = input.amount + fee;
+  // HivePay keeps its fee out of what's sent (it publishes no price list), so
+  // the amount goes as it is and the bill counts as paid with it (owner, 2026-11-12).
+  const sent = input.amount;
   const db = createAdminClient();
   const { data: isNew, error } = await db.rpc("expense_payout_start", {
     p_id: input.id,

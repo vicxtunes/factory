@@ -6,6 +6,7 @@ import { requireAccountsAccess } from "@repo/lib/accounting/index.server";
 import { periodFrom } from "@repo/lib/accounting/params";
 import { expenseDashboard, expenseMonths, expensesBoard } from "@repo/lib/books/expenses-server";
 import { resolveTenantScope } from "@repo/lib/tenancy/server/resolve";
+import * as hivepay from "@repo/lib/wallet/server/providers/hivepay";
 
 export const dynamic = "force-dynamic";
 
@@ -37,5 +38,5 @@ async function Board({ isBoss, searchParams }: { isBoss: boolean; searchParams: 
   // The board first: it creates what recurring expenses now owe, and the figures must include them.
   const board = await expensesBoard(scope, period);
   const [summary, months] = await Promise.all([expenseDashboard(scope, period), expenseMonths(scope, period)]);
-  return <ExpensesBoard {...board} summary={summary} months={months} period={period} isBoss={isBoss} timeZone={scope.timeZone} />;
+  return <ExpensesBoard {...board} summary={summary} months={months} period={period} isBoss={isBoss} canSend={isBoss && hivepay.isConfigured()} timeZone={scope.timeZone} />;
 }

@@ -243,7 +243,7 @@ const EXPENSE_REMINDER_HOUR = 8;
 
 /**
  * Each morning: creates what recurring expenses now owe, then one message to
- * the boss and supervisors with the bills and debts overdue or due soon, and
+ * the boss with the bills and debts overdue or due soon, and
  * what's waiting for approval. Silent when there's none. Called every few minutes.
  */
 export async function sendExpenseReminder(now = new Date()): Promise<boolean> {
@@ -266,6 +266,8 @@ export async function sendExpenseReminder(now = new Date()): Promise<boolean> {
         approval: "approved" as const,
         onCredit: false,
         amountIsEstimate: false,
+        payPhone: null,
+        payoutSending: false,
       })),
     ],
     today,

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { AUTOMATIC_ACTOR, expenseBalance, expenseBelongsOn, expenseReminder, expenseStatus, hivepaySendFee, onOrAfterWeekday, repeatLabel, scheduleState, type ExpenseLine } from "./expenses";
+import { AUTOMATIC_ACTOR, expenseBalance, expenseBelongsOn, expenseReminder, expenseStatus, onOrAfterWeekday, readyToSend, repeatLabel, scheduleState, type ExpenseLine } from "./expenses";
 
 const TODAY = "2026-11-03";
 const line = (o: Partial<ExpenseLine> = {}): ExpenseLine => ({
@@ -34,6 +34,8 @@ const line = (o: Partial<ExpenseLine> = {}): ExpenseLine => ({
   restoredAt: null,
   restoredBy: null,
   paidFrom: [],
+  payPhone: null,
+  payoutSending: false,
   ...o,
 });
 
@@ -107,16 +109,27 @@ test("a long list stays short and still counts every bill", () => {
   assert.equal(r?.body, "Overdue: B0 100, B1 100, B2 100, B3 100 and 2 more.");
 });
 
-test("the sending fee goes by what's sent, the amount plus the fee", () => {
-  const bands = [
-    { upTo: 50_000, fee: 1_000 },
-    { upTo: 100_000, fee: 2_000 },
-  ];
-  assert.equal(hivepaySendFee(49_000, bands), 1_000);
-  assert.equal(hivepaySendFee(49_500, bands), 2_000, "49,500 + 1,000 is past the first band");
-  assert.equal(hivepaySendFee(98_000, bands), 2_000);
-  assert.equal(hivepaySendFee(98_001, bands), null, "beyond the list: not offered");
-  assert.equal(hivepaySendFee(1_000, []), null);
+test("ready to send: a number to pay to, due, something left, nothing on its way", () => {
+  const phone = "256772000000";
+  const ready = readyToSend(
+    [
+      line({ name: "Late", payPhone: phone, dueOn: "2026-11-01" }),
+      line({ name: "Today", payPhone: phone, dueOn: TODAY, approval: "waiting" }),
+      line({ name: "Tomorrow", payPhone: phone, dueOn: "2026-11-04" }),
+      line({ name: "No number", dueOn: TODAY }),
+      line({ name: "Paid", payPhone: phone, dueOn: TODAY, paid: 100 }),
+      line({ name: "On its way", payPhone: phone, dueOn: TODAY, payoutSending: true }),
+      line({ name: "Rejected", payPhone: phone, dueOn: TODAY, approval: "rejected" }),
+      line({ name: "Voided", payPhone: phone, dueOn: TODAY, voidedAt: "2026-11-02T00:00:00Z" }),
+    ],
+    TODAY,
+  );
+  assert.deepEqual(ready.map((e) => e.name), ["Late", "Today"]);
+});
+
+test("the reminder names a bill ready to send once, before the rest", () => {
+  const r = expenseReminder([line({ name: "Rent", payPhone: "256772000000", dueOn: "2026-11-01" }), line({ name: "Power", dueOn: "2026-11-01" })], TODAY, money);
+  assert.deepEqual(r, { title: "To pay: 1 ready to send, 1 overdue", body: "Ready to send by mobile money: Rent 100. Overdue: Power 100." });
 });
 
 test("repeat labels", () => {
