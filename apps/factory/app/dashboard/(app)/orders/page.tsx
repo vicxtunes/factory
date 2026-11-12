@@ -10,7 +10,7 @@ import {
   fetchOfficeItems,
   fetchProductCatalog,
 } from "@repo/lib/queries";
-import { canViewOrderAudit, isManagerRole, type Worker } from "@repo/lib/types";
+import { canManageBusiness, canViewOrderAudit, isManagerRole, type Worker } from "@repo/lib/types";
 
 import { OrderBoard } from "../../order-board";
 
@@ -20,6 +20,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
   const canManage = session ? isManagerRole(session.role) : false;
   const canViewAudit = session ? canViewOrderAudit(session.role) : false;
   const canCancel = session?.role === "boss";
+  const takesPayments = session ? canManageBusiness(session.role) : false;
 
   return (
     <Loading
@@ -44,7 +45,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
         </div>
       }
     >
-      <Board canManage={canManage} canViewAudit={canViewAudit} canCancel={canCancel} openOrderId={order} />
+      <Board canManage={canManage} canViewAudit={canViewAudit} canCancel={canCancel} takesPayments={takesPayments} openOrderId={order} />
     </Loading>
   );
 }
@@ -53,11 +54,13 @@ async function Board({
   canManage,
   canViewAudit,
   canCancel,
+  takesPayments,
   openOrderId,
 }: {
   canManage: boolean;
   canViewAudit: boolean;
   canCancel: boolean;
+  takesPayments: boolean;
   openOrderId?: string;
 }) {
   const admin = createAdminClient();
@@ -85,6 +88,7 @@ async function Board({
       canManage={canManage}
       canViewAudit={canViewAudit}
       canCancel={canCancel}
+      takesPayments={takesPayments}
       catalog={catalog}
       clients={clients}
       agents={agents}

@@ -2,7 +2,7 @@
 
 import type { AppRole } from "@repo/lib/types";
 
-/** Business-wide money totals: the boss and supervisors, not receptionists. */
+/** Business-wide money totals: the boss only (owner, 2026-11-12: supervisors manage production only). */
 export function canViewAccounts(role: AppRole): boolean {
-  return role === "boss" || role === "supervisor";
+  return role === "boss";
 }

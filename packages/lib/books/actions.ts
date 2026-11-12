@@ -47,7 +47,7 @@ function expensesChanged() {
 
 async function staff() {
   const session = await getDashboardSession();
-  if (!session || !canViewAccounts(session.role)) throw new AppError("Only the boss and supervisors can do this.");
+  if (!session || !canViewAccounts(session.role)) throw new AppError("Only the boss can do this.");
   return {
     actor: { id: session.userId, name: session.fullName ?? session.email ?? "Staff" },
     scope: await resolveTenantScope(),

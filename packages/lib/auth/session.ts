@@ -7,6 +7,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@repo/lib/supabase/server";
 import { createAdminClient } from "@repo/lib/supabase/admin";
 import {
+  canManageBusiness,
   canManageWorkerSecurity,
   canViewOrderAudit,
   isManagerRole,
@@ -159,6 +160,16 @@ export async function requireManager(): Promise<DashboardSession> {
   const session = await requireDashboard();
   if (!isManagerRole(session.role)) {
     throw new Error("Forbidden: requires manager access");
+  }
+  return session;
+}
+
+// Clients' records, agents and money: not supervisors, who manage production
+// only (owner, 2026-11-12; see canManageBusiness).
+export async function requireBusiness(): Promise<DashboardSession> {
+  const session = await requireDashboard();
+  if (!canManageBusiness(session.role)) {
+    throw new Error("Forbidden: requires boss or reception access");
   }
   return session;
 }

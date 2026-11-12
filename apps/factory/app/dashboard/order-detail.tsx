@@ -237,6 +237,7 @@ export function OrderDetail({
   canManage,
   canViewAudit,
   canCancel = false,
+  takesPayments = false,
   catalog,
   onChanged,
   onPickCreatedDate,
@@ -252,6 +253,8 @@ export function OrderDetail({
   // Boss only, and only while the order is live and not fully completed —
   // the board works that out (see ./order-board.tsx).
   canCancel?: boolean;
+  /** Boss and reception: the client's payments and wallet on this order. Supervisors see the invoice only. */
+  takesPayments?: boolean;
   catalog: ProductCategory[];
   onChanged: () => void;
   // Calendar icon next to "Created" — pick any date to jump to every order
@@ -377,7 +380,7 @@ export function OrderDetail({
         </>
       ) : null}
       {/* Shows only once something has been paid from the client's wallet — cancelled orders included, in case a refund is still owed. */}
-      {item.order.client_id && canManage ? (
+      {item.order.client_id && canManage && takesPayments ? (
         <StaffOrderPayment key={`${item.order_id}-${moneyVersion}`} orderId={item.order_id} />
       ) : null}
       {/* Invoices are for confirmed orders (the price is agreed); cancelled ones keep theirs, shown as Cancelled. */}
@@ -385,6 +388,7 @@ export function OrderDetail({
         <StaffInvoicePanel
           key={item.order_id}
           orderId={item.order_id}
+          takesPayments={takesPayments}
           onChanged={() => {
             // A payment recorded on the invoice changes the "paid" panel above.
             setMoneyVersion((v) => v + 1);

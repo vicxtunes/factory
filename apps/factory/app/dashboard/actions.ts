@@ -12,6 +12,7 @@ import { createClient } from "@repo/lib/supabase/server";
 import { createAdminClient } from "@repo/lib/supabase/admin";
 import { fetchBaseCurrencySymbol } from "@repo/lib/queries";
 import {
+  requireBusiness,
   requireManager,
   requireOrderAudit,
   requireRole,
@@ -660,7 +661,7 @@ export async function updateClient(input: {
   email: string;
   phone: string;
 }): Promise<Result> {
-  await requireManager();
+  await requireBusiness();
   const name = input.name.trim();
   if (!name) return { ok: false, error: "Name is required." };
 
@@ -770,7 +771,7 @@ export interface BulkImportResult {
 export async function bulkImportClients(
   csvText: string,
 ): Promise<BulkImportResult | { ok: false; error: string }> {
-  await requireManager();
+  await requireBusiness();
 
   const parsed = Papa.parse<Record<string, string>>(csvText, {
     header: true,

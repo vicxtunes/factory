@@ -11,7 +11,7 @@ import { canManageProduction } from "@repo/lib/production/policy";
 import { production } from "@repo/lib/production/server";
 import { resolveTenantScope } from "@repo/lib/tenancy/server/resolve";
 import { createAdminClient } from "@repo/lib/supabase/admin";
-import { isManagerRole } from "@repo/lib/types";
+import { canManageBusiness, isManagerRole } from "@repo/lib/types";
 
 import { OrderApprovalQueue, type ItemCosts } from "../../order-approval-queue";
 
@@ -30,12 +30,12 @@ export default async function OrderApprovalsPage() {
         </>
       }
     >
-      <Queue canCancel={session.role === "boss"} seesCosts={canManageProduction(session.role)} />
+      <Queue canCancel={session.role === "boss"} seesCosts={canManageProduction(session.role)} takesPayments={canManageBusiness(session.role)} />
     </Loading>
   );
 }
 
-async function Queue({ canCancel, seesCosts }: { canCancel: boolean; seesCosts: boolean }) {
+async function Queue({ canCancel, seesCosts, takesPayments }: { canCancel: boolean; seesCosts: boolean; takesPayments: boolean }) {
   const [items, designers, catalog] = await Promise.all([
     fetchApprovalQueueItems(),
     fetchDesigners(true),
@@ -52,6 +52,7 @@ async function Queue({ canCancel, seesCosts }: { canCancel: boolean; seesCosts: 
       costs={seesCosts ? await itemCosts(items) : null}
       driveLinks={await driveLinkCounts(items.map((i) => i.id))}
       canCancel={canCancel}
+      takesPayments={takesPayments}
     />
   );
 }
