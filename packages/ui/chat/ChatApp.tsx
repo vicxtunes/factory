@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 
+import { openSupportConversation } from "@repo/lib/chat/actions";
 import { getInbox } from "@repo/lib/chat/client/api";
 import { useChatSignals, type ChatSignalHandler } from "@repo/lib/chat/client/useChatSignals";
 import { participantKey } from "@repo/lib/chat/policy";
@@ -29,6 +30,10 @@ const INBOX_BATCH_MS = 1000;
  *
  * `initialInbox` is loaded by the server with the page (app/chat/layout.tsx),
  * so the list shows at once; realtime signals keep it fresh from there.
+ *
+ * A client's New goes straight to the Aming support team (owner, 2026-11-13):
+ * their one support chat, made the first time. Staff, designers and workers
+ * pick who to message.
  */
 export function ChatApp({
   viewer,
@@ -47,6 +52,8 @@ export function ChatApp({
   const [loading, setLoading] = useState(!initialInbox);
   const [error, setError] = useState<string | null>(null);
   const [newOpen, setNewOpen] = useState(false);
+  const [startError, setStartError] = useState<string | null>(null);
+  const starting = useRef(false);
   // Bumped when a realtime signal concerns the open conversation.
   const [threadRefreshKey, setThreadRefreshKey] = useState(0);
 
@@ -102,11 +109,24 @@ export function ChatApp({
     [pathname, searchParams, activeId],
   );
 
+  async function startNew() {
+    if (viewer.type !== "client") return setNewOpen(true);
+    if (starting.current) return;
+    starting.current = true;
+    setStartError(null);
+    const res = await openSupportConversation();
+    starting.current = false;
+    if (!res.ok) return setStartError(res.error);
+    select(res.data);
+    loadInbox();
+  }
+
   return (
     <div data-chat-frame className={CHAT_FRAME_CLASS}>
       <aside
         className={`w-full shrink-0 border-r border-border md:block md:w-80 lg:w-96 ${activeId ? "hidden" : "block"}`}
       >
+        {startError ? <p className="border-b border-border px-4 py-2 text-xs text-[var(--rush)]">{startError}</p> : null}
         {error ? (
           <p className="p-6 text-center text-sm text-muted">{error}</p>
         ) : (
@@ -115,7 +135,7 @@ export function ChatApp({
             loading={loading}
             activeId={activeId}
             onSelect={select}
-            onNew={() => setNewOpen(true)}
+            onNew={startNew}
             exitHref={exitHref}
           />
         )}
