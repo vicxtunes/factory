@@ -251,7 +251,6 @@ export async function cancelMyOrder(orderId: string, reason: string): Promise<{ 
   const res = await applyCancellation({ order, items, reason: why, actor, notifyClient: false });
   if (!res.ok) return res;
 
-  const admin = createAdminClient();
   const managers = (await staffWith("orders")).map((id) => ({ id }));
   await Promise.all(
     (managers ?? []).map((m) =>

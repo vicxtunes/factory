@@ -5,32 +5,32 @@ import { useState, useTransition } from "react";
 
 import { Button } from "@repo/ui/Button";
 import { inviteTeamMember, removeTeamAccess, setTeamAccess } from "@repo/lib/team/actions";
-import { ACCESS_PRESETS, AREA_LABELS, AREAS, INVITE_DAYS, presetOf, type AccessPreset, type Area, type TeamMember } from "@repo/lib/team/core";
-
-const PRESETS = Object.keys(ACCESS_PRESETS) as (keyof typeof ACCESS_PRESETS)[];
+import { Select } from "@repo/ui/Field";
+import { AREA_LABELS, AREAS, INVITE_DAYS, LEVEL_LABELS, LEVELS, type AccessRole, type Area, type AreaMap, type Level, type TeamMember } from "@repo/lib/team/core";
 
 /**
  * What a member may use, and their sign-in: an invite link to send them,
  * whether they joined, and removing their access.
  */
-export function TeamAccess({ member }: { member: TeamMember }) {
+export function TeamAccess({ member, roles }: { member: TeamMember; roles: AccessRole[] }) {
   const router = useRouter();
-  const [areas, setAreas] = useState<Area[]>(member.access);
-  const [preset, setPreset] = useState<AccessPreset>(presetOf(member.access));
+  const [roleId, setRoleId] = useState<string | null>(member.accessRoleId);
+  const [own, setOwn] = useState<AreaMap>(member.ownAccess);
   const [link, setLink] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const [pending, start] = useTransition();
   const archived = !!member.archivedAt;
-  const changed = areas.length !== member.access.length || areas.some((a) => !member.access.includes(a));
+  const role = roles.find((r) => r.id === roleId) ?? null;
+  const changed = roleId !== member.accessRoleId || JSON.stringify(own) !== JSON.stringify(member.ownAccess);
 
-  function choose(p: AccessPreset) {
-    setPreset(p);
-    if (p !== "custom") setAreas([...ACCESS_PRESETS[p].areas]);
-    setMessage(null);
-  }
-  function toggle(area: Area) {
-    setAreas((now) => (now.includes(area) ? now.filter((a) => a !== area) : [...now, area]));
+  function setArea(area: Area, value: string) {
+    setOwn((now) => {
+      const next = { ...now };
+      if (value === "role") delete next[area];
+      else next[area] = value as Level;
+      return next;
+    });
     setMessage(null);
   }
   function run(action: () => Promise<{ ok: true; data?: unknown } | { ok: false; error: string }>, done: string, after?: (data: unknown) => void) {
@@ -69,33 +69,56 @@ export function TeamAccess({ member }: { member: TeamMember }) {
         </p>
       </div>
 
-      <fieldset className="space-y-2" disabled={archived}>
+      <fieldset className="space-y-3" disabled={archived || pending}>
         <legend className="sr-only">Access</legend>
-        {[...PRESETS, "custom" as const].map((p) => (
-          <label key={p} className="flex cursor-pointer items-start gap-3 rounded-xl border border-border p-3 has-[:checked]:border-brand-500">
-            <input type="radio" name={`preset-${member.id}`} checked={preset === p} onChange={() => choose(p)} className="mt-1" />
-            <span>
-              <span className="block text-sm font-medium">{p === "custom" ? "Choose" : ACCESS_PRESETS[p].label}</span>
-              <span className="block text-xs text-muted">{p === "custom" ? "Pick the parts yourself" : ACCESS_PRESETS[p].hint}</span>
-            </span>
-          </label>
-        ))}
-        {preset === "custom" ? (
-          <div className="space-y-2 pl-2">
-            {AREAS.map((a) => (
-              <label key={a} className="flex cursor-pointer items-start gap-3">
-                <input type="checkbox" checked={areas.includes(a)} onChange={() => toggle(a)} className="mt-1" />
-                <span>
+        <label className="block space-y-1">
+          <span className="block text-sm font-medium">Role</span>
+          <Select
+            value={roleId ?? ""}
+            onChange={(e) => {
+              setRoleId(e.target.value || null);
+              setMessage(null);
+            }}
+          >
+            <option value="">No role: only what you set below</option>
+            {roles.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.name}
+              </option>
+            ))}
+          </Select>
+          <span className="block text-xs text-muted">View: they see it. Manage: they can also change it. Change any part for {member.name} alone below.</span>
+        </label>
+        <div className="space-y-2">
+          {AREAS.map((a) => {
+            const mine = own[a];
+            const fromRole = role?.access[a] ?? "none";
+            return (
+              <div key={a} className="grid grid-cols-[1fr_auto] items-center gap-2 rounded-xl border border-border p-2.5">
+                <span className="min-w-0">
                   <span className="block text-sm font-medium">{AREA_LABELS[a].label}</span>
                   <span className="block text-xs text-muted">{AREA_LABELS[a].hint}</span>
                 </span>
-              </label>
-            ))}
-          </div>
-        ) : null}
+                <Select
+                  aria-label={AREA_LABELS[a].label}
+                  className={`min-h-9 w-36 ${mine !== undefined && role ? "border-brand-400" : ""}`}
+                  value={mine ?? (role ? "role" : "none")}
+                  onChange={(e) => setArea(a, e.target.value)}
+                >
+                  {role ? <option value="role">Role&apos;s: {LEVEL_LABELS[fromRole]}</option> : null}
+                  {LEVELS.map((l) => (
+                    <option key={l} value={l}>
+                      {LEVEL_LABELS[l]}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            );
+          })}
+        </div>
       </fieldset>
       {changed ? (
-        <Button type="button" loading={pending} onClick={() => run(() => setTeamAccess(member.id, areas), "Access saved.")}>
+        <Button type="button" loading={pending} onClick={() => run(() => setTeamAccess(member.id, { roleId, own }), "Access saved.")}>
           Save access
         </Button>
       ) : null}

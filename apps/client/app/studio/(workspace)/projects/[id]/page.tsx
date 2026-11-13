@@ -122,7 +122,7 @@ export default async function StudioProjectPage({ params, searchParams }: { para
       ) : null}
       {tab === "vendors" ? (
         <Loading skeleton={<RowsSkeleton rows={2} />}>
-          <Vendors scope={scope} project={p} canPay={canUse(access, "money")} hire={hire} service={service} />
+          <Vendors scope={scope} project={p} canPay={canUse(access, "money", "manage")} hire={hire} service={service} />
         </Loading>
       ) : null}
       {tab === "files" ? (

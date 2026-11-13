@@ -4,7 +4,7 @@ import { SetupFrame } from "@repo/ui/studio-access/SetupLayouts";
 import { getClientSession } from "@repo/lib/auth/session";
 import { STUDIOS_ENABLED } from "@repo/lib/studios/feature";
 import { studios } from "@repo/lib/studios/server";
-import { AREA_LABELS, inviteTokenSchema } from "@repo/lib/team/core";
+import { AREAS, AREA_LABELS, inviteTokenSchema } from "@repo/lib/team/core";
 import { team } from "@repo/lib/team/server";
 
 import { AuthGate } from "../../../../auth-gate";
@@ -40,9 +40,9 @@ export default async function JoinTeamPage({ params }: { params: Promise<{ token
               </p>
               <ul className="list-disc space-y-1 pl-5 text-sm">
                 <li>See and work on the tasks given to you</li>
-                {invite.member.access.map((a) => (
+                {AREAS.filter((a) => invite.member.access[a] !== "none").map((a) => (
                   <li key={a}>
-                    {AREA_LABELS[a].label}: {AREA_LABELS[a].hint.toLowerCase()}
+                    {AREA_LABELS[a].label} ({invite.member.access[a] === "manage" ? "see and change" : "see"}): {AREA_LABELS[a].hint.toLowerCase()}
                   </li>
                 ))}
               </ul>
