@@ -6,10 +6,9 @@
 
 import { revalidatePath } from "next/cache";
 
-import { getDashboardSession } from "@repo/lib/auth/session";
+import { getDashboardSession, sessionCan } from "@repo/lib/auth/session";
 import { parseInput, type Result } from "@repo/lib/kernel/core";
 import { runAction } from "@repo/lib/kernel/server/action";
-import { canViewAllStudios } from "@repo/lib/studios/policy";
 import { ownStudio, studioForSetup } from "@repo/lib/studios/server";
 
 import { codeSchema, detailsSchema, emailSchema, reviewSchema, uploadKeySchema } from "./core";
@@ -73,7 +72,7 @@ export async function submitStudioForReview(): Promise<Result> {
 export async function reviewStudio(input: unknown): Promise<Result> {
   return run(async () => {
     const session = await getDashboardSession();
-    if (!session || !canViewAllStudios(session.role)) throw new AccessError("Only the boss can review businesses.");
+    if (!sessionCan(session, "studios", "manage")) throw new AccessError("You don't have access to this. Ask the boss.");
     const { studioId, decision, note } = parseInput(reviewSchema, input);
     await studioAccess.review(studioId, decision, note);
     revalidatePath("/dashboard/studios", "layout");

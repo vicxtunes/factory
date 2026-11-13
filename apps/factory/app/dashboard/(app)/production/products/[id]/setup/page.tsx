@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 
+import { sessionCan } from "@repo/lib/auth/session";
 import { BackLink } from "@repo/ui/navigation/back";
 import { RecipeEditor } from "@repo/ui/production/RecipeEditor";
 import { FormSkeleton, TitleRowSkeleton } from "@repo/ui/skeletons/blocks";
@@ -28,13 +29,13 @@ export default async function RecipePage({ params }: { params: Promise<{ id: str
           </div>
         }
       >
-        <Recipe id={id} setsPrices={session.role === "boss"} />
+        <Recipe id={id} setsPrices={sessionCan(session, "catalog", "manage")} canEdit={sessionCan(session, "production", "manage")} />
       </Loading>
     </div>
   );
 }
 
-async function Recipe({ id, setsPrices }: { id: string; setsPrices: boolean }) {
+async function Recipe({ id, setsPrices, canEdit }: { id: string; setsPrices: boolean; canEdit: boolean }) {
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
   const [catalog, book] = await Promise.all([costingCatalog(), production.costBook(await resolveTenantScope())]);
   const category = catalog.find((c) => c.products.some((p) => p.id === id));
@@ -62,6 +63,7 @@ async function Recipe({ id, setsPrices }: { id: string; setsPrices: boolean }) {
         sizes={product.variants.length ? product.variants.map((v) => v.name) : categorySizes(category)}
         details={category.attributes.map((a) => ({ name: a.name, type: a.type, options: addOnNames(a.name) ?? a.options }))}
         setsPrices={setsPrices}
+        canEdit={canEdit}
       />
     </div>
   );

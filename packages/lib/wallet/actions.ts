@@ -205,14 +205,14 @@ export async function withdrawFromBusinessCard(amount: number, phone: string): P
 
 export async function listWallets(): Promise<WalletResult<WalletListRow[]>> {
   return run(async () => {
-    await requireStaff();
+    await requireStaff("view");
     return service.listWallets();
   });
 }
 
 export async function listPendingDeposits(): Promise<WalletResult<PendingDeposit[]>> {
   return run(async () => {
-    await requireStaff();
+    await requireStaff("view");
     return service.listPendingDeposits();
   });
 }
@@ -221,14 +221,14 @@ export async function getAllTransactionHistory(
   filters: TransactionHistoryFilters = {},
 ): Promise<WalletResult<TransactionHistoryPage>> {
   return run(async () => {
-    await requireStaff();
+    await requireStaff("view");
     return service.getAllTransactionHistory(filters);
   });
 }
 
 export async function getClientWallet(clientId: string): Promise<WalletResult<WalletView>> {
   return run(async () => {
-    await requireStaff();
+    await requireStaff("view");
     return service.getClientWallet(clientId);
   });
 }
@@ -261,7 +261,7 @@ export async function recordDeposit(clientId: string, input: DepositInput): Prom
 /** `amount` is signed: positive adds, negative takes away. Returns the new balance. */
 export async function listMoneyAccounts(): Promise<WalletResult<MoneyAccount[]>> {
   return run(async () => {
-    await requireStaff();
+    await requireStaff("manage", ["wallets", "invoices", "accounts", "expenses", "agents"]);
     return service.listMoneyAccounts();
   });
 }
@@ -297,7 +297,7 @@ export async function refundOrderToWallet(
 /** Businesses' and vendors' withdrawals waiting for staff or being sent, oldest first. */
 export async function listPendingWithdrawals(): Promise<WalletResult<PendingWithdrawal[]>> {
   return run(async () => {
-    await requireStaff();
+    await requireStaff("view");
     const [businesses, vendors] = await Promise.all([business.listPendingWithdrawals(), vendorWallet.listPendingVendorWithdrawals()]);
     return [...businesses, ...vendors].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   });
@@ -353,11 +353,9 @@ export async function withdrawCommission(amount: number, to: agentWallet.Withdra
   });
 }
 
-/** Only the boss answers agents' withdrawals. */
-async function requireBoss() {
-  const staff = await requireStaff();
-  if (staff.role !== "boss") throw new WalletError("Only the boss can answer agents' withdrawals.");
-  return staff;
+/** Agents' withdrawals are answered by whoever manages Agents. */
+function requireAgentsManager() {
+  return requireStaff("manage", ["agents"]);
 }
 
 function refreshAgentPages() {
@@ -369,7 +367,7 @@ function refreshAgentPages() {
 /** Approves a waiting mobile money withdrawal: HivePay sends it. */
 export async function approveAgentWithdrawal(id: string): Promise<WalletResult> {
   return run(async () => {
-    await agentWallet.approveAgentWithdrawal(await requireBoss(), id);
+    await agentWallet.approveAgentWithdrawal(await requireAgentsManager(), id);
     refreshAgentPages();
   });
 }
@@ -377,7 +375,7 @@ export async function approveAgentWithdrawal(id: string): Promise<WalletResult> 
 /** Refuses a waiting withdrawal (the agent sees `reason`): the money goes back on their balance. */
 export async function refuseAgentWithdrawal(id: string, reason: string): Promise<WalletResult> {
   return run(async () => {
-    await agentWallet.refuseAgentWithdrawal(await requireBoss(), id, reason);
+    await agentWallet.refuseAgentWithdrawal(await requireAgentsManager(), id, reason);
     refreshAgentPages();
   });
 }
@@ -385,7 +383,7 @@ export async function refuseAgentWithdrawal(id: string, reason: string): Promise
 /** A bank withdrawal the boss sent by hand: paid, from this account, with this reference. */
 export async function markAgentWithdrawalPaid(id: string, accountId: string, reference: string): Promise<WalletResult> {
   return run(async () => {
-    await agentWallet.markAgentWithdrawalPaid(await requireBoss(), id, accountId, reference);
+    await agentWallet.markAgentWithdrawalPaid(await requireAgentsManager(), id, accountId, reference);
     refreshAgentPages();
   });
 }
@@ -408,10 +406,10 @@ export async function resolveMoneyAlert(id: string): Promise<WalletResult> {
 
 // --- Top-up bonus (Marketing) ----------------------------------------------
 
-/** Every top-up bonus, running first. Managers can look; the boss changes them. */
+/** Every top-up bonus, running first. Discounts & top-up bonus: view to look, manage to change. */
 export async function listTopupBonuses(): Promise<WalletResult<TopupBonus[]>> {
   return run(async () => {
-    await requireStaff();
+    await requireStaff("view", ["discounts"]);
     return bonus.listBonuses();
   });
 }
@@ -436,7 +434,7 @@ export async function createTopupBonus(input: {
       throw new WalletError("Fill in the bonus, the minimum top-up and the dates.");
     }
     const { percent, minAmount, startsAt, endsAt } = input;
-    await bonus.createBonus(await requireStaff(), { percent, minAmount, startsAt, endsAt });
+    await bonus.createBonus(await requireStaff("manage", ["discounts"]), { percent, minAmount, startsAt, endsAt });
     revalidatePath("/dashboard/marketing");
     return bonus.listBonuses();
   });
@@ -446,7 +444,7 @@ export async function createTopupBonus(input: {
 export async function stopTopupBonus(id: string): Promise<WalletResult<TopupBonus[]>> {
   return run(async () => {
     if (typeof id !== "string") throw new WalletError("That bonus no longer exists.");
-    await bonus.stopBonus(await requireStaff(), id);
+    await bonus.stopBonus(await requireStaff("manage", ["discounts"]), id);
     revalidatePath("/dashboard/marketing");
     return bonus.listBonuses();
   });

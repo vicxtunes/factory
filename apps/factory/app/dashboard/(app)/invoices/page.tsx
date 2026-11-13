@@ -1,24 +1,20 @@
-import { redirect } from "next/navigation";
-
 import { InvoicesList } from "@repo/ui/invoices/InvoicesList";
 import { SectionLabel } from "@repo/ui/SectionLabel";
 import { RowsSkeleton } from "@repo/ui/skeletons/blocks";
 import { Loading } from "@repo/ui/skeletons/Loading";
-import { getDashboardSession } from "@repo/lib/auth/session";
+import { pageAccess, sessionCan } from "@repo/lib/auth/session";
 import { listInvoices } from "@repo/lib/invoices/actions";
-import { canManageBusiness } from "@repo/lib/types";
 
 export const dynamic = "force-dynamic";
 
 export default async function InvoicesPage() {
-  const session = await getDashboardSession();
-  if (!session || !canManageBusiness(session.role)) redirect("/dashboard");
+  const session = await pageAccess("invoices");
 
   return (
     <div className="space-y-6">
       <SectionLabel>Invoices</SectionLabel>
       <Loading skeleton={<RowsSkeleton />}>
-        <Invoices canEditSettings={session.role === "boss"} />
+        <Invoices canEditSettings={sessionCan(session, "accounts", "manage")} />
       </Loading>
     </div>
   );

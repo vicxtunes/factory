@@ -17,9 +17,8 @@ import {
   ProductsIcon,
   SupportIcon,
 } from "@repo/ui/icons";
-import type { AppRole } from "@repo/lib/types";
 
-import { CHAT, HOME, isCurrent, navFor, type NavGroup } from "./nav";
+import { CHAT, HOME, isCurrent, navFor, type NavGroup, type NavViewer } from "./nav";
 
 const GROUP_ICONS: Record<NavGroup["id"], typeof DashboardIcon> = {
   orders: OrdersIcon,
@@ -57,9 +56,9 @@ function DashboardGroup({
 // Desktop only (lg+). On phones navigation is the bottom home bar
 // (./home-bar.tsx) — no hamburger, no slide-out drawer. The links and who
 // sees them come from ./nav.ts.
-export function DashboardSidebar({ role, email }: { role: AppRole; email: string | null }) {
+export function DashboardSidebar({ viewer }: { viewer: NavViewer }) {
   const pathname = usePathname();
-  const groups = navFor({ role, email });
+  const groups = navFor(viewer);
 
   // Groups start closed, except the one holding the current page; a choice
   // the person made wins (this browser only).

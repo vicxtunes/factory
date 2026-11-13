@@ -7,7 +7,7 @@
 // above the limit.
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState, useTransition, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, useTransition, type ReactNode } from "react";
 
 import { Button } from "@repo/ui/Button";
 import { DataTable, type DataTableColumn } from "@repo/ui/DataTable";
@@ -73,6 +73,9 @@ import {
 import { matchesSearch } from "@repo/lib/search";
 import type { PaymentMethod } from "@repo/lib/wallet/types";
 
+/** Expenses at manage (staff access): without it the board only shows, with no record, pay, void or edit. */
+const CanManage = createContext(true);
+
 const METHODS: Record<string, string> = { cash: "Cash", mobile_money: "Mobile money", bank_transfer: "Bank transfer", other: "Other" };
 const FILE_TYPES = "image/*,application/pdf";
 /** How far ahead Coming up looks; the server projects recurring bills as far (UPCOMING_DAYS). */
@@ -130,6 +133,7 @@ export function ExpensesBoard({
   approvalAbove,
   autopayUpTo,
   isBoss,
+  canManage,
   canSend,
   timeZone,
 }: {
@@ -144,8 +148,11 @@ export function ExpensesBoard({
   approvalAbove: number | null;
   /** Autopay bills go by themselves up to this much; null: no limit. */
   autopayUpTo: number | null;
+  /** May approve expenses (Approve & pay bills): what they record never waits. */
   isBoss: boolean;
-  /** The boss, with HivePay set up on this server: bills can be paid by mobile money. */
+  /** Expenses at manage: record, pay, void, edit. */
+  canManage: boolean;
+  /** Approve & pay bills, with HivePay set up on this server: bills can be paid by mobile money. */
   canSend: boolean;
   timeZone: string;
 }) {
@@ -266,9 +273,10 @@ export function ExpensesBoard({
   };
 
   return (
+    <CanManage.Provider value={canManage}>
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
-        <Button onClick={() => setSheet("new")}>Record expense</Button>
+        {canManage ? <Button onClick={() => setSheet("new")}>Record expense</Button> : null}
         {isBoss ? (
           <Button variant="secondary" onClick={() => setSheet("limit")}>
             Approval limit: {approvalAbove === null ? "none" : money(approvalAbove)}
@@ -568,6 +576,7 @@ export function ExpensesBoard({
         />
       ) : null}
     </div>
+    </CanManage.Provider>
   );
 }
 
@@ -1118,6 +1127,7 @@ function ExpenseSheet({
   timeZone: string;
   onClose: () => void;
 }) {
+  const manage = useContext(CanManage);
   const money = useMoney();
   const router = useRouter();
   const [detail, setDetail] = useState<ExpenseDetail | null>(null);
@@ -1245,7 +1255,7 @@ function ExpenseSheet({
           ) : null}
           {e.approval === "waiting" && !isBoss ? <p className="text-sm text-muted">Waiting for the boss to approve it before it can be paid.</p> : null}
 
-          {!e.automatic && !closed && left > 0 && (e.approval === "approved" || isBoss) ? (
+          {manage && !e.automatic && !closed && left > 0 && (e.approval === "approved" || isBoss) ? (
             mode === "pay" ? (
               <PayForm expense={e} today={today} onDone={refresh} onCancel={() => setMode("view")} />
             ) : mode === "send" ? (
@@ -1298,7 +1308,7 @@ function ExpenseSheet({
                             <a href={`/dashboard/receipts/expense/${p.id}`} target="_blank" rel="noreferrer" className="text-brand-600 underline">
                               Receipt
                             </a>
-                            {p.voidedAt ? null : (
+                            {p.voidedAt || !manage ? null : (
                               <button type="button" className="text-muted underline" onClick={() => setVoidingPayment(p)}>
                                 Void
                               </button>
@@ -1338,14 +1348,14 @@ function ExpenseSheet({
                     ))}
                   </ul>
                 ) : null}
-                <UploadRow label="Add a receipt or invoice" hint="Photos or PDFs, up to 25 MB each" accept={FILE_TYPES} multiple disabled={uploading !== null} progress={uploading} onFiles={addFiles} />
+                {manage ? <UploadRow label="Add a receipt or invoice" hint="Photos or PDFs, up to 25 MB each" accept={FILE_TYPES} multiple disabled={uploading !== null} progress={uploading} onFiles={addFiles} /> : null}
               </Card>
             </>
           )}
 
           <ErrorLine error={error} />
 
-          {!e.automatic && !closed && livePayments.length === 0 && detail !== null ? (
+          {manage && !e.automatic && !closed && livePayments.length === 0 && detail !== null ? (
             <button type="button" className="text-xs text-muted underline" onClick={() => setMode("void")}>
               Void this expense
             </button>
@@ -1676,6 +1686,7 @@ function ScheduleSheet({
   onOpenLine: (id: string) => void;
   onClose: () => void;
 }) {
+  const manage = useContext(CanManage);
   const money = useMoney();
   const router = useRouter();
   const [mode, setMode] = useState<"view" | "edit" | "pause" | "cancel" | "resume" | "autopay">("view");
@@ -1723,7 +1734,7 @@ function ScheduleSheet({
           {s.endedAt ? <Row label={state === "finished" ? "Finished" : "Cancelled by"}>{state === "finished" ? "Reached its end" : s.endedBy}</Row> : null}
         </dl>
 
-        {s.endedAt ? null : (
+        {s.endedAt || !manage ? null : (
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             <Button variant="secondary" onClick={() => setMode("edit")}>
               Edit
@@ -1806,9 +1817,11 @@ function ScheduleSheet({
                       {money(l.amount)} · voided by {l.voidedBy}
                     </span>
                   </span>
-                  <Button variant="secondary" loading={pending} onClick={() => restore(l.id)}>
-                    Restore
-                  </Button>
+                  {manage ? (
+                    <Button variant="secondary" loading={pending} onClick={() => restore(l.id)}>
+                      Restore
+                    </Button>
+                  ) : null}
                 </li>
               ))}
             </ul>

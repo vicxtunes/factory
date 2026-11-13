@@ -20,7 +20,8 @@ const TITLES: Record<MoneyAlertKind, string> = {
  * What the money watch found that doesn't add up (packages/lib/wallet/server/watch.ts),
  * until someone marks it resolved. Nothing shows when all is well.
  */
-export function MoneyAlerts({ alerts }: { alerts: MoneyAlert[] }) {
+/** `canManage`: Accounts at manage (staff access): marking an alert dealt with. */
+export function MoneyAlerts({ alerts, canManage = true }: { alerts: MoneyAlert[]; canManage?: boolean }) {
   if (alerts.length === 0) return null;
   return (
     <section className="rounded-2xl border border-error-500/40 bg-error-50 p-4 dark:bg-error-500/10">
@@ -30,14 +31,14 @@ export function MoneyAlerts({ alerts }: { alerts: MoneyAlert[] }) {
       <p className="mt-0.5 text-xs text-muted">Found by checking the app&apos;s records against each other and against HivePay.</p>
       <ul className="mt-3 space-y-2">
         {alerts.map((a) => (
-          <AlertRow key={a.id} alert={a} />
+          <AlertRow key={a.id} alert={a} canManage={canManage} />
         ))}
       </ul>
     </section>
   );
 }
 
-function AlertRow({ alert }: { alert: MoneyAlert }) {
+function AlertRow({ alert, canManage }: { alert: MoneyAlert; canManage: boolean }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -51,7 +52,7 @@ function AlertRow({ alert }: { alert: MoneyAlert }) {
         </p>
         {error ? <p className="mt-1 text-xs text-error-600">{error}</p> : null}
       </div>
-      <Button
+      {canManage ? <Button
         type="button"
         variant="secondary"
         size="sm"
@@ -68,7 +69,7 @@ function AlertRow({ alert }: { alert: MoneyAlert }) {
         }
       >
         Mark resolved
-      </Button>
+      </Button> : null}
     </li>
   );
 }

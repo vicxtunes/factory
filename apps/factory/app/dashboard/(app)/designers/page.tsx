@@ -1,21 +1,18 @@
-import { redirect } from "next/navigation";
-
 import { SectionLabel } from "@repo/ui/SectionLabel";
 import { RowsSkeleton } from "@repo/ui/skeletons/blocks";
 import { Loading } from "@repo/ui/skeletons/Loading";
 import { createAdminClient } from "@repo/lib/supabase/admin";
-import { getDashboardSession } from "@repo/lib/auth/session";
-import { isManagerRole, type Designer } from "@repo/lib/types";
+import { pageAccess, sessionCan } from "@repo/lib/auth/session";
+import type { Designer } from "@repo/lib/types";
 
 import { DesignerPanel } from "../../designer-panel";
 
 export const dynamic = "force-dynamic";
 
 export default async function DesignersPage() {
-  const session = await getDashboardSession();
-  if (!session || !isManagerRole(session.role)) redirect("/dashboard");
+  const session = await pageAccess("designers");
 
-  const canManage = session.role === "boss";
+  const canManage = sessionCan(session, "designers", "manage");
 
   return (
     <div className="space-y-6">

@@ -3,7 +3,7 @@
 import { randomUUID } from "crypto";
 
 import { createAdminClient } from "@repo/lib/supabase/admin";
-import { requireRole } from "@repo/lib/auth/session";
+import { requireAccess } from "@repo/lib/auth/session";
 
 import { MARKETING_MEDIA_BUCKET, safeStorageSegment } from "./client";
 
@@ -17,7 +17,7 @@ type ConfirmResult = { ok: true; url: string } | { ok: false; error: string };
 // createMarketingSlide/updateMarketingSlide do the actual DB write either
 // way, so both paths end up identical from there on.
 export async function createMarketingUploadSession(fileName: string): Promise<UploadSessionResult> {
-  await requireRole("boss");
+  await requireAccess("carousel");
   if (!fileName.trim()) return { ok: false, error: "Missing file details." };
 
   const path = `marketing/${randomUUID()}-${safeStorageSegment(fileName)}`;
@@ -31,7 +31,7 @@ export async function createMarketingUploadSession(fileName: string): Promise<Up
 // Re-verifies the object actually landed in Storage before handing back its
 // public URL — same posture as packages/lib/storage/actions.ts's confirmItemUpload.
 export async function confirmMarketingUpload(path: string): Promise<ConfirmResult> {
-  await requireRole("boss");
+  await requireAccess("carousel");
   if (!path) return { ok: false, error: "Missing upload details." };
 
   const lastSlash = path.lastIndexOf("/");

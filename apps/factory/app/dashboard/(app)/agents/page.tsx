@@ -1,11 +1,8 @@
-import { redirect } from "next/navigation";
-
 import { SectionLabel } from "@repo/ui/SectionLabel";
 import { RowsSkeleton } from "@repo/ui/skeletons/blocks";
 import { Loading } from "@repo/ui/skeletons/Loading";
 import { listAgentsWithFigures, payFirstForAll } from "@repo/lib/agents/server";
-import { getDashboardSession } from "@repo/lib/auth/session";
-import { canManageBusiness } from "@repo/lib/types";
+import { pageAccess, sessionCan } from "@repo/lib/auth/session";
 
 import { AgentTabs } from "./agent-tabs";
 import { AgentsBoard } from "./agents-board";
@@ -13,9 +10,8 @@ import { AgentsBoard } from "./agents-board";
 export const dynamic = "force-dynamic";
 
 export default async function AgentsPage() {
-  const session = await getDashboardSession();
-  if (!session || !canManageBusiness(session.role)) redirect("/dashboard");
-  const boss = session.role === "boss";
+  const session = await pageAccess("agents");
+  const boss = sessionCan(session, "agents", "manage");
 
   return (
     <div className="space-y-6">

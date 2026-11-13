@@ -5,10 +5,9 @@
 
 import { revalidatePath } from "next/cache";
 
-import { getDashboardSession } from "@repo/lib/auth/session";
+import { getDashboardSession, sessionCan } from "@repo/lib/auth/session";
 import { parseInput, type Result } from "@repo/lib/kernel/core";
 import { runAction } from "@repo/lib/kernel/server/action";
-import { canViewAllStudios } from "@repo/lib/studios/policy";
 import { studioForSetup, studioOfCaller } from "@repo/lib/studios/server";
 
 import { saveServiceTemplate as save, setServiceTemplateArchived } from "./adapters/supabase/templates";
@@ -20,7 +19,7 @@ import { offerings, templatesOnOffer } from "./server";
 
 async function asBoss(): Promise<void> {
   const session = await getDashboardSession();
-  if (!session || !canViewAllStudios(session.role)) throw new OfferingError("Only the boss keeps the service templates.");
+  if (!sessionCan(session, "studios", "manage")) throw new OfferingError("You don't have access to this. Ask the boss.");
 }
 
 /** Adds a template (`id` null) or changes one. Studios that added it keep their copy. */

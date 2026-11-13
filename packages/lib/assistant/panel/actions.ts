@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
+import { can } from "@repo/lib/staff-access/core";
 import { getDashboardSession } from "@repo/lib/auth/session";
 import { SUPPORT_OWNER_EMAIL } from "@repo/lib/support/constants";
 
@@ -60,9 +61,10 @@ export async function agreeToAlexisTerms(version: number, page: string): Promise
   return panel.panelState(person, page);
 }
 
+/** Alexis settings at manage (staff access), or the developer. */
 async function bossOrDeveloper(): Promise<string | null> {
   const session = await getDashboardSession();
-  if (session?.role !== "boss" && session?.email !== SUPPORT_OWNER_EMAIL) return null;
+  if (!session || (session.email !== SUPPORT_OWNER_EMAIL && !can(session.access, "alexis", "manage"))) return null;
   return session.fullName || session.email || "Boss";
 }
 

@@ -7,7 +7,7 @@ import "server-only";
 import { AppError } from "@repo/lib/kernel/core";
 import { getClientSession, getDashboardSession } from "@repo/lib/auth/session";
 import { studioOfCaller } from "@repo/lib/studios/server";
-import { canManageBusiness } from "@repo/lib/types";
+import { can, type Level, type Section } from "@repo/lib/staff-access/core";
 
 import { WalletError } from "./errors";
 
@@ -51,10 +51,13 @@ export async function requireBusinessOwner(): Promise<{ tenantId: string; owner:
   }
 }
 
-/** A signed-in dashboard user allowed to manage wallets (not supervisors), or throws. */
-export async function requireStaff(): Promise<StaffViewer> {
+/**
+ * A signed-in dashboard user who reaches one of `sections` (Wallets &
+ * transactions by default) at `level` (manage by default), or throws.
+ */
+export async function requireStaff(level: Exclude<Level, "none"> = "manage", sections: Section[] = ["wallets"]): Promise<StaffViewer> {
   const session = await getDashboardSession();
-  if (!session || !canManageBusiness(session.role)) throw new WalletError("You don't have access to client wallets.");
+  if (!session || !sections.some((s) => can(session.access, s, level))) throw new WalletError("You don't have access to this. Ask the boss.");
   return {
     type: "dashboard_user",
     id: session.userId,
@@ -66,7 +69,8 @@ export async function requireStaff(): Promise<StaffViewer> {
 /** Whoever is signed in, client or staff; null for anyone else. */
 export async function getViewer(): Promise<ClientViewer | StaffViewer | null> {
   const dashboard = await getDashboardSession();
-  if (dashboard && canManageBusiness(dashboard.role)) {
+  // Staff who take payments or keep wallets see how far an order is paid.
+  if (dashboard && (can(dashboard.access, "invoices") || can(dashboard.access, "wallets"))) {
     return {
       type: "dashboard_user",
       id: dashboard.userId,

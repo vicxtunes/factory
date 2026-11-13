@@ -21,7 +21,8 @@ import type { PaymentMethod } from "@repo/lib/wallet/types";
 const METHODS: PaymentMethod[] = ["cash", "mobile_money", "bank_transfer", "other"];
 const KINDS: OtherMoneyKind[] = ["owner", "other_income", "other"];
 
-export function OtherMoneyPanel({ lines }: { lines: OtherMoneyLine[] }) {
+/** `canManage`: Accounts at manage (staff access): record and void. */
+export function OtherMoneyPanel({ lines, canManage = true }: { lines: OtherMoneyLine[]; canManage?: boolean }) {
   const money = useMoney();
   const [adding, setAdding] = useState(false);
   const [voiding, setVoiding] = useState<OtherMoneyLine | null>(null);
@@ -31,9 +32,11 @@ export function OtherMoneyPanel({ lines }: { lines: OtherMoneyLine[] }) {
     <Card
       title="Other money in"
       aside={
-        <Button size="sm" variant="secondary" onClick={() => setAdding(true)}>
-          Record money in
-        </Button>
+        canManage ? (
+          <Button size="sm" variant="secondary" onClick={() => setAdding(true)}>
+            Record money in
+          </Button>
+        ) : null
       }
     >
       <p className="text-xs text-muted">Money that isn&apos;t from a client: owners&apos; money, other income, money borrowed. It isn&apos;t counted as sales money.</p>
@@ -58,7 +61,7 @@ export function OtherMoneyPanel({ lines }: { lines: OtherMoneyLine[] }) {
                 </div>
                 <div className="flex shrink-0 flex-col items-end gap-1">
                   <span className="font-semibold tnum">{money(l.amount)}</span>
-                  {l.kind === "loan" ? null : (
+                  {l.kind === "loan" || !canManage ? null : (
                     <button type="button" className="text-xs text-muted underline" onClick={() => setVoiding(l)}>
                       Void
                     </button>

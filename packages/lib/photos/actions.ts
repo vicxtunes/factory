@@ -8,11 +8,10 @@
 
 import { revalidatePath } from "next/cache";
 
-import { getDashboardSession } from "@repo/lib/auth/session";
+import { getDashboardSession, sessionCan } from "@repo/lib/auth/session";
 import { parseInput, type Result } from "@repo/lib/kernel/core";
 import { runAction } from "@repo/lib/kernel/server/action";
 import { studioIdSchema } from "@repo/lib/studios/core";
-import { canViewAllStudios } from "@repo/lib/studios/policy";
 import { projects } from "@repo/lib/projects/server";
 import { portal, studioUrl } from "@repo/lib/studio-portal/server";
 import { studioOfCaller } from "@repo/lib/studios/server";
@@ -200,7 +199,7 @@ export async function stopSharingProjectGallery(albumId: unknown): Promise<Resul
 export async function setStudioStorageQuota(studioId: unknown, gb: unknown): Promise<Result> {
   return runAction("photos", async () => {
     const session = await getDashboardSession();
-    if (!session || !canViewAllStudios(session.role)) throw new PhotoError("Only the boss can change a business's storage.");
+    if (!sessionCan(session, "studios", "manage")) throw new PhotoError("You don't have access to this. Ask the boss.");
     const id = parseInput(studioIdSchema, studioId);
     await photos.setQuota(id, parseInput(quotaGbSchema, gb) * 1024 ** 3);
     revalidatePath(`/dashboard/studios/${id}`);
@@ -220,7 +219,7 @@ export async function buyStorageSpace(input: unknown): Promise<Result> {
 export async function setStorageSpacePrice(pricePerGb: unknown): Promise<Result> {
   return runAction("photos", async () => {
     const session = await getDashboardSession();
-    if (!session || !canViewAllStudios(session.role)) throw new PhotoError("Only the boss can change the price of storage.");
+    if (!sessionCan(session, "studios", "manage")) throw new PhotoError("You don't have access to this. Ask the boss.");
     await photos.setSpacePrice(parseInput(spacePriceSchema, pricePerGb));
     revalidatePath("/dashboard/studios");
   });

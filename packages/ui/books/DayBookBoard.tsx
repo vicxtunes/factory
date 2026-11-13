@@ -43,7 +43,8 @@ function matches(l: DayLine, query: string, accountName: string): boolean {
   return matchesSearch(query, [l.party, l.senderName, l.phone, l.reference, l.detail, l.recordedBy, METHODS[l.method] ?? l.method, accountName, DAY_LINE_LABELS[l.kind], l.amount]);
 }
 
-export function DayBookBoard({ book, timeZone }: { book: DayBook; timeZone: string }) {
+/** `canManage`: Accounts at manage (staff access): openings, closing the day, moving money. */
+export function DayBookBoard({ book, timeZone, canManage = true }: { book: DayBook; timeZone: string; canManage?: boolean }) {
   const money = useMoney();
   const router = useRouter();
   const [search, setSearch] = useState("");
@@ -83,7 +84,7 @@ export function DayBookBoard({ book, timeZone }: { book: DayBook; timeZone: stri
         <p className="basis-full text-sm font-semibold sm:ml-auto sm:basis-auto">{dayName(book.day)}</p>
       </div>
 
-      {unset.length && isToday ? (
+      {canManage && unset.length && isToday ? (
         <Card
           title="Start the books"
           aside={
@@ -148,12 +149,14 @@ export function DayBookBoard({ book, timeZone }: { book: DayBook; timeZone: stri
         </p>
       ) : null}
 
-      <div className="flex flex-wrap items-center gap-2">
-        {canClose ? <Button onClick={() => setSheet("close")}>Close today</Button> : null}
-        <Button variant="secondary" onClick={() => setSheet("move")}>
-          Move money
-        </Button>
-      </div>
+      {canManage ? (
+        <div className="flex flex-wrap items-center gap-2">
+          {canClose ? <Button onClick={() => setSheet("close")}>Close today</Button> : null}
+          <Button variant="secondary" onClick={() => setSheet("move")}>
+            Move money
+          </Button>
+        </div>
+      ) : null}
 
       <div className="flex flex-wrap items-center gap-2">
         <div className="w-full sm:w-auto sm:min-w-0 sm:flex-1">
@@ -218,7 +221,7 @@ export function DayBookBoard({ book, timeZone }: { book: DayBook; timeZone: stri
                   {l.recordedBy ? ` · By ${l.recordedBy}` : ""}
                 </p>
                 {l.late ? <LateTag /> : null}
-                {l.kind === "move" && l.direction === "out" ? <VoidMoveButton onClick={() => setVoidingMove(l)} /> : null}
+                {canManage && l.kind === "move" && l.direction === "out" ? <VoidMoveButton onClick={() => setVoidingMove(l)} /> : null}
               </li>
             ))}
           </ul>
@@ -258,7 +261,7 @@ export function DayBookBoard({ book, timeZone }: { book: DayBook; timeZone: stri
                     </td>
                     <td className="whitespace-nowrap px-4 py-2 text-muted">
                       {l.recordedBy ?? "—"}
-                      {l.kind === "move" && l.direction === "out" ? <VoidMoveButton onClick={() => setVoidingMove(l)} /> : null}
+                      {canManage && l.kind === "move" && l.direction === "out" ? <VoidMoveButton onClick={() => setVoidingMove(l)} /> : null}
                     </td>
                   </tr>
                 ))}

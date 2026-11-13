@@ -6,14 +6,8 @@ import { redirect } from "next/navigation";
 
 import { createClient } from "@repo/lib/supabase/server";
 import { createAdminClient } from "@repo/lib/supabase/admin";
-import {
-  canManageBusiness,
-  canManageWorkerSecurity,
-  canViewOrderAudit,
-  isManagerRole,
-  type AppRole,
-  type Profile,
-} from "@repo/lib/types";
+import type { AppRole } from "@repo/lib/types";
+import { can, resolveAccess, type Access, type Level, type Section } from "@repo/lib/staff-access/core";
 import { DESIGNER_COOKIE, WORKER_COOKIE, verifyPayload } from "@repo/lib/auth/cookies";
 
 // Each getter is wrapped in React's cache(): the layout, the page and any
@@ -103,13 +97,29 @@ export interface DashboardSession {
   fullName: string | null;
   avatarUrl: string | null;
   role: AppRole;
+  /** The boss: everything, and Team & access. */
+  isBoss: boolean;
+  /** Their role's name ("Boss" for the boss). */
+  roleName: string;
+  /** Every dashboard section and how far they reach it (packages/lib/staff-access). */
+  access: Access;
+}
+
+interface ProfileRow {
+  role: AppRole;
+  full_name: string | null;
+  avatar_url: string | null;
+  staff_role_id: string | null;
+  access_overrides: unknown;
+  suspended_at: string | null;
 }
 
 // Returns the dashboard session or null (does not redirect).
 // getClaims() verifies the access token locally (with the project's
 // asymmetric signing keys) instead of asking Supabase Auth on every request.
 // A deleted user's token stays valid until it expires, but deleting a user
-// cascades to their profiles row, so the check below still locks them out.
+// cascades to their profiles row, so the check below still locks them out;
+// a suspended one (Team & access) is locked out the same way, at once.
 export const getDashboardSession = cache(async (): Promise<DashboardSession | null> => {
   const supabase = await createClient();
   const { data } = await supabase.auth.getClaims();
@@ -118,24 +128,36 @@ export const getDashboardSession = cache(async (): Promise<DashboardSession | nu
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("role, full_name, avatar_url")
+    .select("role, full_name, avatar_url, staff_role_id, access_overrides, suspended_at")
     .eq("id", claims.sub)
-    .maybeSingle<Pick<Profile, "role" | "full_name" | "avatar_url">>();
+    .maybeSingle<ProfileRow>();
   // A Supabase Auth user with no matching profiles row (deleted out from
   // under them, or created outside this app's own createAdminUser, which
   // always inserts both atomically) has no assigned role — treat as not
-  // signed in rather than defaulting to any role, let alone "boss": every
-  // dashboard-only gate (requireRole("boss"), isManagerRole, etc.) checks
-  // `session.role`, so a silent default here would hand out that role's
-  // access to an account nobody explicitly granted it to.
-  if (!profile) return null;
+  // signed in rather than defaulting to any access.
+  if (!profile || profile.suspended_at) return null;
 
+  const isBoss = profile.role === "boss";
+  const staffRole =
+    isBoss || !profile.staff_role_id
+      ? null
+      : (
+          await createAdminClient()
+            .from("staff_roles")
+            .select("name, access")
+            .eq("id", profile.staff_role_id)
+            .maybeSingle<{ name: string; access: unknown }>()
+        ).data;
   return {
     userId: claims.sub,
     email: claims.email ?? null,
     fullName: profile.full_name,
     avatarUrl: profile.avatar_url,
     role: profile.role,
+    isBoss,
+    roleName: isBoss ? "Boss" : (staffRole?.name ?? "No role"),
+    // No role (it can't be deleted while used, so only by hand): only their own sections.
+    access: resolveAccess(isBoss, staffRole?.access, profile.access_overrides),
   };
 });
 
@@ -146,50 +168,29 @@ export async function requireDashboard(): Promise<DashboardSession> {
   return session;
 }
 
-export async function requireRole(role: AppRole): Promise<DashboardSession> {
+/** Whether this session reaches `section` at `level` (view by default). */
+export function sessionCan(session: DashboardSession | null, section: Section, level: Exclude<Level, "none"> = "view"): session is DashboardSession {
+  return !!session && can(session.access, section, level);
+}
+
+/** For server actions: the session, if it reaches `section` at `level` (manage by default). */
+export async function requireAccess(section: Section, level: Exclude<Level, "none"> = "manage"): Promise<DashboardSession> {
   const session = await requireDashboard();
-  if (session.role !== role) {
-    throw new Error(`Forbidden: requires ${role} role`);
-  }
+  if (!can(session.access, section, level)) throw new Error("You don't have access to this. Ask the boss.");
   return session;
 }
 
-// Receptionist, supervisor and boss all have full CRUD access. Boss also
-// reaches the admins panel (user management), gated via requireRole("boss").
-export async function requireManager(): Promise<DashboardSession> {
+/** For pages: back to the dashboard unless this session reaches `section` (view by default). */
+export async function pageAccess(section: Section, level: Exclude<Level, "none"> = "view"): Promise<DashboardSession> {
   const session = await requireDashboard();
-  if (!isManagerRole(session.role)) {
-    throw new Error("Forbidden: requires manager access");
-  }
+  if (!can(session.access, section, level)) redirect("/dashboard");
   return session;
 }
 
-// Clients' records, agents and money: not supervisors, who manage production
-// only (owner, 2026-11-12; see canManageBusiness).
-export async function requireBusiness(): Promise<DashboardSession> {
+/** Team & access: the boss's alone, never given. */
+export async function requireBoss(): Promise<DashboardSession> {
   const session = await requireDashboard();
-  if (!canManageBusiness(session.role)) {
-    throw new Error("Forbidden: requires boss or reception access");
-  }
-  return session;
-}
-
-// Worker login credentials — initial PIN, PIN reset, activate/deactivate.
-// Receptionist keeps every other manager action; this carve-out is theirs.
-export async function requireWorkerSecurity(): Promise<DashboardSession> {
-  const session = await requireDashboard();
-  if (!canManageWorkerSecurity(session.role)) {
-    throw new Error("Forbidden: requires supervisor or boss access");
-  }
-  return session;
-}
-
-// The order-level "Show logs" audit trail — boss-only for now.
-export async function requireOrderAudit(): Promise<DashboardSession> {
-  const session = await requireDashboard();
-  if (!canViewOrderAudit(session.role)) {
-    throw new Error("Forbidden: requires audit access");
-  }
+  if (!session.isBoss) throw new Error("Only the boss can do this.");
   return session;
 }
 

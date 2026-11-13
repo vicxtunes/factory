@@ -1,5 +1,6 @@
 import "server-only";
 
+import { staffWith } from "@repo/lib/staff-access/server";
 import { randomUUID } from "node:crypto";
 
 import { z } from "zod";
@@ -41,7 +42,7 @@ export interface ToolContext {
 }
 
 export async function tellManagers(title: string, body: string, url: string): Promise<void> {
-  const { data } = await createAdminClient().from("profiles").select("id").in("role", ["receptionist", "supervisor", "boss"]);
+  const data = (await staffWith("orders")).map((id) => ({ id }));
   await Promise.all((data ?? []).map((m) => notifyActor({ type: "dashboard_user", id: m.id }, { title, body, url })));
 }
 

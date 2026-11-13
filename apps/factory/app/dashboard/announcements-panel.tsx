@@ -243,10 +243,13 @@ export function AnnouncementsPanel({
   announcements,
   currentUserId,
   canApprove,
+  canCreate,
 }: {
   announcements: Announcement[];
   currentUserId: string;
   canApprove: boolean;
+  /** Announcements at manage: may write their own. */
+  canCreate: boolean;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -331,6 +334,7 @@ export function AnnouncementsPanel({
         its place at the top of the stack.
       */}
       <div className="contents lg:flex lg:min-w-0 lg:flex-col lg:gap-3">
+        {canCreate ? (
         <div className="order-1 space-y-3">
           <div className="space-y-3 rounded-2xl border border-border bg-surface p-4 shadow-theme-xs">
             <div>
@@ -358,6 +362,7 @@ export function AnnouncementsPanel({
           </div>
           {error ? <p className="text-xs text-error-600">{error}</p> : null}
         </div>
+        ) : null}
       </div>
     </div>
   );

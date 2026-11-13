@@ -1,14 +1,11 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { redirect } from "next/navigation";
-
 import { SectionLabel } from "@repo/ui/SectionLabel";
 import { RowsSkeleton } from "@repo/ui/skeletons/blocks";
 import { Loading } from "@repo/ui/skeletons/Loading";
-import { getDashboardSession } from "@repo/lib/auth/session";
+import { pageAccess } from "@repo/lib/auth/session";
 import { METHOD_LABELS } from "@repo/lib/wallet/policy";
 import { getAllTransactionHistory } from "@repo/lib/wallet/actions";
-import { canManageBusiness } from "@repo/lib/types";
 import type { PaymentStatus, TransactionHistoryKind } from "@repo/lib/wallet/types";
 
 export const dynamic = "force-dynamic";
@@ -34,8 +31,7 @@ export default async function TransactionsPage({
 }: {
   searchParams?: Promise<{ q?: string | string[]; kind?: string | string[]; status?: string | string[]; page?: string | string[] }>;
 }) {
-  const session = await getDashboardSession();
-  if (!session || !canManageBusiness(session.role)) redirect("/dashboard");
+  await pageAccess("wallets");
 
   const params = searchParams ? await searchParams : {};
   const q = getQueryParam(params.q);

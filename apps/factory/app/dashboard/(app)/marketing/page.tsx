@@ -1,15 +1,13 @@
-import { redirect } from "next/navigation";
-
 import { DiscountsPanel } from "@repo/ui/discounts/DiscountsPanel";
 import { TopupBonusPanel } from "@repo/ui/wallet/TopupBonusPanel";
 import { SectionLabel } from "@repo/ui/SectionLabel";
 import { ProductGridSkeleton, RowsSkeleton } from "@repo/ui/skeletons/blocks";
 import { Loading } from "@repo/ui/skeletons/Loading";
-import { getDashboardSession } from "@repo/lib/auth/session";
+import { redirect } from "next/navigation";
+
+import { requireDashboard, sessionCan } from "@repo/lib/auth/session";
 import { listDiscounts } from "@repo/lib/discounts/actions";
-import { canManageDiscounts } from "@repo/lib/discounts/policy";
 import { fetchMarketingSlides, fetchProductCatalog } from "@repo/lib/queries";
-import { canManageBusiness } from "@repo/lib/types";
 import { listTopupBonuses } from "@repo/lib/wallet/actions";
 
 import { MarketingPanel } from "../../marketing-panel";
@@ -18,34 +16,49 @@ import { MarketingTabs } from "../../marketing-tabs";
 export const dynamic = "force-dynamic";
 
 export default async function MarketingPage() {
-  const session = await getDashboardSession();
-  if (!session || !canManageBusiness(session.role)) redirect("/dashboard");
+  const session = await requireDashboard();
+  const seesCarousel = sessionCan(session, "carousel");
+  const seesDiscounts = sessionCan(session, "discounts");
+  if (!seesCarousel && !seesDiscounts) redirect("/dashboard");
+  const notYours = <p className="text-sm text-muted">Discounts and the top-up bonus aren&apos;t part of your access.</p>;
 
-  const canManage = session.role === "boss";
+  const canManage = sessionCan(session, "carousel", "manage");
 
   return (
     <div className="space-y-6">
       <SectionLabel>Marketing</SectionLabel>
       <MarketingTabs
         carousel={
+          !seesCarousel ? (
+            <p className="text-sm text-muted">The carousel isn&apos;t part of your access.</p>
+          ) : (
           <div className="space-y-4">
             {!canManage ? (
-              <p className="text-sm text-muted">View only — the marketing carousel is managed by the boss.</p>
+              <p className="text-sm text-muted">View only — the carousel is changed by whoever manages Carousel.</p>
             ) : null}
             <Loading skeleton={<ProductGridSkeleton count={4} />}>
               <Slides canManage={canManage} />
             </Loading>
           </div>
+          )
         }
         discounts={
-          <Loading skeleton={<RowsSkeleton rows={4} />}>
-            <Discounts canManage={canManageDiscounts(session.role)} />
-          </Loading>
+          seesDiscounts ? (
+            <Loading skeleton={<RowsSkeleton rows={4} />}>
+              <Discounts canManage={sessionCan(session, "discounts", "manage")} />
+            </Loading>
+          ) : (
+            notYours
+          )
         }
         bonus={
-          <Loading skeleton={<RowsSkeleton rows={2} />}>
-            <Bonuses canManage={canManage} />
-          </Loading>
+          seesDiscounts ? (
+            <Loading skeleton={<RowsSkeleton rows={2} />}>
+              <Bonuses canManage={sessionCan(session, "discounts", "manage")} />
+            </Loading>
+          ) : (
+            notYours
+          )
         }
       />
     </div>

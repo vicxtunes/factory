@@ -1,5 +1,6 @@
 "use server";
 
+import { staffWith } from "@repo/lib/staff-access/server";
 import { createHmac, randomInt, randomUUID, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 
@@ -236,7 +237,7 @@ async function claimFirstEmail(admin: Admin, clientId: string, email: string): P
     .maybeSingle();
   if (error) return { ok: false, error: "That email belongs to another account — use a different one." };
   if (claimed) {
-    const { data: managers } = await admin.from("profiles").select("id").in("role", ["receptionist", "supervisor", "boss"]);
+    const managers = (await staffWith("orders")).map((id) => ({ id }));
     await Promise.all(
       (managers ?? []).map((m) =>
         notifyActor(

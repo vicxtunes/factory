@@ -5,7 +5,7 @@
 
 import { revalidatePath } from "next/cache";
 
-import { getDashboardSession } from "@repo/lib/auth/session";
+import { getDashboardSession, sessionCan } from "@repo/lib/auth/session";
 import { catalogChanged } from "@repo/lib/catalog-cache";
 import { parseInput, type Result } from "@repo/lib/kernel/core";
 import { runAction } from "@repo/lib/kernel/server/action";
@@ -21,7 +21,6 @@ import {
   repaymentInputSchema,
   voidSchema,
 } from "./core/schema";
-import { canManageProduction } from "./policy";
 import { ProductionError } from "./ports";
 import { production } from "./server";
 
@@ -35,20 +34,21 @@ function owedChanged() {
   revalidatePath("/dashboard/accounts");
 }
 
-async function staff() {
+/** Materials, stock and recipes: Production costs at manage; loans (Money we owe) are Accounts'. */
+async function staff(section: "production" | "accounts" = "production") {
   const session = await getDashboardSession();
-  if (!session || !canManageProduction(session.role)) throw new ProductionError("Only the boss and supervisors can do this.");
+  if (!sessionCan(session, section, "manage")) throw new ProductionError("You don't have access to this. Ask the boss.");
   return {
     actor: { id: session.userId, name: session.fullName ?? session.email ?? "Staff" },
     scope: await resolveTenantScope(),
-    /** Selling prices and margins are the boss's alone. */
-    setsPrices: session.role === "boss",
+    /** Selling prices and margins go with Products & prices. */
+    setsPrices: sessionCan(session, "catalog", "manage"),
   };
 }
 
 async function boss() {
   const s = await staff();
-  if (!s.setsPrices) throw new ProductionError("Only the boss sets prices.");
+  if (!s.setsPrices) throw new ProductionError("Selling prices are changed by whoever manages Products & prices.");
   return s;
 }
 
@@ -121,7 +121,7 @@ export async function setMargin(input: unknown): Promise<Result> {
 
 export async function recordLoan(input: unknown): Promise<Result<string>> {
   return runAction("production", async () => {
-    const { scope, actor } = await staff();
+    const { scope, actor } = await staff("accounts");
     const id = await production.recordLoan(scope, parseInput(loanInputSchema, input), actor);
     owedChanged();
     return id;
@@ -130,7 +130,7 @@ export async function recordLoan(input: unknown): Promise<Result<string>> {
 
 export async function recordRepayment(input: unknown): Promise<Result> {
   return runAction("production", async () => {
-    const { scope, actor } = await staff();
+    const { scope, actor } = await staff("accounts");
     await production.recordRepayment(scope, parseInput(repaymentInputSchema, input), actor);
     owedChanged();
   });
@@ -138,7 +138,7 @@ export async function recordRepayment(input: unknown): Promise<Result> {
 
 export async function voidLoan(input: unknown): Promise<Result> {
   return runAction("production", async () => {
-    const { scope, actor } = await staff();
+    const { scope, actor } = await staff("accounts");
     await production.voidLoan(scope, parseInput(voidSchema, input), actor);
     owedChanged();
   });
@@ -146,7 +146,7 @@ export async function voidLoan(input: unknown): Promise<Result> {
 
 export async function voidRepayment(input: unknown): Promise<Result> {
   return runAction("production", async () => {
-    const { scope, actor } = await staff();
+    const { scope, actor } = await staff("accounts");
     await production.voidRepayment(scope, parseInput(voidSchema, input), actor);
     owedChanged();
   });

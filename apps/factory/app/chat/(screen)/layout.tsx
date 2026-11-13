@@ -35,7 +35,8 @@ export default async function ChatLayout({ children }: { children: React.ReactNo
         email={dashboard.email}
         fullName={dashboard.fullName}
         avatarUrl={dashboard.avatarUrl}
-        role={dashboard.role}
+        roleName={dashboard.roleName}
+        viewer={{ isBoss: dashboard.isBoss, access: dashboard.access, email: dashboard.email }}
         notifications={notifications}
       >
         <ChatScreen viewer={{ type: "dashboard_user", id: dashboard.userId }} exitHref="/dashboard" />

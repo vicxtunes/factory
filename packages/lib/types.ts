@@ -38,37 +38,10 @@ export type NotificationEvent =
   | "client_responded"
   | "cancelled";
 
-export type AppRole = "supervisor" | "boss" | "receptionist";
-
-// Receptionist and supervisor share full CRUD access across the dashboard.
-// Boss is the super-admin: full CRUD everywhere PLUS the admins panel
-// (create users, reset passwords, change roles) — gated via requireRole("boss").
-export function isManagerRole(role: AppRole): boolean {
-  return role === "supervisor" || role === "receptionist" || role === "boss";
-}
-
-// Supervisors manage production only (owner, 2026-11-12): orders (office and
-// client, including making the invoice to route one), the Production pages,
-// workers, designers and stations. Clients, agents, payments, wallets,
-// invoices lists, the catalog, marketing and Accounts are the boss's and the
-// receptionist's (receptionist unchanged).
-export function canManageBusiness(role: AppRole): boolean {
-  return role === "boss" || role === "receptionist";
-}
-
-// Receptionist is the data-entry role (orders, clients, agents) and does
-// NOT get worker login-credential actions — setting a worker's initial PIN,
-// resetting a PIN, or activating/deactivating a worker's account. Those stay
-// with supervisor and boss, gated via requireWorkerSecurity().
-export function canManageWorkerSecurity(role: AppRole): boolean {
-  return role === "supervisor" || role === "boss";
-}
-
-// The order-level "Show logs" audit trail is boss-only for now — written so
-// another role can be added later with a one-line change here.
-export function canViewOrderAudit(role: AppRole): boolean {
-  return role === "boss";
-}
+// Only "boss" means anything by itself: the boss has everything. Everyone
+// else's access comes from their role and own sections (packages/lib/staff-access);
+// "staff" is anyone on a role the boss made.
+export type AppRole = "supervisor" | "boss" | "receptionist" | "staff";
 
 export interface Order {
   id: string;

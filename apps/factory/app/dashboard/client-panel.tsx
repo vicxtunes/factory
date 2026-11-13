@@ -41,6 +41,7 @@ const EXPORT_COLUMNS: ExportColumn<ClientExportRow>[] = [
 export function ClientPanel({
   clients,
   orderCounts,
+  canManage,
   canDelete,
 }: {
   clients: Client[];
@@ -48,8 +49,9 @@ export function ClientPanel({
   // fetchClientOrderCounts. Shown up front so it's obvious which clients
   // Delete will actually work on, instead of finding out by trying.
   orderCounts: Record<string, number>;
-  // Permanently deleting a client is boss-only — receptionist/supervisor
-  // keep everything else (add, edit, bulk import).
+  /** Clients at manage: add, edit, bulk import (staff access). */
+  canManage: boolean;
+  /** Cancel & delete at manage: permanently delete a client. */
   canDelete: boolean;
 }) {
   const router = useRouter();
@@ -141,9 +143,11 @@ export function ClientPanel({
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <ExportButtons columns={EXPORT_COLUMNS} rows={exportRows} filename="clients" />
-        <Button variant="primary" onClick={() => setFormOpen(true)}>
-          + Add client
-        </Button>
+        {canManage ? (
+          <Button variant="primary" onClick={() => setFormOpen(true)}>
+            + Add client
+          </Button>
+        ) : null}
       </div>
 
       <Drawer open={formOpen} onClose={() => setFormOpen(false)} title="Add client">
@@ -340,17 +344,18 @@ export function ClientPanel({
                     </td>
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-2">
-                        <Button
-                          variant="secondary"
-                          className="min-h-9 text-xs"
-                          loading={pending} disabled={pending}
-                          onClick={() => startEdit(c)}
-                        >
-                          Edit
-                        </Button>
-                        {!canDelete ? (
-                          <span className="text-xs text-muted">Boss only</span>
-                        ) : orderCounts[c.id] ? (
+                        {canManage ? (
+                          <Button
+                            variant="secondary"
+                            className="min-h-9 text-xs"
+                            loading={pending} disabled={pending}
+                            onClick={() => startEdit(c)}
+                          >
+                            Edit
+                          </Button>
+                        ) : null}
+                        {!canDelete ? null
+                        : orderCounts[c.id] ? (
                           <span className="text-xs text-muted" title="Clients with order history can't be deleted">
                             Has orders attached
                           </span>

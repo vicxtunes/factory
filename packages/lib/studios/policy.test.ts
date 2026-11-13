@@ -1,13 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { businessToOpen, canViewAllStudios } from "./policy";
-
-test("only the boss oversees every studio", () => {
-  assert.equal(canViewAllStudios("boss"), true);
-  assert.equal(canViewAllStudios("supervisor"), false);
-  assert.equal(canViewAllStudios("receptionist"), false);
-});
+import { businessToOpen } from "./policy";
 
 test("a team member whose own business is an unfinished draft opens the one they work for, on any device", () => {
   assert.equal(businessToOpen(undefined, ["b"], { active: false }), "b");

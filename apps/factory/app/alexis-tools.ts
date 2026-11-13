@@ -6,7 +6,6 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
 import { accounting } from "@repo/lib/accounting/index.server";
-import { canViewAccounts } from "@repo/lib/accounting/policy";
 import { registerAgent, setCommissionRate } from "@repo/lib/agents/actions";
 import { agentRegisterSchema } from "@repo/lib/agents/core";
 import { categoryRates, listAgentsWithFigures } from "@repo/lib/agents/server";
@@ -25,18 +24,28 @@ import { createAdminClient } from "@repo/lib/supabase/admin";
 import { createClient } from "@repo/lib/supabase/server";
 import { SUPPORT_OWNER_EMAIL } from "@repo/lib/support/constants";
 import { resolveTenantScope } from "@repo/lib/tenancy/server/resolve";
-import { canManageBusiness, isManagerRole, STATUS_LABELS, type AppRole, type ProductionStatus } from "@repo/lib/types";
+import { can, resolveAccess, type Access, type Level, type Section } from "@repo/lib/staff-access/core";
+import { accessOf } from "@repo/lib/staff-access/server";
+import { STATUS_LABELS, type ProductionStatus } from "@repo/lib/types";
 
 import { ordersAlexis } from "./alexis-orders";
 import { peopleTools } from "./alexis-people";
 import { settingsTools } from "./alexis-settings";
-import { addClient, overrideStatus, updateCurrency, updateUserRole } from "./dashboard/actions";
+import { setStaffRoleByName } from "@repo/lib/staff-access/actions";
+import { addClient, overrideStatus, updateCurrency } from "./dashboard/actions";
 import { searchOrFilters } from "@repo/lib/search";
 
 // Alexis's tools in the staff app (packages/lib/assistant/panel). Each set is
-// given only to the roles the app already lets do that thing (the same
-// policies its menu and pages use), and each change runs the app's own server
-// action, which checks the role again when the person taps Confirm.
+// given only to whoever the app already lets do that thing (their staff
+// access, the same sections its menu and pages use), and each change runs the
+// app's own server action, which checks again when the person taps Confirm.
+
+/** Who's asking: the boss, or their sections (packages/lib/staff-access). */
+interface Viewer {
+  isBoss: boolean;
+  access: Access;
+}
+const has = (v: Viewer, section: Section, level: Exclude<Level, "none"> = "view") => can(v.access, section, level);
 
 const PERIODS = ["today", "yesterday", "this_week", "this_month", "last_month", "this_year", "all"] as const;
 const STATUSES = Object.keys(STATUS_LABELS) as [ProductionStatus, ...ProductionStatus[]];
@@ -46,9 +55,9 @@ const ORDER_COLUMNS =
   "id, order_no, client_name, client_phone, delivery_date, status, approval_status, order_type, agent_name, cancelled_at, created_at, items:order_items (id, product, product_type, qty, production_status, unit_price)";
 
 /** `inApp`: false on WhatsApp, where tools that read through the sign-in would see nothing. */
-function staffReads(role: AppRole, db: SupabaseClient, inApp: boolean): AssistantTool[] {
+function staffReads(v: Viewer, db: SupabaseClient, inApp: boolean): AssistantTool[] {
   const tools: AssistantTool[] = [];
-  if (isManagerRole(role)) {
+  if (has(v, "orders")) {
     tools.push(
       readTool({
         name: "find_orders",
@@ -64,8 +73,7 @@ function staffReads(role: AppRole, db: SupabaseClient, inApp: boolean): Assistan
         },
       }),
     );
-    // Clients' records aren't supervisors' (canManageBusiness).
-    if (canManageBusiness(role)) tools.push(
+    if (has(v, "clients")) tools.push(
       readTool({
         name: "find_clients",
         description: "Find Aming's clients by name, phone or email.",
@@ -92,7 +100,7 @@ function staffReads(role: AppRole, db: SupabaseClient, inApp: boolean): Assistan
       }),
     );
   }
-  if (canViewAccounts(role)) {
+  if (has(v, "accounts")) {
     tools.push(
       readTool({
         name: "money_overview",
@@ -104,6 +112,10 @@ function staffReads(role: AppRole, db: SupabaseClient, inApp: boolean): Assistan
         },
       }),
       ...accountsTools(),
+    );
+  }
+  if (has(v, "expenses")) {
+    tools.push(
       readTool({
         name: "expense_categories",
         description: "The expense categories (key and name), for recording an expense.",
@@ -117,7 +129,7 @@ function staffReads(role: AppRole, db: SupabaseClient, inApp: boolean): Assistan
       }),
     );
   }
-  if (role === "boss") {
+  if (v.isBoss) {
     tools.push(
       ...databaseTools(),
       readTool({
@@ -127,21 +139,33 @@ function staffReads(role: AppRole, db: SupabaseClient, inApp: boolean): Assistan
         run: serverHealth,
       }),
       readTool({
+        name: "staff_accounts",
+        description: "Everyone who signs in to the dashboard, with their role, and whether their sign-in is suspended.",
+        inputSchema: z.object({}),
+        run: async () => {
+          const { data, error } = await createAdminClient()
+            .from("profiles")
+            .select("id, full_name, role, suspended_at, staff_role:staff_roles (name)")
+            .order("full_name")
+            .returns<{ id: string; full_name: string | null; role: string; suspended_at: string | null; staff_role: { name: string } | null }[]>();
+          if (error) throw new Error(error.message);
+          return (data ?? []).map((p) => ({ id: p.id, name: p.full_name, role: p.role === "boss" ? "Boss" : (p.staff_role?.name ?? "No role"), suspended: !!p.suspended_at }));
+        },
+      }),
+    );
+  }
+  if (has(v, "agents")) {
+    tools.push(
+      readTool({
         name: "agents",
         description: "Every agent with their orders, sales, commission and balance in UGX, and the commission rate per product category.",
         inputSchema: z.object({}),
         run: async () => ({ agents: (await listAgentsWithFigures()).slice(0, 50), ratesByCategory: await categoryRates() }),
       }),
-      readTool({
-        name: "staff_accounts",
-        description: "Everyone who signs in to the dashboard, with their role.",
-        inputSchema: z.object({}),
-        run: async () => {
-          const { data, error } = await createAdminClient().from("profiles").select("id, full_name, role").order("full_name");
-          if (error) throw new Error(error.message);
-          return data;
-        },
-      }),
+    );
+  }
+  if (has(v, "catalog")) {
+    tools.push(
       readTool({
         name: "currencies",
         description: "The currencies clients can see prices in, with how many UGX one unit is worth and whether each is on.",
@@ -167,9 +191,9 @@ async function itemFor(itemId: string) {
   return data;
 }
 
-function staffChanges(role: AppRole): ChangeTool[] {
+function staffChanges(v: Viewer): ChangeTool[] {
   const tools: ChangeTool[] = [];
-  if (isManagerRole(role)) {
+  if (has(v, "orders", "manage")) {
     tools.push(
       changeTool({
         name: "set_item_status",
@@ -186,7 +210,9 @@ function staffChanges(role: AppRole): ChangeTool[] {
       }),
       addFilesToOrderTool(null),
     );
-    if (canManageBusiness(role)) tools.push(
+  }
+  if (has(v, "clients", "manage")) {
+    tools.push(
       changeTool({
         name: "add_client",
         description: "Add a new client to Aming. Phone is required; email can be empty.",
@@ -196,7 +222,7 @@ function staffChanges(role: AppRole): ChangeTool[] {
       }),
     );
   }
-  if (canViewAccounts(role)) {
+  if (has(v, "expenses", "manage")) {
     const expense = z.object({
       name: z.string().trim().min(1).max(120),
       category: z.string().min(1).describe("A category key from expense_categories."),
@@ -243,7 +269,7 @@ function staffChanges(role: AppRole): ChangeTool[] {
       }),
     );
   }
-  if (role === "boss") {
+  if (has(v, "catalog", "manage")) {
     tools.push(
       changeTool({
         name: "set_currency_rate",
@@ -262,17 +288,26 @@ function staffChanges(role: AppRole): ChangeTool[] {
           return outcome(await updateCurrency(data.id, { label: data.label, symbol: data.symbol, rate: String(1 / ugxPerUnit) }), `1 ${code.toUpperCase()} is now ${ugxPerUnit} UGX.`);
         },
       }),
+    );
+  }
+  if (v.isBoss) {
+    tools.push(
       changeTool({
         name: "set_staff_role",
-        description: "Change a dashboard user's role. Use the id from staff_accounts.",
-        inputSchema: z.object({ userId: z.string().uuid(), role: z.enum(["receptionist", "supervisor", "boss"]) }),
+        description: "Put a dashboard user on a role (Boss, or a role's name from Team & access, e.g. Receptionist). Use the id from staff_accounts. Their own section changes stay.",
+        inputSchema: z.object({ userId: z.string().uuid(), role: z.string().trim().min(1).max(40) }),
         card: async ({ userId, role: next }) => {
-          const { data } = await createAdminClient().from("profiles").select("full_name, role").eq("id", userId).maybeSingle();
+          const { data } = await createAdminClient().from("profiles").select("full_name, role, staff_role:staff_roles (name)").eq("id", userId).maybeSingle<{ full_name: string | null; role: string; staff_role: { name: string } | null }>();
           if (!data) throw new Error("That person doesn't exist.");
-          return { title: `Make ${data.full_name ?? "this person"} a ${next}`, lines: [`Now: ${data.role}`, `After: ${next}`] };
+          const now = data.role === "boss" ? "Boss" : (data.staff_role?.name ?? "No role");
+          return { title: `Make ${data.full_name ?? "this person"} ${next}`, lines: [`Now: ${now}`, `After: ${next}`] };
         },
-        run: async ({ userId, role: next }) => outcome(await updateUserRole({ id: userId, role: next }), `Their role is now ${next}.`),
+        run: async ({ userId, role: next }) => outcome(await setStaffRoleByName(userId, next), `Their role is now ${next}.`),
       }),
+    );
+  }
+  if (has(v, "agents", "manage")) {
+    tools.push(
       changeTool({
         name: "set_commission_rate",
         description: "Set agents' commission rate (percent) for a product category. Use the category id from agents.",
@@ -299,17 +334,19 @@ function staffChanges(role: AppRole): ChangeTool[] {
   return tools;
 }
 
-function abilities(role: AppRole, change: ChangeTool[], read: AssistantTool[]): string {
+function abilities(v: Viewer, change: ChangeTool[], read: AssistantTool[]): string {
   const parts = ["Look things up for their role:"];
-  if (isManagerRole(role)) parts.push(`orders (and one order in full, with its invoice)${canManageBusiness(role) ? ", clients" : ""}, orders waiting for review, the workers and designers;`);
+  if (has(v, "orders")) parts.push(`orders (and one order in full, with its invoice)${has(v, "clients") ? ", clients" : ""}, orders waiting for review, the workers and designers;`);
   if (read.some((t) => t.name === "announcements")) parts.push("announcements;");
   if (read.some((t) => t.name === "support_tickets")) parts.push("support tickets;");
   if (read.some((t) => t.name === "invoices")) parts.push("every invoice and the money accounts;");
   if (read.some((t) => t.name === "order_files")) parts.push("the files and links on an order;");
   if (read.some((t) => t.name === "catalog")) parts.push("the catalog, stations and top-up bonuses;");
   if (read.some((t) => t.name === "client_wallets")) parts.push("clients' wallets, deposits waiting to be confirmed, agents' clients that may already be on Aming;");
-  if (canViewAccounts(role)) parts.push("money at a glance, every payment, sale and expense for any period;");
-  if (role === "boss") parts.push("server health, agents, staff accounts, currencies, and everything else in the business through the database (every feature: orders, production, Drive files, chats, wallets, agents, vendors, studios, notifications…);");
+  if (has(v, "accounts")) parts.push("money at a glance, every payment, sale and expense for any period;");
+  if (has(v, "agents")) parts.push("agents;");
+  if (has(v, "catalog")) parts.push("currencies;");
+  if (v.isBoss) parts.push("server health, staff accounts, and everything else in the business through the database (every feature: orders, production, Drive files, chats, wallets, agents, vendors, studios, notifications…);");
   if (change.length) parts.push(`Prepare these changes for them to confirm: ${change.map((c) => c.name.replace(/_/g, " ")).join(", ")}.`);
   else parts.push("They can't make changes through you.");
   parts.push("PINs and passwords are never set through you: they're changed on their pages.");
@@ -350,21 +387,22 @@ export async function staffAppToolbox(person: Person, _page: string, channel: "a
     };
   }
   if (person.type !== "staff") return { read: [], change: [], abilities: "Nothing in this app." };
-  const role = person.role as AppRole;
+  // Read afresh: on WhatsApp there's no sign-in, and a suspended person gets nothing.
+  const v: Viewer = (await accessOf(person.id)) ?? { isBoss: false, access: resolveAccess(false, {}, {}) };
   const db = channel === "app" ? ((await createClient()) as unknown as SupabaseClient) : (createAdminClient() as unknown as SupabaseClient);
-  const change = channel === "app" ? staffChanges(role) : [];
-  const read = staffReads(role, db, channel === "app");
-  const developer = person.email === SUPPORT_OWNER_EMAIL && role !== "boss";
+  const change = channel === "app" ? staffChanges(v) : [];
+  const read = staffReads(v, db, channel === "app");
+  const developer = person.email === SUPPORT_OWNER_EMAIL && !v.isBoss;
   if (developer) read.push(readTool({ name: "server_health", description: "Whether the sites are up, server load, and money alerts.", inputSchema: z.object({}), run: serverHealth }));
   // They read through the sign-in, which WhatsApp doesn't have.
   if (channel === "app") {
-    const admin = staffAdminTools({ userId: person.id, role, email: person.email });
-    const orders = isManagerRole(role) ? ordersAlexis.managerTools(role) : { read: [], change: [] };
-    const invoices = canManageBusiness(role) ? invoiceTools() : { read: [], change: [] };
-    const people = canManageBusiness(role) ? peopleTools(role, canViewAccounts(role)) : { read: [], change: [] };
-    const settings = isManagerRole(role) ? settingsTools(role) : { read: [], change: [] };
+    const admin = staffAdminTools({ userId: person.id, isBoss: v.isBoss, access: v.access, email: person.email });
+    const orders = has(v, "orders") ? ordersAlexis.managerTools(v) : { read: [], change: [] };
+    const invoices = has(v, "invoices") ? invoiceTools() : { read: [], change: [] };
+    const people = has(v, "clients") || has(v, "wallets") || has(v, "agents") ? peopleTools(v) : { read: [], change: [] };
+    const settings = settingsTools(v);
     read.push(...admin.read, ...orders.read, ...invoices.read, ...people.read, ...settings.read);
-    change.push(...admin.change, ...orders.change, ...invoices.change, ...(canViewAccounts(role) ? booksChanges(role === "boss") : []), ...people.change, ...settings.change);
+    change.push(...admin.change, ...orders.change, ...invoices.change, ...booksChanges(v), ...people.change, ...settings.change);
   }
-  return { read, change, abilities: abilities(role, change, read) + (channel === "whatsapp" ? " On WhatsApp they can only look things up: changes are made in the app." : "") };
+  return { read, change, abilities: abilities(v, change, read) + (channel === "whatsapp" ? " On WhatsApp they can only look things up: changes are made in the app." : "") };
 }

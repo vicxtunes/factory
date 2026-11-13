@@ -15,7 +15,8 @@ import { Panel, formatWhen, useMoney } from "./shared";
 // money is already off the card. Approving sends it through the payment
 // gateway (HivePay) to the owner's phone; its answer settles it (failed: back
 // on the card). Refusing, with a reason, puts it back straight away.
-export function WithdrawalsQueue({ withdrawals }: { withdrawals: PendingWithdrawal[] }) {
+/** `canManage`: Wallets at manage (staff access); without it the queue only shows. */
+export function WithdrawalsQueue({ withdrawals, canManage = true }: { withdrawals: PendingWithdrawal[]; canManage?: boolean }) {
   return (
     <Panel title={`Withdrawals (${withdrawals.length})`}>
       {withdrawals.length ? (
@@ -25,7 +26,7 @@ export function WithdrawalsQueue({ withdrawals }: { withdrawals: PendingWithdraw
           </p>
           <ul className="divide-y divide-border">
             {withdrawals.map((w) => (
-              <Row key={w.id} withdrawal={w} />
+              <Row key={w.id} withdrawal={w} canManage={canManage} />
             ))}
           </ul>
         </>
@@ -36,7 +37,7 @@ export function WithdrawalsQueue({ withdrawals }: { withdrawals: PendingWithdraw
   );
 }
 
-function Row({ withdrawal }: { withdrawal: PendingWithdrawal }) {
+function Row({ withdrawal, canManage }: { withdrawal: PendingWithdrawal; canManage: boolean }) {
   const router = useRouter();
   const money = useMoney();
   const [refusing, setRefusing] = useState(false);
@@ -69,7 +70,7 @@ function Row({ withdrawal }: { withdrawal: PendingWithdrawal }) {
         </div>
         {sending ? (
           <span className="rounded-full bg-warning-50 px-2 py-0.5 text-[11px] font-medium text-warning-700 dark:bg-warning-500/15 dark:text-warning-500">Being sent</span>
-        ) : refusing ? null : (
+        ) : refusing || !canManage ? null : (
           <div className="flex gap-2">
             <Button
               className="min-h-9 text-xs"

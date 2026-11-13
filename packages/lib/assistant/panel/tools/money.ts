@@ -7,6 +7,7 @@ import { z } from "zod";
 import { addExpenseCategory, decideExpense, endExpenseSchedule, moveMoney, payExpense, recordOtherMoney, voidExpense, voidOtherMoney } from "@repo/lib/books/actions";
 import { repeatLabel } from "@repo/lib/books/expenses";
 import { applyWalletToInvoice, listInvoices, recordInvoicePayment, sendInvoiceReminders, updateInvoice } from "@repo/lib/invoices/actions";
+import { can, type Access } from "@repo/lib/staff-access/core";
 import { createAdminClient } from "@repo/lib/supabase/admin";
 import { resolveTenantScope } from "@repo/lib/tenancy/server/resolve";
 
@@ -14,7 +15,7 @@ import { changeTool, outcome, readTool, type ChangeTool } from "../toolbox";
 import type { AssistantTool } from "../../server/tools";
 
 // Money through Alexis (2026-11-10): invoices (reception and up) and the
-// books (boss and supervisors), on cards that run the pages' own server
+// books (as far as each person's staff access goes), on cards that run the pages' own server
 // actions. No money leaves through Alexis: sending a payout, refunds and
 // withdrawals stay on their pages.
 
@@ -148,9 +149,9 @@ export function invoiceTools(): { read: AssistantTool[]; change: ChangeTool[] } 
   };
 }
 
-/** The books: the boss and supervisors (the Accounts pages). `boss`: approving expenses. */
-export function booksChanges(boss: boolean): ChangeTool[] {
-  const tools: ChangeTool[] = [
+/** The books, as far as this person's staff access goes: Expenses, Accounts (other money, moving money), Approve & pay bills. */
+export function booksChanges(v: { access: Access }): ChangeTool[] {
+  const expenses: ChangeTool[] = [
     changeTool({
       name: "pay_expense",
       description:
@@ -205,6 +206,8 @@ export function booksChanges(boss: boolean): ChangeTool[] {
       card: async ({ name }) => ({ title: `New expense category: ${name}`, lines: [] }),
       run: async ({ name }) => outcome(await addExpenseCategory({ name }), `${name} is a category now.`),
     }),
+  ];
+  const accounts: ChangeTool[] = [
     changeTool({
       name: "record_other_money_in",
       description: "Record money in that isn't from a client: owner (the owner putting money in), other_income, or other. With who sent it, how, when and into which account.",
@@ -248,7 +251,8 @@ export function booksChanges(boss: boolean): ChangeTool[] {
       run: async (m) => outcome(await moveMoney({ ...m, id: randomUUID() }), "The move is recorded."),
     }),
   ];
-  if (boss) {
+  const tools = [...(can(v.access, "expenses", "manage") ? expenses : []), ...(can(v.access, "accounts", "manage") ? accounts : [])];
+  if (can(v.access, "bill_approval", "manage")) {
     tools.push(
       changeTool({
         name: "approve_expense",

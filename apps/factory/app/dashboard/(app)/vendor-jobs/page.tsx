@@ -1,9 +1,8 @@
-import { redirect } from "next/navigation";
 import { after } from "next/server";
 
 import { SectionLabel } from "@repo/ui/SectionLabel";
 import { SettleDispute } from "@repo/ui/vendors/SettleDispute";
-import { getDashboardSession } from "@repo/lib/auth/session";
+import { pageAccess, sessionCan } from "@repo/lib/auth/session";
 import { autoReleaseAt, vendorTake, type JobView } from "@repo/lib/vendors/core";
 import { vendorJobs } from "@repo/lib/vendors/server";
 
@@ -18,8 +17,8 @@ const money = (n: number) => `UGX ${n.toLocaleString("en-US")}`;
 // released on its own two days after delivery. Opening it also settles
 // what's overdue.
 export default async function VendorJobsPage() {
-  const session = await getDashboardSession();
-  if (session?.role !== "boss") redirect("/dashboard");
+  const session = await pageAccess("vendor_jobs");
+  const manage = sessionCan(session, "vendor_jobs", "manage");
   after(() => vendorJobs.sweepOverdue());
   const jobs = await vendorJobs.needingAttention();
   const disputes = jobs.filter((j) => j.status === "disputed");
@@ -41,7 +40,7 @@ export default async function VendorJobsPage() {
                 <p className="rounded-xl bg-error-50 p-3 text-sm text-error-700 dark:bg-error-500/15 dark:text-error-400">
                   {j.disputedBy === "studio" ? j.studio.name : j.vendor.name}: &ldquo;{j.disputeReason}&rdquo;
                 </p>
-                <SettleDispute id={j.id} vendorName={j.vendor.name} studioName={j.studio.name} price={j.price} take={vendorTake(j.price)} />
+                {manage ? <SettleDispute id={j.id} vendorName={j.vendor.name} studioName={j.studio.name} price={j.price} take={vendorTake(j.price)} /> : null}
               </li>
             ))}
           </ul>

@@ -5,44 +5,72 @@ import { RowsSkeleton } from "@repo/ui/skeletons/blocks";
 import { Loading } from "@repo/ui/skeletons/Loading";
 import { createAdminClient } from "@repo/lib/supabase/admin";
 import { getDashboardSession } from "@repo/lib/auth/session";
-import type { AppRole } from "@repo/lib/types";
+import { cleanMap } from "@repo/lib/staff-access/core";
 
-import { AdminPanel, type AdminRow } from "../../admin-panel";
+import { TeamAccessPanel, type AccessLogRow, type TeamPerson, type TeamRole } from "../../team-access-panel";
 
 export const dynamic = "force-dynamic";
 
-export default async function AdminsPage() {
+// Team & access: the boss's alone (packages/lib/staff-access).
+export default async function TeamAccessPage() {
   const session = await getDashboardSession();
-  if (session?.role !== "boss") redirect("/dashboard");
+  if (!session?.isBoss) redirect("/dashboard");
 
   return (
     <div className="space-y-6">
-      <SectionLabel>Dashboard admins</SectionLabel>
+      <SectionLabel>Team & access</SectionLabel>
       <Loading skeleton={<RowsSkeleton rows={4} />}>
-        <Admins ownId={session.userId} />
+        <Team ownId={session.userId} />
       </Loading>
     </div>
   );
 }
 
-async function Admins({ ownId }: { ownId: string }) {
+interface ProfileRow {
+  id: string;
+  role: string;
+  full_name: string | null;
+  staff_role_id: string | null;
+  access_overrides: unknown;
+  suspended_at: string | null;
+  suspended_by_name: string | null;
+}
+
+async function Team({ ownId }: { ownId: string }) {
   const admin = createAdminClient();
-  const [{ data: profiles }, { data: usersList }] = await Promise.all([
+  const [{ data: profiles }, { data: roleRows }, { data: logRows }, { data: usersList }] = await Promise.all([
     admin
       .from("profiles")
-      .select("id, role, full_name, created_at")
-      .order("created_at"),
-    admin.auth.admin.listUsers({ perPage: 200 }),
+      .select("id, role, full_name, staff_role_id, access_overrides, suspended_at, suspended_by_name")
+      .order("created_at")
+      .returns<ProfileRow[]>(),
+    admin.from("staff_roles").select("id, name, built_in, access").order("created_at").returns<{ id: string; name: string; built_in: string | null; access: unknown }[]>(),
+    admin.from("staff_access_log").select("id, at, by_name, about, what").order("at", { ascending: false }).limit(200),
+    admin.auth.admin.listUsers({ perPage: 1000 }),
   ]);
 
   const emailById = new Map(usersList?.users.map((u) => [u.id, u.email ?? "—"]) ?? []);
-  const admins: AdminRow[] = (profiles ?? []).map((p) => ({
+  const roleName = new Map((roleRows ?? []).map((r) => [r.id, r.name]));
+  const people: TeamPerson[] = (profiles ?? []).map((p) => ({
     id: p.id,
     email: emailById.get(p.id) ?? "—",
-    full_name: p.full_name,
-    role: p.role as AppRole,
-    created_at: p.created_at,
+    name: p.full_name,
+    isBoss: p.role === "boss",
+    roleId: p.staff_role_id,
+    roleName: p.role === "boss" ? "Boss" : (roleName.get(p.staff_role_id ?? "") ?? "No role"),
+    overrides: cleanMap(p.access_overrides),
+    suspended: !!p.suspended_at,
+    suspendedBy: p.suspended_by_name,
+    isSelf: p.id === ownId,
   }));
+  const roles: TeamRole[] = (roleRows ?? []).map((r) => ({
+    id: r.id,
+    name: r.name,
+    builtIn: !!r.built_in,
+    access: cleanMap(r.access),
+    people: people.filter((p) => !p.isBoss && p.roleId === r.id).length,
+  }));
+  const log: AccessLogRow[] = (logRows ?? []).map((l) => ({ id: l.id, at: l.at, by: l.by_name, about: l.about, what: l.what }));
 
-  return <AdminPanel admins={admins} ownId={ownId} />;
+  return <TeamAccessPanel people={people} roles={roles} log={log} />;
 }
