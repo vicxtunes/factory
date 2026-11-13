@@ -4,7 +4,7 @@ import { announceTyping, postAssistantMessage } from "@repo/lib/chat/assistant";
 import { chatHref } from "@repo/lib/chat/routes";
 import { createAdminClient } from "@repo/lib/supabase/admin";
 
-import { ASSISTANT_NAME, ASSISTANT_NAMES, costUsd, findModel, mayAnswer, type TokenUsage } from "../core/rules";
+import { ASSISTANT_NAME, ASSISTANT_NAMES, CLIENT_PAUSED_MESSAGE, costUsd, findModel, mayAnswer, outOfCredit, type TokenUsage } from "../core/rules";
 import { askModel, type ChatTurn } from "./providers";
 import * as store from "./store";
 import { assistantTools, tellManagers, type ToolContext } from "./tools";
@@ -12,7 +12,6 @@ import { assistantTools, tellManagers, type ToolContext } from "./tools";
 const MESSAGES_READ = 40;
 const CHATS_AT_ONCE = 5;
 const TYPING_EVERY_MS = 4_000;
-const SORRY = "Sorry, I can't help with that right now. Someone from the team will reply here shortly.";
 
 interface ChatRow {
   kind: string;
@@ -77,7 +76,7 @@ async function loadClient(id: string): Promise<ToolContext["client"] | null> {
 
 async function handOver(ctx: { conversationId: string; clientId: string; clientName: string }, reason: string, tellClient: boolean): Promise<void> {
   await store.setState(ctx.conversationId, "staff");
-  if (tellClient) await postAssistantMessage(ctx.conversationId, ctx.clientId, ASSISTANT_NAME, SORRY);
+  if (tellClient) await postAssistantMessage(ctx.conversationId, ctx.clientId, ASSISTANT_NAME, CLIENT_PAUSED_MESSAGE);
   await tellManagers(`${ctx.clientName} needs a person`, reason, chatHref(ctx.conversationId));
 }
 
@@ -128,7 +127,11 @@ async function answer(thread: store.ThreadRow, settings: store.AssistantSettings
     // Someone took over while it was thinking: they speak now.
     const quiet = (await store.threadState(conversationId)) === "staff";
     if (failure) {
-      await handOver(handCtx, `The assistant couldn't answer: ${failure}`, !quiet);
+      // Staff are told in plain words; OpenAI's own text goes to the run log only.
+      const reason = outOfCredit(failure)
+        ? "Alexis is paused until the AI account has credit again. Please reply to them in Chat."
+        : `The assistant couldn't answer: ${failure}`;
+      await handOver(handCtx, reason, !quiet);
     } else if (reply && !quiet) {
       await postAssistantMessage(conversationId, client.id, ASSISTANT_NAME, reply, { choices: ctx.choices, images: ctx.images });
       await store.markSummaryPosted(conversationId);

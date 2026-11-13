@@ -5,18 +5,18 @@ import { useState } from "react";
 import { Button } from "@repo/ui/Button";
 import { Drawer } from "@repo/ui/Drawer";
 import { TextInput } from "@repo/ui/Field";
-import { createGroupConversation, openDirectConversation, openSupportConversation } from "@repo/lib/chat/actions";
+import { createGroupConversation, openDirectConversation } from "@repo/lib/chat/actions";
 import { canCreateGroup, canJoinGroup, CHAT_LIMITS, participantKey } from "@repo/lib/chat/policy";
 import type { ChatPerson, ParticipantRef } from "@repo/lib/chat/types";
 
 import { ContactPicker } from "./ContactPicker";
-import { SupportIcon } from "./icons";
 
 type Mode = "direct" | "group";
 
 /**
- * "New chat": message one person, start a group, or (clients) reach the
- * support team. Calls `onOpened` with the conversation id to show.
+ * "New chat" for staff, designers and workers: message one person or start a
+ * group (clients go straight to support, ChatApp). Calls `onOpened` with the
+ * conversation id to show.
  */
 export function NewConversationDrawer({
   open,
@@ -128,22 +128,6 @@ export function NewConversationDrawer({
             </div>
           ) : null}
 
-          {viewer.type === "client" ? (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => run(() => openSupportConversation())}
-              className="flex shrink-0 items-center gap-3 rounded-[var(--radius)] border border-brand-200 bg-brand-25 p-3 text-left hover:bg-brand-50 dark:border-brand-800 dark:bg-brand-500/5"
-            >
-              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-500 text-white">
-                <SupportIcon className="h-5 w-5" />
-              </span>
-              <span>
-                <span className="block text-sm font-semibold">Support team</span>
-                <span className="block text-xs text-muted">Questions about orders, payments or anything else</span>
-              </span>
-            </button>
-          ) : null}
 
           {mode === "group" ? (
             <>
@@ -161,7 +145,6 @@ export function NewConversationDrawer({
             </>
           ) : (
             <>
-              {viewer.type === "client" ? <p className="shrink-0 text-xs text-muted">Or message your designer:</p> : null}
               <div className="min-h-0 flex-1">
                 <ContactPicker onPick={(p) => !busy && run(() => openDirectConversation({ type: p.type, id: p.id }))} />
               </div>
