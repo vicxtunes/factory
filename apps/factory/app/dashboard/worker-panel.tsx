@@ -37,6 +37,7 @@ export function WorkerPanel({
   workers,
   stations,
   canManageSecurity = true,
+  canEdit = true,
 }: {
   workers: WorkerLite[];
   stations: Station[];
@@ -44,6 +45,8 @@ export function WorkerPanel({
   // activating/deactivating an account are login-credential actions —
   // receptionist doesn't get these, only supervisor and boss do.
   canManageSecurity?: boolean;
+  /** Workers at manage: change a worker's station. */
+  canEdit?: boolean;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -168,6 +171,7 @@ export function WorkerPanel({
                   </td>
                   <td className="px-5 py-3">
                     <select
+                      disabled={!canEdit}
                       defaultValue={w.station ?? ""}
                       className="min-h-9 w-36 rounded-[var(--radius)] border border-border bg-surface px-2 text-xs"
                       onChange={(e) => {

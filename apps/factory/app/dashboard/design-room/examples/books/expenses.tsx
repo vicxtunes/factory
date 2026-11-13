@@ -79,6 +79,7 @@ export default function BooksExpenses() {
       approvalAbove={500_000}
       autopayUpTo={2_000_000}
       isBoss
+      canManage
       canSend
       timeZone="Africa/Kampala"
     />

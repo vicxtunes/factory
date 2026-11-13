@@ -22,7 +22,8 @@ export default async function DashboardLayout({
       email={session.email}
       fullName={session.fullName}
       avatarUrl={session.avatarUrl}
-      role={session.role}
+      roleName={session.roleName}
+      viewer={{ isBoss: session.isBoss, access: session.access, email: session.email }}
       notifications={notifications}
     >
       {children}

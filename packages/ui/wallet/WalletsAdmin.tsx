@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { createContext, useContext, useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@repo/ui/Button";
@@ -32,15 +32,20 @@ export interface WalletClientOption {
 //   2. Every client with a wallet, and their balance. Opening one shows its
 //      history and lets staff record a deposit (money taken at the counter or
 //      seen on the statement) or make a correction.
+/** Wallets at manage (staff access): without it, wallets and deposits only show. */
+const CanManage = createContext(true);
+
 export function WalletsAdmin({
   pending,
   wallets,
   clients,
+  canManage = true,
 }: {
   pending: PendingDeposit[];
   wallets: WalletListRow[];
   /** Every client, so staff can open a wallet for someone who doesn't have one yet. */
   clients: WalletClientOption[];
+  canManage?: boolean;
 }) {
   const money = useMoney();
   const [openClientId, setOpenClientId] = useState<string | null>(null);
@@ -53,6 +58,7 @@ export function WalletsAdmin({
   const total = wallets.reduce((sum, w) => sum + w.balance, 0);
 
   return (
+    <CanManage.Provider value={canManage}>
     <div className="space-y-6">
       <Panel title={`To confirm (${pending.length})`}>
         {pending.length ? (
@@ -125,10 +131,12 @@ export function WalletsAdmin({
 
       <ClientWalletDrawer clientId={openClientId} onClose={() => setOpenClientId(null)} />
     </div>
+    </CanManage.Provider>
   );
 }
 
 function PendingRow({ deposit }: { deposit: PendingDeposit }) {
+  const manage = useContext(CanManage);
   const router = useRouter();
   const money = useMoney();
   const [rejecting, setRejecting] = useState(false);
@@ -169,7 +177,7 @@ function PendingRow({ deposit }: { deposit: PendingDeposit }) {
           </p>
           <p className="text-[11px] text-muted">{formatWhen(deposit.createdAt)}</p>
         </div>
-        {!rejecting ? (
+        {!rejecting && manage ? (
           <div className="flex gap-2">
             <Button className="min-h-9 text-xs" loading={pending} onClick={confirm}>
               Confirm
@@ -201,6 +209,7 @@ function PendingRow({ deposit }: { deposit: PendingDeposit }) {
 }
 
 function ClientWalletDrawer({ clientId, onClose }: { clientId: string | null; onClose: () => void }) {
+  const manage = useContext(CanManage);
   const router = useRouter();
   const [wallet, setWallet] = useState<WalletView | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -243,12 +252,16 @@ function ClientWalletDrawer({ clientId, onClose }: { clientId: string | null; on
       {current ? (
         <div className="space-y-4">
           <BalanceCard balance={current.balance}>
-            <Button className="min-h-9 text-xs" onClick={() => setForm(form === "deposit" ? null : "deposit")}>
-              Record deposit
-            </Button>
-            <Button variant="secondary" className="min-h-9 text-xs" onClick={() => setForm(form === "adjust" ? null : "adjust")}>
-              Adjust
-            </Button>
+            {manage ? (
+              <>
+                <Button className="min-h-9 text-xs" onClick={() => setForm(form === "deposit" ? null : "deposit")}>
+                  Record deposit
+                </Button>
+                <Button variant="secondary" className="min-h-9 text-xs" onClick={() => setForm(form === "adjust" ? null : "adjust")}>
+                  Adjust
+                </Button>
+              </>
+            ) : null}
           </BalanceCard>
 
           {form === "deposit" ? <RecordDepositForm clientId={current.clientId} clientName={current.clientName} onDone={reload} /> : null}

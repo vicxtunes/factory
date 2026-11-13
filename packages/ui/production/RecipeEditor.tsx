@@ -44,6 +44,7 @@ export function RecipeEditor({
   sizes,
   details,
   setsPrices,
+  canEdit = true,
 }: {
   product: RecipeProduct;
   book: PlainCostBook;
@@ -52,6 +53,8 @@ export function RecipeEditor({
   /** Its category's order details (Size, NOS, Type, Lamination…), add-ons with the catalog's products as options. */
   details: DetailChoice[];
   setsPrices: boolean;
+  /** Production costs at manage (staff access); without it the recipe only shows. */
+  canEdit?: boolean;
 }) {
   const money = useMoney();
   const costing = useMemo(() => new Costing(fromPlainCostBook(plain)), [plain]);
@@ -103,9 +106,11 @@ export function RecipeEditor({
       <section className="space-y-3">
         <div className="flex items-center justify-between gap-3">
           <h3 className="text-sm font-semibold">What one is made of</h3>
-          <Button type="button" onClick={() => setEditing("new")} disabled={!plain.materials.some((m) => m.active)}>
+          {canEdit ? (
+<Button type="button" onClick={() => canEdit && setEditing("new")} disabled={!plain.materials.some((m) => m.active)}>
             Add a line
           </Button>
+) : null}
         </div>
         {!plain.materials.length ? <p className="text-sm text-muted">Add materials first, in Production → Materials.</p> : null}
         {lines.length ? (
@@ -113,7 +118,7 @@ export function RecipeEditor({
             <ul className="space-y-2 @3xl:hidden">
               {rows.map(({ l, i }) => (
                 <li key={i}>
-                  <button type="button" onClick={() => setEditing(i)} className="block w-full rounded-2xl border border-border bg-surface p-4 text-left shadow-theme-xs active:bg-gray-50 dark:active:bg-white/5">
+                  <button type="button" onClick={() => canEdit && setEditing(i)} className="block w-full rounded-2xl border border-border bg-surface p-4 text-left shadow-theme-xs active:bg-gray-50 dark:active:bg-white/5">
                     <div className="flex items-baseline justify-between gap-3">
                       <p className="truncate font-medium">{nameOf(l)}</p>
                       <p className="shrink-0 text-sm tnum">{qtyText(l)}</p>
@@ -126,7 +131,7 @@ export function RecipeEditor({
                 </li>
               ))}
             </ul>
-            <DataTable className="hidden @3xl:block" columns={columns} rows={rows} rowKey={({ i }) => String(i)} onRowClick={({ i }) => setEditing(i)} />
+            <DataTable className="hidden @3xl:block" columns={columns} rows={rows} rowKey={({ i }) => String(i)} onRowClick={({ i }) => canEdit && setEditing(i)} />
           </>
         ) : (
           <div className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted">No lines yet: add what one is made of.</div>

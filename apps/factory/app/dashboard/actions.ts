@@ -2,7 +2,6 @@
 
 import { recipeListPrice } from "@repo/lib/production/pricing";
 import { photoBookSheetsProblem } from "@repo/lib/production/core/recipes";
-import { randomBytes } from "crypto";
 
 import Papa from "papaparse";
 import { revalidatePath } from "next/cache";
@@ -11,13 +10,8 @@ import { catalogChanged } from "@repo/lib/catalog-cache";
 import { createClient } from "@repo/lib/supabase/server";
 import { createAdminClient } from "@repo/lib/supabase/admin";
 import { fetchBaseCurrencySymbol } from "@repo/lib/queries";
-import {
-  requireBusiness,
-  requireManager,
-  requireOrderAudit,
-  requireRole,
-  requireWorkerSecurity,
-} from "@repo/lib/auth/session";
+import { requireAccess, requireDashboard } from "@repo/lib/auth/session";
+import { can } from "@repo/lib/staff-access/core";
 import { hashPin, isValidPinFormat } from "@repo/lib/auth/pin";
 import { logOrderEvent, resolveActor } from "@repo/lib/audit/log";
 import {
@@ -47,7 +41,6 @@ import { isOrderInvoiced } from "@repo/lib/invoices/orders";
 import { lineDiscountOf, validateLineDiscount, type LineDiscount, type LineDiscountChange } from "@repo/lib/discounts/core";
 import {
   STATUS_LABELS,
-  type AppRole,
   type AttributeType,
   type OrderAuditEntry,
   type ProductionStatus,
@@ -57,6 +50,13 @@ import { postOrderCard } from "@repo/lib/chat/orders";
 import { chatHref } from "@repo/lib/chat/routes";
 
 type Result = { ok: true } | { ok: false; error: string };
+
+/** Adding a client: from Clients, or from an order form (Orders at manage). */
+async function requireClientAdding() {
+  const session = await requireDashboard();
+  if (!can(session.access, "clients", "manage") && !can(session.access, "orders", "manage")) throw new Error("You don't have access to this. Ask the boss.");
+  return session;
+}
 
 function itemLabel(item: { product: string; product_type: string | null }): string {
   return item.product_type ? `${item.product} (${item.product_type})` : item.product;
@@ -69,8 +69,14 @@ export async function signIn(
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
   const supabase = await createClient();
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) return { error: error.message };
+  // A suspended sign-in (Team & access) gets no further.
+  const { data: profile } = await createAdminClient().from("profiles").select("suspended_at").eq("id", data.user.id).maybeSingle();
+  if (profile?.suspended_at) {
+    await supabase.auth.signOut({ scope: "local" });
+    return { error: "Your sign-in is suspended. Ask the boss." };
+  }
   return {};
 }
 
@@ -85,7 +91,7 @@ export async function addWorker(input: {
   pin: string;
   station: string;
 }): Promise<Result> {
-  await requireWorkerSecurity();
+  await requireAccess("worker_logins");
   if (!input.name.trim()) return { ok: false, error: "Name is required." };
   if (!isValidPinFormat(input.pin)) {
     return { ok: false, error: "PIN must be 4–8 digits." };
@@ -106,7 +112,7 @@ export async function updateWorker(input: {
   id: string;
   station: string;
 }): Promise<Result> {
-  await requireManager();
+  await requireAccess("workers");
   const admin = createAdminClient();
   const { error } = await admin
     .from("workers")
@@ -118,7 +124,7 @@ export async function updateWorker(input: {
 }
 
 export async function resetWorkerPin(input: { id: string; pin: string }): Promise<Result> {
-  await requireWorkerSecurity();
+  await requireAccess("worker_logins");
   if (!isValidPinFormat(input.pin)) {
     return { ok: false, error: "PIN must be 4–8 digits." };
   }
@@ -133,7 +139,7 @@ export async function resetWorkerPin(input: { id: string; pin: string }): Promis
 }
 
 export async function deactivateWorker(id: string): Promise<Result> {
-  await requireWorkerSecurity();
+  await requireAccess("worker_logins");
   const admin = createAdminClient();
   // Trigger unassign_items_on_worker_deactivate() nulls their assigned items.
   const { error } = await admin
@@ -146,7 +152,7 @@ export async function deactivateWorker(id: string): Promise<Result> {
 }
 
 export async function reactivateWorker(id: string): Promise<Result> {
-  await requireWorkerSecurity();
+  await requireAccess("worker_logins");
   const admin = createAdminClient();
   const { error } = await admin
     .from("workers")
@@ -158,7 +164,7 @@ export async function reactivateWorker(id: string): Promise<Result> {
 }
 
 export async function createStation(name: string): Promise<Result> {
-  await requireRole("boss");
+  await requireAccess("stations");
   const trimmed = name.trim();
   if (!trimmed) return { ok: false, error: "Name is required." };
 
@@ -175,7 +181,7 @@ export async function createStation(name: string): Promise<Result> {
 }
 
 export async function renameStation(id: string, name: string): Promise<Result> {
-  await requireRole("boss");
+  await requireAccess("stations");
   const trimmed = name.trim();
   if (!trimmed) return { ok: false, error: "Name is required." };
 
@@ -212,7 +218,7 @@ export async function renameStation(id: string, name: string): Promise<Result> {
 }
 
 export async function deleteStation(id: string): Promise<Result> {
-  await requireRole("boss");
+  await requireAccess("stations");
   const admin = createAdminClient();
 
   const { data: existing, error: fetchError } = await admin
@@ -237,116 +243,11 @@ export async function deleteStation(id: string): Promise<Result> {
   return { ok: true };
 }
 
-function generatePassword(): string {
-  return randomBytes(9).toString("base64").replace(/[+/=]/g, "").slice(0, 12);
-}
-
-export async function createAdminUser(input: {
-  email: string;
-  fullName: string;
-  role: AppRole;
-}): Promise<{ ok: true; password: string } | { ok: false; error: string }> {
-  await requireRole("boss");
-
-  const email = input.email.trim().toLowerCase();
-  const fullName = input.fullName.trim();
-  if (!email) return { ok: false, error: "Email is required." };
-  if (!["supervisor", "boss", "receptionist"].includes(input.role)) {
-    return { ok: false, error: "Invalid role." };
-  }
-
-  const admin = createAdminClient();
-  const password = generatePassword();
-  const { data, error } = await admin.auth.admin.createUser({
-    email,
-    password,
-    email_confirm: true,
-  });
-  if (error || !data.user) {
-    return { ok: false, error: error?.message ?? "Could not create user." };
-  }
-
-  const { error: profileError } = await admin.from("profiles").insert({
-    id: data.user.id,
-    role: input.role,
-    full_name: fullName || null,
-  });
-  if (profileError) {
-    // Roll back the auth user so a failed profile insert doesn't leave an
-    // orphaned account with no role.
-    await admin.auth.admin.deleteUser(data.user.id);
-    return { ok: false, error: profileError.message };
-  }
-
-  revalidatePath("/dashboard/admins");
-  return { ok: true, password };
-}
-
-const MIN_PASSWORD_LENGTH = 8;
-
-// Reset another dashboard user's password. Boss-only. Pass an explicit
-// password, or omit it to have one generated and returned.
-export async function setUserPassword(input: {
-  id: string;
-  password?: string;
-}): Promise<{ ok: true; password: string } | { ok: false; error: string }> {
-  await requireRole("boss");
-
-  const password = input.password?.trim() ? input.password.trim() : generatePassword();
-  if (password.length < MIN_PASSWORD_LENGTH) {
-    return { ok: false, error: `Password must be at least ${MIN_PASSWORD_LENGTH} characters.` };
-  }
-
-  const admin = createAdminClient();
-  const { error } = await admin.auth.admin.updateUserById(input.id, { password });
-  if (error) return { ok: false, error: error.message };
-
-  return { ok: true, password };
-}
-
-// Change a dashboard user's role. Boss-only. A boss cannot demote themselves —
-// that could lock the last super-admin out of user management.
-export async function updateUserRole(input: {
-  id: string;
-  role: AppRole;
-}): Promise<Result> {
-  const session = await requireRole("boss");
-  if (input.id === session.userId && input.role !== "boss") {
-    return { ok: false, error: "You can't change your own role." };
-  }
-  if (!["supervisor", "boss", "receptionist"].includes(input.role)) {
-    return { ok: false, error: "Invalid role." };
-  }
-
-  const admin = createAdminClient();
-  const { error } = await admin.from("profiles").update({ role: input.role }).eq("id", input.id);
-  if (error) return { ok: false, error: error.message };
-
-  revalidatePath("/dashboard/admins");
-  return { ok: true };
-}
-
-// Remove a dashboard user entirely (auth user + profile via FK cascade).
-// Boss-only, and you can't delete yourself.
-export async function deleteAdminUser(id: string): Promise<Result> {
-  const session = await requireRole("boss");
-  if (id === session.userId) {
-    return { ok: false, error: "You can't remove your own account." };
-  }
-
-  const admin = createAdminClient();
-  const { error } = await admin.auth.admin.deleteUser(id);
-  if (error) return { ok: false, error: error.message };
-
-  revalidatePath("/dashboard/admins");
-  return { ok: true };
-}
-
 export async function assignItem(
   itemId: string,
   workerId: string | null,
 ): Promise<Result> {
-  await requireManager();
+  await requireAccess("orders");
   const admin = createAdminClient();
 
   const { data: item } = await admin
@@ -383,7 +284,7 @@ export async function overrideStatus(
   itemId: string,
   status: ProductionStatus,
 ): Promise<Result> {
-  await requireManager();
+  await requireAccess("orders");
   const admin = createAdminClient();
 
   const { data: item } = await admin
@@ -456,7 +357,7 @@ const sortedEntries = (attributes: unknown) => Object.entries((attributes ?? {})
 // manager role gets this (receptionist included), same "editable until
 // Completed" cutoff the designer side already uses in updateDesignerOrder.
 export async function updateOrderItem(input: UpdateOrderItemInput): Promise<Result> {
-  await requireManager();
+  await requireAccess("orders");
   const admin = createAdminClient();
 
   const { data: item } = await admin
@@ -598,9 +499,9 @@ export async function updateOrderItem(input: UpdateOrderItemInput): Promise<Resu
   return { ok: true };
 }
 
-// Boss-only "Show logs" read — see requireOrderAudit() and packages/lib/audit/render.ts.
+// "Show logs": Cancel & delete at view — see packages/lib/audit/render.ts.
 export async function getOrderAuditLog(orderId: string): Promise<OrderAuditEntry[]> {
-  await requireOrderAudit();
+  await requireAccess("order_admin", "view");
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("order_audit_log")
@@ -620,7 +521,7 @@ export async function addClient(input: {
   email: string;
   phone: string;
 }): Promise<Result> {
-  await requireManager();
+  await requireClientAdding();
   const name = input.name.trim();
   if (!name) return { ok: false, error: "Name is required." };
 
@@ -661,7 +562,7 @@ export async function updateClient(input: {
   email: string;
   phone: string;
 }): Promise<Result> {
-  await requireBusiness();
+  await requireAccess("clients");
   const name = input.name.trim();
   if (!name) return { ok: false, error: "Name is required." };
 
@@ -718,7 +619,7 @@ export async function updateClient(input: {
 // The client's name on an order, fixed from the order (renames the client on
 // file too: see renameOrderClient).
 export async function renameClientOnOrder(orderId: string, name: string): Promise<Result> {
-  await requireManager();
+  await requireAccess("orders");
   const res = await renameOrderClient(createAdminClient(), orderId, name);
   if (res.ok) revalidatePath("/dashboard");
   return res;
@@ -730,7 +631,7 @@ export async function renameClientOnOrder(orderId: string, name: string): Promis
 // key violation) rather than silently losing that history — caught below
 // and turned into a plain message instead of a raw DB error.
 export async function deleteClient(id: string): Promise<Result> {
-  await requireRole("boss");
+  await requireAccess("order_admin");
   const admin = createAdminClient();
   const { error } = await admin.from("clients").delete().eq("id", id);
   if (error) {
@@ -771,7 +672,7 @@ export interface BulkImportResult {
 export async function bulkImportClients(
   csvText: string,
 ): Promise<BulkImportResult | { ok: false; error: string }> {
-  await requireBusiness();
+  await requireAccess("clients");
 
   const parsed = Papa.parse<Record<string, string>>(csvText, {
     header: true,
@@ -862,7 +763,7 @@ export async function lookupClientDuplicates(input: {
   phone: string;
   excludeId?: string;
 }): Promise<{ ok: true; hits: ClientDuplicateHit[] } | { ok: false; error: string }> {
-  await requireManager();
+  await requireClientAdding();
 
   const name = input.name.trim();
   const email = input.email.trim();
@@ -901,7 +802,7 @@ function uniqueViolation(error: { code?: string }, message: string): Result {
 }
 
 export async function createCategory(name: string): Promise<Result> {
-  await requireRole("boss");
+  await requireAccess("catalog");
   const trimmed = name.trim();
   if (!trimmed) return { ok: false, error: "Name is required." };
 
@@ -913,7 +814,7 @@ export async function createCategory(name: string): Promise<Result> {
 }
 
 export async function renameCategory(id: string, name: string): Promise<Result> {
-  await requireRole("boss");
+  await requireAccess("catalog");
   const trimmed = name.trim();
   if (!trimmed) return { ok: false, error: "Name is required." };
 
@@ -925,7 +826,7 @@ export async function renameCategory(id: string, name: string): Promise<Result> 
 }
 
 export async function setCategoryActive(id: string, active: boolean): Promise<Result> {
-  await requireRole("boss");
+  await requireAccess("catalog");
   const admin = createAdminClient();
   const { error } = await admin.from("product_categories").update({ active }).eq("id", id);
   if (error) return { ok: false, error: error.message };
@@ -935,7 +836,7 @@ export async function setCategoryActive(id: string, active: boolean): Promise<Re
 
 /** Whether clients browse the category in the showroom; off, its products stay on the order form (e.g. Cover Type). */
 export async function setCategoryInShowroom(id: string, inShowroom: boolean): Promise<Result> {
-  await requireRole("boss");
+  await requireAccess("catalog");
   const { error } = await createAdminClient().from("product_categories").update({ in_showroom: inShowroom }).eq("id", id);
   if (error) return { ok: false, error: error.message };
   catalogChanged();
@@ -943,7 +844,7 @@ export async function setCategoryInShowroom(id: string, inShowroom: boolean): Pr
 }
 
 export async function createProduct(categoryId: string, name: string): Promise<Result> {
-  await requireRole("boss");
+  await requireAccess("catalog");
   const trimmed = name.trim();
   if (!trimmed) return { ok: false, error: "Name is required." };
 
@@ -957,7 +858,7 @@ export async function createProduct(categoryId: string, name: string): Promise<R
 }
 
 export async function renameProduct(id: string, name: string): Promise<Result> {
-  await requireRole("boss");
+  await requireAccess("catalog");
   const trimmed = name.trim();
   if (!trimmed) return { ok: false, error: "Name is required." };
 
@@ -969,7 +870,7 @@ export async function renameProduct(id: string, name: string): Promise<Result> {
 }
 
 export async function setProductActive(id: string, active: boolean): Promise<Result> {
-  await requireRole("boss");
+  await requireAccess("catalog");
   const admin = createAdminClient();
   const { error } = await admin.from("products").update({ active }).eq("id", id);
   if (error) return { ok: false, error: error.message };
@@ -980,7 +881,7 @@ export async function setProductActive(id: string, active: boolean): Promise<Res
 // Nullable — clearing the field (empty string) removes pricing rather than
 // forcing every product to have one before it can be shown in the showroom.
 export async function setProductPrice(id: string, price: string): Promise<Result> {
-  await requireRole("boss");
+  await requireAccess("catalog");
   const trimmed = price.trim();
   const value = trimmed ? Number(trimmed) : null;
   if (trimmed && (!Number.isFinite(value) || value! < 0)) {
@@ -1006,7 +907,7 @@ async function pricedFromRecipe(productId: string): Promise<boolean> {
 // The unit shown on invoices ("Pc", "Sheet", "Service"); copied onto an
 // order's lines when it's invoiced (see packages/lib/invoices).
 export async function setProductUnit(id: string, unit: string): Promise<Result> {
-  await requireRole("boss");
+  await requireAccess("catalog");
   const admin = createAdminClient();
   const { error } = await admin
     .from("products")
@@ -1018,7 +919,7 @@ export async function setProductUnit(id: string, unit: string): Promise<Result> 
 }
 
 export async function setProductDescription(id: string, description: string): Promise<Result> {
-  await requireRole("boss");
+  await requireAccess("catalog");
   const admin = createAdminClient();
   const { error } = await admin
     .from("products")
@@ -1030,7 +931,7 @@ export async function setProductDescription(id: string, description: string): Pr
 }
 
 export async function createVariant(productId: string, name: string): Promise<Result> {
-  await requireRole("boss");
+  await requireAccess("catalog");
   const trimmed = name.trim();
   if (!trimmed) return { ok: false, error: "Name is required." };
 
@@ -1044,7 +945,7 @@ export async function createVariant(productId: string, name: string): Promise<Re
 }
 
 export async function renameVariant(id: string, name: string): Promise<Result> {
-  await requireRole("boss");
+  await requireAccess("catalog");
   const trimmed = name.trim();
   if (!trimmed) return { ok: false, error: "Name is required." };
 
@@ -1056,7 +957,7 @@ export async function renameVariant(id: string, name: string): Promise<Result> {
 }
 
 export async function setVariantActive(id: string, active: boolean): Promise<Result> {
-  await requireRole("boss");
+  await requireAccess("catalog");
   const admin = createAdminClient();
   const { error } = await admin.from("product_variants").update({ active }).eq("id", id);
   if (error) return { ok: false, error: error.message };
@@ -1067,7 +968,7 @@ export async function setVariantActive(id: string, active: boolean): Promise<Res
 // Whether the showroom/order form show a product or variant's recorded
 // price, or the fallback "Pricing confirmed after review" text.
 export async function setShowPrices(show: boolean): Promise<Result> {
-  await requireRole("boss");
+  await requireAccess("catalog");
   const admin = createAdminClient();
   const { error } = await admin.from("showroom_settings").update({ show_prices: show }).eq("id", 1);
   if (error) return { ok: false, error: error.message };
@@ -1092,7 +993,7 @@ export async function createCurrency(input: {
   symbol: string;
   rate: string;
 }): Promise<Result> {
-  await requireRole("boss");
+  await requireAccess("catalog");
   const code = input.code.trim().toUpperCase();
   const label = input.label.trim();
   const symbol = input.symbol.trim();
@@ -1130,7 +1031,7 @@ export async function updateCurrency(
   id: string,
   input: { label: string; symbol: string; rate: string },
 ): Promise<Result> {
-  await requireRole("boss");
+  await requireAccess("catalog");
   const label = input.label.trim();
   const symbol = input.symbol.trim();
   const rate = Number(input.rate);
@@ -1155,7 +1056,7 @@ export async function updateCurrency(
 // The one display symbol for prices (the business prices in a single
 // currency) — stored on the base currency row so conversion math is untouched.
 export async function setCurrencySymbol(symbol: string): Promise<Result> {
-  await requireRole("boss");
+  await requireAccess("catalog");
   const trimmed = symbol.trim();
   if (!trimmed) return { ok: false, error: "Symbol is required." };
   if (trimmed.length > 8) return { ok: false, error: "Keep the symbol to 8 characters or fewer." };
@@ -1167,7 +1068,7 @@ export async function setCurrencySymbol(symbol: string): Promise<Result> {
 }
 
 export async function setCurrencyActive(id: string, active: boolean): Promise<Result> {
-  await requireRole("boss");
+  await requireAccess("catalog");
   const admin = createAdminClient();
   const { data: existing } = await admin.from("currencies").select("is_base").eq("id", id).maybeSingle();
   if (existing?.is_base && !active) {
@@ -1181,7 +1082,7 @@ export async function setCurrencyActive(id: string, active: boolean): Promise<Re
 }
 
 export async function deleteCurrency(id: string): Promise<Result> {
-  await requireRole("boss");
+  await requireAccess("catalog");
   const admin = createAdminClient();
   const { data: existing } = await admin.from("currencies").select("is_base").eq("id", id).maybeSingle();
   if (existing?.is_base) {
@@ -1198,7 +1099,7 @@ export async function deleteCurrency(id: string): Promise<Result> {
 // falls back to the product's own price rather than forcing every variant
 // to carry one. Same validation as setProductPrice.
 export async function setVariantPrice(id: string, price: string): Promise<Result> {
-  await requireRole("boss");
+  await requireAccess("catalog");
   const trimmed = price.trim();
   const value = trimmed ? Number(trimmed) : null;
   if (trimmed && (!Number.isFinite(value) || value! < 0)) {
@@ -1240,7 +1141,7 @@ function normalizeAttributeInput(input: AttributeInput) {
 }
 
 export async function createAttribute(categoryId: string, input: AttributeInput): Promise<Result> {
-  await requireRole("boss");
+  await requireAccess("catalog");
   const normalized = normalizeAttributeInput(input);
   if (!normalized.name) return { ok: false, error: "Name is required." };
   if (normalized.type === "select" && (!normalized.options || normalized.options.length === 0)) {
@@ -1257,7 +1158,7 @@ export async function createAttribute(categoryId: string, input: AttributeInput)
 }
 
 export async function updateAttribute(id: string, input: AttributeInput): Promise<Result> {
-  await requireRole("boss");
+  await requireAccess("catalog");
   const normalized = normalizeAttributeInput(input);
   if (!normalized.name) return { ok: false, error: "Name is required." };
   if (normalized.type === "select" && (!normalized.options || normalized.options.length === 0)) {
@@ -1272,7 +1173,7 @@ export async function updateAttribute(id: string, input: AttributeInput): Promis
 }
 
 export async function deleteAttribute(id: string): Promise<Result> {
-  await requireRole("boss");
+  await requireAccess("catalog");
   const admin = createAdminClient();
   const { error } = await admin.from("category_attributes").delete().eq("id", id);
   if (error) return { ok: false, error: error.message };
@@ -1286,7 +1187,7 @@ export async function deleteAttribute(id: string): Promise<Result> {
 // ---------------------------------------------------------------------------
 
 export async function addDesigner(input: { name: string; pin: string }): Promise<Result> {
-  await requireRole("boss");
+  await requireAccess("designers");
   if (!input.name.trim()) return { ok: false, error: "Name is required." };
   if (!isValidPinFormat(input.pin)) {
     return { ok: false, error: "PIN must be 4–8 digits." };
@@ -1303,7 +1204,7 @@ export async function addDesigner(input: { name: string; pin: string }): Promise
 }
 
 export async function resetDesignerPin(input: { id: string; pin: string }): Promise<Result> {
-  await requireRole("boss");
+  await requireAccess("designers");
   if (!isValidPinFormat(input.pin)) {
     return { ok: false, error: "PIN must be 4–8 digits." };
   }
@@ -1318,7 +1219,7 @@ export async function resetDesignerPin(input: { id: string; pin: string }): Prom
 }
 
 export async function deactivateDesigner(id: string): Promise<Result> {
-  await requireRole("boss");
+  await requireAccess("designers");
   const admin = createAdminClient();
   // Trigger unassign_orders_on_designer_deactivate() clears in-progress orders.
   const { error } = await admin.from("designers").update({ active: false }).eq("id", id);
@@ -1328,7 +1229,7 @@ export async function deactivateDesigner(id: string): Promise<Result> {
 }
 
 export async function reactivateDesigner(id: string): Promise<Result> {
-  await requireRole("boss");
+  await requireAccess("designers");
   const admin = createAdminClient();
   const { error } = await admin.from("designers").update({ active: true }).eq("id", id);
   if (error) return { ok: false, error: error.message };
@@ -1346,7 +1247,7 @@ export async function reactivateDesigner(id: string): Promise<Result> {
 // ---------------------------------------------------------------------------
 
 export async function createOrder(input: OrderFormPayload): Promise<CreateOrderResult> {
-  await requireManager();
+  await requireAccess("orders");
 
   if (!input.delivery_date) {
     return { ok: false, error: "Delivery date is required." };
@@ -1442,7 +1343,7 @@ export async function createOrder(input: OrderFormPayload): Promise<CreateOrderR
 // (packages/lib/orders/pricing.ts). Orders still in the quote step use quoteOrder
 // instead, so this never interferes with a quote the client is looking at.
 export async function setOrderAmount(orderId: string, amount: number | null): Promise<Result> {
-  await requireManager();
+  await requireAccess("orders");
   if (amount !== null && (!Number.isFinite(amount) || amount <= 0)) return { ok: false, error: "Enter a valid amount." };
 
   const admin = createAdminClient();
@@ -1488,7 +1389,7 @@ const LINE_DISCOUNT_MESSAGES: Record<string, string> = {
 // only be changed or removed, until the order is invoiced (the database
 // enforces both). Every change is logged for the discount history.
 export async function setLineDiscount(itemId: string, discount: LineDiscount | null): Promise<Result> {
-  await requireManager();
+  await requireAccess("orders");
   if (discount) {
     const errors = validateLineDiscount(discount);
     if (errors.length) return { ok: false, error: errors.join(" ") };
@@ -1534,7 +1435,7 @@ export async function setLineDiscount(itemId: string, discount: LineDiscount | n
 // list price (order_items.list_unit_price), so a running discount comes off it
 // like off a catalog price (item_offer, 20261129140000_price_on_call_offers.sql).
 export async function setAgreedUnitPrice(itemId: string, price: number): Promise<Result> {
-  await requireManager();
+  await requireAccess("orders");
   if (!Number.isInteger(price) || price <= 0) return { ok: false, error: "Enter a valid price." };
 
   const admin = createAdminClient();
@@ -1577,7 +1478,7 @@ export async function setAgreedUnitPrice(itemId: string, price: number): Promise
 // that's already awaiting the client's response, approved, or routed would
 // silently clobber state a human is actively relying on.
 export async function quoteOrder(orderId: string, price: number): Promise<Result> {
-  await requireManager();
+  await requireAccess("orders");
   if (!Number.isFinite(price) || price <= 0) return { ok: false, error: "Enter a valid price." };
 
   const admin = createAdminClient();
@@ -1634,7 +1535,7 @@ export async function routeApprovedOrder(
   route: OrderRoute,
   designerId?: string,
 ): Promise<Result> {
-  await requireManager();
+  await requireAccess("orders");
 
   const admin = createAdminClient();
   const { data: order } = await admin
@@ -1734,7 +1635,7 @@ export async function receiveClientOrder(
   orderId: string,
   price?: number,
 ): Promise<Result> {
-  await requireManager();
+  await requireAccess("orders");
   const res = await receiveOrder(orderId, await resolveActor(), price);
   if (!res.ok) return res;
   revalidatePath("/dashboard/order-approvals");
@@ -1747,7 +1648,7 @@ export async function receiveClientOrder(
 // packages/lib/orders/cancel.ts): the order drops off every work board and the client,
 // designer and assigned workers are told, with the reason.
 export async function cancelOrder(orderId: string, reason: string): Promise<Result> {
-  await requireRole("boss");
+  await requireAccess("order_admin");
   const why = cleanReason(reason);
   if (!why) return { ok: false, error: "Enter a reason for cancelling." };
 
@@ -1774,7 +1675,7 @@ export async function createMarketingSlide(input: {
   linkUrl: string;
   sortOrder: number;
 }): Promise<Result> {
-  await requireRole("boss");
+  await requireAccess("carousel");
   const imageUrl = input.imageUrl.trim();
   if (!imageUrl) return { ok: false, error: "Image URL is required." };
 
@@ -1794,7 +1695,7 @@ export async function updateMarketingSlide(
   id: string,
   input: { imageUrl: string; caption: string; linkUrl: string; sortOrder: number },
 ): Promise<Result> {
-  await requireRole("boss");
+  await requireAccess("carousel");
   const imageUrl = input.imageUrl.trim();
   if (!imageUrl) return { ok: false, error: "Image URL is required." };
 
@@ -1814,7 +1715,7 @@ export async function updateMarketingSlide(
 }
 
 export async function setMarketingSlideActive(id: string, active: boolean): Promise<Result> {
-  await requireRole("boss");
+  await requireAccess("carousel");
   const admin = createAdminClient();
   const { error } = await admin.from("marketing_slides").update({ active }).eq("id", id);
   if (error) return { ok: false, error: error.message };
@@ -1823,7 +1724,7 @@ export async function setMarketingSlideActive(id: string, active: boolean): Prom
 }
 
 export async function deleteMarketingSlide(id: string): Promise<Result> {
-  await requireRole("boss");
+  await requireAccess("carousel");
   const admin = createAdminClient();
   const { error } = await admin.from("marketing_slides").delete().eq("id", id);
   if (error) return { ok: false, error: error.message };

@@ -1,25 +1,20 @@
-import { redirect } from "next/navigation";
-
 import { CardGridSkeleton, ChipRowSkeleton } from "@repo/ui/skeletons/blocks";
 import { Loading } from "@repo/ui/skeletons/Loading";
 import { agentPaymentsFor } from "@repo/lib/agents/server";
-import { getDashboardSession } from "@repo/lib/auth/session";
+import { pageAccess, sessionCan } from "@repo/lib/auth/session";
 import { fetchApprovalQueueItems, fetchDesigners, fetchProductCatalog } from "@repo/lib/queries";
 import { isPhotobookCategory } from "@repo/lib/orders/photobook";
 import { Costing } from "@repo/lib/production/core";
-import { canManageProduction } from "@repo/lib/production/policy";
 import { production } from "@repo/lib/production/server";
 import { resolveTenantScope } from "@repo/lib/tenancy/server/resolve";
 import { createAdminClient } from "@repo/lib/supabase/admin";
-import { canManageBusiness, isManagerRole } from "@repo/lib/types";
 
 import { OrderApprovalQueue, type ItemCosts } from "../../order-approval-queue";
 
 export const metadata = { title: "Client Orders — Factory Order Tracker" };
 
 export default async function OrderApprovalsPage() {
-  const session = await getDashboardSession();
-  if (!session || !isManagerRole(session.role)) redirect("/dashboard");
+  const session = await pageAccess("orders");
 
   return (
     <Loading
@@ -30,12 +25,12 @@ export default async function OrderApprovalsPage() {
         </>
       }
     >
-      <Queue canCancel={session.role === "boss"} seesCosts={canManageProduction(session.role)} takesPayments={canManageBusiness(session.role)} />
+      <Queue canManage={sessionCan(session, "orders", "manage")} canCancel={sessionCan(session, "order_admin", "manage")} seesCosts={sessionCan(session, "production")} takesPayments={sessionCan(session, "invoices", "manage")} />
     </Loading>
   );
 }
 
-async function Queue({ canCancel, seesCosts, takesPayments }: { canCancel: boolean; seesCosts: boolean; takesPayments: boolean }) {
+async function Queue({ canManage, canCancel, seesCosts, takesPayments }: { canManage: boolean; canCancel: boolean; seesCosts: boolean; takesPayments: boolean }) {
   const [items, designers, catalog] = await Promise.all([
     fetchApprovalQueueItems(),
     fetchDesigners(true),
@@ -51,6 +46,7 @@ async function Queue({ canCancel, seesCosts, takesPayments }: { canCancel: boole
       agentPayments={agentPayments}
       costs={seesCosts ? await itemCosts(items) : null}
       driveLinks={await driveLinkCounts(items.map((i) => i.id))}
+      canManage={canManage}
       canCancel={canCancel}
       takesPayments={takesPayments}
     />

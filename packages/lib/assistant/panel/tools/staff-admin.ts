@@ -8,7 +8,8 @@ import { fetchAnnouncements } from "@repo/lib/queries";
 import { createAdminClient } from "@repo/lib/supabase/admin";
 import { deleteSupportReport, getSupportReports, setSupportReportStatus, submitSupportReport } from "@repo/lib/support/actions";
 import { SUPPORT_OWNER_EMAIL } from "@repo/lib/support/constants";
-import type { Announcement, AppRole, AuditActorType, SupportReport } from "@repo/lib/types";
+import type { Access } from "@repo/lib/staff-access/core";
+import type { Announcement, AuditActorType, SupportReport } from "@repo/lib/types";
 
 import { changeTool, outcome, readTool, type ChangeTool } from "../toolbox";
 import type { AssistantTool } from "../../server/tools";
@@ -21,7 +22,8 @@ import type { AssistantTool } from "../../server/tools";
 /** The signed-in staff member, as the announcement rules see them. */
 export interface StaffViewer {
   userId: string;
-  role: AppRole;
+  isBoss: boolean;
+  access: Access;
   email: string | null;
 }
 

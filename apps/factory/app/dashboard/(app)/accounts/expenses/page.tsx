@@ -1,8 +1,8 @@
 import { ExpensesBoard } from "@repo/ui/books/ExpensesBoard";
+import { pageAccess, sessionCan } from "@repo/lib/auth/session";
 import { PanelStackSkeleton, StatTilesSkeleton } from "@repo/ui/skeletons/blocks";
 import { Loading } from "@repo/ui/skeletons/Loading";
 import { resolvePeriod } from "@repo/lib/accounting/core/period";
-import { requireAccountsAccess } from "@repo/lib/accounting/index.server";
 import { periodFrom } from "@repo/lib/accounting/params";
 import { expenseDashboard, expenseMonths, expensesBoard } from "@repo/lib/books/expenses-server";
 import { resolveTenantScope } from "@repo/lib/tenancy/server/resolve";
@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
 export default async function AccountsExpensesPage({ searchParams }: { searchParams: SearchParams }) {
-  const session = await requireAccountsAccess();
+  const session = await pageAccess("expenses");
 
   return (
     <div className="space-y-6">
@@ -26,17 +26,17 @@ export default async function AccountsExpensesPage({ searchParams }: { searchPar
           </div>
         }
       >
-        <Board isBoss={session.role === "boss"} searchParams={searchParams} />
+        <Board isBoss={sessionCan(session, "bill_approval", "manage")} canManage={sessionCan(session, "expenses", "manage")} searchParams={searchParams} />
       </Loading>
     </div>
   );
 }
 
-async function Board({ isBoss, searchParams }: { isBoss: boolean; searchParams: SearchParams }) {
+async function Board({ isBoss, canManage, searchParams }: { isBoss: boolean; canManage: boolean; searchParams: SearchParams }) {
   const [scope, params] = await Promise.all([resolveTenantScope(), searchParams]);
   const period = resolvePeriod(periodFrom(params), new Date(), scope.timeZone);
   // The board first: it creates what recurring expenses now owe, and the figures must include them.
   const board = await expensesBoard(scope, period);
   const [summary, months] = await Promise.all([expenseDashboard(scope, period), expenseMonths(scope, period)]);
-  return <ExpensesBoard {...board} summary={summary} months={months} period={period} isBoss={isBoss} canSend={isBoss && hivepay.isConfigured()} timeZone={scope.timeZone} />;
+  return <ExpensesBoard {...board} summary={summary} months={months} period={period} isBoss={isBoss} canManage={canManage} canSend={isBoss && hivepay.isConfigured()} timeZone={scope.timeZone} />;
 }

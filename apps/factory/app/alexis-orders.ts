@@ -6,7 +6,8 @@ import { changeTool, outcome, readTool, type ChangeTool } from "@repo/lib/assist
 import type { AssistantTool } from "@repo/lib/assistant/server/tools";
 import { generateInvoice, getInvoiceDraft, getInvoiceForOrder } from "@repo/lib/invoices/actions";
 import { createAdminClient } from "@repo/lib/supabase/admin";
-import { STATUS_LABELS, type AppRole, type ProductionStatus } from "@repo/lib/types";
+import { can, type Access } from "@repo/lib/staff-access/core";
+import { STATUS_LABELS, type ProductionStatus } from "@repo/lib/types";
 
 import { assignItem, cancelOrder, receiveClientOrder, renameClientOnOrder, routeApprovedOrder, setAgreedUnitPrice, setLineDiscount, setOrderAmount, updateOrderItem } from "./dashboard/actions";
 import { advanceStatus, clearDelay, flagDelay } from "./factory/actions";
@@ -74,8 +75,8 @@ const itemName = (i: Pick<ItemRow, "product" | "product_type">) => (i.product_ty
 const stage = (o: Pick<OrderRow, "approval_status" | "released_at">) =>
   o.released_at ? "in production" : o.approval_status === "approved" ? "confirmed, not sent to production yet" : "not confirmed yet";
 
-/** Reception, supervisors and the boss: everything on Orders, Client Orders and the board. */
-function managerTools(role: AppRole): { read: AssistantTool[]; change: ChangeTool[] } {
+/** Whoever reaches Orders: everything on Orders, Client Orders and the board (changes at manage). */
+function managerTools(v: { access: Access }): { read: AssistantTool[]; change: ChangeTool[] } {
   const read = [
     readTool({
       name: "order_details",
@@ -264,7 +265,8 @@ function managerTools(role: AppRole): { read: AssistantTool[]; change: ChangeToo
       run: async ({ orderId, to, designerId }) => outcome(await routeApprovedOrder(orderId, to, designerId ?? undefined), "The order is in production."),
     }),
   ];
-  if (role === "boss") {
+  if (!can(v.access, "orders", "manage")) change.length = 0;
+  if (can(v.access, "order_admin", "manage")) {
     change.push(
       changeTool({
         name: "cancel_order",

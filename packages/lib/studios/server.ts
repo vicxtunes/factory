@@ -13,7 +13,7 @@ import { cache } from "react";
 import { cookies } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 
-import { getClientSession, getDashboardSession, type ClientSession, type DashboardSession } from "@repo/lib/auth/session";
+import { getClientSession, pageAccess, type ClientSession, type DashboardSession } from "@repo/lib/auth/session";
 import { isSettingUp } from "@repo/lib/studio-access/core";
 import { canUse, type Area, type StudioAccess } from "@repo/lib/team/core";
 import { team } from "@repo/lib/team/server";
@@ -23,7 +23,7 @@ import { createAdminClient } from "@repo/lib/supabase/admin";
 import { supabaseStudioStore } from "./adapters/supabase/store";
 import { studioScope, type Studio, type StudioOwner } from "./core";
 import { STUDIOS_ENABLED } from "./feature";
-import { businessToOpen, canViewAllStudios } from "./policy";
+import { businessToOpen } from "./policy";
 import { StudioError } from "./ports";
 import { StudioService } from "./service";
 
@@ -153,11 +153,9 @@ export async function ownStudio(): Promise<CallerStudio> {
   return caller;
 }
 
-/** For the boss's studio pages: the signed-in boss, else back to the dashboard. */
+/** For the Businesses pages: whoever may see Businesses (staff access), else back to the dashboard. */
 export async function requireStudiosOversight(): Promise<DashboardSession> {
-  const session = await getDashboardSession();
-  if (!session || !canViewAllStudios(session.role)) redirect("/dashboard");
-  return session;
+  return pageAccess("studios");
 }
 
 /** What a studio can delete for good (see supabase/migrations/20261016100000_studio_delete.sql). */

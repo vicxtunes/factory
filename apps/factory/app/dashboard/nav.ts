@@ -4,15 +4,13 @@
 // To add, move or re-gate a page, edit this file only.
 
 import type { HomeBarIcon } from "@repo/ui/HomeBar";
-import { canViewAccounts } from "@repo/lib/accounting/policy";
-import { canManageProduction } from "@repo/lib/production/policy";
 import { canViewAnnouncements } from "@repo/lib/announcements/access";
-import { canViewAllStudios } from "@repo/lib/studios/policy";
+import { can, type Access, type Section } from "@repo/lib/staff-access/core";
 import { SUPPORT_OWNER_EMAIL } from "@repo/lib/support/constants";
-import { canManageBusiness, isManagerRole, type AppRole } from "@repo/lib/types";
 
 export interface NavViewer {
-  role: AppRole;
+  isBoss: boolean;
+  access: Access;
   email: string | null;
 }
 
@@ -34,13 +32,9 @@ export interface NavGroup {
 }
 
 const everyone = () => true;
-const managers = (v: NavViewer) => isManagerRole(v.role);
-const boss = (v: NavViewer) => v.role === "boss";
-// Not supervisors: they manage production only (see canManageBusiness).
-const business = (v: NavViewer) => canManageBusiness(v.role);
-const accountsViewers = (v: NavViewer) => canViewAccounts(v.role);
-const production = (v: NavViewer) => canManageProduction(v.role);
-const studiosOverseers = (v: NavViewer) => canViewAllStudios(v.role);
+/** Whoever reaches the section (staff access: Team & access). */
+const sees = (section: Section) => (v: NavViewer) => can(v.access, section);
+const boss = (v: NavViewer) => v.isBoss;
 // Support-report review is gated by email, not role: several accounts can
 // be "boss", only this one person should see what staff report.
 const developer = (v: NavViewer) => v.email === SUPPORT_OWNER_EMAIL;
@@ -60,8 +54,8 @@ export const NAV_GROUPS: NavGroup[] = [
     id: "orders",
     label: "Orders",
     items: [
-      { href: "/dashboard/orders", label: "Office Orders", icon: "orders", visible: everyone },
-      { href: "/dashboard/order-approvals", label: "Client Orders", icon: "clients", visible: managers },
+      { href: "/dashboard/orders", label: "Office Orders", icon: "orders", visible: sees("orders") },
+      { href: "/dashboard/order-approvals", label: "Client Orders", icon: "clients", visible: sees("orders") },
     ],
   },
   {
@@ -71,37 +65,37 @@ export const NAV_GROUPS: NavGroup[] = [
     id: "payments",
     label: "Payments",
     items: [
-      { href: "/dashboard/invoices", label: "Invoices", icon: "invoice", visible: business },
-      { href: "/dashboard/wallets", label: "Wallets", icon: "payment", visible: business },
-      { href: "/dashboard/transactions", label: "Transactions", icon: "payment", visible: business },
+      { href: "/dashboard/invoices", label: "Invoices", icon: "invoice", visible: sees("invoices") },
+      { href: "/dashboard/wallets", label: "Wallets", icon: "payment", visible: sees("wallets") },
+      { href: "/dashboard/transactions", label: "Transactions", icon: "payment", visible: sees("wallets") },
       // Studios' payments to vendors that Aming holds: disputes to settle, work waiting on studios.
-      { href: "/dashboard/vendor-jobs", label: "Vendor jobs", icon: "agents", visible: boss },
+      { href: "/dashboard/vendor-jobs", label: "Vendor jobs", icon: "agents", visible: sees("vendor_jobs") },
     ],
   },
   {
     // The business's money at a glance: sales, money received, what clients
-    // owe and hold (packages/lib/accounting). Boss only.
+    // owe and hold (packages/lib/accounting); Expenses has its own section.
     id: "accounts",
     label: "Accounts",
     items: [
-      { href: "/dashboard/accounts", label: "Overview", icon: "dashboard", visible: accountsViewers, exact: true },
-      { href: "/dashboard/accounts/today", label: "Today", icon: "tasks", visible: accountsViewers },
-      { href: "/dashboard/accounts/payments", label: "Payments", icon: "payment", visible: accountsViewers },
-      { href: "/dashboard/accounts/expenses", label: "Expenses", icon: "invoice", visible: accountsViewers },
-      { href: "/dashboard/accounts/sales", label: "Sales", icon: "invoice", visible: accountsViewers },
-      { href: "/dashboard/accounts/clients", label: "Client accounts", icon: "clients", visible: accountsViewers },
-      { href: "/dashboard/accounts/owed", label: "Money we owe", icon: "payment", visible: accountsViewers },
+      { href: "/dashboard/accounts", label: "Overview", icon: "dashboard", visible: sees("accounts"), exact: true },
+      { href: "/dashboard/accounts/today", label: "Today", icon: "tasks", visible: sees("accounts") },
+      { href: "/dashboard/accounts/payments", label: "Payments", icon: "payment", visible: sees("accounts") },
+      { href: "/dashboard/accounts/expenses", label: "Expenses", icon: "invoice", visible: sees("expenses") },
+      { href: "/dashboard/accounts/sales", label: "Sales", icon: "invoice", visible: sees("accounts") },
+      { href: "/dashboard/accounts/clients", label: "Client accounts", icon: "clients", visible: sees("accounts") },
+      { href: "/dashboard/accounts/owed", label: "Money we owe", icon: "payment", visible: sees("accounts") },
     ],
   },
   {
-    // What production uses and costs (packages/lib/production). Boss and supervisors.
+    // What production uses and costs (packages/lib/production).
     id: "production",
     label: "Production",
     items: [
-      { href: "/dashboard/production", label: "Overview", icon: "dashboard", visible: production, exact: true },
-      { href: "/dashboard/production/materials", label: "Materials", icon: "production", visible: production },
-      { href: "/dashboard/production/products", label: "Product costs", icon: "products", visible: production },
-      { href: "/dashboard/production/speed", label: "Speed", icon: "history", visible: production },
+      { href: "/dashboard/production", label: "Overview", icon: "dashboard", visible: sees("production"), exact: true },
+      { href: "/dashboard/production/materials", label: "Materials", icon: "production", visible: sees("production") },
+      { href: "/dashboard/production/products", label: "Product costs", icon: "products", visible: sees("production") },
+      { href: "/dashboard/production/speed", label: "Speed", icon: "history", visible: sees("production") },
     ],
   },
   {
@@ -110,9 +104,9 @@ export const NAV_GROUPS: NavGroup[] = [
     id: "catalog",
     label: "Catalog & Marketing",
     items: [
-      { href: "/dashboard/products", label: "Products", icon: "products", visible: business },
+      { href: "/dashboard/products", label: "Products", icon: "products", visible: sees("catalog") },
       { href: "/dashboard/showroom", label: "Showroom", icon: "showroom", visible: everyone },
-      { href: "/dashboard/marketing", label: "Carousel & discounts", icon: "marketing", visible: business },
+      { href: "/dashboard/marketing", label: "Carousel & discounts", icon: "marketing", visible: (v) => sees("carousel")(v) || sees("discounts")(v) },
       { href: "/dashboard/announcements", label: "Announcements", icon: "announcements", visible: canViewAnnouncements },
     ],
   },
@@ -120,22 +114,22 @@ export const NAV_GROUPS: NavGroup[] = [
     id: "people",
     label: "People",
     items: [
-      { href: "/dashboard/clients", label: "Clients", icon: "clients", visible: business },
-      // Clients' own photography studios (packages/lib/studios). The boss oversees them all.
-      { href: "/dashboard/studios", label: "Businesses", icon: "studio", visible: studiosOverseers },
+      { href: "/dashboard/clients", label: "Clients", icon: "clients", visible: sees("clients") },
+      // Clients' own photography studios (packages/lib/studios).
+      { href: "/dashboard/studios", label: "Businesses", icon: "studio", visible: sees("studios") },
       // Ready-made services with packages that businesses start from (packages/lib/offerings, "Templates").
-      { href: "/dashboard/service-templates", label: "Service templates", icon: "products", visible: studiosOverseers },
-      { href: "/dashboard/agents", label: "Agents", icon: "agents", visible: business },
-      { href: "/dashboard/workers", label: "Workers", icon: "workers", visible: managers },
-      { href: "/dashboard/designers", label: "Designers", icon: "designers", visible: managers },
-      { href: "/dashboard/admins", label: "Admins", icon: "admins", visible: boss },
+      { href: "/dashboard/service-templates", label: "Service templates", icon: "products", visible: (v) => can(v.access, "studios", "manage") },
+      { href: "/dashboard/agents", label: "Agents", icon: "agents", visible: sees("agents") },
+      { href: "/dashboard/workers", label: "Workers", icon: "workers", visible: (v) => sees("workers")(v) || sees("stations")(v) },
+      { href: "/dashboard/designers", label: "Designers", icon: "designers", visible: sees("designers") },
+      { href: "/dashboard/admins", label: "Team & access", icon: "admins", visible: boss },
     ],
   },
   {
     id: "help",
     label: "Help & Tools",
     items: [
-      { href: "/dashboard/assistant", label: "Assistant", icon: "support", visible: (v) => boss(v) || developer(v) },
+      { href: "/dashboard/assistant", label: "Assistant", icon: "support", visible: (v) => sees("alexis")(v) || developer(v) },
       { href: "/support", label: "Support", icon: "support", visible: everyone },
       { href: "/dashboard/support", label: "Support Reports", icon: "support", visible: developer },
       // Private component workbench; the room itself 404s for anyone else.

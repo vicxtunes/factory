@@ -58,7 +58,8 @@ export default async function SupportPage() {
         email={dashboardSession.email}
         fullName={dashboardSession.fullName}
         avatarUrl={dashboardSession.avatarUrl}
-        role={dashboardSession.role}
+        roleName={dashboardSession.roleName}
+        viewer={{ isBoss: dashboardSession.isBoss, access: dashboardSession.access, email: dashboardSession.email }}
         notifications={notifications}
       >
         <SupportPageContent />

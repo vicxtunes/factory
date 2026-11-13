@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { SectionLabel } from "@repo/ui/SectionLabel";
 import { RowsSkeleton } from "@repo/ui/skeletons/blocks";
 import { Loading } from "@repo/ui/skeletons/Loading";
-import { canApproveAnnouncements, canViewAnnouncements } from "@repo/lib/announcements/access";
+import { canApproveAnnouncements, canCreateAnnouncements, canViewAnnouncements } from "@repo/lib/announcements/access";
 import { getDashboardSession, type DashboardSession } from "@repo/lib/auth/session";
 import { fetchAnnouncements } from "@repo/lib/queries";
 import { SUPPORT_OWNER_EMAIL } from "@repo/lib/support/constants";
@@ -39,6 +39,7 @@ async function Announcements({ session }: { session: DashboardSession }) {
       announcements={await fetchAnnouncements()}
       currentUserId={session.userId}
       canApprove={canApproveAnnouncements(session)}
+      canCreate={canCreateAnnouncements(session)}
     />
   );
 }

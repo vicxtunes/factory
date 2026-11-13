@@ -1,19 +1,15 @@
-import { redirect } from "next/navigation";
-
 import { SectionLabel } from "@repo/ui/SectionLabel";
 import { RowsSkeleton } from "@repo/ui/skeletons/blocks";
 import { Loading } from "@repo/ui/skeletons/Loading";
 import { fetchCurrencies, fetchProductCatalog, fetchShowroomSettings } from "@repo/lib/queries";
-import { getDashboardSession } from "@repo/lib/auth/session";
-import { canManageBusiness } from "@repo/lib/types";
+import { pageAccess, sessionCan } from "@repo/lib/auth/session";
 
 import { ProductPanel } from "../../product-panel";
 
 export default async function ProductsPage() {
-  const session = await getDashboardSession();
-  if (!session || !canManageBusiness(session.role)) redirect("/dashboard");
+  const session = await pageAccess("catalog");
 
-  const canManage = session.role === "boss";
+  const canManage = sessionCan(session, "catalog", "manage");
 
   return (
     <div className="space-y-6">

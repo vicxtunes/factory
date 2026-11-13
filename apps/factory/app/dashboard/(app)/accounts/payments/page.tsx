@@ -1,4 +1,5 @@
 import { MoneyAlerts } from "@repo/ui/accounting/MoneyAlerts";
+import { getDashboardSession, sessionCan } from "@repo/lib/auth/session";
 import { PaymentsTable } from "@repo/ui/accounting/PaymentsTable";
 import { OtherMoneyPanel } from "@repo/ui/books/OtherMoneyPanel";
 import { PeriodPicker } from "@repo/ui/accounting/PeriodPicker";
@@ -45,7 +46,7 @@ async function Payments({ searchParams }: { searchParams: SearchParams }) {
   const other = await otherMoneyIn(scope, { from: view.period.fromDate, to: view.period.toDate });
   return (
     <>
-      <MoneyAlerts alerts={alerts.ok ? alerts.data ?? [] : []} />
+      <MoneyAlerts alerts={alerts.ok ? alerts.data ?? [] : []} canManage={sessionCan(await getDashboardSession(), "accounts", "manage")} />
       <PeriodPicker period={view.period} presets={DAY_PERIOD_PRESETS} />
       <PaymentsTable
         // Remount when the period changes so the search starts fresh on the new data.
@@ -54,7 +55,7 @@ async function Payments({ searchParams }: { searchParams: SearchParams }) {
         exportName="payments"
         timeZone={scope.timeZone}
       />
-      <OtherMoneyPanel lines={other} />
+      <OtherMoneyPanel lines={other} canManage={sessionCan(await getDashboardSession(), "accounts", "manage")} />
     </>
   );
 }

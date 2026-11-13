@@ -7,7 +7,7 @@ import { agentById, allAgentClients, payFirstForAll, pendingClientMatches, waiti
 import { changeTool, outcome, readTool, type ChangeTool } from "@repo/lib/assistant/panel/toolbox";
 import type { AssistantTool } from "@repo/lib/assistant/server/tools";
 import { createAdminClient } from "@repo/lib/supabase/admin";
-import type { AppRole } from "@repo/lib/types";
+import { can, type Access, type Level, type Section } from "@repo/lib/staff-access/core";
 import { confirmDeposit, listPendingDeposits, listWallets, recordDeposit, rejectDeposit, resolveMoneyAlert } from "@repo/lib/wallet/actions";
 
 import { deleteClient, updateClient } from "./dashboard/actions";
@@ -262,12 +262,35 @@ function bossTools(): { read: AssistantTool[]; change: ChangeTool[] } {
   };
 }
 
-/** For whoever is signed in to the staff app: managers, the boss on top, money alerts for Accounts. */
-export function peopleTools(role: AppRole, accounts: boolean): { read: AssistantTool[]; change: ChangeTool[] } {
+/** Which staff access each tool needs (packages/lib/staff-access). */
+const NEEDS: Record<string, [Section, Exclude<Level, "none">]> = {
+  client_wallets: ["wallets", "view"],
+  pending_deposits: ["wallets", "view"],
+  client_matches: ["clients", "view"],
+  agent_clients: ["agents", "view"],
+  edit_client: ["clients", "manage"],
+  record_wallet_deposit: ["wallets", "manage"],
+  confirm_deposit: ["wallets", "manage"],
+  reject_deposit: ["wallets", "manage"],
+  decide_client_match: ["clients", "manage"],
+  delete_client: ["order_admin", "manage"],
+  set_agent_active: ["agents", "manage"],
+  edit_agent: ["agents", "manage"],
+  set_pay_first_for_all: ["agents", "manage"],
+  move_agent_client: ["agents", "manage"],
+  merge_agent_client: ["agents", "manage"],
+  resolve_money_alert: ["accounts", "manage"],
+};
+
+/** Clients, wallets, agents and money alerts: each tool for whoever its section reaches. */
+export function peopleTools(v: { access: Access }): { read: AssistantTool[]; change: ChangeTool[] } {
   const m = managerTools();
-  const b = role === "boss" ? bossTools() : { read: [], change: [] };
-  const alerts: ChangeTool[] = accounts
-    ? [
+  const b = bossTools();
+  const allowed = (t: { name: string }) => {
+    const need = NEEDS[t.name];
+    return !!need && can(v.access, need[0], need[1]);
+  };
+  const alerts: ChangeTool[] = [
         changeTool({
           name: "resolve_money_alert",
           description: "Mark a money watch alert (from server_health) as dealt with.",
@@ -280,7 +303,6 @@ export function peopleTools(role: AppRole, accounts: boolean): { read: Assistant
           },
           run: async ({ alertId }) => outcome(await resolveMoneyAlert(alertId), "The alert is dealt with."),
         }),
-      ]
-    : [];
-  return { read: [...m.read, ...b.read], change: [...m.change, ...b.change, ...alerts] };
+  ];
+  return { read: [...m.read, ...b.read].filter(allowed), change: [...m.change, ...b.change, ...alerts].filter(allowed) };
 }

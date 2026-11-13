@@ -1,14 +1,8 @@
 import "server-only";
 
-import { redirect } from "next/navigation";
+import { pageAccess, type DashboardSession } from "@repo/lib/auth/session";
 
-import { getDashboardSession, type DashboardSession } from "@repo/lib/auth/session";
-
-import { canManageProduction } from "./policy";
-
-/** For Production pages: the signed-in boss or supervisor, else back to the dashboard. */
+/** For Production pages: whoever may see Production costs (staff access), else back to the dashboard. */
 export async function requireProductionAccess(): Promise<DashboardSession> {
-  const session = await getDashboardSession();
-  if (!session || !canManageProduction(session.role)) redirect("/dashboard");
-  return session;
+  return pageAccess("production");
 }

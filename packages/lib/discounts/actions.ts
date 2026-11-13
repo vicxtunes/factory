@@ -5,7 +5,7 @@
 
 import { revalidatePath } from "next/cache";
 
-import { getClientSession, getDashboardSession } from "@repo/lib/auth/session";
+import { getClientSession, getDashboardSession, sessionCan } from "@repo/lib/auth/session";
 import { catalogChanged } from "@repo/lib/catalog-cache";
 import { parseInput, type Result } from "@repo/lib/kernel/core";
 import { runAction } from "@repo/lib/kernel/server/action";
@@ -13,14 +13,13 @@ import { resolveTenantScope } from "@repo/lib/tenancy/server/resolve";
 
 import type { PromoCode } from "./core/model";
 import { discountIdSchema, discountInputSchema, promoCodeSchema } from "./core/schema";
-import { canManageDiscounts, canViewDiscounts } from "./policy";
 import { DiscountError } from "./ports";
 import { discounts as service } from "./server";
 import type { DiscountView } from "./service";
 
 async function staff(manage: boolean) {
   const session = await getDashboardSession();
-  if (!session || !(manage ? canManageDiscounts(session.role) : canViewDiscounts(session.role))) {
+  if (!sessionCan(session, "discounts", manage ? "manage" : "view")) {
     throw new DiscountError(manage ? "Only the boss can change discounts." : "You can't view discounts.");
   }
   return { actor: { id: session.userId, name: session.fullName ?? session.email ?? "Staff" }, scope: await resolveTenantScope() };

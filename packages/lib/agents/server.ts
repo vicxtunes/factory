@@ -3,6 +3,7 @@ import "server-only";
 // The agent platform's data (see ./README.md). Everything here uses the admin
 // client: callers (./actions.ts and the pages) check who's asking first.
 
+import { staffWith } from "@repo/lib/staff-access/server";
 import { clientUrl } from "@repo/lib/client-portal/paths";
 import { findClientCandidates, resolveOrCreateClient, type ClientMatchReason } from "@repo/lib/clients/dedupe";
 import { formatMoney } from "@repo/lib/currency/format";
@@ -439,7 +440,7 @@ export async function placeForClient(agent: Agent, input: PlacedAgentOrder): Pro
 }
 
 async function tellManagers(notice: { title: string; body: string; url: string }): Promise<void> {
-  const managers = must(await createAdminClient().from("profiles").select("id").in("role", ["receptionist", "supervisor", "boss"])) ?? [];
+  const managers = (await staffWith("orders")).map((id) => ({ id }));
   await Promise.all(managers.map((m) => notifyActor({ type: "dashboard_user", id: m.id }, notice))).catch((err) => console.error("agents: push failed:", err));
 }
 

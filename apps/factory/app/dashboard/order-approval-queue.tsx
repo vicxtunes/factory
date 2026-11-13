@@ -57,6 +57,7 @@ export function OrderApprovalQueue({
   agentPayments,
   costs,
   driveLinks,
+  canManage = true,
   canCancel = false,
   takesPayments = false,
 }: {
@@ -69,6 +70,8 @@ export function OrderApprovalQueue({
   costs: ItemCosts | null;
   /** Agents' own orders: paid so far and the % (set by the boss) needed before production (packages/lib/agents). */
   agentPayments: Record<string, { paid: number; percent: number; needed: number | null }>;
+  /** Orders at manage: confirm, invoice and route. Without it the queue only shows. */
+  canManage?: boolean;
   canCancel?: boolean;
   /** Boss and reception record payments on the invoice; supervisors only make it. */
   takesPayments?: boolean;
@@ -93,6 +96,7 @@ export function OrderApprovalQueue({
             driveLinks={driveLinks}
             agentPayment={agentPayments[g.orderId] ?? null}
             costs={costs}
+            canManage={canManage}
             canCancel={canCancel}
             takesPayments={takesPayments}
           />
@@ -276,6 +280,7 @@ function RouteCard({
   agentPayment,
   costs,
   driveLinks,
+  canManage = true,
   canCancel = false,
   takesPayments = false,
 }: {
@@ -287,6 +292,7 @@ function RouteCard({
   // Photo-book order: confirming needs the price agreed on a call with the
   // client — photo books have no catalog price (see ./order-confirmation.tsx).
   call?: boolean;
+  canManage?: boolean;
   canCancel?: boolean;
   takesPayments?: boolean;
 }) {
@@ -320,7 +326,9 @@ function RouteCard({
     <OrderCard group={group}>
       <OrderDetails order={group.order} items={group.items} costs={costs} driveLinks={driveLinks} />
       <Steps current={confirmed ? (invoiceReady ? "route" : "invoice") : "confirm"} />
-      {!confirmed ? (
+      {!canManage ? (
+        <p className="text-xs text-muted">You can look at client orders. Confirming and routing them is for whoever manages Orders.</p>
+      ) : !confirmed ? (
         <OrderConfirmation
           orderId={group.orderId}
           orderNo={group.orderNo}
