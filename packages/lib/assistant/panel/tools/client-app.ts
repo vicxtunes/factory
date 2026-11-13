@@ -96,8 +96,8 @@ async function studioTools(widgets: Widgets): Promise<{ read: AssistantTool[]; c
         run: ({ period }) => accounting.overview(scope, { preset: period }),
       }),
     );
-    change.push(studioDocumentTool(scope));
-    can.push("see the studio's money and create quotations and invoices for its clients");
+    if (canUse(access, "money", "manage")) change.push(studioDocumentTool(scope));
+    can.push(canUse(access, "money", "manage") ? "see the studio's money and create quotations and invoices for its clients" : "see the studio's money");
   }
   if (canUse(access, "clients")) {
     read.push(
@@ -115,7 +115,7 @@ async function studioTools(widgets: Widgets): Promise<{ read: AssistantTool[]; c
         },
       }),
     );
-    change.push(
+    if (canUse(access, "clients", "manage")) change.push(
       changeTool({
         name: "add_studio_client",
         description: "Add a new client to the studio's client list.",
@@ -137,7 +137,7 @@ async function studioTools(widgets: Widgets): Promise<{ read: AssistantTool[]; c
         },
       }),
     );
-    can.push("see and add the studio's clients");
+    can.push(canUse(access, "clients", "manage") ? "see and add the studio's clients" : "see the studio's clients");
   }
   if (canUse(access, "catalog")) {
     read.push(packagePhotosTool(scope, widgets), marketPricesTool(scope));
@@ -154,11 +154,11 @@ async function studioTools(widgets: Widgets): Promise<{ read: AssistantTool[]; c
     );
     can.push("see the studio's vendor jobs");
   }
-  const work = studioBusinessTools(scope, (area) => canUse(access, area));
+  const work = studioBusinessTools(scope, (area) => canUse(access, area), (area) => canUse(access, area, "manage"));
   read.push(...work.read);
   change.push(...work.change);
   can.push(...work.words);
-  const jobs = studioJobChanges(scope.tenantId, { projects: canUse(access, "projects"), money: canUse(access, "money") });
+  const jobs = studioJobChanges(scope.tenantId, { projects: canUse(access, "projects", "manage"), money: canUse(access, "money", "manage") });
   change.push(...jobs);
   if (jobs.length) can.push("call off, pay in, approve or raise a problem with vendor jobs");
   const words = can.length ? `For ${studio.name}: ${can.join(", ")}.` : "";

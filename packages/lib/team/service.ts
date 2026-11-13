@@ -4,7 +4,7 @@
 
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
-import { INVITE_DAYS, type Area, type Membership, type TeamMember, type TeamMemberInput } from "./core";
+import { INVITE_DAYS, STARTER_ROLES, type AccessRole, type AreaMap, type Membership, type TeamMember, type TeamMemberInput } from "./core";
 import { TeamError, type TeamAccounts, type TeamStore } from "./ports";
 
 const GONE = "That team member no longer exists.";
@@ -45,9 +45,32 @@ export class TeamService {
     if (!(await this.store.setArchived(scope, id, archived))) throw new TeamError(GONE);
   }
 
-  /** What they may use; it applies from their next page. */
-  async setAccess(scope: TenantScope, id: string, access: Area[]): Promise<void> {
-    if (!(await this.store.setAccess(scope, id, access))) throw new TeamError(GONE);
+  /** What they may use: a role of the business (or none) and their own areas on top. It applies from their next page. */
+  async setAccess(scope: TenantScope, id: string, roleId: string | null, own: AreaMap): Promise<void> {
+    if (roleId && !(await this.store.roles(scope)).some((r) => r.id === roleId)) throw new TeamError("That role no longer exists.");
+    if (!(await this.store.setAccess(scope, id, roleId, own))) throw new TeamError(GONE);
+  }
+
+  /** The business's roles; a business that has none gets the starters (Manager, Accounts, Tasks only) to change. */
+  async roles(scope: TenantScope): Promise<AccessRole[]> {
+    const roles = await this.store.roles(scope);
+    if (roles.length) return roles;
+    await this.store.addRoles(scope, STARTER_ROLES);
+    return this.store.roles(scope);
+  }
+
+  async addRole(scope: TenantScope, role: { name: string; access: AreaMap }): Promise<void> {
+    await this.roles(scope);
+    await this.store.addRoles(scope, [role]);
+  }
+
+  /** A change reaches everyone on the role at once, except areas set for them alone. */
+  async updateRole(scope: TenantScope, id: string, role: { name: string; access: AreaMap }): Promise<void> {
+    if (!(await this.store.updateRole(scope, id, role))) throw new TeamError("That role no longer exists.");
+  }
+
+  async deleteRole(scope: TenantScope, id: string): Promise<void> {
+    if (!(await this.store.deleteRole(scope, id))) throw new TeamError("That role no longer exists.");
   }
 
   /** A new invite link for them (an earlier one stops working), for INVITE_DAYS days. */

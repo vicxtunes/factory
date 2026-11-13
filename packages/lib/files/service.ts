@@ -598,6 +598,18 @@ export class FileService {
   }
 
   /**
+   * A team member with Files at view (owner, 2026-11-13): every folder to
+   * look in and download from, changing nothing; what's shared with them
+   * besides counts too.
+   */
+  async viewerAccess(scope: TenantScope, memberId: string): Promise<FileAccess> {
+    const shared = await this.memberAccess(scope, memberId);
+    const tops = (await this.repo.folders(scope)).filter((f) => f.parentId === null);
+    const grants = tops.map((f) => ({ folderId: f.id, role: "viewer" as const, canDownload: true }));
+    return { kind: "shared", grants: [...grants, ...(shared.kind === "shared" ? shared.grants : [])] };
+  }
+
+  /**
    * What a share link opens, at this studio's address only, while it lasts
    * (`today`: the studio's calendar day). Null when it doesn't.
    */

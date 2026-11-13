@@ -7,7 +7,7 @@
 import { AppError } from "@repo/lib/kernel/core";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
-import type { Area } from "./core/access";
+import type { AccessRole, AreaMap } from "./core/access";
 import type { Membership, TeamMember, TeamMemberInput } from "./core/model";
 
 export interface TeamStore {
@@ -16,7 +16,16 @@ export interface TeamStore {
   create(scope: TenantScope, input: TeamMemberInput): Promise<string>;
   update(scope: TenantScope, id: string, input: TeamMemberInput): Promise<boolean>;
   setArchived(scope: TenantScope, id: string, archived: boolean): Promise<boolean>;
-  setAccess(scope: TenantScope, id: string, access: Area[]): Promise<boolean>;
+  /** Their role (null: none) and their own areas. */
+  setAccess(scope: TenantScope, id: string, roleId: string | null, own: AreaMap): Promise<boolean>;
+  /** The business's roles, oldest first. */
+  roles(scope: TenantScope): Promise<AccessRole[]>;
+  /** Adds roles; throws TeamError when one's name is taken. */
+  addRoles(scope: TenantScope, roles: { name: string; access: AreaMap }[]): Promise<void>;
+  /** False when there's no such role there; throws TeamError when the name is taken. */
+  updateRole(scope: TenantScope, id: string, role: { name: string; access: AreaMap }): Promise<boolean>;
+  /** False when there's no such role; throws TeamError while someone is on it. */
+  deleteRole(scope: TenantScope, id: string): Promise<boolean>;
   /** Sets (or, null, removes) the invite link. */
   setInvite(scope: TenantScope, id: string, invite: { token: string; expiresAt: string } | null): Promise<boolean>;
   /** Unlinks the account that joined (and any invite): they can't sign in to the studio any more. */

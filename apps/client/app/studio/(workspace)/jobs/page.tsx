@@ -28,7 +28,7 @@ export default async function StudioJobsPage({ searchParams }: { searchParams: P
         Everyone you&apos;ve hired, on a project or not, and equipment you&apos;ve hired. Aming holds what you pay in until you approve the work, or the equipment is back.
       </p>
       <Loading skeleton={<RowsSkeleton rows={3} />}>
-        <Jobs scope={scope} canPay={canUse(access, "money")} hire={hire} service={service} />
+        <Jobs scope={scope} canPay={canUse(access, "money", "manage")} hire={hire} service={service} />
       </Loading>
     </>
   );

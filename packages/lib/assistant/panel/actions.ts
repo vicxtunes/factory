@@ -32,7 +32,7 @@ export async function openAlexisChat(chatId: string): Promise<panel.PanelMessage
 /** One of the studio's services' photos, for the panel Alexis shows in the chat. Its Catalog area only. */
 export async function alexisServiceMedia(serviceId: string): Promise<{ album: AlbumView | null; photos: PhotoView[]; usage: Usage } | null> {
   try {
-    const { scope } = await studioOfCaller("catalog");
+    const { scope } = await studioOfCaller("catalog", "view");
     const id = String(serviceId);
     if (!(await offerings.service(scope, id))) return null;
     const [album, usage] = await Promise.all([photosService.serviceGallery(scope, id).catch(() => null), photosService.usage(scope)]);

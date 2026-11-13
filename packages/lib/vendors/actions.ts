@@ -178,7 +178,7 @@ export interface VendorCard {
 /** Vendors the caller's studio can hire on its projects. */
 export async function findVendors(input: unknown): Promise<Result<VendorCard[]>> {
   return runAction("vendors", async () => {
-    await studioOfCaller("projects");
+    await studioOfCaller("projects", "view");
     const { query, category } = parseInput(vendorSearchSchema, input);
     const found = await vendors.search(query, category);
     return Promise.all(found.map(async (v: Vendor) => ({ id: v.id, name: v.name, category: v.category, location: v.location, skills: v.skills, offers: v.offers.map(({ id, name, price, unit }) => ({ id, name, price, unit })), photoUrl: await vendors.pictureUrl(v.photoKey) })));

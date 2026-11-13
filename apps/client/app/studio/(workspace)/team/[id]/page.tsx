@@ -22,7 +22,7 @@ export default async function TeamMemberPage({ params }: { params: Promise<{ id:
   const { scope } = await requireStudio();
   // Looked up inside the caller's studio only: another studio's id is "not found".
   const id = teamMemberIdSchema.safeParse((await params).id);
-  const member = id.success ? await team.get(scope, id.data) : null;
+  const [member, roles] = await Promise.all([id.success ? team.get(scope, id.data) : null, team.roles(scope)]);
   if (!member) notFound();
 
   return (
@@ -34,7 +34,7 @@ export default async function TeamMemberPage({ params }: { params: Promise<{ id:
         <h2 className="mt-1 text-xl font-semibold">{member.name}</h2>
       </div>
       <TeamMemberForm key={member.id} member={member} />
-      <TeamAccess key={`${member.id}-access`} member={member} />
+      <TeamAccess key={`${member.id}-access`} member={member} roles={roles} />
       <section>
         <SectionLabel>Their open tasks</SectionLabel>
         <Loading skeleton={<RowsSkeleton rows={3} />}>

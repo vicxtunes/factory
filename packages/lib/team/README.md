@@ -10,14 +10,12 @@ in with their own Aming account to work in the business. Generic and tenant-scop
 
 ## Signing in (access)
 
-The owner chooses what each member may use, from the member's page:
-
-| Choice | Areas |
-| --- | --- |
-| Manager | everything below: runs the business for the owner |
-| Accounts | clients and money |
-| Tasks only | none: only the tasks given to them |
-| Choose | any of: bookings, projects (& tasks), clients, money, catalog (packages, products, showroom) |
+The owner chooses what each member may use, from the member's page (owner, 2026-11-13): each area
+(bookings, projects & tasks, clients, money, catalog, files) at **none**, **view** (they see it) or
+**manage** (they can also change it). A **role** gives a starting set: the business's own roles,
+listed on My Business → Team, which the owner adds, changes and deletes (Manager, Accounts and Tasks
+only to start). On top of the role, any area can be set for one member alone. With nothing, a member
+sees only the tasks given to them. Members who had areas before kept them at manage, on no role.
 
 Never given: the team, the business profile, its brand and document settings, and
 Aming orders (placed under the owner's own account). Those stay the owner's.
@@ -34,8 +32,8 @@ Aming orders (placed under the owner's own account). Those stay the owner's.
 - **Remove access.** Their sign-in stops at once (and any invite link). They stay on the team
   for tasks. Archiving a member also stops their sign-in.
 
-Each page and action says what it needs (`requireStudio(area)`, `studioOfCaller(area)` in
-packages/lib/studios); none means owner-only, so new pages stay the owner's until they say
+Each page and action says what it needs (`requireStudio(area)` sees it; `studioOfCaller(area)` changes it,
+`studioOfCaller(area, "view")` only reads, in packages/lib/studios); none means owner-only, so new pages stay the owner's until they say
 otherwise. The rule itself is `canUse` in `core/access.ts`.
 
 ## Studio separation
@@ -52,7 +50,7 @@ The same rules as every studio module:
 ```
 packages/lib/team/
   core/            TeamMember, TeamMemberInput, zod schemas (phone stored in one form);
-                   access.ts: areas, presets, canUse.
+                   access.ts: areas, levels, starter roles, resolveAreas, canUse.
   ports.ts         TeamStore, TeamAccounts (owner), TeamError.
   service.ts       class TeamService: list (active first), active, get, create, update, setArchived,
                    setAccess, invite, removeAccess, byInvite, join, membershipsOf.
@@ -60,7 +58,8 @@ packages/lib/team/
   adapters/supabase/store.ts, server.ts, actions.ts
 packages/ui/team/  TeamList, TeamForms (member form, archive button), TeamAccess (access, invite link).
 apps/client/app/studio/(setup)/join/[token]  the invite link's page.
-supabase/migrations/20261003170000_team_tasks.sql (with tasks), 20261013100000_team_access.sql
+supabase/migrations/20261003170000_team_tasks.sql (with tasks), 20261013100000_team_access.sql,
+20270107100000_team_access_levels.sql (roles and levels)
 ```
 
 ## Testing

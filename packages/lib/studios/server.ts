@@ -41,7 +41,8 @@ export interface CallerStudio {
 /** What a page or action needs: an area, or "anyone" on the team (their home, their own tasks). Nothing: owner-only. */
 export type StudioNeed = Area | "anyone";
 
-const reaches = (access: StudioAccess, need?: StudioNeed) => need === "anyone" || canUse(access, need);
+/** Pages need to see an area (view); actions that change it, manage. */
+const reaches = (access: StudioAccess, need: StudioNeed | undefined, level: "view" | "manage") => need === "anyone" || canUse(access, need, level);
 
 /** Which business this device is working in, when its account can open more than one (`chooseStudio`). */
 export const STUDIO_CHOICE_COOKIE = "studio_as";
@@ -90,7 +91,7 @@ export async function requireStudio(need?: StudioNeed): Promise<CallerStudio> {
   const caller = await callerStudio();
   if (!caller) redirect("/");
   if (!caller.access.owner) {
-    if (!reaches(caller.access, need)) redirect("/studio");
+    if (!reaches(caller.access, need, "view")) redirect("/studio");
     return caller;
   }
   if (caller.studio.status !== "active") redirect("/studio/welcome");
@@ -108,14 +109,15 @@ export async function requireOwnStudio(): Promise<CallerStudio> {
 
 /**
  * For studio actions (this module's and others'): the caller's working
- * studio when they have what the action `need`s (nothing: owner-only), else
- * a StudioError.
+ * studio when they have what the action `need`s (nothing: owner-only) at
+ * `level` (manage: it changes something; view: it only reads), else a
+ * StudioError.
  */
-export async function studioOfCaller(need?: StudioNeed): Promise<CallerStudio> {
+export async function studioOfCaller(need?: StudioNeed, level: "view" | "manage" = "manage"): Promise<CallerStudio> {
   const caller = await callerStudio();
   if (!caller) throw new StudioError("Sign in to manage your business.");
   if (!caller.access.owner) {
-    if (!reaches(caller.access, need)) throw new StudioError("You don't have access to this part of the business. Ask its owner.");
+    if (!reaches(caller.access, need, level)) throw new StudioError(level === "view" ? "You don't have access to this part of the business. Ask its owner." : "You can look at this part of the business but not change it. Ask its owner.");
     return caller;
   }
   if (caller.studio.status !== "active") throw new StudioError("Your business isn't open yet: finish setting it up and wait for Aming's approval.");

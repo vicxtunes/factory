@@ -143,7 +143,7 @@ async function Browser({
         shares,
         people: {
           clients: clientList.map((c) => ({ id: c.id, name: c.name })),
-          members: members.filter((m) => !canUse({ owner: false, memberId: m.id, areas: m.access }, "files")).map((m) => ({ id: m.id, name: m.name })),
+          members: members.filter((m) => !canUse({ owner: false, memberId: m.id, areas: m.access }, "files", "manage")).map((m) => ({ id: m.id, name: m.name })),
         },
         linkBase: slug ? studioUrl(`${slug}/f/`) : null,
       }}

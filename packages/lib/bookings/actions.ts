@@ -48,7 +48,7 @@ export async function updateBooking(id: unknown, input: unknown): Promise<Result
 /** For a form's warning: the caller's bookings this day and these times would clash with, leaving out the one being changed. Warns, never blocks. */
 export async function findClashes(when: unknown, exceptId: unknown): Promise<Result<Booking[]>> {
   return runAction("bookings", async () => {
-    const { scope } = await studioOfCaller("bookings");
+    const { scope } = await studioOfCaller("bookings", "view");
     return bookings.clashesWith(scope, parseInput(bookingWhenSchema, when), exceptId == null ? null : parseInput(bookingIdSchema, exceptId));
   });
 }

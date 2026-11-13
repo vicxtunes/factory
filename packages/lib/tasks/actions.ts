@@ -38,7 +38,7 @@ async function openFolderFor(scope: TenantScope, task: Pick<TaskInput, "folderId
   if (task.customerId) return files.ensureShared(scope, task.folderId, { kind: "client", customerId: task.customerId }, "viewer", false);
   if (!task.assigneeId) return;
   const member = await team.get(scope, task.assigneeId);
-  if (member && !member.access.includes("files")) await files.ensureShared(scope, task.folderId, { kind: "member", memberId: member.id }, "editor");
+  if (member && member.access.files !== "manage") await files.ensureShared(scope, task.folderId, { kind: "member", memberId: member.id }, "editor");
 }
 
 /**
@@ -97,7 +97,7 @@ export async function updateTask(id: unknown, input: unknown): Promise<Result> {
 export async function setTaskStatus(id: unknown, status: unknown): Promise<Result> {
   return runAction("tasks", async () => {
     const { scope, access } = await studioOfCaller("anyone");
-    const onlyFor = access.owner || canUse(access, "projects") ? undefined : access.memberId;
+    const onlyFor = access.owner || canUse(access, "projects", "manage") ? undefined : access.memberId;
     await tasks.setStatus(scope, parseInput(taskIdSchema, id), parseInput(taskStatusSchema, status), onlyFor);
     revalidatePath("/studio", "layout");
   });
@@ -109,7 +109,7 @@ export async function setTaskStatus(id: unknown, status: unknown): Promise<Resul
  */
 export async function taskLink(id: unknown): Promise<Result<string>> {
   return runAction("tasks", async () => {
-    const { scope } = await studioOfCaller("projects");
+    const { scope } = await studioOfCaller("projects", "view");
     const token = await tasks.shareToken(scope, parseInput(taskIdSchema, id));
     const slug = await portal.currentSlug(scope.tenantId);
     if (!slug) throw new TaskError("Set your business's page address first, so the link has somewhere to open.");
