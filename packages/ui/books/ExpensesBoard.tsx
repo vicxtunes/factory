@@ -548,7 +548,7 @@ export function ExpensesBoard({
         </>
       )}
 
-      {sheet === "new" ? <NewExpenseSheet categories={categories} today={today} onClose={() => setSheet(null)} /> : null}
+      {sheet === "new" ? <NewExpenseSheet categories={categories} today={today} canSend={canSend} onClose={() => setSheet(null)} /> : null}
       {sheet === "limit" ? <LimitSheet above={approvalAbove} onClose={() => setSheet(null)} /> : null}
       {sheet === "autopay_limit" ? <AutopayLimitSheet upTo={autopayUpTo} onClose={() => setSheet(null)} /> : null}
       {opened ? <ExpenseSheet key={opened.id} expense={opened} today={today} isBoss={isBoss} canSend={canSend} startSending={openToSend} timeZone={timeZone} onClose={() => setOpenId(null)} /> : null}
@@ -695,9 +695,17 @@ function RepeatFields({ value: r, onChange, dueLabel, min, madeSoFar }: { value:
 }
 
 /** One-time, fixed recurring or varying recurring: the same form, what differs follows the choice. */
-function NewExpenseSheet({ categories, today, onClose }: { categories: ExpenseCategory[]; today: string; onClose: () => void }) {
+/**
+ * Record an expense. A one-time one can be noted as already paid, or (the
+ * boss, with HivePay) paid now by mobile money as it's saved (owner, 2026-11-13).
+ */
+function NewExpenseSheet({ categories, today, canSend, onClose }: { categories: ExpenseCategory[]; today: string; canSend: boolean; onClose: () => void }) {
   const router = useRouter();
+  const money = useMoney();
   const [ids] = useState(() => ({ expense: crypto.randomUUID(), schedule: crypto.randomUUID(), payment: crypto.randomUUID() }));
+  // Saved but the send failed: trying again only sends, with a fresh id (an id sends at most once).
+  const [saved, setSaved] = useState(false);
+  const [payoutId, setPayoutId] = useState(() => crypto.randomUUID());
   const [type, setType] = useState<"one_time" | "fixed" | "varying">("one_time");
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -709,7 +717,10 @@ function NewExpenseSheet({ categories, today, onClose }: { categories: ExpenseCa
   const [spentOn, setSpentOn] = useState(today);
   const [dueOn, setDueOn] = useState("");
   const [repeat, setRepeat] = useState<RepeatValue>({ every: "month", everyCount: "1", dueOn: today, end: "never", endsOn: "", times: "" });
-  const [paidNow, setPaidNow] = useState(false);
+  const [paid, setPaid] = useState<"no" | "already" | "send">("no");
+  const [phone, setPhone] = useState("");
+  // Sending real money asks once more, as Approve and send does.
+  const [sure, setSure] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
   const pay = usePayFields(today);
   const [error, setError] = useState<string | null>(null);
@@ -725,7 +736,11 @@ function NewExpenseSheet({ categories, today, onClose }: { categories: ExpenseCa
     if (category === "__new" && !newCategory.trim()) return setError("Give the new category a name.");
     const how = repeatInput(repeat);
     if (recurring && "error" in how) return setError(how.error);
+    const sending = !recurring && paid === "send";
+    if (sending && !phone.trim()) return setError("Enter the MTN or Airtel number to send it to.");
+    if (sending && (value < 500 || value > 5_000_000)) return setError("HivePay sends from 500 to 5,000,000 at a time.");
     setError(null);
+    if (sending && !sure) return setSure(true);
     start(async () => {
       let categoryKey = category;
       if (category === "__new") {
@@ -742,15 +757,27 @@ function NewExpenseSheet({ categories, today, onClose }: { categories: ExpenseCa
         router.refresh();
         return onClose();
       }
-      const res = await recordExpense({ ...shared, id: ids.expense, spentOn, dueOn: dueOn || null });
-      if (!res.ok) return setError(res.error);
-      for (const file of files) {
-        const up = await uploadExpenseDocument(ids.expense, file);
-        if (!up.ok) return setError(`The expense is saved, but ${file.name} didn't upload. Open the expense and add it again.`);
+      if (!saved) {
+        const res = await recordExpense({ ...shared, id: ids.expense, spentOn, dueOn: dueOn || null });
+        if (!res.ok) return setError(res.error);
+        setSaved(true);
+        for (const file of files) {
+          const up = await uploadExpenseDocument(ids.expense, file);
+          if (!up.ok) return setError(`The expense is saved, but ${file.name} didn't upload. Open the expense and add it again.`);
+        }
       }
-      if (paidNow) {
-        const paid = await payExpense({ ...pay.value, id: ids.payment, expenseId: ids.expense, amount: value, actual: null });
-        if (!paid.ok) return setError(`The expense is saved, but the payment wasn't: ${paid.error} Open the expense to pay it.`);
+      if (paid === "already") {
+        const done = await payExpense({ ...pay.value, id: ids.payment, expenseId: ids.expense, amount: value, actual: null });
+        if (!done.ok) return setError(`The expense is saved, but the payment wasn't: ${done.error} Open the expense to pay it.`);
+      }
+      if (sending) {
+        const sent = await sendExpensePayout({ id: payoutId, expenseId: ids.expense, amount: value, actual: null, phone });
+        if (!sent.ok) {
+          router.refresh();
+          setSure(false);
+          setPayoutId(crypto.randomUUID());
+          return setError(`The expense is saved, but the money wasn't sent: ${sent.error} Check the number and press again, or close and send it from the expense later.`);
+        }
       }
       router.refresh();
       onClose();
@@ -773,7 +800,7 @@ function NewExpenseSheet({ categories, today, onClose }: { categories: ExpenseCa
         <CategoryField choices={choices} category={category} setCategory={setCategory} newCategory={newCategory} setNewCategory={setNewCategory} />
         <div className="grid gap-2 sm:grid-cols-2">
           <Field label={type === "varying" ? "Expected amount" : "Amount"}>
-            <TextInput inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value)} />
+            <TextInput inputMode="numeric" value={amount} disabled={saved || sure} onChange={(e) => setAmount(e.target.value)} />
           </Field>
           <Field label="Who it's for (optional)">
             <TextInput value={recipient} onChange={(e) => setRecipient(e.target.value)} maxLength={120} />
@@ -804,17 +831,50 @@ function NewExpenseSheet({ categories, today, onClose }: { categories: ExpenseCa
               disabled={pending}
               onFiles={(list) => setFiles(Array.from(list))}
             />
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={paidNow} onChange={(e) => setPaidNow(e.target.checked)} />
-              Already paid in full
-            </label>
-            {paidNow ? <PayFields form={pay} /> : null}
+            <Field label="Paid?">
+              <Select
+                value={paid}
+                disabled={sure}
+                onChange={(e) => {
+                  setPaid(e.target.value as typeof paid);
+                  setSure(false);
+                }}
+              >
+                <option value="no">Not paid yet</option>
+                <option value="already">Already paid in full</option>
+                {canSend ? <option value="send">Pay now by mobile money</option> : null}
+              </Select>
+            </Field>
+            {paid === "already" ? <PayFields form={pay} /> : null}
+            {paid === "send" ? (
+              <>
+                <Field label="MTN or Airtel number" hint="The whole amount is sent from Aming's HivePay account as you save. HivePay keeps its fee out of it, so the phone gets a little less.">
+                  <TextInput type="tel" value={phone} disabled={sure} onChange={(e) => setPhone(e.target.value)} placeholder="e.g. 0772 000 000" />
+                </Field>
+              </>
+            ) : null}
           </>
         )}
         <ErrorLine error={error} />
-        <Button type="submit" loading={pending} className="w-full">
-          {recurring ? "Save recurring expense" : "Save expense"}
-        </Button>
+        {sure ? (
+          <div className="space-y-2 rounded-xl bg-warning-50 p-3 dark:bg-warning-500/10">
+            <p className="text-sm font-medium">
+              Save and send {money(parseNumber(amount))} to {phone.trim()}? Real money leaves at once and can&apos;t be pulled back.
+            </p>
+            <div className="flex gap-2">
+              <Button type="submit" loading={pending} className="flex-1">
+                Yes, save and send
+              </Button>
+              <Button type="button" variant="secondary" disabled={pending} onClick={() => setSure(false)}>
+                Back
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <Button type="submit" loading={pending} className="w-full">
+            {recurring ? "Save recurring expense" : paid === "send" ? "Save and pay now" : "Save expense"}
+          </Button>
+        )}
       </form>
     </FormSheet>
   );
