@@ -4,7 +4,7 @@ import "server-only";
 // (actions.ts is for the browser).
 
 export { handleWebhook as handleHivepayWebhook, reconcileWaiting as reconcileWaitingHivepay } from "./server/mobile-money";
-export { reconcileAgentPayouts } from "./server/agent";
+export { reconcileAgentPayouts, runWeeklyAgentPay } from "./server/agent";
 export { reconcileExpensePayouts, runAutopay } from "@repo/lib/books/payouts-server";
 export { closePastDays } from "@repo/lib/books/server";
 export { sendDailyReport as sendDailyMoneyReport, sendExpenseReminder, sendLateMoneyNote, watchMoney } from "./server/watch";

@@ -220,7 +220,7 @@ function bossTools(): { read: AssistantTool[]; change: ChangeTool[] } {
         run: async (e) => {
           const a = await agentRow(e.agentId);
           return outcome(
-            await editAgent({ agentId: a.id, name: e.name ?? a.name, rateOverride: e.rateOverride === undefined ? a.rateOverride : e.rateOverride, payFirstOverride: e.payFirstOverride === undefined ? a.payFirstOverride : e.payFirstOverride }, e.waiting ?? "follow"),
+            await editAgent({ agentId: a.id, name: e.name ?? a.name, rateOverride: e.rateOverride === undefined ? a.rateOverride : e.rateOverride, payFirstOverride: e.payFirstOverride === undefined ? a.payFirstOverride : e.payFirstOverride, payoutPhone: a.payoutPhone ?? "" }, e.waiting ?? "follow"),
             "The agent is updated.",
           );
         },
