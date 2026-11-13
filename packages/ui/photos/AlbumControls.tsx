@@ -106,7 +106,8 @@ export function AlbumSettings({ album, publicUrl, basePath }: { album: AlbumView
 }
 
 /** The studio's view of an album's photos: make one the cover, caption it, delete it. */
-export function ManagePhotos({ albumId, coverPhotoId, photos }: { albumId: string; coverPhotoId: string | null; photos: PhotoView[] }) {
+/** The album's photos; `canEdit` adds Make cover, Caption and Delete. */
+export function ManagePhotos({ albumId, coverPhotoId, photos, canEdit }: { albumId: string; coverPhotoId: string | null; photos: PhotoView[]; canEdit: boolean }) {
   const { error, pending, run } = useRun();
   if (photos.length === 0) return <p className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted">No photos yet.</p>;
   return (
@@ -118,6 +119,9 @@ export function ManagePhotos({ albumId, coverPhotoId, photos }: { albumId: strin
             <img src={p.thumbUrl} alt={p.caption ?? ""} loading="lazy" className="aspect-square w-full object-cover" />
             <div className="space-y-1 p-2 text-xs">
               {p.caption ? <p className="truncate">{p.caption}</p> : null}
+              {!canEdit ? (
+                coverPhotoId === p.id ? <span className="font-medium text-success-600 dark:text-success-400">Cover</span> : null
+              ) : (
               <div className="flex flex-wrap gap-x-3 gap-y-1">
                 {coverPhotoId === p.id ? (
                   <span className="font-medium text-success-600 dark:text-success-400">Cover</span>
@@ -148,6 +152,7 @@ export function ManagePhotos({ albumId, coverPhotoId, photos }: { albumId: strin
                   Delete
                 </Button>
               </div>
+              )}
             </div>
           </li>
         ))}

@@ -25,6 +25,7 @@ export function ProjectGalleryPanel({
   usage,
   shareUrl,
   clientPhone,
+  canEdit,
 }: {
   projectId: string;
   album: AlbumView | null;
@@ -33,6 +34,8 @@ export function ProjectGalleryPanel({
   /** The current share link, if it's shared. */
   shareUrl: string | null;
   clientPhone: string | null;
+  /** Creating the gallery, adding and managing photos, and its share link. */
+  canEdit: boolean;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -51,6 +54,7 @@ export function ProjectGalleryPanel({
     });
   };
 
+  if (!album && !canEdit) return <p className="rounded-2xl border border-dashed border-border p-5 text-center text-sm text-muted">No photo gallery yet.</p>;
   if (!album) {
     return (
       <section className="space-y-2 rounded-2xl border border-border bg-surface p-4 shadow-theme-xs">
@@ -68,11 +72,13 @@ export function ProjectGalleryPanel({
   return (
     <div className="space-y-3">
       <UsageBar usage={usage} />
-      <PhotoUploader albumId={album.id} />
-      <ManagePhotos albumId={album.id} coverPhotoId={album.coverPhotoId} photos={photos} />
+      {canEdit ? <PhotoUploader albumId={album.id} /> : null}
+      <ManagePhotos albumId={album.id} coverPhotoId={album.coverPhotoId} photos={photos} canEdit={canEdit} />
+      {canEdit || link ? (
       <section className="space-y-3 rounded-2xl border border-border bg-surface p-4 shadow-theme-xs">
         <p className="text-sm font-semibold">Share by link</p>
         <p className="text-xs text-muted">Your client already sees these photos on their page. A link lets family view and download them without signing in.</p>
+        {canEdit ? (
         <div className="flex flex-wrap items-end gap-2">
           <Field label="Works until (optional)">
             <TextInput type="date" value={expires} onChange={(e) => setExpires(e.target.value)} />
@@ -86,6 +92,7 @@ export function ProjectGalleryPanel({
             </Button>
           ) : null}
         </div>
+        ) : null}
         {link ? (
           <div className="space-y-2">
             <p className="break-all rounded-[var(--radius)] bg-background px-3 py-2 text-xs text-muted">{link}</p>
@@ -105,10 +112,11 @@ export function ProjectGalleryPanel({
                 </a>
               ) : null}
             </div>
-            <p className="text-xs text-muted">Making a new link stops the old one working.</p>
+            {canEdit ? <p className="text-xs text-muted">Making a new link stops the old one working.</p> : null}
           </div>
         ) : null}
       </section>
+      ) : null}
       {error ? <p className="text-sm text-error-600 dark:text-error-400">{error}</p> : null}
     </div>
   );

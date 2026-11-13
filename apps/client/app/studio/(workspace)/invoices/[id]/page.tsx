@@ -13,6 +13,7 @@ import { canEditInvoice, canVoidInvoice, invoiceIdSchema } from "@repo/lib/billi
 import { documentIssuer, invoices, invoiceUrl, receiptUrl } from "@repo/lib/billing/server";
 import { bookings } from "@repo/lib/bookings/server";
 import { requireStudio } from "@repo/lib/studios/server";
+import { canUse } from "@repo/lib/team/core";
 
 export const metadata = { title: "Invoice · My Business" };
 
@@ -20,7 +21,8 @@ const button =
   "inline-flex min-h-11 items-center rounded-[var(--radius)] border border-gray-300 bg-white px-4 text-sm text-gray-700 shadow-theme-xs hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300";
 
 export default async function StudioInvoicePage({ params }: { params: Promise<{ id: string }> }) {
-  const { scope, studio } = await requireStudio("money");
+  const { scope, studio, access } = await requireStudio("money");
+  const canEdit = canUse(access, "money", "manage");
   // Looked up inside the caller's studio only: another studio's id is "not found".
   const id = invoiceIdSchema.safeParse((await params).id);
   const [invoice, issuer] = await Promise.all([id.success ? invoices.get(scope, id.data) : null, documentIssuer(studio.id)]);
@@ -46,17 +48,19 @@ export default async function StudioInvoicePage({ params }: { params: Promise<{ 
               Booking
             </Link>
           ) : null}
-          {canEditInvoice(state) ? (
+          {canEdit && canEditInvoice(state) ? (
             <Link href={`/studio/invoices/${invoice.id}/edit`} className={button}>
               Edit
             </Link>
           ) : null}
-          <DeleteButton
-            className="min-h-11"
-            confirm={`Delete invoice ${invoice.number} and its recorded payments?`}
-            action={deleteInvoice.bind(null, invoice.id)}
-            after="/studio/invoices"
-          />
+          {canEdit ? (
+            <DeleteButton
+              className="min-h-11"
+              confirm={`Delete invoice ${invoice.number} and its recorded payments?`}
+              action={deleteInvoice.bind(null, invoice.id)}
+              after="/studio/invoices"
+            />
+          ) : null}
         </div>
       </div>
       {invoice.voidedAt ? null : (
@@ -67,6 +71,7 @@ export default async function StudioInvoicePage({ params }: { params: Promise<{ 
           number={invoice.number}
           studioName={studio.name}
           clientPhone={invoice.billTo.phone}
+          canReset={canEdit}
         />
       )}
       <PaymentsPanel
@@ -74,13 +79,14 @@ export default async function StudioInvoicePage({ params }: { params: Promise<{ 
         receiptUrls={Object.fromEntries(invoice.payments.map((p) => [p.id, receiptUrl(p.shareToken)]))}
         today={localDate(new Date(), scope.timeZone)}
         scope={scope}
+        canRecord={canEdit}
       />
       <InvoicePdf
         invoice={invoice}
         issuer={issuer}
         scope={{ currency: scope.currency, locale: scope.locale, timeZone: scope.timeZone }}
       />
-      {canVoidInvoice(state) ? <VoidInvoiceButton invoiceId={invoice.id} /> : null}
+      {canEdit && canVoidInvoice(state) ? <VoidInvoiceButton invoiceId={invoice.id} /> : null}
     </>
   );
 }

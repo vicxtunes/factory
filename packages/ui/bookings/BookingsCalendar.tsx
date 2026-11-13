@@ -35,6 +35,7 @@ export function BookingsCalendar({
   bookings,
   scope,
   basePath,
+  canAdd,
 }: {
   view: CalendarView;
   /** The day the view is around, "yyyy-mm-dd". */
@@ -44,6 +45,8 @@ export function BookingsCalendar({
   bookings: Booking[];
   scope: Pick<TenantScope, "locale" | "timeZone">;
   basePath: string;
+  /** Shows "+ Book" on each day. */
+  canAdd: boolean;
 }) {
   const href = (v: CalendarView, d: string) => `${basePath}?view=${v}&date=${d}`;
   const { from, to } = viewRange(view, anchor);
@@ -138,9 +141,11 @@ export function BookingsCalendar({
                   <Link href={href("day", d)} className={`text-sm font-semibold hover:underline ${d === today ? "text-brand-600" : ""}`}>
                     {new Intl.DateTimeFormat(scope.locale, { timeZone: "UTC", weekday: "long", day: "numeric", month: "short" }).format(new Date(`${d}T12:00:00Z`))}
                   </Link>
-                  <Link href={`${basePath}?new&date=${d}`} scroll={false} className={buttonClass("secondary", "sm")}>
-                    + Book
-                  </Link>
+                  {canAdd ? (
+                    <Link href={`${basePath}?new&date=${d}`} scroll={false} className={buttonClass("secondary", "sm")}>
+                      + Book
+                    </Link>
+                  ) : null}
                 </div>
                 {items.length === 0 ? (
                   <p className="text-xs text-muted">Free</p>

@@ -357,6 +357,22 @@ test("a shared folder is all a client sees: it's their top, the way up stops the
   assert.equal(await service.list(studioA, nakato, await service.clientAccess(studioA, "c2")), null);
 });
 
+test("Files at view: every folder and the files at the top, to look at and download, changing nothing", async () => {
+  const { service, upload, clients, nakato } = await sharedDrive();
+  const loose = await upload(studioA, null, "price-list.pdf", MB);
+  const access = await service.viewerAccess(studioA, "m1");
+
+  const top = await service.list(studioA, null, access);
+  assert.deepEqual(top?.folders.map((f) => f.name), ["Clients"]);
+  assert.deepEqual(top?.files.map((f) => f.name), ["price-list.pdf"]);
+  assert.ok(top?.files[0]?.downloadUrl);
+  assert.deepEqual(top?.rights, { add: false, change: false, download: true, share: false });
+  assert.deepEqual((await service.list(studioA, nakato, access))?.files.map((f) => f.name), ["contract.pdf"]);
+  await assert.rejects(service.createFolder(studioA, { parentId: null, name: "Mine" }, access));
+  await assert.rejects(service.renameFile(studioA, loose, "x.pdf", access));
+  await assert.rejects(service.deleteFolder(studioA, clients, access));
+});
+
 test("a viewer looks (downloading only if allowed), and changes nothing", async () => {
   const { service, upload, nakato, contract } = await sharedDrive();
   await service.share(studioA, nakato, { kind: "member", memberId: "m1" }, settings("viewer", false));

@@ -102,6 +102,7 @@ export function ProjectVendors({
   jobs,
   folders,
   canPay,
+  canHire,
   hire,
   hireService,
   returnTo,
@@ -110,6 +111,8 @@ export function ProjectVendors({
   jobs: ProjectJob[];
   folders: ProjectFolder[];
   canPay: boolean;
+  /** Hiring, giving a folder, cancelling and disputes (the Projects area's manage). */
+  canHire: boolean;
   hire: VendorCard | null;
   hireService: string | null;
   returnTo: string;
@@ -117,7 +120,7 @@ export function ProjectVendors({
   const router = useRouter();
   // On a project, a vendor has one open job at a time.
   const openJobs = projectId ? jobs.filter((j) => isOpenJob(j.status)).map((j) => j.vendorId) : [];
-  const [adding, setAdding] = useState(hire !== null);
+  const [adding, setAdding] = useState(canHire && hire !== null);
   // A job with no folder (made before jobs had them, or its folder was deleted): the studio gives it one.
   const [givingFolder, setGivingFolder] = useState<ProjectJob | null>(null);
   const [sheet, setSheet] = useState<Sheet>(null);
@@ -181,7 +184,7 @@ export function ProjectVendors({
                   {j.status === "samples_sent" && canPay ? <Button onClick={() => setSheet({ kind: "fund", job: j })}>Approve samples and pay in</Button> : null}
                   {j.status === "awaiting_funds" && canPay ? <Button onClick={() => setSheet({ kind: "fund", job: j })}>{j.rental ? "Pay in to book it" : "Pay in to start"}</Button> : null}
                   {j.status === "delivered" && canPay ? <Button onClick={() => setSheet({ kind: "approve", job: j })}>{j.rental ? "Approve the return" : "Approve and release"}</Button> : null}
-                  {needsFolder ? (
+                  {needsFolder && canHire ? (
                     <Button variant="secondary" onClick={() => setGivingFolder(j)}>
                       Give a folder
                     </Button>
@@ -191,12 +194,12 @@ export function ProjectVendors({
                       {j.status === "samples_sent" ? "See the samples" : "Open their folder"}
                     </Link>
                   ) : null}
-                  {["requested", "samples", "samples_sent", "awaiting_funds"].includes(j.status) ? (
+                  {canHire && ["requested", "samples", "samples_sent", "awaiting_funds"].includes(j.status) ? (
                     <Button size="sm" variant="danger" type="button" disabled={pending} onClick={() => act(() => cancelVendorJob(j.id))}>
                       {j.status === "samples_sent" ? "Not good: cancel" : "Cancel"}
                     </Button>
                   ) : null}
-                  {j.status === "in_progress" || j.status === "delivered" ? (
+                  {canHire && (j.status === "in_progress" || j.status === "delivered") ? (
                     <Button size="sm" variant="danger" type="button" onClick={() => setSheet({ kind: "dispute", job: j })}>
                       Raise a dispute
                     </Button>
@@ -214,9 +217,11 @@ export function ProjectVendors({
         </p>
       )}
       {error && !sheet ? <p className="text-sm text-error-600 dark:text-error-400">{error}</p> : null}
-      <Button variant="secondary" onClick={() => setAdding(true)}>
-        {projectId ? "Add a vendor" : "Hire a vendor"}
-      </Button>
+      {canHire ? (
+        <Button variant="secondary" onClick={() => setAdding(true)}>
+          {projectId ? "Add a vendor" : "Hire a vendor"}
+        </Button>
+      ) : null}
 
       {adding ? (
         <AddVendor

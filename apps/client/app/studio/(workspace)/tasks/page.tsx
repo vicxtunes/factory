@@ -13,12 +13,13 @@ export const metadata = { title: "Tasks · My Business" };
 export default async function StudioTasksPage() {
   const { scope, access } = await requireStudio("anyone");
   const all = canUse(access, "projects");
+  const canMove = canUse(access, "projects", "manage");
   return (
     <>
       <p className="text-sm text-muted">
-        {all ? "Everything still to do across your projects: drag a task to move it along. Add tasks on a project's page." : "The tasks given to you: drag one to In progress when you start, and to Done when it's finished."}
+        {all && !canMove ? "Everything still to do across the projects." : all ? "Everything still to do across your projects: drag a task to move it along. Add tasks on a project's page." : "The tasks given to you: drag one to In progress when you start, and to Done when it's finished."}
       </p>
-      <Loading skeleton={<RowsSkeleton />}>{all ? <Tasks scope={scope} /> : <MyTasks scope={scope} access={access} />}</Loading>
+      <Loading skeleton={<RowsSkeleton />}>{all ? <Tasks scope={scope} canMove={canMove} /> : <MyTasks scope={scope} access={access} />}</Loading>
     </>
   );
 }
@@ -33,7 +34,7 @@ async function MyTasks({ scope, access }: { scope: TenantScope; access: StudioAc
   return <TasksBoard tasks={mine} team={[]} today={localDate(new Date(), scope.timeZone)} scope={scope} editable="status" projectPath={null} />;
 }
 
-async function Tasks({ scope }: { scope: TenantScope }) {
+async function Tasks({ scope, canMove }: { scope: TenantScope; canMove: boolean }) {
   const [all, members] = await Promise.all([tasks.board(scope, doneSince()), team.list(scope)]);
-  return <TasksBoard tasks={all} team={members.map((m) => ({ id: m.id, name: m.name }))} today={localDate(new Date(), scope.timeZone)} scope={scope} editable />;
+  return <TasksBoard tasks={all} team={members.map((m) => ({ id: m.id, name: m.name }))} today={localDate(new Date(), scope.timeZone)} scope={scope} editable={canMove} />;
 }

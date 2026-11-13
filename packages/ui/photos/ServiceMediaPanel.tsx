@@ -120,7 +120,7 @@ export function ServiceMediaPanel({
       <UsageBar usage={usage} />
       <PreviewVideo album={album} />
       <PhotoUploader albumId={album.id} />
-      <ManagePhotos albumId={album.id} coverPhotoId={album.coverPhotoId} photos={photos} />
+      <ManagePhotos albumId={album.id} coverPhotoId={album.coverPhotoId} photos={photos} canEdit />
     </div>
   );
 }

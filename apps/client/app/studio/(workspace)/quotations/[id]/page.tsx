@@ -13,13 +13,15 @@ import { quotationIdSchema } from "@repo/lib/billing/core";
 import { documentIssuer, invoices, quotations, quotationUrl } from "@repo/lib/billing/server";
 import { bookings } from "@repo/lib/bookings/server";
 import { requireStudio } from "@repo/lib/studios/server";
+import { canUse, type StudioAccess } from "@repo/lib/team/core";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 import { buttonClass } from "@repo/ui/Button";
 
 export const metadata = { title: "Quotation · My Business" };
 
 export default async function StudioQuotationPage({ params }: { params: Promise<{ id: string }> }) {
-  const { scope, studio } = await requireStudio("money");
+  const { scope, studio, access } = await requireStudio("money");
+  const canEdit = canUse(access, "money", "manage");
   // Looked up inside the caller's studio only: another studio's id is "not found".
   const id = quotationIdSchema.safeParse((await params).id);
   const [quotation, issuer] = await Promise.all([id.success ? quotations.get(scope, id.data) : null, documentIssuer(studio.id)]);
@@ -31,7 +33,8 @@ export default async function StudioQuotationPage({ params }: { params: Promise<
         <BackLink href="/studio/quotations" className="text-xs font-medium text-brand-600 hover:underline">
           ← Quotations
         </BackLink>
-        <div className="flex flex-wrap gap-2">
+        {canEdit ? (
+          <div className="flex flex-wrap gap-2">
             <Link
               href={`/studio/quotations/${quotation.id}/edit`}
               className="inline-flex min-h-11 items-center rounded-[var(--radius)] border border-gray-300 bg-white px-4 text-sm text-gray-700 shadow-theme-xs hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300"
@@ -44,11 +47,12 @@ export default async function StudioQuotationPage({ params }: { params: Promise<
               action={deleteQuotation.bind(null, quotation.id)}
               after="/studio/quotations"
             />
-        </div>
+          </div>
+        ) : null}
       </div>
       {quotation.status === "accepted" ? (
         <Loading skeleton={<Skeleton className="h-16 w-full rounded-2xl" />}>
-          <Accepted scope={scope} quotationId={quotation.id} />
+          <Accepted scope={scope} quotationId={quotation.id} access={access} />
         </Loading>
       ) : null}
       <DocumentShare
@@ -58,6 +62,7 @@ export default async function StudioQuotationPage({ params }: { params: Promise<
         number={quotation.number}
         studioName={studio.name}
         clientPhone={quotation.billTo.phone}
+        canReset={canEdit}
       />
       {quotation.status === "declined" ? (
         <section className="rounded-2xl border border-border bg-surface p-4 text-sm shadow-theme-xs">
@@ -75,7 +80,7 @@ export default async function StudioQuotationPage({ params }: { params: Promise<
 }
 
 // Accepted: what's been made from it so far, and what's left to make.
-async function Accepted({ scope, quotationId }: { scope: TenantScope; quotationId: string }) {
+async function Accepted({ scope, quotationId, access }: { scope: TenantScope; quotationId: string; access: StudioAccess }) {
   const [invoiceId, bookingId] = await Promise.all([invoices.idForQuotation(scope, quotationId), bookings.idForQuotation(scope, quotationId)]);
   return (
     <section className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-surface p-4 shadow-theme-xs print:hidden">
@@ -84,7 +89,7 @@ async function Accepted({ scope, quotationId }: { scope: TenantScope; quotationI
         <Link href={`/studio/bookings/${bookingId}`} className="text-sm font-medium text-brand-600 hover:underline">
           View its booking
         </Link>
-      ) : (
+      ) : !canUse(access, "bookings", "manage") ? null : (
         <Link href={`/studio/bookings?new&quotation=${quotationId}`} className={buttonClass("secondary", "sm")}>
           Book it
         </Link>
@@ -93,7 +98,7 @@ async function Accepted({ scope, quotationId }: { scope: TenantScope; quotationI
         <Link href={`/studio/invoices/${invoiceId}`} className="text-sm font-medium text-brand-600 hover:underline">
           View its invoice
         </Link>
-      ) : (
+      ) : !canUse(access, "money", "manage") ? null : (
         <CreateInvoiceButton quotationId={quotationId} basePath="/studio/invoices" />
       )}
     </section>

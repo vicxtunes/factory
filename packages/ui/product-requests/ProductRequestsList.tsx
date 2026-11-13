@@ -27,6 +27,7 @@ export function ProductRequestsList({
   scope,
   invoicesPath,
   clientsPath,
+  canAnswer,
 }: {
   requests: ProductRequest[];
   /** Mobile money paid in, by request id. */
@@ -34,6 +35,8 @@ export function ProductRequestsList({
   scope: Pick<TenantScope, "currency" | "locale" | "timeZone">;
   invoicesPath: string;
   clientsPath: string;
+  /** Shows Confirm and Decline on requests. */
+  canAnswer: boolean;
 }) {
   return (
     <ul className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-surface shadow-theme-xs">
@@ -55,7 +58,7 @@ export function ProductRequestsList({
             ) : null}
           </div>
           <OrderMedia media={r.media} />
-          {r.status === "requested" ? <Answer request={r} invoicesPath={invoicesPath} /> : null}
+          {canAnswer && r.status === "requested" ? <Answer request={r} invoicesPath={invoicesPath} /> : null}
         </li>
       ))}
     </ul>

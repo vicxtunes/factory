@@ -12,6 +12,7 @@ export default function ProjectGalleryDelivery() {
       <LookOnly>
         <ProjectGalleryPanel
           projectId="design-room-project"
+          canEdit
           album={{
             id: "design-room-album",
             kind: "delivery",

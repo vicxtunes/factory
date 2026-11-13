@@ -81,17 +81,18 @@ const callerStudio = cache(async (): Promise<CallerStudio | null> => {
 
 /**
  * For workspace pages: the caller's working studio, when the caller has what
- * the page `need`s (nothing: owner-only). Otherwise to set-up / review
+ * the page `need`s at `level` (view, or manage for a page that only changes
+ * things: a new or edit form) (nothing: owner-only). Otherwise to set-up / review
  * (/studio/welcome) or a member's home (/studio). 404 while studios are off.
  * Owner and members alike get in with their Aming sign-in (an emailed code):
  * there's no second studio login.
  */
-export async function requireStudio(need?: StudioNeed): Promise<CallerStudio> {
+export async function requireStudio(need?: StudioNeed, level: "view" | "manage" = "view"): Promise<CallerStudio> {
   if (!STUDIOS_ENABLED) notFound();
   const caller = await callerStudio();
   if (!caller) redirect("/");
   if (!caller.access.owner) {
-    if (!reaches(caller.access, need, "view")) redirect("/studio");
+    if (!reaches(caller.access, need, level)) redirect("/studio");
     return caller;
   }
   if (caller.studio.status !== "active") redirect("/studio/welcome");

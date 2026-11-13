@@ -20,6 +20,7 @@ export function DocumentShare({
   number,
   studioName,
   clientPhone,
+  canReset,
 }: {
   kind: keyof typeof KINDS;
   documentId: string;
@@ -27,6 +28,8 @@ export function DocumentShare({
   number: string;
   studioName: string;
   clientPhone: string | null;
+  /** Shows Reset link. */
+  canReset: boolean;
 }) {
   const router = useRouter();
   const [copied, setCopied] = useState(false);
@@ -68,9 +71,11 @@ export function DocumentShare({
         >
           Send on WhatsApp
         </a>
-        <Button type="button" variant="ghost" onClick={reset} loading={pending}>
-          Reset link
-        </Button>
+        {canReset ? (
+          <Button type="button" variant="ghost" onClick={reset} loading={pending}>
+            Reset link
+          </Button>
+        ) : null}
       </div>
       {error ? <p className="text-sm text-error-600 dark:text-error-400">{error}</p> : null}
     </section>

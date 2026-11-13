@@ -15,7 +15,7 @@ import { buttonClass } from "@repo/ui/Button";
 export const metadata = { title: "New quotation · My Business" };
 
 export default async function NewQuotationPage({ searchParams }: { searchParams: Promise<{ client?: string; booking?: string }> }) {
-  const { scope } = await requireStudio("money");
+  const { scope } = await requireStudio("money", "manage");
   const { client, booking } = await searchParams;
 
   return (

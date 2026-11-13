@@ -11,6 +11,7 @@ import { studioAccounts } from "@repo/lib/billing/server";
 import { CurrencySymbolProvider } from "@repo/lib/currency/CurrencySymbolProvider";
 import { productRequests } from "@repo/lib/product-requests/server";
 import { requireStudio } from "@repo/lib/studios/server";
+import { canUse } from "@repo/lib/team/core";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 import { paidForStudioRequests } from "@repo/lib/wallet/studio";
 
@@ -23,13 +24,13 @@ const LINKS = { sales: "/studio/invoices", overdue: "/studio/invoices", clients:
 // its invoices and payments (packages/lib/billing → Accounts). The money it
 // holds is on Wallet (../wallet).
 export default async function StudioAccountsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  const { scope } = await requireStudio("money");
+  const { scope, access } = await requireStudio("money");
 
   return (
     <>
       {/* Shown only when there are some, so nothing stands in for it while it loads. */}
       <Suspense fallback={null}>
-        <OrderRequests scope={scope} />
+        <OrderRequests scope={scope} canAnswer={canUse(access, "money", "manage")} />
       </Suspense>
       {/* Amounts in the studio's own currency. */}
       <CurrencySymbolProvider symbol={scope.currency}>
@@ -50,11 +51,11 @@ export default async function StudioAccountsPage({ searchParams }: { searchParam
 }
 
 // Clients who asked for a product online: Confirm makes the invoice. Then confirmed ones, with what to make them from.
-async function OrderRequests({ scope }: { scope: TenantScope }) {
+async function OrderRequests({ scope, canAnswer }: { scope: TenantScope; canAnswer: boolean }) {
   const [requests, confirmed] = await Promise.all([productRequests.open(scope), productRequests.confirmed(scope)]);
   if (!requests.length && !confirmed.length) return null;
   const paid = await paidForStudioRequests([...requests, ...confirmed].map((r) => r.id));
-  const list = (shown: typeof requests) => <ProductRequestsList requests={shown} paid={paid} scope={scope} invoicesPath="/studio/invoices" clientsPath="/studio/clients" />;
+  const list = (shown: typeof requests) => <ProductRequestsList requests={shown} paid={paid} scope={scope} invoicesPath="/studio/invoices" clientsPath="/studio/clients" canAnswer={canAnswer} />;
   return (
     <>
       {requests.length ? (

@@ -37,8 +37,13 @@ export interface Grant {
   canDownload: boolean;
 }
 
-/** Who's looking: everything (the owner, Files area), or only what's shared with them. */
-export type FileAccess = { kind: "full" } | { kind: "shared"; grants: Grant[] };
+/**
+ * Who's looking: everything (the owner, Files area at manage), or only what's
+ * shared with them. `seesTop`: also the files at the very top, to look at
+ * and download (a team member with Files at view, whose grants are every
+ * top folder).
+ */
+export type FileAccess = { kind: "full" } | { kind: "shared"; grants: Grant[]; seesTop?: boolean };
 
 export const FULL_ACCESS: FileAccess = { kind: "full" };
 
@@ -74,6 +79,7 @@ export function grantOver(folders: Folder[], grants: Grant[], folderId: string |
 
 export function rightsIn(folders: Folder[], access: FileAccess, folderId: string | null): FolderRights {
   if (access.kind === "full") return { add: true, change: true, download: true, share: true };
+  if (folderId === null && access.seesTop) return { add: false, change: false, download: true, share: false };
   const grant = grantOver(folders, access.grants, folderId);
   return {
     add: grant !== null && rank(grant.role) >= rank("contributor"),
@@ -86,7 +92,8 @@ export function rightsIn(folders: Folder[], access: FileAccess, folderId: string
 /** Whether the person sees this folder at all. */
 export function canSee(folders: Folder[], access: FileAccess, folderId: string | null): boolean {
   if (access.kind === "full") return true;
-  return folderId !== null && grantOver(folders, access.grants, folderId) !== null;
+  if (folderId === null) return access.seesTop === true;
+  return grantOver(folders, access.grants, folderId) !== null;
 }
 
 /**
