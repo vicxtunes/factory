@@ -113,7 +113,7 @@ export class FileService {
     if (!canSee(every, access, folderId) && !(access.kind === "shared" && folderId === null)) return null;
     const visible = every.filter((f) => canSee(every, access, f.id));
     const rights = rightsIn(every, access, folderId);
-    const files = folderId === null && access.kind === "shared" ? [] : (await this.repo.files(scope, folderId)).sort(byName);
+    const files = folderId === null && access.kind === "shared" && !access.seesTop ? [] : (await this.repo.files(scope, folderId)).sort(byName);
     const open = await this.repo.openCommentCounts(
       scope,
       files.map((f) => f.id),
@@ -606,7 +606,7 @@ export class FileService {
     const shared = await this.memberAccess(scope, memberId);
     const tops = (await this.repo.folders(scope)).filter((f) => f.parentId === null);
     const grants = tops.map((f) => ({ folderId: f.id, role: "viewer" as const, canDownload: true }));
-    return { kind: "shared", grants: [...grants, ...(shared.kind === "shared" ? shared.grants : [])] };
+    return { kind: "shared", grants: [...grants, ...(shared.kind === "shared" ? shared.grants : [])], seesTop: true };
   }
 
   /**

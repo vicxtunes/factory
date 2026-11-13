@@ -57,7 +57,7 @@ export default async function StudioFilesPage({ searchParams }: { searchParams: 
   if (access.kind !== "full") {
     return (
       <>
-        <p className="text-sm text-muted">Folders the business has shared with you.</p>
+        <p className="text-sm text-muted">{access.seesTop ? "The business's files, to look at and download." : "Folders the business has shared with you."}</p>
         <Loading skeleton={<RowsSkeleton />}>
           <Browser scope={scope} folderId={folderId} access={access} task={task?.mine ? task : undefined} />
         </Loading>
@@ -133,7 +133,7 @@ async function Browser({
   const root = business && folderId === null ? businessTree([], new Map())[0] : undefined;
   const listing = root ? { ...found, folders: [root, ...found.folders] } : found;
   const browser = { listing, basePath: "/studio/files", scope: { locale: scope.locale, timeZone: scope.timeZone }, via: VIA, task, topLabel: "Drive" };
-  if (access.kind !== "full") return <FileBrowser {...browser} topLabel="Shared with you" />;
+  if (access.kind !== "full") return <FileBrowser {...browser} topLabel={access.seesTop ? "Drive" : "Shared with you"} />;
   // Whoever has everything shares: with clients, with team members who haven't the Files area, or by link.
   const [shares, clientList, members, slug] = await Promise.all([files.shares(scope), customers.list(scope), team.active(scope), portal.currentSlug(scope.tenantId)]);
   return (

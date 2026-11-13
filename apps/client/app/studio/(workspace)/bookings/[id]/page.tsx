@@ -20,6 +20,7 @@ import { bookings } from "@repo/lib/bookings/server";
 import { projects } from "@repo/lib/projects/server";
 import { portal } from "@repo/lib/studio-portal/server";
 import { requireStudio } from "@repo/lib/studios/server";
+import { canUse, type StudioAccess } from "@repo/lib/team/core";
 import { formatAmount, formatDay } from "@repo/lib/tenancy/format";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 import { buttonClass } from "@repo/ui/Button";
@@ -29,7 +30,8 @@ import { EditBookingSheet } from "../sheets";
 export const metadata = { title: "Booking · My Business" };
 
 export default async function StudioBookingPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ edit?: string }> }) {
-  const { scope } = await requireStudio("bookings");
+  const { scope, access } = await requireStudio("bookings");
+  const canEdit = canUse(access, "bookings", "manage");
   // Looked up inside the caller's studio only: another studio's id is "not found".
   const id = bookingIdSchema.safeParse((await params).id);
   const view = id.success ? await bookings.get(scope, id.data) : null;
@@ -59,9 +61,11 @@ export default async function StudioBookingPage({ params, searchParams }: { para
         <BackLink href={`/studio/bookings?view=day&date=${b.date}`} className="text-xs font-medium text-brand-600 hover:underline">
           ← Bookings
         </BackLink>
+        {canEdit ? (
           <Link href={`/studio/bookings/${b.id}?edit`} scroll={false} className={buttonClass("secondary")}>
             Edit
           </Link>
+        ) : null}
       </div>
       <div>
         <h2 className="text-xl font-semibold">{b.title}</h2>
@@ -96,24 +100,26 @@ export default async function StudioBookingPage({ params, searchParams }: { para
           </div>
         ) : null}
       </dl>
-      {b.status === "requested" ? <RequestAnswer bookingId={b.id} projectsPath="/studio/projects" /> : null}
+      {canEdit && b.status === "requested" ? <RequestAnswer bookingId={b.id} projectsPath="/studio/projects" /> : null}
       <Loading skeleton={<Skeleton className="h-16 w-full rounded-2xl" />}>
-        <Behind scope={scope} booking={b} />
+        <Behind scope={scope} booking={b} access={access} />
       </Loading>
-      {b.status === "requested" ? null : <BookingStatusButtons bookingId={b.id} status={b.status} />}
-      {b.source === "online" ? (
+      {!canEdit || b.status === "requested" ? null : <BookingStatusButtons bookingId={b.id} status={b.status} />}
+      {b.source === "online" && canUse(access, "clients", "manage") ? (
         <Loading skeleton={<Skeleton className="h-24 w-full rounded-2xl" />}>
           <Access scope={scope} booking={b} />
         </Loading>
       ) : null}
-      <DeleteButton
-        label="Delete booking"
-        className="min-h-11 self-start"
-        confirm="Delete this booking? Its project, quotation and invoice stay."
-        action={deleteBooking.bind(null, b.id)}
-        after="/studio/bookings"
-      />
-      {(await searchParams).edit !== undefined ? <EditBookingSheet scope={scope} booking={b} /> : null}
+      {canEdit ? (
+        <DeleteButton
+          label="Delete booking"
+          className="min-h-11 self-start"
+          confirm="Delete this booking? Its project, quotation and invoice stay."
+          action={deleteBooking.bind(null, b.id)}
+          after="/studio/bookings"
+        />
+      ) : null}
+      {canEdit && (await searchParams).edit !== undefined ? <EditBookingSheet scope={scope} booking={b} /> : null}
     </>
   );
 }
@@ -127,7 +133,8 @@ const linkStyle = "font-medium text-brand-600 hover:underline";
  * the booking: either confirms it). A client's request makes its invoice when
  * it's confirmed (above). Then its project.
  */
-async function Behind({ scope, booking: b }: { scope: TenantScope; booking: Booking }) {
+async function Behind({ scope, booking: b, access }: { scope: TenantScope; booking: Booking; access: StudioAccess }) {
+  const money = canUse(access, "money", "manage");
   const invoiceId = b.invoiceId ?? (b.quotationId ? await invoices.idForQuotation(scope, b.quotationId) : null);
   const [invoice, quotation, projectId] = await Promise.all([
     invoiceId ? invoices.get(scope, invoiceId) : null,
@@ -136,8 +143,8 @@ async function Behind({ scope, booking: b }: { scope: TenantScope; booking: Book
   ]);
   // Documents are made only while it's going ahead; a client's request gets its invoice on Confirm.
   const going = b.status === "tentative" || b.status === "confirmed";
-  const showQuotation = !!quotation || (going && !invoice && b.status === "tentative");
-  const showInvoice = !!invoice || going;
+  const showQuotation = !!quotation || (money && going && !invoice && b.status === "tentative");
+  const showInvoice = !!invoice || (money && going);
 
   return (
     <>
@@ -190,7 +197,7 @@ async function Behind({ scope, booking: b }: { scope: TenantScope; booking: Book
         <Link href={`/studio/projects/${projectId}`} className="text-sm font-medium text-brand-600 hover:underline">
           View its project
         </Link>
-      ) : b.status === "confirmed" || b.status === "completed" ? (
+      ) : canUse(access, "projects", "manage") && (b.status === "confirmed" || b.status === "completed") ? (
         <StartProjectButton bookingId={b.id} basePath="/studio/projects" />
       ) : null}
     </>

@@ -12,6 +12,7 @@ import { localDate } from "@repo/lib/accounting/core/period";
 import { calendarViewSchema, viewRange, type CalendarView } from "@repo/lib/bookings/core";
 import { bookings } from "@repo/lib/bookings/server";
 import { requireStudio } from "@repo/lib/studios/server";
+import { canUse } from "@repo/lib/team/core";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
 import { NewBookingSheet } from "./sheets";
@@ -19,7 +20,8 @@ import { NewBookingSheet } from "./sheets";
 export const metadata = { title: "Bookings · My Business" };
 
 export default async function StudioBookingsPage({ searchParams }: { searchParams: Promise<{ view?: string; date?: string; new?: string; quotation?: string; client?: string }> }) {
-  const { scope } = await requireStudio("bookings");
+  const { scope, access } = await requireStudio("bookings");
+  const canEdit = canUse(access, "bookings", "manage");
   const params = await searchParams;
   const today = localDate(new Date(), scope.timeZone);
   const view = calendarViewSchema.catch("month").parse(params.view);
@@ -27,29 +29,31 @@ export default async function StudioBookingsPage({ searchParams }: { searchParam
 
   return (
     <>
-      <div className="flex justify-end">
-        <Link href={`/studio/bookings?view=${view}&date=${anchor}&new`} scroll={false} className={buttonClass()}>
-          New booking
-        </Link>
-      </div>
+      {canEdit ? (
+        <div className="flex justify-end">
+          <Link href={`/studio/bookings?view=${view}&date=${anchor}&new`} scroll={false} className={buttonClass()}>
+            New booking
+          </Link>
+        </div>
+      ) : null}
       {/* Shown only when there are some, so nothing stands in for it while it loads. */}
       <Suspense fallback={null}>
         <Requests scope={scope} />
       </Suspense>
       <Loading skeleton={<Skeleton className="h-[32rem] w-full rounded-2xl" />}>
-        <Calendar scope={scope} view={view} anchor={anchor} today={today} />
+        <Calendar scope={scope} view={view} anchor={anchor} today={today} canAdd={canEdit} />
       </Loading>
-      {params.new !== undefined ? (
+      {canEdit && params.new !== undefined ? (
         <NewBookingSheet scope={scope} closeHref={`/studio/bookings?view=${view}&date=${anchor}`} date={params.date} quotation={params.quotation} client={params.client} />
       ) : null}
     </>
   );
 }
 
-async function Calendar({ scope, view, anchor, today }: { scope: TenantScope; view: CalendarView; anchor: string; today: string }) {
+async function Calendar({ scope, view, anchor, today, canAdd }: { scope: TenantScope; view: CalendarView; anchor: string; today: string; canAdd: boolean }) {
   const { from, to } = viewRange(view, anchor);
   const list = await bookings.between(scope, from, to);
-  return <BookingsCalendar view={view} anchor={anchor} today={today} bookings={list} scope={scope} basePath="/studio/bookings" />;
+  return <BookingsCalendar view={view} anchor={anchor} today={today} bookings={list} scope={scope} basePath="/studio/bookings" canAdd={canAdd} />;
 }
 
 // Clients who booked online: first thing here until the studio answers.

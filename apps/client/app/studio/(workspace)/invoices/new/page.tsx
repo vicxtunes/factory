@@ -17,7 +17,7 @@ import { buttonClass } from "@repo/ui/Button";
 export const metadata = { title: "New invoice · My Business" };
 
 export default async function NewInvoicePage({ searchParams }: { searchParams: Promise<{ client?: string; booking?: string; project?: string }> }) {
-  const { scope } = await requireStudio("money");
+  const { scope } = await requireStudio("money", "manage");
   const { client, booking, project } = await searchParams;
   const back = booking ? { href: `/studio/bookings/${booking}`, label: "← Booking" } : project ? { href: `/studio/projects/${project}`, label: "← Project" } : { href: "/studio/invoices", label: "← Invoices" };
 

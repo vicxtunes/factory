@@ -7,12 +7,14 @@ import { PhotoError } from "@repo/lib/photos/ports";
 import { photos } from "@repo/lib/photos/server";
 import { portal } from "@repo/lib/studio-portal/server";
 import { requireStudio } from "@repo/lib/studios/server";
+import { canUse } from "@repo/lib/team/core";
+import { CatalogView } from "@repo/ui/offerings/CatalogView";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
 export const metadata = { title: "Products · My Business" };
 
 export default async function StudioProductsPage() {
-  const { scope } = await requireStudio("catalog");
+  const { scope, access } = await requireStudio("catalog");
   return (
     <>
       <p className="text-sm text-muted">
@@ -20,10 +22,15 @@ export default async function StudioProductsPage() {
         categories and products of your own. Your showroom shows them and clients order them; quotations and invoices can use them too.
       </p>
       <Loading skeleton={<RowsSkeleton rows={4} />}>
-        <Catalog scope={scope} />
+        {canUse(access, "catalog", "manage") ? <Catalog scope={scope} /> : <ViewOnly scope={scope} />}
       </Loading>
     </>
   );
+}
+
+// Catalog at view: to look at only.
+async function ViewOnly({ scope }: { scope: TenantScope }) {
+  return <CatalogView kind="product" categories={await offerings.manage(scope, "product")} scope={scope} />;
 }
 
 async function Catalog({ scope }: { scope: TenantScope }) {

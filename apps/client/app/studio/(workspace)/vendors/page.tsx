@@ -4,6 +4,7 @@ import { RowsSkeleton } from "@repo/ui/skeletons/blocks";
 import { Loading } from "@repo/ui/skeletons/Loading";
 import { HIRE_CARD_BUTTON, HireCard } from "@repo/ui/vendors/HireCard";
 import { requireStudio } from "@repo/lib/studios/server";
+import { canUse } from "@repo/lib/team/core";
 import { cardLine, VENDOR_CATEGORIES, vendorCategory, vendorSearchSchema } from "@repo/lib/vendors/core";
 import { vendors } from "@repo/lib/vendors/server";
 
@@ -16,7 +17,7 @@ const CHIPS = VENDOR_CATEGORIES.slice(0, 5);
 // what they do; each a card (packages/ui/vendors/HireCard.tsx) to see their
 // work or hire them.
 export default async function StudioVendorsPage({ searchParams }: { searchParams: Promise<{ q?: string; category?: string }> }) {
-  await requireStudio("projects");
+  const { access } = await requireStudio("projects");
   const parsed = vendorSearchSchema.safeParse({ query: (await searchParams).q, category: (await searchParams).category });
   const { query, category } = parsed.success ? parsed.data : { query: "", category: null };
   const chip = (id: string | null) => {
@@ -57,13 +58,13 @@ export default async function StudioVendorsPage({ searchParams }: { searchParams
         })}
       </nav>
       <Loading key={`${query}|${category}`} skeleton={<RowsSkeleton rows={4} />}>
-        <VendorList query={query} category={category} />
+        <VendorList query={query} category={category} canHire={canUse(access, "projects", "manage")} />
       </Loading>
     </>
   );
 }
 
-async function VendorList({ query, category }: { query: string; category: string | null }) {
+async function VendorList({ query, category, canHire }: { query: string; category: string | null; canHire: boolean }) {
   const found = await vendors.search(query, category);
   if (!found.length) {
     return (
@@ -88,12 +89,14 @@ async function VendorList({ query, category }: { query: string; category: string
             line={cardLine(v.statusLine, v.offers)}
             actions={
               <>
-                <Link href={`/studio/vendors/${v.id}#hire`} className={HIRE_CARD_BUTTON}>
-                  <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden>
-                    <path d="M12 8v8M8 12h8M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-                  </svg>
-                  Hire me
-                </Link>
+                {canHire ? (
+                  <Link href={`/studio/vendors/${v.id}#hire`} className={HIRE_CARD_BUTTON}>
+                    <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden>
+                      <path d="M12 8v8M8 12h8M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                    </svg>
+                    Hire me
+                  </Link>
+                ) : null}
                 <Link href={`/studio/vendors/${v.id}`} className={HIRE_CARD_BUTTON}>
                   <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                     <path d="M4 5h16v14H4zM4 15l4-4 4 4 3-3 5 5M15 9.5h.01" />

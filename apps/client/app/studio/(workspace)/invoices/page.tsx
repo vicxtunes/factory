@@ -7,6 +7,7 @@ import { RowsSkeleton } from "@repo/ui/skeletons/blocks";
 import { Loading } from "@repo/ui/skeletons/Loading";
 import { invoices } from "@repo/lib/billing/server";
 import { requireStudio } from "@repo/lib/studios/server";
+import { canUse } from "@repo/lib/team/core";
 import { formatAmount } from "@repo/lib/tenancy/format";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
@@ -15,7 +16,7 @@ export const metadata = { title: "Invoices · My Business" };
 type Invoices = ReturnType<typeof invoices.list>;
 
 export default async function StudioInvoicesPage() {
-  const { scope } = await requireStudio("money");
+  const { scope, access } = await requireStudio("money");
   // Read once, for the total and the list.
   const list = invoices.list(scope);
 
@@ -25,12 +26,14 @@ export default async function StudioInvoicesPage() {
         <Suspense fallback={<Skeleton className="h-4 w-56" />}>
           <Owed scope={scope} list={list} />
         </Suspense>
-        <Link
-          href="/studio/invoices/new"
-          className="inline-flex min-h-11 shrink-0 items-center rounded-[var(--radius)] bg-brand-500 px-4 text-sm text-white shadow-theme-xs hover:bg-brand-600"
-        >
-          New invoice
-        </Link>
+        {canUse(access, "money", "manage") ? (
+          <Link
+            href="/studio/invoices/new"
+            className="inline-flex min-h-11 shrink-0 items-center rounded-[var(--radius)] bg-brand-500 px-4 text-sm text-white shadow-theme-xs hover:bg-brand-600"
+          >
+            New invoice
+          </Link>
+        ) : null}
       </div>
       <Loading skeleton={<RowsSkeleton />}>
         <List scope={scope} list={list} />

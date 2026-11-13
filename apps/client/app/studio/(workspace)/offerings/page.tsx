@@ -7,22 +7,29 @@ import { PhotoError } from "@repo/lib/photos/ports";
 import { photos } from "@repo/lib/photos/server";
 import { portal } from "@repo/lib/studio-portal/server";
 import { requireStudio } from "@repo/lib/studios/server";
+import { canUse } from "@repo/lib/team/core";
+import { CatalogView } from "@repo/ui/offerings/CatalogView";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
 export const metadata = { title: "Packages & Services · My Business" };
 
 export default async function StudioOfferingsPage() {
-  const { scope } = await requireStudio("catalog");
+  const { scope, access } = await requireStudio("catalog");
   return (
     <>
       <p className="text-sm text-muted">
         Your categories and services, each with its packages. Your showroom shows them; quotations and bookings are built from the packages.
       </p>
       <Loading skeleton={<RowsSkeleton rows={4} />}>
-        <Catalog scope={scope} />
+        {canUse(access, "catalog", "manage") ? <Catalog scope={scope} /> : <ViewOnly scope={scope} />}
       </Loading>
     </>
   );
+}
+
+// Catalog at view: to look at only.
+async function ViewOnly({ scope }: { scope: TenantScope }) {
+  return <CatalogView kind="service" categories={await offerings.manage(scope, "service")} scope={scope} />;
 }
 
 async function Catalog({ scope }: { scope: TenantScope }) {

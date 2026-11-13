@@ -8,6 +8,7 @@ import { ServiceTiles } from "@repo/ui/vendors/ServiceTiles";
 import { SocialIcon } from "@repo/ui/vendors/SocialIcon";
 import { projects } from "@repo/lib/projects/server";
 import { requireStudio } from "@repo/lib/studios/server";
+import { canUse } from "@repo/lib/team/core";
 import { formatDay } from "@repo/lib/tenancy/format";
 import { SOCIAL_NETWORKS, vendorCategory } from "@repo/lib/vendors/core";
 import { vendors } from "@repo/lib/vendors/server";
@@ -18,7 +19,8 @@ export const metadata = { title: "Vendor · My Business" };
 // services with their prices and samples, where they show their work, then the studio's projects in
 // hand to hire them on (the request is made on the project, in its folder).
 export default async function StudioVendorPage({ params }: { params: Promise<{ id: string }> }) {
-  const { scope } = await requireStudio("projects");
+  const { scope, access } = await requireStudio("projects");
+  const canHire = canUse(access, "projects", "manage");
   const vendor = await vendors.hireable((await params).id);
   if (!vendor) notFound();
   const [photoUrl, coverUrl, inHand, offers] = await Promise.all([vendors.pictureUrl(vendor.photoKey), vendors.pictureUrl(vendor.coverKey), projects.active(scope), vendors.showOffers(vendor)]);
@@ -87,14 +89,19 @@ export default async function StudioVendorPage({ params }: { params: Promise<{ i
           <SectionLabel>Services</SectionLabel>
           <ServiceTiles
             offers={offers}
-            hire={{
-              vendorId: vendor.id,
-              projects: inHand.map((p) => ({ id: p.id, title: p.title, meta: [p.customerName, p.eventDate ? formatDay(scope, p.eventDate) : null].filter(Boolean).join(" · ") })),
-            }}
+            hire={
+              canHire
+                ? {
+                    vendorId: vendor.id,
+                    projects: inHand.map((p) => ({ id: p.id, title: p.title, meta: [p.customerName, p.eventDate ? formatDay(scope, p.eventDate) : null].filter(Boolean).join(" · ") })),
+                  }
+                : undefined
+            }
           />
         </section>
       ) : null}
 
+      {canHire ? (
       <section id="hire" className="scroll-mt-20 space-y-3">
         <SectionLabel>Hire them</SectionLabel>
         <ul className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-surface">
@@ -111,6 +118,7 @@ export default async function StudioVendorPage({ params }: { params: Promise<{ i
           ))}
         </ul>
       </section>
+      ) : null}
     </>
   );
 }
