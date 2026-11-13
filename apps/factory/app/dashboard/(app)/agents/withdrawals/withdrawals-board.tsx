@@ -53,7 +53,10 @@ function Withdrawal({ withdrawal: w, accounts }: { withdrawal: Row; accounts: Mo
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-lg font-bold tnum">{money(w.amount)}</p>
-          <p className="truncate text-sm font-medium">{w.agentName}</p>
+          <p className="truncate text-sm font-medium">
+            {w.agentName}
+            {w.weekly ? <span className="ml-2 text-xs font-normal text-muted">Weekly payment</span> : null}
+          </p>
           <p className="text-xs text-muted" suppressHydrationWarning>
             {formatWhen(w.createdAt)}
           </p>

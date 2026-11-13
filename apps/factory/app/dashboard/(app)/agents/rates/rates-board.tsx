@@ -4,9 +4,9 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
 import { Button } from "@repo/ui/Button";
-import { TextInput } from "@repo/ui/Field";
-import { setCommissionRate, setPayFirstForAll, setWithdrawalFeePaidBy, waitingForPayFirst } from "@repo/lib/agents/actions";
-import type { FeePaidBy } from "@repo/lib/agents/core";
+import { Field, Select, TextInput } from "@repo/ui/Field";
+import { setCommissionRate, setPayFirstForAll, setWeeklyPay, setWithdrawalFeePaidBy, waitingForPayFirst } from "@repo/lib/agents/actions";
+import { WEEKDAYS, WEEKLY_PAY_HOURS, weeklyPayWhen, type FeePaidBy, type WeeklyPay } from "@repo/lib/agents/core";
 import type { CategoryRate } from "@repo/lib/agents/server";
 
 const FEE_OPTIONS: { value: FeePaidBy; label: string; text: string }[] = [
@@ -14,7 +14,7 @@ const FEE_OPTIONS: { value: FeePaidBy; label: string; text: string }[] = [
   { value: "aming", label: "Aming", text: "The fee still comes out of what's sent, then Aming puts the same amount back on their balance for next time. HivePay's price list would be needed to send it in full." },
 ];
 
-export function RatesBoard({ rates, feePaidBy, payFirstPercent }: { rates: CategoryRate[]; feePaidBy: FeePaidBy; payFirstPercent: number }) {
+export function RatesBoard({ rates, feePaidBy, payFirstPercent, weeklyPay }: { rates: CategoryRate[]; feePaidBy: FeePaidBy; payFirstPercent: number; weeklyPay: WeeklyPay }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -34,6 +34,7 @@ export function RatesBoard({ rates, feePaidBy, payFirstPercent }: { rates: Categ
       </section>
 
       <div className="space-y-6">
+        <WeeklyPaySetting pay={weeklyPay} />
         <PayFirstSetting percent={payFirstPercent} />
 
         <section className="rounded-2xl border border-border bg-surface p-4 shadow-theme-xs sm:p-5">
@@ -68,6 +69,76 @@ export function RatesBoard({ rates, feePaidBy, payFirstPercent }: { rates: Categ
         </section>
       </div>
     </div>
+  );
+}
+
+/** Agents' commission paid by itself each week, to the number agreed with each agent (on their page, under Edit). */
+function WeeklyPaySetting({ pay }: { pay: WeeklyPay }) {
+  const router = useRouter();
+  const [on, setOn] = useState(pay.on);
+  const [day, setDay] = useState(String(pay.day));
+  const [hour, setHour] = useState(String(pay.hour));
+  const [min, setMin] = useState(String(pay.min));
+  const [error, setError] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+  const changed = on !== pay.on || Number(day) !== pay.day || Number(hour) !== pay.hour || Number(min.replace(/[,\s]/g, "")) !== pay.min;
+  const hours = Array.from({ length: WEEKLY_PAY_HOURS.to - WEEKLY_PAY_HOURS.from + 1 }, (_, i) => WEEKLY_PAY_HOURS.from + i);
+
+  return (
+    <section className="rounded-2xl border border-border bg-surface p-4 shadow-theme-xs sm:p-5">
+      <div>
+        <div>
+          <h2 className="text-sm font-semibold">Weekly commission payment</h2>
+          <p className="mt-1 text-xs text-muted">
+            {pay.on ? `${weeklyPayWhen(pay)}.` : "Off."} Each agent with an agreed number (on their page, under Edit) gets their whole available balance by mobile money, by itself, with no approval. Agents below the smallest amount wait for next week. You get a message after it&apos;s sent. Agents can still ask for a withdrawal in between.
+          </p>
+        </div>
+      </div>
+      <form
+        className="mt-3 grid gap-3 sm:grid-cols-3"
+        onSubmit={(e) => {
+          e.preventDefault();
+          setError(null);
+          start(async () => {
+            const res = await setWeeklyPay({ on, day, hour, min: min.replace(/[,\s]/g, "") });
+            if (!res.ok) return setError(res.error);
+            router.refresh();
+          });
+        }}
+      >
+        <label className="flex items-center gap-2 text-sm font-medium sm:col-span-3">
+          <input type="checkbox" className="size-4" checked={on} disabled={pending} onChange={(e) => setOn(e.target.checked)} />
+          Pay agents every week
+        </label>
+        <Field label="Day">
+          <Select value={day} onChange={(e) => setDay(e.target.value)} disabled={pending}>
+            {WEEKDAYS.map((d, i) => (
+              <option key={d} value={i + 1}>
+                {d}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="From">
+          <Select value={hour} onChange={(e) => setHour(e.target.value)} disabled={pending}>
+            {hours.map((h) => (
+              <option key={h} value={h}>
+                {String(h).padStart(2, "0")}:00
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Smallest amount">
+          <TextInput inputMode="numeric" value={min} onChange={(e) => setMin(e.target.value)} disabled={pending} />
+        </Field>
+        <div className="sm:col-span-3">
+          <Button type="submit" variant="secondary" loading={pending} disabled={pending || !changed}>
+            Save
+          </Button>
+        </div>
+      </form>
+      {error ? <p className="mt-2 text-sm text-error-600">{error}</p> : null}
+    </section>
   );
 }
 

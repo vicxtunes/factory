@@ -13,7 +13,7 @@ import type { OrderType } from "@repo/lib/types";
 import { WalletError, checkOrderLinkPayment, startOrderLinkPayment } from "@repo/lib/wallet/orders";
 import type { MobileMoneyCollection } from "@repo/lib/wallet/types";
 
-import { agentClientSchema, agentEditSchema, agentRegisterSchema, commissionRateSchema, payFirstPercentSchema, waitingChoiceSchema } from "./core";
+import { agentClientSchema, agentEditSchema, agentRegisterSchema, commissionRateSchema, payFirstPercentSchema, waitingChoiceSchema, weeklyPaySchema } from "./core";
 import * as server from "./server";
 
 const id = z.string().uuid();
@@ -148,6 +148,15 @@ export async function setWithdrawalFeePaidBy(paidBy: unknown): Promise<Result> {
   return runAction("agents", async () => {
     const by = await requireBoss();
     await server.setFeePaidBy(parseInput(z.enum(["agent", "aming"]), paidBy), by);
+    refreshAdmin();
+  });
+}
+
+/** Agents' commission paid by itself every week: on or off, the day, the hour and the smallest amount. */
+export async function setWeeklyPay(input: unknown): Promise<Result> {
+  return runAction("agents", async () => {
+    const by = await requireBoss();
+    await server.setWeeklyPay(parseInput(weeklyPaySchema, input), by);
     refreshAdmin();
   });
 }

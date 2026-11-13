@@ -9,6 +9,7 @@ import { findClientCandidates, resolveOrCreateClient, type ClientMatchReason } f
 import { formatMoney } from "@repo/lib/currency/format";
 import { clientCurrency } from "@repo/lib/currency/server";
 import { AppError } from "@repo/lib/kernel/core";
+import { parsePhone } from "@repo/lib/kernel/core/phone";
 import { buildAndInsertOrder, type BuildOrderResult } from "@repo/lib/orders/create";
 import { orderNeedsCall } from "@repo/lib/orders/needs-call";
 import type { OrderItemInput } from "@repo/lib/orders/types";
@@ -29,6 +30,7 @@ import {
   type AgentStage,
   type CommissionStatus,
   type FeePaidBy,
+  type WeeklyPay,
 } from "./core";
 
 export interface Agent {
@@ -41,6 +43,8 @@ export interface Agent {
   payFirstOverride: number | null;
   email: string | null;
   phone: string | null;
+  /** The number their weekly commission goes to (set by the boss); null: not paid weekly. */
+  payoutPhone: string | null;
 }
 
 interface AgentRow {
@@ -50,10 +54,11 @@ interface AgentRow {
   client_id: string | null;
   rate_override: number | string | null;
   pay_first_override: number | null;
+  payout_phone: string | null;
   client: { email: string | null; phone: string | null } | null;
 }
 
-const AGENT_COLUMNS = "id, name, active, client_id, rate_override, pay_first_override, client:clients (email, phone)";
+const AGENT_COLUMNS = "id, name, active, client_id, rate_override, pay_first_override, payout_phone, client:clients (email, phone)";
 
 const toAgent = (r: AgentRow): Agent => ({
   id: r.id,
@@ -64,6 +69,7 @@ const toAgent = (r: AgentRow): Agent => ({
   payFirstOverride: r.pay_first_override,
   email: r.client?.email ?? null,
   phone: r.client?.phone ?? null,
+  payoutPhone: r.payout_phone,
 });
 
 function must<T>(res: { data: T; error: { message: string } | null }): T {
@@ -121,18 +127,28 @@ function escapeHtml(text: string): string {
 }
 
 export async function editAgent(
-  input: { agentId: string; name: string; rateOverride: number | null; payFirstOverride: number | null },
+  input: { agentId: string; name: string; rateOverride: number | null; payFirstOverride: number | null; payoutPhone: string },
   waiting: WaitingChoice = "follow",
 ): Promise<void> {
+  const payoutPhone = payoutNumber(input.payoutPhone);
   const before = await payFirstPercent(input.agentId);
   const after = input.payFirstOverride ?? (await payFirstForAll());
   if (before !== after) await settleWaiting({ agentId: input.agentId }, before, waiting);
   must(
     await createAdminClient()
       .from("agents")
-      .update({ name: input.name, rate_override: input.rateOverride, pay_first_override: input.payFirstOverride, updated_at: new Date().toISOString() })
+      .update({ name: input.name, rate_override: input.rateOverride, pay_first_override: input.payFirstOverride, payout_phone: payoutPhone, updated_at: new Date().toISOString() })
       .eq("id", input.agentId),
   );
+}
+
+/** The weekly payment number as stored (+256…), or null for none. MTN and Airtel Uganda only, as HivePay sends. */
+function payoutNumber(raw: string): string | null {
+  if (!raw.trim()) return null;
+  const parsed = parsePhone(raw);
+  if (!parsed.ok) throw new AppError(`Weekly payment number: ${parsed.error}`);
+  if (!parsed.store.startsWith("+256")) throw new AppError("Weekly payments go to MTN and Airtel Uganda numbers.");
+  return parsed.store;
 }
 
 export async function setAgentActive(id: string, active: boolean): Promise<void> {
@@ -167,6 +183,28 @@ export async function feePaidBy(): Promise<FeePaidBy> {
 
 export async function setFeePaidBy(paidBy: FeePaidBy, byName: string): Promise<void> {
   must(await createAdminClient().from("agent_settings").update({ withdrawal_fee_paid_by: paidBy, updated_by_name: byName, updated_at: new Date().toISOString() }).eq("id", true));
+}
+
+interface WeeklyPayRow {
+  weekly_pay_on: boolean;
+  weekly_pay_day: number;
+  weekly_pay_hour: number;
+  weekly_pay_min: number | string;
+}
+
+/** The boss's weekly payment setting. */
+export async function weeklyPay(): Promise<WeeklyPay> {
+  const r = must(await createAdminClient().from("agent_settings").select("weekly_pay_on, weekly_pay_day, weekly_pay_hour, weekly_pay_min").single<WeeklyPayRow>())!;
+  return { on: r.weekly_pay_on, day: r.weekly_pay_day, hour: r.weekly_pay_hour, min: Number(r.weekly_pay_min) };
+}
+
+export async function setWeeklyPay(pay: WeeklyPay, byName: string): Promise<void> {
+  must(
+    await createAdminClient()
+      .from("agent_settings")
+      .update({ weekly_pay_on: pay.on, weekly_pay_day: pay.day, weekly_pay_hour: pay.hour, weekly_pay_min: pay.min, updated_by_name: byName, updated_at: new Date().toISOString() })
+      .eq("id", true),
+  );
 }
 
 /** The % of the price an agent's own order must have paid before production, for agents without their own. */

@@ -80,6 +80,23 @@ export async function agentWithdrawalToApprove(agentName: string, amount: number
   );
 }
 
+/** The week's commission went out by itself: whoever manages Agents hears what was sent, and what HivePay turned down (waiting for them). */
+export async function agentWeeklyPaySent(sent: { name: string; amount: number }[], failed: { name: string; amount: number; why: string }[]): Promise<void> {
+  const total = sent.reduce((sum, s) => sum + s.amount, 0);
+  const parts = [
+    ...(sent.length ? [`${formatMoney(total)} sent to ${sent.length === 1 ? sent[0].name : `${sent.length} agents`}.`] : []),
+    ...(failed.length ? [`Not sent, waiting for you: ${failed.map((f) => `${f.name} ${formatMoney(f.amount)} (${f.why})`).join("; ")}.`] : []),
+  ];
+  await Promise.all(
+    (await staffWith("agents", "manage")).map((id) =>
+      notifyActor(
+        { type: "dashboard_user", id },
+        { title: failed.length ? "Weekly commission: some not sent" : "Weekly commission sent", body: parts.join(" "), url: failed.length ? "/dashboard/agents/withdrawals" : "/dashboard/agents" },
+      ),
+    ),
+  );
+}
+
 /** An agent's withdrawal was paid, or (`reason`) refused or failed and put back. `to`: their bank's name, or their phone. */
 export async function agentWithdrawalAnswered(clientId: string, amount: number, to: string, reason: string | null): Promise<void> {
   const where = to.startsWith("+") ? localPhone(to) : to;

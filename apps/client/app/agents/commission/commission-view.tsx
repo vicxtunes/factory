@@ -24,7 +24,7 @@ const WITHDRAWAL_STATUS: Record<AgentWithdrawal["status"], { label: string; tone
   rejected: { label: "Not sent", tone: "bg-gray-100 text-gray-600 dark:bg-white/5 dark:text-gray-400" },
 };
 
-export function CommissionView({ wallet, orders, phone, feePaidBy, canWithdraw }: { wallet: AgentWalletView; orders: AgentOrder[]; phone: string | null; feePaidBy: FeePaidBy; canWithdraw: boolean }) {
+export function CommissionView({ wallet, orders, phone, feePaidBy, canWithdraw, weeklyLine }: { wallet: AgentWalletView; orders: AgentOrder[]; phone: string | null; feePaidBy: FeePaidBy; canWithdraw: boolean; weeklyLine: string | null }) {
   const money = useMoney();
   const [view, setView] = useState<View>("orders");
   const [open, setOpen] = useState(false);
@@ -38,6 +38,7 @@ export function CommissionView({ wallet, orders, phone, feePaidBy, canWithdraw }
           <p className={`text-3xl font-bold tnum ${wallet.balance < 0 ? "text-error-600 dark:text-error-400" : ""}`}>{money(wallet.balance)}</p>
           <p className="mt-0.5 text-sm text-muted">Available to withdraw</p>
           {wallet.balance < 0 ? <p className="mt-1 text-xs text-muted">Commission was taken back after a refund. New commission covers this first.</p> : null}
+          {weeklyLine ? <p className="mt-1 text-xs text-muted">{weeklyLine}</p> : null}
         </div>
         {canWithdraw ? (
           <Button type="button" className="sm:w-40" disabled={wallet.balance < MIN_WITHDRAWAL} onClick={() => setOpen(true)}>
@@ -103,7 +104,10 @@ export function CommissionView({ wallet, orders, phone, feePaidBy, canWithdraw }
           {wallet.withdrawals.map((w) => (
             <li key={w.id} className="flex items-start justify-between gap-3 px-4 py-3">
               <span className="min-w-0">
-                <span className="block text-sm font-semibold tnum">{money(w.amount)}</span>
+                <span className="block text-sm font-semibold tnum">
+                  {money(w.amount)}
+                  {w.weekly ? <span className="ml-2 text-xs font-normal text-muted">Weekly payment</span> : null}
+                </span>
                 <span className="block text-xs text-muted" suppressHydrationWarning>
                   {w.method === "bank" ? `To ${w.bankName} ${w.bankAccountNumber}` : `To ${localPhone(w.phone!)}`}
                   {w.fee ? ` · ${money(w.fee)} sending fee${w.feePaidBy === "aming" ? ", put back on your balance" : ""}` : ""}

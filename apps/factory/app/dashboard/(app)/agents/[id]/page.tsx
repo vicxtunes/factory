@@ -3,12 +3,13 @@ import { notFound } from "next/navigation";
 import { z } from "zod";
 
 import { Tile } from "@repo/ui/production/MaterialsBoard";
-import { COMMISSION_STATUS_LABELS, AGENT_STAGE_LABELS, AGENT_WALLET_KIND_LABELS } from "@repo/lib/agents/core";
-import { agentById, agentClients, figuresFor, payFirstForAll } from "@repo/lib/agents/server";
+import { COMMISSION_STATUS_LABELS, AGENT_STAGE_LABELS, AGENT_WALLET_KIND_LABELS, weeklyPayWhen } from "@repo/lib/agents/core";
+import { agentById, agentClients, figuresFor, payFirstForAll, weeklyPay } from "@repo/lib/agents/server";
 import { pageAccess, sessionCan } from "@repo/lib/auth/session";
 import { formatMoney } from "@repo/lib/currency/format";
 import { fetchBaseCurrencySymbol } from "@repo/lib/queries";
 import { agentWallet } from "@repo/lib/wallet/agent";
+import { localPhone } from "@repo/lib/wallet/policy";
 
 import { AgentActions } from "./agent-actions";
 
@@ -33,7 +34,7 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
   const agent = await agentById(id);
   if (!agent) notFound();
 
-  const [{ orders, ...figures }, clients, wallet, symbol, payFirstAll] = await Promise.all([figuresFor(id), agentClients(id), agentWallet(id), fetchBaseCurrencySymbol(), payFirstForAll()]);
+  const [{ orders, ...figures }, clients, wallet, symbol, payFirstAll, weekly] = await Promise.all([figuresFor(id), agentClients(id), agentWallet(id), fetchBaseCurrencySymbol(), payFirstForAll(), weeklyPay()]);
   const money = (n: number) => formatMoney(n, symbol);
 
   return (
@@ -48,6 +49,11 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
           <p className="text-sm text-muted">
             {agent.active ? "Active" : "Inactive"} · {agent.rateOverride === null ? "Category rates" : `Own rate: ${agent.rateOverride}%`} · Pays {agent.payFirstOverride ?? payFirstAll}% before production
             {agent.payFirstOverride === null ? " (all agents)" : " (own)"}
+          </p>
+          <p className="text-sm text-muted">
+            {agent.payoutPhone
+              ? `Weekly payment to ${localPhone(agent.payoutPhone)}${weekly.on ? ` · ${weeklyPayWhen(weekly).toLowerCase()}` : " · weekly payments are off (Rates & settings)"}`
+              : "No weekly payment number: paid only when they ask"}
           </p>
         </div>
         {sessionCan(session, "agents", "manage") ? <AgentActions agent={agent} payFirstForAll={payFirstAll} /> : null}
@@ -120,7 +126,10 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
           {wallet.withdrawals.map((w) => (
             <li key={w.id} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
               <span className="min-w-0">
-                <span className="block font-semibold tnum">{money(w.amount)}</span>
+                <span className="block font-semibold tnum">
+                  {money(w.amount)}
+                  {w.weekly ? <span className="ml-2 text-xs font-normal text-muted">Weekly</span> : null}
+                </span>
                 <span className="block truncate text-xs text-muted">
                   {w.method === "bank" ? `${w.bankName} ${w.bankAccountNumber}` : w.phone} · {day(w.createdAt)}
                   {w.reference ? ` · Ref ${w.reference}` : ""}
