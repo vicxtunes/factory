@@ -95,18 +95,3 @@ export function projectMonthTotal(spent: number, firstAt: string | null, now: Da
   const days = Math.max(Math.ceil((now.getTime() - Date.parse(firstAt)) / 86_400_000), 1);
   return (spent / days) * daysInMonth;
 }
-
-/**
- * The AI account has run out of credit (OpenAI's "no credits remaining" or
- * "exceeded your current quota", Anthropic's "credit balance is too low"):
- * Alexis is paused until it's topped up, so trying again won't help.
- */
-export function outOfCredit(error: string | null | undefined): boolean {
-  return !!error && /no credits remaining|insufficient_quota|exceeded your current quota|credit balance is too low/i.test(error);
-}
-
-/** What a client sees in their chat when Alexis can't answer: someone from the team will. */
-export const CLIENT_PAUSED_MESSAGE = "Thanks for your message 😊 Our assistant is taking a short break right now, so someone from our team will reply to you here shortly.";
-
-/** What anyone sees in the Alexis panel while the AI account is out of credit. */
-export const PANEL_PAUSED_MESSAGE = "Alexis is taking a short break and will be back soon. Everything else in Aming works as usual.";
