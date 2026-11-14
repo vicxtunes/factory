@@ -78,6 +78,7 @@ export default function BooksExpenses() {
       upcoming={[{ scheduleId: "00000000-0000-4000-8000-000000000020", dueOn: "2026-12-01" }]}
       approvalAbove={500_000}
       autopayUpTo={2_000_000}
+      sendFees={[{ upTo: 40_000, fee: 1_000 }, { upTo: 100_000, fee: 2_000 }]}
       isBoss
       canManage
       canSend

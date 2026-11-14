@@ -175,7 +175,7 @@ export async function expensesBoard(scope: TenantScope, period: { fromDate: stri
   if (from && to) inPeriod = inPeriod.or(`and(spent_on.gte.${from},spent_on.lte.${to}),and(due_on.gte.${from},due_on.lte.${to})`);
   else if (from) inPeriod = inPeriod.or(`spent_on.gte.${from},due_on.gte.${from}`);
   else if (to) inPeriod = inPeriod.or(`spent_on.lte.${to},due_on.lte.${to}`);
-  const [lines, open, restorable, categories, schedules, upcoming, settings] = await Promise.all([
+  const [lines, open, restorable, categories, schedules, upcoming, settings, fees] = await Promise.all([
     inPeriod.order("spent_on", { ascending: false }).order("created_at", { ascending: false }).limit(5000).returns<LineRow[]>(),
     db.rpc("expense_open_lines"),
     db.from("expense_lines").select("*").eq("tenant_id", scope.tenantId).eq("voided_with_schedule", true).not("voided_at", "is", null).returns<LineRow[]>(),
@@ -183,8 +183,9 @@ export async function expensesBoard(scope: TenantScope, period: { fromDate: stri
     db.from("expense_schedule_lines").select("*").eq("tenant_id", scope.tenantId).order("created_at", { ascending: false }).returns<ScheduleRow[]>(),
     db.rpc("expense_schedule_upcoming", { p_today: today, p_days: UPCOMING_DAYS }),
     db.from("expense_settings").select("approval_above, autopay_up_to").eq("tenant_id", scope.tenantId).maybeSingle<{ approval_above: number | string | null; autopay_up_to: number | string | null }>(),
+    db.from("hivepay_send_fees").select("up_to, fee").order("up_to").returns<{ up_to: number | string; fee: number | string }[]>(),
   ]);
-  for (const r of [lines, open, restorable, categories, schedules, upcoming, settings]) if (r.error) fail(r.error);
+  for (const r of [lines, open, restorable, categories, schedules, upcoming, settings, fees]) if (r.error) fail(r.error);
   const byId = new Map<string, LineRow>();
   for (const l of [...(lines.data ?? []), ...((open.data ?? []) as LineRow[]), ...(restorable.data ?? [])]) byId.set(l.id, l);
   return {
@@ -193,6 +194,7 @@ export async function expensesBoard(scope: TenantScope, period: { fromDate: stri
     categories: categories.data ?? [],
     approvalAbove: settings.data?.approval_above == null ? null : Number(settings.data.approval_above),
     autopayUpTo: settings.data?.autopay_up_to == null ? null : Number(settings.data.autopay_up_to),
+    sendFees: (fees.data ?? []).map((f) => ({ upTo: Number(f.up_to), fee: Number(f.fee) })),
     schedules: (schedules.data ?? []).map(toSchedule),
     upcoming: ((upcoming.data ?? []) as { schedule_id: string; due_on: string }[]).map((u): UpcomingBill => ({ scheduleId: u.schedule_id, dueOn: u.due_on })),
   };
@@ -364,6 +366,12 @@ export async function setApprovalLimit(above: number | null, byName: string): Pr
 }
 
 /** Autopay sends by itself up to this much (null: no limit). Bills warned of that are now above it wait again. */
+/** The boss saves HivePay's sending fee bands (owner, 2026-11-14: Aming pays the fee on top of what agents and suppliers receive). */
+export async function setSendFees(bands: { upTo: number; fee: number }[], byName: string): Promise<void> {
+  const { error } = await createAdminClient().rpc("hivepay_send_fees_set", { p_bands: bands.map((b) => ({ up_to: b.upTo, fee: b.fee })), p_by: byName });
+  if (error) fail(error);
+}
+
 export async function setAutopayLimit(upTo: number | null, byName: string, today: string): Promise<void> {
   const db = createAdminClient();
   const { error } = await db.from("expense_settings").upsert({ autopay_up_to: upTo, updated_by_name: byName, updated_at: new Date().toISOString() });

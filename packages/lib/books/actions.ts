@@ -16,6 +16,7 @@ import type { ExpenseDetail } from "./expenses";
 import {
   approvalLimitSchema,
   autopayLimitSchema,
+  sendFeesSchema,
   categoryInputSchema,
   closeDayInputSchema,
   decideInputSchema,
@@ -175,6 +176,15 @@ export async function setExpenseAutopayLimit(input: unknown): Promise<Result> {
   });
 }
 
+/** HivePay's sending fee bands, which Aming sends on top so agents and suppliers receive the full amount. Approve & pay bills. */
+export async function setHivepaySendFees(input: unknown): Promise<Result> {
+  return runAction("books", async () => {
+    const { actor } = await staff("bill_approval");
+    await expenses.setSendFees(parseInput(sendFeesSchema, input), actor.name);
+    expensesChanged();
+  });
+}
+
 /** Stops a bill going by itself: it waits for Approve and send. Approve & pay bills. */
 export async function holdExpenseAutopay(id: unknown): Promise<Result> {
   return runAction("books", async () => {
@@ -227,7 +237,7 @@ export async function payExpense(input: unknown): Promise<Result> {
   });
 }
 
-/** Real money: Approve & pay bills only, and sending is the approval. HivePay keeps its fee out of the amount. */
+/** Real money: Approve & pay bills only, and sending is the approval. Aming pays HivePay's fee on top of the amount. */
 export async function sendExpensePayout(input: unknown): Promise<Result> {
   return runAction("books", async () => {
     const { actor } = await staff("bill_approval");

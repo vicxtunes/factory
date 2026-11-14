@@ -5,19 +5,12 @@ import { useState, useTransition } from "react";
 
 import { Button } from "@repo/ui/Button";
 import { Field, Select, TextInput } from "@repo/ui/Field";
-import { setCommissionRate, setPayFirstForAll, setWeeklyPay, setWithdrawalFeePaidBy, waitingForPayFirst } from "@repo/lib/agents/actions";
-import { WEEKDAYS, WEEKLY_PAY_HOURS, weeklyPayWhen, type FeePaidBy, type WeeklyPay } from "@repo/lib/agents/core";
+import { setCommissionRate, setPayFirstForAll, setWeeklyPay, waitingForPayFirst } from "@repo/lib/agents/actions";
+import { WEEKDAYS, WEEKLY_PAY_HOURS, weeklyPayWhen, type WeeklyPay } from "@repo/lib/agents/core";
 import type { CategoryRate } from "@repo/lib/agents/server";
 
-const FEE_OPTIONS: { value: FeePaidBy; label: string; text: string }[] = [
-  { value: "agent", label: "The agent", text: "The fee comes out of what's sent, so their phone receives a little less than they asked for." },
-  { value: "aming", label: "Aming", text: "The fee still comes out of what's sent, then Aming puts the same amount back on their balance for next time. HivePay's price list would be needed to send it in full." },
-];
 
-export function RatesBoard({ rates, feePaidBy, payFirstPercent, weeklyPay }: { rates: CategoryRate[]; feePaidBy: FeePaidBy; payFirstPercent: number; weeklyPay: WeeklyPay }) {
-  const router = useRouter();
-  const [error, setError] = useState<string | null>(null);
-  const [pending, start] = useTransition();
+export function RatesBoard({ rates, payFirstPercent, weeklyPay }: { rates: CategoryRate[]; payFirstPercent: number; weeklyPay: WeeklyPay }) {
   const missing = rates.filter((r) => r.rate === null).length;
 
   return (
@@ -38,34 +31,10 @@ export function RatesBoard({ rates, feePaidBy, payFirstPercent, weeklyPay }: { r
         <PayFirstSetting percent={payFirstPercent} />
 
         <section className="rounded-2xl border border-border bg-surface p-4 shadow-theme-xs sm:p-5">
-          <h2 className="text-sm font-semibold">Who pays the mobile money sending fee?</h2>
-          <p className="mt-1 text-xs text-muted">Applies to withdrawals asked for from now on.</p>
-          <div className="mt-3 space-y-2">
-            {FEE_OPTIONS.map((o) => (
-              <label key={o.value} className={`flex cursor-pointer gap-3 rounded-xl border p-3 ${o.value === feePaidBy ? "border-brand-500 bg-brand-50 dark:bg-brand-500/15" : "border-border"}`}>
-                <input
-                  type="radio"
-                  name="fee"
-                  className="mt-1"
-                  checked={o.value === feePaidBy}
-                  disabled={pending}
-                  onChange={() =>
-                    start(async () => {
-                      setError(null);
-                      const res = await setWithdrawalFeePaidBy(o.value);
-                      if (!res.ok) setError(res.error);
-                      else router.refresh();
-                    })
-                  }
-                />
-                <span>
-                  <span className="block text-sm font-medium">{o.label}</span>
-                  <span className="block text-xs text-muted">{o.text}</span>
-                </span>
-              </label>
-            ))}
-          </div>
-          {error ? <p className="mt-2 text-sm text-error-600">{error}</p> : null}
+          <h2 className="text-sm font-semibold">Mobile money sending fee</h2>
+          <p className="mt-1 text-xs text-muted">
+            Aming pays it: the fee is sent on top, so agents receive the full amount. It comes from HivePay&apos;s fee bands under Accounts → Expenses → HivePay fees; if HivePay keeps more, the difference goes back on the agent&apos;s balance.
+          </p>
         </section>
       </div>
     </div>

@@ -181,10 +181,6 @@ export async function feePaidBy(): Promise<FeePaidBy> {
   return row!.withdrawal_fee_paid_by;
 }
 
-export async function setFeePaidBy(paidBy: FeePaidBy, byName: string): Promise<void> {
-  must(await createAdminClient().from("agent_settings").update({ withdrawal_fee_paid_by: paidBy, updated_by_name: byName, updated_at: new Date().toISOString() }).eq("id", true));
-}
-
 interface WeeklyPayRow {
   weekly_pay_on: boolean;
   weekly_pay_day: number;
