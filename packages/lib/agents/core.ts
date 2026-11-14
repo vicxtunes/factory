@@ -164,21 +164,25 @@ export const WEEKLY_PAY_HOURS = { from: 8, to: 20 } as const;
 /** Where pay day and hour are counted. */
 export const WEEKLY_PAY_TIME_ZONE = "Africa/Kampala";
 
-/** The boss's weekly payment setting: whether it runs, which day, from what hour, and the least worth sending. */
+/** The boss's weekly payment setting: whether it runs, which day, from what hour, the least worth sending and the most one payment sends. */
 export interface WeeklyPay {
   on: boolean;
   /** ISO weekday, 1 Monday … 7 Sunday. */
   day: number;
   hour: number;
   min: number;
+  max: number;
 }
 
-export const weeklyPaySchema = z.object({
-  on: z.boolean(),
-  day: z.coerce.number().int().min(1, "Choose a day.").max(7, "Choose a day."),
-  hour: z.coerce.number().int().min(WEEKLY_PAY_HOURS.from, "Choose a time from 08:00.").max(WEEKLY_PAY_HOURS.to, "Choose a time up to 20:00."),
-  min: z.coerce.number({ message: "Enter the smallest amount to send." }).int("Use a whole amount.").min(500, "The smallest amount can't be below 500.").max(5_000_000, "That's above the most one payment can send."),
-});
+export const weeklyPaySchema = z
+  .object({
+    on: z.boolean(),
+    day: z.coerce.number().int().min(1, "Choose a day.").max(7, "Choose a day."),
+    hour: z.coerce.number().int().min(WEEKLY_PAY_HOURS.from, "Choose a time from 08:00.").max(WEEKLY_PAY_HOURS.to, "Choose a time up to 20:00."),
+    min: z.coerce.number({ message: "Enter the smallest amount to send." }).int("Use a whole amount.").min(500, "The smallest amount can't be below 500.").max(5_000_000, "That's above the most one payment can send."),
+    max: z.coerce.number({ message: "Enter the largest amount to send." }).int("Use a whole amount.").min(500, "The largest amount can't be below 500.").max(5_000_000, "Mobile money sends at most 5,000,000 at once."),
+  })
+  .refine((p) => p.max >= p.min, { message: "The largest amount can't be below the smallest.", path: ["max"] });
 
 /** "Every Monday from 10:00". */
 export function weeklyPayWhen(pay: Pick<WeeklyPay, "day" | "hour">): string {
@@ -196,18 +200,11 @@ export function weeklyPayDue(pay: WeeklyPay, now: Date): string | null {
 }
 
 /**
- * Commission credited this recently waits for a later pay day (audit,
- * 2026-11-14): an order refunded soon after delivery takes its commission
- * back before it has been paid out, instead of leaving the agent owing it.
+ * What an agent's weekly payment sends: what's in their wallet, up to the
+ * boss's largest amount (the rest goes the week after), or nothing below the
+ * boss's smallest amount (owner, 2026-11-14).
  */
-export const WEEKLY_PAY_HOLD_DAYS = 7;
-
-/**
- * What an agent's weekly payment sends: their balance less commission
- * credited in the last WEEKLY_PAY_HOLD_DAYS (`recent`), up to the most one
- * payment can, or nothing below the boss's smallest amount.
- */
-export function weeklyPayAmount(balance: number, recent: number, min: number, max: number): number {
-  const amount = Math.min(Math.floor(balance - Math.max(recent, 0)), max);
+export function weeklyPayAmount(balance: number, min: number, max: number): number {
+  const amount = Math.min(Math.floor(balance), max);
   return amount >= min ? amount : 0;
 }

@@ -79,9 +79,10 @@ function WeeklyPaySetting({ pay }: { pay: WeeklyPay }) {
   const [day, setDay] = useState(String(pay.day));
   const [hour, setHour] = useState(String(pay.hour));
   const [min, setMin] = useState(String(pay.min));
+  const [max, setMax] = useState(String(pay.max));
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
-  const changed = on !== pay.on || Number(day) !== pay.day || Number(hour) !== pay.hour || Number(min.replace(/[,\s]/g, "")) !== pay.min;
+  const changed = on !== pay.on || Number(day) !== pay.day || Number(hour) !== pay.hour || Number(min.replace(/[,\s]/g, "")) !== pay.min || Number(max.replace(/[,\s]/g, "")) !== pay.max;
   const hours = Array.from({ length: WEEKLY_PAY_HOURS.to - WEEKLY_PAY_HOURS.from + 1 }, (_, i) => WEEKLY_PAY_HOURS.from + i);
 
   return (
@@ -90,23 +91,23 @@ function WeeklyPaySetting({ pay }: { pay: WeeklyPay }) {
         <div>
           <h2 className="text-sm font-semibold">Weekly commission payment</h2>
           <p className="mt-1 text-xs text-muted">
-            {pay.on ? `${weeklyPayWhen(pay)}.` : "Off."} Each agent with an agreed number (on their page, under Edit) gets their available balance by mobile money, by itself, with no approval. Commission earned in the 7 days before waits for the next pay day, so a refund can take it back first. Agents below the smallest amount wait for next week. You get a message after it&apos;s sent. Agents can still ask for a withdrawal in between.
+            {pay.on ? `${weeklyPayWhen(pay)}.` : "Off."} Each agent with an agreed number (on their page, under Edit) gets what's in their wallet by mobile money, by itself, with no approval: nothing below the smallest amount, and at most the largest (the rest goes the week after). Agents below the smallest amount wait for next week. You get a message after it&apos;s sent. Agents can still ask for a withdrawal in between.
           </p>
         </div>
       </div>
       <form
-        className="mt-3 grid gap-3 sm:grid-cols-3"
+        className="mt-3 grid gap-3 sm:grid-cols-2"
         onSubmit={(e) => {
           e.preventDefault();
           setError(null);
           start(async () => {
-            const res = await setWeeklyPay({ on, day, hour, min: min.replace(/[,\s]/g, "") });
+            const res = await setWeeklyPay({ on, day, hour, min: min.replace(/[,\s]/g, ""), max: max.replace(/[,\s]/g, "") });
             if (!res.ok) return setError(res.error);
             router.refresh();
           });
         }}
       >
-        <label className="flex items-center gap-2 text-sm font-medium sm:col-span-3">
+        <label className="flex items-center gap-2 text-sm font-medium sm:col-span-2">
           <input type="checkbox" className="size-4" checked={on} disabled={pending} onChange={(e) => setOn(e.target.checked)} />
           Pay agents every week
         </label>
@@ -131,7 +132,10 @@ function WeeklyPaySetting({ pay }: { pay: WeeklyPay }) {
         <Field label="Smallest amount">
           <TextInput inputMode="numeric" value={min} onChange={(e) => setMin(e.target.value)} disabled={pending} />
         </Field>
-        <div className="sm:col-span-3">
+        <Field label="Largest amount" hint="Up to 5,000,000">
+          <TextInput inputMode="numeric" value={max} onChange={(e) => setMax(e.target.value)} disabled={pending} />
+        </Field>
+        <div className="sm:col-span-2">
           <Button type="submit" variant="secondary" loading={pending} disabled={pending || !changed}>
             Save
           </Button>

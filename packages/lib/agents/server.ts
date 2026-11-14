@@ -190,19 +190,20 @@ interface WeeklyPayRow {
   weekly_pay_day: number;
   weekly_pay_hour: number;
   weekly_pay_min: number | string;
+  weekly_pay_max: number | string;
 }
 
 /** The boss's weekly payment setting. */
 export async function weeklyPay(): Promise<WeeklyPay> {
-  const r = must(await createAdminClient().from("agent_settings").select("weekly_pay_on, weekly_pay_day, weekly_pay_hour, weekly_pay_min").single<WeeklyPayRow>())!;
-  return { on: r.weekly_pay_on, day: r.weekly_pay_day, hour: r.weekly_pay_hour, min: Number(r.weekly_pay_min) };
+  const r = must(await createAdminClient().from("agent_settings").select("weekly_pay_on, weekly_pay_day, weekly_pay_hour, weekly_pay_min, weekly_pay_max").single<WeeklyPayRow>())!;
+  return { on: r.weekly_pay_on, day: r.weekly_pay_day, hour: r.weekly_pay_hour, min: Number(r.weekly_pay_min), max: Number(r.weekly_pay_max) };
 }
 
 export async function setWeeklyPay(pay: WeeklyPay, byName: string): Promise<void> {
   must(
     await createAdminClient()
       .from("agent_settings")
-      .update({ weekly_pay_on: pay.on, weekly_pay_day: pay.day, weekly_pay_hour: pay.hour, weekly_pay_min: pay.min, updated_by_name: byName, updated_at: new Date().toISOString() })
+      .update({ weekly_pay_on: pay.on, weekly_pay_day: pay.day, weekly_pay_hour: pay.hour, weekly_pay_min: pay.min, weekly_pay_max: pay.max, updated_by_name: byName, updated_at: new Date().toISOString() })
       .eq("id", true),
   );
 }
