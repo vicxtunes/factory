@@ -80,11 +80,20 @@ export async function agentWithdrawalToApprove(agentName: string, amount: number
   );
 }
 
-/** The week's commission went out by itself: whoever manages Agents hears what was sent, and what HivePay turned down (waiting for them). */
-export async function agentWeeklyPaySent(sent: { name: string; amount: number }[], failed: { name: string; amount: number; why: string }[]): Promise<void> {
+/**
+ * The week's commission went out by itself: whoever manages Agents hears what
+ * HivePay took, what it didn't answer about yet (its status settles those),
+ * and what it turned down (waiting for them).
+ */
+export async function agentWeeklyPaySent(
+  sent: { name: string; amount: number }[],
+  unanswered: { name: string; amount: number }[],
+  failed: { name: string; amount: number; why: string }[],
+): Promise<void> {
   const total = sent.reduce((sum, s) => sum + s.amount, 0);
   const parts = [
     ...(sent.length ? [`${formatMoney(total)} sent to ${sent.length === 1 ? sent[0].name : `${sent.length} agents`}.`] : []),
+    ...(unanswered.length ? [`HivePay hasn't answered yet for ${unanswered.map((u) => `${u.name} ${formatMoney(u.amount)}`).join(", ")}: it's checked every few minutes, nothing is sent twice.`] : []),
     ...(failed.length ? [`Not sent, waiting for you: ${failed.map((f) => `${f.name} ${formatMoney(f.amount)} (${f.why})`).join("; ")}.`] : []),
   ];
   await Promise.all(

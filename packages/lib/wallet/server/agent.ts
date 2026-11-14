@@ -186,7 +186,7 @@ export async function approveAgentWithdrawal(staff: StaffViewer, id: string): Pr
  * WalletError saying so). No answer: it stays "being sent" and its status
  * settles it.
  */
-async function handToHivepay(id: string, w: { amount: number; phone: string }, description: string): Promise<void> {
+async function handToHivepay(id: string, w: { amount: number; phone: string }, description: string): Promise<"taken" | "unanswered"> {
   const db = createAdminClient();
   let sent: Awaited<ReturnType<typeof hivepay.send>>;
   try {
@@ -194,7 +194,7 @@ async function handToHivepay(id: string, w: { amount: number; phone: string }, d
   } catch (err) {
     // No answer: HivePay may or may not have it. It stays "being sent", and its status settles it.
     console.error("hivepay send threw:", id, err);
-    return;
+    return "unanswered";
   }
   if (!sent.ok) {
     console.error("hivepay send refused:", id, sent.status, sent.message);
@@ -205,6 +205,7 @@ async function handToHivepay(id: string, w: { amount: number; phone: string }, d
   }
   const { error: taken } = await db.rpc("agent_withdraw_taken", { p_withdrawal: id, p_gateway_reference: sent.gatewayRef, p_fee: sent.fee });
   if (taken) throwDbError(taken);
+  return "taken";
 }
 
 /**
@@ -216,6 +217,9 @@ async function handToHivepay(id: string, w: { amount: number; phone: string }, d
  * agents not paid yet. One HivePay can't take waits for the boss in
  * Withdrawals with the reason; the boss hears what went once a run sends any.
  */
+const SEND_EVERY_MS = 3_000;
+const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 export async function runWeeklyAgentPay(now = new Date()): Promise<void> {
   const pay = await weeklyPay();
   const week = weeklyPayDue(pay, now);
@@ -230,7 +234,9 @@ export async function runWeeklyAgentPay(now = new Date()): Promise<void> {
   const paid = new Set((done.data ?? []).map((d) => d.agent_id));
 
   const sent: { name: string; amount: number }[] = [];
+  const unanswered: { name: string; amount: number }[] = [];
   const failed: { name: string; amount: number; why: string }[] = [];
+  let calls = 0;
   for (const agent of agents.data ?? []) {
     if (paid.has(agent.id)) continue;
     const amount = weeklyPayAmount(Number(agent.wallet?.balance ?? 0), Math.max(pay.min, MIN_WITHDRAWAL), MAX_WITHDRAWAL);
@@ -242,14 +248,16 @@ export async function runWeeklyAgentPay(now = new Date()): Promise<void> {
       continue;
     }
     if (!id) continue;
+    // HivePay limits how fast it's called: one send at a time, a moment apart.
+    if (calls++ > 0) await pause(SEND_EVERY_MS);
     try {
-      await handToHivepay(id as string, { amount, phone: agent.payout_phone }, "Agent weekly commission");
-      sent.push({ name: agent.name, amount });
+      const outcome = await handToHivepay(id as string, { amount, phone: agent.payout_phone }, "Agent weekly commission");
+      (outcome === "taken" ? sent : unanswered).push({ name: agent.name, amount });
     } catch (err) {
       failed.push({ name: agent.name, amount, why: err instanceof WalletError ? err.message.replace(/^Not sent: /, "") : "HivePay didn't answer." });
     }
   }
-  if (sent.length || failed.length) await notifier.agentWeeklyPaySent(sent, failed).catch((err) => console.error("weekly pay push failed:", err));
+  if (sent.length || unanswered.length || failed.length) await notifier.agentWeeklyPaySent(sent, unanswered, failed).catch((err) => console.error("weekly pay push failed:", err));
 }
 
 /** The boss refuses a waiting one (the agent sees why): the money goes back on their balance. */
