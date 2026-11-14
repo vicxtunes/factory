@@ -5,7 +5,7 @@ import "server-only";
 // the boss by hand. Made like a vendor's wallet (./vendor.ts), but only the boss
 // answers (supabase/migrations/20261216100000_agent_platform.sql).
 
-import { WEEKLY_PAY_HOLD_DAYS, weeklyPayAmount, weeklyPayDue, type AgentWalletKind, type FeePaidBy, type WithdrawalMethod } from "@repo/lib/agents/core";
+import { weeklyPayAmount, weeklyPayDue, type AgentWalletKind, type FeePaidBy, type WithdrawalMethod } from "@repo/lib/agents/core";
 import { weeklyPay } from "@repo/lib/agents/server";
 import { parsePhone } from "@repo/lib/kernel/core/phone";
 import { createAdminClient } from "@repo/lib/supabase/admin";
@@ -211,8 +211,8 @@ async function handToHivepay(id: string, w: { amount: number; phone: string }, d
 /**
  * Agents' commission, paid by itself on the boss's pay day (owner,
  * 2026-11-14): from the pay hour, each active agent with an agreed number gets
- * their available balance less commission credited in the last week (up to
- * the most one payment sends), if it's at least the boss's smallest amount. One per agent per pay day, held by the
+ * what's in their wallet, up to the boss's largest amount (the rest goes the
+ * week after), if it's at least the boss's smallest amount. One per agent per pay day, held by the
  * database, so running again (every couple of minutes all day) only picks up
  * agents not paid yet. One HivePay can't take waits for the boss in
  * Withdrawals with the reason; the boss hears what went once a run sends any.
@@ -232,16 +232,6 @@ export async function runWeeklyAgentPay(now = new Date()): Promise<void> {
   if (agents.error) throwDbError(agents.error);
   if (done.error) throwDbError(done.error);
   const paid = new Set((done.data ?? []).map((d) => d.agent_id));
-  // Commission credited in the last week waits for a later pay day (refunds take it back first).
-  const { data: fresh, error: freshError } = await db
-    .from("agent_wallet_transactions")
-    .select("agent_id, amount")
-    .eq("kind", "commission")
-    .gt("created_at", new Date(now.getTime() - WEEKLY_PAY_HOLD_DAYS * 86_400_000).toISOString())
-    .returns<{ agent_id: string; amount: number | string }[]>();
-  if (freshError) throwDbError(freshError);
-  const recent = new Map<string, number>();
-  for (const f of fresh ?? []) recent.set(f.agent_id, (recent.get(f.agent_id) ?? 0) + Number(f.amount));
 
   const sent: { name: string; amount: number }[] = [];
   const unanswered: { name: string; amount: number }[] = [];
@@ -249,7 +239,7 @@ export async function runWeeklyAgentPay(now = new Date()): Promise<void> {
   let calls = 0;
   for (const agent of agents.data ?? []) {
     if (paid.has(agent.id)) continue;
-    const amount = weeklyPayAmount(Number(agent.wallet?.balance ?? 0), recent.get(agent.id) ?? 0, Math.max(pay.min, MIN_WITHDRAWAL), MAX_WITHDRAWAL);
+    const amount = weeklyPayAmount(Number(agent.wallet?.balance ?? 0), Math.max(pay.min, MIN_WITHDRAWAL), Math.min(pay.max, MAX_WITHDRAWAL));
     if (!amount) continue;
     const { data: id, error } = await db.rpc("agent_weekly_withdraw", { p_agent: agent.id, p_amount: amount, p_phone: agent.payout_phone, p_week: week });
     if (error) {

@@ -1,7 +1,8 @@
 -- Agents' commission paid by itself every week (owner, 2026-11-14), to the
 -- mobile money number the boss agreed with each agent. The boss decides
--- whether it runs, the day, the hour and the smallest amount worth sending;
--- each agent's whole available balance goes, with no approval. Agents can
+-- whether it runs, the day, the hour, the smallest amount worth sending and
+-- the most one payment sends; what's in each agent's wallet goes (up to that
+-- most), with no approval. Agents can
 -- still ask for a withdrawal in between, as before.
 
 -- The agreed number: only the boss sets it. None: the agent isn't paid weekly.
@@ -13,7 +14,9 @@ alter table agent_settings
   add column weekly_pay_on   boolean  not null default false,
   add column weekly_pay_day  smallint not null default 1 check (weekly_pay_day between 1 and 7),
   add column weekly_pay_hour smallint not null default 10 check (weekly_pay_hour between 8 and 20),
-  add column weekly_pay_min  bigint   not null default 5000 check (weekly_pay_min >= 500);
+  add column weekly_pay_min  bigint   not null default 5000 check (weekly_pay_min >= 500),
+  add column weekly_pay_max  bigint   not null default 5000000 check (weekly_pay_max <= 5000000),
+  add constraint agent_settings_weekly_pay_range check (weekly_pay_max >= weekly_pay_min);
 
 -- A weekly payment: the pay day it was for. One per agent per pay day, so a
 -- second run (or a second server) can never pay twice.
