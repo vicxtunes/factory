@@ -33,7 +33,7 @@ export default function WalletCardVendor() {
         </div>
       </section>
       <Withdrawals
-        withdrawals={[{ id: "w", amount: 500_000, phone: "+256772000000", status: "paid", reference: "HP-81723", payoutFee: 2_500, lastError: null, reason: null, createdAt: "2026-10-19T08:00:00Z" }]}
+        withdrawals={[{ id: "w", amount: 500_000, phone: "+256772000000", status: "paid", reference: "HP-81723", payoutFee: 2_500, feeOnAming: true, lastError: null, reason: null, createdAt: "2026-10-19T08:00:00Z" }]}
       />
       <WithdrawSheet open={withdrawing} onClose={() => setWithdrawing(false)} balance={1_350_000} phone="+256772000000" from="vendor" />
     </div>

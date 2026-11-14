@@ -114,8 +114,8 @@ export function WithdrawSheet({
           }}
         >
           <p className="text-sm text-muted">
-            Sent to your MTN or Airtel number through our mobile money provider, after a check by Aming: between 5 minutes and 24 hours after you ask. The
-            provider&apos;s fee comes off what you receive.{from === "business" ? " Only you, the owner, can withdraw." : null}
+            Sent to your MTN or Airtel number through our mobile money provider, after a check by Aming: between 5 minutes and 24 hours after you ask. You
+            receive the whole amount: Aming pays the provider&apos;s fee.{from === "business" ? " Only you, the owner, can withdraw." : null}
           </p>
           <Field label="Amount" hint={`${money(balance)} on ${where}. From ${money(MIN_WITHDRAWAL)} to ${money(MAX_WITHDRAWAL)} at a time.`}>
             <TextInput inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="e.g. 100000" required />
@@ -154,7 +154,7 @@ export function Withdrawals({ withdrawals }: { withdrawals: Withdrawal[] }) {
             <div className="min-w-0">
               <p className="text-sm font-semibold tabular-nums">{money(w.amount)}</p>
               <p className="text-xs text-muted">
-                {[`To ${localPhone(w.phone)}`, w.payoutFee ? `you received ${money(w.amount - w.payoutFee)} after the provider's ${money(w.payoutFee)} fee` : null, w.reference ? `Ref ${w.reference}` : null]
+                {[`To ${localPhone(w.phone)}`, w.payoutFee && !w.feeOnAming ? `you received ${money(w.amount - w.payoutFee)} after the provider's ${money(w.payoutFee)} fee` : null, w.reference ? `Ref ${w.reference}` : null]
                   .filter(Boolean)
                   .join(" • ")}
                 {/* The server's time zone isn't the reader's. */}

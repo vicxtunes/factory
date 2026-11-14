@@ -27,7 +27,7 @@ const WITHDRAWALS_SHOWN = 10;
 const MAX_MOVE = 100_000_000;
 
 /** A withdrawal's columns, a Business card's or a vendor's wallet's (./vendor.ts): the two tables match. */
-export const WITHDRAWAL_COLUMNS = "id, amount, phone, status, reference, reason, payout_fee, last_error, created_at";
+export const WITHDRAWAL_COLUMNS = "id, amount, phone, status, reference, reason, payout_fee, sent, last_error, created_at";
 
 export interface WithdrawalRow {
   id: string;
@@ -37,6 +37,7 @@ export interface WithdrawalRow {
   reference: string | null;
   reason: string | null;
   payout_fee: number | null;
+  sent: number | null;
   last_error: string | null;
   created_at: string;
 }
@@ -49,9 +50,21 @@ export const toWithdrawal = (r: WithdrawalRow): Withdrawal => ({
   reference: r.reference,
   reason: r.reason,
   payoutFee: r.payout_fee === null ? null : Number(r.payout_fee),
+  feeOnAming: r.sent !== null,
   lastError: r.last_error,
   createdAt: r.created_at,
 });
+
+/**
+ * What to hand HivePay so `due` reaches the phone (owner, 2026-11-14: every
+ * sending charge is Aming's): `due` plus HivePay's charge from its fee bands
+ * (hivepay_send_gross). HivePay always keeps its charge out of what it's sent.
+ */
+export async function sendingGross(due: number): Promise<number> {
+  const { data, error } = await createAdminClient().rpc("hivepay_send_gross", { p_due: due });
+  if (error) throwDbError(error);
+  return Number(data ?? due);
+}
 
 /** The gateway is only asked about a payout once it has had this long. */
 export const ASK_GATEWAY_AFTER_MS = 10_000;
@@ -249,9 +262,13 @@ export async function approveWithdrawal(staff: StaffViewer, id: string): Promise
   const { data, error } = await db.rpc("business_withdraw_approve", { p_withdrawal: id, p_actor_name: staff.name });
   if (error) throwDbError(error);
   const w = data as { amount: number; phone: string };
+  // Aming carries the charge: the amount plus HivePay's charge is sent, so the owner receives it all.
+  const gross = await sendingGross(Number(w.amount));
+  const { error: noted } = await db.from("business_withdrawals").update({ sent: gross }).eq("id", id).eq("status", "sending");
+  if (noted) throwDbError(noted);
   let sent: Awaited<ReturnType<typeof hivepay.send>>;
   try {
-    sent = await hivepay.send({ reference: toPayoutReference(id), phone: w.phone, amount: Number(w.amount), description: "Business card withdrawal" });
+    sent = await hivepay.send({ reference: toPayoutReference(id), phone: w.phone, amount: gross, description: "Business card withdrawal" });
   } catch (err) {
     // No answer: HivePay may or may not have it. It stays "being sent", and its status settles it.
     console.error("hivepay send threw:", id, err);

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { accountMoves, dayTotals, type DayLine } from "./model";
+import { accountMoves, dayTotals, type DayLine, hivepaySendGross } from "./model";
 
 test("day totals: in, out and net, with money in no account shown apart", () => {
   const totals = dayTotals([
@@ -30,4 +30,22 @@ test("a move shows on each account it touched, and nowhere else", () => {
   assert.deepEqual(accountMoves(lines, "cash"), { movedIn: 0, movedOut: 500 });
   assert.deepEqual(accountMoves(lines, "bank"), { movedIn: 500, movedOut: 0 });
   assert.deepEqual(accountMoves(lines, "mobile"), { movedIn: 0, movedOut: 0 });
+});
+
+// HivePay's payout charges (its price list, 2026-11-14), as in 20270112100000.
+const HIVEPAY = [
+  { upTo: 50_000, fee: 1_000 },
+  { upTo: 200_000, fee: 2_000 },
+  { upTo: 400_000, fee: 2_700 },
+  { upTo: 1_000_000, fee: 4_500 },
+  { upTo: 5_000_000, fee: 9_200 },
+];
+
+test("hivepaySendGross: the amount plus HivePay's charge, like the database", () => {
+  assert.equal(hivepaySendGross(10_000, HIVEPAY), 11_000);
+  assert.equal(hivepaySendGross(48_000, HIVEPAY), 49_000);
+  assert.equal(hivepaySendGross(49_500, HIVEPAY), 51_500); // crosses into the next band
+  assert.equal(hivepaySendGross(300_000, HIVEPAY), 302_700);
+  assert.equal(hivepaySendGross(4_990_000, HIVEPAY), 4_999_200);
+  assert.equal(hivepaySendGross(10_000, []), 10_000); // no bands: as it is
 });

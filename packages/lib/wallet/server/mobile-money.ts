@@ -15,6 +15,7 @@ import "server-only";
 // timeout, since the client may still approve the prompt.
 
 import { clientUrl } from "@repo/lib/client-portal/paths";
+import { reconcileOwnerPayout } from "@repo/lib/books/owner-withdrawals-server";
 import { reconcileExpensePayout } from "@repo/lib/books/payouts-server";
 import { formatMoney } from "@repo/lib/currency/format";
 import { parsePhone } from "@repo/lib/kernel/core/phone";
@@ -439,10 +440,11 @@ export async function handleWebhook(rawBody: string, signature: string | null): 
   // A withdrawal's payout delivered or failed: settled from HivePay's own status, like a collection.
   const withdrawalId = reference ? fromPayoutReference(reference) : null;
   if (withdrawalId) {
-    // The id is one business's, vendor's or agent's: each only acts on its own.
+    // The id is one business's, vendor's, agent's or the boss's own: each only acts on its own.
     await reconcilePayout(withdrawalId);
     await reconcileVendorPayout(withdrawalId);
     await reconcileAgentPayout(withdrawalId);
+    await reconcileOwnerPayout(withdrawalId);
     return answer(200);
   }
   // A bill paid through the app, settled the same way.

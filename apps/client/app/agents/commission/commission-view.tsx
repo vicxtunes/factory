@@ -110,7 +110,7 @@ export function CommissionView({ wallet, orders, phone, feePaidBy, canWithdraw, 
                 </span>
                 <span className="block text-xs text-muted" suppressHydrationWarning>
                   {w.method === "bank" ? `To ${w.bankName} ${w.bankAccountNumber}` : `To ${localPhone(w.phone!)}`}
-                  {w.fee ? ` · ${money(w.fee)} sending fee${w.feePaidBy === "aming" ? ", put back on your balance" : ""}` : ""}
+                  {w.fee ? ` · ${money(w.fee)} sending fee${w.feePaidBy === "aming" ? ", paid by Aming" : ""}` : ""}
                   {w.reference ? ` · Ref ${w.reference}` : ""} · {formatWhen(w.createdAt)}
                 </span>
                 {w.status === "rejected" && w.reason ? <span className="block text-xs text-error-600 dark:text-error-400">{w.reason} It&apos;s back on your balance.</span> : null}

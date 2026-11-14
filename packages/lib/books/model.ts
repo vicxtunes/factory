@@ -62,6 +62,7 @@ export type DayLineKind =
   | "wallet_money_back"
   | "expense"
   | "move"
+  | "owner_drawing"
   | "hivepay_fee";
 
 export const DAY_LINE_LABELS: Record<DayLineKind, string> = {
@@ -76,6 +77,7 @@ export const DAY_LINE_LABELS: Record<DayLineKind, string> = {
   wallet_money_back: "Money back from a wallet",
   expense: "Expense",
   move: "Moved between accounts",
+  owner_drawing: "Owner took out",
   hivepay_fee: "HivePay fee (3%)",
 };
 
@@ -141,4 +143,38 @@ export function accountMoves(lines: Pick<DayLine, "direction" | "amount" | "acco
     else movedOut += l.amount;
   }
   return { movedIn, movedOut };
+}
+
+/** One of HivePay's sending charge bands: up to this amount sent (above the previous band), this charge. */
+export interface SendFeeBand {
+  upTo: number;
+  fee: number;
+}
+
+/**
+ * What to hand HivePay so `due` reaches the phone: the smallest amount whose
+ * band's charge, kept out of it, leaves `due`. With no band for it, `due`.
+ * The same rule as hivepay_send_gross() in the database, which decides; this
+ * only shows it before sending.
+ */
+export function hivepaySendGross(due: number, bands: SendFeeBand[]): number {
+  const sorted = [...bands].sort((a, b) => a.upTo - b.upTo);
+  for (const [i, b] of sorted.entries()) {
+    const sent = due + b.fee;
+    if (sent <= b.upTo && sent > (i > 0 ? sorted[i - 1].upTo : 0)) return Math.min(sent, 5_000_000);
+  }
+  return Math.min(due, 5_000_000);
+}
+
+/** The boss taking Aming's money out of HivePay to their phone. */
+export interface OwnerWithdrawal {
+  id: string;
+  amount: number;
+  /** What was sent for it: the amount plus HivePay's charge. */
+  sent: number;
+  phone: string;
+  note: string | null;
+  status: "sending" | "paid" | "failed";
+  lastError: string | null;
+  createdAt: string;
 }

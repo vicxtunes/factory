@@ -11,7 +11,7 @@ import { parsePhone } from "@repo/lib/kernel/core/phone";
 import { createAdminClient } from "@repo/lib/supabase/admin";
 
 import { HISTORY_LIMIT, MAX_WITHDRAWAL, MIN_WITHDRAWAL, checkAmount, cleanReason } from "../policy";
-import { ASK_GATEWAY_AFTER_MS } from "./business";
+import { ASK_GATEWAY_AFTER_MS, sendingGross } from "./business";
 import { WalletError, throwDbError } from "./errors";
 import type { StaffViewer } from "./identity";
 import * as notifier from "./notifier";
@@ -178,13 +178,6 @@ export async function approveAgentWithdrawal(staff: StaffViewer, id: string): Pr
   if (error) throwDbError(error);
   const w = data as { amount: number; phone: string };
   await handToHivepay(id, w, "Agent commission withdrawal");
-}
-
-/** What to send so `due` arrives after HivePay's fee (its bands, kept by the boss; none known: `due`). */
-export async function sendingGross(due: number): Promise<number> {
-  const { data, error } = await createAdminClient().rpc("hivepay_send_gross", { p_due: due });
-  if (error) throwDbError(error);
-  return Number(data ?? due);
 }
 
 /**

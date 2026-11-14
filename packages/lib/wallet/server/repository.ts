@@ -757,11 +757,11 @@ export interface StuckPayoutRow {
   sent_at: string;
 }
 
-/** Withdrawals (a business's, a vendor's or an agent's) still sending, sent before `before`. */
+/** Withdrawals (a business's, a vendor's, an agent's or the boss's own) and bill payouts still sending, sent before `before`. */
 export async function payoutsSendingBefore(before: Date): Promise<StuckPayoutRow[]> {
   const db = createAdminClient();
-  const [business, vendor, agent, bills] = await Promise.all([
-    ...["business_withdrawals", "vendor_withdrawals", "agent_withdrawals"].map((table) =>
+  const [business, vendor, agent, owner, bills] = await Promise.all([
+    ...["business_withdrawals", "vendor_withdrawals", "agent_withdrawals", "owner_withdrawals"].map((table) =>
       db.from(table).select("id, amount, phone, sent_at").eq("status", "sending").lt("sent_at", before.toISOString()).returns<StuckPayoutRow[]>(),
     ),
     db.from("expense_payouts").select("id, amount:sent, phone, sent_at:created_at").eq("status", "sending").lt("created_at", before.toISOString()).returns<StuckPayoutRow[]>(),
@@ -769,8 +769,9 @@ export async function payoutsSendingBefore(before: Date): Promise<StuckPayoutRow
   if (business.error) throwDbError(business.error);
   if (vendor.error) throwDbError(vendor.error);
   if (agent.error) throwDbError(agent.error);
+  if (owner.error) throwDbError(owner.error);
   if (bills.error) throwDbError(bills.error);
-  return [...(business.data ?? []), ...(vendor.data ?? []), ...(agent.data ?? []), ...(bills.data ?? [])].map((r) => ({ ...r, amount: num(r.amount) }));
+  return [...(business.data ?? []), ...(vendor.data ?? []), ...(agent.data ?? []), ...(owner.data ?? []), ...(bills.data ?? [])].map((r) => ({ ...r, amount: num(r.amount) }));
 }
 
 export interface MoneyAlertRow {

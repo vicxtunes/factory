@@ -44,7 +44,7 @@ export const WALLET_TERMS: TermsSection[] = [
     title: "Fees",
     points: [
       `Aming keeps ${COLLECTION_FEE_PERCENT / 100} of each collection made for your business (${COLLECTION_FEE_PERCENT}%). The whole payment and the fee both show in your card's history, and the rest stays on your card.`,
-      "Our mobile money provider's fee for sending a withdrawal comes off what you receive, and is shown with the withdrawal once it's sent.",
+      "Aming pays our mobile money provider's fee for sending a withdrawal: you receive the whole amount you withdraw.",
       "We'll tell you before a fee is introduced or changed.",
     ],
   },

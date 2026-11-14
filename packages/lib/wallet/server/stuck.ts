@@ -7,6 +7,7 @@ import "server-only";
 // vendor or agent, or the bill becomes unpaid again). Done too soon, someone
 // could keep money that did go out, so it waits STUCK_FOR_MS first.
 
+import { giveUpOwnerPayout, reconcileOwnerPayout } from "@repo/lib/books/owner-withdrawals-server";
 import { giveUpExpensePayout, reconcileExpensePayout } from "@repo/lib/books/payouts-server";
 import { createAdminClient } from "@repo/lib/supabase/admin";
 
@@ -23,6 +24,7 @@ const KINDS = [
   { table: "business_withdrawals", sentAt: "sent_at", ask: reconcilePayout, giveUp: giveUpBusinessPayout },
   { table: "vendor_withdrawals", sentAt: "sent_at", ask: reconcileVendorPayout, giveUp: giveUpVendorPayout },
   { table: "expense_payouts", sentAt: "created_at", ask: reconcileExpensePayout, giveUp: giveUpExpensePayout },
+  { table: "owner_withdrawals", sentAt: "sent_at", ask: reconcileOwnerPayout, giveUp: giveUpOwnerPayout },
 ] as const;
 
 async function find(id: string): Promise<{ kind: (typeof KINDS)[number]; status: string; sentAt: string | null } | null> {
