@@ -136,3 +136,42 @@ export type ScheduleEditInput = z.output<typeof scheduleEditSchema>;
 export type ScheduleStopInput = z.output<typeof scheduleStopSchema>;
 export type ExpensePayoutInput = z.output<typeof expensePayoutInputSchema>;
 export type ExpensePaymentInput = z.output<typeof expensePaymentInputSchema>;
+
+// --- Month-end check and petty cash --------------------------------------------
+
+const month = z.string().regex(/^\d{4}-\d{2}-01$/, "Choose a month.");
+
+export const monthCheckSaveSchema = z.object({
+  month,
+  lines: z
+    .array(
+      z.object({
+        accountId: z.string().uuid(),
+        actual: z.number({ message: "Enter the real balance." }).int("Enter whole shillings.").min(0, "A balance can't be negative.").nullable(),
+        reason: text(500),
+      }),
+    )
+    .max(50),
+});
+
+export const monthCheckSubmitSchema = z.object({ month });
+
+export const monthCheckApproveSchema = z.object({
+  month,
+  bookings: z.array(z.object({ accountId: z.string().uuid(), as: z.enum(["shortage", "surplus", "opening"]) })).max(50),
+});
+
+export const pettyCashSpendSchema = z.object({
+  id: z.string().uuid(),
+  boxId: z.string().uuid(),
+  name: z.string().trim().min(1, "Say what it was for.").max(120),
+  category: z.string().min(1, "Choose a category."),
+  amount: z.number({ message: "Enter the amount paid." }).int("Enter whole shillings.").positive("Enter the amount paid."),
+  recipient: text(120),
+  description: text(500),
+});
+
+export const pettyCashFloatSchema = z.object({
+  boxId: z.string().uuid(),
+  amount: z.number({ message: "Enter the float." }).int("Enter whole shillings.").min(0, "The float can't be negative.").nullable(),
+});

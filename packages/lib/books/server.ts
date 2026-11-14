@@ -54,11 +54,22 @@ const REFUSALS: Record<string, string> = {
   reject_reason: "Say why it's rejected.",
   void_reason: "Say why it's being voided.",
   has_payments: "Void its payments first.",
+  bad_box: "That isn't a petty cash box.",
+  bad_month: "Choose a month.",
+  not_yet: "A month can be checked from 8 pm on its last day.",
+  approved: "This month's check is approved, so it can't change.",
+  missing: "Enter the real balance of every account.",
+  reason: "Say why each account that differs is different.",
+  not_sent: "The check has to be sent to the boss before it's approved.",
+  booking: "Say what each difference was: a shortage only when money is missing, a surplus only when there's more.",
 };
 
 /** A sentence for one of the database's refusals; anything else stays a plain error, logged and hidden. */
 function fail(error: { message: string }): never {
-  const code = /(?:DAYBOOK|EXPENSE):(\w+)/.exec(error.message)?.[1];
+  // A box can't pay more than it holds: the database says how much it holds.
+  const holds = /PETTY:not_enough:(\d+)/.exec(error.message)?.[1];
+  if (holds) throw new AppError(`The box holds only ${Number(holds).toLocaleString("en-GB")}. Ask the boss to top it up first.`);
+  const code = /(?:DAYBOOK|EXPENSE|MONTHCHECK|PETTY):(\w+)/.exec(error.message)?.[1];
   if (code && REFUSALS[code]) throw new AppError(REFUSALS[code]);
   throw new Error(`books: ${error.message}`);
 }

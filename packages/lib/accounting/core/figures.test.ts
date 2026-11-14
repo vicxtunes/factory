@@ -197,11 +197,11 @@ test("customer history merges money in and held movements, newest first", () => 
   );
 });
 
-test("payments totals: per channel and per person who recorded them, most first", () => {
+test("payments totals: per channel, per account and per person who recorded them, most first", () => {
   const t = paymentsTotals([
-    money({ id: "a", amount: 50_000, channel: "cash", recordedBy: "Carol" }),
-    money({ id: "b", amount: 20_000, channel: "mobile_money", recordedBy: "HivePay" }),
-    money({ id: "c", amount: 40_000, channel: "mobile_money", recordedBy: "HivePay" }),
+    money({ id: "a", amount: 50_000, channel: "cash", recordedBy: "Carol", accountName: "Cash" }),
+    money({ id: "b", amount: 20_000, channel: "mobile_money", recordedBy: "HivePay", accountName: "HivePay" }),
+    money({ id: "c", amount: 40_000, channel: "mobile_money", recordedBy: "HivePay", accountName: "HivePay" }),
     money({ id: "d", amount: 5_000, channel: "bank_transfer", recordedBy: null }),
   ]);
   assert.equal(t.total, 115_000);
@@ -209,6 +209,11 @@ test("payments totals: per channel and per person who recorded them, most first"
   assert.equal(t.byChannel.cash, 50_000);
   assert.equal(t.byChannel.mobile_money, 60_000);
   assert.equal(t.byChannel.card, 0);
+  assert.deepEqual(t.byAccount, [
+    { name: "HivePay", amount: 60_000, count: 2 },
+    { name: "Cash", amount: 50_000, count: 1 },
+    { name: null, amount: 5_000, count: 1 },
+  ]);
   assert.deepEqual(t.byRecorder, [
     { name: "HivePay", amount: 60_000, count: 2 },
     { name: "Carol", amount: 50_000, count: 1 },

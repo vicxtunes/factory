@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { getDashboardSession } from "@repo/lib/auth/session";
+import { seesPettyCash } from "@repo/lib/books/petty-cash-server";
 import { getStaffNotifications } from "../notification-actions";
 import { DashboardShell } from "../shell";
 
@@ -15,7 +16,7 @@ export default async function DashboardLayout({
   if (!session) redirect("/dashboard/login");
 
   // Every order event, this user's own resolved support reports, and their inbox.
-  const notifications = await getStaffNotifications();
+  const [notifications, pettyCash] = await Promise.all([getStaffNotifications(), seesPettyCash(session)]);
 
   return (
     <DashboardShell
@@ -23,7 +24,7 @@ export default async function DashboardLayout({
       fullName={session.fullName}
       avatarUrl={session.avatarUrl}
       roleName={session.roleName}
-      viewer={{ isBoss: session.isBoss, access: session.access, email: session.email }}
+      viewer={{ isBoss: session.isBoss, access: session.access, email: session.email, pettyCash }}
       notifications={notifications}
     >
       {children}
