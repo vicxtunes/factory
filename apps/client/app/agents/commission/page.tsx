@@ -27,7 +27,7 @@ export default async function AgentCommissionPage() {
   // Paid by itself each week to the number agreed with Aming, when the boss has it on.
   const weeklyLine =
     weekly.on && agent.payoutPhone && agent.active
-      ? `${weeklyPayWhen(weekly)}, your balance is sent to ${localPhone(agent.payoutPhone)} by itself when it's at least ${formatMoney(Math.max(weekly.min, MIN_WITHDRAWAL))}.`
+      ? `${weeklyPayWhen(weekly)}, your balance is sent to ${localPhone(agent.payoutPhone)} by itself when it's at least ${formatMoney(Math.max(weekly.min, MIN_WITHDRAWAL))}. Commission earned in the last 7 days goes the week after.`
       : null;
   return (
     <AgentFrame agent={agent} page="commission">

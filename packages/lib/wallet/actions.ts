@@ -23,6 +23,7 @@ import * as mobileMoney from "./server/mobile-money";
 import * as agentWallet from "./server/agent";
 import { requireUnlocked } from "./server/pin";
 import * as service from "./server/service";
+import * as stuck from "./server/stuck";
 import * as watch from "./server/watch";
 import type { MoneyAccount, MoneySource } from "./types";
 import type {
@@ -41,6 +42,7 @@ import type {
   WalletView,
 } from "./types";
 import { requireAccountsAccess } from "@repo/lib/accounting/access";
+import { getDashboardSession } from "@repo/lib/auth/session";
 import { clientPath } from "@repo/lib/client-portal/paths";
 import { agentOfClient } from "@repo/lib/agents/server";
 import { vendors } from "@repo/lib/vendors/server";
@@ -401,6 +403,21 @@ export async function resolveMoneyAlert(id: string): Promise<WalletResult> {
     const session = await requireAccountsAccess();
     await watch.resolveAlert(id, session.fullName ?? session.email ?? "Staff");
     revalidatePath("/dashboard/accounts");
+  });
+}
+
+/**
+ * "Not sent, return it" on a payout HivePay never confirmed: the boss only.
+ * HivePay is asked once more first; see ./server/stuck.ts.
+ */
+export async function returnStuckPayout(payoutId: string, alertId: string, note: string): Promise<WalletResult<"paid" | "returned">> {
+  return run(async () => {
+    const session = await getDashboardSession();
+    if (!session?.isBoss) throw new WalletError("Only the boss can do this.");
+    const outcome = await stuck.returnStuckPayout({ name: session.fullName || session.email || "The boss" }, payoutId, note);
+    await watch.resolveAlert(alertId, session.fullName ?? session.email ?? "The boss");
+    revalidatePath("/dashboard", "layout");
+    return outcome;
   });
 }
 

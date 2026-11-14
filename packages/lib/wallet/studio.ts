@@ -12,6 +12,7 @@ export { businessTermsAccepted, getBusinessCard } from "./server/business";
 export {
   checkStudioRequestPayment,
   claimStudioPaymentApply,
+  paidForStudioBookings,
   paidForStudioRequests,
   releaseStudioPaymentApply,
   startStudioRequestPayment,

@@ -46,7 +46,7 @@ async function Payments({ searchParams }: { searchParams: SearchParams }) {
   const other = await otherMoneyIn(scope, { from: view.period.fromDate, to: view.period.toDate });
   return (
     <>
-      <MoneyAlerts alerts={alerts.ok ? alerts.data ?? [] : []} canManage={sessionCan(await getDashboardSession(), "accounts", "manage")} />
+      <MoneyAlerts alerts={alerts.ok ? alerts.data ?? [] : []} canManage={sessionCan(await getDashboardSession(), "accounts", "manage")} isBoss={(await getDashboardSession())?.isBoss ?? false} />
       <PeriodPicker period={view.period} presets={DAY_PERIOD_PRESETS} />
       <PaymentsTable
         // Remount when the period changes so the search starts fresh on the new data.

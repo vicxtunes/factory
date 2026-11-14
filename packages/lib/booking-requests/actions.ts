@@ -19,7 +19,8 @@ import { studioOfCaller } from "@repo/lib/studios/server";
 import { localDate } from "@repo/lib/accounting/core/period";
 import { bookings } from "@repo/lib/bookings/server";
 import { applyStudioPayment } from "@repo/lib/studio-payments/server";
-import { WalletError, checkStudioRequestPayment, startStudioRequestPayment } from "@repo/lib/wallet/studio";
+import { invoices } from "@repo/lib/billing/server";
+import { WalletError, checkStudioRequestPayment, paidForStudioBookings, startStudioRequestPayment } from "@repo/lib/wallet/studio";
 import type { MobileMoneyCollection } from "@repo/lib/wallet/types";
 
 import { bookNowSchema, type BookNowOutcome } from "./core";
@@ -77,7 +78,12 @@ export async function payForBooking(slug: unknown, input: { bookingId: unknown; 
     if (booking.status === "cancelled") throw new BookingRequestError("This booking was cancelled.");
     if (!booking.amount) throw new BookingRequestError("This booking's price isn't set yet.");
     const amount = Number(input.amount);
-    if (amount > booking.amount) throw new BookingRequestError("That's more than the booking costs.");
+    // What's still owed: its invoice's balance once it has one (payments go on it), else its price less what's been paid in (audit, 2026-11-14).
+    const left = booking.invoiceId
+      ? ((await invoices.get(at.scope, booking.invoiceId))?.balance ?? 0)
+      : booking.amount - ((await paidForStudioBookings([bookingId]))[bookingId] ?? 0);
+    if (left <= 0) throw new BookingRequestError("This booking is already paid in full.");
+    if (amount > left) throw new BookingRequestError(`That's more than what's left to pay (${left.toLocaleString("en-UG")}).`);
     return walletStep(() =>
       startStudioRequestPayment({
         tenantId: at.studio.id,

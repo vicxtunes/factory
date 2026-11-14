@@ -104,7 +104,7 @@ function lastMonths(timeZone: string): string[] {
 /** The card as its business sees it: balance, history, withdrawals and its last months, in the business's time zone. */
 export async function getBusinessCard(tenantId: string, timeZone: string): Promise<BusinessCardView> {
   // Payouts the gateway may have answered since: settled first, so the card is current.
-  await reconcileSending(tenantId);
+  await reconcileBusinessPayouts(tenantId);
   const db = createAdminClient();
   const months = lastMonths(timeZone);
   const [state, entries, withdrawals, movements] = await Promise.all([
@@ -217,7 +217,7 @@ async function businessesOf(tenantIds: string[]): Promise<Map<string, { name: st
 
 /** The staff queue: withdrawals waiting for approval or being sent, oldest first. */
 export async function listPendingWithdrawals(): Promise<PendingWithdrawal[]> {
-  await reconcileSending(null);
+  await reconcileBusinessPayouts(null);
   const { data, error } = await createAdminClient()
     .from("business_withdrawals")
     .select(`${WITHDRAWAL_COLUMNS}, tenant_id, requested_by_name`)
@@ -288,8 +288,26 @@ export async function reconcilePayout(id: string): Promise<void> {
   if (changed) await tellOwner(id, reason);
 }
 
+/**
+ * A payout stuck "being sent" that the boss checked with HivePay never went
+ * (./stuck.ts): failed, and the money goes back. False when it's no longer
+ * being sent.
+ */
+export async function giveUpBusinessPayout(id: string, reason: string): Promise<boolean> {
+  const { data: changed, error } = await createAdminClient().rpc("business_withdraw_payout_result", {
+    p_withdrawal: id,
+    p_delivered: false,
+    p_fee: null,
+    p_gateway_reference: null,
+    p_reason: reason,
+  });
+  if (error) throwDbError(error);
+  if (changed) await tellOwner(id, reason);
+  return !!changed;
+}
+
 /** Every payout still being sent (one business's, or all of them), asked about once it has had a moment. */
-async function reconcileSending(tenantId: string | null): Promise<void> {
+export async function reconcileBusinessPayouts(tenantId: string | null): Promise<void> {
   let query = createAdminClient()
     .from("business_withdrawals")
     .select("id")

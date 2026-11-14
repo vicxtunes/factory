@@ -65,7 +65,7 @@ Paid withdrawals are money out in the day book (`money_day_lines`).
 **Weekly payment (owner, 2026-11-14):** the boss turns it on in Rates & settings and picks the day, the hour
 (08:00–20:00, Kampala) and the smallest amount worth sending (`agent_settings.weekly_pay_*`). Each agent the
 boss gave an agreed number (Edit agent, `agents.payout_phone`, MTN/Airtel Uganda; only the boss sets it, not
-Alexis) then gets their whole available balance (up to the most one payment sends) by itself, with no approval:
+Alexis) then gets their available balance less commission credited in the last 7 days (`WEEKLY_PAY_HOLD_DAYS`: a refund takes it back first; audit 2026-11-14), up to the most one payment sends, by itself, with no approval:
 `runWeeklyAgentPay` (packages/lib/wallet/server/agent.ts) runs every couple of minutes on the production server
 and, on the pay day from its hour, makes one withdrawal per agent per pay day (`agent_weekly_withdraw`, unique on
 `agent_withdrawals.weekly_of`, migration 20270108100000) and hands it to HivePay. One HivePay turns down waits in

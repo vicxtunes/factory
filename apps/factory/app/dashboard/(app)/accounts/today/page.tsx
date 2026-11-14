@@ -42,7 +42,7 @@ async function Today({ searchParams }: { searchParams: SearchParams }) {
   const [book, alerts] = await Promise.all([dayBook(scope, day), getMoneyAlerts()]);
   return (
     <>
-      <MoneyAlerts alerts={alerts.ok ? alerts.data ?? [] : []} canManage={sessionCan(await getDashboardSession(), "accounts", "manage")} />
+      <MoneyAlerts alerts={alerts.ok ? alerts.data ?? [] : []} canManage={sessionCan(await getDashboardSession(), "accounts", "manage")} isBoss={(await getDashboardSession())?.isBoss ?? false} />
       <DayBookBoard key={day} book={book} timeZone={scope.timeZone} canManage={sessionCan(await getDashboardSession(), "accounts", "manage")} />
     </>
   );

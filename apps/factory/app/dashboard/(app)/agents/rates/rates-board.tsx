@@ -90,7 +90,7 @@ function WeeklyPaySetting({ pay }: { pay: WeeklyPay }) {
         <div>
           <h2 className="text-sm font-semibold">Weekly commission payment</h2>
           <p className="mt-1 text-xs text-muted">
-            {pay.on ? `${weeklyPayWhen(pay)}.` : "Off."} Each agent with an agreed number (on their page, under Edit) gets their whole available balance by mobile money, by itself, with no approval. Agents below the smallest amount wait for next week. You get a message after it&apos;s sent. Agents can still ask for a withdrawal in between.
+            {pay.on ? `${weeklyPayWhen(pay)}.` : "Off."} Each agent with an agreed number (on their page, under Edit) gets their available balance by mobile money, by itself, with no approval. Commission earned in the 7 days before waits for the next pay day, so a refund can take it back first. Agents below the smallest amount wait for next week. You get a message after it&apos;s sent. Agents can still ask for a withdrawal in between.
           </p>
         </div>
       </div>
