@@ -31,10 +31,13 @@ const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export async function sendPayout(input: ExpensePayoutInput, phone: string, actor: { id: string; name: string }): Promise<void> {
   if (!hivepay.isConfigured()) throw new AppError("Payouts aren't set up on this server (HivePay keys).");
-  // HivePay keeps its fee out of what's sent (it publishes no price list), so
-  // the amount goes as it is and the bill counts as paid with it (owner, 2026-11-12).
-  const sent = input.amount;
+  // Aming carries the fee (owner, 2026-11-03, again 2026-11-14): the bill plus
+  // HivePay's fee is sent, so the supplier receives the bill in full; the fee
+  // is an expense of its own when HivePay reports it.
   const db = createAdminClient();
+  const { data: gross, error: grossError } = await db.rpc("hivepay_send_gross", { p_due: input.amount });
+  if (grossError) fail(grossError);
+  const sent = Number(gross ?? input.amount);
   const { data: isNew, error } = await db.rpc("expense_payout_start", {
     p_id: input.id,
     p_expense: input.expenseId,

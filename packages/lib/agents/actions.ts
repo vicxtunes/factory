@@ -144,14 +144,6 @@ export async function setCommissionRate(input: unknown): Promise<Result> {
   });
 }
 
-export async function setWithdrawalFeePaidBy(paidBy: unknown): Promise<Result> {
-  return runAction("agents", async () => {
-    const by = await requireBoss();
-    await server.setFeePaidBy(parseInput(z.enum(["agent", "aming"]), paidBy), by);
-    refreshAdmin();
-  });
-}
-
 /** Agents' commission paid by itself every week: on or off, the day, the hour and the smallest amount. */
 export async function setWeeklyPay(input: unknown): Promise<Result> {
   return runAction("agents", async () => {

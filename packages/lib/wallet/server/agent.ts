@@ -180,6 +180,13 @@ export async function approveAgentWithdrawal(staff: StaffViewer, id: string): Pr
   await handToHivepay(id, w, "Agent commission withdrawal");
 }
 
+/** What to send so `due` arrives after HivePay's fee (its bands, kept by the boss; none known: `due`). */
+export async function sendingGross(due: number): Promise<number> {
+  const { data, error } = await createAdminClient().rpc("hivepay_send_gross", { p_due: due });
+  if (error) throwDbError(error);
+  return Number(data ?? due);
+}
+
 /**
  * A withdrawal already marked as being sent goes to HivePay. Turned down
  * before HivePay took it: back to waiting for the boss, with why (and a
@@ -188,9 +195,13 @@ export async function approveAgentWithdrawal(staff: StaffViewer, id: string): Pr
  */
 async function handToHivepay(id: string, w: { amount: number; phone: string }, description: string): Promise<"taken" | "unanswered"> {
   const db = createAdminClient();
+  // Aming carries the fee (owner, 2026-11-14): the amount plus HivePay's fee is sent, so the agent receives it all.
+  const gross = await sendingGross(Number(w.amount));
+  const { error: noted } = await db.from("agent_withdrawals").update({ sent: gross }).eq("id", id).eq("status", "sending");
+  if (noted) throwDbError(noted);
   let sent: Awaited<ReturnType<typeof hivepay.send>>;
   try {
-    sent = await hivepay.send({ reference: toPayoutReference(id), phone: w.phone, amount: Number(w.amount), description });
+    sent = await hivepay.send({ reference: toPayoutReference(id), phone: w.phone, amount: gross, description });
   } catch (err) {
     // No answer: HivePay may or may not have it. It stays "being sent", and its status settles it.
     console.error("hivepay send threw:", id, err);

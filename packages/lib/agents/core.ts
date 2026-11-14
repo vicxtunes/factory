@@ -87,8 +87,9 @@ export type WithdrawalMethod = "mobile_money" | "bank";
 
 /** Said to the agent before they confirm a mobile money withdrawal. */
 export function feeWording(paidBy: FeePaidBy): string {
+  // Aming carries every sending fee (owner, 2026-11-14); "agent" is only on withdrawals asked for before.
   return paidBy === "aming"
-    ? "HivePay's sending fee comes out of what's sent, then Aming puts the same amount back on your balance."
+    ? "Aming pays HivePay's sending fee, so your phone receives the full amount. If HivePay ever keeps some of it, it goes back on your balance."
     : "HivePay's sending fee comes out of what's sent, so your phone receives a little less than you ask for.";
 }
 
