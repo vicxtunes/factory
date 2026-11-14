@@ -10,7 +10,7 @@ import { createAdminClient } from "@repo/lib/supabase/admin";
 
 import { HISTORY_LIMIT, MAX_WITHDRAWAL, MIN_WITHDRAWAL, checkAmount, cleanReason } from "../policy";
 import type { PendingWithdrawal, VendorWalletEntry, VendorWalletView } from "../types";
-import { ASK_GATEWAY_AFTER_MS, WITHDRAWAL_COLUMNS, toWithdrawal, type WithdrawalRow } from "./business";
+import { ASK_GATEWAY_AFTER_MS, WITHDRAWAL_COLUMNS, sendingGross, toWithdrawal, type WithdrawalRow } from "./business";
 import { WalletError, throwDbError } from "./errors";
 import type { StaffViewer } from "./identity";
 import * as notifier from "./notifier";
@@ -83,9 +83,13 @@ export async function approveVendorWithdrawal(staff: StaffViewer, id: string): P
   const { data, error } = await db.rpc("vendor_withdraw_approve", { p_withdrawal: id, p_actor_name: staff.name });
   if (error) throwDbError(error);
   const w = data as { amount: number; phone: string };
+  // Aming carries the charge: the amount plus HivePay's charge is sent, so the vendor receives it all.
+  const gross = await sendingGross(Number(w.amount));
+  const { error: noted } = await db.from("vendor_withdrawals").update({ sent: gross }).eq("id", id).eq("status", "sending");
+  if (noted) throwDbError(noted);
   let sent: Awaited<ReturnType<typeof hivepay.send>>;
   try {
-    sent = await hivepay.send({ reference: toPayoutReference(id), phone: w.phone, amount: Number(w.amount), description: "Vendor wallet withdrawal" });
+    sent = await hivepay.send({ reference: toPayoutReference(id), phone: w.phone, amount: gross, description: "Vendor wallet withdrawal" });
   } catch (err) {
     // No answer: HivePay may or may not have it. It stays "being sent", and its status settles it.
     console.error("hivepay send threw:", id, err);

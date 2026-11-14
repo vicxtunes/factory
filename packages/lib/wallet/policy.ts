@@ -12,7 +12,8 @@ export const MAX_DEPOSIT = 100_000_000;
 export const COLLECTION_FEE_PERCENT = 5;
 /** A withdrawal from a Business card (UGX) goes out through HivePay, within its limits per payout. */
 export const MIN_WITHDRAWAL = 500;
-export const MAX_WITHDRAWAL = 5_000_000;
+// HivePay sends at most 5,000,000, and Aming sends its charge on top (owner, 2026-11-14): up to 9,200 at the top.
+export const MAX_WITHDRAWAL = 4_990_000;
 /** Largest single staff adjustment (UGX), either direction. */
 export const MAX_ADJUSTMENT = 100_000_000;
 

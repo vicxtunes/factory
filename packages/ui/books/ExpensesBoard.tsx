@@ -1140,7 +1140,7 @@ function SendFeesSheet({ bands, onClose }: { bands: { upTo: number; fee: number 
         }}
       >
         <p className="text-sm text-muted">
-          Aming pays HivePay&apos;s fee: bills and agents&apos; money are sent with the fee on top, so the phone receives the full amount. Copy HivePay&apos;s fee for each band: the fee for sending up to that amount. If HivePay keeps more than this, an agent gets the difference on their balance and a bill keeps the rest owing.
+          Aming pays every HivePay fee: bills, agents&apos;, Business card and vendor withdrawals, and the boss&apos;s own, are sent with the fee on top, so the phone receives the full amount, and each fee is recorded as an expense (HivePay sending fees). Copy HivePay&apos;s fee for each band: the fee for sending up to that amount. If HivePay keeps more than this, an agent gets the difference on their balance and a bill keeps the rest owing.
         </p>
         <div className="space-y-2">
           {rows.map((r, i) => (

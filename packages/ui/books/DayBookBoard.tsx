@@ -14,8 +14,9 @@ import { Field, Select, TextInput } from "@repo/ui/Field";
 import { FormSheet } from "@repo/ui/FormSheet";
 import { Card, EmptyState, FigureTile, formatDayTime, useMoney } from "@repo/ui/accounting/shared";
 import { VoidSheet, parseNumber } from "@repo/ui/production/sheets";
-import { closeDay, moveMoney, setOpeningBalances, voidMoneyMove } from "@repo/lib/books/actions";
-import { DAY_LINE_LABELS, accountMoves, dayTotals, type DayAccount, type DayBook, type DayLine } from "@repo/lib/books/model";
+import { closeDay, moveMoney, setOpeningBalances, takeMoneyOut, voidMoneyMove } from "@repo/lib/books/actions";
+import { DAY_LINE_LABELS, accountMoves, dayTotals, hivepaySendGross, type DayAccount, type DayBook, type DayLine, type OwnerWithdrawal, type SendFeeBand } from "@repo/lib/books/model";
+import { localPhone } from "@repo/lib/wallet/policy";
 import { matchesSearch } from "@repo/lib/search";
 
 const METHODS: Record<string, string> = { cash: "Cash", mobile_money: "Mobile money", bank_transfer: "Bank transfer", card: "Card", other: "Other", move: "Own accounts" };
@@ -44,11 +45,22 @@ function matches(l: DayLine, query: string, accountName: string): boolean {
 }
 
 /** `canManage`: Accounts at manage (staff access): openings, closing the day, moving money. */
-export function DayBookBoard({ book, timeZone, canManage = true }: { book: DayBook; timeZone: string; canManage?: boolean }) {
+export function DayBookBoard({
+  book,
+  timeZone,
+  canManage = true,
+  takeOut = null,
+}: {
+  book: DayBook;
+  timeZone: string;
+  canManage?: boolean;
+  /** The boss's own withdrawals from HivePay and HivePay's charges; null: not the boss, or HivePay isn't set up. */
+  takeOut?: { withdrawals: OwnerWithdrawal[]; bands: SendFeeBand[] } | null;
+}) {
   const money = useMoney();
   const router = useRouter();
   const [search, setSearch] = useState("");
-  const [sheet, setSheet] = useState<"opening" | "close" | "move" | null>(null);
+  const [sheet, setSheet] = useState<"opening" | "close" | "move" | "take_out" | null>(null);
   const [voidingMove, setVoidingMove] = useState<DayLine | null>(null);
   const query = search;
   const accountName = useMemo(() => new Map(book.accounts.map((a) => [a.id, a.name])), [book.accounts]);
@@ -149,12 +161,19 @@ export function DayBookBoard({ book, timeZone, canManage = true }: { book: DayBo
         </p>
       ) : null}
 
-      {canManage ? (
+      {canManage || takeOut ? (
         <div className="flex flex-wrap items-center gap-2">
-          {canClose ? <Button onClick={() => setSheet("close")}>Close today</Button> : null}
-          <Button variant="secondary" onClick={() => setSheet("move")}>
-            Move money
-          </Button>
+          {canManage && canClose ? <Button onClick={() => setSheet("close")}>Close today</Button> : null}
+          {canManage ? (
+            <Button variant="secondary" onClick={() => setSheet("move")}>
+              Move money
+            </Button>
+          ) : null}
+          {takeOut ? (
+            <Button variant="secondary" onClick={() => setSheet("take_out")}>
+              Take money out of HivePay
+            </Button>
+          ) : null}
         </div>
       ) : null}
 
@@ -283,6 +302,7 @@ export function DayBookBoard({ book, timeZone, canManage = true }: { book: DayBo
       {sheet === "opening" ? <OpeningSheet accounts={unset} onClose={() => setSheet(null)} /> : null}
       {sheet === "close" ? <CloseSheet book={book} onClose={() => setSheet(null)} /> : null}
       {sheet === "move" ? <MoveSheet book={book} onClose={() => setSheet(null)} /> : null}
+      {sheet === "take_out" && takeOut ? <TakeOutSheet book={book} takeOut={takeOut} timeZone={timeZone} onClose={() => setSheet(null)} /> : null}
       {voidingMove ? (
         <VoidSheet
           open
@@ -526,6 +546,95 @@ function MoveSheet({ book, onClose }: { book: DayBook; onClose: () => void }) {
           Move money
         </Button>
       </form>
+    </FormSheet>
+  );
+}
+
+const TAKE_OUT_STATUS: Record<OwnerWithdrawal["status"], string> = { sending: "Sending", paid: "Sent", failed: "Not sent" };
+
+/**
+ * The boss takes Aming's money out of HivePay to their phone (owner,
+ * 2026-11-14). The whole amount arrives: HivePay's charge is sent on top and
+ * recorded as an expense. It's the owner taking money out, not an expense.
+ */
+function TakeOutSheet({ book, takeOut, timeZone, onClose }: { book: DayBook; takeOut: { withdrawals: OwnerWithdrawal[]; bands: SendFeeBand[] }; timeZone: string; onClose: () => void }) {
+  const money = useMoney();
+  const router = useRouter();
+  const [amount, setAmount] = useState("");
+  const [phone, setPhone] = useState("");
+  const [note, setNote] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
+  const [pending, start] = useTransition();
+
+  const value = parseNumber(amount);
+  const sent = value > 0 ? hivepaySendGross(value, takeOut.bands) : 0;
+  const hivepay = book.accounts.find((a) => a.kind === "hivepay");
+  const held = book.day === book.today ? hivepay?.closing ?? null : null;
+
+  function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!(value > 0) || !Number.isInteger(value)) return setError("Enter the amount in whole shillings.");
+    setError(null);
+    start(async () => {
+      const res = await takeMoneyOut({ amount: value, phone, note });
+      if (!res.ok) return setError(res.error);
+      setDone(true);
+      setAmount("");
+      setNote("");
+      router.refresh();
+    });
+  }
+
+  return (
+    <FormSheet open onClose={onClose} title="Take money out of HivePay">
+      <form onSubmit={submit} className="space-y-3">
+        <p className="text-sm text-muted">
+          Sends Aming&apos;s money from HivePay to your MTN or Airtel number. You receive the whole amount: HivePay&apos;s charge is sent on top and recorded as an
+          expense (HivePay sending fees). The day book shows it as the owner taking money out, not as an expense.
+        </p>
+        <Field label="Amount">
+          <TextInput inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="e.g. 500000" required />
+          {value > 0 ? (
+            <p className="mt-1 text-xs text-muted">
+              {sent > value ? `HivePay's charge ${money(sent - value)}: ${money(sent)} leaves HivePay.` : "No charge band for this amount: HivePay's charge will come out of it."}
+            </p>
+          ) : null}
+          {held !== null && sent > held ? (
+            <p className="mt-1 text-xs font-medium text-warning-700 dark:text-warning-500">HivePay should only hold {money(held)}. HivePay will turn it down if it&apos;s short.</p>
+          ) : null}
+        </Field>
+        <Field label="To number">
+          <TextInput inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="07…" required />
+        </Field>
+        <Field label="What it's for (optional)">
+          <TextInput value={note} onChange={(e) => setNote(e.target.value)} maxLength={300} />
+        </Field>
+        {error ? <p className="text-xs text-error-600">{error}</p> : null}
+        {done ? <p className="text-xs text-success-700 dark:text-success-500">Sent to HivePay. It shows in the day book once HivePay confirms it went.</p> : null}
+        <Button type="submit" loading={pending} className="w-full">
+          {value > 0 ? `Send ${money(value)}` : "Send"}
+        </Button>
+      </form>
+      {takeOut.withdrawals.length > 0 ? (
+        <div className="mt-5">
+          <h3 className="text-sm font-semibold">Your last withdrawals</h3>
+          <ul className="mt-1 divide-y divide-border">
+            {takeOut.withdrawals.map((w) => (
+              <li key={w.id} className="flex items-start justify-between gap-3 py-2 text-sm">
+                <span className="min-w-0">
+                  <span className="block font-medium tnum">{money(w.amount)}</span>
+                  <span className="block text-xs text-muted">
+                    {[`To ${localPhone(w.phone)}`, w.sent > w.amount ? `charge ${money(w.sent - w.amount)}` : null, w.note, formatDayTime(w.createdAt, timeZone)].filter(Boolean).join(" · ")}
+                  </span>
+                  {w.status === "failed" && w.lastError ? <span className="block text-xs text-error-600 dark:text-error-400">{w.lastError}</span> : null}
+                </span>
+                <span className="shrink-0 text-xs text-muted">{TAKE_OUT_STATUS[w.status]}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
     </FormSheet>
   );
 }

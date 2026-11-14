@@ -366,7 +366,7 @@ export async function setApprovalLimit(above: number | null, byName: string): Pr
 }
 
 /** Autopay sends by itself up to this much (null: no limit). Bills warned of that are now above it wait again. */
-/** The boss saves HivePay's sending fee bands (owner, 2026-11-14: Aming pays the fee on top of what agents and suppliers receive). */
+/** The boss saves HivePay's sending fee bands (owner, 2026-11-14: Aming pays every fee, on top of what each phone receives). */
 export async function setSendFees(bands: { upTo: number; fee: number }[], byName: string): Promise<void> {
   const { error } = await createAdminClient().rpc("hivepay_send_fees_set", { p_bands: bands.map((b) => ({ up_to: b.upTo, fee: b.fee })), p_by: byName });
   if (error) fail(error);

@@ -26,6 +26,7 @@ import {
   moneyMoveInputSchema,
   openingInputSchema,
   otherMoneyInputSchema,
+  ownerWithdrawSchema,
   scheduleEditSchema,
   scheduleInputSchema,
   schedulePayPhoneSchema,
@@ -35,6 +36,7 @@ import {
   voidOtherMoneySchema,
 } from "./schema";
 import * as expenses from "./expenses-server";
+import { withdrawToOwner } from "./owner-withdrawals-server";
 import { sendPayout } from "./payouts-server";
 import * as store from "./server";
 
@@ -99,6 +101,22 @@ export async function closeDay(input: unknown): Promise<Result> {
     const { actor } = await staff("accounts");
     await store.closeDay(parseInput(closeDayInputSchema, input), actor);
     revalidatePath(TODAY);
+  });
+}
+
+/**
+ * The boss takes Aming's money out of HivePay to their phone (owner,
+ * 2026-11-14): an owner's drawing; HivePay's charge is Aming's expense. The
+ * boss only.
+ */
+export async function takeMoneyOut(input: unknown): Promise<Result> {
+  return runAction("books", async () => {
+    const session = await getDashboardSession();
+    if (!session?.isBoss) throw new AppError("Only the boss can take money out of HivePay.");
+    const parsed = parseInput(ownerWithdrawSchema, input);
+    await withdrawToOwner({ ...parsed, phone: sendablePhone(parsed.phone) }, { id: session.userId, name: session.fullName ?? session.email ?? "Boss" });
+    revalidatePath(TODAY);
+    revalidatePath(EXPENSES);
   });
 }
 
@@ -176,7 +194,7 @@ export async function setExpenseAutopayLimit(input: unknown): Promise<Result> {
   });
 }
 
-/** HivePay's sending fee bands, which Aming sends on top so agents and suppliers receive the full amount. Approve & pay bills. */
+/** HivePay's sending fee bands, which Aming sends on top so every phone receives the full amount. Approve & pay bills. */
 export async function setHivepaySendFees(input: unknown): Promise<Result> {
   return runAction("books", async () => {
     const { actor } = await staff("bill_approval");

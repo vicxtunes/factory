@@ -5,7 +5,9 @@ import { PanelStackSkeleton, StatTilesSkeleton } from "@repo/ui/skeletons/blocks
 import { Loading } from "@repo/ui/skeletons/Loading";
 import { localDate } from "@repo/lib/accounting/core/period";
 import { requireAccountsAccess } from "@repo/lib/accounting/index.server";
+import { recentOwnerWithdrawals, sendFeeBands } from "@repo/lib/books/owner-withdrawals-server";
 import { dayBook } from "@repo/lib/books/server";
+import { isConfigured as hivepayConfigured } from "@repo/lib/wallet/server/providers/hivepay";
 import { resolveTenantScope } from "@repo/lib/tenancy/server/resolve";
 import { getMoneyAlerts } from "@repo/lib/wallet/actions";
 
@@ -39,11 +41,18 @@ async function Today({ searchParams }: { searchParams: SearchParams }) {
   const asked = typeof params.day === "string" && /^\d{4}-\d{2}-\d{2}$/.test(params.day) ? params.day : today;
   // Tomorrow has no book yet.
   const day = asked > today ? today : asked;
-  const [book, alerts] = await Promise.all([dayBook(scope, day), getMoneyAlerts()]);
+  const session = await getDashboardSession();
+  // The boss may take Aming's money out of HivePay to their phone (owner, 2026-11-14).
+  const boss = (session?.isBoss ?? false) && hivepayConfigured();
+  const [book, alerts, takeOut] = await Promise.all([
+    dayBook(scope, day),
+    getMoneyAlerts(),
+    boss ? Promise.all([recentOwnerWithdrawals(), sendFeeBands()]).then(([withdrawals, bands]) => ({ withdrawals, bands })) : null,
+  ]);
   return (
     <>
-      <MoneyAlerts alerts={alerts.ok ? alerts.data ?? [] : []} canManage={sessionCan(await getDashboardSession(), "accounts", "manage")} isBoss={(await getDashboardSession())?.isBoss ?? false} />
-      <DayBookBoard key={day} book={book} timeZone={scope.timeZone} canManage={sessionCan(await getDashboardSession(), "accounts", "manage")} />
+      <MoneyAlerts alerts={alerts.ok ? alerts.data ?? [] : []} canManage={sessionCan(session, "accounts", "manage")} isBoss={session?.isBoss ?? false} />
+      <DayBookBoard key={day} book={book} timeZone={scope.timeZone} canManage={sessionCan(session, "accounts", "manage")} takeOut={takeOut} />
     </>
   );
 }
