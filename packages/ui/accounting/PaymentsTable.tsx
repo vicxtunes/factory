@@ -5,7 +5,6 @@ import { useMemo, useState } from "react";
 
 import { ExportButtons } from "@repo/ui/ExportButtons";
 import { TextInput } from "@repo/ui/Field";
-import { CHANNELS } from "@repo/lib/accounting/core/model";
 import { paymentsTotals, type PaymentLine } from "@repo/lib/accounting/core/figures";
 
 import { CHANNEL_LABELS, Card, EmptyState, FigureTile, formatDayTime, useMoney } from "./shared";
@@ -14,6 +13,9 @@ import { matchesSearch } from "@repo/lib/search";
 /** Who the money came from, as recorded. Older hand-recorded money has no sender. */
 const cameFrom = (l: PaymentLine) => [l.senderName, l.senderPhone].filter(Boolean).join(" · ");
 
+/** HivePay records prompt payments by itself: it isn't a person. */
+const recorderLabel = (name: string) => (name === "HivePay" ? "Automatic (HivePay)" : name);
+
 const forWhat = (l: PaymentLine) => (l.orderNo ? `Order ${l.orderNo}` : "Wallet top-up");
 
 function lineMatches(l: PaymentLine, query: string): boolean {
@@ -21,7 +23,7 @@ function lineMatches(l: PaymentLine, query: string): boolean {
 }
 
 /**
- * Every payment received in the period: totals per method and per person who
+ * Every payment received in the period: totals per account it went into and per person who
  * recorded it, then each payment with when, from whom, for what and its
  * reference. A card per payment on a phone, a table on wider screens.
  */
@@ -33,7 +35,6 @@ export function PaymentsTable({ lines, exportName, timeZone }: { lines: PaymentL
 
   const visible = useMemo(() => lines.filter((l) => lineMatches(l, query)), [lines, query]);
   const totals = useMemo(() => paymentsTotals(visible), [visible]);
-  const channels = CHANNELS.filter((c) => totals.byChannel[c] > 0);
 
   const exportRows = visible.map((l) => ({
     time: time(l.receivedAt),
@@ -55,15 +56,17 @@ export function PaymentsTable({ lines, exportName, timeZone }: { lines: PaymentL
           value={money(totals.total)}
           hint={`${totals.count} payment${totals.count === 1 ? "" : "s"}${query ? " matching the search" : ""}`}
         />
-        <Card title="By method">
-          {channels.length === 0 ? (
+        <Card title="By account it went into">
+          {totals.byAccount.length === 0 ? (
             <p className="text-sm text-muted">Nothing received.</p>
           ) : (
             <ul className="divide-y divide-border text-sm">
-              {channels.map((c) => (
-                <li key={c} className="flex items-center justify-between gap-2 py-1.5">
-                  <span>{CHANNEL_LABELS[c]}</span>
-                  <span className="tnum font-medium">{money(totals.byChannel[c])}</span>
+              {totals.byAccount.map((a) => (
+                <li key={a.name ?? ""} className="flex items-center justify-between gap-2 py-1.5">
+                  <span className="min-w-0 truncate">
+                    {a.name ?? "No account"} <span className="text-xs text-muted">({a.count})</span>
+                  </span>
+                  <span className="tnum font-medium">{money(a.amount)}</span>
                 </li>
               ))}
             </ul>
@@ -77,7 +80,7 @@ export function PaymentsTable({ lines, exportName, timeZone }: { lines: PaymentL
               {totals.byRecorder.map((r) => (
                 <li key={r.name} className="flex items-center justify-between gap-2 py-1.5">
                   <span className="min-w-0 truncate">
-                    {r.name} <span className="text-xs text-muted">({r.count})</span>
+                    {recorderLabel(r.name)} <span className="text-xs text-muted">({r.count})</span>
                   </span>
                   <span className="tnum font-medium">{money(r.amount)}</span>
                 </li>
@@ -134,7 +137,7 @@ export function PaymentsTable({ lines, exportName, timeZone }: { lines: PaymentL
                   {cameFrom(l) ? <span className="tnum">From {cameFrom(l)} · </span> : null}
                   {l.accountName ? <span>Into {l.accountName} · </span> : null}
                   {l.reference ? <span className="tnum">{l.reference} · </span> : null}
-                  Recorded by {l.recordedBy ?? "—"}
+                  Recorded by {l.recordedBy ? recorderLabel(l.recordedBy) : "—"}
                 </p>
               </li>
             ))}
@@ -171,7 +174,7 @@ export function PaymentsTable({ lines, exportName, timeZone }: { lines: PaymentL
                     <td className="whitespace-nowrap px-4 py-2 text-muted">{l.accountName ?? "—"}</td>
                     <td className="whitespace-nowrap px-4 py-2 text-muted">{forWhat(l)}</td>
                     <td className="whitespace-nowrap px-4 py-2 text-muted tnum">{l.reference ?? "—"}</td>
-                    <td className="whitespace-nowrap px-4 py-2">{l.recordedBy ?? "—"}</td>
+                    <td className="whitespace-nowrap px-4 py-2">{l.recordedBy ? recorderLabel(l.recordedBy) : "—"}</td>
                   </tr>
                 ))}
               </tbody>
