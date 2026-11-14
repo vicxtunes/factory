@@ -126,6 +126,39 @@ const toCustomer = (r: CustomerRow): Customer => ({
   held: num(r.held),
 });
 
+// Ids per request, so the URL stays well under Nginx's limit.
+const ID_BATCH = 150;
+
+/**
+ * The account each payment went into, as the day book (Accounts → Today) puts it:
+ * the one staff picked, else HivePay for prompt payments, else the method's usual
+ * account. So the Payments page and Today never disagree.
+ */
+async function dayBookAccounts(ids: string[]): Promise<Map<string, string>> {
+  const db = createAdminClient();
+  const [{ data: list, error }, ...batches] = await Promise.all([
+    db.from("money_accounts").select("id, name"),
+    ...Array.from({ length: Math.ceil(ids.length / ID_BATCH) }, (_, i) =>
+      db
+        .from("money_day_lines")
+        .select("id, money_account_id")
+        .eq("direction", "in")
+        .in("id", ids.slice(i * ID_BATCH, (i + 1) * ID_BATCH)),
+    ),
+  ]);
+  if (error) throw new Error(`accounting: ${error.message}`);
+  const names = new Map((list ?? []).map((a: { id: string; name: string }) => [a.id, a.name]));
+  const out = new Map<string, string>();
+  for (const b of batches) {
+    if (b.error) throw new Error(`accounting: ${b.error.message}`);
+    for (const l of (b.data ?? []) as { id: string; money_account_id: string | null }[]) {
+      const name = l.money_account_id ? names.get(l.money_account_id) : undefined;
+      if (name) out.set(l.id, name);
+    }
+  }
+  return out;
+}
+
 export const factorySource: AccountingSource = {
   async saleDocuments(scope, filter) {
     const db = createAdminClient();
@@ -147,7 +180,8 @@ export const factorySource: AccountingSource = {
       if (range.to) q = q.lt("received_at", range.to);
       return q.order("received_at", { ascending: false }).order("id").range(from, to);
     });
-    return rows.map(toMoneyIn);
+    const accounts = await dayBookAccounts(rows.map((r) => r.id));
+    return rows.map((r) => ({ ...toMoneyIn(r), accountName: accounts.get(r.id) ?? r.account_name }));
   },
 
   async heldMovements(scope, customerId) {

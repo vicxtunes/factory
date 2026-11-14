@@ -247,16 +247,23 @@ export interface PaymentsTotals {
   total: number;
   count: number;
   byChannel: Record<Channel, number>;
+  /** The account the money went into, most first; null when no account is known. */
+  byAccount: { name: string | null; amount: number; count: number }[];
   /** Who recorded the money, most first. */
   byRecorder: { name: string; amount: number; count: number }[];
 }
 
-/** Money received, in total, per channel and per person who recorded it. */
+/** Money received, in total, per channel, per account it went into and per person who recorded it. */
 export function paymentsTotals(lines: MoneyIn[]): PaymentsTotals {
   const byChannel = Object.fromEntries(CHANNELS.map((c) => [c, 0])) as Record<Channel, number>;
+  const accounts = new Map<string | null, { name: string | null; amount: number; count: number }>();
   const recorders = new Map<string, { name: string; amount: number; count: number }>();
   for (const m of lines) {
     byChannel[m.channel] += m.amount;
+    const account = accounts.get(m.accountName ?? null) ?? { name: m.accountName ?? null, amount: 0, count: 0 };
+    account.amount += m.amount;
+    account.count += 1;
+    accounts.set(account.name, account);
     const name = m.recordedBy ?? "Not recorded";
     const row = recorders.get(name) ?? { name, amount: 0, count: 0 };
     row.amount += m.amount;
@@ -267,6 +274,7 @@ export function paymentsTotals(lines: MoneyIn[]): PaymentsTotals {
     total: sum(lines, (m) => m.amount),
     count: lines.length,
     byChannel,
+    byAccount: [...accounts.values()].sort((a, b) => b.amount - a.amount),
     byRecorder: [...recorders.values()].sort((a, b) => b.amount - a.amount),
   };
 }
