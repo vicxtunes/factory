@@ -31,5 +31,4 @@ update team_members
   set access_levels = coalesce((select jsonb_object_agg(a, 'manage') from unnest(access) as a), '{}'::jsonb)
   where cardinality(access) > 0;
 
-alter table team_members drop constraint team_members_access_check;
-alter table team_members drop column access;
+-- The old access column goes in 20270107100001, once the apps that read it are replaced.
