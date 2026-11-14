@@ -24,9 +24,14 @@ import {
   expensePaymentInputSchema,
   expensePayoutInputSchema,
   moneyMoveInputSchema,
+  monthCheckApproveSchema,
+  monthCheckSaveSchema,
+  monthCheckSubmitSchema,
   openingInputSchema,
   otherMoneyInputSchema,
   ownerWithdrawSchema,
+  pettyCashFloatSchema,
+  pettyCashSpendSchema,
   scheduleEditSchema,
   scheduleInputSchema,
   schedulePayPhoneSchema,
@@ -36,6 +41,8 @@ import {
   voidOtherMoneySchema,
 } from "./schema";
 import * as expenses from "./expenses-server";
+import * as monthChecks from "./month-check-server";
+import * as pettyCash from "./petty-cash-server";
 import { withdrawToOwner } from "./owner-withdrawals-server";
 import { sendPayout } from "./payouts-server";
 import * as store from "./server";
@@ -43,6 +50,8 @@ import * as store from "./server";
 const PAYMENTS = "/dashboard/accounts/payments";
 const TODAY = "/dashboard/accounts/today";
 const EXPENSES = "/dashboard/accounts/expenses";
+const MONTH_END = "/dashboard/accounts/month-end";
+const PETTY_CASH = "/dashboard/accounts/petty-cash";
 
 function expensesChanged() {
   revalidatePath(EXPENSES);
@@ -328,5 +337,77 @@ export async function confirmExpenseDocument(input: { expenseId: string; path: s
     const { actor } = await staff("expenses");
     await expenses.confirmDocument(parseInput(voidInputSchema.pick({ id: true }), { id: input.expenseId }).id, input.path, actor.name);
     revalidatePath(EXPENSES);
+  });
+}
+
+// --- Month-end check -----------------------------------------------------------
+
+/** The real balances and reasons: the boss or anyone with Accounts → manage. */
+export async function saveMonthCheck(input: unknown): Promise<Result> {
+  return runAction("books", async () => {
+    const { actor } = await staff("accounts");
+    const { month, lines } = parseInput(monthCheckSaveSchema, input);
+    await monthChecks.saveMonthCheck(month, lines, actor.name);
+    revalidatePath(MONTH_END);
+  });
+}
+
+export async function submitMonthCheck(input: unknown): Promise<Result> {
+  return runAction("books", async () => {
+    const { actor } = await staff("accounts");
+    const { month } = parseInput(monthCheckSubmitSchema, input);
+    await monthChecks.submitMonthCheck(month, actor.name);
+    revalidatePath(MONTH_END);
+  });
+}
+
+/** The boss alone approves, saying what each difference was; it's booked on the month's last day. */
+export async function approveMonthCheck(input: unknown): Promise<Result> {
+  return runAction("books", async () => {
+    const session = await getDashboardSession();
+    if (!session?.isBoss) throw new AppError("Only the boss can approve the month-end check.");
+    const { month, bookings } = parseInput(monthCheckApproveSchema, input);
+    await monthChecks.approveMonthCheck(month, bookings, session.fullName ?? session.email ?? "Boss");
+    revalidatePath(MONTH_END);
+    revalidatePath(TODAY);
+    revalidatePath(EXPENSES);
+    revalidatePath(PAYMENTS);
+  });
+}
+
+// --- Petty cash ----------------------------------------------------------------
+
+/** A payment from a petty cash box: its holders (by role) or the boss. No approval limit (owner, 2026-11-15). */
+export async function spendPettyCash(input: unknown): Promise<Result> {
+  return runAction("books", async () => {
+    const session = await getDashboardSession();
+    if (!session) throw new AppError("Sign in again.");
+    const parsed = parseInput(pettyCashSpendSchema, input);
+    if (!(await pettyCash.mayUseBox(parsed.boxId, session))) throw new AppError("This isn't your petty cash box.");
+    await pettyCash.spendFromBox(parsed, { id: session.userId, name: session.fullName ?? session.email ?? "Staff" });
+    revalidatePath(PETTY_CASH);
+    expensesChanged();
+  });
+}
+
+/** What the boss keeps a box topped up to. */
+export async function setPettyCashFloat(input: unknown): Promise<Result> {
+  return runAction("books", async () => {
+    const session = await getDashboardSession();
+    if (!session?.isBoss) throw new AppError("Only the boss sets the float.");
+    const { boxId, amount } = parseInput(pettyCashFloatSchema, input);
+    await pettyCash.setFloat(boxId, amount);
+    revalidatePath(PETTY_CASH);
+  });
+}
+
+/** The boss tops a box up: a move from another account into it. */
+export async function topUpPettyCash(input: unknown): Promise<Result> {
+  return runAction("books", async () => {
+    const session = await getDashboardSession();
+    if (!session?.isBoss) throw new AppError("Only the boss tops up petty cash.");
+    await store.moveMoney(parseInput(moneyMoveInputSchema, input), { id: session.userId, name: session.fullName ?? session.email ?? "Boss" });
+    revalidatePath(PETTY_CASH);
+    revalidatePath(TODAY);
   });
 }

@@ -1,3 +1,4 @@
+import { seesPettyCash } from "@repo/lib/books/petty-cash-server";
 import Link from "next/link";
 
 import { ChatScreen } from "@repo/ui/chat/ChatScreen";
@@ -36,7 +37,7 @@ export default async function ChatLayout({ children }: { children: React.ReactNo
         fullName={dashboard.fullName}
         avatarUrl={dashboard.avatarUrl}
         roleName={dashboard.roleName}
-        viewer={{ isBoss: dashboard.isBoss, access: dashboard.access, email: dashboard.email }}
+        viewer={{ isBoss: dashboard.isBoss, access: dashboard.access, email: dashboard.email, pettyCash: await seesPettyCash(dashboard) }}
         notifications={notifications}
       >
         <ChatScreen viewer={{ type: "dashboard_user", id: dashboard.userId }} exitHref="/dashboard" />

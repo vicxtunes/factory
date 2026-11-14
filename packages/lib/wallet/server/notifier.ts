@@ -196,6 +196,11 @@ async function notifyMoneyWatchers(payload: { title: string; body: string; url: 
   await Promise.all((await staffWith(section, level)).map((id) => notifyActor({ type: "dashboard_user", id }, payload)));
 }
 
+/** The month-end check is due or waiting: the boss and whoever enters it (Accounts → manage). */
+export async function monthCheckReminder(title: string, body: string, month: string): Promise<void> {
+  await notifyMoneyWatchers({ title, body, url: `/dashboard/accounts/month-end?month=${month}` }, "accounts", "manage");
+}
+
 /** The money watch (watch.ts) found something that doesn't add up. */
 export async function moneyAlert(alert: MoneyAlertRow): Promise<void> {
   await notifyMoneyWatchers({ title: MONEY_ALERT_TITLES[alert.kind], body: alert.detail, url: "/dashboard/accounts" });

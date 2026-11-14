@@ -12,6 +12,8 @@ import { addDays, localDate } from "@repo/lib/accounting/core/period";
 import { accounting } from "@repo/lib/accounting/index.server";
 import { expenseReminder } from "@repo/lib/books/expenses";
 import { claimExpenseReminder, createDueExpenses, openExpenses } from "@repo/lib/books/expenses-server";
+import { monthCheckReminder, reminderMonth } from "@repo/lib/books/month-check";
+import { claimMonthCheckReminder, monthCheckStatus } from "@repo/lib/books/month-check-server";
 import { warnAutopay } from "@repo/lib/books/payouts-server";
 import { otherMoneyIn } from "@repo/lib/books/server";
 import { formatMoney } from "@repo/lib/currency/format";
@@ -281,5 +283,24 @@ export async function sendExpenseReminder(now = new Date()): Promise<boolean> {
   );
   if (!reminder) return false;
   await notifier.expenseReminder(reminder.title, reminder.body);
+  return true;
+}
+
+/**
+ * The month-end check (owner, 2026-11-14): on a month's last day from 20:00,
+ * then on the 1st and 3rd while last month's isn't approved, one push to the
+ * boss and whoever enters it. Called every few minutes.
+ */
+export async function sendMonthCheckReminder(now = new Date()): Promise<boolean> {
+  const scope = await resolveTenantScope();
+  const hour = Number(new Intl.DateTimeFormat("en-GB", { hour: "numeric", hourCycle: "h23", timeZone: scope.timeZone }).format(now));
+  const today = localDate(now, scope.timeZone);
+  // Mornings for the follow-ups, like the expense reminder.
+  if (hour < EXPENSE_REMINDER_HOUR) return false;
+  const month = reminderMonth(today, hour);
+  if (!month) return false;
+  const reminder = monthCheckReminder(month, await monthCheckStatus(scope, month), today);
+  if (!reminder || !(await claimMonthCheckReminder(today))) return false;
+  await notifier.monthCheckReminder(reminder.title, reminder.body, month);
   return true;
 }

@@ -481,7 +481,7 @@ function MoveSheet({ book, onClose }: { book: DayBook; onClose: () => void }) {
   const [pending, start] = useTransition();
 
   const source = book.accounts.find((a) => a.id === from);
-  const needsReference = book.accounts.some((a) => (a.id === from || a.id === to) && a.kind !== "cash");
+  const needsReference = book.accounts.some((a) => (a.id === from || a.id === to) && a.kind !== "cash" && a.kind !== "petty_cash");
   const value = parseNumber(amount);
   // Today's closing is only what's there now when looking at today.
   const held = book.day === book.today ? source?.closing ?? null : null;
