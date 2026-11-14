@@ -101,6 +101,13 @@ export async function listStaffRefs(): Promise<ParticipantRef[]> {
   return (data ?? []).map((r) => ({ type: "dashboard_user" as const, id: r.id }));
 }
 
+/** The bosses (not suspended): the staff of every client's Aming chat. */
+export async function listBossRefs(): Promise<ParticipantRef[]> {
+  const { data, error } = await createAdminClient().from("profiles").select("id").eq("role", "boss").is("suspended_at", null);
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((r) => ({ type: "dashboard_user" as const, id: r.id }));
+}
+
 // ---------------------------------------------------------------------------
 // Relationships (client ↔ designer)
 // ---------------------------------------------------------------------------

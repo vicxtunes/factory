@@ -41,6 +41,8 @@ function headerSubtitle(detail: ConversationDetail, meKey: string | null): strin
       return `Shared with all staff · ${detail.members.length} following${muted}`;
     case "issue":
       return "Issue report · private to you and the developer";
+    case "aming":
+      return detail.me.type === "client" ? "Updates about your money · reply here" : `Aming's notices to this client · bosses and Alexis${muted}`;
     case "group":
       return `${detail.members.length} members${muted}`;
   }

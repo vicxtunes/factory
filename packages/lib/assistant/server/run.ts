@@ -60,8 +60,13 @@ function toMessages(rows: ChatRow[]): ChatTurn[] {
 /** What changes from call to call. The chat shows only words, so it says what's waiting behind them. */
 async function contextFor(conversationId: string, clientName: string): Promise<string> {
   const lines = [`Today is ${new Date().toISOString().slice(0, 10)}. You're talking to ${clientName}.`];
-  const { data: chat } = await createAdminClient().from("chat_conversations").select("orders(id, order_no)").eq("id", conversationId).maybeSingle();
+  const { data: chat } = await createAdminClient().from("chat_conversations").select("kind, orders(id, order_no)").eq("id", conversationId).maybeSingle();
   const order = chat?.orders as unknown as { id: string; order_no: string } | null;
+  if (chat?.kind === "aming") {
+    lines.push(
+      "This is the client's Aming chat. Aming posts their money notices here (\"Aming update\"): their wallet credited with its receipt, payments that didn't go through, deposits not confirmed, wallet changes, and their Business card's money and withdrawals. Answer what they ask about these from their records. If their money looks wrong or they dispute something, say a boss will look at it here; don't promise refunds or changes yourself.",
+    );
+  }
   if (order) lines.push(`This chat is about order ${order.order_no} (order_id ${order.id}). Anything the client says or sends here is about it unless they say otherwise.`);
   const pending = await store.getPendingOrder(conversationId);
   if (pending?.posted_at) {
