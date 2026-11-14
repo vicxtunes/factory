@@ -30,6 +30,7 @@ const KIND_ICONS = {
   client_order: OrderIcon,
   support: SupportIcon,
   issue: IssueIcon,
+  aming: SupportIcon,
 } as const;
 
 /** Open/Resolved pill for issue threads. */

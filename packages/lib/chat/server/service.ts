@@ -871,3 +871,29 @@ export async function postAssistantMessage(
   ringConversation(conversation, "message");
   await notifyRecipients([{ type: "client", id: clientId }], { title: senderName, body: body.slice(0, 120), conversationId });
 }
+
+/**
+ * The client's Aming chat (made the first time): the client and every boss,
+ * kept up to date as bosses come and go. Only the server opens it; the client
+ * finds it in their chats once Aming has said something there.
+ */
+async function amingThread(clientId: string): Promise<repo.ConversationRow> {
+  const existing = await repo.findAmingConversation(clientId);
+  const conversation =
+    existing ??
+    (await repo.createConversation({ kind: "aming", client_id: clientId, created_by_type: "system", created_by_id: "aming" }, () => repo.findAmingConversation(clientId))).conversation;
+  await repo.addParticipants(conversation.id, dedupeRefs([{ type: "client", id: clientId }, ...(await directory.listBossRefs())]));
+  return conversation;
+}
+
+/**
+ * Aming tells a client something important about their money in their Aming
+ * chat (owner, 2026-11-14), as "Aming". The push about it has gone already
+ * (packages/lib/wallet's notices), so nobody is pushed again: the chat just
+ * holds it, for the client to read and answer, Alexis and the bosses to reply.
+ */
+export async function postAmingNotice(clientId: string, body: string): Promise<void> {
+  const conversation = await amingThread(clientId);
+  await repo.insertMessage({ conversation_id: conversation.id, kind: "text", sender_name: "Aming", body: body.slice(0, CHAT_LIMITS.maxMessageLength) });
+  ringConversation(conversation, "message");
+}

@@ -127,6 +127,7 @@ export const findDirectConversation = (key: string) => findOne("direct_key", key
 export const findOrderConversation = (orderId: string) => findOne("order_id", orderId, "order");
 export const findClientOrderConversation = (orderId: string) => findOne("order_id", orderId, "client_order");
 export const findSupportConversation = (clientId: string) => findOne("client_id", clientId, "support");
+export const findAmingConversation = (clientId: string) => findOne("client_id", clientId, "aming");
 export const findIssueConversation = (reportId: string) => findOne("support_report_id", reportId, "issue");
 
 /**

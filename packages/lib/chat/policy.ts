@@ -84,7 +84,7 @@ const DIRECT_MESSAGE_MATRIX: Record<ParticipantType, readonly ParticipantType[]>
 };
 
 /** The conversation kinds a client may see at all. */
-const CLIENT_KINDS: readonly ConversationKind[] = ["support", "client_order", "direct"];
+const CLIENT_KINDS: readonly ConversationKind[] = ["support", "client_order", "direct", "aming"];
 
 /**
  * Pairs that are type-allowed but also require an existing working

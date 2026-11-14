@@ -8,7 +8,7 @@ import { formatMoney } from "@repo/lib/currency/format";
 import { notifyActor } from "@repo/lib/push/send";
 import { staffWith } from "@repo/lib/staff-access/server";
 import type { Section } from "@repo/lib/staff-access/core";
-import { clientPath } from "@repo/lib/client-portal/paths";
+import { clientPath, clientUrl } from "@repo/lib/client-portal/paths";
 import { localPhone } from "@repo/lib/wallet/policy";
 
 import type { MoneyAlertKind } from "../types";
@@ -18,6 +18,20 @@ const CLIENT_URL = clientPath("/payment");
 
 async function pushClient(clientId: string, title: string, body: string): Promise<void> {
   await notifyActor({ type: "client", id: clientId }, { title, body, url: CLIENT_URL });
+}
+
+/**
+ * The same notice in the client's Aming chat (owner, 2026-11-14), where they
+ * can answer and Alexis and the bosses reply. Best effort: the push has gone
+ * either way. (Loaded when used: chat reads the wallet too.)
+ */
+async function inAming(clientId: string, title: string, body: string, link?: string): Promise<void> {
+  try {
+    const { postAmingNotice } = await import("@repo/lib/chat/aming");
+    await postAmingNotice(clientId, [title, body, link].filter(Boolean).join("\n"));
+  } catch (err) {
+    console.error("aming chat notice failed:", clientId, err);
+  }
 }
 
 /**
@@ -35,19 +49,25 @@ export async function walletCredited(
   const bonus = receipt?.bonus ? ` plus a ${formatMoney(receipt.bonus)} top-up bonus` : "";
   const body = `${formatMoney(amount)} was added to your wallet${bonus}. New balance: ${formatMoney(balance)}.${receipt ? ` Receipt ${receipt.receiptNo}: tap to open it.` : ""}`;
   await notifyActor({ type: "client", id: clientId }, { title: "Wallet credited", body, url: receipt ? clientPath(`/receipt/${receipt.token}`) : CLIENT_URL });
+  await inAming(
+    clientId,
+    "Wallet credited",
+    `${formatMoney(amount)} was added to your wallet${bonus}. New balance: ${formatMoney(balance)}.${receipt ? ` Your receipt ${receipt.receiptNo}:` : ""}`,
+    receipt ? clientUrl(clientPath(`/receipt/${receipt.token}`)) : undefined,
+  );
 }
 
 export async function depositRejected(clientId: string, amount: number, reason: string): Promise<void> {
-  await pushClient(clientId, "Deposit not confirmed", `We couldn't confirm your ${formatMoney(amount)} deposit: ${reason}`);
+  const body = `We couldn't confirm your ${formatMoney(amount)} deposit: ${reason}`;
+  await pushClient(clientId, "Deposit not confirmed", body);
+  await inAming(clientId, "Deposit not confirmed", `${body} Reply here if you have any questions.`);
 }
 
 export async function walletChangedByStaff(clientId: string, amount: number, balance: number, what: string): Promise<void> {
   const sign = amount > 0 ? "+" : "−";
-  await pushClient(
-    clientId,
-    "Wallet updated",
-    `${what}: ${sign}${formatMoney(Math.abs(amount))}. Balance: ${formatMoney(balance)}.`,
-  );
+  const body = `${what}: ${sign}${formatMoney(Math.abs(amount))}. Balance: ${formatMoney(balance)}.`;
+  await pushClient(clientId, "Wallet updated", body);
+  await inAming(clientId, "Wallet updated", body);
 }
 
 /** A mobile money prompt the client approved for an order went through. */
@@ -62,10 +82,9 @@ export async function mobileMoneyReceivedForInvoices(clientId: string, amount: n
 
 /** A studio's customer paid for an order request, a booking or an invoice: it's on the Business card. */
 export async function studioCustomerPaid(ownerClientId: string, amount: number, forWhat: "an order" | "a booking" | "an invoice"): Promise<void> {
-  await notifyActor(
-    { type: "client", id: ownerClientId },
-    { title: "Customer paid", body: `${formatMoney(amount)} by mobile money for ${forWhat}. It's on your Business card.`, url: "/studio/wallet" },
-  );
+  const body = `${formatMoney(amount)} by mobile money for ${forWhat}. It's on your Business card.`;
+  await notifyActor({ type: "client", id: ownerClientId }, { title: "Customer paid", body, url: "/studio/wallet" });
+  await inAming(ownerClientId, "Customer paid", body);
 }
 
 /** Staff who manage wallets are told a business owner (or a vendor, `from` their wallet) asked for a withdrawal to approve. */
@@ -121,12 +140,12 @@ export async function agentWeeklyPaySent(
 /** An agent's withdrawal was paid, or (`reason`) refused or failed and put back. `to`: their bank's name, or their phone. */
 export async function agentWithdrawalAnswered(clientId: string, amount: number, to: string, reason: string | null): Promise<void> {
   const where = to.startsWith("+") ? localPhone(to) : to;
-  await notifyActor(
-    { type: "client", id: clientId },
+  const notice =
     reason === null
       ? { title: "Commission sent", body: `${formatMoney(amount)} was sent to ${where}.`, url: "/agents/commission" }
-      : { title: "Withdrawal not sent", body: `${formatMoney(amount)} is back on your balance: ${reason}`, url: "/agents/commission" },
-  );
+      : { title: "Withdrawal not sent", body: `${formatMoney(amount)} is back on your balance: ${reason}`, url: "/agents/commission" };
+  await notifyActor({ type: "client", id: clientId }, notice);
+  await inAming(clientId, notice.title, notice.body);
 }
 
 /** Where a withdrawal comes from: a business's Business card, or a vendor's wallet. */
@@ -148,20 +167,19 @@ export async function withdrawalRequested(clientId: string, amount: number, phon
 
 /** A withdrawal was delivered, or (`reason`) refused or failed and put back. */
 export async function withdrawalAnswered(clientId: string, amount: number, phone: string, reason: string | null, from: Wallet = "business"): Promise<void> {
-  await notifyActor(
-    { type: "client", id: clientId },
+  const notice =
     reason === null
       ? { title: "Money sent successfully", body: `${formatMoney(amount)} was sent to ${localPhone(phone)} by mobile money.`, url: walletUrl(from) }
-      : { title: "Withdrawal not sent", body: `${formatMoney(amount)} is back on ${walletName(from)}: ${reason}`, url: walletUrl(from) },
-  );
+      : { title: "Withdrawal not sent", body: `${formatMoney(amount)} is back on ${walletName(from)}: ${reason}`, url: walletUrl(from) };
+  await notifyActor({ type: "client", id: clientId }, notice);
+  await inAming(clientId, notice.title, notice.body);
 }
 
 /** A mobile money payment the client started didn't go through: nothing was taken. */
 export async function paymentFailed(clientId: string, amount: number, url: string): Promise<void> {
-  await notifyActor(
-    { type: "client", id: clientId },
-    { title: "Payment didn't go through", body: `Your mobile money payment of ${formatMoney(amount)} wasn't completed, and no money was taken. You can try again.`, url },
-  );
+  const body = `Your mobile money payment of ${formatMoney(amount)} wasn't completed, and no money was taken. You can try again.`;
+  await notifyActor({ type: "client", id: clientId }, { title: "Payment didn't go through", body, url });
+  await inAming(clientId, "Payment didn't go through", `${body} Reply here if something isn't right.`);
 }
 
 const MONEY_ALERT_TITLES: Record<MoneyAlertKind, string> = {

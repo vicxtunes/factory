@@ -57,4 +57,5 @@ export const KIND_LABELS: Record<ConversationKind, string> = {
   client_order: "Order",
   support: "Support",
   issue: "Issue",
+  aming: "Aming",
 };
