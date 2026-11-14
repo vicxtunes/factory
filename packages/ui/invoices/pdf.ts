@@ -378,6 +378,8 @@ export async function receiptPdf(receipt: ReceiptView): Promise<Blob> {
     ...(receipt.orderTotal != null ? ([["Order total", money(receipt.orderTotal)]] as [string, string][]) : []),
     ...(receipt.balanceAfter != null ? ([["Left to pay", money(receipt.balanceAfter)]] as [string, string][]) : []),
     ...(receipt.walletCredit > 0 ? ([["Kept in your wallet", money(receipt.walletCredit)]] as [string, string][]) : []),
+    ...(receipt.bonus > 0 ? ([["Top-up bonus added", money(receipt.bonus)]] as [string, string][]) : []),
+    ...(!receipt.orderNo && receipt.walletBalance != null ? ([["Wallet balance now", money(receipt.walletBalance)]] as [string, string][]) : []),
   ];
   y = 86;
   doc.setFontSize(10);

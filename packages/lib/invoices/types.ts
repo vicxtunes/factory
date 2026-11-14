@@ -127,6 +127,10 @@ export interface ReceiptView {
   orderNo: string | null;
   orderTotal: number | null;
   balanceAfter: number | null;
+  /** A top-up: the wallet's balance once it was in, with any bonus (null on receipts before 2026-11-14). */
+  walletBalance: number | null;
+  /** A top-up: the bonus it earned. */
+  bonus: number;
   client: { name: string; phone: string | null };
   issuer: InvoiceIssuer;
 }

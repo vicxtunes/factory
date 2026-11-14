@@ -500,9 +500,11 @@ export interface CollectionRow {
   status: "pending" | "succeeded" | "failed";
   failure_reason: string | null;
   created_at: string;
+  /** Once settled into the wallet: the deposit it made. */
+  payment_id: string | null;
 }
 
-const COLLECTION_COLUMNS = "id, provider, provider_ref, client_id, order_id, order_ids, product_request_id, booking_id, billing_document_id, vendor_job_id, applied_at, amount, phone, network, status, failure_reason, created_at";
+const COLLECTION_COLUMNS = "id, provider, provider_ref, client_id, order_id, order_ids, product_request_id, booking_id, billing_document_id, vendor_job_id, applied_at, amount, phone, network, status, failure_reason, created_at, payment_id";
 
 function normaliseCollection(row: CollectionRow): CollectionRow {
   return { ...row, amount: num(row.amount) };
@@ -704,6 +706,20 @@ export async function paidByProductRequest(requestIds: string[]): Promise<Record
   return paid;
 }
 
+/** The receipt issued for each of these deposits (a top-up's, since 2026-11-14): its number, link token, bonus and the balance once it was in. */
+export async function depositReceipts(paymentIds: string[]): Promise<Record<string, { receiptNo: string; token: string; bonus: number; walletBalance: number | null }>> {
+  if (!paymentIds.length) return {};
+  const { data, error } = await createAdminClient()
+    .from("order_receipts")
+    .select("payment_id, receipt_no, share_token, bonus, wallet_balance")
+    .in("payment_id", paymentIds)
+    .returns<{ payment_id: string; receipt_no: string; share_token: string; bonus: number | string; wallet_balance: number | string | null }[]>();
+  if (error) throwDbError(error);
+  return Object.fromEntries(
+    (data ?? []).map((r) => [r.payment_id, { receiptNo: r.receipt_no, token: r.share_token, bonus: num(r.bonus), walletBalance: r.wallet_balance == null ? null : num(r.wallet_balance) }]),
+  );
+}
+
 /** What's been paid in by mobile money for each of these studio bookings. */
 export async function paidByBooking(bookingIds: string[]): Promise<Record<string, number>> {
   if (!bookingIds.length) return {};
@@ -741,11 +757,11 @@ export interface StuckPayoutRow {
   sent_at: string;
 }
 
-/** Withdrawals (a business's, a vendor's or an agent's) still sending, sent before `before`. */
+/** Withdrawals (a business's, a vendor's, an agent's or the boss's own) and bill payouts still sending, sent before `before`. */
 export async function payoutsSendingBefore(before: Date): Promise<StuckPayoutRow[]> {
   const db = createAdminClient();
-  const [business, vendor, agent, bills] = await Promise.all([
-    ...["business_withdrawals", "vendor_withdrawals", "agent_withdrawals"].map((table) =>
+  const [business, vendor, agent, owner, bills] = await Promise.all([
+    ...["business_withdrawals", "vendor_withdrawals", "agent_withdrawals", "owner_withdrawals"].map((table) =>
       db.from(table).select("id, amount, phone, sent_at").eq("status", "sending").lt("sent_at", before.toISOString()).returns<StuckPayoutRow[]>(),
     ),
     db.from("expense_payouts").select("id, amount:sent, phone, sent_at:created_at").eq("status", "sending").lt("created_at", before.toISOString()).returns<StuckPayoutRow[]>(),
@@ -753,8 +769,9 @@ export async function payoutsSendingBefore(before: Date): Promise<StuckPayoutRow
   if (business.error) throwDbError(business.error);
   if (vendor.error) throwDbError(vendor.error);
   if (agent.error) throwDbError(agent.error);
+  if (owner.error) throwDbError(owner.error);
   if (bills.error) throwDbError(bills.error);
-  return [...(business.data ?? []), ...(vendor.data ?? []), ...(agent.data ?? []), ...(bills.data ?? [])].map((r) => ({ ...r, amount: num(r.amount) }));
+  return [...(business.data ?? []), ...(vendor.data ?? []), ...(agent.data ?? []), ...(owner.data ?? []), ...(bills.data ?? [])].map((r) => ({ ...r, amount: num(r.amount) }));
 }
 
 export interface MoneyAlertRow {

@@ -38,6 +38,7 @@ import {
   recordExpense,
   setExpenseApprovalLimit,
   setExpenseAutopayLimit,
+  setHivepaySendFees,
   stopExpenseSchedule,
   voidExpense,
   voidExpensePayment,
@@ -132,6 +133,7 @@ export function ExpensesBoard({
   upcoming,
   approvalAbove,
   autopayUpTo,
+  sendFees,
   isBoss,
   canManage,
   canSend,
@@ -148,6 +150,8 @@ export function ExpensesBoard({
   approvalAbove: number | null;
   /** Autopay bills go by themselves up to this much; null: no limit. */
   autopayUpTo: number | null;
+  /** HivePay's sending fee bands (Aming sends the fee on top). */
+  sendFees: { upTo: number; fee: number }[];
   /** May approve expenses (Approve & pay bills): what they record never waits. */
   isBoss: boolean;
   /** Expenses at manage: record, pay, void, edit. */
@@ -165,7 +169,7 @@ export function ExpensesBoard({
   const [account, setAccount] = useState("");
   const [kind, setKind] = useState<"" | "one_time" | "recurring">("");
   const [sort, setSort] = useState<Sort>("newest");
-  const [sheet, setSheet] = useState<"new" | "limit" | "autopay_limit" | null>(null);
+  const [sheet, setSheet] = useState<"new" | "limit" | "autopay_limit" | "send_fees" | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   // Opened from Ready to send: straight to sending it.
   const [openToSend, setOpenToSend] = useState(false);
@@ -285,6 +289,11 @@ export function ExpensesBoard({
         {canSend ? (
           <Button variant="secondary" onClick={() => setSheet("autopay_limit")}>
             Autopay sends by itself: {autopayUpTo === null ? "any amount" : `up to ${money(autopayUpTo)}`}
+          </Button>
+        ) : null}
+        {canSend ? (
+          <Button variant="secondary" onClick={() => setSheet("send_fees")}>
+            HivePay fees: {sendFees.length ? `${sendFees.length} bands` : "not entered"}
           </Button>
         ) : null}
         {isBoss ? null : approvalAbove !== null ? (
@@ -559,6 +568,7 @@ export function ExpensesBoard({
       {sheet === "new" ? <NewExpenseSheet categories={categories} today={today} canSend={canSend} onClose={() => setSheet(null)} /> : null}
       {sheet === "limit" ? <LimitSheet above={approvalAbove} onClose={() => setSheet(null)} /> : null}
       {sheet === "autopay_limit" ? <AutopayLimitSheet upTo={autopayUpTo} onClose={() => setSheet(null)} /> : null}
+      {sheet === "send_fees" ? <SendFeesSheet bands={sendFees} onClose={() => setSheet(null)} /> : null}
       {opened ? <ExpenseSheet key={opened.id} expense={opened} today={today} isBoss={isBoss} canSend={canSend} startSending={openToSend} timeZone={timeZone} onClose={() => setOpenId(null)} /> : null}
       {scheduleOpened ? (
         <ScheduleSheet
@@ -857,7 +867,7 @@ function NewExpenseSheet({ categories, today, canSend, onClose }: { categories: 
             {paid === "already" ? <PayFields form={pay} /> : null}
             {paid === "send" ? (
               <>
-                <Field label="MTN or Airtel number" hint="The whole amount is sent from Aming's HivePay account as you save. HivePay keeps its fee out of it, so the phone gets a little less.">
+                <Field label="MTN or Airtel number" hint="Sent from Aming's HivePay account as you save. Aming pays HivePay's fee on top, so the phone receives the whole amount.">
                   <TextInput type="tel" value={phone} disabled={sure} onChange={(e) => setPhone(e.target.value)} placeholder="e.g. 0772 000 000" />
                 </Field>
               </>
@@ -1094,6 +1104,66 @@ function AutopayLimitSheet({ upTo, onClose }: { upTo: number | null; onClose: ()
         <ErrorLine error={error} />
         <Button type="submit" loading={pending} className="w-full">
           Save limit
+        </Button>
+      </form>
+    </FormSheet>
+  );
+}
+
+/**
+ * HivePay's sending fee bands (owner, 2026-11-14: the money goes out full and
+ * the charges stay with Aming). HivePay keeps its fee out of what it's sent,
+ * so Aming sends the bill or the agent's money plus the fee from these bands.
+ * HivePay publishes none: they're copied from HivePay. Without a band for an
+ * amount, it's sent as it is and HivePay's fee decides what's still owed.
+ */
+function SendFeesSheet({ bands, onClose }: { bands: { upTo: number; fee: number }[]; onClose: () => void }) {
+  const router = useRouter();
+  const money = useMoney();
+  const [rows, setRows] = useState(bands.length ? bands.map((b) => ({ upTo: String(b.upTo), fee: String(b.fee) })) : [{ upTo: "", fee: "" }]);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+  const set = (i: number, key: "upTo" | "fee", value: string) => setRows((now) => now.map((r, j) => (j === i ? { ...r, [key]: value } : r)));
+  return (
+    <FormSheet open onClose={onClose} title="HivePay sending fees">
+      <form
+        className="space-y-3"
+        onSubmit={(e) => {
+          e.preventDefault();
+          const filled = rows.filter((r) => r.upTo.trim() || r.fee.trim());
+          start(async () => {
+            const res = await setHivepaySendFees(filled.map((r) => ({ upTo: parseNumber(r.upTo), fee: parseNumber(r.fee) })));
+            if (!res.ok) return setError(res.error);
+            router.refresh();
+            onClose();
+          });
+        }}
+      >
+        <p className="text-sm text-muted">
+          Aming pays every HivePay fee: bills, agents&apos;, Business card and vendor withdrawals, and the boss&apos;s own, are sent with the fee on top, so the phone receives the full amount, and each fee is recorded as an expense (HivePay sending fees). Copy HivePay&apos;s fee for each band: the fee for sending up to that amount. If HivePay keeps more than this, an agent gets the difference on their balance and a bill keeps the rest owing.
+        </p>
+        <div className="space-y-2">
+          {rows.map((r, i) => (
+            <div key={i} className="grid grid-cols-[1fr_1fr_auto] items-end gap-2">
+              <Field label={i === 0 ? "Sending up to" : ""}>
+                <TextInput inputMode="numeric" value={r.upTo} onChange={(e) => set(i, "upTo", e.target.value)} placeholder="e.g. 40,000" />
+              </Field>
+              <Field label={i === 0 ? "Fee" : ""}>
+                <TextInput inputMode="numeric" value={r.fee} onChange={(e) => set(i, "fee", e.target.value)} placeholder="e.g. 1,000" />
+              </Field>
+              <Button type="button" variant="ghost" size="sm" aria-label="Remove band" onClick={() => setRows((now) => now.filter((_, j) => j !== i))}>
+                ✕
+              </Button>
+            </div>
+          ))}
+        </div>
+        <Button type="button" variant="secondary" size="sm" onClick={() => setRows((now) => [...now, { upTo: "", fee: "" }])}>
+          + Add band
+        </Button>
+        {bands.length ? <p className="text-xs text-muted">Highest band: up to {money(Math.max(...bands.map((b) => b.upTo)))}. Above it, amounts go without the fee on top.</p> : null}
+        <ErrorLine error={error} />
+        <Button type="submit" loading={pending} className="w-full">
+          Save fees
         </Button>
       </form>
     </FormSheet>
@@ -1501,7 +1571,7 @@ function SendForm({ expense: e, onDone, onCancel }: { expense: ExpenseLine; onDo
       {problem ? <p className="text-sm text-error-600 dark:text-error-400">{problem}</p> : null}
       {ready ? (
         <p className="text-sm text-muted">
-          {money(value)} leaves Aming&apos;s HivePay account. HivePay keeps its fee out of it, so the phone gets a little less; the bill counts as paid with {money(value)}.
+          The phone receives {money(value)}. Aming pays HivePay&apos;s fee on top, out of its HivePay account, and it&apos;s recorded as a HivePay sending fee expense.
         </p>
       ) : null}
       <ErrorLine error={error} />

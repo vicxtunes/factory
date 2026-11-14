@@ -22,7 +22,7 @@ import { Panel, PaymentLine, useMoney } from "./shared";
 
 function amingRow(entry: WalletEntry): TransactionRow {
   const detail = [entry.orderNo ? `Order ${entry.orderNo}` : null, entry.method ? METHOD_LABELS[entry.method] : null, entry.note].filter(Boolean);
-  return { id: entry.id, title: ENTRY_LABELS[entry.kind], detail: detail.join(" · ") || null, amount: entry.amount, createdAt: entry.createdAt };
+  return { id: entry.id, title: ENTRY_LABELS[entry.kind], detail: detail.join(" · ") || null, amount: entry.amount, createdAt: entry.createdAt, receiptUrl: entry.receiptUrl };
 }
 
 export function ClientWallet({

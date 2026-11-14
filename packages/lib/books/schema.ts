@@ -111,6 +111,22 @@ export const schedulePayPhoneSchema = z.object({
 export const voidInputSchema = z.object({ id: z.string().uuid(), reason: z.string().trim().min(3, "Say why.").max(500) });
 export const decideInputSchema = z.object({ id: z.string().uuid(), approve: z.boolean(), note: text(500) });
 export const autopayLimitSchema = z.object({ upTo: z.number().int().min(0, "The limit can't be negative.").nullable() });
+/** HivePay's sending fee bands, as the boss copies them from HivePay: up to an amount sent, a fee. */
+export const sendFeesSchema = z
+  .array(
+    z.object({
+      upTo: z.number({ message: "Enter each band's amount." }).int().min(1, "A band's amount must be above 0.").max(5_000_000, "HivePay sends at most 5,000,000."),
+      fee: z.number({ message: "Enter each band's fee." }).int().min(0, "A fee can't be negative."),
+    }),
+  )
+  .max(40)
+  .refine((bands) => new Set(bands.map((b) => b.upTo)).size === bands.length, "Two bands have the same amount.");
+/** The boss taking Aming's money out of HivePay to their phone. */
+export const ownerWithdrawSchema = z.object({
+  amount: z.number({ message: "Enter the amount." }).int("Enter the amount in whole shillings.").min(500, "HivePay sends at least 500.").max(4_990_000, "At most 4,990,000 at a time (HivePay's limit, with its charge)."),
+  phone: z.string().trim().min(9, "Enter the MTN or Airtel number to send it to.").max(30),
+  note: z.string().trim().max(300).nullish().transform((v) => v || null),
+});
 export const approvalLimitSchema = z.object({ above: z.number().int().min(0, "The limit can't be negative.").nullable() });
 export const categoryInputSchema = z.object({ name: z.string().trim().min(2, "Give the category a name.").max(60) });
 

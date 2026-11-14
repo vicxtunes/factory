@@ -16,6 +16,7 @@ import type { ExpenseDetail } from "./expenses";
 import {
   approvalLimitSchema,
   autopayLimitSchema,
+  sendFeesSchema,
   categoryInputSchema,
   closeDayInputSchema,
   decideInputSchema,
@@ -25,6 +26,7 @@ import {
   moneyMoveInputSchema,
   openingInputSchema,
   otherMoneyInputSchema,
+  ownerWithdrawSchema,
   scheduleEditSchema,
   scheduleInputSchema,
   schedulePayPhoneSchema,
@@ -34,6 +36,7 @@ import {
   voidOtherMoneySchema,
 } from "./schema";
 import * as expenses from "./expenses-server";
+import { withdrawToOwner } from "./owner-withdrawals-server";
 import { sendPayout } from "./payouts-server";
 import * as store from "./server";
 
@@ -98,6 +101,22 @@ export async function closeDay(input: unknown): Promise<Result> {
     const { actor } = await staff("accounts");
     await store.closeDay(parseInput(closeDayInputSchema, input), actor);
     revalidatePath(TODAY);
+  });
+}
+
+/**
+ * The boss takes Aming's money out of HivePay to their phone (owner,
+ * 2026-11-14): an owner's drawing; HivePay's charge is Aming's expense. The
+ * boss only.
+ */
+export async function takeMoneyOut(input: unknown): Promise<Result> {
+  return runAction("books", async () => {
+    const session = await getDashboardSession();
+    if (!session?.isBoss) throw new AppError("Only the boss can take money out of HivePay.");
+    const parsed = parseInput(ownerWithdrawSchema, input);
+    await withdrawToOwner({ ...parsed, phone: sendablePhone(parsed.phone) }, { id: session.userId, name: session.fullName ?? session.email ?? "Boss" });
+    revalidatePath(TODAY);
+    revalidatePath(EXPENSES);
   });
 }
 
@@ -175,6 +194,15 @@ export async function setExpenseAutopayLimit(input: unknown): Promise<Result> {
   });
 }
 
+/** HivePay's sending fee bands, which Aming sends on top so every phone receives the full amount. Approve & pay bills. */
+export async function setHivepaySendFees(input: unknown): Promise<Result> {
+  return runAction("books", async () => {
+    const { actor } = await staff("bill_approval");
+    await expenses.setSendFees(parseInput(sendFeesSchema, input), actor.name);
+    expensesChanged();
+  });
+}
+
 /** Stops a bill going by itself: it waits for Approve and send. Approve & pay bills. */
 export async function holdExpenseAutopay(id: unknown): Promise<Result> {
   return runAction("books", async () => {
@@ -227,7 +255,7 @@ export async function payExpense(input: unknown): Promise<Result> {
   });
 }
 
-/** Real money: Approve & pay bills only, and sending is the approval. HivePay keeps its fee out of the amount. */
+/** Real money: Approve & pay bills only, and sending is the approval. Aming pays HivePay's fee on top of the amount. */
 export async function sendExpensePayout(input: unknown): Promise<Result> {
   return runAction("books", async () => {
     const { actor } = await staff("bill_approval");

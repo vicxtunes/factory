@@ -33,8 +33,12 @@ export interface ChatPerson extends ParticipantRef {
  *                designer and the whole staff team. Only that order's messages.
  * support      — one thread per client with the whole staff team (general questions).
  * issue        — one private thread per support report: the reporter + the developer.
+ * aming        — one thread per client called "Aming": Aming's notices about their
+ *                money (wallet credited with its receipt, payments that didn't go
+ *                through, their Business card), answered by Alexis and the bosses,
+ *                its only staff members (owner, 2026-11-14).
  */
-export type ConversationKind = "direct" | "group" | "order" | "client_order" | "support" | "issue";
+export type ConversationKind = "direct" | "group" | "order" | "client_order" | "support" | "issue" | "aming";
 
 /** Status of an issue thread's report. Only the developer may change it. */
 export interface IssueState {

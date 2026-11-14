@@ -61,7 +61,7 @@ export async function buildContext(conversations: ConversationLike[]): Promise<P
 
   const refs: ParticipantRef[] = members.map(toRef);
   for (const c of conversations) {
-    if ((c.kind === "support" || c.kind === "client_order") && c.client_id) refs.push({ type: "client", id: c.client_id });
+    if ((c.kind === "support" || c.kind === "client_order" || c.kind === "aming") && c.client_id) refs.push({ type: "client", id: c.client_id });
   }
 
   const orderIds = conversations.filter((c) => c.order_id).map((c) => c.order_id!);
@@ -115,6 +115,12 @@ export function presentConversation(
       if (viewer.type === "client") return { title: "Support team", avatarUrl: null };
       const client = c.client_id ? person({ type: "client", id: c.client_id }) : undefined;
       return { title: client?.name ?? "Client", avatarUrl: client?.avatarUrl ?? null };
+    }
+    case "aming": {
+      // The client sees "Aming"; a boss sees whose it is.
+      if (viewer.type === "client") return { title: "Aming", avatarUrl: "/icon-192.png" };
+      const client = c.client_id ? person({ type: "client", id: c.client_id }) : undefined;
+      return { title: `Aming · ${client?.name ?? "Client"}`, avatarUrl: client?.avatarUrl ?? null };
     }
     case "issue": {
       // Stored title is the start of the report. The developer, who sees

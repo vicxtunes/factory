@@ -81,6 +81,8 @@ export interface WalletEntry {
   note: string | null;
   actorName: string;
   createdAt: string;
+  /** A deposit's receipt link (top-ups since 2026-11-14 can be found from here). */
+  receiptUrl: string | null;
 }
 
 /** A wallet as its owner (or staff looking at it) sees it. */
@@ -224,6 +226,8 @@ export interface Withdrawal {
   reference: string | null;
   /** Paid: what the gateway took from the amount (the phone received amount − fee). */
   payoutFee: number | null;
+  /** Sent with the charge on top (since 2026-11-14): the phone received the whole amount, and the charge was Aming's. */
+  feeOnAming: boolean;
   /** Pending: why the gateway didn't take it the last time staff approved it. */
   lastError: string | null;
   /** Rejected: why. */
