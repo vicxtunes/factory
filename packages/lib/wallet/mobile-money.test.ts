@@ -3,6 +3,7 @@ import { createHmac } from "node:crypto";
 import { test } from "node:test";
 
 import { checkMobileMoneyAmount } from "./policy";
+import { payoutRefused } from "./server/providers/hivepay-answer";
 import { verifyHivepaySignature } from "./server/providers/hivepay-signature";
 
 test("mobile money takes 500 to 5,000,000 UGX, charged as is (HivePay takes its fee from what it pays us)", () => {
@@ -70,4 +71,9 @@ test("HivePay bill payout reference: comes back as itself, never mistaken for an
     assert.equal(fromHivepayReference(reference), null);
     assert.equal(fromExpensePayoutReference(toPayoutReference(id)), null);
   }
+});
+
+test("a payout is only taken as turned down on a 4xx: a 5xx or an unreadable success waits for HivePay's status, so it's never sent twice", () => {
+  for (const status of [400, 401, 402, 422, 429]) assert.equal(payoutRefused(status), true, String(status));
+  for (const status of [200, 201, 500, 502, 503, 504]) assert.equal(payoutRefused(status), false, String(status));
 });

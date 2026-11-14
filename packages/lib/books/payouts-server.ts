@@ -69,8 +69,6 @@ async function deliver(id: string, phone: string, sent: number): Promise<string 
   }
   if (!answer.ok) {
     console.error("hivepay send refused:", id, answer.status, answer.message);
-    // A fault on HivePay's side says nothing about whether it went: its status settles that too.
-    if (answer.status >= 500) return null;
     const why = answer.status === 402 ? "Not enough in Aming's HivePay account to send it." : answer.message;
     const { error: back } = await db.rpc("expense_payout_result", { p_id: id, p_delivered: false, p_fee: null, p_reference: null, p_reason: why });
     if (back) fail(back);
