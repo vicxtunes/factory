@@ -53,6 +53,8 @@ export interface TransactionRow {
   /** Signed. */
   amount: number;
   createdAt: string;
+  /** Its receipt, linked under it. */
+  receiptUrl?: string | null;
 }
 
 /** "23 Jun", in the reader's own time zone. */
@@ -99,6 +101,11 @@ export function Transactions({ title, rows, empty, bare = false }: { title?: str
                       {shortDay(row.createdAt)}
                     </span>
                   </p>
+                  {row.receiptUrl ? (
+                    <a href={row.receiptUrl} target="_blank" rel="noreferrer" className="text-xs font-medium text-brand-600 hover:underline">
+                      Receipt
+                    </a>
+                  ) : null}
                 </div>
                 <p className={`shrink-0 text-[15px] font-semibold tabular-nums ${credit ? "text-success-600 dark:text-success-500" : ""}`}>
                   {credit ? "+ " : "– "}

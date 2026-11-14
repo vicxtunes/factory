@@ -81,6 +81,8 @@ export interface WalletEntry {
   note: string | null;
   actorName: string;
   createdAt: string;
+  /** A deposit's receipt link (top-ups since 2026-11-14 can be found from here). */
+  receiptUrl: string | null;
 }
 
 /** A wallet as its owner (or staff looking at it) sees it. */

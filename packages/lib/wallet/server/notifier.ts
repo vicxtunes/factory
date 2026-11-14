@@ -20,9 +20,21 @@ async function pushClient(clientId: string, title: string, body: string): Promis
   await notifyActor({ type: "client", id: clientId }, { title, body, url: CLIENT_URL });
 }
 
-/** A top-up reached the wallet (mobile money, or a deposit staff recorded or confirmed): what came in and the balance now. */
-export async function walletCredited(clientId: string, amount: number, balance: number): Promise<void> {
-  await pushClient(clientId, "Wallet credited", `${formatMoney(amount)} was added to your wallet. New balance: ${formatMoney(balance)}.`);
+/**
+ * A top-up reached the wallet (mobile money, or a deposit staff recorded or
+ * confirmed): what came in, any top-up bonus, the balance now, and its
+ * receipt, which the notice opens (owner, 2026-11-14). It's in their
+ * notifications too, not only a push.
+ */
+export async function walletCredited(
+  clientId: string,
+  amount: number,
+  balance: number,
+  receipt: { receiptNo: string; token: string; bonus: number } | null = null,
+): Promise<void> {
+  const bonus = receipt?.bonus ? ` plus a ${formatMoney(receipt.bonus)} top-up bonus` : "";
+  const body = `${formatMoney(amount)} was added to your wallet${bonus}. New balance: ${formatMoney(balance)}.${receipt ? ` Receipt ${receipt.receiptNo}: tap to open it.` : ""}`;
+  await notifyActor({ type: "client", id: clientId }, { title: "Wallet credited", body, url: receipt ? clientPath(`/receipt/${receipt.token}`) : CLIENT_URL });
 }
 
 export async function depositRejected(clientId: string, amount: number, reason: string): Promise<void> {

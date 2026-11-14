@@ -27,6 +27,7 @@ import {
   isOrderPayable,
 } from "../policy";
 import { localDate } from "@repo/lib/accounting/core/period";
+import { clientPath } from "@repo/lib/client-portal/paths";
 import { resolveTenantScope } from "@repo/lib/tenancy/server/resolve";
 
 import type {
@@ -78,7 +79,8 @@ function toPayment(row: repo.PaymentRow): WalletPayment {
   };
 }
 
-function toEntry(row: repo.EntryRow): WalletEntry {
+function toEntry(row: repo.EntryRow, receipts: Awaited<ReturnType<typeof repo.depositReceipts>> = {}): WalletEntry {
+  const receipt = row.kind === "deposit" && row.payment_id ? receipts[row.payment_id] : undefined;
   return {
     id: row.id,
     kind: row.kind,
@@ -92,6 +94,7 @@ function toEntry(row: repo.EntryRow): WalletEntry {
     note: row.note,
     actorName: row.actor_name,
     createdAt: row.created_at,
+    receiptUrl: receipt ? clientPath(`/receipt/${receipt.token}`) : null,
   };
 }
 
@@ -104,13 +107,14 @@ async function walletView(clientId: string, clientName: string): Promise<WalletV
     repo.listPayments(clientId, ["pending"], 50),
     repo.listPayments(clientId, ["failed", "cancelled"], CLOSED_LIMIT),
   ]);
+  const receipts = await repo.depositReceipts(entries.filter((e) => e.kind === "deposit" && e.payment_id).map((e) => e.payment_id!));
   return {
     clientId,
     clientName,
     balance: balance.balance,
     currency: balance.currency,
     pending: pending.map(toPayment),
-    entries: entries.map(toEntry),
+    entries: entries.map((e) => toEntry(e, receipts)),
     closed: closed.map(toPayment),
   };
 }
@@ -149,7 +153,8 @@ function checkOrderPaymentInput(input: { amount: number; method: PaymentMethod; 
 async function settle(payment: repo.PaymentRow, actor: WalletActor): Promise<number> {
   const result = await repo.settlePayment(payment.id, actor);
   if (!result.alreadySettled) {
-    await notifier.walletCredited(payment.client_id, payment.amount, result.balance);
+    const receipt = (await repo.depositReceipts([payment.id]).catch(() => ({}) as Awaited<ReturnType<typeof repo.depositReceipts>>))[payment.id] ?? null;
+    await notifier.walletCredited(payment.client_id, payment.amount, receipt?.walletBalance ?? result.balance, receipt);
     if (payment.order_id && result.appliedToOrder > 0) {
       await directory.logOnOrder(payment.order_id, actor, "wallet_payment", { amount: result.appliedToOrder });
     }
