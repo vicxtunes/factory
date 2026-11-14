@@ -607,7 +607,7 @@ export async function receiptByToken(token: string): Promise<ReceiptView | null>
   if (!isWellFormedToken(token)) return null;
   const { data, error } = await createAdminClient()
     .from("order_receipts")
-    .select("receipt_no, created_at, amount, method, reference, wallet_credit, order_total, balance_after, clients(name, phone), orders(order_no, invoices(currency, rate))")
+    .select("receipt_no, created_at, amount, method, reference, wallet_credit, order_total, balance_after, wallet_balance, bonus, clients(name, phone), orders(order_no, invoices(currency, rate))")
     .eq("share_token", token)
     .maybeSingle();
   if (error) throw new Error(error.message);
@@ -626,6 +626,8 @@ export async function receiptByToken(token: string): Promise<ReceiptView | null>
     orderNo: order?.order_no ?? null,
     orderTotal: data.order_total == null ? null : Number(data.order_total),
     balanceAfter: data.balance_after == null ? null : Number(data.balance_after),
+    walletBalance: data.wallet_balance == null ? null : Number(data.wallet_balance),
+    bonus: Number(data.bonus ?? 0),
     client: { name: client.name, phone: client.phone },
     issuer: await getIssuer(),
   };

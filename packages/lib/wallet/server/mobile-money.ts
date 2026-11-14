@@ -376,8 +376,10 @@ async function announce(row: repo.CollectionRow): Promise<void> {
   if (row.order_ids) return notifier.mobileMoneyReceivedForInvoices(row.client_id, row.amount, row.order_ids.length);
   const order = row.order_id ? await directory.loadOrder(row.order_id) : null;
   if (order) return notifier.mobileMoneyReceived(row.client_id, row.amount, order.orderNo);
-  // A wallet top-up: the balance now (with any top-up bonus) is read after it's credited.
-  await notifier.walletCredited(row.client_id, row.amount, (await repo.getBalance(row.client_id)).balance);
+  // A wallet top-up: the balance now (with any top-up bonus) and its receipt, read after it's credited.
+  const paymentId = (await repo.getCollection(row.id))?.payment_id ?? null;
+  const receipt = paymentId ? ((await repo.depositReceipts([paymentId]).catch(() => ({}) as Awaited<ReturnType<typeof repo.depositReceipts>>))[paymentId] ?? null) : null;
+  await notifier.walletCredited(row.client_id, row.amount, receipt?.walletBalance ?? (await repo.getBalance(row.client_id)).balance, receipt);
 }
 
 /** The payment screen following its prompt. Asks HivePay once the prompt has had a moment. */
