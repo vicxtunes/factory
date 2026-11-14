@@ -14,7 +14,7 @@ import { tellAgents } from "@repo/lib/agents/server";
 import { reviewClientOrders } from "@repo/lib/assistant/server/review";
 import { answerWaitingChats } from "@repo/lib/assistant/server/run";
 import { applyStudioPayment } from "@repo/lib/studio-payments/server";
-import { closePastDays, reconcileAgentPayouts, reconcileWaitingHivepay, reconcileExpensePayouts, reconcileOwnerPayouts, reconcileBusinessPayouts, reconcileVendorPayouts, runAutopay, runWeeklyAgentPay, sendDailyMoneyReport, sendExpenseReminder, sendLateMoneyNote, watchMoney } from "@repo/lib/wallet/webhooks";
+import { closePastDays, reconcileAgentPayouts, reconcileWaitingHivepay, reconcileExpensePayouts, reconcileOwnerPayouts, reconcileBusinessPayouts, reconcileVendorPayouts, runAutopay, runWeeklyAgentPay, sendDailyMoneyReport, sendExpenseReminder, sendMonthCheckReminder, sendLateMoneyNote, watchMoney } from "@repo/lib/wallet/webhooks";
 
 const EVERY_MS = 2 * 60_000;
 const ASSISTANT_EVERY_MS = 2_000;
@@ -63,6 +63,7 @@ if (process.env.NODE_ENV === "production" && process.env.NEXT_PUBLIC_TEST_COPY !
   every(DAILY_REPORT_EVERY_MS, "closing past days", closePastDays);
   every(REPORT_CHECK_EVERY_MS, "late money note", sendLateMoneyNote);
   every(REPORT_CHECK_EVERY_MS, "expense reminder", sendExpenseReminder);
+  every(REPORT_CHECK_EVERY_MS, "month-end check reminder", sendMonthCheckReminder);
 }
 
 // The assistant answers clients' chats wherever it has a key, except the test copy.

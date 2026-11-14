@@ -12,6 +12,8 @@ export interface NavViewer {
   isBoss: boolean;
   access: Access;
   email: string | null;
+  /** The boss, or a member of a role holding a petty cash box. */
+  pettyCash: boolean;
 }
 
 export interface NavItem {
@@ -81,10 +83,12 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/dashboard/accounts", label: "Overview", icon: "dashboard", visible: sees("accounts"), exact: true },
       { href: "/dashboard/accounts/today", label: "Today", icon: "tasks", visible: sees("accounts") },
       { href: "/dashboard/accounts/payments", label: "Payments", icon: "payment", visible: sees("accounts") },
+      { href: "/dashboard/accounts/petty-cash", label: "Petty cash", icon: "payment", visible: (v) => v.pettyCash },
       { href: "/dashboard/accounts/expenses", label: "Expenses", icon: "invoice", visible: sees("expenses") },
       { href: "/dashboard/accounts/sales", label: "Sales", icon: "invoice", visible: sees("accounts") },
       { href: "/dashboard/accounts/clients", label: "Client accounts", icon: "clients", visible: sees("accounts") },
       { href: "/dashboard/accounts/owed", label: "Money we owe", icon: "payment", visible: sees("accounts") },
+      { href: "/dashboard/accounts/month-end", label: "Month end", icon: "tasks", visible: sees("accounts") },
     ],
   },
   {

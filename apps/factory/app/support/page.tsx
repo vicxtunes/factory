@@ -1,3 +1,4 @@
+import { seesPettyCash } from "@repo/lib/books/petty-cash-server";
 import { Header } from "@repo/ui/Header";
 import { PushOptIn } from "@repo/ui/push/PushOptIn";
 import {
@@ -59,7 +60,7 @@ export default async function SupportPage() {
         fullName={dashboardSession.fullName}
         avatarUrl={dashboardSession.avatarUrl}
         roleName={dashboardSession.roleName}
-        viewer={{ isBoss: dashboardSession.isBoss, access: dashboardSession.access, email: dashboardSession.email }}
+        viewer={{ isBoss: dashboardSession.isBoss, access: dashboardSession.access, email: dashboardSession.email, pettyCash: await seesPettyCash(dashboardSession) }}
         notifications={notifications}
       >
         <SupportPageContent />

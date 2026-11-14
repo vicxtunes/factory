@@ -33,7 +33,7 @@ export const DAY_CLOSED_MESSAGE = "That day is closed, so it can't change. Recor
 export interface DayAccount {
   id: string;
   name: string;
-  kind: "cash" | "bank" | "mobile_money" | "hivepay";
+  kind: "cash" | "bank" | "mobile_money" | "hivepay" | "petty_cash";
   /** Null when no opening balance covers this day: the first count came later, or hasn't happened. */
   opening: number | null;
   moneyIn: number;
@@ -63,7 +63,8 @@ export type DayLineKind =
   | "expense"
   | "move"
   | "owner_drawing"
-  | "hivepay_fee";
+  | "hivepay_fee"
+  | "opening_fix";
 
 export const DAY_LINE_LABELS: Record<DayLineKind, string> = {
   ...OTHER_MONEY_LABELS,
@@ -79,6 +80,7 @@ export const DAY_LINE_LABELS: Record<DayLineKind, string> = {
   move: "Moved between accounts",
   owner_drawing: "Owner took out",
   hivepay_fee: "HivePay fee (3%)",
+  opening_fix: "Starting balance fix",
 };
 
 export interface DayLine {
@@ -119,13 +121,14 @@ export interface DayBook {
 /**
  * Totals of the day's lines, including money in no account. A move between the
  * business's own accounts isn't money in or out: it only changes where it sits.
+ * Nor is a month-end starting-balance fix: it only says where the balance stood.
  */
 export function dayTotals(lines: Pick<DayLine, "direction" | "amount" | "accountId" | "kind">[]) {
   let moneyIn = 0;
   let moneyOut = 0;
   let inNoAccount = 0;
   for (const l of lines) {
-    if (l.kind === "move") continue;
+    if (l.kind === "move" || l.kind === "opening_fix") continue;
     if (l.direction === "in") moneyIn += l.amount;
     else moneyOut += l.amount;
     if (l.accountId === null) inNoAccount += l.amount;
@@ -177,4 +180,21 @@ export interface OwnerWithdrawal {
   status: "sending" | "paid" | "failed";
   lastError: string | null;
   createdAt: string;
+}
+
+/** A petty cash box (owner, 2026-11-15): held by a staff role, kept topped up to a float by the boss. */
+export interface PettyCashBox {
+  id: string;
+  name: string;
+  /** The staff role whose members hold it, e.g. "Receptionist". */
+  heldBy: string;
+  /** What the boss keeps it topped up to; null until set. */
+  float: number | null;
+  /** What it holds now, as Today works it out. */
+  balance: number;
+}
+
+/** What a top-up brings the box back to its float with; 0 when it's at or above it. */
+export function topUpNeeded(box: Pick<PettyCashBox, "float" | "balance">): number {
+  return box.float === null ? 0 : Math.max(0, box.float - box.balance);
 }

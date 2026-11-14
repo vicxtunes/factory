@@ -101,6 +101,8 @@ export interface DashboardSession {
   isBoss: boolean;
   /** Their role's name ("Boss" for the boss). */
   roleName: string;
+  /** Their staff role (null for the boss): it decides which petty cash box they hold. */
+  staffRoleId: string | null;
   /** Every dashboard section and how far they reach it (packages/lib/staff-access). */
   access: Access;
 }
@@ -156,6 +158,7 @@ export const getDashboardSession = cache(async (): Promise<DashboardSession | nu
     role: profile.role,
     isBoss,
     roleName: isBoss ? "Boss" : (staffRole?.name ?? "No role"),
+    staffRoleId: isBoss ? null : profile.staff_role_id,
     // No role (it can't be deleted while used, so only by hand): only their own sections.
     access: resolveAccess(isBoss, staffRole?.access, profile.access_overrides),
   };

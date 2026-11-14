@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { accountMoves, dayTotals, type DayLine, hivepaySendGross } from "./model";
+import { accountMoves, dayTotals, type DayLine, hivepaySendGross, topUpNeeded } from "./model";
 
 test("day totals: in, out and net, with money in no account shown apart", () => {
   const totals = dayTotals([
@@ -48,4 +48,10 @@ test("hivepaySendGross: the amount plus HivePay's charge, like the database", ()
   assert.equal(hivepaySendGross(300_000, HIVEPAY), 302_700);
   assert.equal(hivepaySendGross(4_990_000, HIVEPAY), 4_999_200);
   assert.equal(hivepaySendGross(10_000, []), 10_000); // no bands: as it is
+});
+
+test("petty cash: a top-up brings the box back to its float", () => {
+  assert.equal(topUpNeeded({ float: 200_000, balance: 45_000 }), 155_000);
+  assert.equal(topUpNeeded({ float: 200_000, balance: 250_000 }), 0);
+  assert.equal(topUpNeeded({ float: null, balance: 0 }), 0);
 });
