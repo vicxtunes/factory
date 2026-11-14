@@ -43,7 +43,7 @@ async function Overview({ searchParams }: { searchParams: SearchParams }) {
   const flow = await moneyFlow(view.period);
   return (
     <div className="space-y-6">
-      <MoneyAlerts alerts={alerts.ok ? alerts.data ?? [] : []} canManage={sessionCan(await getDashboardSession(), "accounts", "manage")} />
+      <MoneyAlerts alerts={alerts.ok ? alerts.data ?? [] : []} canManage={sessionCan(await getDashboardSession(), "accounts", "manage")} isBoss={(await getDashboardSession())?.isBoss ?? false} />
       <MoneyDashboard view={view} timeZone={scope.timeZone} weOwe={owed.totals} flow={flow} />
     </div>
   );

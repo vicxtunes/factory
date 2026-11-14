@@ -195,8 +195,19 @@ export function weeklyPayDue(pay: WeeklyPay, now: Date): string | null {
   return `${get("year")}-${get("month")}-${get("day")}`;
 }
 
-/** What an agent's weekly payment sends: their whole balance, up to the most one payment can, or nothing below the boss's smallest amount. */
-export function weeklyPayAmount(balance: number, min: number, max: number): number {
-  const amount = Math.min(Math.floor(balance), max);
+/**
+ * Commission credited this recently waits for a later pay day (audit,
+ * 2026-11-14): an order refunded soon after delivery takes its commission
+ * back before it has been paid out, instead of leaving the agent owing it.
+ */
+export const WEEKLY_PAY_HOLD_DAYS = 7;
+
+/**
+ * What an agent's weekly payment sends: their balance less commission
+ * credited in the last WEEKLY_PAY_HOLD_DAYS (`recent`), up to the most one
+ * payment can, or nothing below the boss's smallest amount.
+ */
+export function weeklyPayAmount(balance: number, recent: number, min: number, max: number): number {
+  const amount = Math.min(Math.floor(balance - Math.max(recent, 0)), max);
   return amount >= min ? amount : 0;
 }

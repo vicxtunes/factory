@@ -188,6 +188,13 @@ export async function reconcileExpensePayout(id: string): Promise<void> {
   }
 }
 
+/** A bill payout stuck "being sent" that the boss checked with HivePay never went (wallet/server/stuck.ts): failed, the bill unpaid again. */
+export async function giveUpExpensePayout(id: string, reason: string): Promise<boolean> {
+  const { data: changed, error } = await createAdminClient().rpc("expense_payout_result", { p_id: id, p_delivered: false, p_fee: null, p_reference: null, p_reason: reason });
+  if (error) fail(error);
+  return !!changed;
+}
+
 /** Every bill payout still being sent, asked about one at a time. Called every few minutes. */
 export async function reconcileExpensePayouts(now = new Date()): Promise<void> {
   const { data, error } = await createAdminClient()

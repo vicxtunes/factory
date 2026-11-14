@@ -704,6 +704,16 @@ export async function paidByProductRequest(requestIds: string[]): Promise<Record
   return paid;
 }
 
+/** What's been paid in by mobile money for each of these studio bookings. */
+export async function paidByBooking(bookingIds: string[]): Promise<Record<string, number>> {
+  if (!bookingIds.length) return {};
+  const { data, error } = await createAdminClient().from("provider_collections").select("booking_id, amount").in("booking_id", bookingIds).eq("status", "succeeded");
+  if (error) throwDbError(error);
+  const paid: Record<string, number> = {};
+  for (const r of data ?? []) paid[r.booking_id as string] = (paid[r.booking_id as string] ?? 0) + num(r.amount);
+  return paid;
+}
+
 // --- Money watch (watch.ts) ---------------------------------------------------
 
 /**

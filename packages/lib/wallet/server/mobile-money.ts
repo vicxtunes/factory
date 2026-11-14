@@ -27,6 +27,7 @@ import { WalletError } from "./errors";
 import type { ClientViewer } from "./identity";
 import { reconcileAgentPayout } from "./agent";
 import { businessTermsAccepted, reconcilePayout } from "./business";
+import { reconcileVendorPayout } from "./vendor";
 import * as notifier from "./notifier";
 import * as hivepay from "./providers/hivepay";
 import { fromHivepayReference, fromPayoutReference, toHivepayReference, fromExpensePayoutReference } from "./providers/hivepay-reference";
@@ -302,6 +303,11 @@ export async function paidForStudioRequests(requestIds: string[]): Promise<Recor
   return repo.paidByProductRequest(requestIds);
 }
 
+/** What's been paid in by mobile money for each of these studio bookings. */
+export async function paidForStudioBookings(bookingIds: string[]): Promise<Record<string, number>> {
+  return repo.paidByBooking(bookingIds);
+}
+
 /**
  * Asks HivePay about a pending collection and settles or fails it. Returns the row as it now stands.
  * `quiet`: a failure isn't told to the client (a prompt from days ago they've long forgotten).
@@ -433,6 +439,7 @@ export async function handleWebhook(rawBody: string, signature: string | null): 
   if (withdrawalId) {
     // The id is one business's, vendor's or agent's: each only acts on its own.
     await reconcilePayout(withdrawalId);
+    await reconcileVendorPayout(withdrawalId);
     await reconcileAgentPayout(withdrawalId);
     return answer(200);
   }

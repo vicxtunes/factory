@@ -84,11 +84,13 @@ test("weekly pay is due on its day from its hour, Kampala time, and only that da
   assert.equal(weeklyPayDue({ ...monday10, day: 7, hour: 8 }, new Date("2026-11-22T05:00:00Z")), "2026-11-22");
 });
 
-test("weekly pay sends the whole balance, capped, and nothing under the smallest amount", () => {
-  assert.equal(weeklyPayAmount(42_500, 5000, 5_000_000), 42_500);
-  assert.equal(weeklyPayAmount(4_999, 5000, 5_000_000), 0);
-  assert.equal(weeklyPayAmount(-3_000, 5000, 5_000_000), 0);
-  assert.equal(weeklyPayAmount(7_000_000, 5000, 5_000_000), 5_000_000);
+test("weekly pay sends the balance less this week's commission, capped, and nothing under the smallest amount", () => {
+  assert.equal(weeklyPayAmount(42_500, 0, 5000, 5_000_000), 42_500);
+  assert.equal(weeklyPayAmount(42_500, 30_000, 5000, 5_000_000), 12_500);
+  assert.equal(weeklyPayAmount(42_500, 40_000, 5000, 5_000_000), 0);
+  assert.equal(weeklyPayAmount(4_999, 0, 5000, 5_000_000), 0);
+  assert.equal(weeklyPayAmount(-3_000, 0, 5000, 5_000_000), 0);
+  assert.equal(weeklyPayAmount(7_000_000, 0, 5000, 5_000_000), 5_000_000);
 });
 
 test("weekly pay setting: a day, an hour from 08 to 20, a smallest amount from 500", () => {
