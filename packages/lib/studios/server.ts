@@ -21,6 +21,7 @@ import type { TenantScope } from "@repo/lib/tenancy/types";
 import { createAdminClient } from "@repo/lib/supabase/admin";
 
 import { supabaseStudioStore } from "./adapters/supabase/store";
+export { readStudioActivity } from "./adapters/supabase/activity";
 import { studioScope, type Studio, type StudioOwner } from "./core";
 import { STUDIOS_ENABLED } from "./feature";
 import { businessToOpen } from "./policy";
