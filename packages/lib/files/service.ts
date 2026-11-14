@@ -113,7 +113,7 @@ export class FileService {
     if (!canSee(every, access, folderId) && !(access.kind === "shared" && folderId === null)) return null;
     const visible = every.filter((f) => canSee(every, access, f.id));
     const rights = rightsIn(every, access, folderId);
-    const files = folderId === null && access.kind === "shared" ? [] : (await this.repo.files(scope, folderId)).sort(byName);
+    const files = folderId === null && access.kind === "shared" && !access.seesTop ? [] : (await this.repo.files(scope, folderId)).sort(byName);
     const open = await this.repo.openCommentCounts(
       scope,
       files.map((f) => f.id),
@@ -595,6 +595,18 @@ export class FileService {
   /** What's shared with a team member who hasn't the Files area. */
   async memberAccess(scope: TenantScope, memberId: string): Promise<FileAccess> {
     return this.sharedAccess(scope, (s) => s.audience.kind === "member" && s.audience.memberId === memberId);
+  }
+
+  /**
+   * A team member with Files at view (owner, 2026-11-13): every folder to
+   * look in and download from, changing nothing; what's shared with them
+   * besides counts too.
+   */
+  async viewerAccess(scope: TenantScope, memberId: string): Promise<FileAccess> {
+    const shared = await this.memberAccess(scope, memberId);
+    const tops = (await this.repo.folders(scope)).filter((f) => f.parentId === null);
+    const grants = tops.map((f) => ({ folderId: f.id, role: "viewer" as const, canDownload: true }));
+    return { kind: "shared", grants: [...grants, ...(shared.kind === "shared" ? shared.grants : [])], seesTop: true };
   }
 
   /**

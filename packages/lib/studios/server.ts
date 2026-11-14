@@ -13,7 +13,7 @@ import { cache } from "react";
 import { cookies } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 
-import { getClientSession, getDashboardSession, type ClientSession, type DashboardSession } from "@repo/lib/auth/session";
+import { getClientSession, pageAccess, type ClientSession, type DashboardSession } from "@repo/lib/auth/session";
 import { isSettingUp } from "@repo/lib/studio-access/core";
 import { canUse, type Area, type StudioAccess } from "@repo/lib/team/core";
 import { team } from "@repo/lib/team/server";
@@ -23,7 +23,7 @@ import { createAdminClient } from "@repo/lib/supabase/admin";
 import { supabaseStudioStore } from "./adapters/supabase/store";
 import { studioScope, type Studio, type StudioOwner } from "./core";
 import { STUDIOS_ENABLED } from "./feature";
-import { businessToOpen, canViewAllStudios } from "./policy";
+import { businessToOpen } from "./policy";
 import { StudioError } from "./ports";
 import { StudioService } from "./service";
 
@@ -41,7 +41,8 @@ export interface CallerStudio {
 /** What a page or action needs: an area, or "anyone" on the team (their home, their own tasks). Nothing: owner-only. */
 export type StudioNeed = Area | "anyone";
 
-const reaches = (access: StudioAccess, need?: StudioNeed) => need === "anyone" || canUse(access, need);
+/** Pages need to see an area (view); actions that change it, manage. */
+const reaches = (access: StudioAccess, need: StudioNeed | undefined, level: "view" | "manage") => need === "anyone" || canUse(access, need, level);
 
 /** Which business this device is working in, when its account can open more than one (`chooseStudio`). */
 export const STUDIO_CHOICE_COOKIE = "studio_as";
@@ -80,17 +81,18 @@ const callerStudio = cache(async (): Promise<CallerStudio | null> => {
 
 /**
  * For workspace pages: the caller's working studio, when the caller has what
- * the page `need`s (nothing: owner-only). Otherwise to set-up / review
+ * the page `need`s at `level` (view, or manage for a page that only changes
+ * things: a new or edit form) (nothing: owner-only). Otherwise to set-up / review
  * (/studio/welcome) or a member's home (/studio). 404 while studios are off.
  * Owner and members alike get in with their Aming sign-in (an emailed code):
  * there's no second studio login.
  */
-export async function requireStudio(need?: StudioNeed): Promise<CallerStudio> {
+export async function requireStudio(need?: StudioNeed, level: "view" | "manage" = "view"): Promise<CallerStudio> {
   if (!STUDIOS_ENABLED) notFound();
   const caller = await callerStudio();
   if (!caller) redirect("/");
   if (!caller.access.owner) {
-    if (!reaches(caller.access, need)) redirect("/studio");
+    if (!reaches(caller.access, need, level)) redirect("/studio");
     return caller;
   }
   if (caller.studio.status !== "active") redirect("/studio/welcome");
@@ -108,14 +110,15 @@ export async function requireOwnStudio(): Promise<CallerStudio> {
 
 /**
  * For studio actions (this module's and others'): the caller's working
- * studio when they have what the action `need`s (nothing: owner-only), else
- * a StudioError.
+ * studio when they have what the action `need`s (nothing: owner-only) at
+ * `level` (manage: it changes something; view: it only reads), else a
+ * StudioError.
  */
-export async function studioOfCaller(need?: StudioNeed): Promise<CallerStudio> {
+export async function studioOfCaller(need?: StudioNeed, level: "view" | "manage" = "manage"): Promise<CallerStudio> {
   const caller = await callerStudio();
   if (!caller) throw new StudioError("Sign in to manage your business.");
   if (!caller.access.owner) {
-    if (!reaches(caller.access, need)) throw new StudioError("You don't have access to this part of the business. Ask its owner.");
+    if (!reaches(caller.access, need, level)) throw new StudioError(level === "view" ? "You don't have access to this part of the business. Ask its owner." : "You can look at this part of the business but not change it. Ask its owner.");
     return caller;
   }
   if (caller.studio.status !== "active") throw new StudioError("Your business isn't open yet: finish setting it up and wait for Aming's approval.");
@@ -153,11 +156,9 @@ export async function ownStudio(): Promise<CallerStudio> {
   return caller;
 }
 
-/** For the boss's studio pages: the signed-in boss, else back to the dashboard. */
+/** For the Businesses pages: whoever may see Businesses (staff access), else back to the dashboard. */
 export async function requireStudiosOversight(): Promise<DashboardSession> {
-  const session = await getDashboardSession();
-  if (!session || !canViewAllStudios(session.role)) redirect("/dashboard");
-  return session;
+  return pageAccess("studios");
 }
 
 /** What a studio can delete for good (see supabase/migrations/20261016100000_studio_delete.sql). */

@@ -30,7 +30,7 @@ interface EntryRow {
 
 /** The vendor's wallet: its balance, its history and its latest withdrawals. Those being sent are asked about first. */
 export async function vendorWallet(vendorId: string): Promise<VendorWalletView> {
-  await reconcileSending(vendorId);
+  await reconcileVendorPayouts(vendorId);
   const db = createAdminClient();
   const [wallet, entries, withdrawals] = await Promise.all([
     db.from("vendor_wallets").select("balance").eq("vendor_id", vendorId).maybeSingle<{ balance: number | string }>(),
@@ -64,7 +64,7 @@ export async function requestVendorWithdrawal(vendor: { id: string; name: string
 
 /** Vendors' withdrawals waiting for staff or being sent, oldest first: part of staff's queue (./business.ts). */
 export async function listPendingVendorWithdrawals(): Promise<PendingWithdrawal[]> {
-  await reconcileSending(null);
+  await reconcileVendorPayouts(null);
   const { data, error } = await createAdminClient()
     .from("vendor_withdrawals")
     // Through the wallet to its vendor (a withdrawal points at the wallet).
@@ -112,7 +112,7 @@ export async function refuseVendorWithdrawal(staff: StaffViewer, id: string, rea
 }
 
 /** Asks HivePay how a vendor's payout being sent went, and settles it: sent, or failed and back in the wallet. */
-async function reconcilePayout(id: string): Promise<void> {
+export async function reconcileVendorPayout(id: string): Promise<void> {
   const db = createAdminClient();
   const { data: row } = await db.from("vendor_withdrawals").select("status, payout_fee, gateway_reference").eq("id", id).maybeSingle<{ status: string; payout_fee: number | null; gateway_reference: string | null }>();
   if (row?.status !== "sending") return;
@@ -131,8 +131,26 @@ async function reconcilePayout(id: string): Promise<void> {
   if (changed) await tellVendor(id, reason);
 }
 
+/**
+ * A payout stuck "being sent" that the boss checked with HivePay never went
+ * (./stuck.ts): failed, and the money goes back. False when it's no longer
+ * being sent.
+ */
+export async function giveUpVendorPayout(id: string, reason: string): Promise<boolean> {
+  const { data: changed, error } = await createAdminClient().rpc("vendor_withdraw_payout_result", {
+    p_withdrawal: id,
+    p_delivered: false,
+    p_fee: null,
+    p_gateway_reference: null,
+    p_reason: reason,
+  });
+  if (error) throwDbError(error);
+  if (changed) await tellVendor(id, reason);
+  return !!changed;
+}
+
 /** Every vendor payout still being sent (one vendor's, or all of them), asked about once it has had a moment. */
-async function reconcileSending(vendorId: string | null): Promise<void> {
+export async function reconcileVendorPayouts(vendorId: string | null): Promise<void> {
   let query = createAdminClient()
     .from("vendor_withdrawals")
     .select("id")
@@ -141,7 +159,7 @@ async function reconcileSending(vendorId: string | null): Promise<void> {
   if (vendorId) query = query.eq("vendor_id", vendorId);
   const { data, error } = await query.returns<{ id: string }[]>();
   if (error) throwDbError(error);
-  await Promise.all((data ?? []).map((w) => reconcilePayout(w.id).catch((err) => console.error("payout check failed:", w.id, err))));
+  await Promise.all((data ?? []).map((w) => reconcileVendorPayout(w.id).catch((err) => console.error("payout check failed:", w.id, err))));
 }
 
 /** The vendor is told how their withdrawal went (best effort). */

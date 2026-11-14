@@ -93,7 +93,7 @@ function approvalFields(session: Awaited<ReturnType<typeof requireCreator>>) {
 
 /** Push to every boss that an announcement is waiting for them. */
 async function notifyBossesOfPending(authorName: string | null, title: string): Promise<void> {
-  const { data } = await createAdminClient().from("profiles").select("id").eq("role", "boss");
+  const { data } = await createAdminClient().from("profiles").select("id").eq("role", "boss").is("suspended_at", null);
   await Promise.all(
     (data ?? []).map((b) =>
       notifyActor(

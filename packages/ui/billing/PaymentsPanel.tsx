@@ -20,6 +20,7 @@ export function PaymentsPanel({
   receiptUrls,
   today,
   scope,
+  canRecord,
 }: {
   invoice: Invoice;
   /** Payment id → its receipt link. */
@@ -27,6 +28,8 @@ export function PaymentsPanel({
   /** The studio's today, "yyyy-mm-dd": the default payment date. */
   today: string;
   scope: Omit<TenantScope, "tenantId">;
+  /** Shows the payment form and Void. */
+  canRecord: boolean;
 }) {
   const router = useRouter();
   const [amount, setAmount] = useState(String(invoice.balance));
@@ -66,7 +69,7 @@ export function PaymentsPanel({
   return (
     <section className="space-y-4 rounded-2xl border border-border bg-surface p-4 shadow-theme-xs print:hidden">
       <p className="text-sm font-semibold">Payments</p>
-      {open ? (
+      {open && canRecord ? (
         <form onSubmit={record} className="space-y-3">
           <div className="grid gap-3 sm:grid-cols-3">
             <Field label={`Amount (${scope.currency})`} hint={`${money(invoice.balance)} left`}>
@@ -98,7 +101,7 @@ export function PaymentsPanel({
           </Button>
         </form>
       ) : (
-        <p className="text-sm text-muted">{invoice.voidedAt ? "This invoice is void." : "Paid in full."}</p>
+        <p className="text-sm text-muted">{invoice.voidedAt ? "This invoice is void." : open ? `${money(invoice.balance)} left to pay.` : "Paid in full."}</p>
       )}
       {error ? <p className="text-sm text-error-600 dark:text-error-400">{error}</p> : null}
       {invoice.payments.length ? (
@@ -120,9 +123,11 @@ export function PaymentsPanel({
                   <a href={receiptUrls[p.id]} target="_blank" rel="noreferrer" className="font-medium text-brand-600 hover:underline">
                     Receipt
                   </a>
-                  <Button size="sm" variant="danger" type="button" onClick={() => cancel(p.id)}>
-                    Void
-                  </Button>
+                  {canRecord ? (
+                    <Button size="sm" variant="danger" type="button" onClick={() => cancel(p.id)}>
+                      Void
+                    </Button>
+                  ) : null}
                 </div>
               )}
             </li>

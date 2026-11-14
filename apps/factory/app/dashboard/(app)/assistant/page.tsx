@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { currentTerms, hasAiKey, panelSettings, recentChanges, usageByPayer } from "@repo/lib/assistant/panel/server";
 import { findModel } from "@repo/lib/assistant/core/rules";
 import { monthStats, getSettings, spentToday } from "@repo/lib/assistant/server/store";
-import { getDashboardSession } from "@repo/lib/auth/session";
+import { getDashboardSession, sessionCan } from "@repo/lib/auth/session";
 import { SUPPORT_OWNER_EMAIL } from "@repo/lib/support/constants";
 
 import { AlexisPanelForm, PublishTermsButton } from "./alexis-panel-form";
@@ -30,7 +30,7 @@ const CAPABILITIES = [
 export default async function AssistantPage() {
   const session = await getDashboardSession();
   const developer = session?.email === SUPPORT_OWNER_EMAIL;
-  if (session?.role !== "boss" && !developer) redirect("/dashboard");
+  if (!sessionCan(session, "alexis", "manage") && !developer) redirect("/dashboard");
   const [settings, spent, month, panel, terms, payers, changes] = await Promise.all([
     getSettings(),
     spentToday(),

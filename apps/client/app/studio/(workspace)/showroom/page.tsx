@@ -9,6 +9,7 @@ import { ProductGridSkeleton } from "@repo/ui/skeletons/blocks";
 import { Loading } from "@repo/ui/skeletons/Loading";
 import { photos } from "@repo/lib/photos/server";
 import { requireStudio } from "@repo/lib/studios/server";
+import { canUse } from "@repo/lib/team/core";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
 export const metadata = { title: "Showroom · My Business" };
@@ -24,7 +25,7 @@ export default async function StudioShowroomPage() {
       <Suspense fallback={<Skeleton className="h-6 w-full" />}>
         <Usage scope={scope} />
       </Suspense>
-      <NewAlbumForm basePath="/studio/showroom" />
+      {canUse(access, "catalog", "manage") ? <NewAlbumForm basePath="/studio/showroom" /> : null}
       <Loading skeleton={<ProductGridSkeleton count={6} />}>
         <Albums scope={scope} />
       </Loading>

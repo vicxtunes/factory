@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { getDashboardSession, sessionCan } from "@repo/lib/auth/session";
 import { MoneyWeOweBoard } from "@repo/ui/production/MoneyWeOweBoard";
 import { RowsSkeleton, StatTilesSkeleton } from "@repo/ui/skeletons/blocks";
 import { Loading } from "@repo/ui/skeletons/Loading";
@@ -41,7 +42,7 @@ async function Owed() {
   const [view, toAgents, symbol] = await Promise.all([moneyWeOwe.overview(scope, today), totalOwedToAgents(), fetchBaseCurrencySymbol()]);
   return (
     <div className="space-y-4">
-      <MoneyWeOweBoard accounts={view.accounts} totals={view.totals} open={view.open} today={today} basePath="/dashboard/accounts/owed" />
+      <MoneyWeOweBoard accounts={view.accounts} totals={view.totals} open={view.open} today={today} basePath="/dashboard/accounts/owed" canManage={sessionCan(await getDashboardSession(), "accounts", "manage")} />
       {/* Commission earned and not yet withdrawn: owed, but not a loan. */}
       {toAgents > 0 ? (
         <Link href="/dashboard/agents" className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-surface p-4 text-sm shadow-theme-xs hover:bg-background">

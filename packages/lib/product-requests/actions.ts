@@ -22,7 +22,8 @@ import { deleteStudioRecord, studioOfCaller } from "@repo/lib/studios/server";
 
 import type { MobileMoneyCollection } from "@repo/lib/wallet/types";
 import { applyStudioPayment } from "@repo/lib/studio-payments/server";
-import { WalletError, checkStudioRequestPayment, startStudioRequestPayment } from "@repo/lib/wallet/studio";
+import { invoices } from "@repo/lib/billing/server";
+import { WalletError, checkStudioRequestPayment, paidForStudioRequests, startStudioRequestPayment } from "@repo/lib/wallet/studio";
 
 import { MAX_ORDER_MEDIA, isOrderFileType, isOrderMediaPath, orderLinkSchema, orderMediaFolder, orderNowSchema, productRequestIdSchema, type OrderNowOutcome } from "./core";
 import { isRememberedProductRequest, productRequests, rememberProductRequest } from "./server";
@@ -130,7 +131,15 @@ export async function payForProductRequest(
 
     const amount = Number(input.amount);
     const total = request.unitPrice * request.quantity;
-    if (total > 0 && amount > total) throw new ProductRequestError("That's more than the order costs.");
+    // What's still owed: its invoice's balance once it has one (payments go on it), else its price less what's been
+    // paid in (audit, 2026-11-14). Priced on request with no invoice yet: any amount.
+    const left = request.invoiceId
+      ? ((await invoices.get(at.scope, request.invoiceId))?.balance ?? 0)
+      : total > 0
+        ? total - ((await paidForStudioRequests([requestId]))[requestId] ?? 0)
+        : null;
+    if (left !== null && left <= 0) throw new ProductRequestError("This order is already paid in full.");
+    if (left !== null && amount > left) throw new ProductRequestError(`That's more than what's left to pay (${left.toLocaleString("en-UG")}).`);
     return walletStep(() =>
       startStudioRequestPayment({
         tenantId: at.studio.id,

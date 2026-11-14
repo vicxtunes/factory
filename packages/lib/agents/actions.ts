@@ -5,15 +5,15 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
-import { getClientSession, getDashboardSession } from "@repo/lib/auth/session";
+import { getClientSession, getDashboardSession, sessionCan } from "@repo/lib/auth/session";
 import { AppError, parseInput, type Result } from "@repo/lib/kernel/core";
 import { runAction } from "@repo/lib/kernel/server/action";
 import type { OrderItemInput } from "@repo/lib/orders/types";
-import { canManageBusiness, type OrderType } from "@repo/lib/types";
+import type { OrderType } from "@repo/lib/types";
 import { WalletError, checkOrderLinkPayment, startOrderLinkPayment } from "@repo/lib/wallet/orders";
 import type { MobileMoneyCollection } from "@repo/lib/wallet/types";
 
-import { agentClientSchema, agentEditSchema, agentRegisterSchema, commissionRateSchema, payFirstPercentSchema, waitingChoiceSchema } from "./core";
+import { agentClientSchema, agentEditSchema, agentRegisterSchema, commissionRateSchema, payFirstPercentSchema, waitingChoiceSchema, weeklyPaySchema } from "./core";
 import * as server from "./server";
 
 const id = z.string().uuid();
@@ -26,15 +26,17 @@ async function requireAgent(): Promise<server.Agent> {
   return agent;
 }
 
+/** Registering, editing and paying agents, their rates and clients: Agents at manage. */
 async function requireBoss(): Promise<string> {
   const session = await getDashboardSession();
-  if (session?.role !== "boss") throw new AppError("Only the boss can do this.");
-  return session.fullName || session.email || "Boss";
+  if (!sessionCan(session, "agents", "manage")) throw new AppError("You don't have access to this. Ask the boss.");
+  return session.fullName || session.email || "Staff";
 }
 
+/** Whether an agent's client is someone already on Aming: Clients at manage. */
 async function requireManagerName(): Promise<string> {
   const session = await getDashboardSession();
-  if (!session || !canManageBusiness(session.role)) throw new AppError("You don't have access to this.");
+  if (!sessionCan(session, "clients", "manage")) throw new AppError("You don't have access to this. Ask the boss.");
   return session.fullName || session.email || "Staff";
 }
 
@@ -146,6 +148,15 @@ export async function setWithdrawalFeePaidBy(paidBy: unknown): Promise<Result> {
   return runAction("agents", async () => {
     const by = await requireBoss();
     await server.setFeePaidBy(parseInput(z.enum(["agent", "aming"]), paidBy), by);
+    refreshAdmin();
+  });
+}
+
+/** Agents' commission paid by itself every week: on or off, the day, the hour and the smallest amount. */
+export async function setWeeklyPay(input: unknown): Promise<Result> {
+  return runAction("agents", async () => {
+    const by = await requireBoss();
+    await server.setWeeklyPay(parseInput(weeklyPaySchema, input), by);
     refreshAdmin();
   });
 }

@@ -55,7 +55,7 @@ export default async function StudioDashboardPage() {
       <Loading skeleton={<Skeleton className="h-40 w-full rounded-3xl" />}>
         <Hero scope={scope} studioId={studio.id} access={access} />
       </Loading>
-      <QuickActions actions={quickActions(can)} />
+      <QuickActions actions={quickActions((area) => canUse(access, area, "manage"))} />
       {can("bookings") ? (
         <HomeSection title="Next events" href="/studio/bookings">
           <Loading skeleton={<Skeleton className="h-64 w-full rounded-3xl" />}>
@@ -76,7 +76,7 @@ export default async function StudioDashboardPage() {
           </Loading>
         </section>
       ) : null}
-      <HomeSection title={can("projects") ? "Tasks to do" : "Your tasks"} href="/studio/tasks">
+      <HomeSection title={canUse(access, "projects", "manage") ? "Tasks to do" : "Your tasks"} href="/studio/tasks">
         <Loading skeleton={<RowsSkeleton rows={4} />}>
           <Todo scope={scope} today={today} access={access} />
         </Loading>
@@ -94,7 +94,7 @@ async function Usage({ scope }: { scope: TenantScope }) {
   return <UsageBar usage={await photos.usage(scope)} />;
 }
 
-/** The shortcuts this person can use. */
+/** The shortcuts this person can use (each changes something: their areas at manage). */
 function quickActions(can: (area: Parameters<typeof canUse>[1]) => boolean): QuickAction[] {
   return [
     ...(can("bookings") ? [{ label: "New booking", icon: "calendar", href: "/studio/bookings?new" } as const] : []),
@@ -199,9 +199,9 @@ async function InHand({ scope }: { scope: TenantScope }) {
   return <ProjectsList projects={inHand.slice(0, 5)} scope={scope} basePath="/studio/projects" empty="No projects in hand." />;
 }
 
-// Everyone's, for those who run the projects; else only the caller's own.
+// Everyone's, for those who run the projects (manage: ticking any is theirs); else only the caller's own.
 async function Todo({ scope, today, access }: { scope: TenantScope; today: string; access: StudioAccess }) {
-  const all = access.owner || canUse(access, "projects");
+  const all = canUse(access, "projects", "manage");
   const todo = await tasks.open(scope, all || access.owner ? undefined : access.memberId);
   return <TodoList tasks={all ? todo.slice(0, 8) : todo} today={today} projectPath={all ? "/studio/projects" : null} />;
 }

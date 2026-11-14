@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { agentFigures, agentStage, isFinalStage, payBeforeProduction, payFirstWording } from "./core";
+import { agentFigures, agentStage, isFinalStage, payBeforeProduction, payFirstWording, weeklyPayAmount, weeklyPayDue, weeklyPaySchema, weeklyPayWhen } from "./core";
 
 const line = (production_status: Parameters<typeof agentStage>[0]["lines"][number]["production_status"], stage: "factory" | "with_designer" = "factory") => ({ production_status, stage });
 const approved = (...lines: ReturnType<typeof line>[]) => agentStage({ cancelled_at: null, approval_status: "approved", lines });
@@ -68,4 +68,35 @@ test("at 0% nothing is said about paying first", () => {
   assert.equal(payFirstWording(1000, 0, money), null);
   assert.equal(payFirstWording(1000, 60, money), "Production starts once 60% of the price (UGX 600) is paid.");
   assert.equal(payFirstWording(null, 60, money), "Production starts once 60% of the price is paid.");
+});
+
+const monday10 = { on: true, day: 1, hour: 10, min: 5000, max: 5_000_000 };
+
+test("weekly pay is due on its day from its hour, Kampala time, and only that day", () => {
+  // 2026-11-16 is a Monday; Kampala is UTC+3.
+  assert.equal(weeklyPayDue(monday10, new Date("2026-11-16T06:59:00Z")), null);
+  assert.equal(weeklyPayDue(monday10, new Date("2026-11-16T07:00:00Z")), "2026-11-16");
+  assert.equal(weeklyPayDue(monday10, new Date("2026-11-16T20:59:00Z")), "2026-11-16");
+  // Monday 23:59 UTC is already Tuesday in Kampala.
+  assert.equal(weeklyPayDue(monday10, new Date("2026-11-16T21:00:00Z")), null);
+  assert.equal(weeklyPayDue(monday10, new Date("2026-11-17T09:00:00Z")), null);
+  assert.equal(weeklyPayDue({ ...monday10, on: false }, new Date("2026-11-16T09:00:00Z")), null);
+  assert.equal(weeklyPayDue({ ...monday10, day: 7, hour: 8 }, new Date("2026-11-22T05:00:00Z")), "2026-11-22");
+});
+
+test("weekly pay sends what's in the wallet, up to the largest amount, and nothing under the smallest", () => {
+  assert.equal(weeklyPayAmount(42_500, 5000, 5_000_000), 42_500);
+  assert.equal(weeklyPayAmount(42_500, 5000, 30_000), 30_000);
+  assert.equal(weeklyPayAmount(4_999, 5000, 30_000), 0);
+  assert.equal(weeklyPayAmount(-3_000, 5000, 30_000), 0);
+});
+
+test("weekly pay setting: a day, an hour from 08 to 20, a smallest amount from 500", () => {
+  assert.deepEqual(weeklyPaySchema.parse({ on: true, day: "5", hour: "14", min: "10000", max: "200000" }), { on: true, day: 5, hour: 14, min: 10000, max: 200000 });
+  assert.equal(weeklyPaySchema.safeParse({ on: true, day: 8, hour: 10, min: 5000, max: 10000 }).success, false);
+  assert.equal(weeklyPaySchema.safeParse({ on: true, day: 1, hour: 21, min: 5000, max: 10000 }).success, false);
+  assert.equal(weeklyPaySchema.safeParse({ on: true, day: 1, hour: 10, min: 100, max: 10000 }).success, false);
+  assert.equal(weeklyPaySchema.safeParse({ on: true, day: 1, hour: 10, min: 20000, max: 10000 }).success, false);
+  assert.equal(weeklyPaySchema.safeParse({ on: true, day: 1, hour: 10, min: 5000, max: 6_000_000 }).success, false);
+  assert.equal(weeklyPayWhen({ day: 5, hour: 9 }), "Every Friday from 09:00");
 });

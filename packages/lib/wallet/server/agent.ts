@@ -5,7 +5,8 @@ import "server-only";
 // the boss by hand. Made like a vendor's wallet (./vendor.ts), but only the boss
 // answers (supabase/migrations/20261216100000_agent_platform.sql).
 
-import type { AgentWalletKind, FeePaidBy, WithdrawalMethod } from "@repo/lib/agents/core";
+import { weeklyPayAmount, weeklyPayDue, type AgentWalletKind, type FeePaidBy, type WithdrawalMethod } from "@repo/lib/agents/core";
+import { weeklyPay } from "@repo/lib/agents/server";
 import { parsePhone } from "@repo/lib/kernel/core/phone";
 import { createAdminClient } from "@repo/lib/supabase/admin";
 
@@ -18,7 +19,7 @@ import * as hivepay from "./providers/hivepay";
 import { toPayoutReference } from "./providers/hivepay-reference";
 
 const COLUMNS =
-  "id, agent_id, amount, method, phone, bank_name, bank_account_name, bank_account_number, fee_paid_by, status, reference, reason, payout_fee, last_error, requested_by_name, created_at, resolved_at";
+  "id, agent_id, amount, method, phone, bank_name, bank_account_name, bank_account_number, fee_paid_by, status, reference, reason, payout_fee, last_error, requested_by_name, created_at, resolved_at, weekly_of";
 
 export interface AgentWithdrawal {
   id: string;
@@ -38,6 +39,8 @@ export interface AgentWithdrawal {
   requestedByName: string;
   createdAt: string;
   resolvedAt: string | null;
+  /** Sent by itself as the week's payment, not asked for. */
+  weekly: boolean;
 }
 
 interface WithdrawalRow {
@@ -58,6 +61,7 @@ interface WithdrawalRow {
   requested_by_name: string;
   created_at: string;
   resolved_at: string | null;
+  weekly_of: string | null;
 }
 
 const toWithdrawal = (r: WithdrawalRow): AgentWithdrawal => ({
@@ -78,6 +82,7 @@ const toWithdrawal = (r: WithdrawalRow): AgentWithdrawal => ({
   requestedByName: r.requested_by_name,
   createdAt: r.created_at,
   resolvedAt: r.resolved_at,
+  weekly: r.weekly_of !== null,
 });
 
 export interface AgentWalletEntry {
@@ -172,13 +177,24 @@ export async function approveAgentWithdrawal(staff: StaffViewer, id: string): Pr
   const { data, error } = await db.rpc("agent_withdraw_approve", { p_withdrawal: id, p_actor_name: staff.name });
   if (error) throwDbError(error);
   const w = data as { amount: number; phone: string };
+  await handToHivepay(id, w, "Agent commission withdrawal");
+}
+
+/**
+ * A withdrawal already marked as being sent goes to HivePay. Turned down
+ * before HivePay took it: back to waiting for the boss, with why (and a
+ * WalletError saying so). No answer: it stays "being sent" and its status
+ * settles it.
+ */
+async function handToHivepay(id: string, w: { amount: number; phone: string }, description: string): Promise<"taken" | "unanswered"> {
+  const db = createAdminClient();
   let sent: Awaited<ReturnType<typeof hivepay.send>>;
   try {
-    sent = await hivepay.send({ reference: toPayoutReference(id), phone: w.phone, amount: Number(w.amount), description: "Agent commission withdrawal" });
+    sent = await hivepay.send({ reference: toPayoutReference(id), phone: w.phone, amount: Number(w.amount), description });
   } catch (err) {
     // No answer: HivePay may or may not have it. It stays "being sent", and its status settles it.
     console.error("hivepay send threw:", id, err);
-    return;
+    return "unanswered";
   }
   if (!sent.ok) {
     console.error("hivepay send refused:", id, sent.status, sent.message);
@@ -189,6 +205,59 @@ export async function approveAgentWithdrawal(staff: StaffViewer, id: string): Pr
   }
   const { error: taken } = await db.rpc("agent_withdraw_taken", { p_withdrawal: id, p_gateway_reference: sent.gatewayRef, p_fee: sent.fee });
   if (taken) throwDbError(taken);
+  return "taken";
+}
+
+/**
+ * Agents' commission, paid by itself on the boss's pay day (owner,
+ * 2026-11-14): from the pay hour, each active agent with an agreed number gets
+ * what's in their wallet, up to the boss's largest amount (the rest goes the
+ * week after), if it's at least the boss's smallest amount. One per agent per pay day, held by the
+ * database, so running again (every couple of minutes all day) only picks up
+ * agents not paid yet. One HivePay can't take waits for the boss in
+ * Withdrawals with the reason; the boss hears what went once a run sends any.
+ */
+const SEND_EVERY_MS = 3_000;
+const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+export async function runWeeklyAgentPay(now = new Date()): Promise<void> {
+  const pay = await weeklyPay();
+  const week = weeklyPayDue(pay, now);
+  if (!week || !hivepay.isConfigured()) return;
+  const db = createAdminClient();
+  const [agents, done] = await Promise.all([
+    db.from("agents").select("id, name, payout_phone, wallet:agent_wallets (balance)").eq("active", true).not("payout_phone", "is", null).returns<{ id: string; name: string; payout_phone: string; wallet: { balance: number | string } | null }[]>(),
+    db.from("agent_withdrawals").select("agent_id").eq("weekly_of", week).returns<{ agent_id: string }[]>(),
+  ]);
+  if (agents.error) throwDbError(agents.error);
+  if (done.error) throwDbError(done.error);
+  const paid = new Set((done.data ?? []).map((d) => d.agent_id));
+
+  const sent: { name: string; amount: number }[] = [];
+  const unanswered: { name: string; amount: number }[] = [];
+  const failed: { name: string; amount: number; why: string }[] = [];
+  let calls = 0;
+  for (const agent of agents.data ?? []) {
+    if (paid.has(agent.id)) continue;
+    const amount = weeklyPayAmount(Number(agent.wallet?.balance ?? 0), Math.max(pay.min, MIN_WITHDRAWAL), Math.min(pay.max, MAX_WITHDRAWAL));
+    if (!amount) continue;
+    const { data: id, error } = await db.rpc("agent_weekly_withdraw", { p_agent: agent.id, p_amount: amount, p_phone: agent.payout_phone, p_week: week });
+    if (error) {
+      // The balance moved under it (a withdrawal asked for at the same moment): next run looks again.
+      console.error("weekly agent pay: not made:", agent.name, error.message);
+      continue;
+    }
+    if (!id) continue;
+    // HivePay limits how fast it's called: one send at a time, a moment apart.
+    if (calls++ > 0) await pause(SEND_EVERY_MS);
+    try {
+      const outcome = await handToHivepay(id as string, { amount, phone: agent.payout_phone }, "Agent weekly commission");
+      (outcome === "taken" ? sent : unanswered).push({ name: agent.name, amount });
+    } catch (err) {
+      failed.push({ name: agent.name, amount, why: err instanceof WalletError ? err.message.replace(/^Not sent: /, "") : "HivePay didn't answer." });
+    }
+  }
+  if (sent.length || unanswered.length || failed.length) await notifier.agentWeeklyPaySent(sent, unanswered, failed).catch((err) => console.error("weekly pay push failed:", err));
 }
 
 /** The boss refuses a waiting one (the agent sees why): the money goes back on their balance. */
@@ -228,6 +297,24 @@ export async function reconcileAgentPayout(id: string): Promise<void> {
   });
   if (error) throwDbError(error);
   if (changed) await tellAgent(id, reason);
+}
+
+/**
+ * A payout stuck "being sent" that the boss checked with HivePay never went
+ * (./stuck.ts): failed, and the money goes back. False when it's no longer
+ * being sent.
+ */
+export async function giveUpAgentPayout(id: string, reason: string): Promise<boolean> {
+  const { data: changed, error } = await createAdminClient().rpc("agent_withdraw_payout_result", {
+    p_withdrawal: id,
+    p_delivered: false,
+    p_fee: null,
+    p_gateway_reference: null,
+    p_reason: reason,
+  });
+  if (error) throwDbError(error);
+  if (changed) await tellAgent(id, reason);
+  return !!changed;
 }
 
 /** Every agent payout still being sent (one agent's, or all of them), asked about once it has had a moment. */

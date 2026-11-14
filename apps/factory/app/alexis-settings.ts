@@ -1,12 +1,14 @@
 import "server-only";
 
+import { can, type Access, type Level, type Section } from "@repo/lib/staff-access/core";
 import { z } from "zod";
 
+import { removeStaff } from "@repo/lib/staff-access/actions";
 import { changeTool, outcome, readTool, type ChangeTool } from "@repo/lib/assistant/panel/toolbox";
 import type { AssistantTool } from "@repo/lib/assistant/server/tools";
 import { addMediaLink, deleteOrderItemMedia } from "@repo/lib/storage/actions";
 import { createAdminClient } from "@repo/lib/supabase/admin";
-import type { AppRole } from "@repo/lib/types";
+
 import { createTopupBonus, listTopupBonuses, stopTopupBonus } from "@repo/lib/wallet/actions";
 
 import {
@@ -16,7 +18,6 @@ import {
   createVariant,
   deactivateDesigner,
   deactivateWorker,
-  deleteAdminUser,
   deleteStation,
   reactivateDesigner,
   reactivateWorker,
@@ -53,7 +54,7 @@ async function named(table: string, rowId: string, what: string): Promise<{ name
 }
 
 /** Reception, supervisors, the boss: the files on orders, workers' stations. */
-function managerTools(role: AppRole): { read: AssistantTool[]; change: ChangeTool[] } {
+function managerTools(): { read: AssistantTool[]; change: ChangeTool[] } {
   const change: ChangeTool[] = [
     changeTool({
       name: "add_order_link",
@@ -89,8 +90,7 @@ function managerTools(role: AppRole): { read: AssistantTool[]; change: ChangeToo
       run: async ({ workerId, station }) => outcome(await updateWorker({ id: workerId, station }), "The station is set."),
     }),
   ];
-  // Supervisors and the boss (the Workers page's own rule).
-  if (role === "boss" || role === "supervisor") {
+  {
     change.push(
       changeTool({
         name: "set_worker_active",
@@ -258,7 +258,7 @@ function bossTools(): { read: AssistantTool[]; change: ChangeTool[] } {
           if (!data) throw new Error("That person doesn't exist.");
           return { title: `Remove ${data.full_name ?? "this person"}'s sign-in`, lines: [`Role: ${data.role}`, "This can't be undone"] };
         },
-        run: async ({ userId }) => outcome(await deleteAdminUser(userId), "Their sign-in is removed."),
+        run: async ({ userId }) => outcome(await removeStaff(userId), "Their sign-in is removed."),
       }),
       changeTool({
         name: "set_currency_on",
@@ -300,8 +300,38 @@ function bossTools(): { read: AssistantTool[]; change: ChangeTool[] } {
   };
 }
 
-export function settingsTools(role: AppRole): { read: AssistantTool[]; change: ChangeTool[] } {
-  const m = managerTools(role);
-  const b = role === "boss" ? bossTools() : { read: [], change: [] };
-  return { read: [...m.read, ...b.read], change: [...m.change, ...b.change] };
+/** Which staff access each tool needs (packages/lib/staff-access); "boss": Team & access. */
+const NEEDS: Record<string, [Section, Exclude<Level, "none">] | "boss"> = {
+  order_files: ["orders", "view"],
+  add_order_link: ["orders", "manage"],
+  remove_order_file: ["orders", "manage"],
+  set_worker_station: ["workers", "manage"],
+  set_worker_active: ["worker_logins", "manage"],
+  catalog: ["catalog", "view"],
+  topup_bonuses: ["discounts", "view"],
+  catalog_add: ["catalog", "manage"],
+  catalog_rename: ["catalog", "manage"],
+  catalog_on_off: ["catalog", "manage"],
+  category_in_showroom: ["catalog", "manage"],
+  set_price: ["catalog", "manage"],
+  edit_product: ["catalog", "manage"],
+  show_prices: ["catalog", "manage"],
+  set_currency_on: ["catalog", "manage"],
+  station: ["stations", "manage"],
+  set_designer_active: ["designers", "manage"],
+  remove_staff_account: "boss",
+  topup_bonus: ["discounts", "manage"],
+  stop_topup_bonus: ["discounts", "manage"],
+};
+
+/** Order files, workers, the catalog, stations, designers, bonuses: each tool for whoever its section reaches. */
+export function settingsTools(v: { isBoss: boolean; access: Access }): { read: AssistantTool[]; change: ChangeTool[] } {
+  const m = managerTools();
+  const b = bossTools();
+  const allowed = (t: { name: string }) => {
+    const need = NEEDS[t.name];
+    if (!need) return false;
+    return need === "boss" ? v.isBoss : can(v.access, need[0], need[1]);
+  };
+  return { read: [...m.read, ...b.read].filter(allowed), change: [...m.change, ...b.change].filter(allowed) };
 }

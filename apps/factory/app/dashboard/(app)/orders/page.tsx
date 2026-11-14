@@ -1,7 +1,7 @@
 import { Skeleton } from "@repo/ui/Skeleton";
 import { Loading } from "@repo/ui/skeletons/Loading";
 import { createAdminClient } from "@repo/lib/supabase/admin";
-import { getDashboardSession } from "@repo/lib/auth/session";
+import { pageAccess, sessionCan } from "@repo/lib/auth/session";
 import {
   fetchAgents,
   fetchCategoryNames,
@@ -10,17 +10,17 @@ import {
   fetchOfficeItems,
   fetchProductCatalog,
 } from "@repo/lib/queries";
-import { canManageBusiness, canViewOrderAudit, isManagerRole, type Worker } from "@repo/lib/types";
+import type { Worker } from "@repo/lib/types";
 
 import { OrderBoard } from "../../order-board";
 
 export default async function OrdersPage({ searchParams }: { searchParams: Promise<{ order?: string }> }) {
-  const session = await getDashboardSession();
+  const session = await pageAccess("orders");
   const { order } = await searchParams;
-  const canManage = session ? isManagerRole(session.role) : false;
-  const canViewAudit = session ? canViewOrderAudit(session.role) : false;
-  const canCancel = session?.role === "boss";
-  const takesPayments = session ? canManageBusiness(session.role) : false;
+  const canManage = sessionCan(session, "orders", "manage");
+  const canViewAudit = sessionCan(session, "order_admin");
+  const canCancel = sessionCan(session, "order_admin", "manage");
+  const takesPayments = sessionCan(session, "invoices", "manage");
 
   return (
     <Loading

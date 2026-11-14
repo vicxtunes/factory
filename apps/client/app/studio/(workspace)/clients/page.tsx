@@ -6,6 +6,7 @@ import { RowsSkeleton } from "@repo/ui/skeletons/blocks";
 import { Loading } from "@repo/ui/skeletons/Loading";
 import { customers } from "@repo/lib/customers/server";
 import { requireStudio } from "@repo/lib/studios/server";
+import { canUse } from "@repo/lib/team/core";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
 import { NewClientSheet } from "./sheets";
@@ -13,19 +14,22 @@ import { NewClientSheet } from "./sheets";
 export const metadata = { title: "Clients · My Business" };
 
 export default async function StudioClientsPage({ searchParams }: { searchParams: Promise<{ new?: string }> }) {
-  const { scope } = await requireStudio("clients");
+  const { scope, access } = await requireStudio("clients");
+  const canEdit = canUse(access, "clients", "manage");
   return (
     <>
       <div className="flex items-start justify-between gap-3">
         <p className="text-sm text-muted">The people your business works for. One profile per person keeps their whole history together.</p>
-        <Link href="/studio/clients?new" scroll={false} className={`${buttonClass()} shrink-0`}>
-          Add client
-        </Link>
+        {canEdit ? (
+          <Link href="/studio/clients?new" scroll={false} className={`${buttonClass()} shrink-0`}>
+            Add client
+          </Link>
+        ) : null}
       </div>
       <Loading skeleton={<RowsSkeleton />}>
         <Clients scope={scope} />
       </Loading>
-      {(await searchParams).new !== undefined ? <NewClientSheet /> : null}
+      {canEdit && (await searchParams).new !== undefined ? <NewClientSheet /> : null}
     </>
   );
 }

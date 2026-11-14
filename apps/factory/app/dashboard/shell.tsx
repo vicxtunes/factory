@@ -3,9 +3,10 @@
 import { AnnouncementPopup } from "@repo/ui/announcements/AnnouncementPopup";
 import { InstallGate } from "@repo/ui/pwa/InstallGate";
 import { NotificationGate } from "@repo/ui/pwa/NotificationGate";
-import type { AppRole, NotificationRow } from "@repo/lib/types";
+import type { NotificationRow } from "@repo/lib/types";
 
 import { DashboardHomeBar } from "./home-bar";
+import type { NavViewer } from "./nav";
 import { DashboardSidebar } from "./sidebar";
 import { DashboardTopbar } from "./topbar";
 
@@ -13,14 +14,18 @@ export function DashboardShell({
   email,
   fullName,
   avatarUrl,
-  role,
+  roleName,
+  viewer,
   notifications,
   children,
 }: {
   email: string | null;
   fullName: string | null;
   avatarUrl: string | null;
-  role: AppRole;
+  /** Shown under their name: their role ("Boss", "Receptionist", …). */
+  roleName: string;
+  /** What the menu shows them (staff access). */
+  viewer: NavViewer;
   notifications: NotificationRow[];
   children: React.ReactNode;
 }) {
@@ -29,19 +34,19 @@ export function DashboardShell({
       <InstallGate />
       <NotificationGate />
       <AnnouncementPopup />
-      <DashboardSidebar role={role} email={email} />
+      <DashboardSidebar viewer={viewer} />
       <div className="sidebar-offset flex min-h-screen flex-col lg:pl-(--sidebar-w)">
         <DashboardTopbar
           email={email}
           fullName={fullName}
           avatarUrl={avatarUrl}
-          role={role}
+          role={roleName}
           notifications={notifications}
         />
         {/* Bottom padding so content clears the fixed mobile home bar. */}
         <main className="flex-1 bg-background px-4 py-6 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:px-6 lg:pb-6">{children}</main>
       </div>
-      <DashboardHomeBar role={role} email={email} />
+      <DashboardHomeBar viewer={viewer} />
     </div>
   );
 }

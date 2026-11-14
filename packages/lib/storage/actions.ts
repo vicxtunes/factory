@@ -1,5 +1,6 @@
 "use server";
 
+import { staffWith } from "@repo/lib/staff-access/server";
 import { randomUUID } from "crypto";
 
 import { revalidatePath } from "next/cache";
@@ -147,7 +148,7 @@ export async function reportUploadTrouble(orderItemId: string, fileName: string)
       url: actor.type === "client" ? clientPath("/orders") : undefined,
     });
   }
-  const { data: office } = await admin.from("profiles").select("id").in("role", ["receptionist", "supervisor", "boss"]);
+  const office = (await staffWith("orders")).map((id) => ({ id }));
   const by = actor?.type === "dashboard_user" ? actor.name : (item.order.client_name ?? actor?.name ?? "the client");
   await Promise.all(
     (office ?? []).map((p: { id: string }) =>

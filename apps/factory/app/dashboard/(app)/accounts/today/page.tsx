@@ -1,4 +1,5 @@
 import { MoneyAlerts } from "@repo/ui/accounting/MoneyAlerts";
+import { getDashboardSession, sessionCan } from "@repo/lib/auth/session";
 import { DayBookBoard } from "@repo/ui/books/DayBookBoard";
 import { PanelStackSkeleton, StatTilesSkeleton } from "@repo/ui/skeletons/blocks";
 import { Loading } from "@repo/ui/skeletons/Loading";
@@ -41,8 +42,8 @@ async function Today({ searchParams }: { searchParams: SearchParams }) {
   const [book, alerts] = await Promise.all([dayBook(scope, day), getMoneyAlerts()]);
   return (
     <>
-      <MoneyAlerts alerts={alerts.ok ? alerts.data ?? [] : []} />
-      <DayBookBoard key={day} book={book} timeZone={scope.timeZone} />
+      <MoneyAlerts alerts={alerts.ok ? alerts.data ?? [] : []} canManage={sessionCan(await getDashboardSession(), "accounts", "manage")} isBoss={(await getDashboardSession())?.isBoss ?? false} />
+      <DayBookBoard key={day} book={book} timeZone={scope.timeZone} canManage={sessionCan(await getDashboardSession(), "accounts", "manage")} />
     </>
   );
 }

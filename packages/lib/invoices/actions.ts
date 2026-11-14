@@ -15,12 +15,10 @@ import { WalletError, checkOrderLinkPayment, startOrderLinkPayment } from "@repo
 import type { MobileMoneyCollection, MoneySource, OrderPaymentExcessDisposition, PaymentMethod } from "@repo/lib/wallet/types";
 
 import { countAttempt, tooManyAttempts } from "@repo/lib/auth/attempts";
-import { canViewAccounts } from "@repo/lib/accounting/policy";
-import type { AppRole } from "@repo/lib/types";
 
 import { InvoiceError } from "./server/errors";
 import { sendOwingReminders, type RemindersSent } from "./server/reminders";
-import { getClientIdOrNull, requireBoss, requireCashier, requireClientId, requireStaff } from "./server/identity";
+import { getClientIdOrNull, requireAccounts, requireCashier, requireClientId, requireStaff } from "./server/identity";
 import * as directory from "./server/directory";
 import * as service from "./server/service";
 import type {
@@ -114,7 +112,7 @@ export async function generateInvoice(
   input: { lines: InvoiceLineInput[]; dueDate?: string | null; notes?: string | null; currency?: string | null },
 ): Promise<InvoiceResult<StaffInvoiceView>> {
   return run(async () => {
-    const invoice = await service.generate(await requireStaff(), orderId, input);
+    const invoice = await service.generate(await requireStaff("manage"), orderId, input);
     refresh();
     return invoice;
   });
@@ -123,7 +121,7 @@ export async function generateInvoice(
 /** New line prices on an existing invoice; the order's total follows. */
 export async function updateInvoiceLines(invoiceId: string, lines: InvoiceLineInput[]): Promise<InvoiceResult<StaffInvoiceView>> {
   return run(async () => {
-    await requireStaff();
+    await requireStaff("manage");
     const invoice = await service.updateLines(invoiceId, lines);
     refresh();
     return invoice;
@@ -135,7 +133,7 @@ export async function updateInvoice(
   input: { dueDate?: string | null; notes?: string | null },
 ): Promise<InvoiceResult<StaffInvoiceView>> {
   return run(async () => {
-    await requireStaff();
+    await requireStaff("manage");
     const invoice = await service.update(invoiceId, input);
     refresh();
     return invoice;
@@ -144,7 +142,7 @@ export async function updateInvoice(
 
 export async function resetInvoiceLink(invoiceId: string): Promise<InvoiceResult<StaffInvoiceView>> {
   return run(async () => {
-    await requireStaff();
+    await requireStaff("manage");
     return service.resetLink(invoiceId);
   });
 }
@@ -172,7 +170,7 @@ export async function applyWalletToInvoice(
 
 export async function listInvoices(): Promise<InvoiceResult<InvoiceListRow[]>> {
   return run(async () => {
-    await requireCashier();
+    await requireCashier("view");
     return service.list();
   });
 }
@@ -180,12 +178,12 @@ export async function listInvoices(): Promise<InvoiceResult<InvoiceListRow[]>> {
 /** Invoices matching a search, however old (the list itself shows the latest). */
 export async function searchInvoices(query: string): Promise<InvoiceResult<InvoiceListRow[]>> {
   return run(async () => {
-    await requireCashier();
+    await requireCashier("view");
     return service.search(String(query ?? "").slice(0, 80));
   });
 }
 
-// --- Settings (boss) ---------------------------------------------------------
+// --- Settings (Accounts) -----------------------------------------------------
 
 /** What's printed on every invoice: company details, terms, signature line. */
 export async function getInvoiceSettings(): Promise<InvoiceResult<InvoiceSettingsInput>> {
@@ -200,7 +198,7 @@ export async function startInvoiceImageUpload(
   kind: "logo" | "signature",
 ): Promise<InvoiceResult<{ bucket: string; path: string; token: string }>> {
   return run(async () => {
-    await requireBoss();
+    await requireAccounts();
     return service.startImageUpload(kind === "signature" ? "signature" : "logo");
   });
 }
@@ -208,25 +206,24 @@ export async function startInvoiceImageUpload(
 /** The uploaded image's URL, for the settings form; it's kept when the settings are saved. */
 export async function confirmInvoiceImageUpload(path: string): Promise<InvoiceResult<string>> {
   return run(async () => {
-    await requireBoss();
+    await requireAccounts();
     return service.confirmImageUpload(path);
   });
 }
 
 export async function saveInvoiceSettings(input: InvoiceSettingsInput): Promise<InvoiceResult<InvoiceSettingsInput>> {
   return run(async () => {
-    await requireBoss();
+    await requireAccounts();
     const saved = await service.saveSettings(input);
     refresh();
     return saved;
   });
 }
 
-/** "Send reminders": a push and an email to every client who owes, at most once a day each. Whoever may see Accounts. */
+/** "Send reminders": a push and an email to every client who owes, at most once a day each. Accounts at manage. */
 export async function sendInvoiceReminders(): Promise<InvoiceResult<RemindersSent>> {
   return run(async () => {
-    const staff = await requireCashier();
-    if (!canViewAccounts(staff.role as AppRole)) throw new InvoiceError("Only the boss and supervisors can send reminders.");
+    await requireAccounts();
     return sendOwingReminders();
   });
 }

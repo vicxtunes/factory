@@ -4,7 +4,7 @@ import { randomUUID } from "crypto";
 
 import { createAdminClient } from "@repo/lib/supabase/admin";
 import { catalogChanged } from "@repo/lib/catalog-cache";
-import { requireRole } from "@repo/lib/auth/session";
+import { requireAccess } from "@repo/lib/auth/session";
 
 import { PRODUCT_MEDIA_BUCKET, safeStorageSegment } from "./client";
 
@@ -20,7 +20,7 @@ export async function createProductMediaUploadSession(
   kind: ProductMediaKind,
   fileName: string,
 ): Promise<UploadSessionResult> {
-  await requireRole("boss");
+  await requireAccess("catalog");
   if (!productId || !fileName.trim()) return { ok: false, error: "Missing file details." };
 
   const path = `products/${productId}/${kind}/${randomUUID()}-${safeStorageSegment(fileName)}`;
@@ -39,7 +39,7 @@ export async function confirmProductMediaUpload(
   kind: ProductMediaKind,
   path: string,
 ): Promise<Result> {
-  await requireRole("boss");
+  await requireAccess("catalog");
   if (!productId || !path) return { ok: false, error: "Missing upload details." };
 
   const lastSlash = path.lastIndexOf("/");
@@ -103,7 +103,7 @@ export async function confirmProductMediaUpload(
 }
 
 export async function clearProductDisplayImage(productId: string): Promise<Result> {
-  await requireRole("boss");
+  await requireAccess("catalog");
   const admin = createAdminClient();
   const { data: existing } = await admin
     .from("products")
@@ -125,7 +125,7 @@ export async function clearProductDisplayImage(productId: string): Promise<Resul
 }
 
 export async function clearProductPreviewVideo(productId: string): Promise<Result> {
-  await requireRole("boss");
+  await requireAccess("catalog");
   const admin = createAdminClient();
   const { data: existing } = await admin
     .from("products")
@@ -150,7 +150,7 @@ export async function clearProductPreviewVideo(productId: string): Promise<Resul
 // does — this is boss-managed marketing content, not a customer's upload —
 // so a plain delete (row + the storage object it points at) is enough.
 export async function deleteProductMedia(mediaId: string): Promise<Result> {
-  await requireRole("boss");
+  await requireAccess("catalog");
   const admin = createAdminClient();
   const { data: media } = await admin
     .from("product_media")

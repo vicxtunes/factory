@@ -17,6 +17,11 @@ import type { ChangeTool, PageLink, Toolbox } from "../toolbox";
 import { clientOrderTools, explainPriceTool, walletTools } from "../tools/client-orders";
 import { accountsTools, databaseTools } from "../tools/business";
 import { addFilesToOrderTool } from "../tools/order-files";
+import { resolveAccess } from "@repo/lib/staff-access/core";
+
+/** The boss, and reception as Receptionist starts (supabase/migrations/20270106100000_staff_access.sql). */
+const BOSS = { isBoss: true, access: resolveAccess(true, {}, {}) };
+const RECEPTION = { isBoss: false, access: resolveAccess(false, { orders: "manage", invoices: "manage", wallets: "manage", clients: "manage", agents: "view" }, {}) };
 import { staffAdminTools } from "../tools/staff-admin";
 import { booksChanges, invoiceTools } from "../tools/money";
 import { ordersAlexis } from "../../../../../apps/factory/app/alexis-orders";
@@ -210,7 +215,7 @@ function bossToolbox(): Toolbox {
 /** The boss who is also the apps' developer (Dementa, live chat of 2026-11-10): the real announcement and support ticket tools. */
 function developerBossToolbox(): Toolbox {
   const base = bossToolbox();
-  const admin = staffAdminTools({ userId: "u-1", role: "boss", email: SUPPORT_OWNER_EMAIL });
+  const admin = staffAdminTools({ userId: "u-1", ...BOSS, email: SUPPORT_OWNER_EMAIL });
   return {
     read: [...base.read, ...admin.read],
     change: [...base.change, ...admin.change],
@@ -219,7 +224,7 @@ function developerBossToolbox(): Toolbox {
 }
 /** Reception's toolbox for orders: the real order tools, find_orders as a stand-in. */
 function receptionToolbox(): Toolbox {
-  const orders = ordersAlexis.managerTools("receptionist");
+  const orders = ordersAlexis.managerTools(RECEPTION);
   const findOrders: AssistantTool = { name: "find_orders", description: "Find orders by order number, client name or phone, newest first. Each order has its id; each item its id, product, quantity, production status and unit price in UGX.", inputSchema: z.object({ search: z.string().nullable() }), run: (async () => "") as AssistantTool["run"] };
   return { read: [findOrders, ...orders.read], change: orders.change, abilities: `Look things up for their role: orders (and one order in full, with its invoice), clients, the workers and designers. Prepare these changes for them to confirm: ${orders.change.map((c) => c.name.replace(/_/g, " ")).join(", ")}. No payments, refunds, withdrawals or payouts yet.` };
 }
@@ -227,7 +232,7 @@ function receptionToolbox(): Toolbox {
 function bossMoneyToolbox(): Toolbox {
   const base = bossToolbox();
   const inv = invoiceTools();
-  const change = [...inv.change, ...booksChanges(true)];
+  const change = [...inv.change, ...booksChanges(BOSS)];
   return { read: [...base.read, ...inv.read], change, abilities: `${base.abilities.replace(/No payments.*$/, "")} Every invoice and the money accounts. Prepare these changes for them to confirm: ${change.map((c) => c.name.replace(/_/g, " ")).join(", ")}. No money is sent out through you (payouts, refunds, withdrawals).` };
 }
 const CASH = "3c1d2e4f-0000-4000-8000-0000000000a1";
@@ -237,14 +242,14 @@ const ALEX = "4d5e6f70-0000-4000-8000-0000000000e1";
 const salariesWithIds = () => ({ ...allSalaries, lines: allSalaries.lines.map((l, i) => ({ id: i === 0 ? ALEX : `4d5e6f70-0000-4000-8000-0000000000e${i + 2}`, ...l })) });
 /** The boss's clients and agents toolbox: the real tools, agents as a stand-in. */
 function bossPeopleToolbox(): Toolbox {
-  const p = peopleTools("boss", true);
+  const p = peopleTools(BOSS);
   const agents: AssistantTool = { name: "agents", description: "Every agent with their id, orders, sales, commission and balance in UGX, their own commission % and pay-first % (null: the general setting).", inputSchema: z.object({}), run: (async () => "") as AssistantTool["run"] };
   return { read: [agents, ...p.read], change: p.change, abilities: `Look things up: agents, clients' wallets, deposits waiting to be confirmed, agents' clients. Prepare these changes for them to confirm: ${p.change.map((c) => c.name.replace(/_/g, " ")).join(", ")}. No money is sent out through you.` };
 }
 /** Everything the boss (who is also the developer) has in the staff app, as it is live: picking the right tool among them all. */
 function bossEverythingToolbox(): Toolbox {
   const parts = [developerBossToolbox(), bossMoneyToolbox(), bossPeopleToolbox(), receptionToolbox()];
-  const extra = [ordersAlexis.managerTools("boss"), settingsTools("boss")];
+  const extra = [ordersAlexis.managerTools(BOSS), settingsTools(BOSS)];
   const unique = <T extends { name: string }>(xs: T[]) => [...new Map(xs.map((x) => [x.name, x])).values()];
   const read = unique([...parts.flatMap((p) => p.read), ...extra.flatMap((p) => p.read)]);
   const change = unique([...parts.flatMap((p) => p.change), ...extra.flatMap((p) => p.change)]);

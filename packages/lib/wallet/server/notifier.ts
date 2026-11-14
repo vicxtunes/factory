@@ -6,7 +6,8 @@ import "server-only";
 
 import { formatMoney } from "@repo/lib/currency/format";
 import { notifyActor } from "@repo/lib/push/send";
-import { createAdminClient } from "@repo/lib/supabase/admin";
+import { staffWith } from "@repo/lib/staff-access/server";
+import type { Section } from "@repo/lib/staff-access/core";
 import { clientPath } from "@repo/lib/client-portal/paths";
 import { localPhone } from "@repo/lib/wallet/policy";
 
@@ -55,27 +56,51 @@ export async function studioCustomerPaid(ownerClientId: string, amount: number, 
   );
 }
 
-/** Staff who manage wallets (receptionist, supervisor, boss) are told a business owner (or a vendor, `from` their wallet) asked for a withdrawal to approve. */
+/** Staff who manage wallets are told a business owner (or a vendor, `from` their wallet) asked for a withdrawal to approve. */
 export async function withdrawalToApprove(businessName: string, amount: number, from = "its Business card"): Promise<void> {
-  const { data: managers } = await createAdminClient().from("profiles").select("id").in("role", ["receptionist", "supervisor", "boss"]);
   await Promise.all(
-    (managers ?? []).map((m: { id: string }) =>
+    (await staffWith("wallets", "manage")).map((id) =>
       notifyActor(
-        { type: "dashboard_user", id: m.id },
+        { type: "dashboard_user", id },
         { title: "Withdrawal to approve", body: `${businessName} asked to withdraw ${formatMoney(amount)} from ${from}.`, url: "/dashboard/wallets" },
       ),
     ),
   );
 }
 
-/** An agent asked for their commission: only the boss answers those. */
+/** An agent asked for their commission: whoever manages Agents answers those. */
 export async function agentWithdrawalToApprove(agentName: string, amount: number): Promise<void> {
-  const { data: bosses } = await createAdminClient().from("profiles").select("id").eq("role", "boss");
   await Promise.all(
-    (bosses ?? []).map((b: { id: string }) =>
+    (await staffWith("agents", "manage")).map((id) =>
       notifyActor(
-        { type: "dashboard_user", id: b.id },
+        { type: "dashboard_user", id },
         { title: "Agent withdrawal to approve", body: `${agentName} asked to withdraw ${formatMoney(amount)} of commission.`, url: "/dashboard/agents/withdrawals" },
+      ),
+    ),
+  );
+}
+
+/**
+ * The week's commission went out by itself: whoever manages Agents hears what
+ * HivePay took, what it didn't answer about yet (its status settles those),
+ * and what it turned down (waiting for them).
+ */
+export async function agentWeeklyPaySent(
+  sent: { name: string; amount: number }[],
+  unanswered: { name: string; amount: number }[],
+  failed: { name: string; amount: number; why: string }[],
+): Promise<void> {
+  const total = sent.reduce((sum, s) => sum + s.amount, 0);
+  const parts = [
+    ...(sent.length ? [`${formatMoney(total)} sent to ${sent.length === 1 ? sent[0].name : `${sent.length} agents`}.`] : []),
+    ...(unanswered.length ? [`HivePay hasn't answered yet for ${unanswered.map((u) => `${u.name} ${formatMoney(u.amount)}`).join(", ")}: it's checked every few minutes, nothing is sent twice.`] : []),
+    ...(failed.length ? [`Not sent, waiting for you: ${failed.map((f) => `${f.name} ${formatMoney(f.amount)} (${f.why})`).join("; ")}.`] : []),
+  ];
+  await Promise.all(
+    (await staffWith("agents", "manage")).map((id) =>
+      notifyActor(
+        { type: "dashboard_user", id },
+        { title: failed.length ? "Weekly commission: some not sent" : "Weekly commission sent", body: parts.join(" "), url: failed.length ? "/dashboard/agents/withdrawals" : "/dashboard/agents" },
       ),
     ),
   );
@@ -136,10 +161,9 @@ const MONEY_ALERT_TITLES: Record<MoneyAlertKind, string> = {
   money_not_in_books: "Money not in the books",
 };
 
-/** The boss: who sees Accounts (canViewAccounts), and hears from the money watch. */
-async function notifyMoneyWatchers(payload: { title: string; body: string; url: string }): Promise<void> {
-  const { data: watchers } = await createAdminClient().from("profiles").select("id").eq("role", "boss");
-  await Promise.all((watchers ?? []).map((w: { id: string }) => notifyActor({ type: "dashboard_user", id: w.id }, payload)));
+/** Whoever reaches `section` (staff access): Accounts hears the money watch, Approve & pay bills hears about sending bills, Expenses the reminder. */
+async function notifyMoneyWatchers(payload: { title: string; body: string; url: string }, section: Section = "accounts", level: "view" | "manage" = "view"): Promise<void> {
+  await Promise.all((await staffWith(section, level)).map((id) => notifyActor({ type: "dashboard_user", id }, payload)));
 }
 
 /** The money watch (watch.ts) found something that doesn't add up. */
@@ -154,20 +178,20 @@ export async function dailyMoneyReport(title: string, body: string): Promise<voi
 
 /** A bill sent through HivePay didn't arrive. */
 export async function expensePayoutFailed(body: string): Promise<void> {
-  await notifyMoneyWatchers({ title: "Payout failed", body, url: "/dashboard/accounts/expenses" });
+  await notifyMoneyWatchers({ title: "Payout failed", body, url: "/dashboard/accounts/expenses" }, "bill_approval", "manage");
 }
 
 /** The one warning before autopay bills go by themselves, with time to hold them. */
 export async function autopayWarning(title: string, body: string): Promise<void> {
-  await notifyMoneyWatchers({ title, body, url: "/dashboard/accounts/expenses" });
+  await notifyMoneyWatchers({ title, body, url: "/dashboard/accounts/expenses" }, "bill_approval", "manage");
 }
 
 /** An autopay bill went by itself and arrived. */
 export async function autopaySent(body: string): Promise<void> {
-  await notifyMoneyWatchers({ title: "Bill paid by itself", body, url: "/dashboard/accounts/expenses" });
+  await notifyMoneyWatchers({ title: "Bill paid by itself", body, url: "/dashboard/accounts/expenses" }, "bill_approval", "manage");
 }
 
 /** The morning reminder of what's due (watch.ts). */
 export async function expenseReminder(title: string, body: string): Promise<void> {
-  await notifyMoneyWatchers({ title, body, url: "/dashboard/accounts/expenses" });
+  await notifyMoneyWatchers({ title, body, url: "/dashboard/accounts/expenses" }, "expenses");
 }

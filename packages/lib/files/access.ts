@@ -110,7 +110,8 @@ export async function filesCaller(via: Via): Promise<FilesCaller> {
     const who: Commenter = { kind: access.owner ? "studio" : "member", name: session.name };
     const base = { drive: files, scope, who, studio: { name: studio.name, ownerClientId: studio.ownerClientId } };
     const person = access.owner ? ({ kind: "owner" } as const) : ({ kind: "member", memberId: access.memberId } as const);
-    if (canUse(access, "files")) return { ...base, access: FULL_ACCESS, person };
+    if (canUse(access, "files", "manage")) return { ...base, access: FULL_ACCESS, person };
+    if (!access.owner && canUse(access, "files")) return { ...base, access: await files.viewerAccess(scope, access.memberId), person };
     return { ...base, access: await files.memberAccess(scope, access.owner ? "" : access.memberId), person };
   }
   const at = await studioAtSlug(via.slug);

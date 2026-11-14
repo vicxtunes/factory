@@ -313,6 +313,8 @@ export interface MoneyAlert {
   /** What happened, in a sentence, with HivePay's reference. */
   detail: string;
   createdAt: string;
+  /** A payout not confirmed: the payout (a withdrawal or bill payment), for "Not sent, return it". */
+  payoutId: string | null;
 }
 
 /** Extra on the Aming card for top-ups while it runs (Marketing → Top-up bonus; migration 20261129120000). */

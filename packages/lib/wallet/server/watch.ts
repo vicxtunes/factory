@@ -165,6 +165,7 @@ export async function openAlerts(): Promise<MoneyAlert[]> {
     phone: a.phone,
     detail: a.detail,
     createdAt: a.created_at,
+    payoutId: a.kind === "payout_unconfirmed" ? a.withdrawal_id : null,
   }));
 }
 

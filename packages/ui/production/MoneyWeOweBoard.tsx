@@ -28,12 +28,15 @@ export function MoneyWeOweBoard({
   open,
   today,
   basePath,
+  canManage = true,
 }: {
   accounts: LenderAccount[];
   totals: { owed: number; overdue: number; overdueCount: number };
   open: Loan[];
   today: string;
   basePath: string;
+  /** Accounts at manage (staff access): record money borrowed and repayments. */
+  canManage?: boolean;
 }) {
   const router = useRouter();
   const symbol = useCurrencySymbol();
@@ -92,14 +95,14 @@ export function MoneyWeOweBoard({
             ))}
           </div>
         ) : null}
-        <div className="flex gap-2 @2xl:ml-auto">
+        {canManage ? <div className="flex gap-2 @2xl:ml-auto">
           <Button type="button" variant="secondary" className="flex-1 @2xl:flex-none" onClick={() => setSheet("loan")}>
             Record money borrowed
           </Button>
           <Button type="button" className="flex-1 @2xl:flex-none" onClick={() => setSheet("repay")} disabled={open.length === 0}>
             Record repayment
           </Button>
-        </div>
+        </div> : null}
       </div>
 
       {accounts.length === 0 ? (

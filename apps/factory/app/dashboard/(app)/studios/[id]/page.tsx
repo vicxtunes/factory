@@ -35,6 +35,7 @@ import { customers } from "@repo/lib/customers/server";
 import { offerings } from "@repo/lib/offerings/server";
 import { studioIdSchema, studioScope } from "@repo/lib/studios/core";
 import { requireStudiosOversight, studios } from "@repo/lib/studios/server";
+import { getDashboardSession, sessionCan } from "@repo/lib/auth/session";
 import type { StudioListing } from "@repo/lib/studios/core";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
@@ -171,7 +172,7 @@ async function About({ studio, scope }: Of & { studio: StudioListing }) {
   ];
   return (
     <>
-      {review ? (
+      {review && sessionCan(await getDashboardSession(), "studios", "manage") ? (
         <ReviewCard
           studio={review}
           publicUrl={slug ? studioUrl(slug) : null}
@@ -195,7 +196,7 @@ async function Storage({ studio, scope }: Of & { studio: StudioListing }) {
   return (
     <>
       <UsageBar usage={usage} />
-      <QuotaForm studioId={studio.id} quotaGb={Math.round(usage.quotaBytes / 1024 ** 3)} />
+      {sessionCan(await getDashboardSession(), "studios", "manage") ? <QuotaForm studioId={studio.id} quotaGb={Math.round(usage.quotaBytes / 1024 ** 3)} /> : null}
     </>
   );
 }

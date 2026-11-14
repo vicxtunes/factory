@@ -11,12 +11,14 @@ import { albumIdSchema, type AlbumView } from "@repo/lib/photos/core";
 import { photos } from "@repo/lib/photos/server";
 import { portal, studioUrl } from "@repo/lib/studio-portal/server";
 import { requireStudio } from "@repo/lib/studios/server";
+import { canUse } from "@repo/lib/team/core";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
 export const metadata = { title: "Album · My Business" };
 
 export default async function StudioAlbumPage({ params }: { params: Promise<{ albumId: string }> }) {
-  const { scope } = await requireStudio("catalog");
+  const { scope, access } = await requireStudio("catalog");
+  const canEdit = canUse(access, "catalog", "manage");
   // Looked up inside the caller's studio only: another studio's id is "not found".
   const id = albumIdSchema.safeParse((await params).albumId);
   const album = id.success ? await photos.album(scope, id.data) : null;
@@ -30,15 +32,19 @@ export default async function StudioAlbumPage({ params }: { params: Promise<{ al
         </BackLink>
         <h2 className="mt-1 text-xl font-semibold">{album.title}</h2>
       </div>
-      <Loading skeleton={<Skeleton className="h-24 w-full rounded-2xl" />}>
-        <Settings scope={scope} album={album} />
-      </Loading>
-      <Loading skeleton={<Skeleton className="h-6 w-full" />}>
-        <Usage scope={scope} />
-      </Loading>
-      <PhotoUploader albumId={album.id} />
+      {canEdit ? (
+        <>
+          <Loading skeleton={<Skeleton className="h-24 w-full rounded-2xl" />}>
+            <Settings scope={scope} album={album} />
+          </Loading>
+          <Loading skeleton={<Skeleton className="h-6 w-full" />}>
+            <Usage scope={scope} />
+          </Loading>
+          <PhotoUploader albumId={album.id} />
+        </>
+      ) : null}
       <Loading skeleton={<ProductGridSkeleton count={6} />}>
-        <Photos scope={scope} album={album} />
+        <Photos scope={scope} album={album} canEdit={canEdit} />
       </Loading>
     </>
   );
@@ -53,6 +59,6 @@ async function Usage({ scope }: { scope: TenantScope }) {
   return <UsageBar usage={await photos.usage(scope)} />;
 }
 
-async function Photos({ scope, album }: { scope: TenantScope; album: AlbumView }) {
-  return <ManagePhotos albumId={album.id} coverPhotoId={album.coverPhotoId} photos={await photos.photos(scope, album.id)} />;
+async function Photos({ scope, album, canEdit }: { scope: TenantScope; album: AlbumView; canEdit: boolean }) {
+  return <ManagePhotos albumId={album.id} coverPhotoId={album.coverPhotoId} photos={await photos.photos(scope, album.id)} canEdit={canEdit} />;
 }

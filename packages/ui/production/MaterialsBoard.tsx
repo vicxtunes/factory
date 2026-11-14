@@ -24,7 +24,8 @@ function sellSummary(m: CostMaterial, money: (n: number) => string): string {
   return m.sellPrice === null ? "—" : money(m.sellPrice);
 }
 
-export function MaterialsBoard({ book: plain, sizes, setsPrices }: { book: PlainCostBook; sizes: string[]; setsPrices: boolean }) {
+/** `canEdit`: Production costs at manage (staff access); without it materials only show. */
+export function MaterialsBoard({ book: plain, sizes, setsPrices, canEdit = true }: { book: PlainCostBook; sizes: string[]; setsPrices: boolean; canEdit?: boolean }) {
   const symbol = useCurrencySymbol();
   const money = (n: number) => formatMoney(n, symbol);
   const costing = useMemo(() => new Costing(fromPlainCostBook(plain)), [plain]);
@@ -70,9 +71,11 @@ export function MaterialsBoard({ book: plain, sizes, setsPrices }: { book: Plain
     <div className="@container space-y-4">
       <div className="flex flex-col gap-3 @2xl:flex-row @2xl:items-center">
         <TextInput type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search materials" className="@2xl:max-w-xs" />
-        <Button type="button" className="@2xl:ml-auto" onClick={() => setEditing("new")}>
+        {canEdit ? (
+<Button type="button" className="@2xl:ml-auto" onClick={() => canEdit && setEditing("new")}>
           Add material
         </Button>
+) : null}
       </div>
 
       {materials.length === 0 ? (
@@ -87,7 +90,7 @@ export function MaterialsBoard({ book: plain, sizes, setsPrices }: { book: Plain
               <li key={m.id}>
                 <button
                   type="button"
-                  onClick={() => setEditing(m)}
+                  onClick={() => canEdit && setEditing(m)}
                   className="block w-full rounded-2xl border border-border bg-surface p-4 text-left shadow-theme-xs active:bg-gray-50 dark:active:bg-white/5"
                 >
                   <div className="flex items-baseline justify-between gap-3">
@@ -104,7 +107,7 @@ export function MaterialsBoard({ book: plain, sizes, setsPrices }: { book: Plain
               </li>
             ))}
           </ul>
-          <DataTable className="hidden @3xl:block" columns={columns} rows={shown} rowKey={(m) => m.id} onRowClick={(m) => setEditing(m)} emptyMessage="No material matches." />
+          <DataTable className="hidden @3xl:block" columns={columns} rows={shown} rowKey={(m) => m.id} onRowClick={(m) => canEdit && setEditing(m)} emptyMessage="No material matches." />
           {shown.length === 0 ? <p className="text-center text-sm text-muted @3xl:hidden">No material matches.</p> : null}
           {inactive ? (
             <button type="button" onClick={() => setShowInactive((v) => !v)} className="text-sm font-medium text-brand-600 hover:underline">

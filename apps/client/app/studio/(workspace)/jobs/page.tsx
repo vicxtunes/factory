@@ -28,15 +28,15 @@ export default async function StudioJobsPage({ searchParams }: { searchParams: P
         Everyone you&apos;ve hired, on a project or not, and equipment you&apos;ve hired. Aming holds what you pay in until you approve the work, or the equipment is back.
       </p>
       <Loading skeleton={<RowsSkeleton rows={3} />}>
-        <Jobs scope={scope} canPay={canUse(access, "money")} hire={hire} service={service} />
+        <Jobs scope={scope} canPay={canUse(access, "money", "manage")} canHire={canUse(access, "projects", "manage")} hire={hire} service={service} />
       </Loading>
     </>
   );
 }
 
-async function Jobs({ scope, canPay, hire, service }: { scope: TenantScope; canPay: boolean; hire: string | null; service: string | null }) {
+async function Jobs({ scope, canPay, canHire, hire, service }: { scope: TenantScope; canPay: boolean; canHire: boolean; hire: string | null; service: string | null }) {
   const [found, jobsFolder, hiring] = await Promise.all([vendorJobs.forStudio(scope.tenantId), files.jobsFolder(scope), hireCard(hire)]);
   const [jobs, folders] = await Promise.all([jobRows(found), files.foldersWithin(scope, jobsFolder)]);
   // The Jobs folder itself isn't one to give a vendor: its folders are.
-  return <ProjectVendors projectId={null} jobs={jobs} folders={folders.filter((f) => f.id !== jobsFolder)} canPay={canPay} hire={hiring} hireService={service} returnTo="/studio/jobs" />;
+  return <ProjectVendors projectId={null} jobs={jobs} folders={folders.filter((f) => f.id !== jobsFolder)} canPay={canPay} canHire={canHire} hire={hiring} hireService={service} returnTo="/studio/jobs" />;
 }

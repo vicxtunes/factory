@@ -1,5 +1,6 @@
 import "server-only";
 
+import { payoutRefused } from "./hivepay-answer";
 import { verifyHivepaySignature } from "./hivepay-signature";
 
 // HivePay (https://hivepay.site/docs): MTN / Airtel Uganda mobile money.
@@ -71,6 +72,8 @@ export async function collect(input: {
  * so the phone receives amount − fee. `reference` is our withdrawal's; the
  * outcome comes later (status(), or the webhook). Not taken: `status` is
  * HivePay's HTTP answer (402: its balance is short; 422: number or amount).
+ * Anything but a refusal (./hivepay-answer.ts) throws, as no answer does, so
+ * the payout stays "being sent" and HivePay's status settles it.
  */
 export async function send(input: {
   reference: string;
@@ -82,6 +85,7 @@ export async function send(input: {
     method: "POST",
     body: JSON.stringify({ phone_number: input.phone, amount: input.amount, description: input.description.slice(0, 100), reference: input.reference }),
   });
+  if (!res.ok && !payoutRefused(res.status)) throw new Error(`HivePay send unclear (${res.status}): ${res.message}`);
   if (!res.ok) return res;
   return { ok: true, gatewayRef: res.data.gateway_reference, fee: Number(res.data.fee ?? 0) };
 }

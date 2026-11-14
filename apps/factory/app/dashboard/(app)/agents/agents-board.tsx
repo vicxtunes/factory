@@ -14,6 +14,7 @@ import type { Agent, AgentListRow } from "@repo/lib/agents/server";
 import { useCurrencySymbol } from "@repo/lib/currency/CurrencySymbolProvider";
 import { formatMoney } from "@repo/lib/currency/format";
 import type { ExportColumn } from "@repo/lib/export/tableExport";
+import { localPhone } from "@repo/lib/wallet/policy";
 
 import { WaitingChoice } from "./rates/rates-board";
 
@@ -124,6 +125,7 @@ export function AgentSheet({ sheet, payFirstForAll, onClose }: { sheet: NonNulla
   const [phone, setPhone] = useState("");
   const [rate, setRate] = useState(sheet.agent?.rateOverride?.toString() ?? "");
   const [payFirst, setPayFirst] = useState(sheet.agent?.payFirstOverride?.toString() ?? "");
+  const [payoutPhone, setPayoutPhone] = useState(sheet.agent?.payoutPhone ? localPhone(sheet.agent.payoutPhone) : "");
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
   // Their orders already waiting, when their % changes: the boss chooses whether those take the new one.
@@ -136,7 +138,7 @@ export function AgentSheet({ sheet, payFirstForAll, onClose }: { sheet: NonNulla
     if (sheet.kind !== "edit") return;
     setError(null);
     start(async () => {
-      const res = await editAgent({ agentId: sheet.agent.id, name, rateOverride, payFirstOverride }, choice);
+      const res = await editAgent({ agentId: sheet.agent.id, name, rateOverride, payFirstOverride, payoutPhone }, choice);
       if (!res.ok) return setError(res.error);
       onClose();
       router.refresh();
@@ -191,6 +193,11 @@ export function AgentSheet({ sheet, payFirstForAll, onClose }: { sheet: NonNulla
         {sheet.kind === "edit" ? (
           <Field label="Their own % to pay before production (optional)">
             <TextInput inputMode="numeric" value={payFirst} onChange={(e) => { setPayFirst(e.target.value); setWaiting(null); }} placeholder="The setting for all agents applies" />
+          </Field>
+        ) : null}
+        {sheet.kind === "edit" ? (
+          <Field label="Weekly payment number (optional)" hint="The MTN or Airtel number agreed with them: their commission goes there by itself each week (Rates & settings). Empty: not paid weekly.">
+            <TextInput type="tel" value={payoutPhone} onChange={(e) => setPayoutPhone(e.target.value)} placeholder="Not paid weekly" />
           </Field>
         ) : null}
         {waiting && sheet.kind === "edit" ? (

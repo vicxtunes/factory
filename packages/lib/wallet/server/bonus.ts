@@ -39,12 +39,7 @@ export async function runningBonus(): Promise<TopupBonus | null> {
   return (await listBonuses()).find((b) => b.status === "running") ?? null;
 }
 
-function requireBoss(viewer: StaffViewer) {
-  if (viewer.role !== "boss") throw new WalletError("Only the boss can change the top-up bonus.");
-}
-
 export async function createBonus(viewer: StaffViewer, input: TopupBonusInput): Promise<void> {
-  requireBoss(viewer);
   const errors = validateTopupBonus(input, new Date());
   if (errors.length) throw new WalletError(errors.join(" "));
   await repo.createTopupBonus(input, viewer);
@@ -52,7 +47,6 @@ export async function createBonus(viewer: StaffViewer, input: TopupBonusInput): 
 
 /** Ends a running bonus now (top-ups already rewarded keep theirs), or cancels a planned one. */
 export async function stopBonus(viewer: StaffViewer, id: string): Promise<void> {
-  requireBoss(viewer);
   const bonus = (await listBonuses()).find((b) => b.id === id);
   if (!bonus) throw new WalletError("That bonus no longer exists.");
   if (bonus.status === "ended") throw new WalletError("This bonus has already ended.");

@@ -17,7 +17,7 @@ import { notifyActor } from "@repo/lib/push/send";
 import { STUDIO_CHOICE_COOKIE, deleteStudioRecord, studioOfCaller, studios } from "@repo/lib/studios/server";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
-import { accessSchema, inviteTokenSchema, teamMemberIdSchema, teamMemberInputSchema } from "./core";
+import { accessRoleIdSchema, accessRoleInputSchema, accessSchema, inviteTokenSchema, teamMemberIdSchema, teamMemberInputSchema } from "./core";
 import { TeamError } from "./ports";
 import { team } from "./server";
 
@@ -46,12 +46,13 @@ export async function setTeamMemberArchived(id: unknown, archived: unknown): Pro
   });
 }
 
-/** What they may use in the studio. It applies from their next page; they're told. */
+/** What they may use in the studio: a role and their own areas. It applies from their next page; they're told. */
 export async function setTeamAccess(id: unknown, access: unknown): Promise<Result> {
   return runAction("team", async () => {
     const { scope, studio } = await studioOfCaller();
     const memberId = parseInput(teamMemberIdSchema, id);
-    await team.setAccess(scope, memberId, parseInput(accessSchema, access));
+    const { roleId, own } = parseInput(accessSchema, access);
+    await team.setAccess(scope, memberId, roleId, own);
     await tellMember(scope, memberId, { title: studio.name, body: "What you can use in the business changed.", url: "/studio" });
     revalidatePath("/studio", "layout");
   });
@@ -112,4 +113,31 @@ export async function deleteTeamMember(id: unknown): Promise<Result> {
 async function tellMember(scope: TenantScope, memberId: string, message: { title: string; body: string; url: string }): Promise<void> {
   const member = await team.get(scope, memberId);
   if (member?.accountId) await notifyActor({ type: "client", id: member.accountId }, message);
+}
+
+/** A new role for the business's team (the owner's alone). */
+export async function addTeamRole(input: unknown): Promise<Result> {
+  return runAction("team", async () => {
+    const { scope } = await studioOfCaller();
+    await team.addRole(scope, parseInput(accessRoleInputSchema, input));
+    revalidatePath("/studio", "layout");
+  });
+}
+
+/** Changes a role: everyone on it gets the change from their next page, except areas set for them alone. */
+export async function updateTeamRole(id: unknown, input: unknown): Promise<Result> {
+  return runAction("team", async () => {
+    const { scope } = await studioOfCaller();
+    await team.updateRole(scope, parseInput(accessRoleIdSchema, id), parseInput(accessRoleInputSchema, input));
+    revalidatePath("/studio", "layout");
+  });
+}
+
+/** Deletes a role nobody on the team has. */
+export async function deleteTeamRole(id: unknown): Promise<Result> {
+  return runAction("team", async () => {
+    const { scope } = await studioOfCaller();
+    await team.deleteRole(scope, parseInput(accessRoleIdSchema, id));
+    revalidatePath("/studio", "layout");
+  });
 }

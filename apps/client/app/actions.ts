@@ -1,5 +1,6 @@
 "use server";
 
+import { staffWith } from "@repo/lib/staff-access/server";
 import { recipeListPrice } from "@repo/lib/production/pricing";
 import { clientCurrency } from "@repo/lib/currency/server";
 import { revalidatePath } from "next/cache";
@@ -115,7 +116,7 @@ export async function placeOrder(input: ClientOrderPayload): Promise<PlaceOrderR
 
   {
     const needsCall = await orderNeedsCall(admin, res.orderId);
-    const { data: managers } = await admin.from("profiles").select("id").in("role", ["receptionist", "supervisor", "boss"]);
+    const managers = (await staffWith("orders")).map((id) => ({ id }));
     await Promise.all(
       (managers ?? []).map((m) =>
         notifyActor(
@@ -188,7 +189,7 @@ export async function respondToQuote(
   // them get notified. Push-only: unlike quoteOrder's client-facing
   // notification, there's no single order-item-owning recipient to hang an
   // in-app notifications row on here.
-  const { data: managers } = await admin.from("profiles").select("id").in("role", ["receptionist", "supervisor", "boss"]);
+  const managers = (await staffWith("orders")).map((id) => ({ id }));
   await Promise.all(
     (managers ?? []).map((m) =>
       notifyActor(
@@ -250,8 +251,7 @@ export async function cancelMyOrder(orderId: string, reason: string): Promise<{ 
   const res = await applyCancellation({ order, items, reason: why, actor, notifyClient: false });
   if (!res.ok) return res;
 
-  const admin = createAdminClient();
-  const { data: managers } = await admin.from("profiles").select("id").in("role", ["receptionist", "supervisor", "boss"]);
+  const managers = (await staffWith("orders")).map((id) => ({ id }));
   await Promise.all(
     (managers ?? []).map((m) =>
       notifyActor(

@@ -7,7 +7,6 @@ import { getClientSession, getDashboardSession, getDesignerSession, getWorkerSes
 import { studioOfCaller } from "@repo/lib/studios/server";
 import { createAdminClient } from "@repo/lib/supabase/admin";
 import { SUPPORT_OWNER_EMAIL } from "@repo/lib/support/constants";
-import { isManagerRole, type AppRole } from "@repo/lib/types";
 import { vendors } from "@repo/lib/vendors/server";
 
 import { costUsd, findModel, type AssistantMode, type TokenUsage } from "../core/rules";
@@ -69,7 +68,7 @@ export async function currentPerson(): Promise<Person | null> {
       type: "staff",
       id: dashboard.userId,
       name: dashboard.fullName || dashboard.email || "Staff",
-      role: dashboard.role,
+      role: dashboard.roleName.toLowerCase(),
       email: dashboard.email,
       phone: null,
       alwaysInTest: dashboard.role === "boss" || dashboard.email === SUPPORT_OWNER_EMAIL,
@@ -513,7 +512,7 @@ export async function panelState(person: Person, page: string, chatId?: string |
     kind: "ready",
     firstName: person.name.trim().split(/\s+/)[0] || person.name,
     suggestions: suggestionsFor(person, page),
-    canAttach: person.type === "client" || (person.type === "staff" && isManagerRole(person.role as AppRole)),
+    canAttach: person.type === "client" || person.type === "staff",
     chats,
     chatId: open,
     messages: open ? await history(open, 100) : [],

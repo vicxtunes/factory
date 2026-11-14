@@ -21,6 +21,7 @@ import { projects } from "@repo/lib/projects/server";
 import { customerIdSchema, type Customer } from "@repo/lib/customers/core";
 import { customers } from "@repo/lib/customers/server";
 import { requireStudio } from "@repo/lib/studios/server";
+import { canUse } from "@repo/lib/team/core";
 import { formatAmount, formatDay } from "@repo/lib/tenancy/format";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 import { buttonClass } from "@repo/ui/Button";
@@ -35,7 +36,8 @@ type ClientTab = "overview" | "projects" | "bookings" | "quotations" | "invoices
 // A client: their name and what they owe, Edit in the sheet (?edit), then
 // their parts as tabs, only the open one loaded.
 export default async function StudioClientPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string; edit?: string }> }) {
-  const { scope } = await requireStudio("clients");
+  const { scope, access } = await requireStudio("clients");
+  const canEdit = canUse(access, "clients", "manage");
   // Looked up inside the caller's studio only: another studio's id is "not found".
   const id = customerIdSchema.safeParse((await params).id);
   const customer = id.success ? await customers.get(scope, id.data) : null;
@@ -43,14 +45,15 @@ export default async function StudioClientPage({ params, searchParams }: { param
   const { tab: asked, edit } = await searchParams;
   // Read once, for what they owe and the list.
   const billed = invoices.list(scope, customer.id);
+  // Overview holds only the client's sign-in, archive and delete: someone who only views starts on Projects.
   const tabs: TabItem<ClientTab>[] = [
-    { key: "overview", label: "Overview" },
+    ...(canEdit ? [{ key: "overview" as const, label: "Overview" }] : []),
     { key: "projects", label: "Projects" },
     { key: "bookings", label: "Bookings" },
     { key: "quotations", label: "Quotations" },
     { key: "invoices", label: "Invoices" },
   ];
-  const tab = tabs.find((t) => t.key === asked)?.key ?? "overview";
+  const tab = tabs.find((t) => t.key === asked)?.key ?? tabs[0]!.key;
   const creates = !customer.archivedAt;
 
   return (
@@ -69,14 +72,16 @@ export default async function StudioClientPage({ params, searchParams }: { param
             <Owed scope={scope} billed={billed} />
           </Suspense>
         </div>
-        <Link href={`/studio/clients/${customer.id}?edit`} scroll={false} className={buttonClass("secondary")}>
-          Edit
-        </Link>
+        {canEdit ? (
+          <Link href={`/studio/clients/${customer.id}?edit`} scroll={false} className={buttonClass("secondary")}>
+            Edit
+          </Link>
+        ) : null}
       </div>
 
       <UrlTabs tabs={tabs} value={tab} label="Client" />
 
-      {tab === "overview" ? (
+      {tab === "overview" && canEdit ? (
         <>
           <Loading skeleton={<Skeleton className="h-24 w-full rounded-2xl" />}>
             <Access scope={scope} customer={customer} />
@@ -99,22 +104,22 @@ export default async function StudioClientPage({ params, searchParams }: { param
         </Loading>
       ) : null}
       {tab === "bookings" ? (
-        <TabList action={creates ? { label: "New booking", href: `/studio/bookings?new&client=${customer.id}` } : null}>
+        <TabList action={creates && canUse(access, "bookings", "manage") ? { label: "New booking", href: `/studio/bookings?new&client=${customer.id}` } : null}>
           <Bookings scope={scope} customer={customer} />
         </TabList>
       ) : null}
       {tab === "quotations" ? (
-        <TabList action={creates ? { label: "New quotation", href: `/studio/quotations/new?client=${customer.id}` } : null}>
+        <TabList action={creates && canUse(access, "money", "manage") ? { label: "New quotation", href: `/studio/quotations/new?client=${customer.id}` } : null}>
           <Quotations scope={scope} customer={customer} />
         </TabList>
       ) : null}
       {tab === "invoices" ? (
-        <TabList action={creates ? { label: "New invoice", href: `/studio/invoices/new?client=${customer.id}` } : null}>
+        <TabList action={creates && canUse(access, "money", "manage") ? { label: "New invoice", href: `/studio/invoices/new?client=${customer.id}` } : null}>
           <Invoices scope={scope} billed={billed} />
         </TabList>
       ) : null}
 
-      {edit !== undefined ? (
+      {canEdit && edit !== undefined ? (
         <UrlSheet title="Edit client" closeHref={`/studio/clients/${customer.id}`}>
           <CustomerForm key={customer.id} customer={customer} basePath="/studio/clients" />
         </UrlSheet>

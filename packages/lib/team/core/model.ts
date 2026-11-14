@@ -5,7 +5,7 @@
 // account and use the parts of the studio they were given (./access.ts).
 // Every member belongs to one tenant.
 
-import type { Area } from "./access";
+import type { AreaLevels, AreaMap } from "./access";
 
 export interface TeamMemberInput {
   name: string;
@@ -22,8 +22,12 @@ export interface TeamMember extends TeamMemberInput {
   joined: boolean;
   /** That account, to tell them things (packages/lib/push); null until they join. */
   accountId: string | null;
-  /** The parts of the studio they may use; none: only their own tasks. */
-  access: Area[];
+  /** Their role (one of the business's), or none. */
+  accessRoleId: string | null;
+  /** Areas set for them alone, over their role's. */
+  ownAccess: AreaMap;
+  /** What they end up with; none everywhere: only their own tasks. */
+  access: AreaLevels;
   /** Their invite link's secret and when it stops working, while there's one. */
   invite: { token: string; expiresAt: string } | null;
 }
@@ -33,5 +37,6 @@ export interface Membership {
   tenantId: string;
   memberId: string;
   name: string;
-  access: Area[];
+  /** Their areas there: their role's, then their own. */
+  access: AreaLevels;
 }

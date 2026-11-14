@@ -1,4 +1,5 @@
 import { MoneyAlerts } from "@repo/ui/accounting/MoneyAlerts";
+import { getDashboardSession, sessionCan } from "@repo/lib/auth/session";
 import { MoneyDashboard } from "@repo/ui/money/MoneyDashboard";
 import { ChartsSkeleton, StatTilesSkeleton } from "@repo/ui/skeletons/blocks";
 import { Loading } from "@repo/ui/skeletons/Loading";
@@ -42,7 +43,7 @@ async function Overview({ searchParams }: { searchParams: SearchParams }) {
   const flow = await moneyFlow(view.period);
   return (
     <div className="space-y-6">
-      <MoneyAlerts alerts={alerts.ok ? alerts.data ?? [] : []} />
+      <MoneyAlerts alerts={alerts.ok ? alerts.data ?? [] : []} canManage={sessionCan(await getDashboardSession(), "accounts", "manage")} isBoss={(await getDashboardSession())?.isBoss ?? false} />
       <MoneyDashboard view={view} timeZone={scope.timeZone} weOwe={owed.totals} flow={flow} />
     </div>
   );

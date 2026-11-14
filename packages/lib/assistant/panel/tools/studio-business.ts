@@ -32,7 +32,8 @@ const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "A date as YYYY-MM-DD.");
 const time = z.string().regex(/^\d{2}:\d{2}$/, "A time as HH:MM.");
 const id = z.string().uuid();
 
-export function studioBusinessTools(scope: TenantScope, can: (area: Area) => boolean): { read: AssistantTool[]; change: ChangeTool[]; words: string[] } {
+/** `can`: sees the area (its reads); `canChange`: manages it (its changes). */
+export function studioBusinessTools(scope: TenantScope, can: (area: Area) => boolean, canChange: (area: Area) => boolean = can): { read: AssistantTool[]; change: ChangeTool[]; words: string[] } {
   const read: AssistantTool[] = [];
   const change: ChangeTool[] = [];
   const words: string[] = [];
@@ -67,7 +68,7 @@ export function studioBusinessTools(scope: TenantScope, can: (area: Area) => boo
       amount: z.number().int().min(0).nullable().describe("UGX"),
       notes: z.string().max(2000).nullable(),
     };
-    change.push(
+    if (canChange("bookings")) change.push(
       changeTool({
         name: "create_booking",
         description: "Book a client (customerId from studio_clients) for a day, with times or all day. Clashing bookings are warned about on the card, not refused.",
@@ -184,7 +185,7 @@ export function studioBusinessTools(scope: TenantScope, can: (area: Area) => boo
         },
       }),
     );
-    change.push(
+    if (canChange("projects")) change.push(
       changeTool({
         name: "create_project",
         description: "Start a project: from a booking (bookingId), or on its own for a client (customerId from studio_clients, title, event day).",
@@ -248,7 +249,7 @@ export function studioBusinessTools(scope: TenantScope, can: (area: Area) => boo
   }
 
   if (can("clients")) {
-    change.push(
+    if (canChange("clients")) change.push(
       changeTool({
         name: "edit_studio_client",
         description: "Change a studio client's name, phone, email or notes (give only what changes), or archive them (archived true) or bring them back. Client id from studio_clients.",
@@ -307,7 +308,7 @@ export function studioBusinessTools(scope: TenantScope, can: (area: Area) => boo
       if (!d) throw new Error("That invoice doesn't exist. Look it up with studio_documents.");
       return d;
     };
-    change.push(
+    if (canChange("money")) change.push(
       changeTool({
         name: "record_studio_payment",
         description: "Record money a client paid on one of the studio's invoices outside the app (cash, mobile money, bank, card).",

@@ -1,4 +1,5 @@
 import { ProductCostsBoard } from "@repo/ui/production/ProductCostsBoard";
+import { sessionCan } from "@repo/lib/auth/session";
 import { RowsSkeleton, StatTilesSkeleton } from "@repo/ui/skeletons/blocks";
 import { Loading } from "@repo/ui/skeletons/Loading";
 import { requireProductionAccess } from "@repo/lib/production/access";
@@ -24,7 +25,7 @@ export default async function ProductCostsPage() {
           </div>
         }
       >
-        <Costs setsPrices={session.role === "boss"} />
+        <Costs setsPrices={sessionCan(session, "catalog", "manage")} />
       </Loading>
     </div>
   );

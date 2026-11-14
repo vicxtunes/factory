@@ -139,6 +139,8 @@ export const agentEditSchema = z.object({
   rateOverride: rate.nullable(),
   /** Null: the setting for all agents applies. */
   payFirstOverride: percent.nullable(),
+  /** The mobile money number their weekly commission goes to (the boss agrees it with them); empty: not paid weekly. */
+  payoutPhone: z.string().trim().max(30),
 });
 
 export const payFirstPercentSchema = percent;
@@ -153,3 +155,56 @@ export const agentClientSchema = z.object({
   phone: z.string().trim().min(1, "Enter the client's phone number."),
   email: z.string().trim().toLowerCase().email("Enter a valid email address, or leave it empty.").or(z.literal("")),
 });
+
+// --- Weekly payment (owner, 2026-11-14) ------------------------------------------
+
+/** ISO weekdays, 1 Monday … 7 Sunday. */
+export const WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"] as const;
+export const WEEKLY_PAY_HOURS = { from: 8, to: 20 } as const;
+/** Where pay day and hour are counted. */
+export const WEEKLY_PAY_TIME_ZONE = "Africa/Kampala";
+
+/** The boss's weekly payment setting: whether it runs, which day, from what hour, the least worth sending and the most one payment sends. */
+export interface WeeklyPay {
+  on: boolean;
+  /** ISO weekday, 1 Monday … 7 Sunday. */
+  day: number;
+  hour: number;
+  min: number;
+  max: number;
+}
+
+export const weeklyPaySchema = z
+  .object({
+    on: z.boolean(),
+    day: z.coerce.number().int().min(1, "Choose a day.").max(7, "Choose a day."),
+    hour: z.coerce.number().int().min(WEEKLY_PAY_HOURS.from, "Choose a time from 08:00.").max(WEEKLY_PAY_HOURS.to, "Choose a time up to 20:00."),
+    min: z.coerce.number({ message: "Enter the smallest amount to send." }).int("Use a whole amount.").min(500, "The smallest amount can't be below 500.").max(5_000_000, "That's above the most one payment can send."),
+    max: z.coerce.number({ message: "Enter the largest amount to send." }).int("Use a whole amount.").min(500, "The largest amount can't be below 500.").max(5_000_000, "Mobile money sends at most 5,000,000 at once."),
+  })
+  .refine((p) => p.max >= p.min, { message: "The largest amount can't be below the smallest.", path: ["max"] });
+
+/** "Every Monday from 10:00". */
+export function weeklyPayWhen(pay: Pick<WeeklyPay, "day" | "hour">): string {
+  return `Every ${WEEKDAYS[pay.day - 1]} from ${String(pay.hour).padStart(2, "0")}:00`;
+}
+
+/** The pay day ("yyyy-mm-dd", Kampala) when `now` is on it at or after its hour, else null. Payments only go on the day itself. */
+export function weeklyPayDue(pay: WeeklyPay, now: Date): string | null {
+  if (!pay.on) return null;
+  const parts = new Intl.DateTimeFormat("en-GB", { timeZone: WEEKLY_PAY_TIME_ZONE, year: "numeric", month: "2-digit", day: "2-digit", weekday: "long", hour: "2-digit", hourCycle: "h23" }).formatToParts(now);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  const weekday = WEEKDAYS.indexOf(get("weekday") as (typeof WEEKDAYS)[number]) + 1;
+  if (weekday !== pay.day || Number(get("hour")) < pay.hour) return null;
+  return `${get("year")}-${get("month")}-${get("day")}`;
+}
+
+/**
+ * What an agent's weekly payment sends: what's in their wallet, up to the
+ * boss's largest amount (the rest goes the week after), or nothing below the
+ * boss's smallest amount (owner, 2026-11-14).
+ */
+export function weeklyPayAmount(balance: number, min: number, max: number): number {
+  const amount = Math.min(Math.floor(balance), max);
+  return amount >= min ? amount : 0;
+}
