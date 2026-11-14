@@ -2,14 +2,15 @@ import Link from "next/link";
 
 import { SpacePriceForm } from "@repo/ui/photos/SpacePriceForm";
 import { StudioStatusBadge } from "@repo/ui/studio-access/StatusBadge";
+import { StudiosAnalysis } from "@repo/ui/studios/StudiosAnalysis";
 import { StudiosTable } from "@repo/ui/studios/StudiosTable";
 import { SectionLabel } from "@repo/ui/SectionLabel";
 import { Skeleton } from "@repo/ui/Skeleton";
-import { RowsSkeleton } from "@repo/ui/skeletons/blocks";
+import { ChartsSkeleton, RowsSkeleton, StatTilesSkeleton } from "@repo/ui/skeletons/blocks";
 import { Loading } from "@repo/ui/skeletons/Loading";
 import { photos } from "@repo/lib/photos/server";
 import { studioAccess } from "@repo/lib/studio-access/server";
-import { requireStudiosOversight, studios } from "@repo/lib/studios/server";
+import { readStudioActivity, requireStudiosOversight, studios } from "@repo/lib/studios/server";
 import { sessionCan } from "@repo/lib/auth/session";
 import { resolveTenantScope } from "@repo/lib/tenancy/server/resolve";
 
@@ -21,6 +22,19 @@ export default async function StudiosPage() {
   return (
     <div className="space-y-6">
       <p className="text-sm text-muted">Clients running their own photography business in the system. A business opens once you approve it.</p>
+      <section>
+        <SectionLabel>At a glance</SectionLabel>
+        <Loading
+          skeleton={
+            <div className="space-y-4">
+              <StatTilesSkeleton />
+              <ChartsSkeleton />
+            </div>
+          }
+        >
+          <Analysis />
+        </Loading>
+      </section>
       <section>
         <Loading skeleton={<RowsSkeleton rows={2} />}>
           <Waiting />
@@ -77,6 +91,11 @@ async function Waiting() {
 
 async function SpacePrice() {
   return <SpacePriceForm pricePerGb={await photos.spacePrice()} />;
+}
+
+async function Analysis() {
+  const [list, activity, scope] = await Promise.all([studios.list(), readStudioActivity(30), resolveTenantScope()]);
+  return <StudiosAnalysis studios={list} activity={activity} scope={scope} />;
 }
 
 async function All() {

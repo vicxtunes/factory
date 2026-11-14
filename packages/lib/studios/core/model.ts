@@ -51,6 +51,13 @@ export interface StudioListing extends Studio {
   ownerName: string;
 }
 
+/** What a business did in the system over a stretch of time (the Businesses page's analysis). */
+export interface StudioActivity {
+  customers: number;
+  bookings: number;
+  invoices: number;
+}
+
 /** The client opening their studio, from their session. */
 export interface StudioOwner {
   clientId: string;
