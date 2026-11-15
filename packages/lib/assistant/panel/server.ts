@@ -139,7 +139,7 @@ export async function currentTerms(): Promise<Terms | null> {
   return row ? { version: row.version, body: row.body, publishedAt: row.published_at } : null;
 }
 
-async function hasAgreed(person: Person, version: number): Promise<boolean> {
+export async function hasAgreed(person: Person, version: number): Promise<boolean> {
   const { count, error } = await createAdminClient()
     .from("assistant_terms_acceptances")
     .select("version", { count: "exact", head: true })
