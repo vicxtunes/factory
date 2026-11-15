@@ -3,6 +3,7 @@
 // The browser's way into the books: who's asking → check the input → store.
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 
 import { localDate } from "@repo/lib/accounting/core/period";
 import { getDashboardSession, sessionCan } from "@repo/lib/auth/session";
@@ -36,6 +37,11 @@ import {
   scheduleInputSchema,
   schedulePayPhoneSchema,
   scheduleStopSchema,
+  staffAdvanceSchema,
+  staffPayDaysSchema,
+  staffPayExtraSchema,
+  staffPayPersonSchema,
+  staffPaySettingsSchema,
   voidInputSchema,
   voidMoneyMoveSchema,
   voidOtherMoneySchema,
@@ -43,6 +49,7 @@ import {
 import * as expenses from "./expenses-server";
 import * as monthChecks from "./month-check-server";
 import * as pettyCash from "./petty-cash-server";
+import * as staffPay from "./staff-pay-server";
 import { withdrawToOwner } from "./owner-withdrawals-server";
 import { sendPayout } from "./payouts-server";
 import * as store from "./server";
@@ -52,6 +59,7 @@ const TODAY = "/dashboard/accounts/today";
 const EXPENSES = "/dashboard/accounts/expenses";
 const MONTH_END = "/dashboard/accounts/month-end";
 const PETTY_CASH = "/dashboard/accounts/petty-cash";
+const STAFF_PAY = "/dashboard/accounts/staff-pay";
 
 function expensesChanged() {
   revalidatePath(EXPENSES);
@@ -409,5 +417,80 @@ export async function topUpPettyCash(input: unknown): Promise<Result> {
     await store.moveMoney(parseInput(moneyMoveInputSchema, input), { id: session.userId, name: session.fullName ?? session.email ?? "Boss" });
     revalidatePath(PETTY_CASH);
     revalidatePath(TODAY);
+  });
+}
+
+// --- Staff pay -------------------------------------------------------------------
+// The boss only (owner, 2026-11-15). Paying a payslip is paying its expense
+// (payExpense, sendExpensePayout).
+
+async function boss() {
+  const session = await getDashboardSession();
+  if (!session?.isBoss) throw new AppError("Only the boss manages staff pay.");
+  return { id: session.userId, name: session.fullName ?? session.email ?? "Boss" };
+}
+
+function staffPayChanged() {
+  revalidatePath(STAFF_PAY);
+  expensesChanged();
+}
+
+export async function saveStaffPayPerson(input: unknown): Promise<Result> {
+  return runAction("books", async () => {
+    const actor = await boss();
+    const parsed = parseInput(staffPayPersonSchema, input);
+    await staffPay.savePerson({ ...parsed, phone: parsed.phone ? sendablePhone(parsed.phone) : null }, actor);
+    staffPayChanged();
+  });
+}
+
+export async function stopStaffPayPerson(id: unknown): Promise<Result> {
+  return runAction("books", async () => {
+    const actor = await boss();
+    await staffPay.stopPerson(parseInput(z.string().uuid(), id), actor);
+    staffPayChanged();
+  });
+}
+
+export async function addStaffPayExtra(input: unknown): Promise<Result> {
+  return runAction("books", async () => {
+    const actor = await boss();
+    await staffPay.addExtra(parseInput(staffPayExtraSchema, input), actor);
+    staffPayChanged();
+  });
+}
+
+export async function removeStaffPayExtra(id: unknown): Promise<Result> {
+  return runAction("books", async () => {
+    await boss();
+    await staffPay.removeExtra(parseInput(z.string().uuid(), id));
+    staffPayChanged();
+  });
+}
+
+export async function setStaffPayDays(input: unknown): Promise<Result> {
+  return runAction("books", async () => {
+    const actor = await boss();
+    const { slipId, days } = parseInput(staffPayDaysSchema, input);
+    await staffPay.setDays(slipId, days, actor);
+    staffPayChanged();
+  });
+}
+
+export async function setStaffPaySettings(input: unknown): Promise<Result> {
+  return runAction("books", async () => {
+    const actor = await boss();
+    await staffPay.setSettings(parseInput(staffPaySettingsSchema, input), actor);
+    revalidatePath(STAFF_PAY);
+  });
+}
+
+/** Real money when sent: Aming pays HivePay's fee on top. */
+export async function giveStaffAdvance(input: unknown): Promise<Result> {
+  return runAction("books", async () => {
+    const actor = await boss();
+    const parsed = parseInput(staffAdvanceSchema, input);
+    await staffPay.giveAdvance(parsed, parsed.send && parsed.phone ? sendablePhone(parsed.phone) : null, actor);
+    staffPayChanged();
   });
 }

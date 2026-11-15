@@ -12,6 +12,12 @@ import type { CloseDayInput, MoneyMoveInput, OtherMoneyInput } from "./schema";
 
 const REFUSALS: Record<string, string> = {
   day_closed: DAY_CLOSED_MESSAGE,
+  staff_stopped: "Their pay was stopped, so it can't be changed.",
+  staff_gone: "That person or payslip isn't there any more. Refresh the page.",
+  staff_days_done: "This payslip's days were already entered.",
+  staff_days: "Enter the days worked, from 0 to 31.",
+  staff_pay: "Enter the pay and how often it's paid.",
+  staff_phone: "Enter the phone number it sends to.",
   bad_amount: "Enter an amount of zero or more.",
   bad_account: "That account doesn't exist.",
   opening_set: "That account's opening balance was already set. If it was wrong, the difference shows at the next close.",
@@ -69,7 +75,7 @@ function fail(error: { message: string }): never {
   // A box can't pay more than it holds: the database says how much it holds.
   const holds = /PETTY:not_enough:(\d+)/.exec(error.message)?.[1];
   if (holds) throw new AppError(`The box holds only ${Number(holds).toLocaleString("en-GB")}. Ask the boss to top it up first.`);
-  const code = /(?:DAYBOOK|EXPENSE|MONTHCHECK|PETTY):(\w+)/.exec(error.message)?.[1];
+  const code = /(?:DAYBOOK|EXPENSE|MONTHCHECK|PETTY|STAFFPAY):(\w+)/.exec(error.message)?.[1];
   if (code && REFUSALS[code]) throw new AppError(REFUSALS[code]);
   throw new Error(`books: ${error.message}`);
 }
