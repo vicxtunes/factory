@@ -2,7 +2,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 
 import { after } from "next/server";
 
-import { bossById, send } from "@repo/lib/assistant/panel/server";
+import { agreeToTerms, bossById, currentTerms, hasAgreed, send } from "@repo/lib/assistant/panel/server";
 
 import { staffAppToolbox } from "../../alexis-tools";
 
@@ -47,16 +47,32 @@ interface Incoming {
   from: string;
   type: string;
   text?: { body: string };
+  /** A tap on one of our reply buttons. */
+  interactive?: { type: string; button_reply?: { id: string; title: string } };
 }
 
 /** Meta sends a message again when it isn't sure we got it: each is answered once. */
 const answered = new Set<string>();
 
 async function reply(to: string, body: string): Promise<void> {
+  await post({ messaging_product: "whatsapp", to, type: "text", text: { body: body.slice(0, 4000) } });
+}
+
+/** A message with reply buttons (WhatsApp allows up to three, titles up to 20 characters). */
+async function ask(to: string, body: string, buttons: { id: string; title: string }[]): Promise<void> {
+  await post({
+    messaging_product: "whatsapp",
+    to,
+    type: "interactive",
+    interactive: { type: "button", body: { text: body.slice(0, 1000) }, action: { buttons: buttons.map((b) => ({ type: "reply", reply: b })) } },
+  });
+}
+
+async function post(message: unknown): Promise<void> {
   const res = await fetch(`${GRAPH()}/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`, {
     method: "POST",
     headers: { Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ messaging_product: "whatsapp", to, type: "text", text: { body: body.slice(0, 4000) } }),
+    body: JSON.stringify(message),
   });
   if (!res.ok) console.error("whatsapp reply failed:", res.status, await res.text().catch(() => ""));
 }
@@ -65,6 +81,25 @@ async function answer(message: Incoming): Promise<void> {
   const bossId = process.env.WHATSAPP_BOSS_USER_ID;
   const person = bossId ? await bossById(bossId) : null;
   if (!person) return;
+  // Alexis's terms, agreed in the chat itself (owner, 2026-11-15): the terms,
+  // then Agree / Disagree buttons. Agree accepts that version.
+  const terms = await currentTerms();
+  if (terms && !(await hasAgreed(person, terms.version))) {
+    const tapped = message.interactive?.button_reply?.id;
+    if (tapped === `terms_agree_${terms.version}`) {
+      await agreeToTerms(person, terms.version);
+      await reply(message.from, "Thank you, you've agreed to Alexis's terms. Ask me anything.");
+    } else if (tapped?.startsWith("terms_disagree")) {
+      await reply(message.from, "No problem. Alexis can't help until you agree. Send any message to see the terms again.");
+    } else {
+      await reply(message.from, `Alexis's terms\n\n${terms.body.length > 3800 ? `${terms.body.slice(0, 3800)}…\n\n(The full terms are in the app, in Alexis.)` : terms.body}`);
+      await ask(message.from, "Do you agree to Alexis's terms above?", [
+        { id: `terms_agree_${terms.version}`, title: "Agree" },
+        { id: `terms_disagree_${terms.version}`, title: "Disagree" },
+      ]);
+    }
+    return;
+  }
   if (message.type !== "text" || !message.text?.body) {
     await reply(message.from, "I can only read text messages. Please type your question.");
     return;
