@@ -32,7 +32,7 @@ import {
   otherMoneyInputSchema,
   ownerWithdrawSchema,
   pettyCashFloatSchema,
-  pettyCashSpendSchema,
+  pettyCashSendSchema,
   scheduleEditSchema,
   scheduleInputSchema,
   schedulePayPhoneSchema,
@@ -51,7 +51,7 @@ import * as monthChecks from "./month-check-server";
 import * as pettyCash from "./petty-cash-server";
 import * as staffPay from "./staff-pay-server";
 import { withdrawToOwner } from "./owner-withdrawals-server";
-import { sendPayout } from "./payouts-server";
+import { sendFromPettyCash, sendPayout } from "./payouts-server";
 import * as store from "./server";
 
 const PAYMENTS = "/dashboard/accounts/payments";
@@ -385,14 +385,14 @@ export async function approveMonthCheck(input: unknown): Promise<Result> {
 
 // --- Petty cash ----------------------------------------------------------------
 
-/** A payment from a petty cash box: its holders (by role) or the boss. No approval limit (owner, 2026-11-15). */
-export async function spendPettyCash(input: unknown): Promise<Result> {
+/** "Use petty cash": sent by HivePay from a box, by its holders (by role) or the boss. No approval (owner, 2026-11-15/16). */
+export async function sendPettyCash(input: unknown): Promise<Result> {
   return runAction("books", async () => {
     const session = await getDashboardSession();
     if (!session) throw new AppError("Sign in again.");
-    const parsed = parseInput(pettyCashSpendSchema, input);
+    const parsed = parseInput(pettyCashSendSchema, input);
     if (!(await pettyCash.mayUseBox(parsed.boxId, session))) throw new AppError("This isn't your petty cash box.");
-    await pettyCash.spendFromBox(parsed, { id: session.userId, name: session.fullName ?? session.email ?? "Staff" });
+    await sendFromPettyCash(parsed, sendablePhone(parsed.phone), { id: session.userId, name: session.fullName ?? session.email ?? "Staff" });
     revalidatePath(PETTY_CASH);
     expensesChanged();
   });

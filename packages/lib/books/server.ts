@@ -61,6 +61,9 @@ const REFUSALS: Record<string, string> = {
   void_reason: "Say why it's being voided.",
   has_payments: "Void its payments first.",
   bad_box: "That isn't a petty cash box.",
+  recipient: "Say who receives it.",
+  charge: "Enter the withdraw charge, or 0.",
+  from_hivepay: "Petty cash is topped up from HivePay only.",
   bad_month: "Choose a month.",
   not_yet: "A month can be checked from 8 pm on its last day.",
   approved: "This month's check is approved, so it can't change.",
@@ -74,7 +77,7 @@ const REFUSALS: Record<string, string> = {
 function fail(error: { message: string }): never {
   // A box can't pay more than it holds: the database says how much it holds.
   const holds = /PETTY:not_enough:(\d+)/.exec(error.message)?.[1];
-  if (holds) throw new AppError(`The box holds only ${Number(holds).toLocaleString("en-GB")}. Ask the boss to top it up first.`);
+  if (holds) throw new AppError(`The box can send only ${Number(holds).toLocaleString("en-GB")} now. Ask the boss to top it up first.`);
   const code = /(?:DAYBOOK|EXPENSE|MONTHCHECK|PETTY|STAFFPAY):(\w+)/.exec(error.message)?.[1];
   if (code && REFUSALS[code]) throw new AppError(REFUSALS[code]);
   throw new Error(`books: ${error.message}`);

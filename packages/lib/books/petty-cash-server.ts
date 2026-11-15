@@ -1,10 +1,10 @@
 import "server-only";
 
 // Petty cash boxes (owner, 2026-11-15): each held by a staff role (Receptionist
-// → Office, Supervisor → Factory). The boss sets the float and tops up; the
-// holder records what they pay from their box.
+// → Office, Supervisor → Factory). The boss sets the float and tops up from
+// HivePay; the holder sends payments from their box by HivePay (owner,
+// 2026-11-16: payouts-server.ts, sendFromPettyCash).
 
-import { localDate } from "@repo/lib/accounting/core/period";
 import type { DashboardSession } from "@repo/lib/auth/session";
 import { createAdminClient } from "@repo/lib/supabase/admin";
 import type { TenantScope } from "@repo/lib/tenancy/types";
@@ -30,15 +30,20 @@ export async function pettyCashBoxes(scope: TenantScope, session: Pick<Dashboard
   if (error) fail(error);
   const rows = data ?? [];
   if (rows.length === 0) return [];
-  const { data: balances, error: balanceError } = await db.rpc("money_day_balances", { p_day: localDate(new Date(), scope.timeZone) });
-  if (balanceError) fail(balanceError);
-  const closing = new Map(((balances ?? []) as { money_account_id: string; closing: number | string | null }[]).map((b) => [b.money_account_id, Number(b.closing ?? 0)]));
-  return rows.map((r) => ({
+  // What each box can send: what it holds less what's on its way.
+  const available = await Promise.all(
+    rows.map(async (r) => {
+      const { data, error: balanceError } = await db.rpc("petty_cash_available", { p_account: r.id });
+      if (balanceError) fail(balanceError);
+      return Number(data ?? 0);
+    }),
+  );
+  return rows.map((r, i) => ({
     id: r.id,
     name: r.name,
     heldBy: r.staff_roles?.name ?? "—",
     float: r.float_amount === null ? null : Number(r.float_amount),
-    balance: closing.get(r.id) ?? 0,
+    balance: available[i],
   }));
 }
 
@@ -109,39 +114,16 @@ export async function mayUseBox(boxId: string, session: Pick<DashboardSession, "
   return !!data;
 }
 
-export async function spendFromBox(
-  input: { id: string; boxId: string; name: string; category: string; amount: number; recipient: string | null; description: string | null },
-  actor: { id: string; name: string },
-): Promise<void> {
-  const { error } = await createAdminClient().rpc("petty_cash_spend", {
-    p_id: input.id,
-    p_account: input.boxId,
-    p_name: input.name,
-    p_category: input.category,
-    p_amount: input.amount,
-    p_recipient: input.recipient,
-    p_description: input.description,
-    p_actor_id: actor.id,
-    p_actor_name: actor.name,
-  });
-  if (error) fail(error);
-}
 
 export async function setFloat(boxId: string, amount: number | null): Promise<void> {
   const { error } = await createAdminClient().rpc("petty_cash_set_float", { p_account: boxId, p_amount: amount });
   if (error) fail(error);
 }
 
-/** The categories a box's payment can go under: everyone's own, not the ones that record themselves. */
-export async function spendCategories(scope: TenantScope): Promise<{ key: string; name: string }[]> {
-  const { data, error } = await createAdminClient().from("expense_categories").select("key, name").eq("tenant_id", scope.tenantId).eq("automatic", false).order("name").returns<{ key: string; name: string }[]>();
-  if (error) fail(error);
-  return data ?? [];
-}
 
-/** The accounts the boss tops a box up from: any but the boxes. */
-export async function topUpSources(scope: TenantScope): Promise<{ id: string; name: string; kind: string }[]> {
-  const { data, error } = await createAdminClient().from("money_accounts").select("id, name, kind").eq("tenant_id", scope.tenantId).neq("kind", "petty_cash").order("created_at").returns<{ id: string; name: string; kind: string }[]>();
+/** The account the boss tops a box up from: HivePay, where the boxes' money stays (owner, 2026-11-16). */
+export async function hivepayAccountId(scope: TenantScope): Promise<string | null> {
+  const { data, error } = await createAdminClient().from("money_accounts").select("id").eq("tenant_id", scope.tenantId).eq("kind", "hivepay").order("created_at").limit(1).maybeSingle<{ id: string }>();
   if (error) fail(error);
-  return data ?? [];
+  return data?.id ?? null;
 }

@@ -19,7 +19,7 @@ import * as notifier from "@repo/lib/wallet/server/notifier";
 import * as hivepay from "@repo/lib/wallet/server/providers/hivepay";
 import { toExpensePayoutReference } from "@repo/lib/wallet/server/providers/hivepay-reference";
 
-import type { ExpensePayoutInput } from "./schema";
+import type { ExpensePayoutInput, PettyCashSendInput } from "./schema";
 import { failBooks as fail } from "./server";
 
 /** HivePay needs a moment before it can say how a payout went. */
@@ -56,15 +56,41 @@ export async function sendPayout(input: ExpensePayoutInput, phone: string, actor
 }
 
 /**
+ * "Use petty cash" (owner, 2026-11-16): the amount and its withdraw charge go
+ * to the receiver at once, from the box, with no approval. The database checks
+ * the box can cover it and makes the expense and its payout.
+ */
+export async function sendFromPettyCash(input: PettyCashSendInput, phone: string, actor: { id: string; name: string }): Promise<void> {
+  if (!hivepay.isConfigured()) throw new AppError("Payouts aren't set up on this server (HivePay keys).");
+  const { data: sent, error } = await createAdminClient().rpc("petty_cash_send", {
+    p_id: input.id,
+    p_expense: input.expenseId,
+    p_account: input.boxId,
+    p_name: input.name,
+    p_amount: input.amount,
+    p_charge: input.charge,
+    p_recipient: input.recipient,
+    p_phone: phone,
+    p_actor_id: actor.id,
+    p_actor_name: actor.name,
+  });
+  if (error) fail(error);
+  // Already started by this same press of the button: never send it again.
+  if (sent === null) return;
+  const refused = await deliver(input.id, phone, Number(sent), "Petty cash");
+  if (refused) throw new AppError(`Not sent: ${refused}`);
+}
+
+/**
  * Hands a started payout to HivePay. Returns why HivePay refused it (the
  * payout is then failed and its bill held), or null when it's on its way or
  * its status will settle it.
  */
-async function deliver(id: string, phone: string, sent: number): Promise<string | null> {
+async function deliver(id: string, phone: string, sent: number, description = "Bill payment"): Promise<string | null> {
   const db = createAdminClient();
   let answer: Awaited<ReturnType<typeof hivepay.send>>;
   try {
-    answer = await hivepay.send({ reference: toExpensePayoutReference(id), phone, amount: sent, description: "Bill payment" });
+    answer = await hivepay.send({ reference: toExpensePayoutReference(id), phone, amount: sent, description });
   } catch (err) {
     // No answer: HivePay may or may not have it. It stays "sending", and its status settles it.
     console.error("hivepay send threw:", id, err);
@@ -161,9 +187,9 @@ export async function reconcileExpensePayout(id: string): Promise<void> {
   const db = createAdminClient();
   const { data: row } = await db
     .from("expense_payouts")
-    .select("status, credit, phone, fee, gateway_reference, automatic, expense_id")
+    .select("status, credit, phone, fee, gateway_reference, automatic, expense_id, from_account_id")
     .eq("id", id)
-    .maybeSingle<{ status: string; credit: number | string; phone: string; fee: number | string | null; gateway_reference: string | null; automatic: boolean; expense_id: string }>();
+    .maybeSingle<{ status: string; credit: number | string; phone: string; fee: number | string | null; gateway_reference: string | null; automatic: boolean; expense_id: string; from_account_id: string | null }>();
   if (row?.status !== "sending") return;
   const res = await hivepay.status(toExpensePayoutReference(id));
   if (!res.ok || res.status === "pending") return;
@@ -178,7 +204,11 @@ export async function reconcileExpensePayout(id: string): Promise<void> {
   });
   if (error) fail(error);
   if (!changed) return;
-  if (!delivered && row.automatic) {
+  if (!delivered && row.from_account_id) {
+    await notifier
+      .expensePayoutFailed(`Petty cash: ${formatMoney(Number(row.credit))} to ${localPhone(row.phone)} didn't go through. The money stays in the box.`)
+      .catch((err) => console.error("petty cash failed push:", id, err));
+  } else if (!delivered && row.automatic) {
     await tellFailed(row.expense_id, Number(row.credit), row.phone, "the mobile money network turned it down");
   } else if (!delivered) {
     await notifier
