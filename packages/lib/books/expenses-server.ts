@@ -236,6 +236,17 @@ export async function claimExpenseReminder(day: string): Promise<boolean> {
   fail(error);
 }
 
+/** These expenses as lines, a hundred ids a request (a long list of ids overflows the request). */
+export async function linesByIds(ids: string[]): Promise<ExpenseLine[]> {
+  const lines: ExpenseLine[] = [];
+  for (let i = 0; i < ids.length; i += 100) {
+    const { data, error } = await createAdminClient().from("expense_lines").select("*").in("id", ids.slice(i, i + 100)).returns<LineRow[]>();
+    if (error) fail(error);
+    lines.push(...(data ?? []).map(toLine));
+  }
+  return lines;
+}
+
 export async function openExpenses(): Promise<ExpenseLine[]> {
   const { data, error } = await createAdminClient().rpc("expense_open_lines");
   if (error) fail(error);

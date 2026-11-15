@@ -6,7 +6,7 @@ import "server-only";
 
 import { formatMoney } from "@repo/lib/currency/format";
 import { notifyActor } from "@repo/lib/push/send";
-import { staffWith } from "@repo/lib/staff-access/server";
+import { bosses, staffWith } from "@repo/lib/staff-access/server";
 import type { Section } from "@repo/lib/staff-access/core";
 import { clientPath, clientUrl } from "@repo/lib/client-portal/paths";
 import { localPhone } from "@repo/lib/wallet/policy";
@@ -214,6 +214,12 @@ export async function dailyMoneyReport(title: string, body: string): Promise<voi
 /** A bill sent through HivePay didn't arrive. */
 export async function expensePayoutFailed(body: string): Promise<void> {
   await notifyMoneyWatchers({ title: "Payout failed", body, url: "/dashboard/accounts/expenses" }, "bill_approval", "manage");
+}
+
+/** A salary that was to send by itself didn't go (owner, 2026-11-15: no message unless it fails). The boss only. */
+export async function salaryPayoutFailed(body: string): Promise<void> {
+  const payload = { title: "Salary not sent", body, url: "/dashboard/accounts/staff-pay" };
+  await Promise.all((await bosses()).map((id) => notifyActor({ type: "dashboard_user", id }, payload)));
 }
 
 /** The one warning before autopay bills go by themselves, with time to hold them. */

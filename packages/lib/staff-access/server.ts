@@ -39,3 +39,8 @@ export async function accessOf(userId: string): Promise<{ isBoss: boolean; acces
 export async function staffWith(section: Section, level: Exclude<Level, "none"> = "view"): Promise<string[]> {
   return (await everyone()).filter((p) => can(p.access, section, level)).map((p) => p.id);
 }
+
+/** Every boss signed in to the dashboard: for what only the boss sees, like staff pay. */
+export async function bosses(): Promise<string[]> {
+  return (await everyone()).filter((p) => p.isBoss).map((p) => p.id);
+}

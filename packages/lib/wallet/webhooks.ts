@@ -8,6 +8,7 @@ export { reconcileAgentPayouts, runWeeklyAgentPay } from "./server/agent";
 export { reconcileBusinessPayouts } from "./server/business";
 export { reconcileVendorPayouts } from "./server/vendor";
 export { reconcileExpensePayouts, runAutopay } from "@repo/lib/books/payouts-server";
+export { runStaffPay } from "@repo/lib/books/staff-pay-server";
 export { reconcileOwnerPayouts } from "@repo/lib/books/owner-withdrawals-server";
 export { closePastDays } from "@repo/lib/books/server";
 export { sendDailyReport as sendDailyMoneyReport, sendExpenseReminder, sendMonthCheckReminder, sendLateMoneyNote, watchMoney } from "./server/watch";
