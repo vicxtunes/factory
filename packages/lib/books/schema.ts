@@ -175,3 +175,62 @@ export const pettyCashFloatSchema = z.object({
   boxId: z.string().uuid(),
   amount: z.number({ message: "Enter the float." }).int("Enter whole shillings.").min(0, "The float can't be negative.").nullable(),
 });
+
+// --- Staff pay -------------------------------------------------------------------
+
+const shillings = (message: string) => z.number({ message }).int("Enter whole shillings.").positive(message);
+const payLine = z.object({ name: z.string().trim().min(1, "Name each allowance.").max(80), amount: shillings("Enter each allowance's amount.") });
+
+export const staffPayPersonSchema = z
+  .object({
+    id: z.string().uuid(),
+    name: z.string().trim().min(1, "Enter their name.").max(120),
+    workerId: z.string().uuid().nullable(),
+    profileId: z.string().uuid().nullable(),
+    designerId: z.string().uuid().nullable(),
+    payEvery: z.enum(["month", "week"]),
+    dayRate: z.boolean(),
+    rate: shillings("Enter the pay.").max(50_000_000, "That's more than 50,000,000."),
+    payDay: z.number().int(),
+    phone: text(30),
+    sendsItself: z.boolean(),
+    allowances: z.array(payLine).max(20),
+  })
+  .refine((p) => (p.payEvery === "month" ? p.payDay >= 1 && p.payDay <= 31 : p.payDay >= 0 && p.payDay <= 6), { message: "Choose the pay day.", path: ["payDay"] })
+  .refine((p) => !p.sendsItself || !!p.phone, { message: "Enter the phone number it sends to.", path: ["phone"] });
+
+export const staffPayExtraSchema = z.object({
+  id: z.string().uuid(),
+  personId: z.string().uuid(),
+  name: z.string().trim().min(1, "Say what it's for.").max(80),
+  amount: shillings("Enter the amount."),
+});
+
+export const staffPayDaysSchema = z.object({
+  slipId: z.string().uuid(),
+  days: z.number({ message: "Enter the days worked." }).min(0, "Days can't be negative.").max(31, "That's more than 31 days.").multipleOf(0.5, "Use whole or half days."),
+});
+
+export const staffPaySettingsSchema = z.object({
+  sendsOn: z.boolean(),
+  sendAt: z.string().regex(/^(09|1[0-9]|20):00$/, "Pick a time from 09:00 to 20:00."),
+});
+
+export const staffAdvanceSchema = z
+  .object({
+    id: z.string().uuid(),
+    personId: z.string().uuid(),
+    amount: shillings("Enter the advance."),
+    givenOn: day,
+    /** Sent by HivePay now, else paid from an account. */
+    send: z.boolean(),
+    accountId: z.string().uuid().nullable(),
+    method: z.enum(["cash", "bank_transfer", "mobile_money", "other"]),
+    reference: text(100),
+    phone: text(30),
+  })
+  .refine((a) => a.send || !!a.accountId, { message: "Choose which account it was paid from.", path: ["accountId"] })
+  .refine((a) => !a.send || !!a.phone, { message: "Enter the phone number to send it to.", path: ["phone"] });
+
+export type StaffPayPersonInput = z.output<typeof staffPayPersonSchema>;
+export type StaffAdvanceInput = z.output<typeof staffAdvanceSchema>;

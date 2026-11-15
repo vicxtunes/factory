@@ -85,6 +85,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/dashboard/accounts/payments", label: "Payments", icon: "payment", visible: sees("accounts") },
       { href: "/dashboard/accounts/petty-cash", label: "Petty cash", icon: "payment", visible: (v) => v.pettyCash },
       { href: "/dashboard/accounts/expenses", label: "Expenses", icon: "invoice", visible: sees("expenses") },
+      { href: "/dashboard/accounts/staff-pay", label: "Staff pay", icon: "payment", visible: boss },
       { href: "/dashboard/accounts/sales", label: "Sales", icon: "invoice", visible: sees("accounts") },
       { href: "/dashboard/accounts/clients", label: "Client accounts", icon: "clients", visible: sees("accounts") },
       { href: "/dashboard/accounts/owed", label: "Money we owe", icon: "payment", visible: sees("accounts") },

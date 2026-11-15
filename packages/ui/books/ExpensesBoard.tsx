@@ -936,7 +936,7 @@ function CategoryField({
   );
 }
 
-function usePayFields(today: string) {
+export function usePayFields(today: string) {
   const [method, setMethod] = useState<PaymentMethod>("cash");
   const source = useMoneySource(method);
   const [paidOn, setPaidOn] = useState(today);
@@ -957,7 +957,7 @@ function usePayFields(today: string) {
   };
 }
 
-function PayFields({ form }: { form: ReturnType<typeof usePayFields> }) {
+export function PayFields({ form }: { form: ReturnType<typeof usePayFields> }) {
   const needsReference = form.method === "mobile_money" || form.method === "bank_transfer";
   return (
     <>
@@ -1472,7 +1472,7 @@ function ExpenseSheet({
   );
 }
 
-function PayForm({ expense: e, today, onDone, onCancel }: { expense: ExpenseLine; today: string; onDone: () => Promise<void>; onCancel: () => void }) {
+export function PayForm({ expense: e, today, onDone, onCancel }: { expense: ExpenseLine; today: string; onDone: () => Promise<void>; onCancel: () => void }) {
   const money = useMoney();
   const [id] = useState(() => crypto.randomUUID());
   const left = expenseBalance(e);
@@ -1524,7 +1524,7 @@ function PayForm({ expense: e, today, onDone, onCancel }: { expense: ExpenseLine
 }
 
 /** Real money leaves at once, so it asks a second time, with everything spelled out. */
-function SendForm({ expense: e, onDone, onCancel }: { expense: ExpenseLine; onDone: () => Promise<void>; onCancel: () => void }) {
+export function SendForm({ expense: e, onDone, onCancel }: { expense: ExpenseLine; onDone: () => Promise<void>; onCancel: () => void }) {
   const money = useMoney();
   const [id] = useState(() => crypto.randomUUID());
   const left = expenseBalance(e);
