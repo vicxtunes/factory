@@ -161,15 +161,19 @@ export const monthCheckApproveSchema = z.object({
   bookings: z.array(z.object({ accountId: z.string().uuid(), as: z.enum(["shortage", "surplus", "opening"]) })).max(50),
 });
 
-export const pettyCashSpendSchema = z.object({
+export const pettyCashSendSchema = z.object({
+  /** The payout's id, chosen by the screen: pressing Send twice never sends twice. */
   id: z.string().uuid(),
+  expenseId: z.string().uuid(),
   boxId: z.string().uuid(),
-  name: z.string().trim().min(1, "Say what it was for.").max(120),
-  category: z.string().min(1, "Choose a category."),
-  amount: z.number({ message: "Enter the amount paid." }).int("Enter whole shillings.").positive("Enter the amount paid."),
-  recipient: text(120),
-  description: text(500),
+  name: z.string().trim().min(1, "Say what it's for.").max(120),
+  amount: z.number({ message: "Enter the amount." }).int("Enter whole shillings.").positive("Enter the amount."),
+  charge: z.number({ message: "Enter the withdraw charge, or 0." }).int("Enter whole shillings.").min(0, "Enter the withdraw charge, or 0."),
+  recipient: z.string().trim().min(1, "Say who receives it.").max(120),
+  phone: z.string().trim().min(1, "Enter the number to send it to."),
 });
+
+export type PettyCashSendInput = z.output<typeof pettyCashSendSchema>;
 
 export const pettyCashFloatSchema = z.object({
   boxId: z.string().uuid(),

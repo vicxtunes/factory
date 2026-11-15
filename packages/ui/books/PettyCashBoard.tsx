@@ -1,40 +1,34 @@
 "use client";
 
-// Petty cash (owner, 2026-11-15): one card per box (the boss sees both, a
-// holder only theirs), then this month's movements. A box's holder records what
-// they paid; the boss also tops up and sets the float. Cards side by side on a
-// desktop, stacked on a phone; every form opens in a FormSheet.
+// Petty cash (owner, 2026-11-15/16): one card per box (the boss sees both, a
+// holder only theirs), then this month's movements. A box's holder sends a
+// payment from it by mobile money (Use petty cash); the boss also tops up from
+// HivePay and sets the float. Cards side by side on a desktop, stacked on a
+// phone; every form opens in a FormSheet.
 
-import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useState, useTransition } from "react";
 
 import { Button } from "@repo/ui/Button";
-import { Field, Select, TextInput } from "@repo/ui/Field";
+import { Field, TextInput } from "@repo/ui/Field";
 import { FormSheet } from "@repo/ui/FormSheet";
 import { Card, formatDayTime } from "@repo/ui/accounting/shared";
 import { ErrorLine, Form, parseNumber, useMoney, useSubmit } from "@repo/ui/production/sheets";
-import { setPettyCashFloat, spendPettyCash, topUpPettyCash } from "@repo/lib/books/actions";
+import { sendPettyCash, setPettyCashFloat, topUpPettyCash } from "@repo/lib/books/actions";
 import { DAY_LINE_LABELS, topUpNeeded, type DayLine, type PettyCashBox } from "@repo/lib/books/model";
-
-interface Source {
-  id: string;
-  name: string;
-  kind: string;
-}
 
 export function PettyCashBoard({
   boxes,
   lines,
-  categories,
-  sources,
+  hivepayId,
   isBoss,
   today,
   timeZone,
 }: {
   boxes: PettyCashBox[];
   lines: DayLine[];
-  categories: { key: string; name: string }[];
-  /** Accounts the boss tops up from; empty for a holder. */
-  sources: Source[];
+  /** HivePay's account, which the boss tops up from; null for a holder. */
+  hivepayId: string | null;
   isBoss: boolean;
   today: string;
   timeZone: string;
@@ -63,7 +57,7 @@ export function PettyCashBoard({
                   </button>
                 ) : null}
               </div>
-              <p className="mt-3 text-sm text-muted">In the box</p>
+              <p className="mt-3 text-sm text-muted">Can send</p>
               <p className="text-3xl font-bold tnum">{money(b.balance)}</p>
               <p className="mt-1 text-xs text-muted">
                 {b.float === null ? "No float set yet." : `Float ${money(b.float)}`}
@@ -71,9 +65,9 @@ export function PettyCashBoard({
               </p>
               <div className="mt-4 flex flex-wrap gap-2">
                 <Button size="sm" onClick={() => setSpending(b)}>
-                  Record a payment
+                  Use petty cash
                 </Button>
-                {isBoss ? (
+                {isBoss && hivepayId ? (
                   <Button size="sm" variant="secondary" onClick={() => setTopping(b)}>
                     Top up
                   </Button>
@@ -110,73 +104,110 @@ export function PettyCashBoard({
         )}
       </Card>
 
-      {spending ? <SpendSheet box={spending} categories={categories} onClose={() => setSpending(null)} /> : null}
-      {topping ? <TopUpSheet box={topping} sources={sources} today={today} onClose={() => setTopping(null)} /> : null}
+      {spending ? <SendSheet box={spending} onClose={() => setSpending(null)} /> : null}
+      {topping && hivepayId ? <TopUpSheet box={topping} hivepayId={hivepayId} today={today} onClose={() => setTopping(null)} /> : null}
       {floating ? <FloatSheet box={floating} onClose={() => setFloating(null)} /> : null}
     </div>
   );
 }
 
-function SpendSheet({ box, categories, onClose }: { box: PettyCashBox; categories: { key: string; name: string }[]; onClose: () => void }) {
+function SendSheet({ box, onClose }: { box: PettyCashBox; onClose: () => void }) {
   const money = useMoney();
+  const router = useRouter();
   const [id] = useState(() => crypto.randomUUID());
+  const [expenseId] = useState(() => crypto.randomUUID());
   const [name, setName] = useState("");
-  const [category, setCategory] = useState(categories.find((c) => c.key === "other")?.key ?? categories[0]?.key ?? "");
   const [amount, setAmount] = useState("");
+  const [charge, setCharge] = useState("");
   const [recipient, setRecipient] = useState("");
-  const [description, setDescription] = useState("");
-  const { error, pending, submit, setError } = useSubmit(onClose);
+  const [phone, setPhone] = useState("");
+  const [sure, setSure] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+  const value = parseNumber(amount);
+  const fee = charge.trim() === "" ? 0 : parseNumber(charge);
+  const total = value + fee;
+  const problem = !(value > 0)
+    ? null
+    : !Number.isInteger(value) || !Number.isInteger(fee) || fee < 0
+      ? "Enter whole shillings."
+      : total > box.balance
+        ? `The box can send only ${money(box.balance)}. Ask the boss to top it up first.`
+        : total < 500 || total > 5_000_000
+          ? "HivePay sends from 500 to 5,000,000 at a time."
+          : null;
+  const ready = name.trim() !== "" && value > 0 && !problem && recipient.trim() !== "" && phone.trim() !== "";
+
+  function send() {
+    setError(null);
+    start(async () => {
+      const res = await sendPettyCash({ id, expenseId, boxId: box.id, name, amount: value, charge: fee, recipient, phone });
+      if (!res.ok) {
+        setSure(false);
+        return setError(res.error);
+      }
+      onClose();
+      router.refresh();
+    });
+  }
 
   return (
-    <FormSheet open onClose={onClose} title={`Record a payment from ${box.name}`}>
-      <Form
-        onSubmit={() => {
-          const value = parseNumber(amount);
-          if (!Number.isInteger(value) || value <= 0) return setError("Enter the amount paid.");
-          if (value > box.balance) return setError(`The box holds only ${money(box.balance)}. Ask the boss to top it up first.`);
-          submit(() => spendPettyCash({ id, boxId: box.id, name, category, amount: value, recipient, description }));
-        }}
-      >
-        <p className="text-xs text-muted">Paid today, in cash from the box. It&apos;s recorded as an expense. The box holds {money(box.balance)}.</p>
-        <Field label="What was it for?">
-          <TextInput value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Boda to town, drinking water" maxLength={120} required />
+    <FormSheet open onClose={onClose} title={`Use petty cash: ${box.name}`}>
+      <div className="space-y-4">
+        <p className="text-xs text-muted">Sent at once by mobile money to the person&apos;s phone. The box can send {money(box.balance)}.</p>
+        <Field label="What is it for?">
+          <TextInput value={name} disabled={sure} onChange={(e) => setName(e.target.value)} placeholder="e.g. Boda to town, drinking water" maxLength={120} />
         </Field>
-        <Field label="Amount paid">
-          <TextInput inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value)} required />
+        <Field label="Amount">
+          <TextInput inputMode="numeric" value={amount} disabled={sure} onChange={(e) => setAmount(e.target.value)} />
         </Field>
-        <Field label="Category">
-          <Select value={category} onChange={(e) => setCategory(e.target.value)} required>
-            {categories.map((c) => (
-              <option key={c.key} value={c.key}>
-                {c.name}
-              </option>
-            ))}
-          </Select>
+        <Field label="Withdraw charge" hint="What the person pays to cash it out. It's sent with the amount. Leave empty if none.">
+          <TextInput inputMode="numeric" value={charge} disabled={sure} onChange={(e) => setCharge(e.target.value)} />
         </Field>
-        <Field label="Paid to (optional)">
-          <TextInput value={recipient} onChange={(e) => setRecipient(e.target.value)} maxLength={120} />
+        <Field label="Who receives it?">
+          <TextInput value={recipient} disabled={sure} onChange={(e) => setRecipient(e.target.value)} maxLength={120} />
         </Field>
-        <Field label="Note (optional)">
-          <TextInput value={description} onChange={(e) => setDescription(e.target.value)} maxLength={500} />
+        <Field label="Their MTN or Airtel number">
+          <TextInput type="tel" value={phone} disabled={sure} onChange={(e) => setPhone(e.target.value)} placeholder="e.g. 0772 000 000" />
         </Field>
+        {problem ? <p className="text-sm text-error-600 dark:text-error-400">{problem}</p> : null}
+        {ready ? (
+          <p className="text-sm text-muted">
+            {recipient.trim()} receives {money(total)}
+            {fee > 0 ? ` (${money(value)} + ${money(fee)} withdraw charge)` : ""}. HivePay&apos;s own fee is Aming&apos;s, from HivePay, not from the box.
+          </p>
+        ) : null}
         <ErrorLine error={error} />
-        <Button type="submit" className="w-full" loading={pending} disabled={pending}>
-          Record payment
-        </Button>
-      </Form>
+        {sure ? (
+          <div className="space-y-2 rounded-xl bg-warning-50 p-3 dark:bg-warning-500/10">
+            <p className="text-sm font-medium">
+              Send {money(total)} to {recipient.trim()} on {phone.trim()}? Real money leaves at once and can&apos;t be pulled back.
+            </p>
+            <div className="flex gap-2">
+              <Button loading={pending} disabled={pending} className="flex-1" onClick={send}>
+                Yes, send {money(total)}
+              </Button>
+              <Button variant="secondary" disabled={pending} onClick={() => setSure(false)}>
+                Change
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <Button className="w-full" disabled={!ready} onClick={() => setSure(true)}>
+            Continue
+          </Button>
+        )}
+      </div>
     </FormSheet>
   );
 }
 
-function TopUpSheet({ box, sources, today, onClose }: { box: PettyCashBox; sources: Source[]; today: string; onClose: () => void }) {
+function TopUpSheet({ box, hivepayId, today, onClose }: { box: PettyCashBox; hivepayId: string; today: string; onClose: () => void }) {
   const money = useMoney();
   const need = topUpNeeded(box);
   const [id] = useState(() => crypto.randomUUID());
-  const [from, setFrom] = useState(sources.find((s) => s.kind === "cash")?.id ?? sources[0]?.id ?? "");
   const [amount, setAmount] = useState(need > 0 ? String(need) : "");
-  const [reference, setReference] = useState("");
   const { error, pending, submit, setError } = useSubmit(onClose);
-  const needsReference = sources.find((s) => s.id === from)?.kind !== "cash";
 
   return (
     <FormSheet open onClose={onClose} title={`Top up ${box.name}`}>
@@ -184,34 +215,19 @@ function TopUpSheet({ box, sources, today, onClose }: { box: PettyCashBox; sourc
         onSubmit={() => {
           const value = parseNumber(amount);
           if (!Number.isInteger(value) || value <= 0) return setError("Enter the amount.");
-          if (needsReference && !reference.trim()) return setError("Enter the slip number or transaction ID.");
-          submit(() => topUpPettyCash({ id, fromAccountId: from, toAccountId: box.id, amount: value, movedOn: today, reference, note: "Petty cash top-up" }));
+          submit(() => topUpPettyCash({ id, fromAccountId: hivepayId, toAccountId: box.id, amount: value, movedOn: today, reference: "", note: "Petty cash top-up" }));
         }}
       >
         <p className="text-xs text-muted">
           It holds {money(box.balance)}
-          {box.float !== null ? `; the float is ${money(box.float)}` : ""}. The money moves from another account into the box: it isn&apos;t an expense.
+          {box.float !== null ? `; the float is ${money(box.float)}` : ""}. The money is set aside from HivePay for the box: it stays in HivePay and isn&apos;t an expense.
         </p>
-        <Field label="From">
-          <Select value={from} onChange={(e) => setFrom(e.target.value)} required>
-            {sources.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </Select>
-        </Field>
         <Field label="Amount" hint={need > 0 ? `${money(need)} brings it back to the float.` : undefined}>
           <TextInput inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value)} required />
         </Field>
-        {needsReference ? (
-          <Field label="Slip number or transaction ID">
-            <TextInput value={reference} onChange={(e) => setReference(e.target.value)} maxLength={100} required />
-          </Field>
-        ) : null}
         <ErrorLine error={error} />
         <Button type="submit" className="w-full" loading={pending} disabled={pending}>
-          Top up
+          Top up from HivePay
         </Button>
       </Form>
     </FormSheet>
