@@ -6,9 +6,9 @@ import { agreeToTerms, bossById, currentTerms, hasAgreed, send } from "@repo/lib
 
 import { staffAppToolbox } from "../../alexis-tools";
 
-// Alexis on the boss's WhatsApp (Meta's WhatsApp Cloud API). Meta calls this
-// address with every message to the business number; only messages from the
-// boss's own number are answered, as the boss, with the same tools as the app
+// Alexis on the bosses' WhatsApp (Meta's WhatsApp Cloud API). Meta calls this
+// address with every message to the business number; only messages from a
+// listed boss's own number are answered, as that boss, with the same tools as the app
 // but read-only: changes are made in the app, where Confirm checks the sign-in.
 //
 // Environment (the staff app's):
@@ -16,13 +16,21 @@ import { staffAppToolbox } from "../../alexis-tools";
 //   WHATSAPP_APP_SECRET       the Meta app's secret: proves a call came from Meta
 //   WHATSAPP_TOKEN            a permanent system-user access token
 //   WHATSAPP_PHONE_NUMBER_ID  the business number's id in Meta
-//   WHATSAPP_BOSS_NUMBER      the boss's own WhatsApp number (e.g. 256772123456)
-//   WHATSAPP_BOSS_USER_ID     the boss's dashboard account id (profiles.id)
+//   WHATSAPP_BOSSES           each boss's WhatsApp number and dashboard account id (profiles.id),
+//                             e.g. 256772123456:<id>,256701234567:<id>
 //   WHATSAPP_GRAPH_VERSION    optional, default v21.0
 // Webhook URL in Meta: https://<staff app domain>/api/whatsapp, subscribed to "messages".
 
 const GRAPH = () => `https://graph.facebook.com/${process.env.WHATSAPP_GRAPH_VERSION || "v21.0"}`;
 const lastNine = (s: string) => s.replace(/\D/g, "").slice(-9);
+
+/** The boss account linked to a WhatsApp number, if that number is listed. */
+function bossIdFor(from: string): string | undefined {
+  for (const pair of (process.env.WHATSAPP_BOSSES ?? "").split(",")) {
+    const [number, id] = pair.split(":").map((s) => s.trim());
+    if (number && id && lastNine(number) === lastNine(from)) return id;
+  }
+}
 
 /** Meta's check that this address is ours, when the webhook is set up. */
 export async function GET(request: Request) {
@@ -78,7 +86,7 @@ async function post(message: unknown): Promise<void> {
 }
 
 async function answer(message: Incoming): Promise<void> {
-  const bossId = process.env.WHATSAPP_BOSS_USER_ID;
+  const bossId = bossIdFor(message.from);
   const person = bossId ? await bossById(bossId) : null;
   if (!person) return;
   // Alexis's terms, agreed in the chat itself (owner, 2026-11-15): the terms,
@@ -112,7 +120,6 @@ export async function POST(request: Request) {
   const body = await request.text();
   if (!signedByMeta(body, request.headers.get("x-hub-signature-256"))) return new Response("Forbidden", { status: 403 });
 
-  const boss = process.env.WHATSAPP_BOSS_NUMBER;
   let messages: Incoming[] = [];
   try {
     const payload = JSON.parse(body) as { entry?: { changes?: { value?: { messages?: Incoming[] } }[] }[] };
@@ -121,8 +128,8 @@ export async function POST(request: Request) {
     return new Response("Bad request", { status: 400 });
   }
 
-  // Only the boss's own number; anyone else writing to the business number is left alone.
-  const mine = messages.filter((m) => !!boss && lastNine(m.from) === lastNine(boss) && !answered.has(m.id));
+  // Only the listed bosses' numbers; anyone else writing to the business number is left alone.
+  const mine = messages.filter((m) => !!bossIdFor(m.from) && !answered.has(m.id));
   for (const m of mine) {
     answered.add(m.id);
     if (answered.size > 500) answered.delete(answered.values().next().value!);
