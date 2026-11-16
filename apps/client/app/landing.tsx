@@ -41,6 +41,15 @@ const MORE: { title: string; text: string; icon: ComponentType<{ className?: str
   { title: "Editors & vendors", text: "Hire photo editors, videographers and vendors for a job.", icon: WorkersIcon },
 ];
 
+/** What Drive does (packages/lib/files/README.md), for its section. */
+const DRIVE: [string, string][] = [
+  ["Files up to 1 GB, kept as uploaded", "Any type: RAW, video, zips, PDFs. Nothing is shrunk or split, and big uploads carry on in the background."],
+  ["A folder for every project, by itself", "Each booking you turn into a project gets its folder. Make your own folders, as deep as you like."],
+  ["Share like Google Drive", "With a client on their page, with your team, or with anyone who has the link. Viewer, contributor or editor, and downloads on or off."],
+  ["Proofs that protect your work", "Photos still in production show watermarked, with saving and printing blocked. Clients never get the original until you say."],
+  ["Fast to open, easy to hand over", "Folders open on light previews with location details removed. Download chosen files or a whole folder as a zip."],
+];
+
 type Studio = { id: string; name: string; slug: string; logoUrl: string | null; brandColor: string | null; cover: string; albums: number; photos: number };
 
 /** Each studio in the feed once, with its first cover and how much it shows; the most photos first. */
@@ -104,6 +113,7 @@ export async function Landing() {
             <nav aria-label="Main" className="hidden items-center gap-1 text-sm lg:flex">
               {[
                 ["Platform", "#platform"],
+                ["Drive", "#drive"],
                 ["Studios", "#studios"],
                 ["Work", "#work"],
               ].map(([label, href]) => (
@@ -225,7 +235,7 @@ export async function Landing() {
                 <div className="mt-auto grid grid-cols-3 gap-2 px-8 pb-8 sm:px-10 sm:pb-10">
                   {studios.slice(0, 3).map((s) => (
                     // eslint-disable-next-line @next/next/no-img-element -- signed storage link, already resized
-                    <img key={s.id} src={s.cover} alt="" loading="lazy" className="aspect-[3/4] w-full rounded-xl object-cover" />
+                    <img key={s.id} src={s.cover} alt="" loading="lazy" className="aspect-[4/3] w-full rounded-xl object-cover" />
                   ))}
                 </div>
               ) : null}
@@ -246,13 +256,46 @@ export async function Landing() {
                   {prints.slice(0, 3).map((p) => (
                     <Link key={p.id} href={`/${encodeURIComponent(p.slug)}`} prefetch={false} className="group block">
                       {/* eslint-disable-next-line @next/next/no-img-element -- product photo */}
-                      <img src={p.display_image_url!} alt="" loading="lazy" className="aspect-[3/4] w-full rounded-xl object-cover transition-opacity group-hover:opacity-80" />
+                      <img src={p.display_image_url!} alt="" loading="lazy" className="aspect-[4/3] w-full rounded-xl bg-background object-contain p-1.5 transition-opacity group-hover:opacity-80" />
                       <span className="mt-2 block truncate text-xs font-medium text-muted">{p.name}</span>
                     </Link>
                   ))}
                 </div>
               ) : null}
             </article>
+          </div>
+        </section>
+
+        {/* Drive, on its own: what it does for a studio's files, beside a real studio's Drive. */}
+        <section id="drive" className="scroll-mt-16 border-y border-border bg-surface">
+          <div className={`${WRAP} grid items-center gap-12 py-20 sm:py-28 lg:grid-cols-[5fr_7fr]`}>
+            <div>
+              <p className="text-sm font-semibold tracking-widest text-brand-600 uppercase dark:text-brand-400">Drive</p>
+              <h2 className="mt-3 text-4xl font-extrabold tracking-tight sm:text-5xl">Every file in one place, shared the right way.</h2>
+              <p className="mt-4 text-lg text-muted">Raw shoots, edits, contracts and videos, kept in folders next to your bookings and clients. No more sending files around WhatsApp or chasing flash drives.</p>
+              <ul className="mt-8 space-y-5">
+                {DRIVE.map(([title, text]) => (
+                  <li key={title} className="flex gap-3">
+                    <svg aria-hidden viewBox="0 0 20 20" fill="currentColor" className="mt-0.5 h-5 w-5 shrink-0 text-brand-500">
+                      <path fillRule="evenodd" d="M16.7 5.3a1 1 0 0 1 0 1.4l-8 8a1 1 0 0 1-1.4 0l-4-4a1 1 0 1 1 1.4-1.4L8 12.58l7.3-7.3a1 1 0 0 1 1.4 0Z" clipRule="evenodd" />
+                    </svg>
+                    <span>
+                      <span className="font-semibold">{title}</span>
+                      <span className="mt-0.5 block text-sm text-muted">{text}</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="overflow-hidden rounded-2xl border border-border bg-background shadow-theme-xl">
+              <div aria-hidden className="flex items-center gap-1.5 border-b border-border px-4 py-3">
+                <span className="h-2.5 w-2.5 rounded-full bg-error-500/70" />
+                <span className="h-2.5 w-2.5 rounded-full bg-warning-500/70" />
+                <span className="h-2.5 w-2.5 rounded-full bg-success-500/70" />
+              </div>
+              {/* eslint-disable-next-line @next/next/no-img-element -- static screenshot */}
+              <img src="/landing/drive.jpg" alt="A studio's Drive on Aming Space: a folder of photos with Share, New folder and Upload" loading="lazy" className="block w-full" />
+            </div>
           </div>
         </section>
 

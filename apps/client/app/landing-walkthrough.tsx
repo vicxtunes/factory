@@ -1,12 +1,15 @@
 "use client";
 
-import { useState } from "react";
-
-import { Tabs } from "@repo/ui/Tabs";
+import { useEffect, useState } from "react";
 
 // The product walkthrough on Aming's front page (landing.tsx), like
 // GitHub's: tabs over one big framed screenshot of a real studio's
-// workspace. The pictures are in public/landing/walkthrough.
+// workspace, playing by itself. Each tab shows for STEP_MS with a bar
+// filling under it (globals.css), then the next; choosing a tab stops the
+// play, and it never plays for reduced motion. The pictures are in
+// public/landing/walkthrough.
+
+const STEP_MS = 6000;
 
 const SHOTS = [
   { key: "dashboard", label: "Dashboard", caption: "Everything waiting on you, the next shoots and your packages." },
@@ -16,14 +19,40 @@ const SHOTS = [
   { key: "page", label: "Your page", caption: "Your public page, under your name, logo and colors." },
 ] as const;
 
-type Key = (typeof SHOTS)[number]["key"];
-
 export function LandingWalkthrough() {
-  const [shown, setShown] = useState<Key>("dashboard");
-  const shot = SHOTS.find((s) => s.key === shown)!;
+  const [index, setIndex] = useState(0);
+  const [playing, setPlaying] = useState(true);
+
+  useEffect(() => {
+    if (!playing || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const timer = setTimeout(() => setIndex((i) => (i + 1) % SHOTS.length), STEP_MS);
+    return () => clearTimeout(timer);
+  }, [index, playing]);
+
   return (
     <div>
-      <Tabs label="Aming Space, part by part" tabs={SHOTS.map(({ key, label }) => ({ key, label }))} value={shown} onChange={setShown} />
+      <div role="tablist" aria-label="Aming Space, part by part" className="flex overflow-x-auto border-b border-border">
+        {SHOTS.map((s, i) => (
+          <button
+            key={s.key}
+            type="button"
+            role="tab"
+            aria-selected={i === index}
+            onClick={() => {
+              setIndex(i);
+              setPlaying(false);
+            }}
+            className={`relative shrink-0 px-4 py-3 text-sm font-medium transition-colors ${i === index ? "text-foreground" : "text-muted hover:text-foreground"}`}
+          >
+            {s.label}
+            {i === index ? (
+              <span aria-hidden className="absolute inset-x-0 -bottom-px h-0.5">
+                <span key={`${index}-${playing}`} className={`block h-full bg-brand-500 ${playing ? "landing-walkthrough-fill" : ""}`} style={{ animationDuration: `${STEP_MS}ms` }} />
+              </span>
+            ) : null}
+          </button>
+        ))}
+      </div>
       <figure className="mt-6">
         <div className="overflow-hidden rounded-2xl border border-border bg-surface shadow-theme-xl">
           {/* A browser bar, so it reads as the app it is. */}
@@ -32,10 +61,21 @@ export function LandingWalkthrough() {
             <span className="h-2.5 w-2.5 rounded-full bg-warning-500/70" />
             <span className="h-2.5 w-2.5 rounded-full bg-success-500/70" />
           </div>
-          {/* eslint-disable-next-line @next/next/no-img-element -- static screenshot */}
-          <img key={shot.key} src={`/landing/walkthrough/${shot.key}.jpg`} alt={`Aming Space: ${shot.label}`} className="block aspect-[1568/737] w-full object-cover object-top" />
+          {/* All five stacked, the shown one faded in, so switching never waits on a download. */}
+          <div className="relative aspect-[1568/737]">
+            {SHOTS.map((s, i) => (
+              // eslint-disable-next-line @next/next/no-img-element -- static screenshot
+              <img
+                key={s.key}
+                src={`/landing/walkthrough/${s.key}.jpg`}
+                alt={i === index ? `Aming Space: ${s.label}` : ""}
+                aria-hidden={i !== index}
+                className={`absolute inset-0 h-full w-full object-cover object-top transition-opacity duration-500 ${i === index ? "opacity-100" : "opacity-0"}`}
+              />
+            ))}
+          </div>
         </div>
-        <figcaption className="mt-4 text-center text-sm text-muted">{shot.caption}</figcaption>
+        <figcaption className="mt-4 text-center text-sm text-muted">{SHOTS[index].caption}</figcaption>
       </figure>
     </div>
   );
