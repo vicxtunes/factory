@@ -183,7 +183,19 @@ export const pettyCashFloatSchema = z.object({
 // --- Staff pay -------------------------------------------------------------------
 
 const shillings = (message: string) => z.number({ message }).int("Enter whole shillings.").positive(message);
-const payLine = z.object({ name: z.string().trim().min(1, "Name each allowance.").max(80), amount: shillings("Enter each allowance's amount.") });
+const regular = z
+  .object({
+    id: z.string().uuid(),
+    kind: z.enum(["allowance", "advance"]),
+    name: z.string().trim().min(1, "Name each allowance.").max(80),
+    amount: shillings("Enter each allowance's and advance's amount.").max(5_000_000, "That's more than 5,000,000."),
+    /** Null: with every pay (allowances only). */
+    weekdays: z.array(z.number().int().min(0).max(6)).min(1, "Choose at least one day.").max(7).nullable(),
+    how: z.enum(["payslip", "send", "hand"]),
+  })
+  .refine((r) => r.weekdays !== null || (r.kind === "allowance" && r.how === "payslip"), { message: "An advance needs its days." })
+  .refine((r) => r.kind === "allowance" || r.how !== "payslip", { message: "An advance is given on its day." })
+  .refine((r) => r.how === "payslip" || r.amount >= 500, { message: "HivePay sends from 500, so one given on its day is at least 500." });
 
 export const staffPayPersonSchema = z
   .object({
@@ -198,10 +210,11 @@ export const staffPayPersonSchema = z
     payDay: z.number().int(),
     phone: text(30),
     sendsItself: z.boolean(),
-    allowances: z.array(payLine).max(20),
+    regulars: z.array(regular).max(30),
   })
   .refine((p) => (p.payEvery === "month" ? p.payDay >= 1 && p.payDay <= 31 : p.payDay >= 0 && p.payDay <= 6), { message: "Choose the pay day.", path: ["payDay"] })
-  .refine((p) => !p.sendsItself || !!p.phone, { message: "Enter the phone number it sends to.", path: ["phone"] });
+  .refine((p) => !p.sendsItself || !!p.phone, { message: "Enter the phone number it sends to.", path: ["phone"] })
+  .refine((p) => !!p.phone || p.regulars.every((r) => r.how !== "send"), { message: "Enter the phone number allowances and advances are sent to.", path: ["phone"] });
 
 export const staffPayExtraSchema = z.object({
   id: z.string().uuid(),

@@ -18,7 +18,7 @@ export default async function StaffPayPage() {
 
   return (
     <div className="space-y-6">
-      <p className="text-sm text-muted">Salaries, allowances and advances for everyone Aming pays. Each payslip&apos;s pay is a Salaries expense; advances are Salary advances.</p>
+      <p className="text-sm text-muted">Salaries, allowances and advances for everyone Aming pays, all in one place. Each payslip&apos;s pay is a Salaries expense; advances are Salary advances; allowances given on their day are Staff allowances.</p>
       <Loading
         skeleton={
           <div className="space-y-4">
