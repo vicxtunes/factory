@@ -485,6 +485,15 @@ export async function setStaffPaySettings(input: unknown): Promise<Result> {
   });
 }
 
+/** An allowance or advance given on its day that won't be given. */
+export async function cancelStaffPayGiven(id: unknown): Promise<Result> {
+  return runAction("books", async () => {
+    const actor = await boss();
+    await staffPay.cancelGiven(parseInput(z.string().uuid(), id), actor);
+    staffPayChanged();
+  });
+}
+
 /** Real money when sent: Aming pays HivePay's fee on top. */
 export async function giveStaffAdvance(input: unknown): Promise<Result> {
   return runAction("books", async () => {

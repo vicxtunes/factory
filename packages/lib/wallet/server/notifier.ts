@@ -217,8 +217,8 @@ export async function expensePayoutFailed(body: string): Promise<void> {
 }
 
 /** A salary that was to send by itself didn't go (owner, 2026-11-15: no message unless it fails). The boss only. */
-export async function salaryPayoutFailed(body: string): Promise<void> {
-  const payload = { title: "Salary not sent", body, url: "/dashboard/accounts/staff-pay" };
+export async function salaryPayoutFailed(title: string, body: string): Promise<void> {
+  const payload = { title, body, url: "/dashboard/accounts/staff-pay" };
   await Promise.all((await bosses()).map((id) => notifyActor({ type: "dashboard_user", id }, payload)));
 }
 
