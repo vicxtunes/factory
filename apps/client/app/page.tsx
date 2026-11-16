@@ -36,7 +36,8 @@ export default async function ClientSidePage({
     // on a browser that remembers its account: the lock screen.
     const params = await searchParams;
     if (!params.signin && !(await rememberedClient())) return <Landing />;
-    return <SignInOverlay behind={<Landing />} />;
+    // ?signin=new: from the front page's sign-up box, straight to Create an account.
+    return <SignInOverlay behind={<Landing />} signup={params.signin === "new"} />;
   }
 
   // A vendor's account opens on its vendor side.

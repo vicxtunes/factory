@@ -5,7 +5,7 @@ import { AuthGate } from "./auth-gate";
 
 // The sign-in card over the public page, blurred behind it: a round close
 // button above the card (back to the landing page) and nothing else to do.
-export function SignInOverlay({ behind }: { behind: ReactNode }) {
+export function SignInOverlay({ behind, signup }: { behind: ReactNode; signup?: boolean }) {
   return (
     <>
       <div inert aria-hidden>
@@ -22,7 +22,7 @@ export function SignInOverlay({ behind }: { behind: ReactNode }) {
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 6l12 12M18 6 6 18" />
             </svg>
           </Link>
-          <AuthGate />
+          <AuthGate signup={signup} />
         </main>
       </div>
     </>

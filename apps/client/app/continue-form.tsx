@@ -62,18 +62,21 @@ const linkClass = "text-xs text-muted underline-offset-2 hover:text-foreground h
 // (./device-unlock.ts).
 export function ContinueForm({
   remembered,
+  opening,
 }: {
   remembered: { name: string; avatarUrl: string | null; unlockWith: { pattern: boolean; passkey: boolean } } | null;
+  /** Opened from the front page's sign-up box: on Create an account, with the email typed there. */
+  opening?: { signup: string };
 }) {
   const router = useRouter();
-  const [view, setView] = useState<View>({ kind: remembered ? "unlock" : "signin" });
+  const [view, setView] = useState<View>({ kind: opening ? "signup" : remembered ? "unlock" : "signin" });
   const [unlockBy, setUnlockBy] = useState<"pattern" | "password">(remembered?.unlockWith.pattern ? "pattern" : "password");
   const [method, setMethod] = useState<Method>("email");
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(opening?.signup ?? "");
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
