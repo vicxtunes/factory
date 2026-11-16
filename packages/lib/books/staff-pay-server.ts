@@ -21,7 +21,7 @@ import { linesByIds, voidExpense } from "./expenses-server";
 import { sendPayout } from "./payouts-server";
 import type { StaffAdvanceInput, StaffPayPersonInput } from "./schema";
 import { failBooks as fail } from "./server";
-import type { StaffAdvance, StaffPayCandidate, StaffPayPerson, StaffPaySettings, StaffPaySlip } from "./staff-pay";
+import type { StaffAdvance, StaffPayCandidate, StaffPayGiven, StaffPayMonth, StaffPayPerson, StaffPayRegular, StaffPaySettings, StaffPaySlip } from "./staff-pay";
 
 type Actor = { id: string; name: string };
 
@@ -55,7 +55,7 @@ interface SlipRow {
   day_rate: boolean;
   days: number | string | null;
   basic: number | string | null;
-  allowances: { name: string; amount: number | string; once: boolean }[];
+  allowances: { name: string; amount: number | string; once: boolean; days?: number; each?: number | string }[];
   advance: number | string;
   net: number | string | null;
   expense_id: string | null;
@@ -64,6 +64,22 @@ interface SlipRow {
 
 const num = (v: number | string | null) => (v === null ? null : Number(v));
 
+interface RegularRow {
+  id: string;
+  person_id: string;
+  kind: StaffPayRegular["kind"];
+  name: string;
+  amount: number | string;
+  weekdays: number[] | null;
+  how: StaffPayRegular["how"];
+  starts_on: string;
+}
+
+/** Staff cost by month for the charts: the last 12 months. */
+const MONTHS_SHOWN = 12;
+/** Allowances and advances given on their day: those still open, and these last days. */
+const GIVEN_DAYS = 60;
+
 /** Everything Accounts → Staff pay shows. Payslips due are made first. */
 export async function staffPayBoard(scope: TenantScope): Promise<{
   people: StaffPayPerson[];
@@ -71,12 +87,18 @@ export async function staffPayBoard(scope: TenantScope): Promise<{
   advances: StaffAdvance[];
   candidates: StaffPayCandidate[];
   settings: StaffPaySettings;
+  given: StaffPayGiven[];
+  months: StaffPayMonth[];
 }> {
-  await makeSlips(localDate(new Date(), scope.timeZone));
+  const today = localDate(new Date(), scope.timeZone);
+  await makeSlips(today);
   const db = createAdminClient();
-  const [people, allowances, extras, slips, advances, workers, profiles, designers, settings] = await Promise.all([
+  const firstMonth = new Date(`${today.slice(0, 7)}-01T00:00:00Z`);
+  firstMonth.setUTCMonth(firstMonth.getUTCMonth() - (MONTHS_SHOWN - 1));
+  const since = new Date(Date.parse(`${today}T00:00:00Z`) - GIVEN_DAYS * 86_400_000).toISOString().slice(0, 10);
+  const [people, regulars, extras, slips, advances, workers, profiles, designers, settings, given, months] = await Promise.all([
     db.from("staff_pay_people_lines").select("*").eq("tenant_id", scope.tenantId).order("name").returns<PersonRow[]>(),
-    db.from("staff_pay_allowances").select("person_id, name, amount").order("created_at").returns<{ person_id: string; name: string; amount: number | string }[]>(),
+    db.from("staff_pay_regulars").select("id, person_id, kind, name, amount, weekdays, how, starts_on").is("stopped_at", null).order("created_at").returns<RegularRow[]>(),
     db.from("staff_pay_extras").select("id, person_id, name, amount").is("slip_id", null).order("created_at").returns<{ id: string; person_id: string; name: string; amount: number | string }[]>(),
     db.from("staff_pay_slips").select("*").eq("tenant_id", scope.tenantId).order("pay_on", { ascending: false }).limit(1000).returns<SlipRow[]>(),
     db.from("staff_pay_advances").select("id, person_id, amount, given_on").order("given_on", { ascending: false }).limit(500).returns<{ id: string; person_id: string; amount: number | string; given_on: string }[]>(),
@@ -84,12 +106,19 @@ export async function staffPayBoard(scope: TenantScope): Promise<{
     db.from("profiles").select("id, full_name, role, suspended_at").order("full_name").returns<{ id: string; full_name: string | null; role: string; suspended_at: string | null }[]>(),
     db.from("designers").select("id, name, active").order("name").returns<{ id: string; name: string; active: boolean }[]>(),
     db.from("staff_pay_settings").select("sends_on, send_at").eq("tenant_id", scope.tenantId).maybeSingle<{ sends_on: boolean; send_at: string }>(),
+    db.from("staff_pay_given").select("id, person_id, kind, due_on, staff_pay_regulars(name)").gte("due_on", since).order("due_on", { ascending: false }).limit(2000).returns<{ id: string; person_id: string; kind: StaffPayGiven["kind"]; due_on: string; staff_pay_regulars: { name: string } | null }[]>(),
+    db.rpc("staff_pay_month_totals", { p_from: firstMonth.toISOString().slice(0, 10) }),
   ]);
-  for (const r of [people, allowances, extras, slips, advances, workers, profiles, designers, settings]) if (r.error) fail(r.error);
+  for (const r of [people, regulars, extras, slips, advances, workers, profiles, designers, settings, given, months]) if (r.error) fail(r.error);
 
   const slipRows = slips.data ?? [];
-  const advanceRows = advances.data ?? [];
-  const lines = new Map((await linesByIds([...slipRows.flatMap((s) => (s.expense_id ? [s.expense_id] : [])), ...advanceRows.map((a) => a.id)])).map((l) => [l.id, l]));
+  const givenRows = given.data ?? [];
+  // A daily advance is in both lists; the one given on its day shows with what's given.
+  const givenIds = new Set(givenRows.map((g) => g.id));
+  const advanceRows = (advances.data ?? []).filter((a) => !givenIds.has(a.id));
+  const lines = new Map(
+    (await linesByIds([...slipRows.flatMap((s) => (s.expense_id ? [s.expense_id] : [])), ...advanceRows.map((a) => a.id), ...givenRows.map((g) => g.id)])).map((l) => [l.id, l]),
+  );
   const roleName = (role: string) => (role === "boss" ? "Boss" : role.charAt(0).toUpperCase() + role.slice(1));
   const workerOf = new Map((workers.data ?? []).map((w) => [w.id, w]));
   const profileOf = new Map((profiles.data ?? []).map((p) => [p.id, p]));
@@ -121,7 +150,9 @@ export async function staffPayBoard(scope: TenantScope): Promise<{
       nextPayOn: p.next_pay_on,
       phone: p.phone,
       sendsItself: p.sends_itself,
-      allowances: (allowances.data ?? []).filter((a) => a.person_id === p.id).map((a) => ({ name: a.name, amount: Number(a.amount) })),
+      regulars: (regulars.data ?? [])
+        .filter((r) => r.person_id === p.id)
+        .map((r) => ({ id: r.id, kind: r.kind, name: r.name, amount: Number(r.amount), weekdays: r.weekdays, how: r.how, startsOn: r.starts_on })),
       extras: (extras.data ?? []).filter((x) => x.person_id === p.id).map((x) => ({ id: x.id, name: x.name, amount: Number(x.amount) })),
       advanceOwed: Number(p.advance_owed),
       stopped: !!p.stopped_at,
@@ -134,7 +165,7 @@ export async function staffPayBoard(scope: TenantScope): Promise<{
       dayRate: s.day_rate,
       days: num(s.days),
       basic: num(s.basic),
-      allowances: s.allowances.map((a) => ({ name: a.name, amount: Number(a.amount), once: a.once })),
+      allowances: s.allowances.map((a) => ({ name: a.name, amount: Number(a.amount), once: a.once, ...(a.days ? { days: Number(a.days), each: Number(a.each) } : {}) })),
       advance: Number(s.advance),
       net: num(s.net),
       expense: s.expense_id ? (lines.get(s.expense_id) ?? null) : null,
@@ -143,6 +174,11 @@ export async function staffPayBoard(scope: TenantScope): Promise<{
     advances: advanceRows.map((a) => ({ id: a.id, personId: a.person_id, amount: Number(a.amount), givenOn: a.given_on, expense: lines.get(a.id) ?? null })),
     candidates,
     settings: { sendsOn: settings.data?.sends_on ?? false, sendAt: (settings.data?.send_at ?? "10:00").slice(0, 5) },
+    given: givenRows.map((g) => {
+      const expense = lines.get(g.id) ?? null;
+      return { id: g.id, personId: g.person_id, kind: g.kind, name: g.kind === "advance" ? "Advance" : (g.staff_pay_regulars?.name ?? "Allowance"), dueOn: g.due_on, amount: expense?.amount ?? 0, expense };
+    }),
+    months: ((months.data ?? []) as { month: string; person_id: string; basic: number | string; allowances: number | string; advances: number | string }[]).map((m) => ({ month: m.month.slice(0, 7), personId: m.person_id, basic: Number(m.basic), allowances: Number(m.allowances), advances: Number(m.advances) })),
   };
 }
 
@@ -164,7 +200,7 @@ export async function savePerson(input: StaffPayPersonInput, actor: Actor): Prom
     p_pay_day: input.payDay,
     p_phone: input.phone ?? "",
     p_sends_itself: input.sendsItself,
-    p_allowances: input.allowances,
+    p_regulars: input.regulars,
     p_actor_name: actor.name,
   });
   if (error) fail(error);
@@ -172,8 +208,20 @@ export async function savePerson(input: StaffPayPersonInput, actor: Actor): Prom
 
 /** No more payslips. Those already made stay, to pay. */
 export async function stopPerson(id: string, actor: Actor): Promise<void> {
-  const { error } = await createAdminClient().from("staff_pay_people").update({ stopped_at: new Date().toISOString(), stopped_by_name: actor.name, sends_itself: false }).eq("id", id).is("stopped_at", null);
+  const db = createAdminClient();
+  const at = new Date().toISOString();
+  const { error } = await db.from("staff_pay_people").update({ stopped_at: at, stopped_by_name: actor.name, sends_itself: false }).eq("id", id).is("stopped_at", null);
   if (error) fail(error);
+  const { error: regulars } = await db.from("staff_pay_regulars").update({ stopped_at: at }).eq("person_id", id).is("stopped_at", null);
+  if (regulars) fail(regulars);
+}
+
+/** An allowance or advance given on its day that won't be given: its expense is voided. */
+export async function cancelGiven(id: string, actor: Actor): Promise<void> {
+  const { data, error } = await createAdminClient().from("staff_pay_given").select("id").eq("id", id).maybeSingle();
+  if (error) fail(error);
+  if (!data) throw new AppError("That isn't there any more. Refresh the page.");
+  await voidExpense(id, "Not given", actor.name);
 }
 
 export async function addExtra(input: { id: string; personId: string; name: string; amount: number }, actor: Actor): Promise<void> {
@@ -247,8 +295,28 @@ export async function runStaffPay(now = new Date()): Promise<void> {
       console.error("salary send failed:", s.slip_id, err);
       const why = err instanceof AppError ? err.message.replace(/^Not sent: /, "") : "it couldn't be sent";
       await notifier
-        .salaryPayoutFailed(`${s.name}'s pay, ${formatMoney(amount)} to ${localPhone(s.phone)}, didn't go (${why}). It waits in Staff pay for you.`)
+        .salaryPayoutFailed("Salary not sent", `${s.name}'s pay, ${formatMoney(amount)} to ${localPhone(s.phone)}, didn't go (${why}). It waits in Staff pay for you.`)
         .catch((e) => console.error("salary failed push:", s.slip_id, e));
+    }
+  }
+
+  const { data: givenData, error: givenError } = await createAdminClient().rpc("staff_pay_given_claim", { p_now: now.toISOString() });
+  if (givenError) fail(givenError);
+  const given = (givenData ?? []) as { given_id: string; expense_id: string; amount: number | string; phone: string; name: string; what: string }[];
+  for (const [i, g] of given.entries()) {
+    if (i > 0 || due.length > 0) await pause(SEND_EVERY_MS);
+    const amount = Number(g.amount);
+    try {
+      await sendPayout({ id: randomUUID(), expenseId: g.expense_id, amount, actual: null, phone: g.phone }, g.phone, AUTOMATIC);
+    } catch (err) {
+      console.error("staff given send failed:", g.given_id, err);
+      const why = err instanceof AppError ? err.message.replace(/^Not sent: /, "") : "it couldn't be sent";
+      await notifier
+        .salaryPayoutFailed(
+          g.what === "advance" ? "Advance not sent" : "Allowance not sent",
+          `${g.name}'s ${g.what}, ${formatMoney(amount)} to ${localPhone(g.phone)}, didn't go (${why}). It waits in Staff pay for you.`,
+        )
+        .catch((e) => console.error("staff given failed push:", g.given_id, e));
     }
   }
 }

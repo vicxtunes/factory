@@ -1,9 +1,10 @@
 "use client";
 
 // Accounts → Staff pay (owner, 2026-11-15): salaries, allowances and advances
-// for everyone Aming pays. The boss only. Tabs: what's to pay now, the
-// people (a grid of cards on a desktop, stacked on a phone), every payslip,
-// and advances. Every add and edit opens in a FormSheet. A payslip's pay is
+// for everyone Aming pays. The boss only. Tabs: what's to pay now (payslips,
+// and allowances and advances given on their day), the people (a grid of
+// cards on a desktop, stacked on a phone), every payslip, advances, and the
+// analysis (2026-11-17). Every add and edit opens in a FormSheet. A payslip's pay is
 // an expense, so it's paid with the same forms as a bill.
 
 import { useRouter } from "next/navigation";
@@ -19,6 +20,7 @@ import { PayFields, PayForm, SendForm, usePayFields } from "@repo/ui/books/Expen
 import { ErrorLine, Form, parseNumber, useMoney, useSubmit } from "@repo/ui/production/sheets";
 import {
   addStaffPayExtra,
+  cancelStaffPayGiven,
   giveStaffAdvance,
   removeStaffPayExtra,
   saveStaffPayPerson,
@@ -28,25 +30,35 @@ import {
 } from "@repo/lib/books/actions";
 import { WEEKDAYS, expenseBalance } from "@repo/lib/books/expenses";
 import {
+  EVERY_DAY,
+  HOW_LABELS,
   SLIP_STATE_LABELS,
   advanceState,
+  givenState,
   payDayLabel,
   rateUnit,
   slipGross,
   slipOpen,
   slipState,
+  whenLabel,
   type PayEvery,
-  type PayLine,
+  type RegularHow,
+  type RegularKind,
   type SlipState,
   type StaffAdvance,
   type StaffPayCandidate,
+  type StaffPayGiven,
+  type StaffPayMonth,
   type StaffPayPerson,
+  type StaffPayRegular,
   type StaffPaySettings,
   type StaffPaySlip,
 } from "@repo/lib/books/staff-pay";
 import { localPhone } from "@repo/lib/wallet/policy";
 
-type Tab = "to_pay" | "people" | "payslips" | "advances";
+import { StaffPayAnalysis } from "./StaffPayAnalysis";
+
+type Tab = "to_pay" | "people" | "payslips" | "advances" | "analysis";
 
 const day = (iso: string) => new Intl.DateTimeFormat("en-GB", { timeZone: "UTC", day: "numeric", month: "short", year: "numeric" }).format(new Date(`${iso}T00:00:00Z`));
 
@@ -71,6 +83,8 @@ export function StaffPayBoard({
   advances,
   candidates,
   settings,
+  given,
+  months,
   today,
 }: {
   people: StaffPayPerson[];
@@ -78,25 +92,35 @@ export function StaffPayBoard({
   advances: StaffAdvance[];
   candidates: StaffPayCandidate[];
   settings: StaffPaySettings;
+  given: StaffPayGiven[];
+  months: StaffPayMonth[];
   today: string;
 }) {
   const money = useMoney();
   const active = people.filter((p) => !p.stopped);
   const open = slips.filter(slipOpen).sort((a, b) => a.payOn.localeCompare(b.payOn));
-  const [tab, setTab] = useState<Tab>(open.length > 0 ? "to_pay" : "people");
+  const openGiven = given.filter((g) => ["not_sent", "sending"].includes(givenState(g))).sort((a, b) => a.dueOn.localeCompare(b.dueOn));
+  const [tab, setTab] = useState<Tab>(open.length + openGiven.length > 0 ? "to_pay" : "analysis");
   const [editing, setEditing] = useState<StaffPayPerson | "new" | null>(null);
   const [extraFor, setExtraFor] = useState<StaffPayPerson | null>(null);
   const [advanceFor, setAdvanceFor] = useState<StaffPayPerson | "pick" | null>(null);
   const [slipId, setSlipId] = useState<string | null>(null);
+  const [givenId, setGivenId] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const personOf = new Map(people.map((p) => [p.id, p]));
   const slip = slips.find((s) => s.id === slipId) ?? null;
+  const givenOne = given.find((g) => g.id === givenId) ?? null;
+  // The days of each day rate's last payslip, for estimates.
+  const lastDays = new Map<string, number>();
+  for (const s of slips) if (s.days !== null && !lastDays.has(s.personId)) lastDays.set(s.personId, s.days);
 
-  const dueNow = open.filter((s) => s.payOn <= today && s.expense).reduce((sum, s) => sum + expenseBalance(s.expense!), 0);
+  const dueNow =
+    open.filter((s) => s.payOn <= today && s.expense).reduce((sum, s) => sum + expenseBalance(s.expense!), 0) +
+    openGiven.reduce((sum, g) => sum + (g.expense ? expenseBalance(g.expense) : 0), 0);
   const nextOn = active.map((p) => p.nextPayOn).sort()[0] ?? null;
   const nextTotal = active
     .filter((p) => p.nextPayOn === nextOn && !p.dayRate)
-    .reduce((sum, p) => sum + p.rate + p.allowances.reduce((a, x) => a + x.amount, 0) + p.extras.reduce((a, x) => a + x.amount, 0), 0);
+    .reduce((sum, p) => sum + p.rate + p.regulars.reduce((a, r) => a + (r.how === "payslip" && !r.weekdays ? r.amount : 0), 0) + p.extras.reduce((a, x) => a + x.amount, 0), 0);
   const owed = active.reduce((sum, p) => sum + p.advanceOwed, 0);
 
   const slipColumns: DataTableColumn<StaffPaySlip>[] = [
@@ -111,8 +135,8 @@ export function StaffPayBoard({
   return (
     <div className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <FigureTile label="To pay now" value={money(dueNow)} hint={`${open.filter((s) => s.payOn <= today).length} payslips due`} tone={dueNow > 0 ? "warning" : undefined} />
-        <FigureTile label="Next pay day" value={nextOn ? day(nextOn) : "—"} hint={nextOn ? `About ${money(nextTotal)} before advances` : "Nobody's paid yet"} />
+        <FigureTile label="To pay now" value={money(dueNow)} hint={`${open.filter((s) => s.payOn <= today).length} payslips, ${openGiven.length} allowances and advances`} tone={dueNow > 0 ? "warning" : undefined} />
+        <FigureTile label="Next pay day" value={nextOn ? day(nextOn) : "—"} hint={nextOn ? `About ${money(nextTotal)} before advances and allowances by the day` : "Nobody's paid yet"} />
         <FigureTile label="Advances to take off" value={money(owed)} hint="Off the next payslips" />
         <button type="button" onClick={() => setSettingsOpen(true)} className="rounded-2xl border border-border bg-surface p-4 text-left shadow-theme-xs">
           <p className="text-sm text-muted">Sends by itself</p>
@@ -127,10 +151,11 @@ export function StaffPayBoard({
           value={tab}
           onChange={setTab}
           tabs={[
-            { key: "to_pay", label: "To pay", count: open.length, tone: "warning" },
+            { key: "to_pay", label: "To pay", count: open.length + openGiven.length, tone: "warning" },
             { key: "people", label: "People", count: active.length },
             { key: "payslips", label: "Payslips" },
             { key: "advances", label: "Advances" },
+            { key: "analysis", label: "Analysis" },
           ]}
         />
         <div className="flex gap-2">
@@ -144,10 +169,15 @@ export function StaffPayBoard({
       </div>
 
       {tab === "to_pay" ? (
-        open.length === 0 ? (
-          <EmptyState>Nothing to pay. Payslips are made on each person&apos;s pay day.</EmptyState>
+        open.length + openGiven.length === 0 ? (
+          <EmptyState>Nothing to pay. Payslips are made on each person&apos;s pay day, allowances and advances on their days.</EmptyState>
         ) : (
-          <SlipList slips={open} columns={slipColumns} personOf={personOf} onOpen={setSlipId} />
+          <div className="space-y-6">
+            {open.length ? <SlipList slips={open} columns={slipColumns} personOf={personOf} onOpen={setSlipId} /> : null}
+            {openGiven.length ? (
+              <GivenList title="Allowances and advances to give" given={openGiven} personOf={personOf} onOpen={setGivenId} />
+            ) : null}
+          </div>
         )
       ) : null}
 
@@ -167,11 +197,21 @@ export function StaffPayBoard({
         slips.length === 0 ? <EmptyState>No payslips yet.</EmptyState> : <SlipList slips={slips} columns={slipColumns} personOf={personOf} onOpen={setSlipId} />
       ) : null}
 
-      {tab === "advances" ? <AdvanceList advances={advances} personOf={personOf} /> : null}
+      {tab === "advances" ? (
+        <div className="space-y-6">
+          {given.some((g) => g.kind === "advance") ? (
+            <GivenList title="Advances on their days, last 60 days" given={given.filter((g) => g.kind === "advance")} personOf={personOf} onOpen={setGivenId} />
+          ) : null}
+          <AdvanceList advances={advances} personOf={personOf} />
+        </div>
+      ) : null}
+
+      {tab === "analysis" ? <StaffPayAnalysis people={people} months={months} lastDays={lastDays} today={today} /> : null}
 
       {editing ? <PersonSheet person={editing === "new" ? null : editing} candidates={candidates} onClose={() => setEditing(null)} /> : null}
       {extraFor ? <ExtraSheet person={extraFor} onClose={() => setExtraFor(null)} /> : null}
       {advanceFor ? <AdvanceSheet person={advanceFor === "pick" ? null : advanceFor} people={active} today={today} onClose={() => setAdvanceFor(null)} /> : null}
+      {givenOne ? <GivenSheet given={givenOne} person={personOf.get(givenOne.personId) ?? null} today={today} onClose={() => setGivenId(null)} /> : null}
       {slip ? <SlipSheet slip={slip} person={personOf.get(slip.personId) ?? null} today={today} onClose={() => setSlipId(null)} /> : null}
       {settingsOpen ? <SettingsSheet settings={settings} onClose={() => setSettingsOpen(false)} /> : null}
     </div>
@@ -215,9 +255,38 @@ function SlipList({
   );
 }
 
+function GivenList({ title, given, personOf, onOpen }: { title: string; given: StaffPayGiven[]; personOf: Map<string, StaffPayPerson>; onOpen: (id: string) => void }) {
+  const money = useMoney();
+  return (
+    <Card title={title}>
+      <ul className="divide-y divide-border text-sm">
+        {given.map((g) => (
+          <li key={g.id}>
+            <button type="button" onClick={() => onOpen(g.id)} className="flex w-full items-start justify-between gap-3 py-2 text-left">
+              <div className="min-w-0">
+                <p className="truncate font-medium">
+                  {personOf.get(g.personId)?.name ?? "—"} · {g.name}
+                </p>
+                <p className="mt-0.5 text-xs text-muted">
+                  {day(g.dueOn)} · {ADVANCE_LABELS[givenState(g)]}
+                </p>
+              </div>
+              <span className="shrink-0 font-semibold tnum">{money(g.amount)}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </Card>
+  );
+}
+
+function regularLine(r: StaffPayRegular, money: (n: number) => string): string {
+  const what = r.kind === "advance" ? "Advance" : r.name;
+  return `${what} ${money(r.amount)} ${whenLabel(r.weekdays)}${r.weekdays ? `, ${HOW_LABELS[r.how]}` : ""}`;
+}
+
 function PersonCard({ person: p, onEdit, onExtra, onAdvance }: { person: StaffPayPerson; onEdit: () => void; onExtra: () => void; onAdvance: () => void }) {
   const money = useMoney();
-  const allowances = p.allowances.reduce((sum, a) => sum + a.amount, 0);
   return (
     <section className="flex flex-col rounded-2xl border border-border bg-surface p-4 shadow-theme-xs">
       <div className="flex items-start justify-between gap-3">
@@ -237,7 +306,9 @@ function PersonCard({ person: p, onEdit, onExtra, onAdvance }: { person: StaffPa
           Paid {p.dayRate ? (p.payEvery === "week" ? "weekly, " : "monthly, ") : ""}
           {payDayLabel(p.payEvery, p.payDay)}. Next {day(p.nextPayOn)}.
         </div>
-        {allowances > 0 ? <div>Allowances {money(allowances)} ({p.allowances.map((a) => a.name).join(", ")})</div> : null}
+        {p.regulars.map((r) => (
+          <div key={r.id}>{regularLine(r, money)}</div>
+        ))}
         {p.extras.length > 0 ? <div>Next pay also: {p.extras.map((x) => `${x.name} ${money(x.amount)}`).join(", ")}</div> : null}
         {p.advanceOwed > 0 ? <div className="text-warning-700 dark:text-warning-500">Advance {money(p.advanceOwed)} comes off the next pay</div> : null}
         <div>{p.phone ? `Phone ${localPhone(p.phone)}` : "No phone for mobile money"}</div>
@@ -285,6 +356,111 @@ function AdvanceList({ advances, personOf }: { advances: StaffAdvance[]; personO
 
 type PayKind = "month" | "week" | "day";
 
+/** When an allowance or advance falls, as the form picks it. */
+type When = "pay" | "day" | "week" | "days";
+
+interface RegularDraft {
+  id: string;
+  kind: RegularKind;
+  name: string;
+  amount: string;
+  when: When;
+  /** For "week". */
+  weekday: number;
+  /** For "days". */
+  days: number[];
+  how: RegularHow;
+}
+
+function toDraft(r: StaffPayRegular): RegularDraft {
+  const w = r.weekdays;
+  return {
+    id: r.id,
+    kind: r.kind,
+    name: r.name,
+    amount: String(r.amount),
+    when: !w ? "pay" : w.length === 7 ? "day" : w.length === 1 ? "week" : "days",
+    weekday: w?.length === 1 ? w[0] : 5,
+    days: w && w.length > 1 && w.length < 7 ? w : [1, 2, 3, 4, 5],
+    how: r.how,
+  };
+}
+
+function newDraft(kind: RegularKind): RegularDraft {
+  return { id: crypto.randomUUID(), kind, name: kind === "advance" ? "Advance" : "", amount: "", when: kind === "advance" ? "week" : "pay", weekday: 5, days: [1, 2, 3, 4, 5], how: kind === "advance" ? "hand" : "payslip" };
+}
+
+const weekdaysOf = (d: RegularDraft): number[] | null => (d.when === "pay" ? null : d.when === "day" ? EVERY_DAY : d.when === "week" ? [d.weekday] : d.days);
+
+/** Monday first, as the week is lived. */
+const WEEK_ORDER = [1, 2, 3, 4, 5, 6, 0];
+
+function RegularRow({ draft: d, onChange, onRemove }: { draft: RegularDraft; onChange: (d: RegularDraft) => void; onRemove: () => void }) {
+  const set = (patch: Partial<RegularDraft>) => onChange({ ...d, ...patch });
+  return (
+    <div className="space-y-2 rounded-xl border border-border p-3">
+      <div className="flex gap-2">
+        {d.kind === "allowance" ? (
+          <TextInput value={d.name} onChange={(e) => set({ name: e.target.value })} placeholder="e.g. Lunch" maxLength={80} aria-label="Allowance" />
+        ) : null}
+        <TextInput inputMode="numeric" value={d.amount} onChange={(e) => set({ amount: e.target.value })} placeholder="Amount" aria-label="Amount" className={d.kind === "allowance" ? "w-32" : ""} />
+        <Button type="button" variant="ghost" size="sm" onClick={onRemove}>
+          Remove
+        </Button>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-2">
+        <Select
+          value={d.when}
+          aria-label="When"
+          onChange={(e) => {
+            const when = e.target.value as When;
+            set({ when, how: when === "pay" ? "payslip" : d.kind === "advance" && d.how === "payslip" ? "hand" : d.how });
+          }}
+        >
+          {d.kind === "allowance" ? <option value="pay">With every pay</option> : null}
+          <option value="day">Every day</option>
+          <option value="week">Every week</option>
+          <option value="days">On chosen days</option>
+        </Select>
+        {d.when === "week" ? (
+          <Select value={d.weekday} aria-label="Which day" onChange={(e) => set({ weekday: Number(e.target.value) })}>
+            {WEEK_ORDER.map((i) => (
+              <option key={i} value={i}>
+                On {WEEKDAYS[i]}
+              </option>
+            ))}
+          </Select>
+        ) : null}
+        {d.when !== "pay" ? (
+          <Select value={d.how} aria-label="How it's given" onChange={(e) => set({ how: e.target.value as RegularHow })} className={d.when === "week" ? "sm:col-span-2" : ""}>
+            {d.kind === "allowance" ? <option value="payslip">Added up on the payslip</option> : null}
+            <option value="send">Given on the day: sent by itself</option>
+            <option value="hand">Given on the day: wait for me to pay</option>
+          </Select>
+        ) : null}
+      </div>
+      {d.when === "days" ? (
+        <div className="flex flex-wrap gap-1.5" role="group" aria-label="Days">
+          {WEEK_ORDER.map((i) => {
+            const on = d.days.includes(i);
+            return (
+              <button
+                key={i}
+                type="button"
+                aria-pressed={on}
+                onClick={() => set({ days: on ? d.days.filter((x) => x !== i) : [...d.days, i] })}
+                className={`min-h-9 rounded-full border px-3 text-xs font-medium ${on ? "border-brand-500 bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-400" : "border-border text-muted"}`}
+              >
+                {WEEKDAYS[i].slice(0, 3)}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function PersonSheet({ person: p, candidates, onClose }: { person: StaffPayPerson | null; candidates: StaffPayCandidate[]; onClose: () => void }) {
   const [id] = useState(() => p?.id ?? crypto.randomUUID());
   const [who, setWho] = useState("");
@@ -295,7 +471,7 @@ function PersonSheet({ person: p, candidates, onClose }: { person: StaffPayPerso
   const [payDay, setPayDay] = useState(String(p?.payDay ?? 28));
   const [phone, setPhone] = useState(p?.phone ? localPhone(p.phone) : "");
   const [sendsItself, setSendsItself] = useState(p?.sendsItself ?? false);
-  const [allowances, setAllowances] = useState<{ name: string; amount: string }[]>(p?.allowances.map((a) => ({ name: a.name, amount: String(a.amount) })) ?? []);
+  const [regulars, setRegulars] = useState<RegularDraft[]>(p?.regulars.map(toDraft) ?? []);
   const [stopping, setStopping] = useState(false);
   const { error, pending, submit, setError } = useSubmit(onClose);
   const payEvery: PayEvery = kind === "day" ? every : kind;
@@ -304,12 +480,16 @@ function PersonSheet({ person: p, candidates, onClose }: { person: StaffPayPerso
   function save() {
     const value = parseNumber(rate);
     if (!Number.isInteger(value) || value <= 0) return setError("Enter the pay in whole shillings.");
-    const lines: PayLine[] = [];
-    for (const a of allowances) {
-      if (!a.name.trim() && !a.amount.trim()) continue;
-      const amount = parseNumber(a.amount);
-      if (!a.name.trim() || !Number.isInteger(amount) || amount <= 0) return setError("Give each allowance a name and an amount.");
-      lines.push({ name: a.name.trim(), amount });
+    const lines: Omit<StaffPayRegular, "startsOn">[] = [];
+    for (const d of regulars) {
+      if (d.kind === "allowance" && !d.name.trim() && !d.amount.trim()) continue;
+      const amount = parseNumber(d.amount);
+      if (!d.name.trim() || !Number.isInteger(amount) || amount <= 0) return setError(d.kind === "advance" ? "Give each advance an amount." : "Give each allowance a name and an amount.");
+      const weekdays = weekdaysOf(d);
+      if (weekdays && weekdays.length === 0) return setError("Choose the days for each one on chosen days.");
+      if (d.how !== "payslip" && amount < 500) return setError("One given on its day is at least 500: HivePay sends from 500.");
+      if (d.how === "send" && !phone.trim()) return setError("Enter their phone number: some allowances or advances are sent by themselves.");
+      lines.push({ id: d.id, kind: d.kind, name: d.name.trim(), amount, weekdays, how: d.how });
     }
     const link = (k: StaffPayCandidate["kind"]) => (p ? ({ worker: p.workerId, profile: p.profileId, designer: p.designerId }[k] ?? null) : chosen?.kind === k ? chosen.id : null);
     submit(() =>
@@ -325,7 +505,7 @@ function PersonSheet({ person: p, candidates, onClose }: { person: StaffPayPerso
         payDay: Number(payDay),
         phone,
         sendsItself,
-        allowances: lines,
+        regulars: lines,
       }),
     );
   }
@@ -412,36 +592,34 @@ function PersonSheet({ person: p, candidates, onClose }: { person: StaffPayPerso
           </Field>
         </div>
 
-        <div className="space-y-2">
-          <p className="text-sm font-medium">Allowances with every pay</p>
-          {allowances.map((a, i) => (
-            <div key={i} className="flex gap-2">
-              <TextInput
-                value={a.name}
-                onChange={(e) => setAllowances((all) => all.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))}
-                placeholder="e.g. Transport"
-                maxLength={80}
-                aria-label="Allowance"
-              />
-              <TextInput
-                inputMode="numeric"
-                value={a.amount}
-                onChange={(e) => setAllowances((all) => all.map((x, j) => (j === i ? { ...x, amount: e.target.value } : x)))}
-                placeholder="Amount"
-                aria-label="Amount"
-                className="w-32"
-              />
-              <Button type="button" variant="ghost" size="sm" onClick={() => setAllowances((all) => all.filter((_, j) => j !== i))}>
-                Remove
-              </Button>
+        {(["allowance", "advance"] as const).map((kind) => (
+          <div key={kind} className="space-y-2">
+            <div>
+              <p className="text-sm font-medium">{kind === "allowance" ? "Allowances" : "Regular advances"}</p>
+              <p className="text-xs text-muted">
+                {kind === "allowance"
+                  ? "With every pay, or every day, week or chosen days: added up on the payslip, or given on the day."
+                  : "Given every day, week or chosen days; each comes off the next payslip. For one any time, use Advance on their card."}{" "}
+                New ones start tomorrow.
+              </p>
             </div>
-          ))}
-          <Button type="button" variant="secondary" size="sm" onClick={() => setAllowances((all) => [...all, { name: "", amount: "" }])}>
-            Add an allowance
-          </Button>
-        </div>
+            {regulars
+              .filter((d) => d.kind === kind)
+              .map((d) => (
+                <RegularRow
+                  key={d.id}
+                  draft={d}
+                  onChange={(next) => setRegulars((all) => all.map((x) => (x.id === d.id ? next : x)))}
+                  onRemove={() => setRegulars((all) => all.filter((x) => x.id !== d.id))}
+                />
+              ))}
+            <Button type="button" variant="secondary" size="sm" onClick={() => setRegulars((all) => [...all, newDraft(kind)])}>
+              {kind === "allowance" ? "Add an allowance" : "Add a regular advance"}
+            </Button>
+          </div>
+        ))}
 
-        <Field label="MTN or Airtel number for their pay" hint="Leave empty to pay them in cash.">
+        <Field label="MTN or Airtel number for their pay" hint="Leave empty to pay them in cash. Allowances and advances sent by themselves go here too.">
           <TextInput type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="e.g. 0772 000 000" maxLength={30} />
         </Field>
         <label className="flex items-start gap-2 text-sm">
@@ -449,7 +627,7 @@ function PersonSheet({ person: p, candidates, onClose }: { person: StaffPayPerso
           <span>
             Send their pay by itself on pay day
             <span className="block text-xs text-muted">
-              Through HivePay, at the time set under Sends by itself, with no warning first. You hear only if it fails. Aming pays HivePay&apos;s charge. Pay by the day waits until you enter the days.
+              Through HivePay, at the time set under Sends by itself, with no warning first. You hear only if it fails. Aming pays HivePay&apos;s charge. Pay by the day waits until you enter the days. Allowances and advances given on their day follow their own setting above, at the same time.
             </span>
           </span>
         </label>
@@ -666,7 +844,7 @@ function SlipSheet({ slip: s, person, today, onClose }: { slip: StaffPaySlip; pe
         <dl className="divide-y divide-border rounded-xl border border-border text-sm">
           <Line label={s.dayRate ? `Basic: ${s.days ?? "?"} days × ${money(s.rate)}` : "Basic"} value={s.basic === null ? "—" : money(s.basic)} />
           {s.allowances.map((a, i) => (
-            <Line key={i} label={a.once ? `${a.name} (this pay only)` : a.name} value={money(a.amount)} />
+            <Line key={i} label={a.once ? `${a.name} (this pay only)` : a.days ? `${a.name}: ${a.days} days × ${money(a.each ?? 0)}` : a.name} value={money(a.amount)} />
           ))}
           {s.advance > 0 ? <Line label="Advance taken off" value={`−${money(s.advance)}`} /> : null}
           <Line label="They get" value={s.net === null ? "—" : money(s.net)} strong />
@@ -710,6 +888,65 @@ function SlipSheet({ slip: s, person, today, onClose }: { slip: StaffPaySlip; pe
         ) : null}
         {state === "sending" ? <p className="text-sm text-muted">HivePay is sending it. It shows as paid once HivePay says it arrived.</p> : null}
         {state === "to_pay" && e && expenseBalance(e) > 0 && s.payOn > today ? <p className="text-xs text-muted">Due on {day(s.payOn)}. You can pay it early.</p> : null}
+      </div>
+    </FormSheet>
+  );
+}
+
+function GivenSheet({ given: g, person, today, onClose }: { given: StaffPayGiven; person: StaffPayPerson | null; today: string; onClose: () => void }) {
+  const money = useMoney();
+  const router = useRouter();
+  const [mode, setMode] = useState<"view" | "pay" | "send" | "cancel">("view");
+  const { error, pending, submit } = useSubmit(onClose);
+  const state = givenState(g);
+  const refresh = async () => router.refresh();
+  const e = g.expense;
+
+  return (
+    <FormSheet open onClose={onClose} title={`${person?.name ?? "Staff"}: ${g.name}, ${day(g.dueOn)}`}>
+      <div className="space-y-4">
+        <p className="text-sm">
+          <span className="font-semibold">{money(g.amount)}</span> · {ADVANCE_LABELS[state]}
+        </p>
+        <p className="text-xs text-muted">
+          {g.kind === "advance"
+            ? "Once given, it comes off their next payslip. Recorded as a Salary advances expense."
+            : "Given on its day, on top of their pay. Recorded as a Staff allowances expense."}
+        </p>
+        {e?.paidFrom.length ? <p className="text-xs text-muted">Paid from {e.paidFrom.join(", ")}.</p> : null}
+        {state === "not_sent" && e ? (
+          mode === "pay" ? (
+            <PayForm expense={e} today={today} onDone={refresh} onCancel={onClose} />
+          ) : mode === "send" ? (
+            <SendForm expense={{ ...e, payPhone: e.payPhone ?? person?.phone ?? null }} onDone={refresh} onCancel={onClose} />
+          ) : mode === "cancel" ? (
+            <div className="space-y-2 rounded-xl bg-warning-50 p-3 dark:bg-warning-500/10">
+              <p className="text-sm">Not giving this one? It&apos;s cancelled, and {g.kind === "advance" ? "nothing comes off their pay for it" : "it isn't counted"}.</p>
+              <ErrorLine error={error} />
+              <div className="flex gap-2">
+                <Button type="button" variant="danger" loading={pending} onClick={() => submit(() => cancelStaffPayGiven(g.id))}>
+                  Cancel it
+                </Button>
+                <Button type="button" variant="secondary" onClick={() => setMode("view")}>
+                  Keep
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              <Button className="flex-1" onClick={() => setMode("send")}>
+                Send by mobile money
+              </Button>
+              <Button className="flex-1" variant="secondary" onClick={() => setMode("pay")}>
+                Record it as paid
+              </Button>
+              <Button className="w-full" variant="ghost" onClick={() => setMode("cancel")}>
+                Not giving it
+              </Button>
+            </div>
+          )
+        ) : null}
+        {state === "sending" ? <p className="text-sm text-muted">HivePay is sending it. It shows as given once HivePay says it arrived.</p> : null}
       </div>
     </FormSheet>
   );
