@@ -3,40 +3,44 @@
 import Link from "next/link";
 import { useState } from "react";
 
+
 import type { FeedItem } from "@repo/lib/studio-portal/core";
 import { studioInitials } from "@repo/lib/studios/core";
 import { matchesSearch } from "@repo/lib/search";
 
-// The work grid on Aming's front page (landing.tsx), like Behance's: a
-// search on top, then the work as big tiles, each one opening its studio's
-// page for it.
+// The work on Aming's front page (landing.tsx): a search, then the work as
+// big tiles, each one opening its studio's page for it. A screenful at a
+// time with "Show more", so the rest of the page stays within reach.
 
-export function ExploreFeed({ items }: { items: FeedItem[] }) {
+const PAGE = 12;
+
+export function ExploreFeed({ items, wrap }: { items: FeedItem[]; /** The page's width and gutters, so the edges line up. */ wrap: string }) {
   const [query, setQuery] = useState("");
-  const shown = items.filter((item) => matchesSearch(query, [item.title, item.business.name]));
+  const [count, setCount] = useState(PAGE);
+  const matching = items.filter((item) => matchesSearch(query, [item.title, item.business.name]));
+  const shown = matching.slice(0, count);
 
   return (
-    <section aria-label="Work on Aming">
-      <div className="sticky top-0 z-20 border-b border-border bg-background/95 backdrop-blur">
-        <div className="mx-auto flex max-w-[1600px] flex-col gap-3 px-4 py-3 sm:px-6 md:flex-row md:items-center">
-          <label className="relative block md:w-80 md:shrink-0">
-            <span className="sr-only">Search work</span>
-            <svg aria-hidden viewBox="0 0 20 20" className="pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-muted" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="9" cy="9" r="6" />
-              <path d="m14 14 4 4" strokeLinecap="round" />
-            </svg>
-            <input
-              type="search"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search studios and their work…"
-              className="h-11 w-full rounded-full border border-border bg-surface pr-4 pl-10 text-sm outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
-            />
-          </label>
-        </div>
-      </div>
+    <div className={`${wrap} mt-8`}>
+      <label className="relative block sm:w-80">
+        <span className="sr-only">Search work</span>
+        <svg aria-hidden viewBox="0 0 20 20" className="pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-muted" fill="none" stroke="currentColor" strokeWidth="2">
+          <circle cx="9" cy="9" r="6" />
+          <path d="m14 14 4 4" strokeLinecap="round" />
+        </svg>
+        <input
+          type="search"
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setCount(PAGE);
+          }}
+          placeholder="Search studios and their work…"
+          className="h-11 w-full rounded-full border border-border bg-surface pr-4 pl-10 text-sm outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+        />
+      </label>
 
-      <div className="mx-auto max-w-[1600px] px-4 py-6 sm:px-6">
+      <div className="mt-8">
         {shown.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-border px-6 py-16 text-center">
             <p className="font-semibold">{items.length === 0 ? "Work from businesses on Aming shows here" : "Nothing matches that yet"}</p>
@@ -47,7 +51,7 @@ export function ExploreFeed({ items }: { items: FeedItem[] }) {
             </p>
           </div>
         ) : (
-          <ul className="grid grid-cols-1 gap-x-6 gap-y-8 min-[520px]:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+          <ul className="grid grid-cols-1 gap-x-6 gap-y-8 min-[520px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {shown.map((item) => (
               <li key={item.id}>
                 <WorkTile item={item} />
@@ -55,8 +59,19 @@ export function ExploreFeed({ items }: { items: FeedItem[] }) {
             ))}
           </ul>
         )}
+        {matching.length > count ? (
+          <div className="mt-10 flex justify-center">
+            <button
+              type="button"
+              onClick={() => setCount((c) => c + PAGE)}
+              className="inline-flex min-h-11 items-center rounded-[var(--radius)] border border-border bg-surface px-5 text-sm font-semibold hover:border-muted"
+            >
+              Show more ({matching.length - count} more)
+            </button>
+          </div>
+        ) : null}
       </div>
-    </section>
+    </div>
   );
 }
 
@@ -68,7 +83,7 @@ function WorkTile({ item }: { item: FeedItem }) {
   // duplicates or timed out, and the tapped tile waited minutes behind them.
   return (
     <article>
-      <Link href={item.href} prefetch={false} className="group relative block overflow-hidden rounded-lg bg-gray-100 dark:bg-white/5">
+      <Link href={item.href} prefetch={false} className="group relative block overflow-hidden rounded-lg bg-surface">
         {/* eslint-disable-next-line @next/next/no-img-element -- signed storage link, already resized */}
         <img src={item.coverUrl} alt="" loading="lazy" className="aspect-[4/3] w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]" />
         <span className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 bg-gradient-to-t from-black/70 via-black/30 to-transparent px-4 pt-10 pb-3 text-white opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-visible:opacity-100">

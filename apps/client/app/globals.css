@@ -14,3 +14,21 @@
     overscroll-behavior: none;
   }
 }
+
+/* Aming's front page (landing.tsx): its activity strip: the row is two copies of the same items, so moving
+   it by half its width loops without a jump. Still for reduced motion. */
+@keyframes landing-marquee {
+  to { transform: translateX(-50%); }
+}
+.landing-marquee {
+  animation: landing-marquee 80s linear infinite;
+}
+.landing-marquee-reverse {
+  animation-direction: reverse;
+}
+.landing-marquee-row:hover .landing-marquee {
+  animation-play-state: paused;
+}
+@media (prefers-reduced-motion: reduce) {
+  .landing-marquee { animation: none; }
+}
