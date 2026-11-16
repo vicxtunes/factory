@@ -9,7 +9,7 @@ import { studioInitials } from "@repo/lib/studios/core";
 import { matchesSearch } from "@repo/lib/search";
 
 // The work on Aming's front page (landing.tsx): a search, then the work as
-// big tiles, each one opening its studio's page for it. A screenful at a
+// big tiles, one per studio, each opening its studio's page for it. A screenful at a
 // time with "Show more", so the rest of the page stays within reach.
 
 const PAGE = 12;
@@ -17,7 +17,9 @@ const PAGE = 12;
 export function ExploreFeed({ items, wrap }: { items: FeedItem[]; /** The page's width and gutters, so the edges line up. */ wrap: string }) {
   const [query, setQuery] = useState("");
   const [count, setCount] = useState(PAGE);
-  const matching = items.filter((item) => matchesSearch(query, [item.title, item.business.name]));
+  // One card per studio: its first work that matches (all of its work is searched).
+  const seen = new Set<string>();
+  const matching = items.filter((item) => matchesSearch(query, [item.title, item.business.name]) && !seen.has(item.business.id) && seen.add(item.business.id));
   const shown = matching.slice(0, count);
 
   return (
