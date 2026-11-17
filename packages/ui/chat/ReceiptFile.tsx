@@ -10,6 +10,11 @@ import { savePdf } from "@repo/ui/pdf/files";
 
 import { FileIcon } from "./icons";
 
+/** A receipt shows as its file for a week after it was sent; after that only its link is left (owner, 2026-11-17). */
+export function receiptFileShown(sentAt: string): boolean {
+  return Date.now() - Date.parse(sentAt) < 7 * 24 * 60 * 60_000;
+}
+
 /** The receipt tokens in a message's text (its /receipt/<token> links). */
 export function receiptTokens(text: string): string[] {
   return [...new Set([...text.matchAll(/\/receipt\/([A-Za-z0-9_-]{16,128})/g)].map((m) => m[1]))];

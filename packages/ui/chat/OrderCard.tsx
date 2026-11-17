@@ -18,7 +18,7 @@ import { getOrderPayment } from "@repo/lib/wallet/actions";
 import type { OrderPaymentState } from "@repo/lib/wallet/types";
 
 import { formatMessageTime } from "./format";
-import { downloadReceipt, receiptTokens } from "./ReceiptFile";
+import { downloadReceipt, receiptFileShown, receiptTokens } from "./ReceiptFile";
 
 // Staff only, so clients never download it.
 const StaffInvoicePanel = dynamic(() => import("@repo/ui/invoices/StaffInvoicePanel").then((m) => m.StaffInvoicePanel));
@@ -155,7 +155,13 @@ export function OrderCard({
     const receipt = state.receipts.find((r) => Date.parse(r.at) === Date.parse(message.createdAt));
     if (receipt) {
       actions.push(
-        <DownloadReceiptButton key="receipt" token={receiptTokens(receipt.href)[0] ?? ""} />,
+        receiptFileShown(message.createdAt) ? (
+          <DownloadReceiptButton key="receipt" token={receiptTokens(receipt.href)[0] ?? ""} />
+        ) : (
+          <a key="receipt" href={receipt.href} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center rounded-[var(--radius)] border border-brand-300 bg-surface px-4 text-sm font-semibold text-brand-700 dark:text-brand-300">
+            View receipt
+          </a>
+        ),
       );
     }
     if (client) actions.push(<ClientInvoiceLink key="invoice" orderId={state.orderId} />);
