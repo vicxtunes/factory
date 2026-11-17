@@ -312,6 +312,7 @@ function PayIn({ job, onClose }: { job: ProjectJob; onClose: () => void }) {
   const [how, setHow] = useState<"card" | "mobile">("card");
   const [phone, setPhone] = useState("");
   const [waiting, setWaiting] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const mobileOk = job.price >= MOBILE_MONEY_MIN && job.price <= MOBILE_MONEY_MAX;
@@ -326,6 +327,8 @@ function PayIn({ job, onClose }: { job: ProjectJob; onClose: () => void }) {
         clearInterval(timer);
         onClose();
         router.refresh();
+      } else if (res.data.confirming) {
+        setConfirming(true);
       } else if (res.data.status === "failed") {
         clearInterval(timer);
         setWaiting(null);
@@ -355,8 +358,12 @@ function PayIn({ job, onClose }: { job: ProjectJob; onClose: () => void }) {
 
         {waiting ? (
           <div className="space-y-2 rounded-xl bg-brand-50 p-4 text-brand-700 dark:bg-brand-500/15 dark:text-brand-300">
-            <p className="font-semibold">Check your phone</p>
-            <p>Approve the mobile money prompt for {money(job.price)} with your PIN. This updates by itself once it goes through.</p>
+            <p className="font-semibold">{confirming ? "Still confirming" : "Check your phone"}</p>
+            <p>
+              {confirming
+                ? `Still confirming ${money(job.price)} with the network. If the money left your phone, please don't pay again: this updates by itself once it's confirmed.`
+                : `Approve the mobile money prompt for ${money(job.price)} with your PIN. This updates by itself once it goes through.`}
+            </p>
           </div>
         ) : (
           <>
@@ -406,6 +413,7 @@ function PayIn({ job, onClose }: { job: ProjectJob; onClose: () => void }) {
                   const res = await payVendorJobWithMobileMoney(job.id, phone);
                   if (!res.ok) return setError(res.error);
                   setWaiting(res.data.id);
+                  setConfirming(false);
                 });
               }}
             >

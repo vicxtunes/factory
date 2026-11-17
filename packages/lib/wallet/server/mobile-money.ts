@@ -46,11 +46,19 @@ const DAY_MS = 24 * HOUR_MS;
 /** How far back the waiting-prompt check looks (reconcileWaiting). */
 const WAITING_LOOKBACK_MS = 30 * DAY_MS;
 
+/**
+ * What a payment HivePay called failed is marked with. It's asked about again for a
+ * day (reconcileWaiting), and HivePay has said "failed" then "success" (2026-0745),
+ * so until then the client sees "still confirming", never "failed" (owner, 2026-11-18).
+ */
+const HIVEPAY_SAID_FAILED = "The payment didn't go through.";
+
 function toView(row: repo.CollectionRow): MobileMoneyCollection {
   return {
     id: row.id,
     amount: row.amount,
     status: row.status,
+    confirming: row.status === "failed" && row.failure_reason === HIVEPAY_SAID_FAILED && Date.now() - Date.parse(row.created_at) < DAY_MS,
     failureReason: row.failure_reason,
     orderId: row.order_id,
     network: row.network,
@@ -324,11 +332,11 @@ async function reconcile(row: repo.CollectionRow, { quiet = false } = {}): Promi
   if (res.status === "failed") {
     // Asked again (reconcileWaiting) and still failed: the client heard the first time.
     if (row.status === "failed") return row;
-    await repo.failCollection(row.id, "The payment didn't go through.");
-    // The client's own payment (a top-up or an Aming order): they hear it didn't go. A business's
-    // customer pays without an Aming account, and sees it on the payment screen.
+    await repo.failCollection(row.id, HIVEPAY_SAID_FAILED);
+    // The client's own payment (a top-up or an Aming order): they hear it's still being confirmed.
+    // A business's customer pays without an Aming account, and sees it on the payment screen.
     if (!quiet && !row.product_request_id && !row.booking_id && !row.billing_document_id) {
-      await notifier.paymentFailed(row.client_id, row.amount, row.vendor_job_id ? "/studio/jobs" : clientPath("/payment")).catch((err) => console.error("payment failed push failed:", err));
+      await notifier.paymentNotConfirmed(row.client_id, row.amount, row.vendor_job_id ? "/studio/jobs" : clientPath("/payment")).catch((err) => console.error("payment failed push failed:", err));
     }
   } else if (res.status === "success") {
     if (!(res.amount >= row.amount)) {
@@ -365,8 +373,8 @@ async function tellPaidAfterAll(row: repo.CollectionRow): Promise<void> {
     const receipt = await repo.orderReceiptFor(row.order_id, row.provider_ref);
     if (!order) return;
     const lines = [
-      `Good news: your mobile money payment of ${formatMoney(row.amount)} for order ${order.orderNo} went through after all. ` +
-        `Sorry for the earlier message saying it hadn't. It's now on your order, so please don't pay it again.`,
+      `Good news: your mobile money payment of ${formatMoney(row.amount)} for order ${order.orderNo} is confirmed. ` +
+        `Thank you for waiting. It's now on your order, so please don't pay it again.`,
       receipt ? `Your receipt ${receipt.receiptNo}: ${clientUrl(clientPath(`/receipt/${receipt.token}`))}` : "",
     ];
     const { postAlexisOrderNote } = await import("@repo/lib/chat/orders");
@@ -459,16 +467,18 @@ export async function reconcileWaiting(): Promise<string[]> {
 }
 
 /**
- * HivePay's webhook. A good signature only tells us to look: the outcome is
- * taken from HivePay's status API (reconcile), so a leaked webhook secret
- * still can't credit anyone. Returns the HTTP status to answer with.
+ * HivePay's webhook. It only tells us to look: the outcome is taken from
+ * HivePay's status API (reconcile), so a forged one can't credit anyone, and
+ * only a reference to one of our own payments makes us ask HivePay. So it's
+ * acted on even when the signature doesn't match (owner, 2026-11-18: all 171
+ * since 24 Oct were refused, and clients waited on the 2-minute check).
+ * Returns the HTTP status to answer with.
  */
 export async function handleWebhook(rawBody: string, signature: string | null): Promise<{ status: number; collectionId: string | null }> {
   const answer = (status: number, collectionId: string | null = null) => ({ status, collectionId });
   if (!hivepay.verifyWebhook(rawBody, signature)) {
-    // Said out loud: a wrong HIVEPAY_WEBHOOK_SECRET otherwise only shows as payments left pending.
-    console.error("hivepay webhook rejected: bad signature", signature ? "(signature didn't match)" : "(no signature)");
-    return answer(400);
+    // Acted on anyway; logged so a fixed HIVEPAY_WEBHOOK_SECRET shows as these stopping.
+    console.error("hivepay webhook unsigned or signature didn't match: checking with HivePay anyway", signature ? "(signature didn't match)" : "(no signature)");
   }
   let reference: string | null = null;
   try {

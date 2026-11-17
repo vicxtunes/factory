@@ -73,8 +73,8 @@ export function MobileMoneyPay({
     onDoneRef.current = onDone;
   });
 
-  // Follow the prompt until it's through or failed.
-  const followingId = collection?.status === "pending" && !gaveUp ? collection.id : null;
+  // Follow the prompt until it's through or failed (one HivePay called failed is still being confirmed).
+  const followingId = (collection?.status === "pending" || collection?.confirming) && !gaveUp ? collection.id : null;
   useEffect(() => {
     if (!followingId) return;
     const timer = setInterval(async () => {
@@ -127,6 +127,20 @@ export function MobileMoneyPay({
             Try again
           </Button>
         ) : null}
+      </div>
+    );
+  }
+
+  if (collection?.confirming) {
+    return (
+      <div className="space-y-1 rounded-xl border border-border px-4 py-3">
+        <p className="text-sm font-medium">Still confirming {money(collection.amount)}</p>
+        <p className="text-xs text-muted">
+          If the money left your phone, please don&apos;t pay again: it shows here once confirmed. If you didn&apos;t approve it, you can try again.
+        </p>
+        <Button size="sm" variant="secondary" type="button" onClick={() => setCollection(null)}>
+          Try again
+        </Button>
       </div>
     );
   }
