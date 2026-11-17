@@ -224,7 +224,10 @@ business. One prompt at a time per payment: a second tap within 3 minutes gets t
   HivePay's status API before settling, and a different amount than was asked for is never credited
   (logged for staff). The payment screen asks too (`checkMobileMoneyPayment`, every few seconds), so
   a payment completes even if the webhook is late or missing. A prompt is marked failed only when
-  HivePay says so — never on our own timeout.
+  HivePay says so — never on our own timeout. HivePay can change its mind (failed, then success:
+  order 2026-0745, 2026-11-17), so a failure is asked about again for a day (every 2 minutes in its
+  first hour, then each half hour); if it went through, it's paid in and Alexis tells the client in
+  the order's chat, with the receipt.
 - **Code:** `server/providers/hivepay.ts` (the only file that talks to HivePay),
   `server/mobile-money.ts` (use cases), `packages/ui/wallet/MobileMoneyPay.tsx` (the form and the
   "check your phone" wait).
