@@ -30,6 +30,7 @@ import type {
   InvoiceSettingsInput,
   InvoiceView,
   Owing,
+  ReceiptView,
   StaffInvoiceView,
 } from "./types";
 import { clientPath } from "@repo/lib/client-portal/paths";
@@ -272,4 +273,9 @@ export async function checkInvoiceLinkPayment(collectionId: string): Promise<Inv
     if (collection.status === "succeeded") refresh();
     return collection;
   });
+}
+
+/** A receipt behind its link, for the chat to show as a PDF file right in the message (owner, 2026-11-17). Holding the link is the permission, as on /receipt/<token>. */
+export async function receiptByLink(token: string): Promise<ReceiptView | null> {
+  return /^[A-Za-z0-9_-]{16,128}$/.test(token) ? service.receiptByToken(token) : null;
 }
