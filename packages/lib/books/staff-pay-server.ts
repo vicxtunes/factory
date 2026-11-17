@@ -60,6 +60,7 @@ interface SlipRow {
   net: number | string | null;
   expense_id: string | null;
   moved_from_bill: boolean;
+  advance_by_name: string | null;
 }
 
 const num = (v: number | string | null) => (v === null ? null : Number(v));
@@ -170,6 +171,7 @@ export async function staffPayBoard(scope: TenantScope): Promise<{
       net: num(s.net),
       expense: s.expense_id ? (lines.get(s.expense_id) ?? null) : null,
       movedFromBill: s.moved_from_bill,
+      advanceByName: s.advance_by_name,
     })),
     advances: advanceRows.map((a) => ({ id: a.id, personId: a.person_id, amount: Number(a.amount), givenOn: a.given_on, expense: lines.get(a.id) ?? null })),
     candidates,
@@ -237,6 +239,18 @@ export async function removeExtra(id: string): Promise<void> {
 
 export async function setDays(slipId: string, days: number, actor: Actor): Promise<void> {
   const { error } = await createAdminClient().rpc("staff_pay_set_days", { p_slip: slipId, p_days: days, p_actor_name: actor.name });
+  if (error) fail(error);
+}
+
+/** What comes off a payslip for advances, set by the boss; the rest comes off the next. */
+export async function setSlipAdvance(slipId: string, advance: number, actor: Actor): Promise<void> {
+  const { error } = await createAdminClient().rpc("staff_pay_slip_advance", { p_slip: slipId, p_advance: advance, p_by_hand: true, p_actor_name: actor.name });
+  if (error) fail(error);
+}
+
+/** An advance recorded for the wrong person: to the right one, or to no one on Staff pay (null). */
+export async function moveAdvance(advanceId: string, personId: string | null, actor: Actor): Promise<void> {
+  const { error } = await createAdminClient().rpc("staff_pay_advance_move", { p_advance: advanceId, p_person: personId, p_actor_name: actor.name });
   if (error) fail(error);
 }
 
