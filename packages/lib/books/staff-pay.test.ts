@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import type { ExpenseLine } from "./expenses";
-import { monthlyCost, payDaysBetween, payDayLabel, rateUnit, slipGross, slipState, weeksAhead, whenLabel, type StaffPayPerson } from "./staff-pay";
+import { monthlyCost, payDaysBetween, payDayLabel, rateUnit, slipGross, slipState, weeksAhead, whenLabel, type StaffPayPerson, type StaffPaySlip } from "./staff-pay";
 
 const expense = (patch: Partial<ExpenseLine> = {}) => ({ amount: 300000, paid: 0, voidedAt: null, approval: "approved", onCredit: false, payoutSending: false, ...patch }) as ExpenseLine;
 
@@ -78,13 +78,36 @@ test("the next four weeks: payslips with their allowances, and what's given on i
       { id: "c", kind: "allowance", name: "Lunch", amount: 5000, weekdays: [1, 2, 3, 4, 5], how: "hand", startsOn: "2026-11-18" },
     ],
   });
-  const weeks = weeksAhead([p], new Map(), "2026-11-17");
+  const weeks = weeksAhead([p], new Map(), "2026-11-17", []);
   assert.equal(weeks.length, 4);
   assert.deepEqual(weeks[0], { from: "2026-11-17", to: "2026-11-23", pay: 0, allowances: 4 * 5000, advances: 10000 });
   assert.deepEqual(weeks[1], { from: "2026-11-24", to: "2026-11-30", pay: 300000 + 50000 + 20000, allowances: 5 * 5000, advances: 10000 });
   assert.equal(weeks[2].pay, 0);
   // A stopped person needs nothing.
-  assert.equal(weeksAhead([person({ stopped: true })], new Map(), "2026-11-17").reduce((s, w) => s + w.pay, 0), 0);
+  assert.equal(weeksAhead([person({ stopped: true })], new Map(), "2026-11-17", []).reduce((s, w) => s + w.pay, 0), 0);
+});
+
+test("a payslip already made counts at what's left to pay on it", () => {
+  const slip = {
+    id: "s",
+    personId: "p",
+    payOn: "2026-11-25",
+    rate: 300000,
+    dayRate: false,
+    days: null,
+    basic: 300000,
+    allowances: [],
+    advance: 100000,
+    net: 200000,
+    expense: { amount: 200000, paid: 50000, voidedAt: null, payoutSending: false },
+  } as unknown as StaffPaySlip;
+  // Their next pay day moved on to 25 Dec once the payslip was made.
+  const weeks = weeksAhead([person({ nextPayOn: "2026-12-25" })], new Map(), "2026-11-17", [slip]);
+  assert.equal(weeks[1].pay, 150000);
+  assert.equal(weeks.reduce((s, w) => s + w.pay, 0), 150000);
+  // Paid, or outside the four weeks: nothing.
+  const paid = { ...slip, expense: { ...slip.expense, paid: 200000 } } as StaffPaySlip;
+  assert.equal(weeksAhead([], new Map(), "2026-11-17", [paid]).reduce((s, w) => s + w.pay, 0), 0);
 });
 
 test("a day rate's payslip is estimated from its last days; daily payslip allowances count their days", () => {
@@ -96,7 +119,7 @@ test("a day rate's payslip is estimated from its last days; daily payslip allowa
     nextPayOn: "2026-11-21",
     regulars: [{ id: "l", kind: "allowance", name: "Lunch", amount: 3000, weekdays: [1, 2, 3, 4, 5, 6], how: "payslip", startsOn: "2026-11-01" }],
   });
-  const weeks = weeksAhead([p], new Map([["p", 6]]), "2026-11-17");
+  const weeks = weeksAhead([p], new Map([["p", 6]]), "2026-11-17", []);
   // Sat 21 Nov: 6 days × 15,000 + 6 lunches (15–21 Nov, Mon–Sat).
   assert.equal(weeks[0].pay, 6 * 15000 + 6 * 3000);
   assert.equal(weeks[1].pay, 6 * 15000 + 6 * 3000);

@@ -22,10 +22,12 @@ import {
   addStaffPayExtra,
   cancelStaffPayGiven,
   giveStaffAdvance,
+  moveStaffAdvance,
   removeStaffPayExtra,
   saveStaffPayPerson,
   setStaffPayDays,
   setStaffPaySettings,
+  setStaffPaySlipAdvance,
   stopStaffPayPerson,
 } from "@repo/lib/books/actions";
 import { WEEKDAYS, expenseBalance } from "@repo/lib/books/expenses";
@@ -106,10 +108,12 @@ export function StaffPayBoard({
   const [advanceFor, setAdvanceFor] = useState<StaffPayPerson | "pick" | null>(null);
   const [slipId, setSlipId] = useState<string | null>(null);
   const [givenId, setGivenId] = useState<string | null>(null);
+  const [movingId, setMovingId] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const personOf = new Map(people.map((p) => [p.id, p]));
   const slip = slips.find((s) => s.id === slipId) ?? null;
   const givenOne = given.find((g) => g.id === givenId) ?? null;
+  const moving = advances.find((a) => a.id === movingId) ?? null;
   // The days of each day rate's last payslip, for estimates.
   const lastDays = new Map<string, number>();
   for (const s of slips) if (s.days !== null && !lastDays.has(s.personId)) lastDays.set(s.personId, s.days);
@@ -117,10 +121,14 @@ export function StaffPayBoard({
   const dueNow =
     open.filter((s) => s.payOn <= today && s.expense).reduce((sum, s) => sum + expenseBalance(s.expense!), 0) +
     openGiven.reduce((sum, g) => sum + (g.expense ? expenseBalance(g.expense) : 0), 0);
-  const nextOn = active.map((p) => p.nextPayOn).sort()[0] ?? null;
-  const nextTotal = active
-    .filter((p) => p.nextPayOn === nextOn && !p.dayRate)
-    .reduce((sum, p) => sum + p.rate + p.regulars.reduce((a, r) => a + (r.how === "payslip" && !r.weekdays ? r.amount : 0), 0) + p.extras.reduce((a, x) => a + x.amount, 0), 0);
+  // Payslips are made before their pay day, so the next one may be made already.
+  const upcoming = open.filter((s) => s.payOn > today);
+  const nextOn = [...upcoming.map((s) => s.payOn), ...active.map((p) => p.nextPayOn)].sort()[0] ?? null;
+  const nextTotal =
+    upcoming.filter((s) => s.payOn === nextOn && s.expense).reduce((sum, s) => sum + expenseBalance(s.expense!), 0) +
+    active
+      .filter((p) => p.nextPayOn === nextOn && !p.dayRate)
+      .reduce((sum, p) => sum + p.rate + p.regulars.reduce((a, r) => a + (r.how === "payslip" && !r.weekdays ? r.amount : 0), 0) + p.extras.reduce((a, x) => a + x.amount, 0), 0);
   const owed = active.reduce((sum, p) => sum + p.advanceOwed, 0);
 
   const slipColumns: DataTableColumn<StaffPaySlip>[] = [
@@ -136,7 +144,7 @@ export function StaffPayBoard({
     <div className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <FigureTile label="To pay now" value={money(dueNow)} hint={`${open.filter((s) => s.payOn <= today).length} payslips, ${openGiven.length} allowances and advances`} tone={dueNow > 0 ? "warning" : undefined} />
-        <FigureTile label="Next pay day" value={nextOn ? day(nextOn) : "—"} hint={nextOn ? `About ${money(nextTotal)} before advances and allowances by the day` : "Nobody's paid yet"} />
+        <FigureTile label="Next pay day" value={nextOn ? day(nextOn) : "—"} hint={nextOn ? `About ${money(nextTotal)}, not counting allowances and advances given on their days` : "Nobody's paid yet"} />
         <FigureTile label="Advances to take off" value={money(owed)} hint="Off the next payslips" />
         <button type="button" onClick={() => setSettingsOpen(true)} className="rounded-2xl border border-border bg-surface p-4 text-left shadow-theme-xs">
           <p className="text-sm text-muted">Sends by itself</p>
@@ -170,7 +178,7 @@ export function StaffPayBoard({
 
       {tab === "to_pay" ? (
         open.length + openGiven.length === 0 ? (
-          <EmptyState>Nothing to pay. Payslips are made on each person&apos;s pay day, allowances and advances on their days.</EmptyState>
+          <EmptyState>Nothing to pay. Payslips are made 10 days before each person&apos;s pay day (a day rate&apos;s on the day), allowances and advances on their days.</EmptyState>
         ) : (
           <div className="space-y-6">
             {open.length ? <SlipList slips={open} columns={slipColumns} personOf={personOf} onOpen={setSlipId} /> : null}
@@ -202,17 +210,18 @@ export function StaffPayBoard({
           {given.some((g) => g.kind === "advance") ? (
             <GivenList title="Advances on their days, last 60 days" given={given.filter((g) => g.kind === "advance")} personOf={personOf} onOpen={setGivenId} />
           ) : null}
-          <AdvanceList advances={advances} personOf={personOf} />
+          <AdvanceList advances={advances} personOf={personOf} onOpen={setMovingId} />
         </div>
       ) : null}
 
-      {tab === "analysis" ? <StaffPayAnalysis people={people} months={months} lastDays={lastDays} today={today} /> : null}
+      {tab === "analysis" ? <StaffPayAnalysis people={people} months={months} slips={slips} lastDays={lastDays} today={today} /> : null}
 
       {editing ? <PersonSheet person={editing === "new" ? null : editing} candidates={candidates} onClose={() => setEditing(null)} /> : null}
       {extraFor ? <ExtraSheet person={extraFor} onClose={() => setExtraFor(null)} /> : null}
       {advanceFor ? <AdvanceSheet person={advanceFor === "pick" ? null : advanceFor} people={active} today={today} onClose={() => setAdvanceFor(null)} /> : null}
       {givenOne ? <GivenSheet given={givenOne} person={personOf.get(givenOne.personId) ?? null} today={today} onClose={() => setGivenId(null)} /> : null}
       {slip ? <SlipSheet slip={slip} person={personOf.get(slip.personId) ?? null} today={today} onClose={() => setSlipId(null)} /> : null}
+      {moving ? <AdvanceMoveSheet advance={moving} people={active} personOf={personOf} onClose={() => setMovingId(null)} /> : null}
       {settingsOpen ? <SettingsSheet settings={settings} onClose={() => setSettingsOpen(false)} /> : null}
     </div>
   );
@@ -328,26 +337,29 @@ function PersonCard({ person: p, onEdit, onExtra, onAdvance }: { person: StaffPa
   );
 }
 
-function AdvanceList({ advances, personOf }: { advances: StaffAdvance[]; personOf: Map<string, StaffPayPerson> }) {
+function AdvanceList({ advances, personOf, onOpen }: { advances: StaffAdvance[]; personOf: Map<string, StaffPayPerson>; onOpen: (id: string) => void }) {
   const money = useMoney();
   if (advances.length === 0) return <EmptyState>No advances given.</EmptyState>;
   return (
     <Card title="Advances">
       <ul className="divide-y divide-border text-sm">
         {advances.map((a) => (
-          <li key={a.id} className="flex items-start justify-between gap-3 py-2">
-            <div className="min-w-0">
-              <p className="font-medium">{personOf.get(a.personId)?.name ?? "—"}</p>
-              <p className="mt-0.5 text-xs text-muted">
-                {day(a.givenOn)} · {ADVANCE_LABELS[advanceState(a)]}
-                {a.expense?.paidFrom.length ? ` · from ${a.expense.paidFrom.join(", ")}` : ""}
-              </p>
-            </div>
-            <span className="shrink-0 font-semibold tnum">{money(a.amount)}</span>
+          <li key={a.id}>
+            <button type="button" onClick={() => onOpen(a.id)} disabled={advanceState(a) === "cancelled"} className="flex w-full items-start justify-between gap-3 py-2 text-left">
+              <div className="min-w-0">
+                <p className="font-medium">{personOf.get(a.personId)?.name ?? "—"}</p>
+                <p className="mt-0.5 truncate text-xs text-muted">
+                  {day(a.givenOn)} · {ADVANCE_LABELS[advanceState(a)]}
+                  {a.expense?.paidFrom.length ? ` · from ${a.expense.paidFrom.join(", ")}` : ""}
+                  {a.expense && !a.expense.name.endsWith(personOf.get(a.personId)?.name ?? "") ? ` · “${a.expense.name}”` : ""}
+                </p>
+              </div>
+              <span className="shrink-0 font-semibold tnum">{money(a.amount)}</span>
+            </button>
           </li>
         ))}
       </ul>
-      <p className="mt-3 text-xs text-muted">An advance comes off the next payslip. What that payslip can&apos;t cover comes off the one after.</p>
+      <p className="mt-3 text-xs text-muted">An advance comes off their earliest unpaid payslip. What that payslip can&apos;t cover comes off the one after. Recorded for the wrong person? Tap it.</p>
     </Card>
   );
 }
@@ -827,12 +839,16 @@ function AdvanceSheet({ person, people, today, onClose }: { person: StaffPayPers
 function SlipSheet({ slip: s, person, today, onClose }: { slip: StaffPaySlip; person: StaffPayPerson | null; today: string; onClose: () => void }) {
   const money = useMoney();
   const router = useRouter();
-  const [mode, setMode] = useState<"view" | "pay" | "send">("view");
+  const [mode, setMode] = useState<"view" | "pay" | "send" | "advance">("view");
   const [days, setDays] = useState("");
+  const [advance, setAdvance] = useState(String(s.advance));
   const { error, pending, submit, setError } = useSubmit(() => undefined);
   const state = slipState(s);
   const refresh = async () => router.refresh();
   const e = s.expense;
+  // The advance can change while nothing's on its way and it isn't all paid.
+  const canChange = s.net !== null && (state === "to_pay" || (state === "nothing_to_pay" && s.advance > 0));
+  const mostOff = s.net === null ? 0 : Math.min(s.advance + (person?.advanceOwed ?? 0), s.net + s.advance - (e?.paid ?? 0));
 
   return (
     <FormSheet open onClose={onClose} title={`${person?.name ?? "Payslip"}, ${day(s.payOn)}`}>
@@ -846,7 +862,7 @@ function SlipSheet({ slip: s, person, today, onClose }: { slip: StaffPaySlip; pe
           {s.allowances.map((a, i) => (
             <Line key={i} label={a.once ? `${a.name} (this pay only)` : a.days ? `${a.name}: ${a.days} days × ${money(a.each ?? 0)}` : a.name} value={money(a.amount)} />
           ))}
-          {s.advance > 0 ? <Line label="Advance taken off" value={`−${money(s.advance)}`} /> : null}
+          {s.advance > 0 ? <Line label={s.advanceByName ? `Advance taken off (set by ${s.advanceByName})` : "Advance taken off"} value={`−${money(s.advance)}`} /> : null}
           <Line label="They get" value={s.net === null ? "—" : money(s.net)} strong />
           {e && e.paid > 0 ? <Line label="Paid so far" value={money(e.paid)} /> : null}
         </dl>
@@ -870,7 +886,36 @@ function SlipSheet({ slip: s, person, today, onClose }: { slip: StaffPaySlip; pe
           </Form>
         ) : null}
 
-        {state === "to_pay" && e ? (
+        {mode === "advance" ? (
+          <Form
+            onSubmit={() => {
+              const value = parseNumber(advance);
+              if (!Number.isInteger(value) || value < 0) return setError("Enter the advance to take off, in whole shillings.");
+              if (value > mostOff) return setError(`At most ${money(mostOff)} can come off this payslip.`);
+              submit(async () => {
+                const result = await setStaffPaySlipAdvance({ slipId: s.id, advance: value });
+                if (result.ok) setMode("view");
+                return result;
+              });
+            }}
+          >
+            <Field
+              label="Advance to take off this payslip"
+              hint={`Up to ${money(mostOff)}.${person && person.advanceOwed > 0 ? ` They owe ${money(person.advanceOwed)} more in advances.` : ""} What you leave comes off their next payslip. Once you set it, it stays as you set it.`}
+            >
+              <TextInput inputMode="numeric" value={advance} onChange={(ev) => setAdvance(ev.target.value)} required />
+            </Field>
+            <ErrorLine error={error} />
+            <div className="flex gap-2">
+              <Button type="submit" className="flex-1" loading={pending} disabled={pending}>
+                Save
+              </Button>
+              <Button type="button" variant="secondary" onClick={() => setMode("view")}>
+                Back
+              </Button>
+            </div>
+          </Form>
+        ) : state === "to_pay" && e ? (
           mode === "pay" ? (
             <PayForm expense={e} today={today} onDone={refresh} onCancel={onClose} />
           ) : mode === "send" ? (
@@ -885,6 +930,11 @@ function SlipSheet({ slip: s, person, today, onClose }: { slip: StaffPaySlip; pe
               </Button>
             </div>
           )
+        ) : null}
+        {canChange && mode === "view" && (s.advance > 0 || (person?.advanceOwed ?? 0) > 0) ? (
+          <Button variant="ghost" className="w-full" onClick={() => setMode("advance")}>
+            Change the advance taken off
+          </Button>
         ) : null}
         {state === "sending" ? <p className="text-sm text-muted">HivePay is sending it. It shows as paid once HivePay says it arrived.</p> : null}
         {state === "to_pay" && e && expenseBalance(e) > 0 && s.payOn > today ? <p className="text-xs text-muted">Due on {day(s.payOn)}. You can pay it early.</p> : null}
@@ -948,6 +998,41 @@ function GivenSheet({ given: g, person, today, onClose }: { given: StaffPayGiven
         ) : null}
         {state === "sending" ? <p className="text-sm text-muted">HivePay is sending it. It shows as given once HivePay says it arrived.</p> : null}
       </div>
+    </FormSheet>
+  );
+}
+
+function AdvanceMoveSheet({ advance: a, people, personOf, onClose }: { advance: StaffAdvance; people: StaffPayPerson[]; personOf: Map<string, StaffPayPerson>; onClose: () => void }) {
+  const money = useMoney();
+  const [to, setTo] = useState(a.personId);
+  const { error, pending, submit } = useSubmit(onClose);
+  const from = personOf.get(a.personId)?.name ?? "them";
+  const NOBODY = "nobody";
+
+  return (
+    <FormSheet open onClose={onClose} title={`Advance, ${money(a.amount)}, ${day(a.givenOn)}`}>
+      <Form onSubmit={() => submit(() => moveStaffAdvance({ advanceId: a.id, personId: to === NOBODY ? null : to }))}>
+        {a.expense ? <p className="text-sm text-muted">Recorded as “{a.expense.name}”.</p> : null}
+        <Field label="Whose advance is it?">
+          <Select value={to} onChange={(e) => setTo(e.target.value)}>
+            {people.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+            <option value={NOBODY}>Not anyone on Staff pay</option>
+          </Select>
+        </Field>
+        <p className="text-xs text-muted">
+          {to === a.personId
+            ? `It's ${from}'s: it comes off their pay.`
+            : `If it came off ${from}'s pay already, they get it back: off their unpaid payslip, or added to their next one. ${to === NOBODY ? "It stays a Salary advances expense and comes off no one's pay." : `It comes off ${personOf.get(to)?.name ?? "their"}'s next unpaid payslip instead.`}`}
+        </p>
+        <ErrorLine error={error} />
+        <Button type="submit" className="w-full" loading={pending} disabled={pending || to === a.personId}>
+          Move it
+        </Button>
+      </Form>
     </FormSheet>
   );
 }

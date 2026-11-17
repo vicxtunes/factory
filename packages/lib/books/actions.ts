@@ -494,6 +494,24 @@ export async function cancelStaffPayGiven(id: unknown): Promise<Result> {
   });
 }
 
+export async function setStaffPaySlipAdvance(input: unknown): Promise<Result> {
+  return runAction("books", async () => {
+    const actor = await boss();
+    const { slipId, advance } = parseInput(z.object({ slipId: z.string().uuid(), advance: z.number().int().min(0).max(100_000_000) }), input);
+    await staffPay.setSlipAdvance(slipId, advance, actor);
+    staffPayChanged();
+  });
+}
+
+export async function moveStaffAdvance(input: unknown): Promise<Result> {
+  return runAction("books", async () => {
+    const actor = await boss();
+    const { advanceId, personId } = parseInput(z.object({ advanceId: z.string().uuid(), personId: z.string().uuid().nullable() }), input);
+    await staffPay.moveAdvance(advanceId, personId, actor);
+    staffPayChanged();
+  });
+}
+
 /** Real money when sent: Aming pays HivePay's fee on top. */
 export async function giveStaffAdvance(input: unknown): Promise<Result> {
   return runAction("books", async () => {

@@ -11,7 +11,7 @@ import { ChartCard, GroupedColumns, RankBars, SERIES } from "@repo/ui/charts/kit
 import { compactNumber, monthLabel, percent } from "@repo/ui/charts/format";
 import { FigureTile } from "@repo/ui/accounting/shared";
 import { useMoney } from "@repo/ui/production/sheets";
-import { monthlyCost, weeksAhead, type StaffPayMonth, type StaffPayPerson } from "@repo/lib/books/staff-pay";
+import { monthlyCost, weeksAhead, type StaffPayMonth, type StaffPayPerson, type StaffPaySlip } from "@repo/lib/books/staff-pay";
 
 /** A day rate's month when no payslip has its days yet. */
 const USUAL_DAYS = 26;
@@ -21,11 +21,13 @@ const short = (iso: string) => new Intl.DateTimeFormat("en-GB", { timeZone: "UTC
 export function StaffPayAnalysis({
   people,
   months,
+  slips,
   lastDays,
   today,
 }: {
   people: StaffPayPerson[];
   months: StaffPayMonth[];
+  slips: StaffPaySlip[];
   lastDays: Map<string, number>;
   today: string;
 }) {
@@ -50,7 +52,7 @@ export function StaffPayAnalysis({
   const change = cost(lastMonth) > 0 ? ((cost(thisMonth) - cost(lastMonth)) / cost(lastMonth)) * 100 : null;
 
   const perMonth = active.reduce((s, p) => s + monthlyCost(p, lastDays.get(p.id) ?? USUAL_DAYS), 0);
-  const weeks = weeksAhead(active, lastDays, today);
+  const weeks = weeksAhead(active, lastDays, today, slips);
   const weeksTotal = weeks.reduce((s, w) => s + w.pay + w.allowances + w.advances, 0);
 
   // The last three months, per person.
@@ -127,7 +129,7 @@ export function StaffPayAnalysis({
 
         <ChartCard
           title="Money needed, next 4 weeks"
-          subtitle="From each person's pay day and settings today. Payslips are before advances come off."
+          subtitle="Payslips already made at what's left to pay on them; later ones from each person's pay day and settings today, before advances come off."
           legend={[
             { label: "Payslips", color: SERIES[1] },
             { label: "Allowances on the day", color: SERIES[2] },
