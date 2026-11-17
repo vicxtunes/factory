@@ -41,7 +41,8 @@ const ACTOR_NAME = "HivePay";
 const ASK_PROVIDER_AFTER_MS = 10_000;
 /** While a prompt is this fresh and still pending, a new one isn't sent — the client gets the waiting one back. */
 const ONE_PROMPT_AT_A_TIME_MS = 3 * 60_000;
-const DAY_MS = 24 * 60 * 60_000;
+const HOUR_MS = 60 * 60_000;
+const DAY_MS = 24 * HOUR_MS;
 /** How far back the waiting-prompt check looks (reconcileWaiting). */
 const WAITING_LOOKBACK_MS = 30 * DAY_MS;
 
@@ -314,13 +315,15 @@ export async function paidForStudioBookings(bookingIds: string[]): Promise<Recor
  * `quiet`: a failure isn't told to the client (a prompt from days ago they've long forgotten).
  */
 async function reconcile(row: repo.CollectionRow, { quiet = false } = {}): Promise<repo.CollectionRow> {
-  if (row.status !== "pending") return row;
+  if (row.status === "succeeded") return row;
   const res = await hivepay.status(toHivepayReference(row.id));
   if (!res.ok) {
     console.error("hivepay status failed:", res.message);
     return row;
   }
   if (res.status === "failed") {
+    // Asked again (reconcileWaiting) and still failed: the client heard the first time.
+    if (row.status === "failed") return row;
     await repo.failCollection(row.id, "The payment didn't go through.");
     // The client's own payment (a top-up or an Aming order): they hear it didn't go. A business's
     // customer pays without an Aming account, and sees it on the payment screen.
@@ -342,9 +345,35 @@ async function reconcile(row: repo.CollectionRow, { quiet = false } = {}): Promi
       return (await repo.getCollection(row.id)) ?? row;
     }
     const settled = await repo.settleCollection(row.id, ACTOR_NAME);
-    if (!settled.alreadySettled) await announce(row);
+    if (!settled.alreadySettled) {
+      await announce(row);
+      if (row.status === "failed") await tellPaidAfterAll(row);
+    }
   }
   return (await repo.getCollection(row.id)) ?? row;
+}
+
+/**
+ * A payment the client was told didn't go through went through after all:
+ * Alexis says so in the order's chat, with its receipt (owner, 2026-11-17).
+ * Best effort: the money is in either way.
+ */
+async function tellPaidAfterAll(row: repo.CollectionRow): Promise<void> {
+  if (!row.order_id || !row.provider_ref) return;
+  try {
+    const order = await directory.loadOrder(row.order_id);
+    const receipt = await repo.orderReceiptFor(row.order_id, row.provider_ref);
+    if (!order) return;
+    const lines = [
+      `Good news: your mobile money payment of ${formatMoney(row.amount)} for order ${order.orderNo} went through after all. ` +
+        `Sorry for the earlier message saying it hadn't. It's now on your order, so please don't pay it again.`,
+      receipt ? `Your receipt ${receipt.receiptNo}: ${clientUrl(clientPath(`/receipt/${receipt.token}`))}` : "",
+    ];
+    const { postAlexisOrderNote } = await import("@repo/lib/chat/orders");
+    await postAlexisOrderNote(row.order_id, lines.filter(Boolean).join("\n\n"));
+  } catch (err) {
+    console.error("paid-after-all note failed:", row.id, err);
+  }
 }
 
 /** Someone checks it really was one payment (not a prompt plus a second payment to our number). */
@@ -412,6 +441,18 @@ export async function reconcileWaiting(): Promise<string[]> {
       if ((await reconcile(row, { quiet })).status === "succeeded") succeeded.push(row.id);
     } catch (error) {
       console.error("hivepay reconcile failed:", row.id, error);
+    }
+  }
+  // HivePay can say "failed" and later "success": MTN took Muwinner's 104,400
+  // for order 2026-0745 though HivePay called it failed a minute in (2026-11-17).
+  // So a failure is asked about again for a day: every run in its first hour,
+  // then once each half hour (HivePay limits how often we ask).
+  for (const row of await repo.failedCollectionsSince(new Date(now - DAY_MS))) {
+    if (now - Date.parse(row.created_at) > HOUR_MS && new Date(now).getMinutes() % 30 >= 2) continue;
+    try {
+      if ((await reconcile(row)).status === "succeeded") succeeded.push(row.id);
+    } catch (error) {
+      console.error("hivepay recheck of a failed payment failed:", row.id, error);
     }
   }
   return succeeded;

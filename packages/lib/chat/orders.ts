@@ -4,4 +4,4 @@ import "server-only";
 // with its client (received, ready for pickup). Callers decide when; these
 // functions trust their input.
 
-export { announceOrderCollected, postOrderCard } from "./server/service";
+export { announceOrderCollected, postAlexisOrderNote, postOrderCard } from "./server/service";
