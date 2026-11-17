@@ -11,6 +11,7 @@ import type { ChatAttachment, ChatMessage } from "@repo/lib/chat/types";
 import { formatBytes, formatMessageTime } from "./format";
 import { FileIcon } from "./icons";
 import { MessageMenu, type MessageMenuItem } from "./MessageMenu";
+import { ReceiptFile, receiptTokens } from "./ReceiptFile";
 import { VoicePlayer } from "./VoicePlayer";
 
 function AttachmentView({ a, mine, onOpen }: { a: ChatAttachment; mine: boolean; onOpen: () => void }) {
@@ -205,6 +206,13 @@ export function MessageBubble({
                       {/* eslint-disable-next-line @next/next/no-img-element -- stored product photos, any shape */}
                       <img src={image.url} alt={image.name} loading="lazy" className="aspect-square w-full rounded-lg object-cover" />
                     </button>
+                  ))}
+                </div>
+              ) : null}
+              {message.body && receiptTokens(message.body).length ? (
+                <div className="mb-1.5 space-y-1.5">
+                  {receiptTokens(message.body).map((token) => (
+                    <ReceiptFile key={token} token={token} mine={mine} />
                   ))}
                 </div>
               ) : null}
