@@ -28,6 +28,7 @@ import type {
   ParticipantRef,
   UploadedAttachment,
 } from "../types";
+import { ASSISTANT_NAME } from "@repo/lib/assistant/core/rules";
 import * as directory from "./directory";
 import { ChatError, type ChatViewer } from "./identity";
 import { notifyRecipients } from "./notifier";
@@ -870,6 +871,14 @@ export async function postAssistantMessage(
   });
   ringConversation(conversation, "message");
   await notifyRecipients([{ type: "client", id: clientId }], { title: senderName, body: body.slice(0, 120), conversationId });
+}
+
+/** Alexis tells the client something in their order's chat, with a push (a late payment paid in, 2026-11-17). */
+export async function postAlexisOrderNote(orderId: string, body: string): Promise<void> {
+  const order = await directory.getOrderContext(orderId);
+  if (!order?.clientId) return;
+  const conversation = await ensureClientOrderConversation(order, order.clientId, { type: "system", id: "aming" });
+  await postAssistantMessage(conversation.id, order.clientId, ASSISTANT_NAME, body);
 }
 
 /**

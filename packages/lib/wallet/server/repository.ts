@@ -594,6 +594,34 @@ export async function pendingCollectionsBetween(since: Date, before: Date): Prom
   return (data ?? []).map(normaliseCollection);
 }
 
+/** Prompts HivePay called failed since then, to ask about again (reconcileWaiting). */
+export async function failedCollectionsSince(since: Date): Promise<CollectionRow[]> {
+  const { data, error } = await createAdminClient()
+    .from("provider_collections")
+    .select(COLLECTION_COLUMNS)
+    .eq("status", "failed")
+    .not("provider_ref", "is", null)
+    .gte("created_at", since.toISOString())
+    .order("created_at")
+    .returns<CollectionRow[]>();
+  if (error) throwDbError(error);
+  return (data ?? []).map(normaliseCollection);
+}
+
+/** The receipt a mobile money payment got on its order (it carries HivePay's reference). */
+export async function orderReceiptFor(orderId: string, providerRef: string): Promise<{ receiptNo: string; token: string } | null> {
+  const { data, error } = await createAdminClient()
+    .from("order_receipts")
+    .select("receipt_no, share_token")
+    .eq("order_id", orderId)
+    .eq("reference", providerRef)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throwDbError(error);
+  return data ? { receiptNo: data.receipt_no as string, token: data.share_token as string } : null;
+}
+
 /** The prompt went out: keep the provider's id for it. */
 export async function markCollectionSent(id: string, providerRef: string, network: string | null): Promise<void> {
   const { error } = await createAdminClient()
