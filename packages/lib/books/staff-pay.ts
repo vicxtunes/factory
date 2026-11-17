@@ -215,9 +215,10 @@ export interface WeekNeed {
  * payslips on their pay days (a day rate at the days of their last payslip,
  * allowances on the payslip at their days), and allowances and advances given
  * on their days. Advances taken off a payslip aren't subtracted: this is the
- * money that leaves, the advances leave earlier.
+ * money that leaves, the advances leave earlier. Payslips already made (they
+ * are made before the pay day) count at what's left to pay on them.
  */
-export function weeksAhead(people: StaffPayPerson[], lastDays: Map<string, number>, today: string, weeks = 4): WeekNeed[] {
+export function weeksAhead(people: StaffPayPerson[], lastDays: Map<string, number>, today: string, slips: StaffPaySlip[], weeks = 4): WeekNeed[] {
   const out: WeekNeed[] = [];
   for (let w = 0; w < weeks; w++) {
     const from = isoDay(dayNumber(today) + w * 7 * DAY_MS);
@@ -225,6 +226,10 @@ export function weeksAhead(people: StaffPayPerson[], lastDays: Map<string, numbe
   }
   const end = out[out.length - 1].to;
   const weekOf = (iso: string) => out[Math.floor((dayNumber(iso) - dayNumber(today)) / (7 * DAY_MS))];
+  for (const s of slips) {
+    if (s.payOn < today || s.payOn > end || !slipOpen(s) || !s.expense) continue;
+    weekOf(s.payOn).pay += expenseBalance(s.expense);
+  }
   for (const p of people) {
     if (p.stopped) continue;
     const days = (from: string, to: string, wd: number[], startsOn: string) => {

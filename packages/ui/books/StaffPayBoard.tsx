@@ -117,10 +117,14 @@ export function StaffPayBoard({
   const dueNow =
     open.filter((s) => s.payOn <= today && s.expense).reduce((sum, s) => sum + expenseBalance(s.expense!), 0) +
     openGiven.reduce((sum, g) => sum + (g.expense ? expenseBalance(g.expense) : 0), 0);
-  const nextOn = active.map((p) => p.nextPayOn).sort()[0] ?? null;
-  const nextTotal = active
-    .filter((p) => p.nextPayOn === nextOn && !p.dayRate)
-    .reduce((sum, p) => sum + p.rate + p.regulars.reduce((a, r) => a + (r.how === "payslip" && !r.weekdays ? r.amount : 0), 0) + p.extras.reduce((a, x) => a + x.amount, 0), 0);
+  // Payslips are made before their pay day, so the next one may be made already.
+  const upcoming = open.filter((s) => s.payOn > today);
+  const nextOn = [...upcoming.map((s) => s.payOn), ...active.map((p) => p.nextPayOn)].sort()[0] ?? null;
+  const nextTotal =
+    upcoming.filter((s) => s.payOn === nextOn && s.expense).reduce((sum, s) => sum + expenseBalance(s.expense!), 0) +
+    active
+      .filter((p) => p.nextPayOn === nextOn && !p.dayRate)
+      .reduce((sum, p) => sum + p.rate + p.regulars.reduce((a, r) => a + (r.how === "payslip" && !r.weekdays ? r.amount : 0), 0) + p.extras.reduce((a, x) => a + x.amount, 0), 0);
   const owed = active.reduce((sum, p) => sum + p.advanceOwed, 0);
 
   const slipColumns: DataTableColumn<StaffPaySlip>[] = [
@@ -136,7 +140,7 @@ export function StaffPayBoard({
     <div className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <FigureTile label="To pay now" value={money(dueNow)} hint={`${open.filter((s) => s.payOn <= today).length} payslips, ${openGiven.length} allowances and advances`} tone={dueNow > 0 ? "warning" : undefined} />
-        <FigureTile label="Next pay day" value={nextOn ? day(nextOn) : "—"} hint={nextOn ? `About ${money(nextTotal)} before advances and allowances by the day` : "Nobody's paid yet"} />
+        <FigureTile label="Next pay day" value={nextOn ? day(nextOn) : "—"} hint={nextOn ? `About ${money(nextTotal)}, not counting allowances and advances given on their days` : "Nobody's paid yet"} />
         <FigureTile label="Advances to take off" value={money(owed)} hint="Off the next payslips" />
         <button type="button" onClick={() => setSettingsOpen(true)} className="rounded-2xl border border-border bg-surface p-4 text-left shadow-theme-xs">
           <p className="text-sm text-muted">Sends by itself</p>
@@ -170,7 +174,7 @@ export function StaffPayBoard({
 
       {tab === "to_pay" ? (
         open.length + openGiven.length === 0 ? (
-          <EmptyState>Nothing to pay. Payslips are made on each person&apos;s pay day, allowances and advances on their days.</EmptyState>
+          <EmptyState>Nothing to pay. Payslips are made 10 days before each person&apos;s pay day (a day rate&apos;s on the day), allowances and advances on their days.</EmptyState>
         ) : (
           <div className="space-y-6">
             {open.length ? <SlipList slips={open} columns={slipColumns} personOf={personOf} onOpen={setSlipId} /> : null}
@@ -206,7 +210,7 @@ export function StaffPayBoard({
         </div>
       ) : null}
 
-      {tab === "analysis" ? <StaffPayAnalysis people={people} months={months} lastDays={lastDays} today={today} /> : null}
+      {tab === "analysis" ? <StaffPayAnalysis people={people} months={months} slips={slips} lastDays={lastDays} today={today} /> : null}
 
       {editing ? <PersonSheet person={editing === "new" ? null : editing} candidates={candidates} onClose={() => setEditing(null)} /> : null}
       {extraFor ? <ExtraSheet person={extraFor} onClose={() => setExtraFor(null)} /> : null}
