@@ -11,7 +11,7 @@ import type { ChatAttachment, ChatMessage } from "@repo/lib/chat/types";
 import { formatBytes, formatMessageTime } from "./format";
 import { FileIcon } from "./icons";
 import { MessageMenu, type MessageMenuItem } from "./MessageMenu";
-import { ReceiptFile, receiptTokens } from "./ReceiptFile";
+import { ReceiptFile, receiptFileShown, receiptTokens } from "./ReceiptFile";
 import { VoicePlayer } from "./VoicePlayer";
 
 function AttachmentView({ a, mine, onOpen }: { a: ChatAttachment; mine: boolean; onOpen: () => void }) {
@@ -209,7 +209,7 @@ export function MessageBubble({
                   ))}
                 </div>
               ) : null}
-              {message.body && receiptTokens(message.body).length ? (
+              {message.body && receiptFileShown(message.createdAt) && receiptTokens(message.body).length ? (
                 <div className="mb-1.5 space-y-1.5">
                   {receiptTokens(message.body).map((token) => (
                     <ReceiptFile key={token} token={token} mine={mine} />
