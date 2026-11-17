@@ -87,6 +87,8 @@ export interface StaffPaySlip {
   /** What they get, as an expense; null until worked out, or when an advance took it all. */
   expense: ExpenseLine | null;
   movedFromBill: boolean;
+  /** Who set the advance taken off by hand; until then advances owed come off by themselves. */
+  advanceByName: string | null;
 }
 
 export interface StaffAdvance {
