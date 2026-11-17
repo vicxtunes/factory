@@ -10,6 +10,7 @@ import { ClientInvoiceLink } from "@repo/ui/invoices/ClientInvoiceLink";
 import { OrderPayButton } from "@repo/ui/payments/OrderPayButton";
 import { useMoney } from "@repo/ui/wallet/shared";
 import { getOrderCardState, sendMessage } from "@repo/lib/chat/actions";
+import { receiptByLink } from "@repo/lib/invoices/actions";
 import { uploadChatAttachment } from "@repo/lib/chat/client/upload";
 import type { ChatMessage, OrderCardKind, OrderCardState } from "@repo/lib/chat/types";
 import { confirmOrderCollected } from "@repo/lib/orders/collect";
@@ -17,6 +18,7 @@ import { getOrderPayment } from "@repo/lib/wallet/actions";
 import type { OrderPaymentState } from "@repo/lib/wallet/types";
 
 import { formatMessageTime } from "./format";
+import { downloadReceipt, receiptTokens } from "./ReceiptFile";
 
 // Staff only, so clients never download it.
 const StaffInvoicePanel = dynamic(() => import("@repo/ui/invoices/StaffInvoicePanel").then((m) => m.StaffInvoicePanel));
@@ -153,9 +155,7 @@ export function OrderCard({
     const receipt = state.receipts.find((r) => Date.parse(r.at) === Date.parse(message.createdAt));
     if (receipt) {
       actions.push(
-        <a key="receipt" href={receipt.href} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center rounded-[var(--radius)] border border-brand-300 bg-surface px-4 text-sm font-semibold text-brand-700 dark:text-brand-300">
-          View receipt
-        </a>,
+        <DownloadReceiptButton key="receipt" token={receiptTokens(receipt.href)[0] ?? ""} />,
       );
     }
     if (client) actions.push(<ClientInvoiceLink key="invoice" orderId={state.orderId} />);
@@ -191,6 +191,36 @@ export function OrderCard({
         </BottomSheet>
       ) : null}
     </>
+  );
+}
+
+/** The payment's receipt, saved as its PDF right here: no new tab (owner, 2026-11-17). */
+function DownloadReceiptButton({ token }: { token: string }) {
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
+  return (
+    <Button
+      type="button"
+      variant="secondary"
+      className="min-h-10"
+      loading={busy}
+      disabled={busy || !token}
+      onClick={async () => {
+        setBusy(true);
+        setFailed(false);
+        try {
+          const receipt = await receiptByLink(token);
+          if (receipt) await downloadReceipt(receipt);
+          else setFailed(true);
+        } catch {
+          setFailed(true);
+        } finally {
+          setBusy(false);
+        }
+      }}
+    >
+      {failed ? "Couldn't load it. Try again" : "Download receipt"}
+    </Button>
   );
 }
 
