@@ -21,7 +21,6 @@ export const VIDEO_TYPES = { "video/mp4": "mp4", "video/webm": "webm", "video/qu
 export type VideoContentType = keyof typeof VIDEO_TYPES;
 
 /** Extra storage is bought in these sizes (GB), at the boss's price per GB. */
-export const SPACE_PACKS_GB = [1, 5, 10, 50] as const;
 
 export function usageShare(usedBytes: number, quotaBytes: number): number {
   return quotaBytes <= 0 ? 1 : usedBytes / quotaBytes;

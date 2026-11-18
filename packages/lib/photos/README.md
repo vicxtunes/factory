@@ -60,10 +60,11 @@ never shared by link: it's shown through the service's page. Managed on the serv
 - Every studio starts with **1 GB** (`tenants.storage_quota_bytes`). The boss sets it per studio
   on the studio's page in the staff app.
 - A **usage bar** shows on the studio's dashboard, Showroom and Files pages, warning at 80%.
-- **Buying more:** the owner buys 1, 5, 10 or 50 GB on the Files page (**Get more space**), paid
+- **Buying more:** the owner buys one of the boss's packs (each its own size and price, Studios → Extra storage) on the Files page (**Get more space**), paid
   once from their Aming wallet (shillings) and theirs to keep.
-  - The boss sets the price of a GB on the staff app's Studios page (`storage_pricing`, one row);
-    0 takes it off sale, and the button goes.
+  - The boss keeps the packs on the staff app's Studios page (`storage_packs`, one row a size);
+    no packs takes it off sale, and the button goes. Paid from the card or by MTN/Airtel (put on
+    the card, then bought from it).
   - `storage_buy()` does it in one transaction: the wallet pays (never below zero), the allowance
     goes up, the purchase is recorded (`storage_purchases`). It takes the price the buyer saw, so
     a price changed meanwhile takes nothing. A studio stops at 1 TB.
@@ -142,7 +143,7 @@ packages/lib/photos/
   server.ts, actions.ts
 packages/ui/photos/  browser.ts (resize, signed PUT), PhotoUploader, UsageBar, AlbumControls, DownloadAll,
                      ProjectGalleryPanel,
-                     MasonryGallery (+ full-screen viewer), QuotaForm, BuySpace, SpacePriceForm.
+                     MasonryGallery (+ full-screen viewer), QuotaForm, BuySpace, SpacePacksForm.
 supabase/migrations/20261003200000_studio_photos.sql
 supabase/migrations/20261004100000_photo_deliveries.sql   delivery albums, share links
 supabase/migrations/20261022100000_studio_files.sql       buying storage (with studio files)

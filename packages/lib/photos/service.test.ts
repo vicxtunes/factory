@@ -24,7 +24,7 @@ function fakes(quotaBytes = 10 * MB) {
   const services = new Set(["studio-a/weddings", "studio-b/portraits"]);
   const blank = { kind: "portfolio" as const, projectId: null, serviceId: null, videoKey: null, videoBytes: null, shareToken: null, shareExpiresOn: null, coverPhotoId: null, photoCount: 0, coverThumbKey: null, coverLargeKey: null };
   let n = 0;
-  let price: number | null = null;
+  let packs: { gb: number; price: number }[] = [];
   const objects: ObjectStore = {
     putUrl: async (key, type) => `put://${key}?type=${type}`,
     getUrl: async (key) => `get://${key}`,
@@ -42,11 +42,12 @@ function fakes(quotaBytes = 10 * MB) {
   const repo: PhotoRepository = {
     usage: async (s) => ({ usedBytes: used(s.tenantId), quotaBytes: quotas.get(s.tenantId)! }),
     setQuota: async (t, q) => !!(quotas.has(t) && quotas.set(t, q)),
-    spacePrice: async () => price,
-    setSpacePrice: async (p) => void (price = p),
+    spacePacks: async () => [...packs].sort((a, b) => a.gb - b.gb),
+    setSpacePacks: async (p) => void (packs = p),
     buySpace: async (s, gb, amount) => {
-      if (price === null) throw new PhotoError("Extra storage isn't on sale right now.");
-      if (gb * price !== amount) throw new PhotoError("The price just changed.");
+      const pack = packs.find((p) => p.gb === gb);
+      if (!pack) throw new PhotoError("Extra storage isn't on sale right now.");
+      if (pack.price !== amount) throw new PhotoError("The price just changed.");
       quotas.set(s.tenantId, quotas.get(s.tenantId)! + gb * 1024 ** 3);
     },
     albums: async (s) => albums.filter((a) => a.tenantId === s.tenantId && a.kind === "portfolio"),
@@ -319,16 +320,18 @@ test("videos only go on the studio's own service albums", async () => {
   await assert.rejects(service.removeVideo(studioB, album), /no longer exists/);
 });
 
-test("extra storage: off sale until the boss prices it, then bought at the price seen", async () => {
+test("extra storage: off sale until the boss makes packs, then a pack bought at the price seen", async () => {
   const { service } = fakes(10 * MB);
   const buyer = { clientId: "owner-a", name: "Amina" };
-  assert.equal(await service.spacePrice(), null);
+  assert.deepEqual(await service.spacePacks(), []);
   await assert.rejects(service.buySpace(studioA, { gb: 5, amount: 25_000 }, buyer), /isn't on sale/);
-  await service.setSpacePrice(5_000);
+  await service.setSpacePacks([{ gb: 20, price: 50_000 }, { gb: 5, price: 25_000 }]);
+  assert.deepEqual((await service.spacePacks()).map((p) => p.gb), [5, 20], "smallest first");
+  await assert.rejects(service.buySpace(studioA, { gb: 10, amount: 50_000 }, buyer), /isn't on sale/, "only a pack's size");
   await assert.rejects(service.buySpace(studioA, { gb: 5, amount: 20_000 }, buyer), /price just changed/);
   await service.buySpace(studioA, { gb: 5, amount: 25_000 }, buyer);
   assert.equal((await service.usage(studioA)).quotaBytes, 10 * MB + 5 * 1024 ** 3);
   assert.equal((await service.usage(studioB)).quotaBytes, 10 * MB, "only the buyer's studio grows");
-  await service.setSpacePrice(0);
-  assert.equal(await service.spacePrice(), null, "a price of 0 takes it off sale");
+  await service.setSpacePacks([]);
+  assert.deepEqual(await service.spacePacks(), [], "no packs takes it off sale");
 });

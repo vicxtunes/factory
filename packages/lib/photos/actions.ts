@@ -28,7 +28,7 @@ import {
   photoIdSchema,
   quotaGbSchema,
   shareExpirySchema,
-  spacePriceSchema,
+  spacePacksSchema,
   uploadConfirmSchema,
   uploadStartSchema,
   videoUploadConfirmSchema,
@@ -215,12 +215,12 @@ export async function buyStorageSpace(input: unknown): Promise<Result> {
   });
 }
 
-/** Only the boss sets what a GB of extra storage costs (owner, 2026-11-18); 0 takes it off sale. */
-export async function setStorageSpacePrice(pricePerGb: unknown): Promise<Result> {
+/** Only the boss sets the storage packs (owner, 2026-11-18, packs 2026-11-19); none takes storage off sale. */
+export async function setStorageSpacePacks(packs: unknown): Promise<Result> {
   return runAction("photos", async () => {
     const session = await getDashboardSession();
     if (!session?.isBoss) throw new PhotoError("Only the boss can set the price of storage.");
-    await photos.setSpacePrice(parseInput(spacePriceSchema, pricePerGb));
+    await photos.setSpacePacks(parseInput(spacePacksSchema, packs));
     revalidatePath("/dashboard/studios");
   });
 }

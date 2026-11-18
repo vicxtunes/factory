@@ -66,6 +66,12 @@ export interface AlbumView extends Album {
   videoUrl: string | null;
 }
 
+/** A pack of extra storage on sale: its size and price (whole shillings). */
+export interface SpacePack {
+  gb: number;
+  price: number;
+}
+
 export interface Usage {
   usedBytes: number;
   quotaBytes: number;
