@@ -5,7 +5,7 @@
 import { AppError } from "@repo/lib/kernel/core";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
-import type { Album, Photo, Usage } from "./core/model";
+import type { Album, Photo, SpacePack, Usage } from "./core/model";
 
 export interface ObjectStore {
   /** A signed, short-lived link the browser can PUT one file to (with this content type). */
@@ -23,9 +23,9 @@ export interface ObjectStore {
 export interface PhotoRepository {
   usage(scope: TenantScope): Promise<Usage>;
   setQuota(tenantId: string, quotaBytes: number): Promise<boolean>;
-  /** What a GB of extra storage costs (whole shillings); null when it isn't on sale. */
-  spacePrice(): Promise<number | null>;
-  setSpacePrice(pricePerGb: number | null): Promise<void>;
+  /** The storage packs on sale, smallest first; none when storage isn't on sale. */
+  spacePacks(): Promise<SpacePack[]>;
+  setSpacePacks(packs: SpacePack[]): Promise<void>;
   /**
    * Buys `gb` of extra storage from the studio owner's Aming card (their wallet) for `amount`
    * (the price the buyer saw), raising the allowance, all or nothing (in the

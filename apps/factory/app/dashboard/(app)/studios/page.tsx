@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { SpacePriceForm } from "@repo/ui/photos/SpacePriceForm";
+import { SpacePacksForm } from "@repo/ui/photos/SpacePacksForm";
 import { StudioStatusBadge } from "@repo/ui/studio-access/StatusBadge";
 import { StudiosAnalysis } from "@repo/ui/studios/StudiosAnalysis";
 import { StudiosTable } from "@repo/ui/studios/StudiosTable";
@@ -89,7 +89,7 @@ async function Waiting() {
 }
 
 async function SpacePrice() {
-  return <SpacePriceForm pricePerGb={await photos.spacePrice()} />;
+  return <SpacePacksForm packs={await photos.spacePacks()} />;
 }
 
 async function Analysis() {

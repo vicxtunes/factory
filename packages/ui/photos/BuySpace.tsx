@@ -11,7 +11,7 @@ import { MobileMoneyPay } from "@repo/ui/wallet/MobileMoneyPay";
 import { buyStorageSpace } from "@repo/lib/photos/actions";
 import { topUpWithMobileMoney } from "@repo/lib/wallet/actions";
 import type { MobileNetwork } from "@repo/lib/wallet/policy";
-import { SPACE_PACKS_GB } from "@repo/lib/photos/core";
+import type { SpacePack } from "@repo/lib/photos/core";
 import { formatAmount } from "@repo/lib/tenancy/format";
 
 /**
@@ -22,16 +22,17 @@ import { formatAmount } from "@repo/lib/tenancy/format";
  * from their phone and the space bought from it at once; closed before it
  * confirms, the money stays on the card for the next try.
  */
-export function BuySpace({ pricePerGb, balance, locale }: { pricePerGb: number; balance: number; locale: string }) {
+export function BuySpace({ packs, balance, locale }: { packs: SpacePack[]; balance: number; locale: string }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [gb, setGb] = useState<number>(SPACE_PACKS_GB[1]);
+  const [gb, setGb] = useState<number>(packs[0].gb);
   const [error, setError] = useState<string | null>(null);
   const [bought, setBought] = useState<number | null>(null);
   const [pending, start] = useTransition();
   const [method, setMethod] = useState<"card" | MobileNetwork>("card");
   const money = (amount: number) => formatAmount({ currency: "UGX", locale }, amount);
-  const amount = gb * pricePerGb;
+  // The pack picked; its price as the boss set it (the first pack if that one went meanwhile).
+  const amount = (packs.find((p) => p.gb === gb) ?? packs[0]).price;
   const short = amount > balance;
 
   function buy() {
@@ -68,7 +69,7 @@ export function BuySpace({ pricePerGb, balance, locale }: { pricePerGb: number; 
           <div className="space-y-4">
             <p className="text-sm text-muted">Extra storage for your files and photos, paid once from your Aming card and yours to keep.</p>
             <div role="radiogroup" aria-label="How much" className="grid grid-cols-2 gap-2">
-              {SPACE_PACKS_GB.map((size) => (
+              {packs.map(({ gb: size, price }) => (
                 <button
                   key={size}
                   type="button"
@@ -78,7 +79,7 @@ export function BuySpace({ pricePerGb, balance, locale }: { pricePerGb: number; 
                   className={`rounded-xl border p-3 text-left ${gb === size ? "border-brand-500 bg-brand-50 dark:bg-brand-500/10" : "border-border bg-background"}`}
                 >
                   <span className="block font-medium">{size} GB</span>
-                  <span className="block text-xs text-muted tnum">{money(size * pricePerGb)}</span>
+                  <span className="block text-xs text-muted tnum">{money(price)}</span>
                 </button>
               ))}
             </div>
