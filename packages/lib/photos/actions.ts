@@ -215,11 +215,11 @@ export async function buyStorageSpace(input: unknown): Promise<Result> {
   });
 }
 
-/** The boss sets what a GB of extra storage costs; 0 takes it off sale. */
+/** Only the boss sets what a GB of extra storage costs (owner, 2026-11-18); 0 takes it off sale. */
 export async function setStorageSpacePrice(pricePerGb: unknown): Promise<Result> {
   return runAction("photos", async () => {
     const session = await getDashboardSession();
-    if (!sessionCan(session, "studios", "manage")) throw new PhotoError("You don't have access to this. Ask the boss.");
+    if (!session?.isBoss) throw new PhotoError("Only the boss can set the price of storage.");
     await photos.setSpacePrice(parseInput(spacePriceSchema, pricePerGb));
     revalidatePath("/dashboard/studios");
   });
