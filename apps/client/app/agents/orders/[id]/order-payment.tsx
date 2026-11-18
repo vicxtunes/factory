@@ -17,17 +17,17 @@ export function OrderPayment({ orderId, phone, invoiceUrl }: { orderId: string; 
   const [open, setOpen] = useState(false);
   const [number, setNumber] = useState(phone ? localPhone(phone) : "");
   const [error, setError] = useState<string | null>(null);
-  const [collection, setCollection] = useState<{ id: string; status: string } | null>(null);
+  const [collection, setCollection] = useState<{ id: string; status: string; confirming: boolean } | null>(null);
   const [copied, setCopied] = useState(false);
   const [pending, start] = useTransition();
 
   const waiting = collection?.status === "pending";
   useEffect(() => {
-    if (!collection || collection.status !== "pending") return;
+    if (!collection || (collection.status !== "pending" && !collection.confirming)) return;
     const timer = setInterval(async () => {
       const res = await checkClientPayment(collection.id);
-      if (res.ok && res.data && res.data.status !== "pending") {
-        setCollection({ id: collection.id, status: res.data.status });
+      if (res.ok && res.data && (res.data.status !== collection.status || res.data.confirming !== collection.confirming)) {
+        setCollection({ id: collection.id, status: res.data.status, confirming: res.data.confirming });
         router.refresh();
       }
     }, CHECK_EVERY_MS);
@@ -67,7 +67,9 @@ export function OrderPayment({ orderId, phone, invoiceUrl }: { orderId: string; 
                 ? "Waiting for your client to approve the prompt on their phone."
                 : collection.status === "succeeded"
                   ? "Paid. Thank you."
-                  : "The payment didn't go through, and no money was taken."}
+                  : collection.confirming
+                    ? "Still confirming with the network. If your client's money left their phone, don't send another prompt: it shows on the order once confirmed."
+                    : "The payment didn't go through, and no money was taken."}
             </p>
             {waiting ? null : (
               <Button type="button" className="w-full" onClick={close}>
@@ -84,7 +86,7 @@ export function OrderPayment({ orderId, phone, invoiceUrl }: { orderId: string; 
               start(async () => {
                 const res = await promptClientToPay(orderId, number);
                 if (!res.ok) setError(res.error);
-                else if (res.data) setCollection({ id: res.data.id, status: res.data.status });
+                else if (res.data) setCollection({ id: res.data.id, status: res.data.status, confirming: res.data.confirming });
               });
             }}
           >

@@ -11,13 +11,12 @@ import { Loading } from "@repo/ui/skeletons/Loading";
 import { photos } from "@repo/lib/photos/server";
 import { studioAccess } from "@repo/lib/studio-access/server";
 import { readStudioActivity, requireStudiosOversight, studios } from "@repo/lib/studios/server";
-import { sessionCan } from "@repo/lib/auth/session";
 import { resolveTenantScope } from "@repo/lib/tenancy/server/resolve";
 
 export const dynamic = "force-dynamic";
 
 export default async function StudiosPage() {
-  const manage = sessionCan(await requireStudiosOversight(), "studios", "manage");
+  const session = await requireStudiosOversight();
 
   return (
     <div className="space-y-6">
@@ -46,7 +45,7 @@ export default async function StudiosPage() {
           <All />
         </Loading>
       </section>
-      {manage ? (
+      {session.isBoss ? (
         <section>
           <SectionLabel>Extra storage</SectionLabel>
           <Loading skeleton={<Skeleton className="h-16 w-full" />}>
