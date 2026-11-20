@@ -360,6 +360,11 @@ export interface Announcement {
   approved_at: string | null;
   // Who approved or rejected it.
   decided_by_name: string | null;
+  // A designed poster (public link), shown in place of the title and message,
+  // and a button under it that opens link_url ("Check this out" by default).
+  image_url: string | null;
+  button_label: string | null;
+  link_url: string | null;
 }
 
 export type AnnouncementApproval = "pending" | "approved" | "rejected";

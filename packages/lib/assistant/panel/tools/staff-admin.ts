@@ -3,6 +3,7 @@ import "server-only";
 import { z } from "zod";
 
 import { canApproveAnnouncements, canManageAnnouncement, canViewAnnouncements } from "@repo/lib/announcements/access";
+import { ANNOUNCEMENT_COLUMNS } from "@repo/lib/announcements/core";
 import { createAnnouncement, decideAnnouncement, deleteAnnouncement, setAnnouncementActive, updateAnnouncement } from "@repo/lib/announcements/actions";
 import { fetchAnnouncements } from "@repo/lib/queries";
 import { createAdminClient } from "@repo/lib/supabase/admin";
@@ -37,8 +38,9 @@ const snippet = (text: string, n = 80) => (text.length > n ? `${text.slice(0, n 
 async function announcement(id: string): Promise<Announcement> {
   const { data } = await createAdminClient()
     .from("announcements")
-    .select("id, title, body, audience, active, created_by_id, created_by_name, created_at, approval_status, approved_at, decided_by_name")
+    .select(ANNOUNCEMENT_COLUMNS)
     .eq("id", id)
+    .is("tenant_id", null)
     .maybeSingle<Announcement>();
   if (!data) throw new Error("That announcement doesn't exist. Look them up again with announcements.");
   return data;
