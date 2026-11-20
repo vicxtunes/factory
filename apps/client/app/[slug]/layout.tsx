@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 
+import { StudioAnnouncementPopup } from "@repo/ui/announcements/StudioAnnouncementPopup";
 import { DEFAULT_BRAND_COLOR } from "@repo/lib/studios/core";
 import { studioAtSlug } from "@repo/lib/studio-portal/server";
 
@@ -49,6 +50,7 @@ export default async function StudioLayout({ children, params }: Props & { child
     <>
       <BrandStyle color={at.studio.brandColor} />
       {children}
+      <StudioAnnouncementPopup slug={at.slug} />
     </>
   );
 }

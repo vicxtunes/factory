@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 import { Button } from "@repo/ui/Button";
 import { TextArea, TextInput } from "@repo/ui/Field";
+import { emptyPoster, PosterFields, type Poster } from "@repo/ui/announcements/PosterFields";
 import {
   createAnnouncement,
   decideAnnouncement,
@@ -15,6 +16,8 @@ import {
 import type { Announcement, AuditActorType } from "@repo/lib/types";
 
 type Result = { ok: boolean; error?: string };
+
+const posterOf = (a: Announcement): Poster => ({ imageUrl: a.image_url, buttonLabel: a.button_label ?? "", linkUrl: a.link_url ?? "" });
 
 // "system" is a valid AuditActorType (used for automated audit-log entries)
 // but no session ever resolves to it — never offered as a target here.
@@ -87,9 +90,18 @@ function AnnouncementBody({ announcement, showAuthor }: { announcement: Announce
   ].filter(Boolean);
   return (
     <div className="flex items-start justify-between gap-3">
-      <div className="min-w-0">
+      {announcement.image_url ? (
+        // eslint-disable-next-line @next/next/no-img-element -- the uploaded poster
+        <img src={announcement.image_url} alt="" className="h-20 w-16 shrink-0 rounded-md border border-border object-cover" />
+      ) : null}
+      <div className="min-w-0 flex-1">
         <p className="text-sm font-semibold">{announcement.title}</p>
-        <p className="mt-1 whitespace-pre-wrap text-xs text-muted">{announcement.body}</p>
+        {announcement.body ? <p className="mt-1 whitespace-pre-wrap text-xs text-muted">{announcement.body}</p> : null}
+        {announcement.link_url ? (
+          <p className="mt-1 truncate text-xs text-brand-600">
+            {announcement.button_label} → {announcement.link_url}
+          </p>
+        ) : null}
         <p className="mt-2 text-[0.65rem] uppercase tracking-wide text-muted">{meta.join(" · ")}</p>
       </div>
       <StatusPill announcement={announcement} />
@@ -113,10 +125,11 @@ function OwnAnnouncement({
   const [title, setTitle] = useState(announcement.title);
   const [body, setBody] = useState(announcement.body);
   const [audience, setAudience] = useState<AuditActorType[]>(announcement.audience);
+  const [poster, setPoster] = useState<Poster>(posterOf(announcement));
 
   function save() {
     run(async () => {
-      const res = await updateAnnouncement(announcement.id, { title, body, audience });
+      const res = await updateAnnouncement(announcement.id, { title, body, audience, ...poster });
       if (res.ok) setEditing(false);
       return res;
     });
@@ -126,7 +139,8 @@ function OwnAnnouncement({
     return (
       <div className="space-y-2 rounded-[var(--radius)] border border-border p-3">
         <TextInput value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title" />
-        <TextArea value={body} onChange={(e) => setBody(e.target.value)} placeholder="Message" rows={3} />
+        <TextArea value={body} onChange={(e) => setBody(e.target.value)} placeholder="Message (optional with a poster)" rows={3} />
+        <PosterFields value={poster} onChange={setPoster} />
         <AudiencePicker value={audience} onChange={setAudience} />
         {needsApproval ? <p className="text-xs text-muted">Saving sends it to the boss for approval again.</p> : null}
         <div className="flex gap-3 text-xs">
@@ -257,6 +271,7 @@ export function AnnouncementsPanel({
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [audience, setAudience] = useState<AuditActorType[]>([]);
+  const [poster, setPoster] = useState<Poster>(emptyPoster);
 
   const mine = announcements.filter((a) => a.created_by_id === currentUserId);
   const others = announcements.filter((a) => a.created_by_id !== currentUserId);
@@ -277,11 +292,12 @@ export function AnnouncementsPanel({
 
   function publish() {
     run(async () => {
-      const res = await createAnnouncement({ title, body, audience });
+      const res = await createAnnouncement({ title, body, audience, ...poster });
       if (res.ok) {
         setTitle("");
         setBody("");
         setAudience([]);
+        setPoster(emptyPoster);
       }
       return res;
     });
@@ -345,7 +361,8 @@ export function AnnouncementsPanel({
               </p>
             </div>
             <TextInput value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title…" />
-            <TextArea value={body} onChange={(e) => setBody(e.target.value)} placeholder="Message…" rows={3} />
+            <TextArea value={body} onChange={(e) => setBody(e.target.value)} placeholder="Message… (optional with a poster)" rows={3} />
+            <PosterFields value={poster} onChange={setPoster} />
             <div>
               <p className="mb-1.5 text-xs font-medium text-muted">Who it concerns (none selected = everyone)</p>
               <AudiencePicker value={audience} onChange={setAudience} />
@@ -354,7 +371,7 @@ export function AnnouncementsPanel({
               variant="primary"
               className="text-xs"
               loading={pending}
-              disabled={pending || !title.trim() || !body.trim()}
+              disabled={pending || !title.trim() || (!body.trim() && !poster.imageUrl)}
               onClick={publish}
             >
               {canApprove ? "Publish" : "Send for approval"}

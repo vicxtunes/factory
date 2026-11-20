@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import { Button } from "@repo/ui/Button";
+import { AnnouncementCard } from "./AnnouncementCard";
 import { dismissAnnouncement, getActiveAnnouncement } from "@repo/lib/announcements/actions";
 import { createClient } from "@repo/lib/supabase/browser";
 import type { Announcement } from "@repo/lib/types";
@@ -59,31 +59,5 @@ export function AnnouncementPopup() {
     });
   }
 
-  // A long announcement must never push the title off the top or "Got it"
-  // off the bottom — that left people stuck behind a popup they couldn't
-  // close. The card is capped to the visible viewport (dvh, so mobile browser
-  // chrome is accounted for, plus notch/home-bar safe areas); title and button
-  // stay fixed and only the message scrolls between them.
-  return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="announcement-title"
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-950/70 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))]"
-    >
-      <div className="flex max-h-[calc(100dvh-2rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] w-full max-w-md flex-col rounded-2xl border border-border bg-surface shadow-theme-xl">
-        <p id="announcement-title" className="shrink-0 px-6 pt-6 text-lg font-semibold">
-          {announcement.title}
-        </p>
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-2">
-          <p className="whitespace-pre-wrap text-sm text-muted">{announcement.body}</p>
-        </div>
-        <div className="shrink-0 border-t border-border px-6 pb-6 pt-4">
-          <Button variant="primary" className="w-full" disabled={dismissing} onClick={dismiss}>
-            Got it
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
+  return <AnnouncementCard announcement={announcement} busy={dismissing} onClose={dismiss} />;
 }

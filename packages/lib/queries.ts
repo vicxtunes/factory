@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { unstable_cache } from "next/cache";
 
+import { ANNOUNCEMENT_COLUMNS } from "@repo/lib/announcements/core";
 import { CATALOG_TAG, createCatalogClient } from "@repo/lib/catalog-cache";
 import { createClient } from "@repo/lib/supabase/server";
 import { ORDER_ITEM_SELECT as ITEM_SELECT, selectRecentItems } from "@repo/lib/item-select";
@@ -415,14 +416,15 @@ async function loadCurrencies(supabase: SupabaseClient, activeOnly: boolean): Pr
   return data ?? [];
 }
 
-// Every announcement, active or not, for the dashboard's manager page — the
+// Every Aming announcement (a business's own are theirs), active or not, for the dashboard's manager page — the
 // popup itself only ever asks packages/lib/announcements/actions.ts's
 // getActiveAnnouncement for a single actor-scoped one.
 export async function fetchAnnouncements(): Promise<Announcement[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("announcements")
-    .select("id, title, body, audience, active, created_by_id, created_by_name, created_at, approval_status, approved_at, decided_by_name")
+    .select(ANNOUNCEMENT_COLUMNS)
+    .is("tenant_id", null)
     .order("created_at", { ascending: false });
   if (error) throw new Error(error.message);
   return (data ?? []) as unknown as Announcement[];

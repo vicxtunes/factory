@@ -74,6 +74,8 @@ export const STUDIO_NAV: StudioNavSection[] = [
       { href: "/studio/offerings", label: "Packages & Services", icon: "products", need: "catalog" },
       { href: "/studio/products", label: "Products", icon: "placeOrder", need: "catalog" },
       { href: "/studio/showroom", label: "Showroom", icon: "showroom", need: "catalog" },
+      // Designed pop-ups for the business's clients, on its page.
+      { href: "/studio/announcements", label: "Announcements", icon: "announcements", need: "catalog" },
     ],
   },
   {
