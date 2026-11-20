@@ -182,6 +182,8 @@ export interface MobileMoneyCollection {
   /** What the phone is prompted for, and what's credited / applied. */
   amount: number;
   status: "pending" | "succeeded" | "failed";
+  /** HivePay called it failed but it's still being asked about (a day): shown as "still confirming", not failed. */
+  confirming: boolean;
   failureReason: string | null;
   orderId: string | null;
   network: string | null;

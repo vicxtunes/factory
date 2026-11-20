@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { SpacePriceForm } from "@repo/ui/photos/SpacePriceForm";
+import { SpacePacksForm } from "@repo/ui/photos/SpacePacksForm";
 import { StudioStatusBadge } from "@repo/ui/studio-access/StatusBadge";
 import { StudiosAnalysis } from "@repo/ui/studios/StudiosAnalysis";
 import { StudiosTable } from "@repo/ui/studios/StudiosTable";
@@ -11,13 +11,12 @@ import { Loading } from "@repo/ui/skeletons/Loading";
 import { photos } from "@repo/lib/photos/server";
 import { studioAccess } from "@repo/lib/studio-access/server";
 import { readStudioActivity, requireStudiosOversight, studios } from "@repo/lib/studios/server";
-import { sessionCan } from "@repo/lib/auth/session";
 import { resolveTenantScope } from "@repo/lib/tenancy/server/resolve";
 
 export const dynamic = "force-dynamic";
 
 export default async function StudiosPage() {
-  const manage = sessionCan(await requireStudiosOversight(), "studios", "manage");
+  const session = await requireStudiosOversight();
 
   return (
     <div className="space-y-6">
@@ -46,7 +45,7 @@ export default async function StudiosPage() {
           <All />
         </Loading>
       </section>
-      {manage ? (
+      {session.isBoss ? (
         <section>
           <SectionLabel>Extra storage</SectionLabel>
           <Loading skeleton={<Skeleton className="h-16 w-full" />}>
@@ -90,7 +89,7 @@ async function Waiting() {
 }
 
 async function SpacePrice() {
-  return <SpacePriceForm pricePerGb={await photos.spacePrice()} />;
+  return <SpacePacksForm packs={await photos.spacePacks()} />;
 }
 
 async function Analysis() {

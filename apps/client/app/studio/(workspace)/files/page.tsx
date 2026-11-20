@@ -103,11 +103,11 @@ async function Business({ scope, folderId }: { scope: TenantScope; folderId: str
 
 // Buying is the owner's (it's their Aming card that pays), and only while the boss has it on sale.
 async function Storage({ scope, ownerClientId }: { scope: TenantScope; ownerClientId: string | null }) {
-  const [usage, pricePerGb] = await Promise.all([files.usage(scope), ownerClientId ? photos.spacePrice() : null]);
+  const [usage, packs] = await Promise.all([files.usage(scope), ownerClientId ? photos.spacePacks() : []]);
   return (
     <div className="space-y-2">
       <UsageBar usage={usage} />
-      {ownerClientId && pricePerGb ? <BuySpace pricePerGb={pricePerGb} balance={await amingCardBalance(ownerClientId)} locale={scope.locale} /> : null}
+      {ownerClientId && packs.length ? <BuySpace packs={packs} balance={await amingCardBalance(ownerClientId)} locale={scope.locale} /> : null}
     </div>
   );
 }

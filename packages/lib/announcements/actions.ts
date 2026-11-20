@@ -9,6 +9,7 @@ import type { Announcement, AuditActorType } from "@repo/lib/types";
 
 import { notifyActor } from "@repo/lib/push/send";
 
+import { announcementFields, ANNOUNCEMENT_COLUMNS, type AnnouncementInput } from "./core";
 import { approvalOnSave, canApproveAnnouncements, canCreateAnnouncements, canManageAnnouncement } from "./access";
 
 type Result = { ok: true } | { ok: false; error: string };
@@ -43,7 +44,8 @@ export async function getActiveAnnouncement(): Promise<Announcement | null> {
   const [{ data: announcements }, { data: dismissals }] = await Promise.all([
     admin
       .from("announcements")
-      .select("id, title, body, audience, active, created_by_id, created_by_name, created_at, approval_status, approved_at, decided_by_name")
+      .select(ANNOUNCEMENT_COLUMNS)
+      .is("tenant_id", null)
       .eq("active", true)
       .eq("approval_status", "approved")
       .order("approved_at", { ascending: true }),
@@ -112,30 +114,14 @@ function revalidateAnnouncementViews(): void {
   revalidatePath("/dashboard/announcements");
 }
 
-function validateAnnouncementInput(input: {
-  title: string;
-  body: string;
-}): { title: string; body: string } | { error: string } {
-  const title = input.title.trim();
-  const body = input.body.trim();
-  if (!title) return { error: "Title is required." };
-  if (!body) return { error: "Message is required." };
-  return { title, body };
-}
-
-export async function createAnnouncement(input: {
-  title: string;
-  body: string;
-  audience: AuditActorType[];
-}): Promise<Result> {
+export async function createAnnouncement(input: AnnouncementInput & { audience: AuditActorType[] }): Promise<Result> {
   const session = await requireCreator();
-  const validated = validateAnnouncementInput(input);
+  const validated = announcementFields(input);
   if ("error" in validated) return { ok: false, error: validated.error };
 
   const admin = createAdminClient();
   const { error } = await admin.from("announcements").insert({
-    title: validated.title,
-    body: validated.body,
+    ...validated,
     audience: input.audience,
     created_by_id: session.userId,
     created_by_name: nameOf(session),
@@ -148,21 +134,23 @@ export async function createAnnouncement(input: {
 }
 
 // Editing sends someone else's announcement back to the boss for approval
-// (the boss's own edits stay approved).
-export async function updateAnnouncement(
-  id: string,
-  input: { title: string; body: string; audience: AuditActorType[] },
-): Promise<Result> {
+// (the boss's own edits stay approved). Without imageUrl (Alexis edits only
+// the words) the poster, button and link stay as they are.
+export async function updateAnnouncement(id: string, input: AnnouncementInput & { audience: AuditActorType[] }): Promise<Result> {
   const session = await requireCreator();
   const denied = await ownershipError(id, session);
   if (denied) return { ok: false, error: denied };
-  const validated = validateAnnouncementInput(input);
+  const admin = createAdminClient();
+  if (input.imageUrl === undefined) {
+    const { data } = await admin.from("announcements").select("image_url, button_label, link_url").eq("id", id).maybeSingle();
+    input = { ...input, imageUrl: data?.image_url ?? null, buttonLabel: data?.button_label ?? null, linkUrl: data?.link_url ?? null };
+  }
+  const validated = announcementFields(input);
   if ("error" in validated) return { ok: false, error: validated.error };
 
-  const admin = createAdminClient();
   const { error } = await admin
     .from("announcements")
-    .update({ title: validated.title, body: validated.body, audience: input.audience, ...approvalFields(session) })
+    .update({ ...validated, audience: input.audience, ...approvalFields(session) })
     .eq("id", id);
   if (error) return { ok: false, error: error.message };
   revalidateAnnouncementViews();

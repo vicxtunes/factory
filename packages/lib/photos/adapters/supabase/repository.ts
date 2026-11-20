@@ -110,18 +110,15 @@ export const supabasePhotoRepository: PhotoRepository = {
     return { usedBytes: Number(used), quotaBytes: Number(tenant.storage_quota_bytes) };
   },
 
-  async spacePrice() {
-    const { data, error } = await db().from("storage_pricing").select("price_per_gb").maybeSingle<{ price_per_gb: number | string }>();
-    if (error) fail("read the storage price", error);
-    return data ? Number(data.price_per_gb) : null;
+  async spacePacks() {
+    const { data, error } = await db().from("storage_packs").select("gb, price").order("gb").returns<{ gb: number; price: number | string }[]>();
+    if (error) fail("read the storage packs", error);
+    return data.map((p) => ({ gb: p.gb, price: Number(p.price) }));
   },
 
-  async setSpacePrice(pricePerGb) {
-    const { error } =
-      pricePerGb === null
-        ? await db().from("storage_pricing").delete().eq("only_row", true)
-        : await db().from("storage_pricing").upsert({ only_row: true, price_per_gb: pricePerGb, updated_at: new Date().toISOString() });
-    if (error) fail("set the storage price", error);
+  async setSpacePacks(packs) {
+    const { error } = await db().rpc("storage_packs_set", { p_packs: packs });
+    if (error) fail("save the storage packs", error);
   },
 
   async buySpace(scope, gb, amount, buyer) {

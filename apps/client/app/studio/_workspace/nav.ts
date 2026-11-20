@@ -58,6 +58,8 @@ export const STUDIO_NAV: StudioNavSection[] = [
     items: [
       { href: "/studio/wallet", label: "Wallet", icon: "payment", need: "money" },
       { href: "/studio/accounts", label: "Accounts", icon: "accounts", need: "money" },
+      { href: "/studio/books", label: "Books", icon: "accounts", need: "money" },
+      { href: "/studio/employees", label: "Employees", icon: "agents", need: "money" },
       { href: "/studio/clients", label: "Clients", icon: "clients", need: "clients" },
       { href: "/studio/quotations", label: "Quotations", icon: "invoice", need: "money" },
       { href: "/studio/invoices", label: "Invoices", icon: "payment", need: "money" },
@@ -72,6 +74,8 @@ export const STUDIO_NAV: StudioNavSection[] = [
       { href: "/studio/offerings", label: "Packages & Services", icon: "products", need: "catalog" },
       { href: "/studio/products", label: "Products", icon: "placeOrder", need: "catalog" },
       { href: "/studio/showroom", label: "Showroom", icon: "showroom", need: "catalog" },
+      // Designed pop-ups for the business's clients, on its page.
+      { href: "/studio/announcements", label: "Announcements", icon: "announcements", need: "catalog" },
     ],
   },
   {

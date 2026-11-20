@@ -175,11 +175,13 @@ export async function withdrawalAnswered(clientId: string, amount: number, phone
   await inAming(clientId, notice.title, notice.body);
 }
 
-/** A mobile money payment the client started didn't go through: nothing was taken. */
-export async function paymentFailed(clientId: string, amount: number, url: string): Promise<void> {
-  const body = `Your mobile money payment of ${formatMoney(amount)} wasn't completed, and no money was taken. You can try again.`;
-  await notifyActor({ type: "client", id: clientId }, { title: "Payment didn't go through", body, url });
-  await inAming(clientId, "Payment didn't go through", `${body} Reply here if something isn't right.`);
+/** HivePay called a payment the client started failed: it's asked about again for a day, so they hear it's still being confirmed. */
+export async function paymentNotConfirmed(clientId: string, amount: number, url: string): Promise<void> {
+  const body =
+    `We're still confirming your mobile money payment of ${formatMoney(amount)} with the network. ` +
+    `If the money left your phone, please don't pay again: we'll tell you as soon as it's confirmed. If you didn't approve it, you can try again.`;
+  await notifyActor({ type: "client", id: clientId }, { title: "Still confirming your payment", body, url });
+  await inAming(clientId, "Still confirming your payment", `${body} Reply here if something isn't right.`);
 }
 
 const MONEY_ALERT_TITLES: Record<MoneyAlertKind, string> = {

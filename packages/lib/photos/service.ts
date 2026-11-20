@@ -21,6 +21,7 @@ import {
   type PhotoView,
   type UploadFile,
   type UploadTicket,
+  type SpacePack,
   type Usage,
   type VideoContentType,
 } from "./core";
@@ -50,14 +51,14 @@ export class PhotoService {
     if (!(await this.repo.setQuota(tenantId, quotaBytes))) throw new PhotoError("That business no longer exists.");
   }
 
-  /** What a GB of extra storage costs (whole shillings); null when it isn't on sale. */
-  async spacePrice(): Promise<number | null> {
-    return this.repo.spacePrice();
+  /** The storage packs on sale, smallest first; none when storage isn't on sale. */
+  async spacePacks(): Promise<SpacePack[]> {
+    return this.repo.spacePacks();
   }
 
-  /** The boss sets the price of a GB of extra storage; 0 takes it off sale. */
-  async setSpacePrice(pricePerGb: number): Promise<void> {
-    await this.repo.setSpacePrice(pricePerGb > 0 ? pricePerGb : null);
+  /** The boss saves the storage packs all at once; none takes storage off sale. */
+  async setSpacePacks(packs: SpacePack[]): Promise<void> {
+    await this.repo.setSpacePacks(packs);
   }
 
   /** The studio's owner buys extra storage from their wallet, at the price they saw. */
