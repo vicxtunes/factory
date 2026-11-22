@@ -13,9 +13,8 @@ type Shown = Pick<Announcement, "title" | "body" | "image_url" | "button_label" 
 // 2026-11-21); a plain one shows its title, message and "Got it".
 //
 // Either way the card fits the visible screen (dvh, notch and home bar
-// included), so the way out is never pushed off it. On a computer a poster's
-// card takes 80% of the screen's height at most, the poster shrinking so its
-// caption and buttons always show (owner, 2026-11-22). `shareable`: a Share
+// included), so the way out is never pushed off it. A poster fills the card's
+// width (owner, 2026-11-22: keep it as it was). `shareable`: a Share
 // button beside its button (Aming's always, a business's with Pro).
 export function AnnouncementCard({ announcement: a, busy, onClose, shareable = false }: { announcement: Shown; busy: boolean; onClose: () => void; shareable?: boolean }) {
   const frame =
@@ -25,7 +24,7 @@ export function AnnouncementCard({ announcement: a, busy, onClose, shareable = f
   if (a.image_url) {
     return (
       <div role="dialog" aria-modal="true" aria-label={a.title} className={frame} onClick={busy ? undefined : onClose}>
-        <div className={`relative flex ${fit} w-full max-w-md flex-col overflow-hidden rounded-2xl bg-surface shadow-theme-xl sm:max-h-[80dvh]`} onClick={(e) => e.stopPropagation()}>
+        <div className={`relative flex ${fit} w-full max-w-md flex-col overflow-hidden rounded-2xl bg-surface shadow-theme-xl`} onClick={(e) => e.stopPropagation()}>
           <button
             type="button"
             aria-label="Close"
@@ -37,9 +36,9 @@ export function AnnouncementCard({ announcement: a, busy, onClose, shareable = f
               <path d="M6 6l12 12M18 6L6 18" strokeLinecap="round" />
             </svg>
           </button>
-          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
             {/* eslint-disable-next-line @next/next/no-img-element -- an uploaded poster of any shape, shown whole */}
-            <img src={a.image_url} alt={a.title} className="mx-auto block max-h-[62dvh] w-auto max-w-full object-contain sm:max-h-[56dvh]" />
+            <img src={a.image_url} alt={a.title} className="block w-full" />
             {a.body ? <p className="whitespace-pre-wrap px-5 py-3 text-sm text-muted">{a.body}</p> : null}
           </div>
           {a.link_url || shareable ? (
