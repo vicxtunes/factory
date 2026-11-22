@@ -4,11 +4,19 @@
 // Read-only: it points to the page's own Book now / Order buttons. Pure.
 
 /** Turns kept from the conversation (the browser holds it). */
-export const MAX_TURNS = 12;
-export const MAX_MESSAGE_CHARS = 1000;
-/** A visitor's messages a day, and a business's, so a page can't run up the bill. */
-export const VISITOR_DAILY = 30;
-export const BUSINESS_DAILY = 400;
+export const MAX_TURNS = 8;
+export const MAX_MESSAGE_CHARS = 500;
+/**
+ * Aming pays for every answer, so a page can't run up the bill (owner,
+ * 2026-11-22: "Pro users may misuse our tokens"): a browser's messages a day;
+ * a network address's (several phones can share one, so looser); a business's
+ * a day; and what a business's chat may cost Aming in a month (USD), well
+ * under what Pro brings in.
+ */
+export const VISITOR_DAILY = 20;
+export const ADDRESS_DAILY = 60;
+export const BUSINESS_DAILY = 150;
+export const BUSINESS_MONTHLY_USD = 3;
 
 export interface ChatTurn {
   role: "user" | "assistant";

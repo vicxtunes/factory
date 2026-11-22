@@ -5,12 +5,13 @@
 // ask; each browser and each business has a daily limit, and every answer
 // counts towards Alexis's daily spending cap.
 
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 
 import { localDate } from "@repo/lib/accounting/core/period";
 import { costUsd, findModel, type TokenUsage } from "@repo/lib/assistant/core/rules";
+import { startOfKampalaMonth, startOfNextKampalaMonth } from "@repo/lib/assistant/panel/core";
 import { hasAiKey, panelSettings } from "@repo/lib/assistant/panel/server";
 import { askModel } from "@repo/lib/assistant/server/providers";
 import { spentToday } from "@repo/lib/assistant/server/store";
@@ -25,7 +26,7 @@ import { formatAmount } from "@repo/lib/tenancy/format";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
 import { businessChatOn } from "./server";
-import { BUSINESS_CHAT_PROMPT, BUSINESS_DAILY, cleanTurns, factsText, VISITOR_DAILY, type FactItem, type PageFacts } from "./core";
+import { ADDRESS_DAILY, BUSINESS_CHAT_PROMPT, BUSINESS_DAILY, BUSINESS_MONTHLY_USD, cleanTurns, factsText, VISITOR_DAILY, type FactItem, type PageFacts } from "./core";
 
 const VISITOR_COOKIE = "aming_chat_visitor";
 const ACTION = "Business chat";
@@ -51,14 +52,24 @@ export async function askBusiness(slug: unknown, turns: unknown): Promise<Busine
       visitor = randomUUID();
       jar.set(VISITOR_COOKIE, visitor, { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", maxAge: 365 * 86_400, path: "/" });
     }
+    // The network address too (a new browser or cleared cookies is a new visitor), kept only as a hash.
+    const ip = ((await headers()).get("x-forwarded-for") ?? "").split(",")[0].trim() || "unknown";
+    const address = createHash("sha256").update(`business-chat:${ip}`).digest("hex").slice(0, 16);
+    const key = `${visitor}|${address}`;
     const db = createAdminClient();
     const since = new Date(Date.now() - 86_400_000).toISOString();
-    const [{ count: mine }, { count: theirs }] = await Promise.all([
-      db.from("assistant_runs").select("id", { count: "exact", head: true }).eq("visitor", visitor).gte("created_at", since),
-      db.from("assistant_runs").select("id", { count: "exact", head: true }).eq("payer_type", "studio").eq("payer_id", at.studio.id).contains("actions", [ACTION]).gte("created_at", since),
+    const monthStart = startOfKampalaMonth(new Date()).toISOString();
+    const runs = () => db.from("assistant_runs").select("id", { count: "exact", head: true }).not("visitor", "is", null).gte("created_at", since);
+    const [{ count: mine }, { count: fromAddress }, { count: theirs }, { data: month }] = await Promise.all([
+      runs().like("visitor", `${visitor}|%`),
+      runs().like("visitor", `%|${address}`),
+      runs().eq("payer_type", "studio").eq("payer_id", at.studio.id),
+      db.from("assistant_runs").select("cost_usd").eq("payer_type", "studio").eq("payer_id", at.studio.id).not("visitor", "is", null).gte("created_at", monthStart).returns<{ cost_usd: number | string }[]>(),
     ]);
-    if ((mine ?? 0) >= VISITOR_DAILY) return { ok: false, error: "That's a lot of questions for one day. Call or WhatsApp the business for more." };
-    if ((theirs ?? 0) >= BUSINESS_DAILY) return { ok: false, error: "The chat is busy today. Call or WhatsApp the business." };
+    const spent = (month ?? []).reduce((sum, r) => sum + Number(r.cost_usd), 0);
+    const busy = "The chat is busy just now. Call or WhatsApp the business.";
+    if ((mine ?? 0) >= VISITOR_DAILY || (fromAddress ?? 0) >= ADDRESS_DAILY) return { ok: false, error: "That's a lot of questions for one day. Call or WhatsApp the business for more." };
+    if ((theirs ?? 0) >= BUSINESS_DAILY || spent >= BUSINESS_MONTHLY_USD) return { ok: false, error: busy };
 
     const facts = await pageFacts(at.studio, at.scope, slug as string);
     let totals: TokenUsage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
@@ -71,6 +82,8 @@ export async function askBusiness(slug: unknown, turns: unknown): Promise<Busine
         context: factsText(facts),
         tools: [],
         messages,
+        // A few sentences (with room for the AI's own thinking): a long, costly reply can't be asked for.
+        maxTokens: 1000,
         onUsage: (u) => {
           totals = u;
         },
@@ -97,9 +110,11 @@ export async function askBusiness(slug: unknown, turns: unknown): Promise<Busine
       // Part of Pro: Aming pays.
       charge_usd: 0,
       waived: true,
-      visitor,
+      visitor: key,
     });
     if (error) console.error("business chat: recording the run failed:", error);
+    // The owner hears once when this answer used up the day's or the month's allowance.
+    if (!error) await tellIfLimitReached(at.studio, (theirs ?? 0) + 1, spent, spent + cost);
     return reply ? { ok: true, reply } : { ok: false, error: "Sorry, the chat couldn't answer just now. Try again in a moment." };
   } catch (err) {
     console.error("business chat:", err);
@@ -146,4 +161,19 @@ async function pageFacts(studio: NonNullable<Awaited<ReturnType<typeof studioAtS
     services: items(services, "s"),
     products: items(products, "p"),
   };
+}
+
+async function tellIfLimitReached(studio: { name: string; ownerClientId: string }, today: number, before: number, after: number): Promise<void> {
+  const { tell } = await import("@repo/lib/pro/server");
+  const phone = "Visitors see your phone and WhatsApp instead.";
+  try {
+    if (before < BUSINESS_MONTHLY_USD && after >= BUSINESS_MONTHLY_USD) {
+      const resumes = startOfNextKampalaMonth(new Date()).toLocaleDateString("en-GB", { day: "numeric", month: "long", timeZone: "Africa/Kampala" });
+      await tell(studio.ownerClientId, "Your page's chat has used this month's allowance", `Ask us on ${studio.name}'s page is resting until ${resumes}. ${phone}`);
+    } else if (today === BUSINESS_DAILY) {
+      await tell(studio.ownerClientId, "Your page's chat reached today's limit", `Ask us answered ${BUSINESS_DAILY} questions today, the most in a day. It's back tomorrow. ${phone}`);
+    }
+  } catch (err) {
+    console.error("business chat: telling the owner failed:", err);
+  }
 }

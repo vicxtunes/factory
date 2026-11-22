@@ -42,7 +42,7 @@ function Frame({ open, onClose, actions: headerActions, children }: { open: bool
   }
   if (!open) return null;
   return (
-    <aside aria-label="Alexis" className="fixed inset-y-0 right-0 z-40 flex w-[26rem] flex-col border-l border-border bg-surface shadow-theme-xl">
+    <aside aria-label="Alexis" data-aming-alexis className="fixed inset-y-0 right-0 z-40 flex w-[26rem] flex-col border-l border-border bg-surface shadow-theme-xl">
       <div className="flex items-center gap-2 border-b border-border px-4 py-3">
         <h2 className="min-w-0 flex-1 text-sm font-semibold">{title}</h2>
         <button
@@ -103,6 +103,8 @@ export function AlexisPanel({ actions, fullPage }: { actions: AlexisActions; ful
           type="button"
           onClick={show}
           aria-label="Ask Alexis"
+          // Hidden on a Pro business's pages, where its own chat is the one (packages/ui/studio-portal/BusinessChat.tsx).
+          data-aming-alexis
           className={`fixed right-4 bottom-[calc(5.25rem+env(safe-area-inset-bottom))] z-30 inline-flex h-12 w-12 items-center justify-center rounded-full bg-brand-500 text-white shadow-theme-lg transition-transform hover:bg-brand-600 active:scale-95 print:hidden lg:right-6 lg:bottom-6 ${open || guiding ? "hidden" : ""}`}
         >
           <SparkIcon className="h-6 w-6" />
