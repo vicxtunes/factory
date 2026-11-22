@@ -40,6 +40,7 @@ import { ClientOrderCard } from "./order-card";
 import { ClientQuoteReview } from "./quote-review";
 import { cancelMyOrder } from "./actions";
 import { Button } from "@repo/ui/Button";
+import { DateInput } from "@repo/ui/DateTimeInputs";
 
 // Same search/filter/table/export toolset as app/dashboard/order-board.tsx
 // (packages/lib/orders/filters.ts, OrderItemsTable, ExportButtons, Popover), scoped
@@ -248,15 +249,13 @@ export function ClientOrdersBoard({
                     />
                   </div>
                   <div className="mt-1.5 grid grid-cols-2 gap-2 md:hidden">
-                    <TextInput
-                      type="date"
+                    <DateInput
                       value={filters.dateFrom}
-                      onChange={(e) => patch({ dateFrom: e.target.value })}
+                      onChange={(v) => patch({ dateFrom: v })}
                     />
-                    <TextInput
-                      type="date"
+                    <DateInput
                       value={filters.dateTo}
-                      onChange={(e) => patch({ dateTo: e.target.value })}
+                      onChange={(v) => patch({ dateTo: v })}
                     />
                   </div>
                 </>

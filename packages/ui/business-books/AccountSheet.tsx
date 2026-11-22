@@ -9,6 +9,7 @@ import { Field, Select, TextInput } from "@repo/ui/Field";
 import { FormSheet } from "@repo/ui/FormSheet";
 import { removeAccount, saveAccount } from "@repo/lib/business-books/actions";
 import type { AccountKind, BookAccount } from "@repo/lib/business-books/core";
+import { DateInput } from "@repo/ui/DateTimeInputs";
 
 /** Adding or changing one of the business's accounts: a name, its kind, and what was in it when the books start. */
 export function AccountSheet({ account, onClose, today }: { account: BookAccount | "new" | null; onClose: () => void; today: string }) {
@@ -57,7 +58,7 @@ function AccountForm({ account, onDone, today }: { account: BookAccount | null; 
           <TextInput inputMode="numeric" value={opening} onChange={(e) => setOpening(e.target.value.replace(/[^\d,]/g, ""))} placeholder="0" />
         </Field>
         <Field label="Day the books start">
-          <TextInput type="date" value={openingOn} max={today} onChange={(e) => setOpeningOn(e.target.value)} required />
+          <DateInput value={openingOn} max={today} onChange={setOpeningOn} required />
         </Field>
       </div>
       <p className="text-xs text-muted">Payments the system already knows of land here by kind: cash receipts in your first cash account, mobile money ones in your first mobile money account, bank ones in your first bank account.</p>

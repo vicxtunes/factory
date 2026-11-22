@@ -32,6 +32,7 @@ import type {
   WorkerPublic,
 } from "@repo/lib/types";
 import { matchesSearch } from "@repo/lib/search";
+import { DateInput, DateTimeInput } from "@repo/ui/DateTimeInputs";
 
 type Variant = "manager" | "designer";
 
@@ -466,19 +467,17 @@ function GeneralStep({
           </Select>
         </Field>
         <Field label="Delivery date">
-          <TextInput
-            type="date"
+          <DateInput
             value={general.deliveryDate}
-            onChange={(e) => setGeneral({ ...general, deliveryDate: e.target.value })}
+            onChange={(v) => setGeneral({ ...general, deliveryDate: v })}
             required
           />
         </Field>
         {general.orderType === "express" ? (
           <Field label="Deadline" hint="Date & time this must be done by">
-            <TextInput
-              type="datetime-local"
+            <DateTimeInput
               value={general.deadlineAt}
-              onChange={(e) => setGeneral({ ...general, deadlineAt: e.target.value })}
+              onChange={(v) => setGeneral({ ...general, deadlineAt: v })}
               required
             />
           </Field>

@@ -9,6 +9,7 @@ import { Field, Select, TextInput } from "@repo/ui/Field";
 import { FormSheet } from "@repo/ui/FormSheet";
 import { deleteEntry, saveEntry } from "@repo/lib/business-books/actions";
 import { IN_CATEGORIES, OUT_CATEGORIES, SALARIES, type BookAccount, type EntryInput } from "@repo/lib/business-books/core";
+import { DateInput } from "@repo/ui/DateTimeInputs";
 
 export type EntryKind = EntryInput["kind"];
 
@@ -170,7 +171,7 @@ function EntryForm({
           </Field>
         ) : null}
         <Field label="Day">
-          <TextInput type="date" value={occurredOn} max={today} onChange={(e) => setOccurredOn(e.target.value)} required />
+          <DateInput value={occurredOn} max={today} onChange={setOccurredOn} required />
         </Field>
       </div>
       {kind !== "move" && projects.length ? (

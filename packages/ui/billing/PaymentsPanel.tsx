@@ -9,6 +9,7 @@ import { recordPayment, voidPayment } from "@repo/lib/billing/actions";
 import { PAYMENT_METHOD_LABELS, type Invoice, type PaymentMethod } from "@repo/lib/billing/core";
 import { formatAmount, formatDay } from "@repo/lib/tenancy/format";
 import type { TenantScope } from "@repo/lib/tenancy/types";
+import { DateInput } from "@repo/ui/DateTimeInputs";
 
 /**
  * The studio records money received against an invoice (never more than
@@ -85,7 +86,7 @@ export function PaymentsPanel({
               </Select>
             </Field>
             <Field label="Received on">
-              <TextInput type="date" value={receivedOn} max={today} onChange={(e) => setReceivedOn(e.target.value)} required />
+              <DateInput value={receivedOn} max={today} onChange={setReceivedOn} required />
             </Field>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">

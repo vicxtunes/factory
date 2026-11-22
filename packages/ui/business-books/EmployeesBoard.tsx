@@ -11,6 +11,7 @@ import { saveEmployeeAction } from "@repo/lib/business-books/actions";
 import { SALARIES, type BookAccount, type Employee, type PayKind } from "@repo/lib/business-books/core";
 
 import { EntrySheet, type EntryDraft } from "./EntrySheet";
+import { DateInput } from "@repo/ui/DateTimeInputs";
 
 /**
  * The people who work for the business: who they are, their pay, and what
@@ -171,11 +172,11 @@ function EmployeeForm({ person, onDone }: { person: Employee | null; onDone: () 
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Started (optional)">
-          <TextInput type="date" value={startedOn} onChange={(e) => setStartedOn(e.target.value)} />
+          <DateInput value={startedOn} onChange={setStartedOn} />
         </Field>
         {person ? (
           <Field label="Left (optional)" hint="Set the day they stopped working here.">
-            <TextInput type="date" value={leftOn} onChange={(e) => setLeftOn(e.target.value)} />
+            <DateInput value={leftOn} onChange={setLeftOn} />
           </Field>
         ) : null}
       </div>

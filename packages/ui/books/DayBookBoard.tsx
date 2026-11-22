@@ -18,6 +18,7 @@ import { closeDay, moveMoney, setOpeningBalances, takeMoneyOut, voidMoneyMove } 
 import { DAY_LINE_LABELS, accountMoves, dayTotals, hivepaySendGross, type DayAccount, type DayBook, type DayLine, type OwnerWithdrawal, type SendFeeBand } from "@repo/lib/books/model";
 import { localPhone } from "@repo/lib/wallet/policy";
 import { matchesSearch } from "@repo/lib/search";
+import { DateInput } from "@repo/ui/DateTimeInputs";
 
 const METHODS: Record<string, string> = { cash: "Cash", mobile_money: "Mobile money", bank_transfer: "Bank transfer", card: "Card", other: "Other", move: "Own accounts" };
 
@@ -83,7 +84,7 @@ export function DayBookBoard({
           Previous day
         </Button>
         <div className="w-40">
-          <TextInput type="date" aria-label="Open a day" value={book.day} max={book.today} onChange={(e) => e.target.value && open(e.target.value)} />
+          <DateInput aria-label="Open a day" value={book.day} max={book.today} onChange={(v) => v && open(v)} />
         </div>
         <Button size="sm" variant="secondary" disabled={isToday} onClick={() => open(shiftDay(book.day, 1))}>
           Next day
@@ -533,7 +534,7 @@ function MoveSheet({ book, onClose }: { book: DayBook; onClose: () => void }) {
           ) : null}
         </Field>
         <Field label="Day it moved">
-          <TextInput type="date" value={movedOn} max={book.today} onChange={(e) => setMovedOn(e.target.value)} />
+          <DateInput value={movedOn} max={book.today} onChange={setMovedOn} />
         </Field>
         <Field label={needsReference ? "Slip number or transaction ID" : "Reference (optional)"}>
           <TextInput value={reference} onChange={(e) => setReference(e.target.value)} maxLength={100} />

@@ -4,9 +4,9 @@ import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { Button } from "@repo/ui/Button";
-import { TextInput } from "@repo/ui/Field";
 import { Tabs } from "@repo/ui/Tabs";
 import { PERIOD_PRESETS, type Period, type PeriodPreset } from "@repo/lib/accounting/core/period";
+import { DateInput } from "@repo/ui/DateTimeInputs";
 
 // The reporting period, kept in the URL (?period=…&from=…&to=…) so a view can
 // be bookmarked or shared and the server renders it directly. `presets`: the
@@ -49,11 +49,11 @@ export function PeriodPicker({ period, presets = PERIOD_PRESETS }: { period: Per
         >
           <label className="text-xs text-muted">
             From
-            <TextInput type="date" value={from} max={to || undefined} onChange={(e) => setFrom(e.target.value)} required />
+            <DateInput value={from} max={to || undefined} onChange={setFrom} required />
           </label>
           <label className="text-xs text-muted">
             To
-            <TextInput type="date" value={to} min={from || undefined} onChange={(e) => setTo(e.target.value)} required />
+            <DateInput value={to} min={from || undefined} onChange={setTo} required />
           </label>
           <Button type="submit" variant="primary">
             Apply
