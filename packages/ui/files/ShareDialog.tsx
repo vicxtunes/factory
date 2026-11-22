@@ -7,6 +7,7 @@ import { BottomSheet } from "@repo/ui/BottomSheet";
 import { Button } from "@repo/ui/Button";
 import { shareFolder, stopSharing, updateShare } from "@repo/lib/files/actions";
 import { SHARE_ROLE_LABELS, SHARE_ROLES, type FolderShare, type ShareRole } from "@repo/lib/files/core";
+import { DateInput } from "@repo/ui/DateTimeInputs";
 
 type Person = { id: string; name: string };
 
@@ -191,16 +192,19 @@ export function ShareDialog({
                   <input type="checkbox" checked={link.canDownload} disabled={pending} onChange={(e) => change(link, { canDownload: e.target.checked })} />
                   Can download
                 </label>
-                <label className="flex items-center gap-1.5">
+                <div className="flex items-center gap-1.5">
                   Works until
-                  <input
-                    type="date"
-                    value={link.audience.expiresOn ?? ""}
-                    disabled={pending}
-                    onChange={(e) => change(link, { expiresOn: e.target.value || null })}
-                    className={`${field} min-h-8 text-xs`}
-                  />
-                </label>
+                  <span className="w-48">
+                    <DateInput
+                      value={link.audience.expiresOn ?? ""}
+                      disabled={pending}
+                      placeholder="No end date"
+                      aria-label="Works until"
+                      onChange={(v) => change(link, { expiresOn: v || null })}
+                      className="min-h-9 text-xs"
+                    />
+                  </span>
+                </div>
               </div>
               {link.role !== "viewer" ? (
                 <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-500/10 dark:text-amber-300">

@@ -1,10 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 
-import { ClientsIcon, ShowroomIcon } from "@repo/ui/icons";
-import { SidebarToggle } from "@repo/ui/navigation/sidebar";
 import { PortalStayIn } from "@repo/ui/studio-portal/PortalForms";
 
 import { StudioMark } from "../studio/_workspace/shell";
@@ -16,8 +13,8 @@ export interface PublicStudio {
   slug: string;
 }
 
-// A studio's public pages in the same frame as Aming's (../shell.tsx): the
-// studio's mark and menu on the left (md+), a top bar with the page's title
+// A studio's public pages: no side menu (owner, 2026-11-18), just a top bar
+// with the studio's mark and name (back to the showroom), the page's title
 // and "Log in" (or the signed-in client's way to their page). Browsing never
 // needs signing in; "Log in" only offers it. A signed-in client's every visit
 // renews their sign-in, so they stay signed in for good.
@@ -33,41 +30,18 @@ export function StudioShell({
   title: string;
   children: React.ReactNode;
 }) {
-  const pathname = usePathname();
   const home = `/${studio.slug}`;
-  const items = [
-    { href: home, label: "Showroom", Icon: ShowroomIcon, active: pathname === home || pathname.startsWith(`${home}/s/`) || pathname.startsWith(`${home}/p/`) || pathname.startsWith(`${home}/gallery/`) },
-    ...(signedInAs ? [{ href: `${home}/me`, label: "My page", Icon: ClientsIcon, active: pathname.startsWith(`${home}/me`) }] : []),
-  ];
 
   return (
     <div className="min-h-screen">
       {signedInAs ? <PortalStayIn slug={studio.slug} /> : null}
-      <aside className="sidebar fixed inset-y-0 left-0 z-50 hidden flex-col border-r border-border bg-surface md:flex">
-        <Link href={home} className="sidebar-head flex h-16 shrink-0 items-center gap-2.5 border-b border-border px-5">
-          <StudioMark brand={studio} size="md" />
-          <span className="sidebar-label truncate font-semibold">{studio.name}</span>
-        </Link>
-        <nav aria-label={studio.name} className="flex-1 overflow-y-auto px-3 py-4">
-          <ul className="space-y-1">
-            {items.map(({ href, label, Icon, active }) => (
-              <li key={href}>
-                <Link href={href} aria-current={active ? "page" : undefined} data-tip={label} className={`menu-item ${active ? "menu-item-active" : "menu-item-inactive"}`}>
-                  <Icon className={`h-5 w-5 ${active ? "menu-item-icon-active" : "menu-item-icon-inactive"}`} />
-                  <span className="sidebar-label">{label}</span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </nav>
-        <SidebarToggle />
-      </aside>
-      <div className="sidebar-offset flex min-h-screen flex-col md:pl-(--sidebar-w)">
+      <div className="flex min-h-screen flex-col">
         <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-3 border-b border-border bg-surface px-4 sm:px-6">
-          {/* Phones have no side menu: the studio's mark leads the bar instead. */}
-          <Link href={home} className="md:hidden" aria-label={studio.name}>
+          <Link href={home} className="flex min-w-0 shrink-0 items-center gap-2.5" aria-label={studio.name}>
             <StudioMark brand={studio} size="sm" />
+            <span className="hidden max-w-48 truncate font-semibold sm:inline">{studio.name}</span>
           </Link>
+          <span aria-hidden className="hidden text-muted sm:inline">/</span>
           <h1 className="truncate text-base font-semibold">{title}</h1>
           <div className="ml-auto flex shrink-0 items-center gap-3">
             {signedInAs ? (

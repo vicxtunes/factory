@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
 
 import { StudioAnnouncementPopup } from "@repo/ui/announcements/StudioAnnouncementPopup";
+import { BusinessChat } from "@repo/ui/studio-portal/BusinessChat";
+import { businessChatOn } from "@repo/lib/business-chat/server";
 import { DEFAULT_BRAND_COLOR } from "@repo/lib/studios/core";
 import { studioAtSlug } from "@repo/lib/studio-portal/server";
 
@@ -46,11 +48,14 @@ export async function generateViewport({ params }: Props): Promise<Viewport> {
 export default async function StudioLayout({ children, params }: Props & { children: React.ReactNode }) {
   const at = await studioOf(params);
   if (!at) return children;
+  // Pro's chat that answers as the business (packages/lib/business-chat).
+  const chat = await businessChatOn(at.studio.id).catch(() => false);
   return (
     <>
       <BrandStyle color={at.studio.brandColor} />
       {children}
       <StudioAnnouncementPopup slug={at.slug} />
+      {chat ? <BusinessChat slug={at.slug} name={at.studio.name} /> : null}
     </>
   );
 }

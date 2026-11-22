@@ -3,11 +3,12 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import { Field, TextInput } from "@repo/ui/Field";
+import { Field } from "@repo/ui/Field";
 import { findClashes } from "@repo/lib/bookings/actions";
 import type { Booking } from "@repo/lib/bookings/core";
 
 import { BookingStatusBadge, timeSpan } from "./BookingBits";
+import { DateInput, TimeInput } from "@repo/ui/DateTimeInputs";
 
 /** A day and its times as a form holds them: times "" until chosen. */
 export interface When {
@@ -50,15 +51,15 @@ export function WhenFields({
     <div className="space-y-3">
       <div className="grid gap-4 sm:grid-cols-3">
         <Field label={dateLabel} hint={dateHint}>
-          <TextInput type="date" value={value.date} onChange={(e) => set({ date: e.target.value })} required={dateRequired} />
+          <DateInput value={value.date} onChange={(v) => set({ date: v })} required={dateRequired} />
         </Field>
         {value.date && !value.allDay ? (
           <>
             <Field label="From">
-              <TextInput type="time" value={value.startTime} onChange={(e) => set({ startTime: e.target.value })} required />
+              <TimeInput value={value.startTime} onChange={(v) => set({ startTime: v })} required />
             </Field>
             <Field label="To">
-              <TextInput type="time" value={value.endTime} onChange={(e) => set({ endTime: e.target.value })} required min={value.startTime || undefined} />
+              <TimeInput value={value.endTime} onChange={(v) => set({ endTime: v })} required min={value.startTime || undefined} />
             </Field>
           </>
         ) : null}

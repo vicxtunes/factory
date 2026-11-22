@@ -73,6 +73,7 @@ import {
 } from "@repo/lib/books/expenses";
 import { matchesSearch } from "@repo/lib/search";
 import type { PaymentMethod } from "@repo/lib/wallet/types";
+import { DateInput } from "@repo/ui/DateTimeInputs";
 
 /** Expenses at manage (staff access): without it the board only shows, with no record, pay, void or edit. */
 const CanManage = createContext(true);
@@ -688,7 +689,7 @@ function RepeatFields({ value: r, onChange, dueLabel, min, madeSoFar }: { value:
           </Field>
         ) : null}
         <Field label={dueLabel}>
-          <TextInput type="date" value={r.dueOn} min={min} onChange={(e) => set({ dueOn: e.target.value })} />
+          <DateInput value={r.dueOn} min={min} onChange={(v) => set({ dueOn: v })} />
         </Field>
       </div>
       <Field label="Stops">
@@ -700,7 +701,7 @@ function RepeatFields({ value: r, onChange, dueLabel, min, madeSoFar }: { value:
       </Field>
       {r.end === "on" ? (
         <Field label="Last possible due date">
-          <TextInput type="date" value={r.endsOn} min={r.dueOn || min} onChange={(e) => set({ endsOn: e.target.value })} />
+          <DateInput value={r.endsOn} min={r.dueOn || min} onChange={(v) => set({ endsOn: v })} />
         </Field>
       ) : null}
       {r.end === "after" ? (
@@ -830,10 +831,10 @@ function NewExpenseSheet({ categories, today, canSend, onClose }: { categories: 
         ) : (
           <div className="grid gap-2 sm:grid-cols-2">
             <Field label="Date">
-              <TextInput type="date" value={spentOn} max={today} onChange={(e) => setSpentOn(e.target.value)} />
+              <DateInput value={spentOn} max={today} onChange={setSpentOn} />
             </Field>
             <Field label="Due date (optional)">
-              <TextInput type="date" value={dueOn} onChange={(e) => setDueOn(e.target.value)} />
+              <DateInput value={dueOn} onChange={setDueOn} />
             </Field>
           </div>
         )}
@@ -982,7 +983,7 @@ export function PayFields({ form }: { form: ReturnType<typeof usePayFields> }) {
         </Field>
       </div>
       <Field label="Day it was paid">
-        <TextInput type="date" value={form.paidOn} max={todayHere()} onChange={(e) => form.setPaidOn(e.target.value)} />
+        <DateInput value={form.paidOn} max={todayHere()} onChange={(v) => form.setPaidOn(v)} />
       </Field>
       {needsReference ? (
         <div className="grid gap-2 sm:grid-cols-2">

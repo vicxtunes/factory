@@ -46,6 +46,7 @@ import {
 import { createOrder, lookupClientDuplicates } from "./actions";
 import { OrderCard } from "./order-card";
 import { OrderDetail } from "./order-detail";
+import { CalendarButton, DateInput } from "@repo/ui/DateTimeInputs";
 
 type WorkerLite = Omit<Worker, "pin_hash">;
 
@@ -103,7 +104,6 @@ export function OrderBoard({
   const [tableRows, setTableRows] = useState<number>(TABLE_PAGE_SIZES[0]);
   const [selectedId, setSelectedId] = useState<string | null>(openItemId);
   const supabaseRef = useRef(createClient());
-  const calendarInputRef = useRef<HTMLInputElement>(null);
 
   // Any filter change collapses the table back to the first page so you
   // don't stay scrolled 200 rows into a now-different result set.
@@ -455,15 +455,13 @@ export function OrderBoard({
                     />
                   </div>
                   <div className="mt-1.5 grid grid-cols-2 gap-2 md:hidden">
-                    <TextInput
-                      type="date"
+                    <DateInput
                       value={filters.dateFrom}
-                      onChange={(e) => patch({ dateFrom: e.target.value })}
+                      onChange={(v) => patch({ dateFrom: v })}
                     />
-                    <TextInput
-                      type="date"
+                    <DateInput
                       value={filters.dateTo}
-                      onChange={(e) => patch({ dateTo: e.target.value })}
+                      onChange={(v) => patch({ dateTo: v })}
                     />
                   </div>
                 </>
@@ -508,31 +506,13 @@ export function OrderBoard({
           </button>
         </div>
 
-        <button
-          type="button"
-          onClick={() => {
-            const input = calendarInputRef.current;
-            if (!input) return;
-            try {
-              input.showPicker();
-            } catch {
-              input.click();
-            }
-          }}
+        <CalendarButton
+          onPick={pickCreatedDate}
           aria-label="Pick a date to see orders created then"
-          title="Pick a date to see orders created then"
           className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-[var(--radius)] border border-border bg-surface text-muted hover:bg-background hover:text-foreground"
         >
           <CalendarIcon className="h-5 w-5" />
-        </button>
-        <input
-          ref={calendarInputRef}
-          type="date"
-          className="sr-only"
-          onChange={(e) => {
-            if (e.target.value) pickCreatedDate(e.target.value);
-          }}
-        />
+        </CalendarButton>
 
         {canManage ? (
           <CreateOrderDrawer

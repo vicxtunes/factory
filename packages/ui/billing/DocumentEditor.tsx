@@ -15,6 +15,7 @@ import { WhenFields, whenTimes, type When } from "@repo/ui/bookings/WhenFields";
 import { StepForm } from "@repo/ui/StepForm";
 import { useSteps } from "@repo/ui/Stepper";
 import { formatAmount, formatDay } from "@repo/lib/tenancy/format";
+import { DateInput } from "@repo/ui/DateTimeInputs";
 
 /** A line as typed: numbers stay strings until saved, so half-typed values don't jump. */
 interface Draft {
@@ -244,7 +245,7 @@ export function DocumentEditor({
             </Select>
           </Field>
           <Field label={k.dateLabel} hint={k.dateHint}>
-            <TextInput type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+            <DateInput value={date} onChange={setDate} />
           </Field>
           {linked ? (
             <p className="text-sm sm:col-span-2">

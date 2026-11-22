@@ -1,6 +1,9 @@
 import Link from "next/link";
 
 import { SpacePacksForm } from "@repo/ui/photos/SpacePacksForm";
+import { DomainRequests, LookRentForm } from "@repo/ui/pro/LookRentForm";
+import { ProPageForm } from "@repo/ui/pro/ProPageForm";
+import { ProPriceForm } from "@repo/ui/pro/ProPriceForm";
 import { StudioStatusBadge } from "@repo/ui/studio-access/StatusBadge";
 import { StudiosAnalysis } from "@repo/ui/studios/StudiosAnalysis";
 import { StudiosTable } from "@repo/ui/studios/StudiosTable";
@@ -9,6 +12,8 @@ import { Skeleton } from "@repo/ui/Skeleton";
 import { ChartsSkeleton, RowsSkeleton, StatTilesSkeleton } from "@repo/ui/skeletons/blocks";
 import { Loading } from "@repo/ui/skeletons/Loading";
 import { photos } from "@repo/lib/photos/server";
+import { clientUrl } from "@repo/lib/client-portal/paths";
+import { domainRequests, proCounts, proPage, proPrice, rentPrice } from "@repo/lib/pro/server";
 import { studioAccess } from "@repo/lib/studio-access/server";
 import { readStudioActivity, requireStudiosOversight, studios } from "@repo/lib/studios/server";
 import { resolveTenantScope } from "@repo/lib/tenancy/server/resolve";
@@ -45,6 +50,14 @@ export default async function StudiosPage() {
           <All />
         </Loading>
       </section>
+      {session.isBoss ? (
+        <section>
+          <SectionLabel>Pro</SectionLabel>
+          <Loading skeleton={<Skeleton className="h-16 w-full" />}>
+            <Pro />
+          </Loading>
+        </section>
+      ) : null}
       {session.isBoss ? (
         <section>
           <SectionLabel>Extra storage</SectionLabel>
@@ -85,6 +98,21 @@ async function Waiting() {
         </ul>
       )}
     </>
+  );
+}
+
+async function Pro() {
+  const [price, counts, page, rent, domains] = await Promise.all([proPrice(), proCounts(), proPage(), rentPrice(), domainRequests()]);
+  return (
+    <div className="space-y-4">
+      <ProPriceForm price={price} counts={counts} />
+      <LookRentForm rent={rent} />
+      <ProPageForm page={page} pageUrl={clientUrl("/pricing")} />
+      <div>
+        <SectionLabel>Own domains</SectionLabel>
+        <DomainRequests requests={domains} />
+      </div>
+    </div>
   );
 }
 

@@ -22,7 +22,19 @@ export interface StudioProfile {
   location: MapPoint | null;
 }
 
+/** Its social pages, as links; null where it has none. */
+export interface StudioSocials {
+  tiktok: string | null;
+  instagram: string | null;
+  facebook: string | null;
+  linkedin: string | null;
+}
+
+/** The profile as the owner saves it: socials only when the form sends them. */
+export type StudioProfileInput = StudioProfile & { socials?: StudioSocials };
+
 export interface Studio extends StudioProfile {
+  socials: StudioSocials;
   /** The studio's tenant id: every studio record carries it. */
   id: string;
   ownerClientId: string;

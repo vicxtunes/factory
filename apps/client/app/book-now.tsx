@@ -15,6 +15,7 @@ import { formatAmount, formatDay } from "@repo/lib/tenancy/format";
 import type { TenantScope } from "@repo/lib/tenancy/types";
 
 import { PayNow } from "@repo/ui/payments/PayNow";
+import { Calendar, TimeInput } from "@repo/ui/DateTimeInputs";
 
 type Step = "package" | "date" | "details" | "review" | "pay" | "sent";
 /** The steps shown on the rail, by short name. */
@@ -73,6 +74,8 @@ export function BookNow({
     });
   }, [open, studio.slug]);
   const taken = !!date && booked.includes(date);
+  // Continue pressed before a day was tapped on the calendar.
+  const [noDay, setNoDay] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
@@ -150,12 +153,28 @@ export function BookNow({
               className="space-y-3"
               onSubmit={(e) => {
                 e.preventDefault();
+                if (!date) return setNoDay(true);
                 next();
               }}
             >
-              <Field label="The day" hint={taken ? undefined : "Days already booked can't be chosen."}>
-                <TextInput type="date" value={date} min={today} onChange={(e) => setDate(e.target.value)} required aria-invalid={taken || undefined} />
-              </Field>
+              <div>
+                <p className="mb-1 text-xs font-medium text-muted">The day</p>
+                <div className={`rounded-2xl border p-3 ${noDay && !date ? "border-error-400 ring-3 ring-error-500/10" : "border-border"}`}>
+                  <Calendar
+                    value={date}
+                    min={today}
+                    isUnavailable={(d) => booked.includes(d)}
+                    label="Choose the day"
+                    onPick={(d) => {
+                      setDate(d);
+                      setNoDay(false);
+                    }}
+                  />
+                </div>
+                <p className={`mt-1 text-xs ${noDay && !date ? "font-medium text-error-600" : "text-muted"}`}>
+                  {date ? `You chose ${formatDay(scope, date)}.` : noDay ? "Tap a day on the calendar first." : "Tap a day. Crossed-out days are already booked."}
+                </p>
+              </div>
               {taken ? (
                 <p className="rounded-xl border border-warning-500/40 bg-warning-50 p-3 text-sm text-warning-700 dark:bg-warning-500/10 dark:text-warning-400">
                   {studio.name} is already booked on {formatDay(scope, date)}. Choose another day.
@@ -163,10 +182,10 @@ export function BookNow({
               ) : null}
               <div className="grid grid-cols-2 gap-3">
                 <Field label="From">
-                  <TextInput type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} required />
+                  <TimeInput value={startTime} onChange={setStartTime} required />
                 </Field>
                 <Field label="To">
-                  <TextInput type="time" value={endTime} min={startTime || undefined} onChange={(e) => setEndTime(e.target.value)} required />
+                  <TimeInput value={endTime} min={startTime || undefined} onChange={setEndTime} required />
                 </Field>
               </div>
               <div className="flex gap-2">

@@ -26,6 +26,7 @@ import {
   type Loan,
   type MoneyChannel,
 } from "@repo/lib/production/core";
+import { DateInput } from "@repo/ui/DateTimeInputs";
 
 /** "50,000" → 50000; "12.5" → 12.5; NaN when it isn't a number. */
 export function parseNumber(text: string): number {
@@ -288,11 +289,11 @@ export function LoanSheet({ open, onClose, lenders, lenderId, today }: { open: b
             </Select>
           </Field>
           <Field label="On">
-            <TextInput type="date" value={on} max={today} onChange={(e) => setOn(e.target.value)} required />
+            <DateInput value={on} max={today} onChange={setOn} required />
           </Field>
         </div>
         <Field label="Pay back by (optional)">
-          <TextInput type="date" value={due} min={on} onChange={(e) => setDue(e.target.value)} />
+          <DateInput value={due} min={on} onChange={setDue} />
         </Field>
         <Field label="Note (optional)" hint="Terms, what it was for…">
           <TextArea value={note} onChange={(e) => setNote(e.target.value)} rows={2} />
@@ -349,7 +350,7 @@ export function RepaymentSheet({ open, onClose, loans, loanId, today }: { open: 
               <TextInput inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder={left ? String(left) : ""} required />
             </Field>
             <Field label="Paid on">
-              <TextInput type="date" value={on} min={picked?.receivedOn} max={today} onChange={(e) => setOn(e.target.value)} required />
+              <DateInput value={on} min={picked?.receivedOn} max={today} onChange={setOn} required />
             </Field>
           </div>
           {otherDay ? <p className="text-sm text-muted">Interest is worked out for the date you chose when you save, so the amount left may differ from this.</p> : null}

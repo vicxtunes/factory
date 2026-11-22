@@ -2,7 +2,7 @@
 // runs on any store (tests use an in-memory one, ./service.test.ts).
 // Callers check who's asking and parse the input first (./actions.ts).
 
-import { readableBrandColor, type Studio, type StudioListing, type StudioOwner, type StudioProfile } from "./core";
+import { readableBrandColor, type Studio, type StudioListing, type StudioOwner, type StudioProfileInput } from "./core";
 import type { StudioStore } from "./ports";
 
 export class StudioService {
@@ -22,7 +22,7 @@ export class StudioService {
    * Changes a studio's profile. Callers pass the id of the caller's own
    * studio (server.ts → studioOfCaller), never one sent by the browser.
    */
-  async updateProfile(studioId: string, profile: StudioProfile): Promise<Studio> {
+  async updateProfile(studioId: string, profile: StudioProfileInput): Promise<Studio> {
     return this.store.updateProfile(studioId, profile);
   }
 

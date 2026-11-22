@@ -38,6 +38,7 @@ import {
   type Rental,
 } from "@repo/lib/vendors/core";
 import { checkMobileMoneyPayment, payVendorJobWithMobileMoney } from "@repo/lib/wallet/actions";
+import { DateInput } from "@repo/ui/DateTimeInputs";
 
 /** One vendor job of the studio's, as it sees it. */
 export interface ProjectJob {
@@ -621,7 +622,7 @@ function ServiceForm({
       ) : null}
       <div className="grid grid-cols-2 gap-3">
         <Field label="Due">
-          <TextInput type="date" value={dueOn} onChange={(e) => setDueOn(e.target.value)} />
+          <DateInput value={dueOn} onChange={setDueOn} />
         </Field>
         <Field label="Price (UGX)">
           <TextInput inputMode="numeric" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="300,000" required />
@@ -731,10 +732,10 @@ function RentalForm({
       </Field>
       <div className="grid grid-cols-2 gap-3">
         <Field label="From">
-          <TextInput type="date" min={today} value={startsOn} onChange={(e) => setStartsOn(e.target.value)} required />
+          <DateInput min={today} value={startsOn} onChange={setStartsOn} required />
         </Field>
         <Field label="To (returned by)">
-          <TextInput type="date" min={startsOn || today} value={endsOn} onChange={(e) => setEndsOn(e.target.value)} required />
+          <DateInput min={startsOn || today} value={endsOn} onChange={setEndsOn} required />
         </Field>
       </div>
       <Field label="Anything to add" hint="Optional: where to collect it, what it's for…">

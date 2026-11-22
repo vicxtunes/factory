@@ -9,6 +9,7 @@ import { Field, Select, TextInput } from "@repo/ui/Field";
 import { listMoneyAccounts } from "@repo/lib/wallet/actions";
 import { accountKindFor } from "@repo/lib/wallet/policy";
 import type { MoneyAccount, MoneySource, PaymentMethod } from "@repo/lib/wallet/types";
+import { DateInput } from "@repo/ui/DateTimeInputs";
 
 /** Today where the person is; the server re-checks against the business's date. */
 export function todayHere(): string {
@@ -55,7 +56,7 @@ export function MoneySourceFields({ form, method }: { form: ReturnType<typeof us
       )}
       <div className="grid gap-2 sm:grid-cols-2">
         <Field label="Day it arrived">
-          <TextInput type="date" value={value.receivedOn} max={todayHere()} onChange={(e) => update({ receivedOn: e.target.value })} />
+          <DateInput value={value.receivedOn} max={todayHere()} onChange={(v) => update({ receivedOn: v })} />
         </Field>
         <Field label="Went into">
           <Select value={value.accountId} onChange={(e) => setChosen(e.target.value)}>

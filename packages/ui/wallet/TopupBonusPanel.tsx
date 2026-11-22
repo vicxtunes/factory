@@ -8,6 +8,7 @@ import { Field, TextInput } from "@repo/ui/Field";
 import { useFormatMoney } from "@repo/lib/currency/CurrencySymbolProvider";
 import { createTopupBonus, stopTopupBonus } from "@repo/lib/wallet/actions";
 import type { TopupBonus } from "@repo/lib/wallet/types";
+import { DateTimeInput } from "@repo/ui/DateTimeInputs";
 
 const STATUS_LABELS: Record<TopupBonus["status"], string> = { running: "Running", scheduled: "Scheduled", ended: "Ended" };
 
@@ -163,11 +164,11 @@ function BonusForm({ money, onCreated }: { money: (n: number) => string; onCreat
               <input type="checkbox" checked={startsNow} onChange={(e) => setStartsNow(e.target.checked)} />
               Right away
             </label>
-            {!startsNow ? <TextInput type="datetime-local" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} required /> : null}
+            {!startsNow ? <DateTimeInput value={startsAt} onChange={setStartsAt} required /> : null}
           </div>
         </Field>
         <Field label="Ends (optional)" hint="Leave empty to run until you end it.">
-          <TextInput type="datetime-local" value={endsAt} onChange={(e) => setEndsAt(e.target.value)} />
+          <DateTimeInput value={endsAt} onChange={setEndsAt} />
         </Field>
       </div>
 
