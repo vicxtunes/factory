@@ -20,16 +20,11 @@ test("a trial is Pro not yet extended past the trial's end", () => {
 });
 
 test("a Pro look shows only with Pro; otherwise the page falls back to Classic, the choice kept", () => {
-  assert.equal(shownTemplate({ until: later, template: "showcase", rented: [] }, now), "showcase");
-  assert.equal(shownTemplate({ until: earlier, template: "showcase", rented: [] }, now), "classic");
-  assert.equal(shownTemplate({ until: null, template: "classic", rented: [] }, now), "classic");
+  assert.equal(shownTemplate({ until: later, template: "showcase" }, now), "showcase");
+  assert.equal(shownTemplate({ until: earlier, template: "showcase" }, now), "classic");
+  assert.equal(shownTemplate({ until: null, template: "classic" }, now), "classic");
 });
 
-test("a free business shows a Pro look while it's rented, and Classic once the rent is over", () => {
-  const rent = (until: string) => [{ template: "showcase" as const, until, autoRenew: false }];
-  assert.equal(shownTemplate({ until: null, template: "showcase", rented: rent(later) }, now), "showcase");
-  assert.equal(shownTemplate({ until: earlier, template: "showcase", rented: rent(earlier) }, now), "classic");
-});
 
 test("an own domain is cleaned as typed, and Aming's own or nonsense is refused", () => {
   assert.equal(cleanDomain(" https://www.Salon-Photos.com/about "), "www.salon-photos.com");

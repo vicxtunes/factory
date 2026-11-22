@@ -7,7 +7,7 @@ import { Loading } from "@repo/ui/skeletons/Loading";
 import { chatUsage } from "@repo/lib/business-chat/server";
 import { isPro } from "@repo/lib/pro/core";
 import { heroCandidates, heroChoice } from "@repo/lib/pro/hero";
-import { proPrice, proStatus, rentPrice } from "@repo/lib/pro/server";
+import { proPrice, proStatus } from "@repo/lib/pro/server";
 import { portal } from "@repo/lib/studio-portal/server";
 import { requireStudio, type CallerStudio } from "@repo/lib/studios/server";
 import { canUse } from "@repo/lib/team/core";
@@ -30,10 +30,9 @@ export default async function ProPage() {
 
 async function Body({ caller }: { caller: CallerStudio }) {
   const { studio, access, scope } = caller;
-  const [status, price, rent, slug, balance, chat, heroAlbums, hero] = await Promise.all([
+  const [status, price, slug, balance, chat, heroAlbums, hero] = await Promise.all([
     proStatus(studio.id),
     proPrice(),
-    rentPrice(),
     portal.currentSlug(studio.id),
     access.owner ? amingCardBalance(studio.ownerClientId) : Promise.resolve(0),
     access.owner ? chatUsage(studio.id).catch(() => null) : Promise.resolve(null),
@@ -49,7 +48,7 @@ async function Body({ caller }: { caller: CallerStudio }) {
       ) : null}
       <section>
         <SectionLabel>Your page&apos;s look</SectionLabel>
-        <TemplatePicker slug={slug} status={status} rent={rent} balance={balance} owner={access.owner} canChange={canUse(access, "catalog", "manage")} />
+        <TemplatePicker slug={slug} status={status} canChange={canUse(access, "catalog", "manage")} />
       </section>
       <section>
         <SectionLabel>Showcase look</SectionLabel>
