@@ -3,6 +3,8 @@ import type { Metadata, Viewport } from "next";
 import { StudioAnnouncementPopup } from "@repo/ui/announcements/StudioAnnouncementPopup";
 import { BusinessChat } from "@repo/ui/studio-portal/BusinessChat";
 import { businessChatOn } from "@repo/lib/business-chat/server";
+import { isPro } from "@repo/lib/pro/core";
+import { proStatus } from "@repo/lib/pro/server";
 import { DEFAULT_BRAND_COLOR } from "@repo/lib/studios/core";
 import { studioAtSlug } from "@repo/lib/studio-portal/server";
 
@@ -49,12 +51,12 @@ export default async function StudioLayout({ children, params }: Props & { child
   const at = await studioOf(params);
   if (!at) return children;
   // Pro's chat that answers as the business (packages/lib/business-chat).
-  const chat = await businessChatOn(at.studio.id).catch(() => false);
+  const [chat, pro] = await Promise.all([businessChatOn(at.studio.id).catch(() => false), proStatus(at.studio.id).then((s) => isPro(s), () => false)]);
   return (
     <>
       <BrandStyle color={at.studio.brandColor} />
       {children}
-      <StudioAnnouncementPopup slug={at.slug} />
+      <StudioAnnouncementPopup slug={at.slug} shareable={pro} />
       {chat ? <BusinessChat slug={at.slug} name={at.studio.name} /> : null}
     </>
   );

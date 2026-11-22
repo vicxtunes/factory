@@ -59,5 +59,5 @@ export function AnnouncementPopup() {
     });
   }
 
-  return <AnnouncementCard announcement={announcement} busy={dismissing} onClose={dismiss} />;
+  return <AnnouncementCard announcement={announcement} busy={dismissing} onClose={dismiss} shareable />;
 }

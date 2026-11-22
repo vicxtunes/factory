@@ -12,8 +12,8 @@ import { parseInput, type Result } from "@repo/lib/kernel/core";
 import { runAction } from "@repo/lib/kernel/server/action";
 import { studioOfCaller } from "@repo/lib/studios/server";
 
-import { buyProSchema, domainSchema, SERVER_IP, isPro, mayUse, ProError, proPageSchema, proPriceSchema, rentLookSchema, templateSchema } from "./core";
-import { askDomain, buyPro, dropDomain, proStatus, rentLook, setAutoRenew, setDomainLive, setPageTemplate, setProPage, setProPrice, setRentAutoRenew, setRentPrice } from "./server";
+import { buyProSchema, domainSchema, SERVER_IP, isPro, mayUse, ProError, proPageSchema, proPriceSchema, templateSchema } from "./core";
+import { askDomain, buyPro, dropDomain, proStatus, setAutoRenew, setDomainLive, setPageTemplate, setProPage, setProPrice } from "./server";
 
 const touched = () => revalidatePath("/studio/pro");
 
@@ -41,7 +41,7 @@ export async function choosePageTemplate(template: unknown): Promise<Result> {
   return runAction("pro", async () => {
     const { scope } = await studioOfCaller("catalog");
     const id = parseInput(templateSchema, template);
-    if (!mayUse(await proStatus(scope.tenantId), id)) throw new ProError("That look is for Pro. Get Pro or rent it first.");
+    if (!mayUse(await proStatus(scope.tenantId), id)) throw new ProError("That look is for Pro. Get Pro first.");
     await setPageTemplate(scope.tenantId, id);
     touched();
     revalidatePath("/[slug]", "page");
@@ -64,36 +64,6 @@ export async function saveProPage(input: unknown): Promise<Result> {
     const session = await getDashboardSession();
     if (!session?.isBoss) throw new ProError("Only the boss can change the pricing page.");
     await setProPage(parseInput(proPageSchema, input));
-    revalidatePath("/dashboard/studios");
-  });
-}
-
-/** A month of one Pro look from the owner's card (a free business), at the rent they saw. */
-export async function payLookRent(input: unknown): Promise<Result<string>> {
-  return runAction("pro", async () => {
-    const { scope, session } = await studioOfCaller();
-    const { template, amount, autoRenew } = parseInput(rentLookSchema, input);
-    const until = await rentLook(scope.tenantId, template, amount, { auto: false, renew: autoRenew, actorId: session.client_id, actorName: session.name });
-    touched();
-    revalidatePath("/[slug]", "page");
-    return until;
-  });
-}
-
-export async function changeRentAutoRenew(template: unknown, on: unknown): Promise<Result> {
-  return runAction("pro", async () => {
-    const { scope } = await studioOfCaller();
-    await setRentAutoRenew(scope.tenantId, parseInput(templateSchema, template), on === true);
-    touched();
-  });
-}
-
-/** Only the boss sets a look's rent a month; none: looks aren't for rent. */
-export async function setLookRentPrice(price: unknown): Promise<Result> {
-  return runAction("pro", async () => {
-    const session = await getDashboardSession();
-    if (!session?.isBoss) throw new ProError("Only the boss can set the looks' rent.");
-    await setRentPrice(parseInput(proPriceSchema, price));
     revalidatePath("/dashboard/studios");
   });
 }

@@ -15,7 +15,7 @@ export const ugx = (n: number) => `UGX ${n.toLocaleString("en-UG")}`;
 export const day = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
 
 /**
- * Paying a month (of Pro, or of a rented look): from the Aming card, or by
+ * Paying a month of Pro: from the Aming card, or by
  * MTN / Airtel onto the card first and then from it (as with extra storage),
  * with "renew by itself" ticked unless they untick it.
  */
