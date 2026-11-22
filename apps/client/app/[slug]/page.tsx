@@ -71,7 +71,14 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   if (!studio) return { title: "Not found" };
   const about = [studio.studio.address, studio.studio.phone].filter(Boolean).join(" · ") || "Photography business";
   // The studio's own name alone (./layout.tsx would add it again).
-  return { title: { absolute: studio.studio.name }, description: about, openGraph: { title: studio.studio.name, description: about, type: "website" } };
+  // A shared link shows the business's logo (./logo), never Aming's or Vercel's.
+  const logo = `/${encodeURIComponent(slug)}/logo`;
+  return {
+    title: { absolute: studio.studio.name },
+    description: about,
+    openGraph: { siteName: studio.studio.name, title: studio.studio.name, description: about, type: "website", images: [{ url: logo, alt: studio.studio.name }] },
+    twitter: { card: "summary", images: [logo] },
+  };
 }
 
 export default async function SlugPage({ params, searchParams }: Params) {
