@@ -7,8 +7,9 @@ import type { ChatTurn } from "@repo/lib/business-chat/core";
 
 /**
  * The chat on a Pro business's page (packages/lib/business-chat): a button at
- * the bottom left (Aming's Alexis sits at the right), a window that answers
- * as the business. The conversation stays in this browser tab.
+ * the bottom right, a window that answers as the business. The conversation
+ * stays in this browser tab. On these pages it's the only chat: Aming's Alexis
+ * button is hidden while it's here (owner, 2026-11-22).
  */
 export function BusinessChat({ slug, name }: { slug: string; name: string }) {
   const key = `business-chat:${slug}`;
@@ -67,10 +68,11 @@ export function BusinessChat({ slug, name }: { slug: string; name: string }) {
 
   return (
     <>
+      <style>{"[data-aming-alexis]{display:none!important}"}</style>
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className={`fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] left-4 z-30 inline-flex min-h-12 items-center gap-2 rounded-full bg-brand-500 px-4 text-sm font-semibold text-white shadow-theme-lg hover:bg-brand-600 active:scale-95 print:hidden lg:bottom-6 lg:left-6 ${open ? "hidden" : ""}`}
+        className={`fixed right-4 z-30 inline-flex min-h-12 items-center gap-2 rounded-full bg-brand-500 px-4 text-sm font-semibold text-white shadow-theme-lg hover:bg-brand-600 active:scale-95 print:hidden lg:right-6 bottom-[calc(1rem+env(safe-area-inset-bottom))] lg:bottom-6 ${open ? "hidden" : ""}`}
       >
         <svg aria-hidden viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12Z" />
@@ -82,7 +84,7 @@ export function BusinessChat({ slug, name }: { slug: string; name: string }) {
         <section
           role="dialog"
           aria-label={`Chat with ${name}`}
-          className="fixed inset-0 z-50 flex flex-col bg-surface sm:inset-auto sm:bottom-6 sm:left-6 sm:h-[min(36rem,calc(100dvh-3rem))] sm:w-96 sm:rounded-2xl sm:border sm:border-border sm:shadow-theme-xl"
+          className="fixed inset-0 z-50 flex flex-col bg-surface sm:inset-auto sm:right-6 sm:bottom-6 sm:h-[min(36rem,calc(100dvh-3rem))] sm:w-96 sm:rounded-2xl sm:border sm:border-border sm:shadow-theme-xl"
         >
           <header className="flex items-center gap-3 border-b border-border px-4 py-3">
             <div className="min-w-0 flex-1">
@@ -111,7 +113,7 @@ export function BusinessChat({ slug, name }: { slug: string; name: string }) {
               ref={input}
               rows={1}
               value={text}
-              maxLength={1000}
+              maxLength={500}
               placeholder="Type your question"
               aria-label="Your question"
               onChange={(e) => setText(e.target.value)}

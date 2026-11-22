@@ -35,6 +35,8 @@ export interface AskInput {
    * buttons, then a short closing line, are both the reply). Otherwise its last words.
    */
   everyStep?: boolean;
+  /** Longest reply, in tokens (the business chat's are short): MAX_TOKENS unless given. */
+  maxTokens?: number;
 }
 
 export interface Answer {
@@ -46,10 +48,10 @@ export function askModel(input: AskInput): Promise<Answer> {
   return input.model.provider === "openai" ? askOpenAI(input) : askClaude(input);
 }
 
-async function askClaude({ model, system = SYSTEM_PROMPT, context, tools, messages, onUsage, onText, everyStep }: AskInput): Promise<Answer> {
+async function askClaude({ model, system = SYSTEM_PROMPT, context, tools, messages, onUsage, onText, everyStep, maxTokens = MAX_TOKENS }: AskInput): Promise<Answer> {
   const params = {
     model: model.id,
-    max_tokens: MAX_TOKENS,
+    max_tokens: maxTokens,
     max_iterations: MAX_STEPS,
     betas: ["server-side-fallback-2026-07-01"],
     fallbacks: "default" as const,
@@ -136,7 +138,7 @@ function visible(text: string): string {
   return trimmed.replace(/[\s\u200B-\u200D\u2060\uFEFF]/g, "") ? trimmed : "";
 }
 
-async function askOpenAI({ model, system = SYSTEM_PROMPT, context, tools, messages, onUsage, onText, everyStep }: AskInput): Promise<Answer> {
+async function askOpenAI({ model, system = SYSTEM_PROMPT, context, tools, messages, onUsage, onText, everyStep, maxTokens = MAX_TOKENS }: AskInput): Promise<Answer> {
   const client = new OpenAI({ timeout: TIMEOUT_MS });
   const definitions = tools.map((t): OpenAI.Responses.FunctionTool => {
     const parameters = { ...z.toJSONSchema(t.inputSchema), $schema: undefined };
@@ -153,7 +155,7 @@ async function askOpenAI({ model, system = SYSTEM_PROMPT, context, tools, messag
   let said = "";
   const steps: string[] = [];
   for (let step = 0; step < MAX_STEPS; step++) {
-    const request = { model: model.id, max_output_tokens: MAX_TOKENS, reasoning: { effort: "low" as const }, tools: definitions, input };
+    const request = { model: model.id, max_output_tokens: maxTokens, reasoning: { effort: "low" as const }, tools: definitions, input };
     let response: OpenAI.Responses.Response | null = null;
     if (onText) {
       for await (const event of await client.responses.create({ ...request, stream: true })) {

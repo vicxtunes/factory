@@ -6,6 +6,8 @@ import { useState, useTransition } from "react";
 import { BottomSheet } from "@repo/ui/BottomSheet";
 import { Button } from "@repo/ui/Button";
 import { changeProAutoRenew, payForPro } from "@repo/lib/pro/actions";
+import { BUSINESS_DAILY, VISITOR_DAILY } from "@repo/lib/business-chat/core";
+import type { ChatUsage } from "@repo/lib/business-chat/server";
 import { FREE_SPACE_GB, isPro, onTrial, PRO_SPACE_GB, type ProStatus } from "@repo/lib/pro/core";
 
 import { DomainBox } from "./DomainBox";
@@ -18,7 +20,7 @@ const PRO_GIVES = [`${PRO_SPACE_GB} GB of space (${FREE_SPACE_GB} GB without Pro
  * The owner's Pro: where it stands (trial, on until, ended), what it gives,
  * paying for a month, whether it renews by itself, and their own domain.
  */
-export function ProPanel({ status, price, balance }: { status: ProStatus; price: number | null; balance: number }) {
+export function ProPanel({ status, price, balance, chat }: { status: ProStatus; price: number | null; balance: number; chat: ChatUsage | null }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [pending, start] = useTransition();
@@ -87,6 +89,7 @@ export function ProPanel({ status, price, balance }: { status: ProStatus; price:
           Compare Free and Pro
         </a>
       </div>
+      {pro && chat ? <ChatAllowance chat={chat} /> : null}
       <DomainBox domain={status.domain} pro={pro} />
       {price ? (
         <BottomSheet open={open} onClose={() => setOpen(false)} title="Pay for Pro">
@@ -104,5 +107,33 @@ export function ProPanel({ status, price, balance }: { status: ProStatus; price:
         </BottomSheet>
       ) : null}
     </section>
+  );
+}
+
+/**
+ * Ask us, the chat on the business's page (packages/lib/business-chat): how
+ * much of it is used and its limits, so a pause never surprises the owner.
+ */
+function ChatAllowance({ chat }: { chat: ChatUsage }) {
+  const resets = new Date(chat.resetsAt).toLocaleDateString("en-GB", { day: "numeric", month: "long" });
+  const full = chat.usedPercent >= 100;
+  return (
+    <div className="mt-5 rounded-xl border border-border bg-surface p-4 text-sm">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <p className="font-semibold">Ask us, the chat on your page</p>
+        <p className="text-muted tnum">
+          {chat.answersThisMonth} answers this month · {chat.answersToday} today
+        </p>
+      </div>
+      <div className="mt-3 h-2 overflow-hidden rounded-full bg-background" role="progressbar" aria-label="This month's chat allowance used" aria-valuenow={chat.usedPercent} aria-valuemin={0} aria-valuemax={100}>
+        <div className={`h-full rounded-full ${full ? "bg-error-500" : chat.usedPercent >= 80 ? "bg-warning-500" : "bg-brand-500"}`} style={{ width: `${chat.usedPercent}%` }} />
+      </div>
+      <p className="mt-2 text-muted">
+        {full ? `This month's allowance is used: the chat rests until ${resets} and visitors see your phone and WhatsApp.` : `${chat.usedPercent}% of this month's allowance used. It starts again on ${resets}.`}
+      </p>
+      <p className="mt-1 text-xs text-muted">
+        Limits: up to {BUSINESS_DAILY} answers a day, and a monthly allowance. Each visitor can ask up to {VISITOR_DAILY} questions a day. When a limit is reached the chat pauses, visitors are given your phone and WhatsApp, and we tell you.
+      </p>
+    </div>
   );
 }

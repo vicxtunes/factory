@@ -12,7 +12,7 @@ test("the conversation from the browser is trimmed to visitor-first, visitor-las
   const long = Array.from({ length: 40 }, (_, i) => ({ role: i % 2 ? "assistant" : "user", content: String(i) }));
   long.push({ role: "user", content: "last" });
   assert.ok(cleanTurns(long).length <= MAX_TURNS);
-  assert.equal(cleanTurns([{ role: "user", content: "x".repeat(5000) }])[0].content.length, 1000);
+  assert.equal(cleanTurns([{ role: "user", content: "x".repeat(5000) }])[0].content.length, 500);
 });
 
 test("the facts list prices only as given, and say when they're hidden", () => {
