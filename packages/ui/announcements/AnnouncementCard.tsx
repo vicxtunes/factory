@@ -14,8 +14,7 @@ type Shown = Pick<Announcement, "title" | "body" | "image_url" | "button_label" 
 //
 // Either way the card fits the visible screen (dvh, notch and home bar
 // included), so the way out is never pushed off it. A poster fills the card's
-// width; on a computer the card is 80% of its phone width, so its caption and
-// buttons show (owner, 2026-11-22: shrinking the poster left white bands). `shareable`: a Share
+// width (owner, 2026-11-22: keep it as it was). `shareable`: a Share
 // button beside its button (Aming's always, a business's with Pro).
 export function AnnouncementCard({ announcement: a, busy, onClose, shareable = false }: { announcement: Shown; busy: boolean; onClose: () => void; shareable?: boolean }) {
   const frame =
@@ -25,7 +24,7 @@ export function AnnouncementCard({ announcement: a, busy, onClose, shareable = f
   if (a.image_url) {
     return (
       <div role="dialog" aria-modal="true" aria-label={a.title} className={frame} onClick={busy ? undefined : onClose}>
-        <div className={`relative flex ${fit} w-full max-w-md flex-col overflow-hidden rounded-2xl bg-surface shadow-theme-xl sm:max-w-[22.4rem]`} onClick={(e) => e.stopPropagation()}>
+        <div className={`relative flex ${fit} w-full max-w-md flex-col overflow-hidden rounded-2xl bg-surface shadow-theme-xl`} onClick={(e) => e.stopPropagation()}>
           <button
             type="button"
             aria-label="Close"
