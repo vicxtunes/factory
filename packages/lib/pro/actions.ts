@@ -146,3 +146,15 @@ export async function checkDomainDns(): Promise<Result<{ pointsHere: boolean; fo
     return { pointsHere: found.includes(SERVER_IP), found };
   });
 }
+
+/** The photos at the top of the business's page, in order (none: picked by themselves). Catalog managers. */
+export async function chooseHeroPhotos(ids: unknown): Promise<Result> {
+  return runAction("pro", async () => {
+    const { scope } = await studioOfCaller("catalog");
+    const { setHeroChoice, MAX_HERO_PHOTOS } = await import("./hero");
+    const chosen = parseInput(z.array(z.uuid("Choose photos from your albums.")).max(MAX_HERO_PHOTOS, `Choose up to ${MAX_HERO_PHOTOS} photos.`), ids);
+    await setHeroChoice(scope.tenantId, chosen);
+    touched();
+    revalidatePath("/[slug]", "page");
+  });
+}

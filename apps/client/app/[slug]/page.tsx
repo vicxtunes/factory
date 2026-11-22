@@ -19,6 +19,7 @@ import { rememberedProductRequests } from "@repo/lib/product-requests/server";
 import { fetchCurrencies, fetchProductBySlug, fetchShowroomSettings } from "@repo/lib/queries";
 import { studioAccess } from "@repo/lib/studio-access/server";
 import { shownTemplate, templateSchema, type PageTemplate } from "@repo/lib/pro/core";
+import { chosenHeroPhotos } from "@repo/lib/pro/hero";
 import { proStatus } from "@repo/lib/pro/server";
 import { portalClient, studioAtSlug } from "@repo/lib/studio-portal/server";
 import { studiosOf } from "@repo/lib/studios/server";
@@ -315,15 +316,19 @@ function cardOf(scope: TenantScope, showPrices: boolean, now: Date) {
 }
 
 /**
- * Six photos for the hero, fast: the albums' covers first (already loaded),
- * then, only if that's short, the photos of the first few albums. The same
- * picture twice (same address or size) shows once.
+ * Six photos for the hero, fast: those the business chose (Pro & page look)
+ * first, then the albums' covers (already loaded), then, only if that's
+ * short, the photos of the first few albums. The same picture twice (same
+ * address or size) shows once.
  */
 async function heroPhotos(
   scope: TenantScope,
   albums: { id: string; coverUrl: string | null; coverLargeUrl: string | null }[],
 ): Promise<HeroPhoto[]> {
-  const pictures: HeroPhoto[] = [];
+  const pictures: HeroPhoto[] = await chosenHeroPhotos(scope).catch((err) => {
+    console.error("hero: chosen photos failed:", err);
+    return [];
+  });
   for (const a of albums) {
     if (pictures.length === 6) break;
     if (a.coverUrl && a.coverLargeUrl && !pictures.some((p) => p.large === a.coverLargeUrl)) pictures.push({ small: a.coverUrl, large: a.coverLargeUrl });

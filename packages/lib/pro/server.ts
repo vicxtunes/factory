@@ -224,8 +224,8 @@ export async function proCounts(): Promise<{ pro: number; trial: number }> {
 const day = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "Africa/Kampala" });
 const ugx = (n: number) => `UGX ${n.toLocaleString("en-UG")}`;
 
-/** The owner hears it as a push and in their Aming chat. Best effort. */
-async function tell(clientId: string, title: string, body: string): Promise<void> {
+/** The owner hears it as a push and in their Aming chat, linking to Pro & page look. Best effort. */
+export async function tell(clientId: string, title: string, body: string): Promise<void> {
   await notifyActor({ type: "client", id: clientId }, { title, body, url: clientPath(PAGE) });
   try {
     const { postAmingNotice } = await import("@repo/lib/chat/aming");
