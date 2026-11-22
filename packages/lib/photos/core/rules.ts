@@ -1,7 +1,7 @@
 // Storage allowance, file limits and where files go. Pure.
 
-/** Every new studio's allowance: 1 GB. The boss can raise it per studio. */
-export const DEFAULT_QUOTA_BYTES = 1024 ** 3;
+/** Every new studio's allowance: 2 GB free (owner, 2026-11-22; was 1 GB), 50 GB while it has Pro. Extra bought comes on top. */
+export const DEFAULT_QUOTA_BYTES = 2 * 1024 ** 3;
 /** Warn at this share of the allowance. */
 export const WARN_AT = 0.8;
 /** Per copy, after resizing in the browser: generous for a ~2400px JPEG and a ~600px one. */

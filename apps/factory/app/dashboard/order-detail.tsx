@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 
 import { Button } from "@repo/ui/Button";
 import { Field, Select, TextInput } from "@repo/ui/Field";
@@ -34,6 +34,7 @@ import { StaffOrderPayment } from "@repo/ui/wallet/OrderPayment";
 import { StaffInvoicePanel } from "@repo/ui/invoices/StaffInvoicePanel";
 
 import { assignItem, cancelOrder, overrideStatus, renameClientOnOrder, setLineDiscount, setOrderAmount, updateOrderItem } from "./actions";
+import { CalendarButton, DateInput, DateTimeInput } from "@repo/ui/DateTimeInputs";
 
 type WorkerLite = Omit<Worker, "pin_hash">;
 
@@ -270,7 +271,6 @@ export function OrderDetail({
   const [deliveryDate, setDeliveryDate] = useState("");
   const [deadlineAt, setDeadlineAt] = useState("");
   const [edit, setEdit] = useState<ItemEditState | null>(null);
-  const createdDateInputRef = useRef<HTMLInputElement>(null);
   const photoLink = item.media_link ?? item.order.media_link;
 
   // Same cutoff the designer's edit already uses — a mistake can surface
@@ -505,19 +505,17 @@ export function OrderDetail({
 
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Delivery date">
-              <TextInput
-                type="date"
+              <DateInput
                 value={deliveryDate}
-                onChange={(e) => setDeliveryDate(e.target.value)}
+                onChange={setDeliveryDate}
                 required
               />
             </Field>
             {item.order.order_type === "express" ? (
               <Field label="Deadline">
-                <TextInput
-                  type="datetime-local"
+                <DateTimeInput
                   value={deadlineAt}
-                  onChange={(e) => setDeadlineAt(e.target.value)}
+                  onChange={setDeadlineAt}
                   required
                 />
               </Field>
@@ -558,34 +556,13 @@ export function OrderDetail({
               {formatCreatedAt(submittedAt(item.order))}
               {onPickCreatedDate ? (
                 <>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const input = createdDateInputRef.current;
-                      if (!input) return;
-                      // showPicker() isn't supported everywhere (older
-                      // Safari) — fall back to a plain click, which also
-                      // opens the native picker in every browser that lacks it.
-                      try {
-                        input.showPicker();
-                      } catch {
-                        input.click();
-                      }
-                    }}
+                  <CalendarButton
+                    onPick={onPickCreatedDate}
                     aria-label="Pick a date to see all orders submitted then"
-                    title="Pick a date to see all orders submitted then"
                     className="text-muted hover:text-brand-600"
                   >
                     <CalendarIcon className="h-4 w-4" />
-                  </button>
-                  <input
-                    ref={createdDateInputRef}
-                    type="date"
-                    className="sr-only"
-                    onChange={(e) => {
-                      if (e.target.value) onPickCreatedDate(e.target.value);
-                    }}
-                  />
+                  </CalendarButton>
                 </>
               ) : null}
             </dd>

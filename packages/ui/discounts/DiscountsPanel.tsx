@@ -12,6 +12,7 @@ import { createDiscount, stopDiscount } from "@repo/lib/discounts/actions";
 import { offerBadge, type DiscountInput, type DiscountStatus } from "@repo/lib/discounts/core";
 import type { DiscountView } from "@repo/lib/discounts/service";
 import { matchesSearch } from "@repo/lib/search";
+import { DateTimeInput } from "@repo/ui/DateTimeInputs";
 
 export interface DiscountProductOption {
   id: string;
@@ -322,12 +323,12 @@ function DiscountForm({
               Right away
             </label>
             {!startsNow ? (
-              <TextInput type="datetime-local" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} required />
+              <DateTimeInput value={startsAt} onChange={setStartsAt} required />
             ) : null}
           </div>
         </Field>
         <Field label="Ends (optional)" hint="Leave empty to run until you end it.">
-          <TextInput type="datetime-local" value={endsAt} onChange={(e) => setEndsAt(e.target.value)} />
+          <DateTimeInput value={endsAt} onChange={setEndsAt} />
         </Field>
       </div>
 

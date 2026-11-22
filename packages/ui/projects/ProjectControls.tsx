@@ -8,6 +8,7 @@ import { Field, Select, TextArea, TextInput } from "@repo/ui/Field";
 import type { Result } from "@repo/lib/kernel/core";
 import { createProject, setProjectStatus, startProjectFromBooking, updateProject } from "@repo/lib/projects/actions";
 import { nextStep, PROJECT_STATUS_LABELS, previousStep, type Project, type ProjectStatus } from "@repo/lib/projects/core";
+import { DateInput } from "@repo/ui/DateTimeInputs";
 
 function useAction() {
   const router = useRouter();
@@ -114,7 +115,7 @@ export function ProjectForm({ project, customers, basePath }: { project?: Projec
         </Field>
       </div>
       <Field label="Event day" hint="Optional: the shoot or event.">
-        <TextInput type="date" value={form.eventDate} onChange={set("eventDate")} />
+        <DateInput value={form.eventDate} onChange={(v) => setForm((f) => ({ ...f, eventDate: v }))} />
       </Field>
       <Field label="Notes" hint="Shot list, delivery details, anything the team needs.">
         <TextArea value={form.notes} onChange={set("notes")} maxLength={4000} rows={5} />

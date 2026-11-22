@@ -4,10 +4,11 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
 import { Button } from "@repo/ui/Button";
-import { Field, TextInput } from "@repo/ui/Field";
+import { Field } from "@repo/ui/Field";
 import { FormSheet } from "@repo/ui/FormSheet";
 import { deliverJob, handOverJob, respondToJob, sendSamples, withdrawFromJob } from "@repo/lib/vendors/actions";
 import type { JobStatus } from "@repo/lib/vendors/core";
+import { DateInput } from "@repo/ui/DateTimeInputs";
 
 /** "Friday 7 November". */
 const longDay = (day: string) => new Date(`${day}T12:00:00Z`).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" });
@@ -160,7 +161,7 @@ export function JobActions({
             </>
           ) : (
             <Field label="I'll deliver by" hint="The studio gave no date: the day you choose becomes the job's deadline.">
-              <TextInput type="date" min={today} value={deliverBy} onChange={(e) => setDeliverBy(e.target.value)} required />
+              <DateInput min={today} value={deliverBy} onChange={setDeliverBy} required />
             </Field>
           )}
           <p className="text-xs text-muted">Studios count on this date. If you can&apos;t make it, tell them early, or give the job up so they&apos;re refunded.</p>

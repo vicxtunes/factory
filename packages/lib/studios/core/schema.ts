@@ -5,7 +5,12 @@ import { z } from "zod";
 import { optionalEmail, optionalPhone, optionalText } from "@repo/lib/kernel/core";
 
 import { normalizeHex } from "./brand";
-import type { StudioProfile } from "./model";
+import type { StudioProfileInput } from "./model";
+
+/** A social page's link; "instagram.com/x" gets its https://. */
+function socialLink() {
+  return optionalText(200, "Keep each link under 200 characters.").transform((s) => (s && !/^https?:\/\//i.test(s) ? `https://${s}` : s));
+}
 
 export const studioIdSchema = z.uuid("That business doesn't exist.");
 
@@ -18,7 +23,10 @@ export const studioProfileSchema = z.object({
     .object({ lat: z.number().min(-90).max(90), lng: z.number().min(-180).max(180) }, "That place on the map isn't valid.")
     .nullish()
     .transform((p) => p ?? null),
-}) satisfies z.ZodType<StudioProfile, unknown>;
+  socials: z
+    .object({ tiktok: socialLink(), instagram: socialLink(), facebook: socialLink(), linkedin: socialLink() })
+    .optional(),
+}) satisfies z.ZodType<StudioProfileInput, unknown>;
 
 /** Whether a business's work shows on Aming's front page. */
 export const showOnAmingSchema = z.object({ on: z.boolean() });

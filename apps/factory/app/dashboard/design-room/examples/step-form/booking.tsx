@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Field, Select, TextArea, TextInput } from "@repo/ui/Field";
 import { ChoiceGroup, StepForm } from "@repo/ui/StepForm";
 import { useSteps } from "@repo/ui/Stepper";
+import { DateInput } from "@repo/ui/DateTimeInputs";
 
 // The studio's "New booking" form in the step card, on sample data: click
 // through it. Continue checks the open step's required fields first.
@@ -58,7 +59,7 @@ export default function StepFormBooking() {
         {steps.step === 1 ? (
           <>
             <Field label="Date">
-              <TextInput type="date" value={form.date} onChange={set("date")} required />
+              <DateInput value={form.date} onChange={(v) => setForm((f) => ({ ...f, date: v }))} required />
             </Field>
             <ChoiceGroup
               label="How long"

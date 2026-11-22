@@ -38,6 +38,7 @@ import type { TenantScope } from "@repo/lib/tenancy/types";
 
 import { PackagesEditor } from "./PackagesEditor";
 import { TemplatePicker } from "./TemplatePicker";
+import { DateInput } from "@repo/ui/DateTimeInputs";
 
 type Scope = Pick<TenantScope, "currency" | "locale">;
 type Run = (fn: () => Promise<{ ok: boolean; error?: string; data?: unknown }>) => void;
@@ -760,10 +761,10 @@ function DealEditor({ service, words, run, pending }: { service: ServiceWithPack
           <TextInput inputMode="numeric" className="tnum" value={percent} onChange={(e) => setPercent(e.target.value)} placeholder="20" required />
         </Field>
         <Field label="From">
-          <TextInput type="date" value={from} onChange={(e) => setFrom(e.target.value)} required />
+          <DateInput value={from} onChange={setFrom} required />
         </Field>
         <Field label="Until (included)">
-          <TextInput type="date" value={until} min={from} onChange={(e) => setUntil(e.target.value)} required />
+          <DateInput value={until} min={from} onChange={setUntil} required />
         </Field>
       </div>
       <div className="flex gap-2">

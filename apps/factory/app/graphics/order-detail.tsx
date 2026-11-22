@@ -19,6 +19,7 @@ import {
   type DesignerItemEditInput,
 } from "./actions";
 import type { DesignerOrder } from "./order-status";
+import { DateInput, DateTimeInput } from "@repo/ui/DateTimeInputs";
 
 function formatDate(iso: string | null): string {
   if (!iso) return "—";
@@ -176,19 +177,17 @@ export function OrderDetail({
         <div className="space-y-3 rounded-[var(--radius)] border border-border bg-background p-3">
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Delivery date">
-              <TextInput
-                type="date"
+              <DateInput
                 value={deliveryDate}
-                onChange={(e) => setDeliveryDate(e.target.value)}
+                onChange={setDeliveryDate}
                 required
               />
             </Field>
             {order.orderType === "express" ? (
               <Field label="Deadline">
-                <TextInput
-                  type="datetime-local"
+                <DateTimeInput
                   value={deadlineAt}
-                  onChange={(e) => setDeadlineAt(e.target.value)}
+                  onChange={setDeadlineAt}
                   required
                 />
               </Field>

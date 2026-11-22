@@ -35,6 +35,7 @@ import { InvoicePdf } from "./InvoicePdf";
 import { InvoiceStatusBadge } from "./InvoiceStatusBadge";
 import { InvoiceViewer, ViewerAction, ViewerLoading } from "./InvoiceViewer";
 import { invoicePdf } from "./pdf";
+import { DateInput } from "@repo/ui/DateTimeInputs";
 
 // The invoice section of an order, for staff: generate it, then a card that
 // opens the invoice itself full screen (./InvoiceViewer.tsx) to share it,
@@ -638,7 +639,7 @@ function GeneratePanel({
             </Field>
           ) : null}
           <Field label="Due date (optional)">
-            <TextInput type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+            <DateInput value={dueDate} onChange={setDueDate} />
           </Field>
           <Field label="Notes on the invoice (optional)" hint="Payment terms, a thank-you…">
             <TextArea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} maxLength={1000} />
@@ -812,7 +813,7 @@ function EditForm({
     <div className="space-y-3 rounded-xl border border-border p-3">
       {!invoice.order.cancelled ? <LineEditor lines={lines} onChange={setLines} money={money} /> : null}
       <Field label="Due date">
-        <TextInput type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+        <DateInput value={dueDate} onChange={setDueDate} />
       </Field>
       <Field label="Notes on the invoice">
         <TextArea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} maxLength={1000} />

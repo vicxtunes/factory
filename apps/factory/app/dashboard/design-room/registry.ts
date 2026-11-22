@@ -56,6 +56,8 @@ import DataTableStickyHeader from "./examples/data-table/sticky-header";
 import DataTableWithTotals from "./examples/data-table/with-totals";
 import DataTableZebra from "./examples/data-table/zebra";
 import DateRangeCalendarBasic from "./examples/date-range-calendar/basic";
+import DateTimeInputsCalendar from "./examples/date-time-inputs/calendar";
+import DateTimeInputsFields from "./examples/date-time-inputs/fields";
 import DrawerBasic from "./examples/drawer/basic";
 import DueDatePickerBasic from "./examples/due-date-picker/basic";
 import DueDatePickerCleared from "./examples/due-date-picker/cleared";
@@ -368,6 +370,18 @@ export const COMPONENTS: RoomComponent[] = [
     source: "packages/ui/CurrencySelect.tsx",
     summary: "Compact currency picker; renders nothing when only the base currency exists.",
     examples: [{ title: "Two currencies", file: "currency-select/basic.tsx", Demo: CurrencySelectBasic }],
+  },
+  {
+    slug: "date-time-inputs",
+    name: "Day and time pickers",
+    category: "Inputs",
+    status: "live",
+    source: "packages/ui/DateTimeInputs.tsx",
+    summary: "Every day and time in the apps: a button that says \"Choose a day\" / \"Choose a time\" until chosen, opening a month calendar or a clock face (a sheet on a phone). Required ones left empty turn red and open. Never the browser's dd/mm/yyyy or --:-- boxes.",
+    examples: [
+      { title: "Day, times, day and time", file: "date-time-inputs/fields.tsx", Demo: DateTimeInputsFields },
+      { title: "Calendar on show (booking)", file: "date-time-inputs/calendar.tsx", Demo: DateTimeInputsCalendar },
+    ],
   },
   {
     slug: "date-range-calendar",

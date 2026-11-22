@@ -124,6 +124,9 @@ export async function Landing() {
               <Link href="/vendors" className="rounded-md px-3 py-2 font-medium text-muted hover:text-foreground">
                 For vendors
               </Link>
+              <Link href="/pricing" className="rounded-md px-3 py-2 font-medium text-muted hover:text-foreground">
+                Pricing
+              </Link>
             </nav>
           </div>
           <div className="flex items-center gap-2 text-sm">
@@ -409,6 +412,7 @@ export async function Landing() {
               title: "Platform",
               links: [
                 ["Open your business", START],
+                ["Pricing", "/pricing"],
                 ["Order prints", LOG_IN],
                 ["Log in", LOG_IN],
               ],

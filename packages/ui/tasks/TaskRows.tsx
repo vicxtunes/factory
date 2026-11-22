@@ -10,6 +10,7 @@ import { createTask, removeTask, setTaskStatus, taskLink } from "@repo/lib/tasks
 import { isOverdue, TASK_KIND_LABELS, TASK_PRIORITY_LABELS, type Task, type TaskKind, type TaskPriority } from "@repo/lib/tasks/core";
 import { formatDay } from "@repo/lib/tenancy/format";
 import type { TenantScope } from "@repo/lib/tenancy/types";
+import { DateInput } from "@repo/ui/DateTimeInputs";
 
 function useTaskAction() {
   const router = useRouter();
@@ -268,7 +269,7 @@ export function AddTaskForm({
           </Select>
         </Field>
         <Field label="Due">
-          <TextInput type="date" value={dueOn} onChange={(e) => setDueOn(e.target.value)} />
+          <DateInput value={dueOn} onChange={setDueOn} />
         </Field>
         <Field label="Priority">
           <Select value={priority} onChange={(e) => setPriority(e.target.value as TaskPriority)}>

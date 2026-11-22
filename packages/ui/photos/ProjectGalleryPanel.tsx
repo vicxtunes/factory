@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
 import { Button } from "@repo/ui/Button";
-import { Field, TextInput } from "@repo/ui/Field";
+import { Field } from "@repo/ui/Field";
 import { whatsappNumber } from "@repo/lib/kernel/core/phone";
 import { openProjectGallery, shareProjectGallery, stopSharingProjectGallery } from "@repo/lib/photos/actions";
 import type { AlbumView, PhotoView, Usage } from "@repo/lib/photos/core";
@@ -12,6 +12,7 @@ import type { AlbumView, PhotoView, Usage } from "@repo/lib/photos/core";
 import { ManagePhotos } from "./AlbumControls";
 import { PhotoUploader } from "./PhotoUploader";
 import { UsageBar } from "./UsageBar";
+import { DateInput } from "@repo/ui/DateTimeInputs";
 
 /**
  * On a project: its photos for the client. A private gallery the client sees
@@ -81,7 +82,7 @@ export function ProjectGalleryPanel({
         {canEdit ? (
         <div className="flex flex-wrap items-end gap-2">
           <Field label="Works until (optional)">
-            <TextInput type="date" value={expires} onChange={(e) => setExpires(e.target.value)} />
+            <DateInput value={expires} onChange={setExpires} />
           </Field>
           <Button type="button" variant="secondary" loading={pending} onClick={() => run(() => shareProjectGallery(album.id, expires || null), (url) => setLink(url as string))}>
             {link ? "Make a new link" : "Make a link"}
