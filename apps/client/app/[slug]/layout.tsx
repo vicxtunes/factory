@@ -36,7 +36,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     description,
     applicationName: name,
     appleWebApp: { capable: true, statusBarStyle: "default", title: name },
-    openGraph: { siteName: name, title: name, description, type: "website" },
+    // A shared link to the business shows its logo, never Aming's or Vercel's.
+    openGraph: { siteName: name, title: name, description, type: "website", images: [{ url: icon, alt: name }] },
+    twitter: { card: "summary", images: [icon] },
     icons: { icon, apple: icon },
     manifest: `${home}/manifest.webmanifest`,
   };

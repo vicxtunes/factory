@@ -54,7 +54,9 @@ export const metadata: Metadata = {
     ],
     apple: { url: "/apple-icon.png", sizes: "180x180" },
   },
-  openGraph: { siteName: app.name, title: app.title, description: app.description, type: "website" },
+  // The picture a shared link shows (WhatsApp, Facebook…): without one they used the small icon, once Vercel's triangle (owner, 2026-11-22).
+  openGraph: { siteName: app.name, title: app.title, description: app.description, type: "website", images: [{ url: "/og.png", width: 1200, height: 630, alt: app.name }] },
+  twitter: { card: "summary_large_image", images: ["/og.png"] },
   // iOS uses this for the home-screen label.
   appleWebApp: {
     capable: true,
