@@ -39,17 +39,10 @@ export interface ProStatus {
   autoRenew: boolean;
   /** The look it chose (what shows only while it may use it: see shownTemplate). */
   template: PageTemplate;
-  /** Pro looks rented one by one (a free business), until when. */
-  rented: LookRental[];
   /** Its own domain (Pro): asked for, or live. */
   domain: { name: string; live: boolean } | null;
 }
 
-export interface LookRental {
-  template: PageTemplate;
-  until: string;
-  autoRenew: boolean;
-}
 
 export const isPro = (s: Pick<ProStatus, "until">, now = new Date()) => !!s.until && new Date(s.until) > now;
 
@@ -59,14 +52,11 @@ export const onTrial = (s: Pick<ProStatus, "until" | "trialUntil">, now = new Da
 
 export const templateOf = (id: string) => PAGE_TEMPLATES.find((t) => t.id === id) ?? PAGE_TEMPLATES[0];
 
-/** Rented and not yet over. */
-export const isRented = (s: Pick<ProStatus, "rented">, template: PageTemplate, now = new Date()) => s.rented.some((r) => r.template === template && new Date(r.until) > now);
-
-/** Whether the business may show this look now: free looks always; a Pro look with Pro, or while it's rented. */
-export const mayUse = (s: Pick<ProStatus, "until" | "rented">, template: PageTemplate, now = new Date()) => !templateOf(template).pro || isPro(s, now) || isRented(s, template, now);
+/** Whether the business may show this look now: free looks always, a Pro look with Pro (nothing is sold on its own: owner, 2026-11-22). */
+export const mayUse = (s: Pick<ProStatus, "until">, template: PageTemplate, now = new Date()) => !templateOf(template).pro || isPro(s, now);
 
 /** The look the public page shows: the chosen one, or Classic once it may no longer use it. */
-export function shownTemplate(s: Pick<ProStatus, "until" | "template" | "rented">, now = new Date()): PageTemplate {
+export function shownTemplate(s: Pick<ProStatus, "until" | "template">, now = new Date()): PageTemplate {
   return mayUse(s, s.template, now) ? s.template : "classic";
 }
 
@@ -102,11 +92,6 @@ export const domainSchema = z
     return d;
   });
 
-export const rentLookSchema = z.object({
-  template: z.enum(PAGE_TEMPLATES.filter((t) => t.pro).map((t) => t.id) as [PageTemplate, ...PageTemplate[]], "That look isn't for rent."),
-  amount: z.number().int().positive(),
-  autoRenew: z.boolean(),
-});
 
 export const templateSchema = z.enum(PAGE_TEMPLATES.map((t) => t.id) as [PageTemplate, ...PageTemplate[]], "That look doesn't exist.");
 

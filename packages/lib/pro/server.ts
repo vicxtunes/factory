@@ -8,14 +8,13 @@ import { createAdminClient } from "@repo/lib/supabase/admin";
 import { notifyActor } from "@repo/lib/push/send";
 import { clientPath, clientUrl } from "@repo/lib/client-portal/paths";
 
-import { onTrial, ProError, proPageSchema, templateOf, templateSchema, type LookRental, type PageTemplate, type ProPage, type ProStatus } from "./core";
+import { onTrial, ProError, proPageSchema, templateSchema, type PageTemplate, type ProPage, type ProStatus } from "./core";
 
 const db = () => createAdminClient();
 const PAGE = "/studio/pro";
 
 function fail(what: string, error: { message: string }): never {
   if (error.message.includes("PRO:not_for_sale")) throw new ProError("Pro isn't on sale right now. Ask Aming.");
-  if (error.message.includes("PRO:not_for_rent")) throw new ProError("Looks aren't for rent right now. Ask Aming.");
   if (error.message.includes("tenants_custom_domain_key")) throw new ProError("Another business has asked for that domain. If it's yours, talk to Aming.");
   if (error.message.includes("PRO:price_changed")) throw new ProError("Pro's price just changed. Close this and look again.");
   if (error.message.includes("PRO:too_far")) throw new ProError("You've already paid two months ahead. Pay again nearer the time.");
@@ -32,37 +31,21 @@ interface Row {
   custom_domain_status: "asked" | "live" | null;
 }
 
-interface RentalRow {
-  template: string;
-  until: string;
-  auto_renew: boolean;
-}
 
-/** Rentals of looks that still exist and are Pro looks. */
-const toRentals = (rows: RentalRow[]): LookRental[] =>
-  rows.flatMap((r) => {
-    const t = templateSchema.safeParse(r.template).data;
-    return t && templateOf(t).pro ? [{ template: t, until: r.until, autoRenew: r.auto_renew }] : [];
-  });
 
-const toStatus = (r: Row, rentals: RentalRow[]): ProStatus => ({
+const toStatus = (r: Row): ProStatus => ({
   until: r.pro_until,
   trialUntil: r.pro_trial_until,
   autoRenew: r.pro_auto_renew,
   // A look since taken away shows as Classic.
   template: templateSchema.safeParse(r.page_template).data ?? "classic",
-  rented: toRentals(rentals),
   domain: r.custom_domain ? { name: r.custom_domain, live: r.custom_domain_status === "live" } : null,
 });
 
 export async function proStatus(tenantId: string): Promise<ProStatus> {
-  const [{ data, error }, { data: rentals, error: e2 }] = await Promise.all([
-    db().from("tenants").select("pro_until, pro_trial_until, pro_auto_renew, page_template, custom_domain, custom_domain_status").eq("id", tenantId).single<Row>(),
-    db().from("look_rentals").select("template, until, auto_renew").eq("tenant_id", tenantId).returns<RentalRow[]>(),
-  ]);
+  const { data, error } = await db().from("tenants").select("pro_until, pro_trial_until, pro_auto_renew, page_template, custom_domain, custom_domain_status").eq("id", tenantId).single<Row>();
   if (error) fail("read Pro", error);
-  if (e2) fail("read rented looks", e2);
-  return toStatus(data, rentals);
+  return toStatus(data);
 }
 
 /** The boss's monthly price; null: Pro isn't on sale. */
@@ -75,38 +58,6 @@ export async function proPrice(): Promise<number | null> {
 export async function setProPrice(price: number | null): Promise<void> {
   const { error } = await db().rpc("pro_price_set", { p_price: price });
   if (error) fail("save Pro's price", error);
-}
-
-/** The boss's rent a month for one Pro look; null: looks aren't for rent. */
-export async function rentPrice(): Promise<number | null> {
-  const { data, error } = await db().from("look_rent_pricing").select("price").maybeSingle<{ price: number | string }>();
-  if (error) fail("read the looks' rent", error);
-  return data ? Number(data.price) : null;
-}
-
-export async function setRentPrice(price: number | null): Promise<void> {
-  const { error } = await db().rpc("look_rent_price_set", { p_price: price });
-  if (error) fail("save the looks' rent", error);
-}
-
-/** A month of one look from the owner's card; returns the new end. */
-export async function rentLook(tenantId: string, template: PageTemplate, amount: number, opts: { auto: boolean; renew: boolean; actorId: string; actorName: string }): Promise<string> {
-  const { data, error } = await db().rpc("look_rent", {
-    p_tenant: tenantId,
-    p_template: template,
-    p_amount: amount,
-    p_auto: opts.auto,
-    p_renew: opts.renew,
-    p_actor_id: opts.actorId,
-    p_actor_name: opts.actorName,
-  });
-  if (error) fail("rent the look", error);
-  return data as string;
-}
-
-export async function setRentAutoRenew(tenantId: string, template: PageTemplate, on: boolean): Promise<void> {
-  const { error } = await db().from("look_rentals").update({ auto_renew: on }).eq("tenant_id", tenantId).eq("template", template);
-  if (error) fail("change renewing", error);
 }
 
 // ---- Own domain (Pro) ----
@@ -249,7 +200,6 @@ interface RoundRow extends Row {
  * A period that ended over a week ago is left alone.
  */
 export async function runProRound(now = new Date()): Promise<void> {
-  await runRentRound(now).catch((err) => console.error("pro: rent round failed:", err));
   const soon = new Date(now.getTime() + 3 * 86_400_000).toISOString();
   const weekAgo = new Date(now.getTime() - 7 * 86_400_000).toISOString();
   const { data, error } = await db()
@@ -303,71 +253,7 @@ export async function runProRound(now = new Date()): Promise<void> {
       }
     }
     await mark("ended");
-    await tell(r.owner_client_id, "Pro has ended", "Your page shows the Classic look (unless you rent its look), your own domain is off and your space is back to 2 GB plus any you bought. Nothing was deleted: pay for Pro to bring it all back.");
+    await tell(r.owner_client_id, "Pro has ended", "Your page shows the Classic look, your own domain is off and your space is back to 2 GB plus any you bought. Nothing was deleted: pay for Pro to bring it all back.");
   }
 }
 
-/**
- * Rented looks, the same way: a reminder 3 days before a month ends, then a
- * month from the card if it renews by itself, else a note that the page is
- * back on Classic. Each notice once per month rented.
- */
-export async function runRentRound(now = new Date()): Promise<void> {
-  const soon = new Date(now.getTime() + 3 * 86_400_000).toISOString();
-  const weekAgo = new Date(now.getTime() - 7 * 86_400_000).toISOString();
-  const { data, error } = await db()
-    .from("look_rentals")
-    .select("tenant_id, template, until, auto_renew, notice, tenants!inner(owner_client_id, status, pro_until, page_template)")
-    .gt("until", weekAgo)
-    .lte("until", soon)
-    .returns<(RentalRow & { tenant_id: string; notice: string | null; tenants: { owner_client_id: string | null; status: string; pro_until: string | null; page_template: string } })[]>();
-  if (error) fail("read the rented looks' round", error);
-  if (!data.length) return;
-  const price = await rentPrice();
-
-  for (const r of data) {
-    const owner = r.tenants.owner_client_id;
-    if (!owner || r.tenants.status !== "active") continue;
-    const look = templateSchema.safeParse(r.template).data;
-    if (!look) continue;
-    const name = templateOf(look).name;
-    // With Pro on past the rent's end, the look stays without paying rent: say nothing, renew nothing.
-    if (r.tenants.pro_until && new Date(r.tenants.pro_until) > new Date(r.until)) continue;
-    const ended = new Date(r.until) <= now;
-    const note = (kind: string) => `${kind}:${r.until}`;
-    const mark = async (kind: string) => {
-      const { error: e } = await db().from("look_rentals").update({ notice: note(kind) }).eq("tenant_id", r.tenant_id).eq("template", r.template).eq("until", r.until);
-      if (e) console.error("pro: marking rent notice failed:", r.tenant_id, e);
-    };
-
-    if (!ended) {
-      if (r.notice === note("reminder")) continue;
-      await mark("reminder");
-      const body =
-        r.auto_renew && price
-          ? `Your ${name} look's month ends ${day(r.until)}. It renews by itself for ${ugx(price)} from your Aming card: keep that much on it, or pay with MTN or Airtel on Pro & page look.`
-          : `Your ${name} look's month ends ${day(r.until)}.${price ? ` Keep it for ${ugx(price)} a month, or get Pro for every look.` : ""}`;
-      await tell(owner, `${name} look ending soon`, body);
-      continue;
-    }
-
-    if (r.notice === note("ended")) continue;
-    if (r.auto_renew && price) {
-      try {
-        const next = await rentLook(r.tenant_id, look, price, { auto: true, renew: true, actorId: "system", actorName: "Renewed by itself" });
-        await tell(owner, `${name} look renewed`, `${ugx(price)} was taken from your Aming card. Your page keeps the ${name} look until ${day(next)}.`);
-        continue;
-      } catch (err) {
-        if (!(err instanceof ProError)) {
-          console.error("pro: renewing a rent failed:", r.tenant_id, err);
-          continue;
-        }
-        await mark("ended");
-        await tell(owner, `${name} look couldn't renew`, `${err.message} Your page shows the Classic look until you pay on Pro & page look.`);
-        continue;
-      }
-    }
-    await mark("ended");
-    if (r.tenants.page_template === look) await tell(owner, `${name} look has ended`, "Your page now shows the Classic look. Rent it again or get Pro on Pro & page look: nothing was lost.");
-  }
-}

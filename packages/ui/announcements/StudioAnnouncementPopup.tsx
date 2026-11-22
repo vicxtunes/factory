@@ -19,8 +19,9 @@ function seen(): string[] {
 
 // A business's own announcements on its public pages (apps/client/app/[slug]/
 // layout.tsx), for its clients and visitors: once each, oldest first, like
-// Aming's (./AnnouncementPopup.tsx). Closing one shows the next.
-export function StudioAnnouncementPopup({ slug }: { slug: string }) {
+// Aming's (./AnnouncementPopup.tsx). Closing one shows the next. `shareable`:
+// a Share button, while the business has Pro.
+export function StudioAnnouncementPopup({ slug, shareable }: { slug: string; shareable: boolean }) {
   const [announcement, setAnnouncement] = useState<Announcement | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -44,5 +45,5 @@ export function StudioAnnouncementPopup({ slug }: { slug: string }) {
       .finally(() => setBusy(false));
   }
 
-  return <AnnouncementCard announcement={announcement} busy={busy} onClose={close} />;
+  return <AnnouncementCard announcement={announcement} busy={busy} onClose={close} shareable={shareable} />;
 }

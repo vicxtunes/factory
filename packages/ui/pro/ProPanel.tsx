@@ -14,7 +14,7 @@ import { DomainBox } from "./DomainBox";
 import { day, PayMonthSheet, ugx } from "./PayMonthSheet";
 
 /** What Pro gives (owner, 2026-11-22), shown on the panel. */
-const PRO_GIVES = [`${PRO_SPACE_GB} GB of space (${FREE_SPACE_GB} GB without Pro)`, "Every page look, no rent", "Your page on your own domain", "A chat on your page that answers your clients", "New Pro features as they come"];
+const PRO_GIVES = [`${PRO_SPACE_GB} GB of space (${FREE_SPACE_GB} GB without Pro)`, "Every page look", "Your page on your own domain", "A chat on your page that answers your clients", "A Share button on your announcements", "New Pro features as they come"];
 
 /**
  * The owner's Pro: where it stands (trial, on until, ended), what it gives,
@@ -34,7 +34,7 @@ export function ProPanel({ status, price, balance, chat }: { status: ProStatus; 
       : status.autoRenew
         ? `It renews by itself on ${day(status.until!)}${price ? ` for ${ugx(price)}` : ""} from your Aming card.`
         : "It doesn't renew by itself: pay again before it ends to keep it."
-    : `Your page shows the Classic look (or a look you rent) and you have ${FREE_SPACE_GB} GB of space.`;
+    : `Your page shows the Classic look and you have ${FREE_SPACE_GB} GB of space.`;
 
   return (
     <section className={`rounded-2xl border p-5 ${pro ? "border-brand-300 bg-brand-50 dark:border-brand-500/30 dark:bg-brand-500/10" : "border-border bg-surface"}`}>
