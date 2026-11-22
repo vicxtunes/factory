@@ -7,10 +7,19 @@ import { Field, TextArea, TextInput } from "@repo/ui/Field";
 import { LocationPicker } from "@repo/ui/maps/LocationPicker";
 import { PhoneInput } from "@repo/ui/PhoneInput";
 import { saveMyStudioProfile } from "@repo/lib/studios/actions";
-import type { StudioProfile } from "@repo/lib/studios/core";
+import type { Studio, StudioSocials } from "@repo/lib/studios/core";
 
 /** The studio owner's business profile: what their documents and customers will show. */
-export function StudioProfileForm({ profile }: { profile: StudioProfile }) {
+const SOCIALS: { key: keyof StudioSocials; label: string; placeholder: string }[] = [
+  { key: "instagram", label: "Instagram", placeholder: "instagram.com/yourbusiness" },
+  { key: "tiktok", label: "TikTok", placeholder: "tiktok.com/@yourbusiness" },
+  { key: "facebook", label: "Facebook", placeholder: "facebook.com/yourbusiness" },
+  { key: "linkedin", label: "LinkedIn", placeholder: "linkedin.com/company/yourbusiness" },
+];
+
+const socialsForm = (s: StudioSocials) => ({ tiktok: s.tiktok ?? "", instagram: s.instagram ?? "", facebook: s.facebook ?? "", linkedin: s.linkedin ?? "" });
+
+export function StudioProfileForm({ profile }: { profile: Studio }) {
   const [form, setForm] = useState({
     name: profile.name,
     phone: profile.phone ?? "",
@@ -18,6 +27,7 @@ export function StudioProfileForm({ profile }: { profile: StudioProfile }) {
     address: profile.address ?? "",
   });
   const [location, setLocation] = useState(profile.location);
+  const [socials, setSocials] = useState(socialsForm(profile.socials));
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [pending, start] = useTransition();
@@ -31,11 +41,12 @@ export function StudioProfileForm({ profile }: { profile: StudioProfile }) {
     e.preventDefault();
     setError(null);
     start(async () => {
-      const res = await saveMyStudioProfile({ ...form, location });
+      const res = await saveMyStudioProfile({ ...form, location, socials });
       if (!res.ok) return setError(res.error);
       const s = res.data;
       setForm({ name: s.name, phone: s.phone ?? "", email: s.email ?? "", address: s.address ?? "" });
       setLocation(s.location);
+      setSocials(socialsForm(s.socials));
       setSaved(true);
     });
   }
@@ -56,6 +67,22 @@ export function StudioProfileForm({ profile }: { profile: StudioProfile }) {
       <Field label="Address" hint="Where customers find you. Shown on your quotations and invoices.">
         <TextArea value={form.address} onChange={set("address")} maxLength={200} rows={2} />
       </Field>
+      <div className="grid gap-4 sm:grid-cols-2">
+        {SOCIALS.map(({ key, label, placeholder }) => (
+          <Field key={key} label={label}>
+            <TextInput
+              inputMode="url"
+              value={socials[key]}
+              placeholder={placeholder}
+              maxLength={200}
+              onChange={(e) => {
+                setSocials((v) => ({ ...v, [key]: e.target.value }));
+                setSaved(false);
+              }}
+            />
+          </Field>
+        ))}
+      </div>
       <div className="space-y-1.5">
         <p className="text-sm font-medium">Your place on the map</p>
         <p className="text-xs text-muted">Clients get live directions to this pin.</p>

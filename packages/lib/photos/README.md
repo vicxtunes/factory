@@ -57,7 +57,7 @@ never shared by link: it's shown through the service's page. Managed on the serv
 
 - Photos, services' preview videos and the studio's files (packages/lib/files/README.md) share it
   (`photos_used_bytes()`).
-- Every studio starts with **1 GB** (`tenants.storage_quota_bytes`). The boss sets it per studio
+- Every studio starts with **2 GB** free (`tenants.storage_quota_bytes`, 1 GB until 2026-11-22), and has 48 GB more while it has Pro (`tenant_space_bytes`). The boss sets it per studio
   on the studio's page in the staff app.
 - A **usage bar** shows on the studio's dashboard, Showroom and Files pages, warning at 80%.
 - **Buying more:** the owner buys one of the boss's packs (each its own size and price, Studios → Extra storage) on the Files page (**Get more space**), paid

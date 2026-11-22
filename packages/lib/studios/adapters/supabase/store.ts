@@ -25,10 +25,14 @@ interface Row {
   status: Studio["status"];
   logo_key: string | null;
   brand_color: string | null;
+  tiktok_url?: string | null;
+  instagram_url?: string | null;
+  facebook_url?: string | null;
+  linkedin_url?: string | null;
   show_on_aming: boolean;
 }
 
-const COLUMNS = "id, owner_client_id, name, phone, email, address, latitude, longitude, currency, locale, time_zone, created_at, status, logo_key, brand_color, show_on_aming";
+const COLUMNS = "id, owner_client_id, name, phone, email, address, latitude, longitude, currency, locale, time_zone, created_at, status, logo_key, brand_color, show_on_aming"; // + tiktok_url, instagram_url, facebook_url, linkedin_url once 20270118100000 is on live
 
 const toStudio = (r: Row): Studio => ({
   id: r.id,
@@ -45,6 +49,7 @@ const toStudio = (r: Row): Studio => ({
   status: r.status,
   logoKey: r.logo_key,
   brandColor: r.brand_color,
+  socials: { tiktok: r.tiktok_url ?? null, instagram: r.instagram_url ?? null, facebook: r.facebook_url ?? null, linkedin: r.linkedin_url ?? null },
   showOnAming: r.show_on_aming,
 });
 
@@ -97,6 +102,13 @@ export const supabaseStudioStore: StudioStore = {
         address: profile.address,
         latitude: profile.location?.lat ?? null,
         longitude: profile.location?.lng ?? null,
+        // Only when sent: Alexis saves the profile without them.
+        ...(profile.socials && {
+          tiktok_url: profile.socials.tiktok,
+          instagram_url: profile.socials.instagram,
+          facebook_url: profile.socials.facebook,
+          linkedin_url: profile.socials.linkedin,
+        }),
       })
       .eq("id", id)
       .not("owner_client_id", "is", null)

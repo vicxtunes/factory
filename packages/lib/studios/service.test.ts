@@ -18,6 +18,7 @@ function memoryStore() {
         id: `t${rows.size + 1}`,
         ownerClientId: owner.clientId,
         name: owner.name,
+        socials: { tiktok: null, instagram: null, facebook: null, linkedin: null },
         phone: null,
         email: null,
         address: null,
@@ -35,7 +36,9 @@ function memoryStore() {
       return studio;
     },
     updateProfile: async (id, profile) => {
-      const studio = { ...rows.get(id)!, ...profile };
+      const { socials, ...rest } = profile;
+      const old = rows.get(id)!;
+      const studio = { ...old, ...rest, socials: socials ?? old.socials };
       rows.set(id, studio);
       return studio;
     },

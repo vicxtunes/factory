@@ -130,13 +130,14 @@ export const supabaseFileRepository: FileRepository = {
   async usage(scope) {
     const client = db();
     const [{ data: tenant, error: e1 }, { data: used, error: e2 }] = await Promise.all([
-      client.from("tenants").select("storage_quota_bytes").eq("id", scope.tenantId).single<{ storage_quota_bytes: number | string }>(),
+      // Free space and extra bought, and Pro's while it's on (20270124100000_pro_offer.sql).
+      client.rpc("tenant_space_bytes", { p_tenant: scope.tenantId }),
       // Photos, videos and files: the same sum the database checks uploads against.
       client.rpc("photos_used_bytes", { p_tenant: scope.tenantId }),
     ]);
     if (e1) fail("read the storage allowance", e1);
     if (e2) fail("read the storage used", e2);
-    return { usedBytes: Number(used), quotaBytes: Number(tenant.storage_quota_bytes) };
+    return { usedBytes: Number(used), quotaBytes: Number(tenant) };
   },
 
   async folders(scope) {

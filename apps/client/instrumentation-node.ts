@@ -9,11 +9,13 @@
 // sent by themselves at their time, after one warning. On the boss's pay day,
 // agents' commission goes to their agreed numbers by itself. On pay days, staff
 // payslips are made, and pay set to send by itself goes at the boss's time. Just after midnight,
-// any money day nobody closed closes by itself (packages/lib/books).
+// any money day nobody closed closes by itself (packages/lib/books). Pro
+// reminds owners before it ends, renews from the card, or says it ended.
 
 import { tellAgents } from "@repo/lib/agents/server";
 import { reviewClientOrders } from "@repo/lib/assistant/server/review";
 import { answerWaitingChats } from "@repo/lib/assistant/server/run";
+import { runProRound } from "@repo/lib/pro/server";
 import { applyStudioPayment } from "@repo/lib/studio-payments/server";
 import { closePastDays, reconcileAgentPayouts, reconcileWaitingHivepay, reconcileExpensePayouts, reconcileOwnerPayouts, reconcileBusinessPayouts, reconcileVendorPayouts, runAutopay, runStaffPay, runWeeklyAgentPay, sendDailyMoneyReport, sendExpenseReminder, sendMonthCheckReminder, sendLateMoneyNote, watchMoney } from "@repo/lib/wallet/webhooks";
 
@@ -60,6 +62,8 @@ if (process.env.NODE_ENV === "production" && process.env.NEXT_PUBLIC_TEST_COPY !
   every(EVERY_MS, "hivepay: checking the boss's withdrawals", reconcileOwnerPayouts);
   every(EVERY_MS, "agents: weekly commission", () => runWeeklyAgentPay());
   every(EVERY_MS, "telling agents", tellAgents);
+  // Pro (packages/lib/pro): reminders, renewing from the card, "Pro has ended".
+  every(EVERY_MS, "pro: reminders and renewals", () => runProRound());
   every(WATCH_EVERY_MS, "money watch", watchMoney);
   every(DAILY_REPORT_EVERY_MS, "daily money report", sendDailyMoneyReport);
   every(DAILY_REPORT_EVERY_MS, "closing past days", closePastDays);

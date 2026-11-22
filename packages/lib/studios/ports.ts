@@ -3,7 +3,7 @@
 
 import { AppError } from "@repo/lib/kernel/core";
 
-import type { Studio, StudioListing, StudioOwner, StudioProfile } from "./core/model";
+import type { Studio, StudioListing, StudioOwner, StudioProfileInput } from "./core/model";
 
 export interface StudioStore {
   findByOwner(clientId: string): Promise<Studio | null>;
@@ -12,7 +12,7 @@ export interface StudioStore {
    * at once), returns that one instead: one studio per client.
    */
   create(owner: StudioOwner): Promise<Studio>;
-  updateProfile(id: string, profile: StudioProfile): Promise<Studio>;
+  updateProfile(id: string, profile: StudioProfileInput): Promise<Studio>;
   setBrandColor(id: string, color: string): Promise<Studio>;
   setShowOnAming(id: string, on: boolean): Promise<Studio>;
   /** Every studio, for the boss. */

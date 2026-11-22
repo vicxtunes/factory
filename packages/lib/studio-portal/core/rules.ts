@@ -9,7 +9,7 @@ export const SLUG_PATTERN = /^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$/;
  */
 export const RESERVED_SLUGS = new Set([
   "api", "chat", "history", "invoice", "new", "orders", "payment", "proforma", "serwist", "showroom", "studio", "support", "vendors",
-  "offline", "dashboard", "login", "signin", "signup", "admin", "help", "about", "terms", "privacy", "settings", "account", "aming",
+  "offline", "dashboard", "login", "signin", "signup", "admin", "help", "about", "terms", "privacy", "settings", "account", "aming", "pricing",
 ]);
 
 /** A suggested slug from a name: "Amina Studio & Co." → "amina-studio-co". */
