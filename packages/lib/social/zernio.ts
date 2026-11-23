@@ -128,6 +128,8 @@ export interface PostBody {
  */
 function tiktokSound(m: PostMusic, media: PostMedia[]) {
   if (m.kind === "auto") return { autoAddMusic: true };
+  // TikTok's Creator Inbox: they get a notice, add any song in the app and post.
+  if (m.kind === "app") return { draft: true };
   const video = media.some((x) => x.type === "video");
   return { musicSoundInfo: { musicSoundId: m.id, ...(video ? { musicSoundVolume: 50 } : {}) }, ...(video ? { videoOriginalSoundVolume: 50 } : {}) };
 }

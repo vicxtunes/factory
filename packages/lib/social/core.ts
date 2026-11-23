@@ -43,8 +43,13 @@ export interface PostMedia {
   type: "image" | "video";
 }
 
-/** TikTok's sound on a post: a track from its trending commercial list, or (photos only) TikTok picks one. */
-export type PostMusic = { kind: "auto" } | { kind: "track"; id: string; name: string; artist: string; cover: string | null };
+/**
+ * TikTok's sound on a post: a track from its trending commercial list
+ * (TikTok for Business pages), TikTok picks one (photos only), or "app": the
+ * post goes to the page's TikTok inbox and the person adds any song there
+ * (personal pages, whose API can't add music to a video).
+ */
+export type PostMusic = { kind: "auto" } | { kind: "app" } | { kind: "track"; id: string; name: string; artist: string; cover: string | null };
 
 /** A track on TikTok's trending commercial list, as the picker shows it. */
 export interface MusicTrack {
@@ -102,6 +107,7 @@ export const postInputSchema = z.object({
   music: z
     .discriminatedUnion("kind", [
       z.object({ kind: z.literal("auto") }),
+      z.object({ kind: z.literal("app") }),
       z.object({ kind: z.literal("track"), id: z.string().min(1).max(100), name: z.string().max(300), artist: z.string().max(300), cover: z.string().url().nullable() }),
     ])
     .nullable()

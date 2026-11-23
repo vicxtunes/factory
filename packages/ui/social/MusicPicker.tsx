@@ -28,7 +28,8 @@ const Tile = ({ on, onClick, label, children }: { on: boolean; onClick: () => vo
 );
 
 // TikTok's sound for a post: a strip of trending tracks (cover, play to hear
-// it, tap to pick), "None", and for photos "Auto" (TikTok picks).
+// it, tap to pick; TikTok for Business pages), "None", "In TikTok" (sent to
+// their TikTok inbox to add any song: personal pages), and for photos "Auto".
 export function MusicPicker({ accountId, value, onChange, photosOnly }: { accountId: string; value: PostMusic | null; onChange: (m: PostMusic | null) => void; photosOnly: boolean }) {
   const [tracks, setTracks] = useState<MusicTrack[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -61,11 +62,17 @@ export function MusicPicker({ accountId, value, onChange, photosOnly }: { accoun
       <div className="flex items-center gap-2 text-sm font-semibold">
         <PlatformMark platform="tiktok" size="xs" />
         <Note className="size-4" />
-        <span className="min-w-0 truncate">{picked ? `${picked.name} · ${picked.artist}` : value?.kind === "auto" ? "TikTok picks" : "Music"}</span>
+        <span className="min-w-0 truncate">{picked ? `${picked.name} · ${picked.artist}` : value?.kind === "auto" ? "TikTok picks" : value?.kind === "app" ? "Goes to your TikTok inbox: open TikTok, add any song, post" : "Music"}</span>
       </div>
       <div className="-mx-1 flex gap-3 overflow-x-auto px-1 py-2">
         <Tile on={!value} onClick={() => onChange(null)} label="No music">
           <span className="flex size-full items-center justify-center bg-gray-100 text-xs font-semibold text-muted dark:bg-white/5">None</span>
+        </Tile>
+        <Tile on={value?.kind === "app"} onClick={() => onChange({ kind: "app" })} label="Add a song in the TikTok app">
+          <span className="flex size-full flex-col items-center justify-center gap-1 bg-black text-[11px] font-semibold leading-tight text-white">
+            <PlatformMark platform="tiktok" size="xs" />
+            In TikTok
+          </span>
         </Tile>
         {photosOnly ? (
           <Tile on={value?.kind === "auto"} onClick={() => onChange({ kind: "auto" })} label="TikTok picks the music">
