@@ -14,10 +14,11 @@ import { ProgressBar } from "@repo/ui/ProgressBar";
 import { StatusGlowBadge } from "@repo/ui/StatusGlowBadge";
 import { Tabs } from "@repo/ui/Tabs";
 import { deletePost, savePost, writeCaption } from "@repo/lib/social/actions";
-import { platformName, platformOf, problemFor, STATUS_LABEL, type PostMedia, type PostStatus, type SocialAccount, type SocialPost } from "@repo/lib/social/core";
+import { platformName, platformOf, problemFor, STATUS_LABEL, type PostMedia, type PostMusic, type PostStatus, type SocialAccount, type SocialPost } from "@repo/lib/social/core";
 import type { ProductionStatus } from "@repo/lib/types";
 
 import { MediaPicker } from "./MediaPicker";
+import { MusicPicker } from "./MusicPicker";
 import { PlatformMark } from "./PlatformMark";
 
 type List = "scheduled" | "posted" | "failed";
@@ -228,8 +229,10 @@ function PostForm({ post: p, accounts, onDone }: { post: SocialPost | null; acco
   const [pending, start] = useTransition();
   const [writing, startWriting] = useTransition();
   const [busy, setBusy] = useState(false);
+  const [music, setMusic] = useState<PostMusic | null>(p?.accounts.find((a) => a.platform === "tiktok")?.music ?? null);
 
   const chosen = accounts.filter((a) => picked.includes(a.id));
+  const tiktok = chosen.find((a) => a.platform === "tiktok");
   const problems = [...new Set(chosen.map((a) => problemFor(a.platform, caption, media)).filter((x): x is string => !!x))];
   const limit = chosen.map((a) => platformOf(a.platform)!.limit).sort((a, b) => a - b)[0];
   const over = limit !== undefined && caption.length > limit;
@@ -238,7 +241,7 @@ function PostForm({ post: p, accounts, onDone }: { post: SocialPost | null; acco
     e.preventDefault();
     setError(null);
     start(async () => {
-      const res = await savePost(p?.id ?? null, { caption, media, accountIds: picked, scheduledAt: later ? fromPicker(at) : null });
+      const res = await savePost(p?.id ?? null, { caption, media, accountIds: picked, scheduledAt: later ? fromPicker(at) : null, music: tiktok ? music : null });
       if (!res.ok) return setError(res.error);
       router.refresh();
       onDone();
@@ -290,6 +293,7 @@ function PostForm({ post: p, accounts, onDone }: { post: SocialPost | null; acco
         </div>
       </div>
       <MediaPicker value={media} onChange={setMedia} onBusy={setBusy} />
+      {tiktok ? <MusicPicker accountId={tiktok.id} value={music} onChange={setMusic} photosOnly={!media.some((m) => m.type === "video")} /> : null}
       <div className="space-y-3">
         <div className="grid grid-cols-2 rounded-full bg-gray-100 p-1 dark:bg-white/5">
           {[

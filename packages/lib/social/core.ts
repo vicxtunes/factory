@@ -43,6 +43,19 @@ export interface PostMedia {
   type: "image" | "video";
 }
 
+/** TikTok's sound on a post: a track from its trending commercial list, or (photos only) TikTok picks one. */
+export type PostMusic = { kind: "auto" } | { kind: "track"; id: string; name: string; artist: string; cover: string | null };
+
+/** A track on TikTok's trending commercial list, as the picker shows it. */
+export interface MusicTrack {
+  id: string;
+  name: string;
+  artist: string;
+  cover: string | null;
+  preview: string | null;
+  seconds: number | null;
+}
+
 export interface PostResult {
   accountId: string;
   platform: string;
@@ -55,7 +68,8 @@ export interface SocialPost {
   id: string;
   caption: string;
   media: PostMedia[];
-  accounts: { accountId: string; platform: Platform; name: string }[];
+  /** music: on TikTok pages only. */
+  accounts: { accountId: string; platform: Platform; name: string; music?: PostMusic | null }[];
   scheduled_at: string | null;
   status: PostStatus;
   results: PostResult[];
@@ -84,6 +98,14 @@ export const postInputSchema = z.object({
   accountIds: z.array(z.string().min(1)).min(1, "Pick at least one page to post to."),
   /** ISO; null posts now. */
   scheduledAt: z.string().datetime({ offset: true }).nullable(),
+  /** For the TikTok pages picked. */
+  music: z
+    .discriminatedUnion("kind", [
+      z.object({ kind: z.literal("auto") }),
+      z.object({ kind: z.literal("track"), id: z.string().min(1).max(100), name: z.string().max(300), artist: z.string().max(300), cover: z.string().url().nullable() }),
+    ])
+    .nullable()
+    .default(null),
 });
 export type PostInput = z.infer<typeof postInputSchema>;
 

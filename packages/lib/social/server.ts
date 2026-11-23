@@ -149,7 +149,7 @@ async function pauseAndResume(): Promise<void> {
           profileId: r.tenants.zernio_profile_id,
           caption: r.caption,
           media: r.media,
-          targets: r.accounts.map((a) => ({ accountId: a.accountId, platform: a.platform })),
+          targets: r.accounts.map((a) => ({ accountId: a.accountId, platform: a.platform, music: a.music })),
           scheduledAt: r.scheduled_at,
           ourId: r.id,
         });

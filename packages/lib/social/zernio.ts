@@ -4,7 +4,7 @@ import "server-only";
 // 2026-11-23). One key for all of Aming (ZERNIO_API_KEY); each business is a
 // Zernio profile (externalId = its tenant id).
 
-import { SocialError, type PostMedia, type PostResult } from "./core";
+import { SocialError, type MusicTrack, type PostMedia, type PostMusic, type PostResult } from "./core";
 
 const BASE = "https://zernio.com/api/v1";
 
@@ -85,6 +85,24 @@ export async function connectUrl(profileId: string, platform: string, back: stri
   return r.authUrl;
 }
 
+// ---- TikTok music ----
+
+/** TikTok's trending commercial tracks for that page (the clip id publishes; the full track's may not play abroad). */
+export async function tiktokTracks(accountId: string): Promise<MusicTrack[]> {
+  type T = { id?: string; name?: string; artist?: string; durationSec?: number; previewUrl?: string; thumbnailUrl?: string; clip?: { id?: string; durationSec?: number; previewUrl?: string } };
+  const r = await call<{ tracks?: T[] }>("GET", `/accounts/${encodeURIComponent(accountId)}/tiktok/commercial-music`);
+  return (r.tracks ?? [])
+    .map((t) => ({
+      id: t.clip?.id ?? t.id ?? "",
+      name: t.name ?? "",
+      artist: t.artist ?? "",
+      cover: t.thumbnailUrl ?? null,
+      preview: t.clip?.previewUrl ?? t.previewUrl ?? null,
+      seconds: t.clip?.durationSec ?? t.durationSec ?? null,
+    }))
+    .filter((t) => t.id);
+}
+
 // ---- Posts ----
 
 export interface ZPost {
@@ -97,16 +115,28 @@ export interface PostBody {
   profileId: string;
   caption: string;
   media: PostMedia[];
-  targets: { accountId: string; platform: string }[];
+  targets: { accountId: string; platform: string; music?: PostMusic | null }[];
   scheduledAt: string | null;
   ourId: string;
+}
+
+/**
+ * TikTok's sound fields. A track plays at 50 over the video's own sound at
+ * 50, as the TikTok app does (TikTok's API would mute both by default).
+ * Commercial tracks work only on pages connected through TikTok for Business;
+ * TikTok refuses others at publish time, and the post says so.
+ */
+function tiktokSound(m: PostMusic, media: PostMedia[]) {
+  if (m.kind === "auto") return { autoAddMusic: true };
+  const video = media.some((x) => x.type === "video");
+  return { musicSoundInfo: { musicSoundId: m.id, ...(video ? { musicSoundVolume: 50 } : {}) }, ...(video ? { videoOriginalSoundVolume: 50 } : {}) };
 }
 
 const postJson = (b: PostBody) => ({
   profileId: b.profileId,
   content: b.caption,
   mediaItems: b.media.map((m) => ({ url: m.url, type: m.type })),
-  platforms: b.targets.map((t) => ({ platform: t.platform, accountId: t.accountId })),
+  platforms: b.targets.map((t) => ({ platform: t.platform, accountId: t.accountId, ...(t.platform === "tiktok" && t.music ? { platformSpecificData: tiktokSound(t.music, b.media) } : {}) })),
   ...(b.scheduledAt ? { scheduledFor: b.scheduledAt, timezone: "Africa/Kampala" } : { publishNow: true }),
   externalId: b.ourId,
 });

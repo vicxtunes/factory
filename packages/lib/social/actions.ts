@@ -19,7 +19,7 @@ import { safeStorageSegment } from "@repo/lib/storage/client";
 import { studioOfCaller } from "@repo/lib/studios/server";
 import { createAdminClient } from "@repo/lib/supabase/admin";
 
-import { platformSchema, postInputSchema, problemFor, settingsSchema, SocialError, type SocialPost } from "./core";
+import { platformSchema, postInputSchema, problemFor, settingsSchema, SocialError, type MusicTrack, type SocialPost } from "./core";
 import { accountsOf, applyZernio, postsThisMonth, profileOf, requirePro, saveSocialSettings, socialSettings, SOCIAL_PAGE, SOCIAL_PAGES_PAGE } from "./server";
 import * as z from "./zernio";
 
@@ -118,11 +118,14 @@ export async function savePost(id: string | null, input: unknown): Promise<Resul
       if (problem) throw new SocialError(problem);
     }
 
+    if (p.music?.kind === "auto" && p.media.some((m) => m.type === "video")) throw new SocialError("TikTok picks music for photos only. Pick a track for a video.");
+    const music = (platform: string) => (platform === "tiktok" ? p.music : null);
+
     const posts = createAdminClient().from("social_posts");
     const fields = {
       caption: p.caption,
       media: p.media,
-      accounts: pages.map((t) => ({ accountId: t.id, platform: t.platform, name: t.name })),
+      accounts: pages.map((t) => ({ accountId: t.id, platform: t.platform, name: t.name, music: music(t.platform) })),
       scheduled_at: p.scheduledAt,
       updated_at: new Date().toISOString(),
     };
@@ -142,7 +145,7 @@ export async function savePost(id: string | null, input: unknown): Promise<Resul
       if (error) throw error;
     }
 
-    const body = { profileId, caption: p.caption, media: p.media, targets: pages.map((t) => ({ accountId: t.id, platform: t.platform })), scheduledAt: p.scheduledAt, ourId: ourId! };
+    const body = { profileId, caption: p.caption, media: p.media, targets: pages.map((t) => ({ accountId: t.id, platform: t.platform, music: music(t.platform) })), scheduledAt: p.scheduledAt, ourId: ourId! };
     let zPost: z.ZPost;
     try {
       zPost = zernioId ? await z.updatePost(zernioId, body) : await z.createPost(body);
@@ -156,6 +159,16 @@ export async function savePost(id: string | null, input: unknown): Promise<Resul
     await applyZernio(zPost._id, zPost.status, z.resultsOf(zPost));
     touched();
     return p.scheduledAt ? "scheduled" : "posting";
+  });
+}
+
+/** TikTok's trending tracks, for the music strip on a post. */
+export async function tiktokMusic(accountId: unknown): Promise<Result<MusicTrack[]>> {
+  return runAction("social", async () => {
+    const { profileId } = await caller();
+    const page = (await accountsOf(profileId)).find((a) => a.id === String(accountId) && a.platform === "tiktok");
+    if (!page) throw new SocialError("That TikTok page isn't connected any more.");
+    return z.tiktokTracks(page.id);
   });
 }
 
