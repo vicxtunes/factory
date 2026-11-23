@@ -14,7 +14,7 @@ import { DomainBox } from "./DomainBox";
 import { day, PayMonthSheet, ugx } from "./PayMonthSheet";
 
 /** What Pro gives (owner, 2026-11-22), shown on the panel. */
-const PRO_GIVES = [`${PRO_SPACE_GB} GB of space (${FREE_SPACE_GB} GB without Pro)`, "Every page look", "Your page on your own domain", "A chat on your page that answers your clients", "A Share button on your announcements", "New Pro features as they come"];
+const PRO_GIVES = [`${PRO_SPACE_GB} GB of space (${FREE_SPACE_GB} GB without Pro)`, "Every page look", "Your page on your own domain", "A chat on your page that answers your clients", "A Share button on your announcements", "Post and schedule to Facebook, Instagram, TikTok and more, with Alexis writing captions and replies", "New Pro features as they come"];
 
 /**
  * The owner's Pro: where it stands (trial, on until, ended), what it gives,

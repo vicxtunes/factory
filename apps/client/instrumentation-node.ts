@@ -16,6 +16,7 @@ import { tellAgents } from "@repo/lib/agents/server";
 import { reviewClientOrders } from "@repo/lib/assistant/server/review";
 import { answerWaitingChats } from "@repo/lib/assistant/server/run";
 import { runProRound } from "@repo/lib/pro/server";
+import { runSocialRound } from "@repo/lib/social/server";
 import { applyStudioPayment } from "@repo/lib/studio-payments/server";
 import { closePastDays, reconcileAgentPayouts, reconcileWaitingHivepay, reconcileExpensePayouts, reconcileOwnerPayouts, reconcileBusinessPayouts, reconcileVendorPayouts, runAutopay, runStaffPay, runWeeklyAgentPay, sendDailyMoneyReport, sendExpenseReminder, sendMonthCheckReminder, sendLateMoneyNote, watchMoney } from "@repo/lib/wallet/webhooks";
 
@@ -64,6 +65,8 @@ if (process.env.NODE_ENV === "production" && process.env.NEXT_PUBLIC_TEST_COPY !
   every(EVERY_MS, "telling agents", tellAgents);
   // Pro (packages/lib/pro): reminders, renewing from the card, "Pro has ended".
   every(EVERY_MS, "pro: reminders and renewals", () => runProRound());
+  // Social posts (packages/lib/social): how posts went, pausing them when Pro ends.
+  every(5 * 60_000, "social posts", runSocialRound);
   every(WATCH_EVERY_MS, "money watch", watchMoney);
   every(DAILY_REPORT_EVERY_MS, "daily money report", sendDailyMoneyReport);
   every(DAILY_REPORT_EVERY_MS, "closing past days", closePastDays);

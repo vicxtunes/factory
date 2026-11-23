@@ -21,6 +21,7 @@ import { addFilesToOrderTool } from "./order-files";
 import { studioBusinessTools } from "./studio-business";
 import { studioJobChanges, vendorJobChanges } from "./vendor-jobs";
 import { studioSetupTools } from "./studio-setup";
+import { studioSocialTools } from "./studio-social";
 import { marketPricesTool, packagePhotosTool, studioDocumentTool } from "./studio-work";
 
 /** What the studio's tools show under a reply: the logo uploader, and a service's photos panel. */
@@ -161,6 +162,12 @@ async function studioTools(widgets: Widgets): Promise<{ read: AssistantTool[]; c
   const jobs = studioJobChanges(scope.tenantId, { projects: canUse(access, "projects", "manage"), money: canUse(access, "money", "manage") });
   change.push(...jobs);
   if (jobs.length) can.push("call off, pay in, approve or raise a problem with vendor jobs");
+  const social = canUse(access, "catalog", "manage") ? await studioSocialTools(studio).catch(() => null) : null;
+  if (social) {
+    read.push(...social.read);
+    change.push(...social.change);
+    can.push(social.words);
+  }
   const words = can.length ? `For ${studio.name}: ${can.join(", ")}.` : "";
   if (!access.owner) return { read, change, words };
   const page = studioSetupTools(caller, widgets);

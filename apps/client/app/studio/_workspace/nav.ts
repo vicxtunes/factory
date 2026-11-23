@@ -78,6 +78,8 @@ export const STUDIO_NAV: StudioNavSection[] = [
       { href: "/studio/showroom", label: "Showroom", icon: "showroom", need: "catalog" },
       // Designed pop-ups for the business's clients, on its page.
       { href: "/studio/announcements", label: "Announcements", icon: "announcements", need: "catalog" },
+      // Pro: posting and scheduling to the business's social pages, their comments and messages, and results (packages/lib/social).
+      { href: "/studio/social", label: "Social posts", icon: "marketing", need: "catalog" },
       // Aming Pro and the public page's look (templates).
       { href: "/studio/pro", label: "Pro & page look", icon: "showroom", need: "catalog" },
     ],
