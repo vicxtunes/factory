@@ -12,12 +12,14 @@ import { NotificationBell } from "@repo/ui/notifications/NotificationBell";
 import {
   AccountsIcon,
   AgentsIcon,
+  AnnouncementIcon,
   BackIcon,
   CalendarIcon,
   ClientsIcon,
   DashboardIcon,
   FilesIcon,
   InvoiceIcon,
+  MarketingIcon,
   PaymentIcon,
   PlaceOrderIcon,
   ProductsIcon,
@@ -26,6 +28,7 @@ import {
   StudioIcon,
   TasksIcon,
 } from "@repo/ui/icons";
+import { ChatIcon } from "@repo/ui/chat/icons";
 import { studioInitials } from "@repo/lib/studios/core";
 import type { StudioAccess } from "@repo/lib/team/core";
 
@@ -56,6 +59,9 @@ const ICONS: Partial<Record<StudioNavItem["icon"], typeof DashboardIcon>> = {
   placeOrder: PlaceOrderIcon,
   showroom: ShowroomIcon,
   settings: SettingsIcon,
+  announcements: AnnouncementIcon,
+  marketing: MarketingIcon,
+  chat: ChatIcon,
 };
 
 /** The studio's logo, or its initials on a brand square. Also heads its public pages ([slug]/studio-shell.tsx). */
