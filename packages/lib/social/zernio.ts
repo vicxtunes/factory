@@ -91,10 +91,14 @@ export async function connectUrl(profileId: string, platform: string, back: stri
 export async function tiktokTracks(accountId: string): Promise<MusicTrack[]> {
   type T = { id?: string; name?: string; artist?: string; durationSec?: number; previewUrl?: string; thumbnailUrl?: string; clip?: { id?: string; durationSec?: number; previewUrl?: string } };
   const path = `/accounts/${encodeURIComponent(accountId)}/tiktok/commercial-music`;
-  // Uganda's chart (owner, 2026-11-24: "I can't get Ugandan sounds"); the global one if Uganda's is empty.
-  let r = await call<{ tracks?: T[] }>("GET", `${path}?countryCode=UG`);
-  if (!r.tracks?.length) r = await call<{ tracks?: T[] }>("GET", path);
-  return (r.tracks ?? [])
+  // TikTok has no search, only charts: Uganda's first (owner, 2026-11-24: "I can't get Ugandan sounds"),
+  // then the region's and the global one, together for the search box.
+  const charts = await Promise.allSettled(["UG", "KE", "TZ", "RW", "NG", ""].map((c) => call<{ tracks?: T[] }>("GET", c ? `${path}?countryCode=${c}` : path)));
+  const ok = charts.flatMap((c) => (c.status === "fulfilled" ? [c.value] : []));
+  if (!ok.length) throw (charts[0] as PromiseRejectedResult).reason;
+  const seen = new Set<string>();
+  return ok
+    .flatMap((r) => r.tracks ?? [])
     .map((t) => ({
       id: t.clip?.id ?? t.id ?? "",
       name: t.name ?? "",
@@ -103,7 +107,7 @@ export async function tiktokTracks(accountId: string): Promise<MusicTrack[]> {
       preview: t.clip?.previewUrl ?? t.previewUrl ?? null,
       seconds: t.clip?.durationSec ?? t.durationSec ?? null,
     }))
-    .filter((t) => t.id);
+    .filter((t) => t.id && !seen.has(t.id) && seen.add(t.id));
 }
 
 // ---- Posts ----

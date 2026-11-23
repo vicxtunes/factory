@@ -34,6 +34,7 @@ export function MusicPicker({ accountId, value, onChange, photosOnly }: { accoun
   const [tracks, setTracks] = useState<MusicTrack[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [playing, setPlaying] = useState<string | null>(null);
+  const [q, setQ] = useState("");
   const audio = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
@@ -56,6 +57,8 @@ export function MusicPicker({ accountId, value, onChange, photosOnly }: { accoun
   }
 
   const picked = value?.kind === "track" ? value : null;
+  const words = q.toLowerCase().split(/\s+/).filter(Boolean);
+  const shown = tracks?.filter((t) => words.every((w) => `${t.name} ${t.artist}`.toLowerCase().includes(w)));
 
   return (
     <div className="space-y-2">
@@ -64,6 +67,15 @@ export function MusicPicker({ accountId, value, onChange, photosOnly }: { accoun
         <Note className="size-4" />
         <span className="min-w-0 truncate">{picked ? `${picked.name} · ${picked.artist}` : value?.kind === "auto" ? "TikTok picks" : value?.kind === "app" ? "Finish in TikTok: add the song, post" : "Music"}</span>
       </div>
+      {tracks?.length ? (
+        <input
+          type="search"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder={`Search ${tracks.length} sounds`}
+          className="h-10 w-full rounded-full border border-border bg-background px-4 text-sm outline-none focus:border-brand-500"
+        />
+      ) : null}
       <div className="-mx-1 flex gap-3 overflow-x-auto px-1 py-2">
         <Tile on={!value} onClick={() => onChange(null)} label="No music">
           <span className="flex size-full items-center justify-center bg-gray-100 text-xs font-semibold text-muted dark:bg-white/5">None</span>
@@ -85,7 +97,8 @@ export function MusicPicker({ accountId, value, onChange, photosOnly }: { accoun
         {!tracks && !error
           ? [0, 1, 2, 3].map((i) => <span key={i} className="size-20 shrink-0 animate-pulse rounded-xl bg-gray-100 dark:bg-white/5" />)
           : null}
-        {tracks?.map((t) => {
+        {shown?.length === 0 ? <p className="flex h-20 shrink-0 items-center px-2 text-xs text-muted">No sound called “{q}”</p> : null}
+        {shown?.map((t) => {
           const on = picked?.id === t.id;
           return (
             <div key={t.id} className="w-20 shrink-0">
