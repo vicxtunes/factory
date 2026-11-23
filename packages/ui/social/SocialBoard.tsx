@@ -40,8 +40,12 @@ const GLOW: Record<PostStatus, { status: ProductionStatus; late: boolean }> = {
   paused: { status: "not_started", late: false },
 };
 
-function Badge({ status }: { status: PostStatus }) {
-  return <StatusGlowBadge status={GLOW[status].status} isDelayed={GLOW[status].late} label={STATUS_LABEL[status]} />;
+/** Sent to a TikTok inbox to finish there ("In TikTok"): on Zernio it's posted, but the business still posts it in the app. */
+const inTikTok = (a: SocialPost["accounts"][number]) => a.platform === "tiktok" && a.music?.kind === "app";
+
+function Badge({ post: p }: { post: SocialPost }) {
+  const waiting = p.status === "posted" && p.accounts.some(inTikTok);
+  return <StatusGlowBadge status={waiting ? "quality_check" : GLOW[p.status].status} isDelayed={GLOW[p.status].late} label={waiting ? "Waiting in TikTok" : STATUS_LABEL[p.status]} />;
 }
 
 function Marks({ platforms }: { platforms: string[] }) {
@@ -158,7 +162,7 @@ function PostCard({ post: p, onOpen }: { post: SocialPost; onOpen: () => void })
         {p.media.length > 1 ? <span className="absolute right-2 top-2 rounded-full bg-black/60 px-2 text-xs font-semibold text-white">1/{p.media.length}</span> : null}
       </div>
       <div className="w-full space-y-1 p-3">
-        <Badge status={p.status} />
+        <Badge post={p} />
         {first && p.caption ? <p className="line-clamp-2 text-sm">{p.caption}</p> : null}
         <p className="text-xs text-muted">{when(p.scheduled_at ?? p.created_at)}</p>
       </div>
@@ -178,7 +182,7 @@ function PostDetail({ post: p, canEdit, onEdit }: { post: SocialPost; canEdit: b
         </div>
       ) : null}
       <div className="flex items-center justify-between">
-        <Badge status={p.status} />
+        <Badge post={p} />
         <span className="text-xs text-muted">{when(p.scheduled_at ?? p.created_at)}</span>
       </div>
       {p.caption ? <p className="whitespace-pre-wrap text-sm">{p.caption}</p> : null}
@@ -190,7 +194,7 @@ function PostDetail({ post: p, canEdit, onEdit }: { post: SocialPost; canEdit: b
               <PlatformMark platform={a.platform} size="sm" />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium">{a.name}</p>
-                {r?.error ? <p className="text-xs text-error-600">{r.error}</p> : null}
+                {r?.error ? <p className="text-xs text-error-600">{r.error}</p> : inTikTok(a) && p.status !== "scheduled" && p.status !== "paused" ? <p className="text-xs text-muted">Waiting in TikTok · open TikTok, add the song, post</p> : null}
               </div>
               {r?.url ? (
                 <a href={r.url} target="_blank" rel="noreferrer" className="text-xs font-semibold text-brand-600">

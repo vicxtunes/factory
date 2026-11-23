@@ -62,7 +62,7 @@ export function MusicPicker({ accountId, value, onChange, photosOnly }: { accoun
       <div className="flex items-center gap-2 text-sm font-semibold">
         <PlatformMark platform="tiktok" size="xs" />
         <Note className="size-4" />
-        <span className="min-w-0 truncate">{picked ? `${picked.name} · ${picked.artist}` : value?.kind === "auto" ? "TikTok picks" : value?.kind === "app" ? "Goes to your TikTok inbox: open TikTok, add any song, post" : "Music"}</span>
+        <span className="min-w-0 truncate">{picked ? `${picked.name} · ${picked.artist}` : value?.kind === "auto" ? "TikTok picks" : value?.kind === "app" ? "Finish in TikTok: add the song, post" : "Music"}</span>
       </div>
       <div className="-mx-1 flex gap-3 overflow-x-auto px-1 py-2">
         <Tile on={!value} onClick={() => onChange(null)} label="No music">
@@ -118,6 +118,7 @@ export function MusicPicker({ accountId, value, onChange, photosOnly }: { accoun
           );
         })}
       </div>
+      {value?.kind === "app" ? <p className="text-xs text-muted">💡 To post by itself: put the song in the video before uploading, or pick Auto for photos.</p> : null}
       {error ? <p className="text-xs text-error-600">{error}</p> : null}
     </div>
   );
