@@ -87,10 +87,13 @@ export async function connectUrl(profileId: string, platform: string, back: stri
 
 // ---- TikTok music ----
 
-/** TikTok's trending commercial tracks for that page (the clip id publishes; the full track's may not play abroad). */
+/** TikTok's trending commercial tracks in Uganda for that page (the clip id publishes; the full track's may not play abroad). */
 export async function tiktokTracks(accountId: string): Promise<MusicTrack[]> {
   type T = { id?: string; name?: string; artist?: string; durationSec?: number; previewUrl?: string; thumbnailUrl?: string; clip?: { id?: string; durationSec?: number; previewUrl?: string } };
-  const r = await call<{ tracks?: T[] }>("GET", `/accounts/${encodeURIComponent(accountId)}/tiktok/commercial-music`);
+  const path = `/accounts/${encodeURIComponent(accountId)}/tiktok/commercial-music`;
+  // Uganda's chart (owner, 2026-11-24: "I can't get Ugandan sounds"); the global one if Uganda's is empty.
+  let r = await call<{ tracks?: T[] }>("GET", `${path}?countryCode=UG`);
+  if (!r.tracks?.length) r = await call<{ tracks?: T[] }>("GET", path);
   return (r.tracks ?? [])
     .map((t) => ({
       id: t.clip?.id ?? t.id ?? "",
