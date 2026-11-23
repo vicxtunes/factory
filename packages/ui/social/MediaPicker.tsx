@@ -10,6 +10,17 @@ import { putToSignedUrl } from "@repo/lib/storage/xhr-upload";
 const BUCKET = "social-media";
 const MAX = 10;
 
+/** One photo or video into the public social-media bucket. */
+export async function uploadMedia(file: File, onProgress: (p: number) => void): Promise<{ ok: true; media: PostMedia } | { ok: false; error: string }> {
+  const session = await createMediaUpload(file.name);
+  if (!session.ok) return session;
+  const sent = await putToSignedUrl(BUCKET, session.path, session.token, file, onProgress);
+  if (!sent.ok) return sent;
+  const done = await confirmMediaUpload(session.path);
+  if (!done.ok) return done;
+  return { ok: true, media: { url: done.url, type: done.type } };
+}
+
 // A post's photos and videos (the design room's Upload row): straight from
 // the browser to the public social-media bucket, where Zernio fetches them.
 export function MediaPicker({ value, onChange, onBusy }: { value: PostMedia[]; onChange: (next: PostMedia[]) => void; onBusy: (busy: boolean) => void }) {
@@ -22,22 +33,12 @@ export function MediaPicker({ value, onChange, onBusy }: { value: PostMedia[]; o
     let next = value;
     for (const file of files.slice(0, MAX - value.length)) {
       setProgress(0);
-      const session = await createMediaUpload(file.name);
-      if (!session.ok) {
-        setError(session.error);
-        break;
-      }
-      const sent = await putToSignedUrl(BUCKET, session.path, session.token, file, setProgress);
-      if (!sent.ok) {
-        setError(sent.error);
-        break;
-      }
-      const done = await confirmMediaUpload(session.path);
+      const done = await uploadMedia(file, setProgress);
       if (!done.ok) {
         setError(done.error);
         break;
       }
-      next = [...next, { url: done.url, type: done.type }];
+      next = [...next, done.media];
       onChange(next);
     }
     setProgress(null);

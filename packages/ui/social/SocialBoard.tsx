@@ -19,6 +19,7 @@ import type { ProductionStatus } from "@repo/lib/types";
 
 import { MediaPicker } from "./MediaPicker";
 import { MusicPicker } from "./MusicPicker";
+import { SoundMixer } from "./SoundMixer";
 import { PlatformMark } from "./PlatformMark";
 
 type List = "scheduled" | "posted" | "failed";
@@ -297,6 +298,7 @@ function PostForm({ post: p, accounts, onDone }: { post: SocialPost | null; acco
         </div>
       </div>
       <MediaPicker value={media} onChange={setMedia} onBusy={setBusy} />
+      <SoundMixer media={media} onChange={setMedia} onBusy={setBusy} />
       {tiktok ? <MusicPicker accountId={tiktok.id} value={music} onChange={setMusic} photosOnly={!media.some((m) => m.type === "video")} /> : null}
       <div className="space-y-3">
         <div className="grid grid-cols-2 rounded-full bg-gray-100 p-1 dark:bg-white/5">
