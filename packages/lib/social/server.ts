@@ -13,6 +13,7 @@ import * as z from "./zernio";
 
 const db = () => createAdminClient();
 const PAGE = "/studio/social";
+export const SOCIAL_PAGES_PAGE = "/studio/social/pages";
 
 function fail(what: string, error: { message: string }): never {
   throw new Error(`Could not ${what}: ${error.message}`);
@@ -176,7 +177,7 @@ async function clearLapsed(): Promise<void> {
       for (const a of accounts) await z.disconnectAccount(a._id);
       await db().from("tenants").update({ social_cleared_for: t.pro_until }).eq("id", t.id).eq("pro_until", t.pro_until);
       if (accounts.length && t.owner_client_id) {
-        await tell(t.owner_client_id, "Social pages disconnected", "Pro ended a week ago, so your social pages were disconnected from Aming. Get Pro again and connect them on Social posts.");
+        await tell(t.owner_client_id, "Social pages disconnected", "Pro ended a week ago, so your social pages were disconnected from Aming. Get Pro again and connect them on Social Media → Pages.");
       }
     } catch (err) {
       console.error("social: disconnecting a lapsed business failed:", t.id, err);

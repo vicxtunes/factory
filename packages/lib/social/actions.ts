@@ -20,11 +20,11 @@ import { studioOfCaller } from "@repo/lib/studios/server";
 import { createAdminClient } from "@repo/lib/supabase/admin";
 
 import { platformSchema, postInputSchema, problemFor, settingsSchema, SocialError, type SocialPost } from "./core";
-import { accountsOf, applyZernio, postsThisMonth, profileOf, requirePro, saveSocialSettings, socialSettings, SOCIAL_PAGE } from "./server";
+import { accountsOf, applyZernio, postsThisMonth, profileOf, requirePro, saveSocialSettings, socialSettings, SOCIAL_PAGE, SOCIAL_PAGES_PAGE } from "./server";
 import * as z from "./zernio";
 
 const BUCKET = "social-media";
-const touched = () => revalidatePath(SOCIAL_PAGE);
+const touched = () => revalidatePath(SOCIAL_PAGE, "layout");
 
 async function caller() {
   const c = await studioOfCaller("catalog");
@@ -51,7 +51,7 @@ export async function connectPage(platform: unknown): Promise<Result<string>> {
     if (accounts.length >= settings.accountsPerBusiness) {
       throw new SocialError(`Pro connects up to ${settings.accountsPerBusiness} pages. Disconnect one to connect another.`);
     }
-    return z.connectUrl(profileId, id, await here(SOCIAL_PAGE));
+    return z.connectUrl(profileId, id, await here(SOCIAL_PAGES_PAGE));
   });
 }
 
