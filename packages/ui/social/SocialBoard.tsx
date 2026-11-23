@@ -298,8 +298,17 @@ function PostForm({ post: p, accounts, onDone }: { post: SocialPost | null; acco
         </div>
       </div>
       <MediaPicker value={media} onChange={setMedia} onBusy={setBusy} />
-      <SoundMixer media={media} onChange={setMedia} onBusy={setBusy} />
       {tiktok ? <MusicPicker accountId={tiktok.id} value={music} onChange={setMusic} photosOnly={!media.some((m) => m.type === "video")} /> : null}
+      {/* With TikTok picked, "My sound" is the music strip's first tile; the song in the video replaces any TikTok track. */}
+      <SoundMixer
+        media={media}
+        button={!tiktok}
+        onChange={(next) => {
+          setMedia(next);
+          setMusic(null);
+        }}
+        onBusy={setBusy}
+      />
       <div className="space-y-3">
         <div className="grid grid-cols-2 rounded-full bg-gray-100 p-1 dark:bg-white/5">
           {[

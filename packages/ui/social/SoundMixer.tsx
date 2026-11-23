@@ -13,7 +13,10 @@ const time = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).
 // "My sound": the business's own song put into the post before it leaves
 // (./mixSound.ts). On a video, the first video gets it; photos become one
 // slideshow video with it.
-export function SoundMixer({ media, onChange, onBusy }: { media: PostMedia[]; onChange: (next: PostMedia[]) => void; onBusy: (busy: boolean) => void }) {
+/** The file box's id: the TikTok music strip's "My sound" tile opens it too. */
+export const MY_SOUND_INPUT = "social-my-sound";
+
+export function SoundMixer({ media, button, onChange, onBusy }: { media: PostMedia[]; button: boolean; onChange: (next: PostMedia[]) => void; onBusy: (busy: boolean) => void }) {
   const [file, setFile] = useState<File | null>(null);
   const [length, setLength] = useState(0);
   const [start, setStart] = useState(0);
@@ -83,15 +86,17 @@ export function SoundMixer({ media, onChange, onBusy }: { media: PostMedia[]; on
     }
   }
 
-  if (!video && !photos.length) return null;
-
   return (
     <div className="space-y-3">
-      <input ref={picker} type="file" accept="audio/mpeg,audio/mp4,audio/x-m4a,audio/aac,audio/wav,audio/x-wav,.mp3,.m4a,.aac,.wav" hidden onChange={(e) => void choose(e.target.files?.[0])} />
+      <input ref={picker} id={MY_SOUND_INPUT} type="file" accept="audio/mpeg,audio/mp4,audio/x-m4a,audio/aac,audio/wav,audio/x-wav,.mp3,.m4a,.aac,.wav" hidden onChange={(e) => {
+          void choose(e.target.files?.[0]);
+          e.target.value = "";
+        }} />
       {!file ? (
-        <div className="flex items-center gap-3">
+        <div className={`items-center gap-3 ${button || done ? "flex" : "hidden"}`}>
           <button
             type="button"
+            hidden={!button}
             onClick={() => picker.current?.click()}
             className="inline-flex min-h-9 items-center gap-2 rounded-full bg-gradient-to-r from-brand-500 to-brand-700 px-4 text-sm font-semibold text-white shadow-theme-xs"
           >
@@ -113,7 +118,7 @@ export function SoundMixer({ media, onChange, onBusy }: { media: PostMedia[]; on
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-semibold">{file.name}</p>
               <p className="text-xs text-muted tnum">
-                from {time(start)} · {video ? "on your video" : `${photos.length} photos → video`}
+                from {time(start)} · {video ? "on your video" : photos.length ? `${photos.length} photos → video` : "add photos or a video"}
               </p>
             </div>
             <button type="button" aria-label="Remove sound" onClick={() => setFile(null)} className="text-muted">
@@ -132,8 +137,8 @@ export function SoundMixer({ media, onChange, onBusy }: { media: PostMedia[]; on
           {progress !== null ? (
             <ProgressBar value={Math.round(progress * 100)} max={100} label="Adding the sound" showValue="percent" />
           ) : (
-            <Button type="button" variant="primary" className="min-h-9 w-full" onClick={() => void make()}>
-              Add to {video ? "video" : "photos"}
+            <Button type="button" variant="primary" className="min-h-9 w-full" disabled={!video && !photos.length} onClick={() => void make()}>
+              {video ? "Add to video" : photos.length ? "Add to photos" : "Add photos or a video first"}
             </Button>
           )}
         </div>
