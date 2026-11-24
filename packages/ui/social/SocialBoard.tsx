@@ -234,6 +234,7 @@ function PostForm({ post: p, accounts, onDone }: { post: SocialPost | null; acco
   const [pending, start] = useTransition();
   const [writing, startWriting] = useTransition();
   const [busy, setBusy] = useState(false);
+  const [songOpen, setSongOpen] = useState(false);
   const [music, setMusic] = useState<PostMusic | null>(p?.accounts.find((a) => a.platform === "tiktok")?.music ?? null);
 
   const chosen = accounts.filter((a) => picked.includes(a.id));
@@ -298,11 +299,13 @@ function PostForm({ post: p, accounts, onDone }: { post: SocialPost | null; acco
         </div>
       </div>
       <MediaPicker value={media} onChange={setMedia} onBusy={setBusy} />
-      {tiktok ? <MusicPicker accountId={tiktok.id} value={music} onChange={setMusic} photosOnly={!media.some((m) => m.type === "video")} /> : null}
-      {/* With TikTok picked, "My sound" is the music strip's first tile; the song in the video replaces any TikTok track. */}
+      {tiktok ? <MusicPicker accountId={tiktok.id} value={music} onChange={setMusic} photosOnly={!media.some((m) => m.type === "video")} onSong={() => setSongOpen(true)} /> : null}
+      {/* With TikTok picked, Aming music is the music strip's first tile; the song in the video replaces any TikTok track. */}
       <SoundMixer
         media={media}
         button={!tiktok}
+        open={songOpen}
+        onOpen={setSongOpen}
         onChange={(next) => {
           setMedia(next);
           setMusic(null);

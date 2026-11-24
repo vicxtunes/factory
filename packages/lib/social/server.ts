@@ -8,7 +8,7 @@ import { isPro } from "@repo/lib/pro/core";
 import { proStatus, tell } from "@repo/lib/pro/server";
 import { createAdminClient } from "@repo/lib/supabase/admin";
 
-import { platformOf, POST_COLUMNS, SocialError, type PostStatus, type SocialAccount, type SocialPost, type SocialSettings } from "./core";
+import { platformOf, POST_COLUMNS, SocialError, type BossSong, type PostStatus, type SocialAccount, type SocialPost, type SocialSettings, type Song } from "./core";
 import * as z from "./zernio";
 
 const db = () => createAdminClient();
@@ -79,6 +79,64 @@ export async function postsThisMonth(tenantId: string): Promise<number> {
   const { count, error } = await db().from("social_posts").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId).gte("created_at", start);
   if (error) fail("count posts", error);
   return count ?? 0;
+}
+
+// ---- Aming music library ----
+
+export const SONGS_BUCKET = "social-songs";
+const SONG_COLUMNS = "id, title, artist, audio_path, audio_url, cover_path, cover_url, seconds, hook_at, licence_until, hidden";
+interface SongRow {
+  id: string;
+  title: string;
+  artist: string;
+  audio_path: string;
+  audio_url: string;
+  cover_path: string | null;
+  cover_url: string | null;
+  seconds: number | null;
+  hook_at: number;
+  licence_until: string | null;
+  hidden: boolean;
+}
+const songOf = (r: SongRow): Song => ({ id: r.id, title: r.title, artist: r.artist, audioUrl: r.audio_url, coverUrl: r.cover_url, seconds: r.seconds === null ? null : Number(r.seconds), hookAt: r.hook_at });
+const kampalaToday = () => new Date(Date.now() + 3 * 3_600_000).toISOString().slice(0, 10);
+
+/** The songs businesses can use now: not hidden, licence not ended. */
+export async function librarySongs(): Promise<Song[]> {
+  const { data, error } = await db().from("social_songs").select(SONG_COLUMNS).eq("hidden", false).or(`licence_until.is.null,licence_until.gte.${kampalaToday()}`).order("created_at", { ascending: false });
+  if (error) fail("read songs", error);
+  return (data as SongRow[]).map(songOf);
+}
+
+/** Every song with its licence and the posts that went out with it (all time and the last 30 days). */
+export async function bossSongs(): Promise<BossSong[]> {
+  const [songs, uses] = await Promise.all([
+    db().from("social_songs").select(SONG_COLUMNS).order("created_at", { ascending: false }),
+    db().from("social_song_uses").select("song_id, used_at").limit(100_000),
+  ]);
+  if (songs.error) fail("read songs", songs.error);
+  if (uses.error) fail("read song uses", uses.error);
+  const since = Date.now() - 30 * 86_400_000;
+  return (songs.data as SongRow[]).map((r) => {
+    const mine = (uses.data as { song_id: string; used_at: string }[]).filter((u) => u.song_id === r.id);
+    return {
+      ...songOf(r),
+      audioPath: r.audio_path,
+      coverPath: r.cover_path,
+      licenceUntil: r.licence_until,
+      hidden: r.hidden,
+      uses: mine.length,
+      uses30: mine.filter((u) => new Date(u.used_at).getTime() >= since).length,
+    };
+  });
+}
+
+/** Counts the library songs in a post that just went to Zernio (each once a post). */
+export async function countSongUses(tenantId: string, postId: string, songIds: string[]) {
+  const ids = [...new Set(songIds)];
+  if (!ids.length) return;
+  const { error } = await db().from("social_song_uses").insert(ids.map((song_id) => ({ song_id, tenant_id: tenantId, post_id: postId })));
+  if (error) console.error("social: counting song uses failed:", postId, error);
 }
 
 /** Zernio's post status as ours. */

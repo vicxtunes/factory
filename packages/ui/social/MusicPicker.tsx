@@ -6,7 +6,6 @@ import { tiktokMusic } from "@repo/lib/social/actions";
 import type { MusicTrack, PostMusic } from "@repo/lib/social/core";
 
 import { PlatformMark } from "./PlatformMark";
-import { MY_SOUND_INPUT } from "./SoundMixer";
 
 const Note = ({ className = "size-5" }: { className?: string }) => (
   <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth={1.8} aria-hidden>
@@ -31,7 +30,7 @@ const Tile = ({ on, onClick, label, children }: { on: boolean; onClick: () => vo
 // TikTok's sound for a post: a strip of trending tracks (cover, play to hear
 // it, tap to pick; TikTok for Business pages), "None", "In TikTok" (sent to
 // their TikTok inbox to add any song: personal pages), and for photos "Auto".
-export function MusicPicker({ accountId, value, onChange, photosOnly }: { accountId: string; value: PostMusic | null; onChange: (m: PostMusic | null) => void; photosOnly: boolean }) {
+export function MusicPicker({ accountId, value, onChange, photosOnly, onSong }: { accountId: string; value: PostMusic | null; onChange: (m: PostMusic | null) => void; photosOnly: boolean; /** Opens the song chooser (Aming music or their own), which puts it into the video. */ onSong: () => void }) {
   const [tracks, setTracks] = useState<MusicTrack[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [playing, setPlaying] = useState<string | null>(null);
@@ -78,10 +77,10 @@ export function MusicPicker({ accountId, value, onChange, photosOnly }: { accoun
         />
       ) : null}
       <div className="-mx-1 flex gap-3 overflow-x-auto px-1 py-2">
-        <label htmlFor={MY_SOUND_INPUT} className="flex size-20 shrink-0 cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-brand-400 text-xs font-semibold text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-500/10">
+        <button type="button" onClick={onSong} className="flex size-20 shrink-0 flex-col items-center justify-center gap-1 rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 text-xs font-semibold text-white">
           <Note />
-          My sound
-        </label>
+          Aming music
+        </button>
         <Tile on={!value} onClick={() => onChange(null)} label="No music">
           <span className="flex size-full items-center justify-center bg-gray-100 text-xs font-semibold text-muted dark:bg-white/5">None</span>
         </Tile>

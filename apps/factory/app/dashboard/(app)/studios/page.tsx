@@ -5,6 +5,7 @@ import { DomainRequests } from "@repo/ui/pro/DomainRequests";
 import { ProPageForm } from "@repo/ui/pro/ProPageForm";
 import { ProPriceForm } from "@repo/ui/pro/ProPriceForm";
 import { SocialSettingsForm } from "@repo/ui/social/SocialSettingsForm";
+import { SongLibrary } from "@repo/ui/social/SongLibrary";
 import { StudioStatusBadge } from "@repo/ui/studio-access/StatusBadge";
 import { StudiosAnalysis } from "@repo/ui/studios/StudiosAnalysis";
 import { StudiosTable } from "@repo/ui/studios/StudiosTable";
@@ -15,7 +16,7 @@ import { Loading } from "@repo/ui/skeletons/Loading";
 import { photos } from "@repo/lib/photos/server";
 import { clientUrl } from "@repo/lib/client-portal/paths";
 import { domainRequests, proCounts, proPage, proPrice } from "@repo/lib/pro/server";
-import { socialSettings } from "@repo/lib/social/server";
+import { bossSongs, socialSettings } from "@repo/lib/social/server";
 import { connectedCount, zernioReady } from "@repo/lib/social/zernio";
 import { studioAccess } from "@repo/lib/studio-access/server";
 import { readStudioActivity, requireStudiosOversight, studios } from "@repo/lib/studios/server";
@@ -66,6 +67,14 @@ export default async function StudiosPage() {
           <SectionLabel>Social posts (Pro)</SectionLabel>
           <Loading skeleton={<Skeleton className="h-16 w-full" />}>
             <Social />
+          </Loading>
+        </section>
+      ) : null}
+      {session.isBoss ? (
+        <section>
+          <SectionLabel>Aming music</SectionLabel>
+          <Loading skeleton={<Skeleton className="h-40 w-full" />}>
+            <Music />
           </Loading>
         </section>
       ) : null}
@@ -124,6 +133,10 @@ async function Pro() {
       </div>
     </div>
   );
+}
+
+async function Music() {
+  return <SongLibrary songs={await bossSongs()} />;
 }
 
 async function Social() {

@@ -19,8 +19,8 @@ import { safeStorageSegment } from "@repo/lib/storage/client";
 import { studioOfCaller } from "@repo/lib/studios/server";
 import { createAdminClient } from "@repo/lib/supabase/admin";
 
-import { platformSchema, postInputSchema, problemFor, settingsSchema, SocialError, type MusicTrack, type SocialPost } from "./core";
-import { accountsOf, applyZernio, postsThisMonth, profileOf, requirePro, saveSocialSettings, socialSettings, SOCIAL_PAGE, SOCIAL_PAGES_PAGE } from "./server";
+import { platformSchema, postInputSchema, problemFor, settingsSchema, SocialError, songSchema, type MusicTrack, type PostMedia, type SocialPost, type Song } from "./core";
+import { accountsOf, applyZernio, countSongUses, librarySongs, postsThisMonth, profileOf, requirePro, saveSocialSettings, socialSettings, SOCIAL_PAGE, SOCIAL_PAGES_PAGE, SONGS_BUCKET } from "./server";
 import * as z from "./zernio";
 
 const BUCKET = "social-media";
@@ -132,9 +132,11 @@ export async function savePost(id: string | null, input: unknown): Promise<Resul
 
     let ourId = id;
     let zernioId: string | null = null;
+    let songsBefore: string[] = [];
     if (id) {
-      const { data } = await posts.select("status, zernio_post_id").eq("id", id).eq("tenant_id", studio.id).maybeSingle();
+      const { data } = await posts.select("status, zernio_post_id, media").eq("id", id).eq("tenant_id", studio.id).maybeSingle();
       if (!data) throw new SocialError("That post is gone.");
+      songsBefore = (data.media as PostMedia[]).flatMap((m) => (m.songId ? [m.songId] : []));
       if (!["scheduled", "paused", "failed"].includes(data.status)) throw new SocialError("That post has already gone out. Make a new one.");
       zernioId = data.status === "scheduled" ? data.zernio_post_id : null;
     } else {
@@ -157,8 +159,77 @@ export async function savePost(id: string | null, input: unknown): Promise<Resul
     const { error } = await posts.update({ ...fields, zernio_post_id: zPost._id, status: "scheduled", results: [], error: null }).eq("id", ourId!);
     if (error) throw error;
     await applyZernio(zPost._id, zPost.status, z.resultsOf(zPost));
+    await countSongUses(
+      studio.id,
+      ourId!,
+      p.media.flatMap((m) => (m.songId && !songsBefore.includes(m.songId) ? [m.songId] : [])),
+    );
     touched();
     return p.scheduledAt ? "scheduled" : "posting";
+  });
+}
+
+/** The Aming music library, for a business's post. */
+export async function amingSongs(): Promise<Result<Song[]>> {
+  return runAction("social", async () => {
+    await caller();
+    return librarySongs();
+  });
+}
+
+// ---- The boss's music library ----
+
+async function boss() {
+  const session = await getDashboardSession();
+  if (!session?.isBoss) throw new SocialError("Only the boss can change the music library.");
+}
+
+/** A signed upload for a song's audio or cover (the boss's browser sends it straight to storage). */
+export async function createSongUpload(fileName: string): Promise<{ ok: true; path: string; token: string } | { ok: false; error: string }> {
+  try {
+    await boss();
+    const { data, error } = await createAdminClient().storage.from(SONGS_BUCKET).createSignedUploadUrl(`songs/${randomUUID()}-${safeStorageSegment(fileName)}`);
+    if (error || !data) return { ok: false, error: error?.message ?? "Could not start the upload." };
+    return { ok: true, path: data.path, token: data.token };
+  } catch (err) {
+    return { ok: false, error: err instanceof SocialError ? err.message : "Could not start the upload." };
+  }
+}
+
+/** The file at that path in the songs bucket, if it's there and of that kind. */
+async function songFile(path: string, kind: "audio" | "image"): Promise<string> {
+  const name = path.slice("songs/".length);
+  if (!path.startsWith("songs/") || !name || name.includes("/")) throw new SocialError("That upload isn't valid.");
+  const storage = createAdminClient().storage.from(SONGS_BUCKET);
+  const { data } = await storage.list("songs", { search: name, limit: 10 });
+  const file = data?.find((f) => f.name === name);
+  if (!file) throw new SocialError("The file didn't arrive. Upload it again.");
+  if (!String(file.metadata?.mimetype ?? "").startsWith(`${kind}/`)) throw new SocialError(kind === "audio" ? "Use an MP3, M4A or WAV for the song." : "Use a JPG, PNG or WebP for the cover.");
+  return storage.getPublicUrl(path).data.publicUrl;
+}
+
+/** Adds a song (id null) or changes one. */
+export async function saveSong(id: string | null, input: unknown): Promise<Result> {
+  return runAction("social", async () => {
+    await boss();
+    const s = parseInput(songSchema, input);
+    const row = {
+      title: s.title,
+      artist: s.artist,
+      audio_path: s.audioPath,
+      audio_url: await songFile(s.audioPath, "audio"),
+      cover_path: s.coverPath,
+      cover_url: s.coverPath ? await songFile(s.coverPath, "image") : null,
+      seconds: s.seconds,
+      hook_at: s.seconds ? Math.min(s.hookAt, Math.floor(s.seconds)) : s.hookAt,
+      licence_until: s.licenceUntil,
+      hidden: s.hidden,
+      updated_at: new Date().toISOString(),
+    };
+    const songs = createAdminClient().from("social_songs");
+    const { error } = id ? await songs.update(row).eq("id", id) : await songs.insert(row);
+    if (error) throw error;
+    revalidatePath("/dashboard/studios");
   });
 }
 

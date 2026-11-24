@@ -41,7 +41,41 @@ export type PostStatus = "scheduled" | "posting" | "posted" | "partial" | "faile
 export interface PostMedia {
   url: string;
   type: "image" | "video";
+  /** The Aming music library song mixed into it, counted for the artist when the post goes out. */
+  songId?: string;
 }
+
+/** A song in the Aming music library, as businesses see it. */
+export interface Song {
+  id: string;
+  title: string;
+  artist: string;
+  audioUrl: string;
+  coverUrl: string | null;
+  seconds: number | null;
+  hookAt: number;
+}
+
+/** A song as the boss sees it: with its licence and how often it went out. */
+export interface BossSong extends Song {
+  audioPath: string;
+  coverPath: string | null;
+  licenceUntil: string | null;
+  hidden: boolean;
+  uses30: number;
+  uses: number;
+}
+
+export const songSchema = z.object({
+  title: z.string().trim().min(1, "Give the song's title.").max(200),
+  artist: z.string().trim().min(1, "Give the artist.").max(200),
+  audioPath: z.string().min(1, "Add the song's audio."),
+  coverPath: z.string().min(1).nullable(),
+  seconds: z.number().positive().nullable(),
+  hookAt: z.coerce.number().int().min(0),
+  licenceUntil: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
+  hidden: z.boolean(),
+});
 
 /**
  * TikTok's sound on a post: a track from its trending commercial list
@@ -99,7 +133,7 @@ export const settingsSchema = z.object({
 
 export const postInputSchema = z.object({
   caption: z.string().trim().max(5000),
-  media: z.array(z.object({ url: z.string().url(), type: z.enum(["image", "video"]) })).max(10),
+  media: z.array(z.object({ url: z.string().url(), type: z.enum(["image", "video"]), songId: z.string().uuid().optional() })).max(10),
   accountIds: z.array(z.string().min(1)).min(1, "Pick at least one page to post to."),
   /** ISO; null posts now. */
   scheduledAt: z.string().datetime({ offset: true }).nullable(),
