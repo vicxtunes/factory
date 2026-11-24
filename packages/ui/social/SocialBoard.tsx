@@ -20,6 +20,7 @@ import type { ProductionStatus } from "@repo/lib/types";
 import { MediaPicker } from "./MediaPicker";
 import { MusicPicker } from "./MusicPicker";
 import { SoundMixer } from "./SoundMixer";
+import { VideoEditor } from "./editor/VideoEditor";
 import { PlatformMark } from "./PlatformMark";
 
 type List = "scheduled" | "posted" | "failed";
@@ -235,6 +236,7 @@ function PostForm({ post: p, accounts, onDone }: { post: SocialPost | null; acco
   const [writing, startWriting] = useTransition();
   const [busy, setBusy] = useState(false);
   const [songOpen, setSongOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [music, setMusic] = useState<PostMusic | null>(p?.accounts.find((a) => a.platform === "tiktok")?.music ?? null);
 
   const chosen = accounts.filter((a) => picked.includes(a.id));
@@ -299,6 +301,25 @@ function PostForm({ post: p, accounts, onDone }: { post: SocialPost | null; acco
         </div>
       </div>
       <MediaPicker value={media} onChange={setMedia} onBusy={setBusy} />
+      {media.length ? (
+        <button
+          type="button"
+          onClick={() => setEditing(true)}
+          className="inline-flex min-h-9 items-center gap-2 rounded-full bg-gray-950 px-4 text-sm font-semibold text-white shadow-theme-xs dark:bg-white dark:text-gray-950"
+        >
+          ✂ Edit video
+        </button>
+      ) : null}
+      {editing ? (
+        <VideoEditor
+          media={media}
+          onClose={() => setEditing(false)}
+          onDone={(next) => {
+            setMedia(next);
+            setEditing(false);
+          }}
+        />
+      ) : null}
       {tiktok ? <MusicPicker accountId={tiktok.id} value={music} onChange={setMusic} photosOnly={!media.some((m) => m.type === "video")} onSong={() => setSongOpen(true)} /> : null}
       {/* With TikTok picked, Aming music is the music strip's first tile; the song in the video replaces any TikTok track. */}
       <SoundMixer
