@@ -10,7 +10,8 @@ import type { PostMedia, Song } from "@repo/lib/social/core";
 import { uploadMedia } from "./MediaPicker";
 
 const time = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
-const AUDIO = "audio/mpeg,audio/mp4,audio/x-m4a,audio/aac,audio/wav,audio/x-wav,.mp3,.m4a,.aac,.wav";
+/** A song, or a video whose sound becomes the song (owner, 2026-11-25: "extract from video some sounds"). */
+const AUDIO = "audio/mpeg,audio/mp4,audio/x-m4a,audio/aac,audio/wav,audio/x-wav,.mp3,.m4a,.aac,.wav,video/mp4,video/quicktime,.mp4,.mov";
 
 const Note = ({ className = "size-6" }: { className?: string }) => (
   <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth={1.8} aria-hidden>
@@ -92,7 +93,7 @@ export function SoundMixer({
       setChosen(c);
       setStart(from);
     } catch {
-      setError("That sound won't open. Use an MP3, M4A or WAV.");
+      setError("That sound won't open. Use an MP3, M4A, WAV or an MP4/MOV video.");
     }
   }
 
@@ -185,7 +186,7 @@ export function SoundMixer({
               className="flex size-20 shrink-0 flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-brand-400 text-xs font-semibold text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-500/10"
             >
               <span className="text-lg leading-none">＋</span>
-              My own
+              Song or video
             </button>
             {!songs ? [0, 1, 2].map((i) => <span key={i} className="size-20 shrink-0 animate-pulse rounded-xl bg-gray-100 dark:bg-white/5" />) : null}
             {shown?.map((s) => (
