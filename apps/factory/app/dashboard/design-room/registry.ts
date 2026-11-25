@@ -935,7 +935,7 @@ export const COMPONENTS: RoomComponent[] = [
     summary: "Downloads a whole album, zipped in the browser in parts of 50 so a phone can manage it.",
     examples: [
       { title: "One zip", file: "download-all/one-zip.tsx", Demo: DownloadAllOneZip },
-      { title: "In parts", file: "download-all/in-parts.tsx", Demo: DownloadAllInParts },
+      { title: "Big gallery", file: "download-all/in-parts.tsx", Demo: DownloadAllInParts },
     ],
   },
   {
