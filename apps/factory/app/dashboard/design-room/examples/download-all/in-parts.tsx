@@ -2,7 +2,7 @@ import { DownloadAll } from "@repo/ui/photos/DownloadAll";
 
 import { albumPhotos } from "../_data/media";
 
-// Over 50 photos the download splits into parts, so a phone can manage each zip.
+// A big gallery: still one button; the zips come one after another.
 export default function DownloadAllInParts() {
   return <DownloadAll photos={albumPhotos(120)} name="Big wedding" />;
 }

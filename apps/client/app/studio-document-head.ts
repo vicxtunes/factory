@@ -18,7 +18,10 @@ export async function studioDocumentMetadata(tenantId: string, issuer: Issuer, t
     description,
     applicationName: issuer.name,
     appleWebApp: { capable: true, statusBarStyle: "default", title: issuer.name },
-    openGraph: { siteName: issuer.name, title: full, description, type: "website" },
+    // The share preview (WhatsApp…) shows the studio's logo; without one, no
+    // picture at all, never Aming's (the app-wide twitter image would leak in).
+    openGraph: { siteName: issuer.name, title: full, description, type: "website", ...(home ? { images: [{ url: `${home}/logo`, width: 512, height: 512, alt: issuer.name }] } : {}) },
+    twitter: home ? { card: "summary", images: [`${home}/logo`] } : null,
     // Without the studio's own icon, none rather than Aming's.
     icons: home ? { icon: `${home}/logo`, apple: `${home}/logo` } : null,
     manifest: home ? `${home}/manifest.webmanifest` : null,

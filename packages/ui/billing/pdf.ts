@@ -102,9 +102,12 @@ function billToAndDates(doc: jsPDF, billTo: BillTo, dates: [string, string][], y
   for (const line of [billTo.name, billTo.phone, billTo.email]) {
     if (line) by = paragraph(doc, line, M, by, 95, 5);
   }
+  // Labels end just left of the widest value, so a long one (a shoot's date and time) never runs into them.
+  doc.setFont("helvetica", "normal");
+  const labelX = Math.min(160, RIGHT - Math.max(...dates.map(([, v]) => doc.getTextWidth(safe(v)))) - 3);
   let dy = y;
   for (const [label, value] of dates) {
-    doc.setFont("helvetica", "bold").text(label, 160, dy, { align: "right" });
+    doc.setFont("helvetica", "bold").text(label, labelX, dy, { align: "right" });
     doc.setFont("helvetica", "normal").text(safe(value), RIGHT, dy, { align: "right" });
     dy += 5.5;
   }
