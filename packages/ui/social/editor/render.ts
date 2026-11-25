@@ -22,7 +22,7 @@ import {
   canEncodeVideo,
 } from "mediabunny";
 
-import { FPS, frameSize, lookCss, newId, readableUrl, totalLength, used, type Clip, type Project, type Source, type TextItem } from "./model";
+import { FPS, TRANSITION_SECONDS, filterCss, fontCss, frameSize, labelInk, newId, readableUrl, textAt, totalLength, used, type Clip, type Project, type Source, type TextItem } from "./model";
 
 const RATE = 48_000;
 
@@ -41,7 +41,7 @@ export async function probe(source: Source, name: string): Promise<Clip> {
   const isImage = blob ? blob.type.startsWith("image/") : /\.(jpe?g|png|webp)(\?|$)/i.test(source.kind === "url" ? source.url : "");
   if (isImage) {
     const bmp = await createImageBitmap(await blobOf(source));
-    const clip: Clip = { id: newId(), source, type: "image", name, length: 3, in: 0, out: 3, width: bmp.width, height: bmp.height, hasSound: false, volume: 0 };
+    const clip: Clip = { id: newId(), source, type: "image", name, length: 3, in: 0, out: 3, width: bmp.width, height: bmp.height, hasSound: false, volume: 0, transition: "none" };
     bmp.close();
     return clip;
   }
@@ -51,7 +51,7 @@ export async function probe(source: Source, name: string): Promise<Clip> {
     if (!video) throw new Error("That file has no picture.");
     const length = await input.computeDuration();
     const sound = await input.getPrimaryAudioTrack();
-    return { id: newId(), source, type: "video", name, length, in: 0, out: length, width: await video.getDisplayWidth(), height: await video.getDisplayHeight(), hasSound: !!sound, volume: 1 };
+    return { id: newId(), source, type: "video", name, length, in: 0, out: length, width: await video.getDisplayWidth(), height: await video.getDisplayHeight(), hasSound: !!sound, volume: 1, transition: "none" };
   } finally {
     input.dispose();
   }
@@ -97,64 +97,91 @@ async function mixSound(p: Project, seconds: number): Promise<AudioBuffer> {
     gain.gain.setValueAtTime(p.song.volume, Math.max(0, seconds - 1.5));
     gain.gain.linearRampToValueAtTime(0, seconds);
     src.connect(gain).connect(ctx.destination);
-    src.start(0, Math.min(p.song.start, Math.max(0, decoded.duration - 0.1)));
+    src.start(Math.max(0, -p.song.start), Math.min(Math.max(0, p.song.start), Math.max(0, decoded.duration - 0.1)));
   }
   return ctx.startRendering();
 }
 
 type Ctx = OffscreenCanvasRenderingContext2D;
 
-/** Words: wrapped to the frame, in their style. Shared with nothing else: the preview draws them with CSS. */
-function drawText(ctx: Ctx, w: number, h: number, item: TextItem) {
+/** Words: wrapped to the frame, in their font, style and animation. The preview draws them with CSS. */
+function drawText(ctx: Ctx, w: number, h: number, item: TextItem, t: number) {
+  const now = textAt(item, t);
+  if (now.alpha <= 0 || !now.text.trim()) return;
   const px = Math.round(item.size * w);
-  ctx.font = `800 ${px}px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`;
+  const font = fontCss(item.font);
+  ctx.save();
+  ctx.font = `${font.weight} ${px}px ${font.css}`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
+  // Wrap the whole text, so a typewriter doesn't reflow as it types.
   const max = w * 0.86;
-  const lines: string[] = [];
-  for (const para of item.text.split("\n")) {
-    let line = "";
-    for (const word of para.split(/\s+/)) {
-      const next = line ? `${line} ${word}` : word;
-      if (ctx.measureText(next).width > max && line) {
-        lines.push(line);
-        line = word;
-      } else line = next;
+  const wrap = (text: string) => {
+    const lines: string[] = [];
+    for (const para of text.split("\n")) {
+      let line = "";
+      for (const word of para.split(/\s+/)) {
+        const next = line ? `${line} ${word}` : word;
+        if (ctx.measureText(next).width > max && line) {
+          lines.push(line);
+          line = word;
+        } else line = next;
+      }
+      lines.push(line);
     }
-    lines.push(line);
-  }
+    return lines;
+  };
+  const full = wrap(item.text);
+  let left = now.text.length;
+  const lines = full.map((l) => {
+    const part = l.slice(0, Math.max(0, left));
+    left -= l.length + 1;
+    return part;
+  });
   const lh = px * 1.2;
-  const cx = item.x * w;
-  const top = item.y * h - ((lines.length - 1) * lh) / 2;
+  ctx.globalAlpha = now.alpha;
+  ctx.translate(item.x * w, (item.y + now.dy) * h);
+  ctx.scale(now.scale, now.scale);
+  const top = -((full.length - 1) * lh) / 2;
   lines.forEach((line, i) => {
+    if (!line) return;
     const y = top + i * lh;
-    if (item.style === "box") {
-      const tw = ctx.measureText(line).width + px * 0.6;
-      ctx.fillStyle = "rgba(0,0,0,0.62)";
+    const tw = ctx.measureText(line).width + px * 0.6;
+    if (item.style === "box" || item.style === "label") {
+      ctx.fillStyle = item.style === "box" ? "rgba(0,0,0,0.62)" : item.color;
       ctx.beginPath();
-      ctx.roundRect(cx - tw / 2, y - lh / 2, tw, lh, px * 0.2);
+      ctx.roundRect(-tw / 2, y - lh / 2, tw, lh, px * 0.22);
       ctx.fill();
-      ctx.fillStyle = item.color;
-      ctx.fillText(line, cx, y);
+      ctx.fillStyle = item.style === "box" ? item.color : labelInk(item.color);
+      ctx.fillText(line, 0, y);
     } else if (item.style === "glow") {
       ctx.shadowColor = item.color;
       ctx.shadowBlur = px * 0.5;
       ctx.fillStyle = "#ffffff";
-      ctx.fillText(line, cx, y);
-      ctx.shadowBlur = 0;
+      ctx.fillText(line, 0, y);
+      ctx.fillText(line, 0, y);
+    } else if (item.style === "shadow") {
+      ctx.shadowColor = "rgba(0,0,0,0.85)";
+      ctx.shadowOffsetX = px * 0.06;
+      ctx.shadowOffsetY = px * 0.08;
+      ctx.shadowBlur = px * 0.12;
+      ctx.fillStyle = item.color;
+      ctx.fillText(line, 0, y);
     } else {
       ctx.lineWidth = Math.max(2, px * 0.12);
-      ctx.strokeStyle = "rgba(0,0,0,0.75)";
+      ctx.strokeStyle = "rgba(0,0,0,0.8)";
       ctx.lineJoin = "round";
-      ctx.strokeText(line, cx, y);
+      ctx.strokeText(line, 0, y);
       ctx.fillStyle = item.color;
-      ctx.fillText(line, cx, y);
+      ctx.fillText(line, 0, y);
     }
   });
+  ctx.restore();
 }
 
+
 function drawOverlays(ctx: Ctx, w: number, h: number, p: Project, t: number, logo: ImageBitmap | null) {
-  for (const item of p.texts) if (item.text.trim() && t >= item.start && t < item.end) drawText(ctx, w, h, item);
+  for (const item of p.texts) if (item.text.trim() && t >= item.start && t < item.end) drawText(ctx, w, h, item, t);
   if (logo && p.logo) {
     const lw = p.logo.size * w;
     const lh = (lw * logo.height) / logo.width;
@@ -186,6 +213,12 @@ export async function render(p: Project, onProgress: (share: number) => void): P
 
   const canvas = new OffscreenCanvas(w, h);
   const ctx = canvas.getContext("2d")!;
+  // Each clip's frame is drawn on `base` (cropped, in the look); the frame that
+  // goes out is `base` with the transition, then the words and the logo.
+  const base = new OffscreenCanvas(w, h);
+  const bctx = base.getContext("2d")!;
+  const prev = new OffscreenCanvas(w, h);
+  const pctx = prev.getContext("2d")!;
   const logo = p.logo ? await createImageBitmap(await blobOf(p.logo.source)) : null;
   const output = new Output({ format: new Mp4OutputFormat({ fastStart: "in-memory" }), target: new BufferTarget() });
   const video = new CanvasSource(canvas, { codec: "avc", bitrate: QUALITY_HIGH, keyFrameInterval: 2 });
@@ -196,30 +229,65 @@ export async function render(p: Project, onProgress: (share: number) => void): P
   await audio.add(sound);
   audio.close();
 
-  const filter = lookCss(p.look);
+  const filter = filterCss(p);
   let frame = 0;
   let t0 = 0;
+  let index = 0;
   const put = async () => {
     const t = frame / FPS;
-    ctx.filter = "none";
+    const c = p.clips[index];
+    const k = index > 0 && c.transition !== "none" ? (t - t0) / TRANSITION_SECONDS : 1;
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, w, h);
+    if (k >= 1) ctx.drawImage(base, 0, 0);
+    else if (c.transition === "fade") {
+      // Out to black, then in from black.
+      if (k < 0.5) {
+        ctx.drawImage(prev, 0, 0);
+        ctx.fillStyle = `rgba(0,0,0,${k * 2})`;
+      } else {
+        ctx.drawImage(base, 0, 0);
+        ctx.fillStyle = `rgba(0,0,0,${(1 - k) * 2})`;
+      }
+      ctx.fillRect(0, 0, w, h);
+    } else if (c.transition === "dissolve") {
+      ctx.drawImage(prev, 0, 0);
+      ctx.globalAlpha = k;
+      ctx.drawImage(base, 0, 0);
+      ctx.globalAlpha = 1;
+    } else if (c.transition === "flash") {
+      ctx.drawImage(base, 0, 0);
+      ctx.fillStyle = `rgba(255,255,255,${(1 - k) * (1 - k)})`;
+      ctx.fillRect(0, 0, w, h);
+    } else if (c.transition === "zoom") {
+      const s = 1 + 0.3 * (1 - k) * (1 - k);
+      ctx.drawImage(base, (w - w * s) / 2, (h - h * s) / 2, w * s, h * s);
+    } else if (c.transition === "slide") {
+      const e = 1 - (1 - k) * (1 - k) * (1 - k);
+      ctx.drawImage(prev, -w * e, 0);
+      ctx.drawImage(base, w * (1 - e), 0);
+    }
     drawOverlays(ctx, w, h, p, t, logo);
     await video.add(t, 1 / FPS);
     frame++;
     if (frame % 15 === 0) onProgress(0.05 + 0.95 * Math.min(1, frame / frames));
   };
+  const paint = (sw: number, sh: number, draw: (r: ReturnType<typeof cover>) => void) => {
+    bctx.filter = filter;
+    bctx.fillStyle = "#000";
+    bctx.fillRect(0, 0, w, h);
+    draw(cover(w, h, sw, sh));
+    bctx.filter = "none";
+  };
 
-  for (const c of p.clips) {
+  for (; index < p.clips.length; index++) {
+    const c = p.clips[index];
     const end = Math.round((t0 + used(c)) * FPS);
     if (c.type === "image") {
       const bmp = await createImageBitmap(await blobOf(c.source));
-      const r = cover(w, h, bmp.width, bmp.height);
-      while (frame < end) {
-        ctx.filter = filter;
-        ctx.fillStyle = "#000";
-        ctx.fillRect(0, 0, w, h);
-        ctx.drawImage(bmp, r.x, r.y, r.dw, r.dh);
-        await put();
-      }
+      paint(bmp.width, bmp.height, (r) => bctx.drawImage(bmp, r.x, r.y, r.dw, r.dh));
+      while (frame < end) await put();
       bmp.close();
     } else {
       const input = inputOf(c.source);
@@ -233,11 +301,7 @@ export async function render(p: Project, onProgress: (share: number) => void): P
         };
         for await (const sample of sink.samplesAtTimestamps(stamps())) {
           if (sample) {
-            const r = cover(w, h, sample.displayWidth, sample.displayHeight);
-            ctx.filter = filter;
-            ctx.fillStyle = "#000";
-            ctx.fillRect(0, 0, w, h);
-            sample.draw(ctx, r.x, r.y, r.dw, r.dh);
+            paint(sample.displayWidth, sample.displayHeight, (r) => sample.draw(bctx, r.x, r.y, r.dw, r.dh));
             sample.close();
           }
           await put();
@@ -248,6 +312,7 @@ export async function render(p: Project, onProgress: (share: number) => void): P
         input.dispose();
       }
     }
+    pctx.drawImage(base, 0, 0);
     t0 += used(c);
   }
   video.close();

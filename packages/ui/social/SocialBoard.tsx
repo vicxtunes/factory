@@ -20,6 +20,7 @@ import type { ProductionStatus } from "@repo/lib/types";
 import { MediaPicker } from "./MediaPicker";
 import { MusicPicker } from "./MusicPicker";
 import { SoundMixer } from "./SoundMixer";
+import { Scissors } from "./editor/icons";
 import { VideoEditor } from "./editor/VideoEditor";
 import { PlatformMark } from "./PlatformMark";
 
@@ -307,7 +308,7 @@ function PostForm({ post: p, accounts, onDone }: { post: SocialPost | null; acco
           onClick={() => setEditing(true)}
           className="inline-flex min-h-9 items-center gap-2 rounded-full bg-gray-950 px-4 text-sm font-semibold text-white shadow-theme-xs dark:bg-white dark:text-gray-950"
         >
-          ✂ Edit video
+          <Scissors className="size-4" /> Edit video
         </button>
       ) : null}
       {editing ? (
