@@ -9,7 +9,7 @@ import { amingSongs } from "@repo/lib/social/actions";
 import type { PostMedia, Song as LibrarySong } from "@repo/lib/social/core";
 
 import { uploadMedia } from "../MediaPicker";
-import { ASPECTS, LOOKS, at, frameSize, lookCss, newId, srcUrl, totalLength, used, type Aspect, type Clip, type Corner, type Project, type TextItem, type TextStyle } from "./model";
+import { ASPECTS, LOOKS, at, frameSize, lookCss, newId, readableUrl, srcUrl, totalLength, used, type Aspect, type Clip, type Corner, type Project, type TextItem, type TextStyle } from "./model";
 
 type Tool = "clips" | "size" | "text" | "look" | "logo" | "sound";
 
@@ -679,7 +679,7 @@ function SoundTools({
   async function library(s: LibrarySong) {
     setLoading(s.id);
     try {
-      const blob = await (await fetch(s.audioUrl)).blob();
+      const blob = await (await fetch(readableUrl(s.audioUrl))).blob();
       onSong(new File([blob], `${s.title}.mp3`, { type: blob.type }), `${s.title} · ${s.artist}`, s.hookAt, s.id);
     } finally {
       setLoading(null);

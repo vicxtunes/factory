@@ -21,6 +21,8 @@ import {
   canEncodeVideo,
 } from "mediabunny";
 
+import { readableUrl } from "./editor/model";
+
 const RATE = 48_000;
 const W = 1080;
 const H = 1920;
@@ -85,7 +87,7 @@ function asFile(output: Output<Mp4OutputFormat, BufferTarget>, name: string) {
 /** The video at `url` with the song as its sound. */
 export async function songOnVideo(url: string, song: SoundChoice, onProgress: (p: number) => void): Promise<File> {
   await aacReady();
-  const input = new Input({ source: new UrlSource(url), formats: ALL_FORMATS });
+  const input = new Input({ source: new UrlSource(readableUrl(url)), formats: ALL_FORMATS });
   try {
     const seconds = await input.computeDuration();
     const own: { buffer: AudioBuffer; at: number }[] = [];
@@ -121,7 +123,7 @@ function load(url: string): Promise<HTMLImageElement> {
     img.crossOrigin = "anonymous";
     img.onload = () => ok(img);
     img.onerror = () => fail(new Error("A photo wouldn't load. Try again."));
-    img.src = url;
+    img.src = readableUrl(url);
   });
 }
 

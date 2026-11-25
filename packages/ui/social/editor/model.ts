@@ -132,4 +132,12 @@ export function srcUrl(s: Source): string {
   return u;
 }
 
+/**
+ * The same file at its own address, for reading in code (fetch, the video
+ * reader, a canvas). The app's offline cache (packages/ui/pwa/sw.ts) keeps
+ * the copy a thumbnail loaded, which code may not read ("fetch failed" when
+ * opening the editor, owner 2026-11-25), so code asks for its own copy.
+ */
+export const readableUrl = (u: string) => (u.startsWith("blob:") ? u : `${u}${u.includes("?") ? "&" : "?"}read=1`);
+
 export const newId = () => Math.random().toString(36).slice(2, 10);

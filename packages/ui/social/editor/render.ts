@@ -22,12 +22,12 @@ import {
   canEncodeVideo,
 } from "mediabunny";
 
-import { FPS, frameSize, lookCss, newId, totalLength, used, type Clip, type Project, type Source, type TextItem } from "./model";
+import { FPS, frameSize, lookCss, newId, readableUrl, totalLength, used, type Clip, type Project, type Source, type TextItem } from "./model";
 
 const RATE = 48_000;
 
-const inputOf = (s: Source) => new Input({ source: s.kind === "url" ? new UrlSource(s.url) : new BlobSource(s.file), formats: ALL_FORMATS });
-const blobOf = async (s: Source) => (s.kind === "file" ? s.file : await (await fetch(s.url)).blob());
+const inputOf = (s: Source) => new Input({ source: s.kind === "url" ? new UrlSource(readableUrl(s.url)) : new BlobSource(s.file), formats: ALL_FORMATS });
+const blobOf = async (s: Source) => (s.kind === "file" ? s.file : await (await fetch(readableUrl(s.url))).blob());
 
 async function aacReady() {
   if (await canEncodeAudio("aac")) return;

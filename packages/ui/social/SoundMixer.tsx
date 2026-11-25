@@ -7,6 +7,7 @@ import { ProgressBar } from "@repo/ui/ProgressBar";
 import { amingSongs } from "@repo/lib/social/actions";
 import type { PostMedia, Song } from "@repo/lib/social/core";
 
+import { readableUrl } from "./editor/model";
 import { uploadMedia } from "./MediaPicker";
 
 const time = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
@@ -100,7 +101,7 @@ export function SoundMixer({
   async function pickSong(s: Song) {
     setLoading(s.id);
     try {
-      const res = await fetch(s.audioUrl);
+      const res = await fetch(readableUrl(s.audioUrl));
       if (!res.ok) throw new Error();
       const blob = await res.blob();
       await take({ file: new File([blob], `${s.title}.mp3`, { type: blob.type }), name: `${s.title} · ${s.artist}`, songId: s.id }, s.hookAt);
