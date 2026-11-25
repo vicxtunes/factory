@@ -211,7 +211,7 @@ export function VideoEditor({ media, onDone, onClose }: { media: PostMedia[]; on
       songRef.current = new Audio(URL.createObjectURL(song.file));
       songRef.current.currentTime = song.start + tRef.current;
       songRef.current.volume = Math.min(1, song.volume);
-      void songRef.current.play();
+      void songRef.current.play().catch(() => undefined);
     }
     const tick = (now: number) => {
       const q = pRef.current;

@@ -136,7 +136,7 @@ function SongForm({ song, onDone }: { song: BossSong | null; onDone: () => void 
     player.current = new Audio(audio.url);
     player.current.currentTime = hookAt;
     player.current.onended = () => setPlaying(false);
-    void player.current.play();
+    void player.current.play().catch(() => undefined);
     setPlaying(true);
   }
 

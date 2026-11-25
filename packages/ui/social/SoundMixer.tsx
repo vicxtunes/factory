@@ -77,7 +77,7 @@ export function SoundMixer({
     if (playing === key) return setPlaying(null);
     audio.current = new Audio(src);
     audio.current.currentTime = from;
-    void audio.current.play();
+    void audio.current.play().catch(() => undefined);
     setPlaying(key);
     stop.current = window.setTimeout(() => {
       audio.current?.pause();

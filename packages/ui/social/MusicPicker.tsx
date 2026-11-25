@@ -52,7 +52,7 @@ export function MusicPicker({ accountId, value, onChange, photosOnly, onSong }: 
     if (playing === t.id || !t.preview) return setPlaying(null);
     audio.current = new Audio(t.preview);
     audio.current.onended = () => setPlaying(null);
-    void audio.current.play();
+    void audio.current.play().catch(() => undefined);
     setPlaying(t.id);
   }
 
