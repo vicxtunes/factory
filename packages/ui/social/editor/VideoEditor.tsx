@@ -347,13 +347,16 @@ export function VideoEditor({ media, onDone, onClose }: { media: PostMedia[]; on
           Cancel
         </button>
         <p className="flex-1 text-center text-sm font-semibold tnum">{p ? time(total) : "Edit video"}</p>
-        <Button type="button" variant="primary" className="min-h-9" disabled={!p || progress !== null || !!busy || total <= 0} onClick={() => void done()}>
+        <Button type="button" variant="primary" className="min-h-9" loading={!p && !error} disabled={!p || progress !== null || !!busy || total <= 0} onClick={() => void done()}>
           Done
         </Button>
       </header>
 
       {!p ? (
-        <div className="flex flex-1 items-center justify-center text-sm text-white/60">{error ?? "Opening…"}</div>
+        <div className="flex flex-1 flex-col items-center justify-center gap-3 text-sm text-white/60">
+          {error ? null : <span className="size-8 animate-spin rounded-full border-2 border-white/20 border-t-brand-500" />}
+          {error ?? "Opening your photos and videos…"}
+        </div>
       ) : (
         <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
           <div className="flex shrink-0 flex-col items-center gap-3 p-4 lg:min-h-0 lg:flex-1 lg:justify-center">
