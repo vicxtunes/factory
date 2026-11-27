@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Field, TextArea, TextInput } from "@repo/ui/Field";
 import { PhoneInput } from "@repo/ui/PhoneInput";
@@ -29,8 +29,8 @@ export function MessageUs({ slug, name, logoUrl, signedIn }: { slug: string; nam
     if (busy) return;
     setBusy(true);
     setError(null);
-    const params = new URLSearchParams(window.location.search);
-    const res = await startLeadAt(slug, { name: who, phone, message: text, via: params.get("via") === "ad" ? "ad" : "page", ad: params.get("ad") ?? undefined });
+    const ad = cameFromAd(slug);
+    const res = await startLeadAt(slug, { name: who, phone, message: text, via: ad ? "ad" : "page", ad: ad ?? undefined });
     if (!res.ok) {
       setError(res.error);
       setBusy(false);
@@ -38,6 +38,18 @@ export function MessageUs({ slug, name, logoUrl, signedIn }: { slug: string; nam
     }
     router.push(`/${res.data.slug}/messages?c=${res.data.chatId}`);
   }
+
+  // A visitor from an ad (?via=ad&ad=…) stays the ad's while they look around the page.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const ad = params.get("via") === "ad" ? params.get("ad") : null;
+    if (!ad) return;
+    try {
+      sessionStorage.setItem(`aming-ad:${slug}`, ad.slice(0, 120));
+    } catch {
+      /* no storage: the ad is read from the address only */
+    }
+  }, [slug]);
 
   // Not over the chat itself (Aming's Alexis still steps aside).
   if (path.endsWith("/messages")) return <style>{"[data-aming-alexis]{display:none!important}"}</style>;
@@ -112,4 +124,15 @@ export function MessageUs({ slug, name, logoUrl, signedIn }: { slug: string; nam
       ) : null}
     </>
   );
+}
+
+/** The ad this visitor came from on this business's page: the address now, or earlier in the visit. */
+function cameFromAd(slug: string): string | null {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("via") === "ad" && params.get("ad")) return params.get("ad")!.slice(0, 120);
+  try {
+    return sessionStorage.getItem(`aming-ad:${slug}`);
+  } catch {
+    return null;
+  }
 }

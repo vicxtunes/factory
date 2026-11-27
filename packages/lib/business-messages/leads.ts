@@ -23,7 +23,7 @@ import { studioScope } from "@repo/lib/studios/core";
 import { createAdminClient } from "@repo/lib/supabase/admin";
 import { formatAmount } from "@repo/lib/tenancy/format";
 
-import { leadStatus, type ChatDocument, type LeadRow, type LeadView } from "./core";
+import { leadStatus, type ChatDocument, type LeadRow, type LeadStatus, type LeadView } from "./core";
 import { BizChatError, messagesOn, send, upsertChat, type ChatRow, type Viewer } from "./server";
 
 const db = () => createAdminClient();
@@ -256,4 +256,12 @@ async function chatOf(v: Viewer & { side: "business" }, chatId: unknown): Promis
   const { data } = await db().from("business_chats").select("id, customer_id").eq("id", chatId).eq("tenant_id", v.studio.id).maybeSingle<{ id: string; customer_id: string }>();
   if (!data) throw new BizChatError("That chat isn't here.");
   return data;
+}
+
+/** How far these leads got (for ads' results: packages/lib/ads). */
+export async function leadProgress(tenantId: string, leadIds: string[]): Promise<Map<string, LeadStatus>> {
+  if (!leadIds.length) return new Map();
+  const rows = await inChunks<LeadDbRow>(leadIds, (part) => db().from("business_leads").select(LEAD_COLUMNS).eq("tenant_id", tenantId).in("id", part));
+  const views = await statuses(tenantId, rows);
+  return new Map([...views].map(([id, v]) => [id, v.status]));
 }

@@ -5,6 +5,8 @@ import { DomainRequests } from "@repo/ui/pro/DomainRequests";
 import { ProPageForm } from "@repo/ui/pro/ProPageForm";
 import { ProPriceForm } from "@repo/ui/pro/ProPriceForm";
 import { SocialSettingsForm } from "@repo/ui/social/SocialSettingsForm";
+import { AdsSetup } from "@repo/ui/ads/AdsSetup";
+import { adsSettings, adsSummary } from "@repo/lib/ads/server";
 import { SongLibrary } from "@repo/ui/social/SongLibrary";
 import { StudioStatusBadge } from "@repo/ui/studio-access/StatusBadge";
 import { StudiosAnalysis } from "@repo/ui/studios/StudiosAnalysis";
@@ -67,6 +69,14 @@ export default async function StudiosPage() {
           <SectionLabel>Social posts (Pro)</SectionLabel>
           <Loading skeleton={<Skeleton className="h-16 w-full" />}>
             <Social />
+          </Loading>
+        </section>
+      ) : null}
+      {session.isBoss ? (
+        <section>
+          <SectionLabel>Ads for businesses</SectionLabel>
+          <Loading skeleton={<Skeleton className="h-40 w-full" />}>
+            <Ads />
           </Loading>
         </section>
       ) : null}
@@ -142,6 +152,11 @@ async function Music() {
 async function Social() {
   const [settings, connected] = await Promise.all([socialSettings(), zernioReady() ? connectedCount().catch(() => null) : Promise.resolve(null)]);
   return <SocialSettingsForm settings={settings} connected={connected} />;
+}
+
+async function Ads() {
+  const [settings, summary] = await Promise.all([adsSettings(), adsSummary()]);
+  return <AdsSetup settings={settings} summary={summary} />;
 }
 
 async function SpacePrice() {

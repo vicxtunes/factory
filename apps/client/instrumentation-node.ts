@@ -15,6 +15,7 @@
 import { tellAgents } from "@repo/lib/agents/server";
 import { reviewClientOrders } from "@repo/lib/assistant/server/review";
 import { answerWaitingChats } from "@repo/lib/assistant/server/run";
+import { runAdsRound } from "@repo/lib/ads/server";
 import { runSalesRound } from "@repo/lib/business-messages/sales";
 import { runProRound } from "@repo/lib/pro/server";
 import { runSocialRound } from "@repo/lib/social/server";
@@ -70,6 +71,8 @@ if (process.env.NODE_ENV === "production" && process.env.NEXT_PUBLIC_TEST_COPY !
   every(5 * 60_000, "social posts", runSocialRound);
   // Alexis selling in leads' chats: payment prompts followed to the receipt, and any answer missed (packages/lib/business-messages/sales.ts).
   every(60_000, "leads: Alexis's payments and missed answers", runSalesRound);
+  // Businesses' ads: Meta's numbers, stopping ads that bring nobody, ending and settling their money (packages/lib/ads).
+  every(10 * 60_000, "ads", () => runAdsRound());
   every(WATCH_EVERY_MS, "money watch", watchMoney);
   every(DAILY_REPORT_EVERY_MS, "daily money report", sendDailyMoneyReport);
   every(DAILY_REPORT_EVERY_MS, "closing past days", closePastDays);

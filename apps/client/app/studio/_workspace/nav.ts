@@ -93,6 +93,8 @@ export const STUDIO_NAV: StudioNavSection[] = [
       { href: "/studio/social", label: "Posts", icon: "marketing", exact: true, need: "catalog" },
       { href: "/studio/social/inbox", label: "Inbox", icon: "chat", need: "catalog" },
       { href: "/studio/social/results", label: "Results", icon: "accounts", need: "catalog" },
+      // Ads from Aming's Page leading to the business's page (packages/lib/ads).
+      { href: "/studio/social/ads", label: "Ads", icon: "marketing", need: "catalog" },
       { href: "/studio/social/pages", label: "Pages", icon: "settings", need: "catalog" },
     ],
   },

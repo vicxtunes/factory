@@ -49,9 +49,10 @@ const db = () => createAdminClient();
 
 /**
  * While it's tried out, only these businesses have Messages (owner, 2026-11-27:
- * "we only testing this with Saniget Multimedia"). Empty: every Pro business.
+ * "we only testing this with Saniget Multimedia"; Dementa Studios added
+ * 2026-11-28 so the owner tests Leads and ads on their own business). Empty: every Pro business.
  */
-const TRYING = ["7363e5a4-c8f2-4f02-9c63-9edf89f1e726"];
+const TRYING = ["7363e5a4-c8f2-4f02-9c63-9edf89f1e726", "f96d806b-1bb8-4c27-9f10-8d99c8b80a2a"];
 
 /** Whether this business has Messages: Pro, and (while tried out) on the list above. */
 export async function messagesOn(tenantId: string): Promise<boolean> {

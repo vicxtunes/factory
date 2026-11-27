@@ -1,4 +1,5 @@
 import { messagesOn } from "@repo/lib/business-messages/server";
+import { adsOn } from "@repo/lib/ads/server";
 import { socialOn } from "@repo/lib/social/server";
 import { studioAccess } from "@repo/lib/studio-access/server";
 import { portal } from "@repo/lib/studio-portal/server";
@@ -17,12 +18,13 @@ export const dynamic = "force-dynamic";
 // A team member sees the menu for what they were given.
 export default async function StudioLayout({ children }: { children: React.ReactNode }) {
   const { session, studio, access } = await requireStudio("anyone");
-  const [slug, logoUrl, { owned, working }, messages, social] = await Promise.all([
+  const [slug, logoUrl, { owned, working }, messages, social, ads] = await Promise.all([
     portal.currentSlug(studio.id),
     studioAccess.logoUrl(studio.logoKey),
     studiosOf(session.client_id),
     messagesOn(studio.id),
     socialOn(studio.id),
+    adsOn(studio.id).catch(() => false),
   ]);
   // An account that owns a business and works for others (or works for several) chooses which one this device is in.
   const options = [...(owned ? [{ value: "own", label: `${owned.name} (yours)` }] : []), ...working.map((w) => ({ value: w.studio.id, label: w.studio.name }))];
@@ -35,7 +37,7 @@ export default async function StudioLayout({ children }: { children: React.React
         access={access}
         // Messages: only where it's on (packages/lib/business-messages, tried out with one business first).
         // Social Media too, tried out with two businesses first (packages/lib/social).
-        hide={[...(messages ? [] : ["/studio/messages", "/studio/leads"]), ...(social ? [] : ["/studio/social", "/studio/social/inbox", "/studio/social/results", "/studio/social/pages"])]}
+        hide={[...(messages ? [] : ["/studio/messages", "/studio/leads"]), ...(social ? [] : ["/studio/social", "/studio/social/inbox", "/studio/social/results", "/studio/social/pages"]), ...(ads ? [] : ["/studio/social/ads"])]}
         switcher={options.length > 1 ? <StudioSwitcher options={options} current={access.owner ? "own" : studio.id} /> : null}
       >
         {children}

@@ -10,7 +10,7 @@ const BASE = "https://zernio.com/api/v1";
 
 export const zernioReady = () => !!process.env.ZERNIO_API_KEY;
 
-async function call<T>(method: string, path: string, body?: unknown, headers: Record<string, string> = {}): Promise<T> {
+export async function call<T>(method: string, path: string, body?: unknown, headers: Record<string, string> = {}): Promise<T> {
   const key = process.env.ZERNIO_API_KEY;
   if (!key) throw new SocialError("Social posts aren't switched on yet. Ask Aming.");
   const res = await fetch(`${BASE}${path}`, {
