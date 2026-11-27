@@ -44,8 +44,20 @@ const db = () => createAdminClient();
 
 // ── Who's asking ──────────────────────────────────────────────────────────
 
+/**
+ * While it's tried out, only these businesses have Messages (owner, 2026-11-27:
+ * "we only testing this with Saniget Multimedia"). Empty: every Pro business.
+ */
+const TRYING = ["7363e5a4-c8f2-4f02-9c63-9edf89f1e726"];
+
+/** Whether this business has Messages: Pro, and (while tried out) on the list above. */
+export async function messagesOn(tenantId: string): Promise<boolean> {
+  if (TRYING.length && !TRYING.includes(tenantId)) return false;
+  return isPro(await proStatus(tenantId));
+}
+
 async function mustBePro(studio: Studio) {
-  if (!isPro(await proStatus(studio.id))) throw new BizChatError("Messages are part of Pro.");
+  if (!(await messagesOn(studio.id))) throw new BizChatError("Messages are part of Pro.");
 }
 
 /** The business's person: the owner, or a member with Clients. */

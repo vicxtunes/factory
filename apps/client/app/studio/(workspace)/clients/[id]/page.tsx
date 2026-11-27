@@ -30,8 +30,7 @@ import { UrlSheet } from "@repo/ui/UrlSheet";
 import { UrlTabs } from "@repo/ui/UrlTabs";
 
 import { MessageButton } from "@repo/ui/business-chat/MessageButton";
-import { isPro } from "@repo/lib/pro/core";
-import { proStatus } from "@repo/lib/pro/server";
+import { messagesOn } from "@repo/lib/business-messages/server";
 
 export const metadata = { title: "Client · My Business" };
 
@@ -42,7 +41,7 @@ type ClientTab = "overview" | "projects" | "bookings" | "quotations" | "invoices
 export default async function StudioClientPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string; edit?: string }> }) {
   const { scope, access, studio } = await requireStudio("clients");
   const canEdit = canUse(access, "clients", "manage");
-  const chat = isPro(await proStatus(studio.id));
+  const chat = await messagesOn(studio.id);
   // Looked up inside the caller's studio only: another studio's id is "not found".
   const id = customerIdSchema.safeParse((await params).id);
   const customer = id.success ? await customers.get(scope, id.data) : null;

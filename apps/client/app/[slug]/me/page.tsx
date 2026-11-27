@@ -26,8 +26,7 @@ import { studioAccess } from "@repo/lib/studio-access/server";
 import type { SignInRecord } from "@repo/lib/studio-portal/core";
 import { portalClient, studioAtSlug } from "@repo/lib/studio-portal/server";
 import { businessTermsAccepted } from "@repo/lib/wallet/studio";
-import { isPro } from "@repo/lib/pro/core";
-import { proStatus } from "@repo/lib/pro/server";
+import { messagesOn } from "@repo/lib/business-messages/server";
 
 import { StudioShell } from "../studio-shell";
 
@@ -88,7 +87,7 @@ async function Home({ at, me, slug }: { at: NonNullable<Awaited<ReturnType<typeo
   // Mobile money in the app, once the studio has agreed to the wallet's terms.
   const payOnline = await businessTermsAccepted(at.studio.id);
   // Pro businesses chat with their clients (packages/lib/business-messages).
-  const chat = isPro(await proStatus(at.studio.id));
+  const chat = await messagesOn(at.studio.id);
 
   return (
     <>

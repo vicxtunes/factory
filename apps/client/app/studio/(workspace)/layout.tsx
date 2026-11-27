@@ -1,3 +1,4 @@
+import { messagesOn } from "@repo/lib/business-messages/server";
 import { studioAccess } from "@repo/lib/studio-access/server";
 import { portal } from "@repo/lib/studio-portal/server";
 import { StudioSwitcher } from "@repo/ui/studios/StudioSwitcher";
@@ -15,10 +16,11 @@ export const dynamic = "force-dynamic";
 // A team member sees the menu for what they were given.
 export default async function StudioLayout({ children }: { children: React.ReactNode }) {
   const { session, studio, access } = await requireStudio("anyone");
-  const [slug, logoUrl, { owned, working }] = await Promise.all([
+  const [slug, logoUrl, { owned, working }, messages] = await Promise.all([
     portal.currentSlug(studio.id),
     studioAccess.logoUrl(studio.logoKey),
     studiosOf(session.client_id),
+    messagesOn(studio.id),
   ]);
   // An account that owns a business and works for others (or works for several) chooses which one this device is in.
   const options = [...(owned ? [{ value: "own", label: `${owned.name} (yours)` }] : []), ...working.map((w) => ({ value: w.studio.id, label: w.studio.name }))];
@@ -29,6 +31,8 @@ export default async function StudioLayout({ children }: { children: React.React
         brand={{ name: studio.name, logoUrl, publicHref: slug ? `/${slug}` : null }}
         user={{ name: session.name, avatarUrl: session.avatarUrl }}
         access={access}
+        // Messages: only where it's on (packages/lib/business-messages, tried out with one business first).
+        hide={messages ? [] : ["/studio/messages"]}
         switcher={options.length > 1 ? <StudioSwitcher options={options} current={access.owner ? "own" : studio.id} /> : null}
       >
         {children}

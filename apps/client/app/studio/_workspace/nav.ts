@@ -90,9 +90,9 @@ export const STUDIO_NAV: StudioNavSection[] = [
   },
 ];
 
-/** The menu as `access` sees it: the owner all of it, a team member what they were given (empty sections left out). */
-export function studioNavFor(access: StudioAccess): StudioNavSection[] {
-  return STUDIO_NAV.map((s) => ({ ...s, items: s.items.filter((i) => i.need === "anyone" || canUse(access, i.need)) })).filter((s) => s.items.length > 0);
+/** The menu as `access` sees it: the owner all of it, a team member what they were given (empty sections left out); `hide`: pages this business doesn't have. */
+export function studioNavFor(access: StudioAccess, hide: string[] = []): StudioNavSection[] {
+  return STUDIO_NAV.map((s) => ({ ...s, items: s.items.filter((i) => !hide.includes(i.href) && (i.need === "anyone" || canUse(access, i.need))) })).filter((s) => s.items.length > 0);
 }
 
 /** On the phone's bar (those the person can use); everything else is in "More". */

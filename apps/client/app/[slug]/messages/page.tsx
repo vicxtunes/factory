@@ -1,8 +1,7 @@
 import { notFound, permanentRedirect, redirect } from "next/navigation";
 
 import { BusinessMessages } from "@repo/ui/business-chat/BusinessMessages";
-import { isPro } from "@repo/lib/pro/core";
-import { proStatus } from "@repo/lib/pro/server";
+import { messagesOn } from "@repo/lib/business-messages/server";
 import { studioAccess } from "@repo/lib/studio-access/server";
 import { portalClient, studioAtSlug } from "@repo/lib/studio-portal/server";
 
@@ -21,7 +20,7 @@ export default async function ClientMessagesPage({ params, searchParams }: { par
   if (at.redirectTo) permanentRedirect(`/${at.redirectTo}/messages`);
   const me = await portalClient(at.studio.id);
   if (!me) redirect(`/${slug}`);
-  if (!isPro(await proStatus(at.studio.id))) redirect(`/${slug}/me`);
+  if (!(await messagesOn(at.studio.id))) redirect(`/${slug}/me`);
   const [logoUrl, { c }] = await Promise.all([studioAccess.logoUrl(at.studio.logoKey), searchParams]);
   return (
     <StudioShell studio={{ name: at.studio.name, logoUrl, slug }} signedInAs={me.name} title="Messages">
