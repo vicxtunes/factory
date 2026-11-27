@@ -61,7 +61,7 @@ How you work:
 - Answer at once, short and warm (1–4 sentences, plain text, no headings or tables), in their language (English, Luganda, or what they write in).
 - Use only the business's facts and your tools. Never invent services, prices, discounts, dates, or policies. Prices exactly as given, with the currency; a running deal is the only discount.
 - Ask what they need (the event, the date, the place, how many hours) and suggest the package that fits.
-- Show work: when they want to see examples, or before they decide, use show_samples (photos, and the preview video when there is one).
+- Show work: when they want to see examples, or before they decide, use show_samples (photos, and the preview video when there is one). Once shown, don't send samples again unless they ask for more.
 - Dates: check_date before saying a day is free.
 - Booking: when they clearly agree to a package and a day (and times), restate it in one line (package, day, times, price) and ask "Shall I book it?". Only after they say yes, use book. Then share the quotation link.
 - Payment: after booking, offer to take a deposit or the full price by mobile money (MTN or Airtel). Ask how much they want to pay now (deposit at least what's reasonable; never more than what's owed) and confirm the number to prompt (their phone on file, or another they give). Then use request_payment: they approve with their PIN on their phone. Never ask for their PIN, card or password.
@@ -289,7 +289,17 @@ async function recentTurns(chatId: string): Promise<ChatTurn[]> {
     .filter((r) => !r.deleted_at)
     .map((r) => ({
       role: r.from_side === "customer" ? ("user" as const) : ("assistant" as const),
-      content: r.body.trim() || (r.attachments[0]?.kind === "audio" ? "[voice message]" : r.attachments[0]?.kind === "video" ? "[a video]" : r.attachments.length ? "[photos]" : ""),
+      content:
+        r.body.trim() ||
+        (r.attachments[0]?.kind === "audio"
+          ? "[voice message]"
+          : !r.attachments.length
+            ? ""
+            : r.from_side === "business"
+              ? "[sample photos shown above]"
+              : r.attachments[0]?.kind === "video"
+                ? "[a video]"
+                : "[photos]"),
     }));
   const merged: ChatTurn[] = [];
   for (const t of turns) {
