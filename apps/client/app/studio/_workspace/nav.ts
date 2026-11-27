@@ -61,6 +61,8 @@ export const STUDIO_NAV: StudioNavSection[] = [
       { href: "/studio/books", label: "Books", icon: "accounts", need: "money" },
       { href: "/studio/employees", label: "Employees", icon: "agents", need: "money" },
       { href: "/studio/clients", label: "Clients", icon: "clients", need: "clients" },
+      // Pro: WhatsApp-style chats with clients (packages/lib/business-messages).
+      { href: "/studio/messages", label: "Messages", icon: "chat", need: "clients" },
       { href: "/studio/quotations", label: "Quotations", icon: "invoice", need: "money" },
       { href: "/studio/invoices", label: "Invoices", icon: "payment", need: "money" },
       { href: "/studio/documents", label: "Document settings", icon: "settings" },

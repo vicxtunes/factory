@@ -29,6 +29,10 @@ import type { TabItem } from "@repo/ui/Tabs";
 import { UrlSheet } from "@repo/ui/UrlSheet";
 import { UrlTabs } from "@repo/ui/UrlTabs";
 
+import { MessageButton } from "@repo/ui/business-chat/MessageButton";
+import { isPro } from "@repo/lib/pro/core";
+import { proStatus } from "@repo/lib/pro/server";
+
 export const metadata = { title: "Client · My Business" };
 
 type ClientTab = "overview" | "projects" | "bookings" | "quotations" | "invoices";
@@ -36,8 +40,9 @@ type ClientTab = "overview" | "projects" | "bookings" | "quotations" | "invoices
 // A client: their name and what they owe, Edit in the sheet (?edit), then
 // their parts as tabs, only the open one loaded.
 export default async function StudioClientPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string; edit?: string }> }) {
-  const { scope, access } = await requireStudio("clients");
+  const { scope, access, studio } = await requireStudio("clients");
   const canEdit = canUse(access, "clients", "manage");
+  const chat = isPro(await proStatus(studio.id));
   // Looked up inside the caller's studio only: another studio's id is "not found".
   const id = customerIdSchema.safeParse((await params).id);
   const customer = id.success ? await customers.get(scope, id.data) : null;
@@ -72,11 +77,14 @@ export default async function StudioClientPage({ params, searchParams }: { param
             <Owed scope={scope} billed={billed} />
           </Suspense>
         </div>
-        {canEdit ? (
-          <Link href={`/studio/clients/${customer.id}?edit`} scroll={false} className={buttonClass("secondary")}>
-            Edit
-          </Link>
-        ) : null}
+        <div className="flex flex-wrap items-start gap-2">
+          {chat && !customer.archivedAt ? <MessageButton customerId={customer.id} /> : null}
+          {canEdit ? (
+            <Link href={`/studio/clients/${customer.id}?edit`} scroll={false} className={buttonClass("secondary")}>
+              Edit
+            </Link>
+          ) : null}
+        </div>
       </div>
 
       <UrlTabs tabs={tabs} value={tab} label="Client" />

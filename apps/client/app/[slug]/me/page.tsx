@@ -26,6 +26,8 @@ import { studioAccess } from "@repo/lib/studio-access/server";
 import type { SignInRecord } from "@repo/lib/studio-portal/core";
 import { portalClient, studioAtSlug } from "@repo/lib/studio-portal/server";
 import { businessTermsAccepted } from "@repo/lib/wallet/studio";
+import { isPro } from "@repo/lib/pro/core";
+import { proStatus } from "@repo/lib/pro/server";
 
 import { StudioShell } from "../studio-shell";
 
@@ -85,9 +87,23 @@ async function Home({ at, me, slug }: { at: NonNullable<Awaited<ReturnType<typeo
 
   // Mobile money in the app, once the studio has agreed to the wallet's terms.
   const payOnline = await businessTermsAccepted(at.studio.id);
+  // Pro businesses chat with their clients (packages/lib/business-messages).
+  const chat = isPro(await proStatus(at.studio.id));
 
   return (
     <>
+      {chat ? (
+        <Link href={`/${slug}/messages`} className="flex items-center gap-3 rounded-2xl border border-border bg-surface px-4 py-3 shadow-theme-xs hover:bg-background">
+          <span aria-hidden className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-500 text-lg text-white">
+            💬
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block font-medium">Messages</span>
+            <span className="block text-xs text-muted">Chat with {at.studio.name}</span>
+          </span>
+          <span className="text-sm font-medium text-brand-600">Open</span>
+        </Link>
+      ) : null}
       {theirTasks.length ? (
         <section className="space-y-2">
           <h2 className="text-sm font-semibold">For you to do</h2>

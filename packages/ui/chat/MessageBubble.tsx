@@ -90,6 +90,7 @@ export function MessageBubble({
   onReply,
   onEdit,
   onDelete,
+  seen,
 }: {
   message: ChatMessage;
   mine: boolean;
@@ -97,8 +98,12 @@ export function MessageBubble({
   showSenderName: boolean;
   senderAvatarUrl: string | null;
   onReply: () => void;
-  onEdit: () => void;
-  onDelete: () => void;
+  /** Left out: no Edit (a thread that can't be edited, e.g. a social page's messages). */
+  onEdit?: () => void;
+  /** Left out: no Delete. */
+  onDelete?: () => void;
+  /** On the viewer's own messages: ✓ sent, ✓✓ read by the other side (business messages). Left out: no ticks. */
+  seen?: boolean;
 }) {
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const press = useRef<{ timer: number; x: number; y: number } | null>(null);
@@ -119,8 +124,8 @@ export function MessageBubble({
     : [
         { label: "Reply", onSelect: onReply },
         ...(message.body ? [{ label: "Copy text", onSelect: () => void navigator.clipboard?.writeText(message.body) }] : []),
-        ...(mine && message.kind === "text" ? [{ label: "Edit", onSelect: onEdit }] : []),
-        ...(mine ? [{ label: "Delete", onSelect: onDelete, danger: true, confirm: "Delete this message for everyone?" }] : []),
+        ...(mine && message.kind === "text" && onEdit ? [{ label: "Edit", onSelect: onEdit }] : []),
+        ...(mine && onDelete ? [{ label: "Delete", onSelect: onDelete, danger: true, confirm: "Delete this message for everyone?" }] : []),
       ];
 
   function openMenu(e: React.MouseEvent<HTMLDivElement>) {
@@ -231,6 +236,11 @@ export function MessageBubble({
         <div className={`mt-0.5 flex items-center gap-2 px-1 text-[11px] text-muted ${mine ? "flex-row-reverse" : ""}`}>
           <span className="tnum">{formatMessageTime(message.createdAt)}</span>
           {message.editedAt && !deleted ? <span>· edited</span> : null}
+          {mine && seen !== undefined && !deleted ? (
+            <span aria-label={seen ? "Read" : "Sent"} className={seen ? "font-semibold text-brand-500" : ""}>
+              {seen ? "✓✓" : "✓"}
+            </span>
+          ) : null}
         </div>
 
         {menu ? <MessageMenu x={menu.x} y={menu.y} items={items} onClose={closeMenu} /> : null}

@@ -30,6 +30,9 @@ import { photos } from "@repo/lib/photos/server";
 import { studioOrders } from "@repo/lib/studio-orders/server";
 import { portal, studioUrl } from "@repo/lib/studio-portal/server";
 import { requireStudio } from "@repo/lib/studios/server";
+import { MessageButton } from "@repo/ui/business-chat/MessageButton";
+import { isPro } from "@repo/lib/pro/core";
+import { proStatus } from "@repo/lib/pro/server";
 import { canUse } from "@repo/lib/team/core";
 import { tasks } from "@repo/lib/tasks/server";
 import { vendorJobs } from "@repo/lib/vendors/server";
@@ -67,6 +70,8 @@ export default async function StudioProjectPage({ params, searchParams }: { para
     ...(access.owner ? [{ key: "orders" as const, label: "Aming orders" }] : []),
     { key: "history", label: "History" },
   ];
+  // Pro: the client's chat about this project, for those who see clients.
+  const chat = canUse(access, "clients") && isPro(await proStatus(studio.id));
   // Coming to hire a vendor: their tab.
   const tab = hire ? "vendors" : (tabs.find((t) => t.key === asked)?.key ?? "overview");
 
@@ -76,11 +81,14 @@ export default async function StudioProjectPage({ params, searchParams }: { para
         <BackLink href="/studio/projects" className="text-xs font-medium text-brand-600 hover:underline">
           ← Projects
         </BackLink>
-        {canEdit ? (
-          <Link href={`/studio/projects/${p.id}?edit`} scroll={false} className={buttonClass("secondary")}>
-            Edit
-          </Link>
-        ) : null}
+        <div className="flex flex-wrap items-start gap-2">
+          {chat ? <MessageButton customerId={p.customerId} projectId={p.id} /> : null}
+          {canEdit ? (
+            <Link href={`/studio/projects/${p.id}?edit`} scroll={false} className={buttonClass("secondary")}>
+              Edit
+            </Link>
+          ) : null}
+        </div>
       </div>
       <div className="space-y-2">
         <h2 className="text-xl font-semibold">{p.title}</h2>
