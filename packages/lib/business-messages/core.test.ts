@@ -3,7 +3,7 @@ import { test } from "node:test";
 
 import type { ChatMessage } from "@repo/lib/chat/types";
 
-import { isMine, seenBy, senderRef } from "./core";
+import { isMine, leadStatus, seenBy, senderRef } from "./core";
 
 const msg = (side: "business" | "customer", clientId: string | null) => ({ sender: senderRef(side, clientId) }) as ChatMessage;
 
@@ -22,4 +22,11 @@ test("✓✓ once the other side has read up to the message", () => {
   assert.equal(seenBy(null, "2026-11-27T10:00:00Z"), false);
   assert.equal(seenBy("2026-11-27T09:59:59Z", "2026-11-27T10:00:00Z"), false);
   assert.equal(seenBy("2026-11-27T10:00:00Z", "2026-11-27T10:00:00Z"), true);
+});
+
+test("a lead's status follows from what happened, Lost winning", () => {
+  assert.equal(leadStatus({ lostAt: null, bookedSince: false, answered: false }), "new");
+  assert.equal(leadStatus({ lostAt: null, bookedSince: false, answered: true }), "talking");
+  assert.equal(leadStatus({ lostAt: null, bookedSince: true, answered: false }), "booked");
+  assert.equal(leadStatus({ lostAt: "2026-11-27T10:00:00Z", bookedSince: true, answered: true }), "lost");
 });

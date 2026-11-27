@@ -22,6 +22,48 @@ export interface BizChatSummary {
   /** The last message was the viewer's own (its ticks show). */
   lastMine: boolean;
   unread: number;
+  /** Business side: the chat came from someone who wrote from the page or an ad (./leads.ts). */
+  lead: LeadView | null;
+}
+
+/**
+ * A lead's place: New (nobody on the team has answered), Talking (someone has),
+ * Booked (a booking for them was confirmed since), Lost (the business said so).
+ */
+export type LeadStatus = "new" | "talking" | "booked" | "lost";
+export const LEAD_STATUSES: { value: LeadStatus; label: string }[] = [
+  { value: "new", label: "New" },
+  { value: "talking", label: "Talking" },
+  { value: "booked", label: "Booked" },
+  { value: "lost", label: "Lost" },
+];
+
+export interface LeadView {
+  id: string;
+  status: LeadStatus;
+  source: "page" | "ad";
+}
+
+/** A lead in My Business → Leads. */
+export interface LeadRow extends LeadView {
+  chatId: string;
+  customerId: string;
+  name: string;
+  phone: string | null;
+  isNew: boolean;
+  createdAt: string;
+  /** Their last message or the business's, and when. */
+  lastPreview: string | null;
+  lastMessageAt: string | null;
+  /** Unread messages from them. */
+  waiting: boolean;
+}
+
+/** The lead's status from what happened: Lost is set by hand; Booked, Talking and New follow from the bookings and the chat. */
+export function leadStatus(l: { lostAt: string | null; bookedSince: boolean; answered: boolean }): LeadStatus {
+  if (l.lostAt) return "lost";
+  if (l.bookedSince) return "booked";
+  return l.answered ? "talking" : "new";
 }
 
 /** An open chat: who it's with, its messages (oldest first), and where it listens. */
@@ -55,3 +97,13 @@ export const seenBy = (otherReadAt: string | null, createdAt: string) => !!other
 
 export const TYPING_EVENT = "typing";
 export const SIGNAL_EVENT = "bchat";
+
+/** A quotation or invoice the business can send into a chat (its link goes as a message). */
+export interface ChatDocument {
+  kind: "quotation" | "invoice";
+  id: string;
+  number: string;
+  /** Formatted: the quotation's total, or what's left to pay on the invoice. */
+  total: string;
+  status: string;
+}

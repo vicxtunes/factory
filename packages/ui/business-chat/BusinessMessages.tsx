@@ -14,6 +14,9 @@ import { bizChats, bizClients, bizDelete, bizEdit, bizOpen, bizRead, bizSaveDevi
 import { isMine, seenBy, SIGNAL_EVENT, TYPING_EVENT, type BizChatSummary, type BizThread } from "@repo/lib/business-messages/core";
 import { createClient } from "@repo/lib/supabase/browser";
 
+import { LeadPill } from "./Leads";
+import { SendDocument } from "./SendDocument";
+
 // Business messages (packages/lib/business-messages), WhatsApp-style, for both
 // sides: the business's workspace (`slug` null) and its client on the
 // business's page (`slug`). Chats on the left and the open chat on the right
@@ -145,7 +148,12 @@ export function BusinessMessages({ slug, startWith }: { slug: string | null; sta
                     <span className="min-w-0 flex-1 truncate font-medium">{slug === null ? c.title : subtitle(c)}</span>
                     <span className={`shrink-0 text-[11px] ${c.unread ? "font-semibold text-brand-600" : "text-muted"}`}>{ago(c.lastMessageAt)}</span>
                   </span>
-                  {slug === null ? <span className="block truncate text-xs text-brand-600">{subtitle(c)}</span> : null}
+                  {slug === null ? (
+                    <span className="flex items-center gap-1.5">
+                      <span className="min-w-0 truncate text-xs text-brand-600">{subtitle(c)}</span>
+                      {c.lead ? <LeadPill status={c.lead.status} /> : null}
+                    </span>
+                  ) : null}
                   <span className="flex items-center gap-2">
                     <span className="min-w-0 flex-1 truncate text-sm text-muted">
                       {c.lastMine && c.lastPreview ? "✓ " : ""}
@@ -352,8 +360,21 @@ function Thread({
         <Avatar url={chat?.avatarUrl ?? null} name={chat?.title ?? ""} sizeClassName="h-10 w-10 text-sm" />
         <span className="min-w-0 flex-1">
           <span className="block truncate font-semibold">{title}</span>
-          <span className="block truncate text-xs text-muted">{typing !== null ? "typing…" : sub}</span>
+          <span className="flex items-center gap-1.5 text-xs text-muted">
+            <span className="min-w-0 truncate">{typing !== null ? "typing…" : sub}</span>
+            {slug === null && chat?.lead ? <LeadPill status={chat.lead.status} /> : null}
+          </span>
         </span>
+        {slug === null && thread ? (
+          <SendDocument
+            chatId={chatId}
+            onSent={() => {
+              atBottom.current = true;
+              void load();
+              onChanged();
+            }}
+          />
+        ) : null}
       </header>
 
       <div

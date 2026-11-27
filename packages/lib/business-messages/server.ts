@@ -30,7 +30,8 @@ import { studioOfCaller } from "@repo/lib/studios/server";
 import { createAdminClient } from "@repo/lib/supabase/admin";
 import { team } from "@repo/lib/team/server";
 
-import { SIGNAL_EVENT, senderRef, type BizChatSummary, type BizThread, type Side } from "./core";
+import { SIGNAL_EVENT, senderRef, type BizChatSummary, type BizThread, type LeadView, type Side } from "./core";
+import { leadsOfChats } from "./leads";
 
 /** A refusal whose words can be shown. */
 export class BizChatError extends Error {}
@@ -80,7 +81,7 @@ export async function customerViewer(slug: unknown): Promise<Viewer & { side: "c
 
 // ── Rows ──────────────────────────────────────────────────────────────────
 
-type ChatRow = {
+export type ChatRow = {
   id: string;
   tenant_id: string;
   customer_id: string;
@@ -104,10 +105,11 @@ type MessageRow = {
   created_at: string;
   edited_at: string | null;
   deleted_at: string | null;
+  by_assistant: boolean;
 };
 
 const CHAT_COLUMNS = "id, tenant_id, customer_id, project_id, last_message_at, last_preview, last_from, business_read_at, customer_read_at";
-const MESSAGE_COLUMNS = "id, chat_id, from_side, sender_name, sender_client_id, body, reply_to_id, attachments, created_at, edited_at, deleted_at";
+const MESSAGE_COLUMNS = "id, chat_id, from_side, sender_name, sender_client_id, body, reply_to_id, attachments, created_at, edited_at, deleted_at, by_assistant";
 const other = (side: Side): Side => (side === "business" ? "customer" : "business");
 const readAt = (c: ChatRow, side: Side) => (side === "business" ? c.business_read_at : c.customer_read_at);
 
@@ -126,11 +128,12 @@ async function summaries(v: Viewer, rows: ChatRow[]): Promise<BizChatSummary[]> 
   if (!rows.length) return [];
   const customerIds = [...new Set(rows.map((r) => r.customer_id))];
   const projectIds = [...new Set(rows.flatMap((r) => (r.project_id ? [r.project_id] : [])))];
-  const [{ data: people }, { data: projs }, logo, unread] = await Promise.all([
+  const [{ data: people }, { data: projs }, logo, unread, leads] = await Promise.all([
     db().from("customers").select("id, name").in("id", customerIds).returns<{ id: string; name: string }[]>(),
     projectIds.length ? db().from("projects").select("id, title").in("id", projectIds).returns<{ id: string; title: string }[]>() : Promise.resolve({ data: [] as { id: string; title: string }[] }),
     v.side === "customer" ? studioAccess.logoUrl(v.studio.logoKey) : Promise.resolve(null),
     unreadCounts(v.side, rows),
+    v.side === "business" ? leadsOfChats(v.studio.id, rows.map((r) => r.id)) : Promise.resolve(new Map<string, LeadView>()),
   ]);
   const nameOf = new Map((people ?? []).map((p) => [p.id, p.name]));
   const titleOf = new Map((projs ?? []).map((p) => [p.id, p.title]));
@@ -145,6 +148,7 @@ async function summaries(v: Viewer, rows: ChatRow[]): Promise<BizChatSummary[]> 
     lastPreview: r.last_preview,
     lastMine: r.last_from === v.side,
     unread: unread.get(r.id) ?? 0,
+    lead: leads.get(r.id) ?? null,
   }));
 }
 
@@ -182,7 +186,7 @@ async function ensureCustomerChats(v: Viewer & { side: "customer" }) {
 }
 
 /** The chat for a client (and project), made the first time. */
-async function upsertChat(tenantId: string, customerId: string, projectId: string | null): Promise<string> {
+export async function upsertChat(tenantId: string, customerId: string, projectId: string | null): Promise<string> {
   const find = () => {
     const q = db().from("business_chats").select("id").eq("tenant_id", tenantId).eq("customer_id", customerId);
     return (projectId ? q.eq("project_id", projectId) : q.is("project_id", null)).maybeSingle<{ id: string }>();
@@ -253,8 +257,8 @@ async function present(v: Viewer, rows: MessageRow[]): Promise<ChatMessage[]> {
     const { data } = await db().storage.from(BUCKET).createSignedUrls(paths, CHAT_LIMITS.attachmentUrlTtl);
     for (const s of data ?? []) if (s.path && s.signedUrl) urls.set(s.path, s.signedUrl);
   }
-  // The business's clients see the business's name on its messages; its team sees who wrote.
-  const nameFor = (r: MessageRow) => (v.side === "customer" && r.from_side === "business" ? v.studio.name : r.sender_name);
+  // The business's clients see the business's name on its messages (its assistant's marked so); its team sees who wrote.
+  const nameFor = (r: MessageRow) => (v.side === "customer" && r.from_side === "business" ? (r.by_assistant ? `${v.studio.name} · assistant` : v.studio.name) : r.sender_name);
   return rows.map((r) => {
     const reply = r.reply_to_id ? replyOf.get(r.reply_to_id) : null;
     const attachments: ChatAttachment[] = r.deleted_at
@@ -402,7 +406,7 @@ export function inboxChannel(v: Viewer): string {
   return v.side === "business" ? channel(`business:${v.studio.id}`) : channel(`customer:${v.customerId}`);
 }
 
-async function ring(chat: ChatRow): Promise<void> {
+export async function ring(chat: ChatRow): Promise<void> {
   try {
     const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
     const topics = [channel(`business:${chat.tenant_id}`), channel(`customer:${chat.customer_id}`)];
@@ -420,7 +424,7 @@ async function ring(chat: ChatRow): Promise<void> {
 // ── Notifications ─────────────────────────────────────────────────────────
 
 /** Tells the other side: the business's people (owner and members with Clients), or the client's phones. */
-async function tell(v: Viewer, chat: ChatRow, text: string): Promise<void> {
+export async function tell(v: Viewer, chat: ChatRow, text: string): Promise<void> {
   try {
     if (v.side === "customer") {
       const { data: proj } = chat.project_id ? await db().from("projects").select("title").eq("id", chat.project_id).maybeSingle<{ title: string }>() : { data: null };

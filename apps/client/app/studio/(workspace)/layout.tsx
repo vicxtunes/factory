@@ -32,7 +32,7 @@ export default async function StudioLayout({ children }: { children: React.React
         user={{ name: session.name, avatarUrl: session.avatarUrl }}
         access={access}
         // Messages: only where it's on (packages/lib/business-messages, tried out with one business first).
-        hide={messages ? [] : ["/studio/messages"]}
+        hide={messages ? [] : ["/studio/messages", "/studio/leads"]}
         switcher={options.length > 1 ? <StudioSwitcher options={options} current={access.owner ? "own" : studio.id} /> : null}
       >
         {children}

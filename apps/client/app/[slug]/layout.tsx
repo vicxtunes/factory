@@ -1,12 +1,15 @@
 import type { Metadata, Viewport } from "next";
 
 import { StudioAnnouncementPopup } from "@repo/ui/announcements/StudioAnnouncementPopup";
+import { MessageUs } from "@repo/ui/business-chat/MessageUs";
 import { BusinessChat } from "@repo/ui/studio-portal/BusinessChat";
 import { businessChatOn } from "@repo/lib/business-chat/server";
+import { messagesOn } from "@repo/lib/business-messages/server";
 import { isPro } from "@repo/lib/pro/core";
 import { proStatus } from "@repo/lib/pro/server";
 import { DEFAULT_BRAND_COLOR } from "@repo/lib/studios/core";
-import { studioAtSlug } from "@repo/lib/studio-portal/server";
+import { studioAccess } from "@repo/lib/studio-access/server";
+import { portalClient, studioAtSlug } from "@repo/lib/studio-portal/server";
 
 import { BrandStyle } from "../brand-style";
 
@@ -52,14 +55,16 @@ export async function generateViewport({ params }: Props): Promise<Viewport> {
 export default async function StudioLayout({ children, params }: Props & { children: React.ReactNode }) {
   const at = await studioOf(params);
   if (!at) return children;
-  // Pro's chat that answers as the business (packages/lib/business-chat).
-  const [chat, pro] = await Promise.all([businessChatOn(at.studio.id).catch(() => false), proStatus(at.studio.id).then((s) => isPro(s), () => false)]);
+  // A business that takes messages (packages/lib/business-messages) gets "Message us", its visitors' chats kept as leads;
+  // other Pro businesses keep the chat that answers as the business (packages/lib/business-chat).
+  const [messages, chat, pro] = await Promise.all([messagesOn(at.studio.id).catch(() => false), businessChatOn(at.studio.id).catch(() => false), proStatus(at.studio.id).then((s) => isPro(s), () => false)]);
+  const [signedIn, logoUrl] = messages ? await Promise.all([portalClient(at.studio.id).then(Boolean, () => false), studioAccess.logoUrl(at.studio.logoKey).catch(() => null)]) : [false, null];
   return (
     <>
       <BrandStyle color={at.studio.brandColor} />
       {children}
       <StudioAnnouncementPopup slug={at.slug} shareable={pro} />
-      {chat ? <BusinessChat slug={at.slug} name={at.studio.name} /> : null}
+      {messages ? <MessageUs slug={at.slug} name={at.studio.name} logoUrl={logoUrl} signedIn={signedIn} /> : chat ? <BusinessChat slug={at.slug} name={at.studio.name} /> : null}
     </>
   );
 }

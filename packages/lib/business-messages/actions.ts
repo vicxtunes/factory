@@ -6,13 +6,16 @@
 
 import type { ChatMessage } from "@repo/lib/chat/types";
 
-import type { BizChatSummary, BizThread } from "./core";
+import { setPortalCookie } from "@repo/lib/studio-portal/server";
+
+import type { BizChatSummary, BizThread, ChatDocument, LeadRow } from "./core";
+import * as leads from "./leads";
 import * as chats from "./server";
 import { BizChatError, businessViewer, customerViewer, type Viewer } from "./server";
 
 export type Res<T = undefined> = { ok: true; data: T } | { ok: false; error: string };
 
-async function run<T>(who: () => Promise<Viewer>, fn: (v: Viewer) => Promise<T>): Promise<Res<T>> {
+async function run<T, V extends Viewer = Viewer>(who: () => Promise<V>, fn: (v: V) => Promise<T>): Promise<Res<T>> {
   try {
     return { ok: true, data: await fn(await who()) };
   } catch (err) {
@@ -23,7 +26,7 @@ async function run<T>(who: () => Promise<Viewer>, fn: (v: Viewer) => Promise<T>)
 }
 
 /** Who's asking: the business (no address) or its client (the business's address). */
-const viewer = (slug: string | null) => () => (slug === null ? businessViewer() : customerViewer(slug));
+const viewer = (slug: string | null) => (): Promise<Viewer> => (slug === null ? businessViewer() : customerViewer(slug));
 
 export async function bizChats(slug: string | null): Promise<Res<{ chats: BizChatSummary[]; channel: string }>> {
   return run(viewer(slug), async (v) => ({ chats: await chats.listChats(v), channel: chats.inboxChannel(v) }));
@@ -70,4 +73,45 @@ export async function bizSaveDevice(slug: string, sub: { endpoint: string; keys:
     await chats.saveDevice(v, sub);
     return undefined;
   });
+}
+
+// ── Leads (./leads.ts) ────────────────────────────────────────────────────
+
+/** "Message us" on the business's page: signs this phone in, sends the message, starts a lead. Returns where the chat is. */
+export async function startLeadAt(slug: string, input: unknown): Promise<Res<{ chatId: string; slug: string }>> {
+  try {
+    if (typeof slug !== "string") throw new BizChatError("This business isn't here any more.");
+    const { session, chatId, slug: at } = await leads.startLead(slug, input);
+    if (session) await setPortalCookie(session);
+    return { ok: true, data: { chatId, slug: at } };
+  } catch (err) {
+    if (err instanceof BizChatError) return { ok: false, error: err.message };
+    console.error("leads: starting one failed:", err);
+    return { ok: false, error: "Something went wrong. Try again." };
+  }
+}
+
+const business = businessViewer;
+
+export async function bizLeads(): Promise<Res<{ leads: LeadRow[]; assistant: boolean }>> {
+  return run(business, async (v) => {
+    const [rows, assistant] = await Promise.all([leads.listLeads(v), leads.leadAssistantOn(v.studio.id)]);
+    return { leads: rows, assistant };
+  });
+}
+
+export async function bizSetLeadLost(leadId: string, lost: boolean): Promise<Res> {
+  return run(business, async (v) => void (await leads.setLeadLost(v, leadId, lost === true)));
+}
+
+export async function bizSetLeadAssistant(on: boolean): Promise<Res> {
+  return run(business, async (v) => void (await leads.setLeadAssistant(v, on === true)));
+}
+
+export async function bizDocuments(chatId: string): Promise<Res<{ customerId: string; documents: ChatDocument[] }>> {
+  return run(business, (v) => leads.documentsFor(v, chatId));
+}
+
+export async function bizSendDocument(chatId: string, kind: "quotation" | "invoice", id: string): Promise<Res<ChatMessage>> {
+  return run(business, (v) => leads.sendDocument(v, chatId, kind, id));
 }

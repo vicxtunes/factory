@@ -15,6 +15,7 @@
 import { tellAgents } from "@repo/lib/agents/server";
 import { reviewClientOrders } from "@repo/lib/assistant/server/review";
 import { answerWaitingChats } from "@repo/lib/assistant/server/run";
+import { runLeadAssistant } from "@repo/lib/business-messages/leads";
 import { runProRound } from "@repo/lib/pro/server";
 import { runSocialRound } from "@repo/lib/social/server";
 import { applyStudioPayment } from "@repo/lib/studio-payments/server";
@@ -67,6 +68,8 @@ if (process.env.NODE_ENV === "production" && process.env.NEXT_PUBLIC_TEST_COPY !
   every(EVERY_MS, "pro: reminders and renewals", () => runProRound());
   // Social posts (packages/lib/social): how posts went, pausing them when Pro ends.
   every(5 * 60_000, "social posts", runSocialRound);
+  // Leads nobody on the team answered for a few minutes get the business's assistant (packages/lib/business-messages/leads.ts).
+  every(60_000, "leads: assistant while the team is away", () => runLeadAssistant());
   every(WATCH_EVERY_MS, "money watch", watchMoney);
   every(DAILY_REPORT_EVERY_MS, "daily money report", sendDailyMoneyReport);
   every(DAILY_REPORT_EVERY_MS, "closing past days", closePastDays);
