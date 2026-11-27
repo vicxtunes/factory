@@ -5,6 +5,7 @@ import { useState, useTransition } from "react";
 import { Button } from "@repo/ui/Button";
 import { Field, Select, TextInput } from "@repo/ui/Field";
 import { Linkify } from "@repo/ui/Linkify";
+import { OrderItemDrive } from "@repo/ui/files/OrderItemDrive";
 import { AddMediaButton } from "@repo/ui/media/AddMediaButton";
 import { MediaLinks } from "@repo/ui/media/MediaLinks";
 import { ItemAttributes } from "@repo/ui/order/ItemAttributes";
@@ -337,6 +338,7 @@ export function OrderDetail({
               <div className="space-y-2">
                 <p className="text-xs uppercase tracking-wide text-muted">Photos</p>
                 <MediaLinks media={item.media} legacyLink={photoLink} editable trackDownloads onChanged={onChanged} />
+                <OrderItemDrive itemId={item.id} folderPath={`/graphics/items/${item.id}/drive`} />
                 <AddMediaButton orderItemId={item.id} onUploaded={onChanged} />
               </div>
 
