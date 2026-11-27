@@ -39,8 +39,8 @@ export function MessageUs({ slug, name, logoUrl, signedIn }: { slug: string; nam
     router.push(`/${res.data.slug}/messages?c=${res.data.chatId}`);
   }
 
-  // Not over the chat itself.
-  if (path.endsWith("/messages")) return null;
+  // Not over the chat itself (Aming's Alexis still steps aside).
+  if (path.endsWith("/messages")) return <style>{"[data-aming-alexis]{display:none!important}"}</style>;
 
   const button = (
     <>
