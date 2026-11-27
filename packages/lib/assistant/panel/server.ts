@@ -976,6 +976,21 @@ export async function savePanelSettings(s: { panelMode: AssistantMode; multiplie
   );
 }
 
+/** Businesses' AI credits (packages/lib/business-messages/credits.ts): what each Pro business gets a month, and shillings to the dollar. */
+export async function creditSettings(): Promise<{ monthlyCredits: number; ugxPerUsd: number }> {
+  const row = must(await createAdminClient().from("assistant_settings").select("studio_monthly_credits, ugx_per_usd").single());
+  return { monthlyCredits: Number(row.studio_monthly_credits), ugxPerUsd: Number(row.ugx_per_usd) };
+}
+
+export async function saveCreditSettings(s: { monthlyCredits: number; ugxPerUsd: number }): Promise<void> {
+  must(
+    await createAdminClient()
+      .from("assistant_settings")
+      .update({ studio_monthly_credits: s.monthlyCredits, ugx_per_usd: s.ugxPerUsd, updated_at: new Date().toISOString() })
+      .eq("id", true),
+  );
+}
+
 export interface ChangeRecord {
   id: string;
   who: string;

@@ -24,17 +24,22 @@ export interface BizChatSummary {
   unread: number;
   /** Business side: the chat came from someone who wrote from the page or an ad (./leads.ts). */
   lead: LeadView | null;
+  /** Business side: Alexis stepped back in this chat (someone from the team wrote, or took over). */
+  assistantPaused: boolean;
 }
 
 /**
- * A lead's place: New (nobody on the team has answered), Talking (someone has),
- * Booked (a booking for them was confirmed since), Lost (the business said so).
+ * A lead's place, furthest first: Paid (money came in since), Booked (a
+ * booking since), Quoted (a quotation since), Talking (the business answered:
+ * the team or Alexis), New; Lost is the business's own word.
  */
-export type LeadStatus = "new" | "talking" | "booked" | "lost";
+export type LeadStatus = "new" | "talking" | "quoted" | "booked" | "paid" | "lost";
 export const LEAD_STATUSES: { value: LeadStatus; label: string }[] = [
   { value: "new", label: "New" },
   { value: "talking", label: "Talking" },
+  { value: "quoted", label: "Quoted" },
   { value: "booked", label: "Booked" },
+  { value: "paid", label: "Paid" },
   { value: "lost", label: "Lost" },
 ];
 
@@ -57,12 +62,18 @@ export interface LeadRow extends LeadView {
   lastMessageAt: string | null;
   /** Unread messages from them. */
   waiting: boolean;
+  /** Paid in since the lead started (whole units of the business's currency). */
+  collected: number;
+  /** Alexis made the booking. */
+  closedByAssistant: boolean;
 }
 
-/** The lead's status from what happened: Lost is set by hand; Booked, Talking and New follow from the bookings and the chat. */
-export function leadStatus(l: { lostAt: string | null; bookedSince: boolean; answered: boolean }): LeadStatus {
+/** The lead's status from what happened: Lost is set by hand; the rest follow from payments, bookings, quotations and the chat. */
+export function leadStatus(l: { lostAt: string | null; paidSince: boolean; bookedSince: boolean; quotedSince: boolean; answered: boolean }): LeadStatus {
   if (l.lostAt) return "lost";
+  if (l.paidSince) return "paid";
   if (l.bookedSince) return "booked";
+  if (l.quotedSince) return "quoted";
   return l.answered ? "talking" : "new";
 }
 

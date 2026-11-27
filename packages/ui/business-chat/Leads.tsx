@@ -4,19 +4,23 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
 import { formatListTime } from "@repo/ui/chat/format";
+import { FormSheet } from "@repo/ui/FormSheet";
 import { Avatar } from "@repo/ui/profile/Avatar";
 import { Tabs } from "@repo/ui/Tabs";
-import { bizLeads, bizSetLeadAssistant, bizSetLeadLost } from "@repo/lib/business-messages/actions";
+import { bizBuyCredits, bizCredits, bizLeads, bizSetLeadAssistant, bizSetLeadLost } from "@repo/lib/business-messages/actions";
 import { LEAD_STATUSES, type LeadRow, type LeadStatus } from "@repo/lib/business-messages/core";
 
 // My Business → Leads (packages/lib/business-messages/leads.ts): who wrote
-// from the page or an ad, where each one stands, and how many became bookings.
+// from the page or an ad, how far each got (New → Talking → Quoted → Booked →
+// Paid), the money they brought, who closed them, and Alexis's credits.
 // A lead opens its chat in Messages.
 
 export const STATUS_TONE: Record<LeadStatus, { dot: string; pill: string; bar: string }> = {
   new: { dot: "bg-brand-500", pill: "bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-300", bar: "bg-brand-500" },
-  talking: { dot: "bg-warning-500", pill: "bg-warning-50 text-warning-700 dark:bg-warning-500/15 dark:text-warning-300", bar: "bg-warning-500" },
-  booked: { dot: "bg-success-500", pill: "bg-success-50 text-success-700 dark:bg-success-500/15 dark:text-success-300", bar: "bg-success-500" },
+  talking: { dot: "bg-warning-500", pill: "bg-warning-50 text-warning-700 dark:bg-warning-500/15 dark:text-warning-500", bar: "bg-warning-500" },
+  quoted: { dot: "bg-sky-500", pill: "bg-sky-50 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300", bar: "bg-sky-500" },
+  booked: { dot: "bg-success-500", pill: "bg-success-50 text-success-700 dark:bg-success-500/15 dark:text-success-500", bar: "bg-success-500" },
+  paid: { dot: "bg-success-600", pill: "bg-success-600 text-white", bar: "bg-success-600" },
   lost: { dot: "bg-gray-400", pill: "bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-300", bar: "bg-gray-300 dark:bg-white/20" },
 };
 const label = (s: LeadStatus) => LEAD_STATUSES.find((x) => x.value === s)!.label;
@@ -26,20 +30,28 @@ export function LeadPill({ status }: { status: LeadStatus }) {
 }
 
 type Tab = "all" | LeadStatus;
+type Credits = { balance: number; usedThisMonth: number; packs: readonly number[]; canBuy: boolean };
 
 export function Leads() {
   const [leads, setLeads] = useState<LeadRow[] | null>(null);
+  const [currency, setCurrency] = useState("UGX");
   const [assistant, setAssistant] = useState(true);
+  const [credits, setCredits] = useState<Credits | null>(null);
+  const [buying, setBuying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("all");
 
   const load = useCallback(
     () =>
-      bizLeads().then((res) => {
-        if (!res.ok) return setError(res.error);
-        setLeads(res.data.leads);
-        setAssistant(res.data.assistant);
-      }),
+      Promise.all([
+        bizLeads().then((res) => {
+          if (!res.ok) return setError(res.error);
+          setLeads(res.data.leads);
+          setAssistant(res.data.assistant);
+          setCurrency(res.data.currency);
+        }),
+        bizCredits().then((res) => (res.ok ? setCredits(res.data) : null)),
+      ]),
     [],
   );
   useEffect(() => {
@@ -48,15 +60,20 @@ export function Leads() {
 
   if (error) return <p className="py-10 text-center text-sm text-error-600">{error}</p>;
 
+  const money = (n: number) => `${currency} ${Math.round(n).toLocaleString("en-UG")}`;
+  const ugx = (n: number) => `UGX ${Math.round(n).toLocaleString("en-UG")}`;
   const all = leads ?? [];
   const monthStart = new Date();
   monthStart.setDate(1);
   monthStart.setHours(0, 0, 0, 0);
   const month = all.filter((l) => new Date(l.createdAt) >= monthStart);
-  const booked = month.filter((l) => l.status === "booked").length;
+  const paid = month.filter((l) => l.status === "paid").length;
+  const collected = month.reduce((sum, l) => sum + l.collected, 0);
+  const byAlexis = month.filter((l) => l.closedByAssistant).length;
   const waiting = all.filter((l) => l.waiting && l.status !== "lost").length;
   const count = (s: LeadStatus) => all.filter((l) => l.status === s).length;
   const shown = tab === "all" ? all : all.filter((l) => l.status === tab);
+  const low = credits !== null && credits.balance <= 2000;
 
   async function toggleAssistant() {
     const next = !assistant;
@@ -76,36 +93,53 @@ export function Leads() {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold">Leads</h1>
-          <p className="text-sm text-muted">People who messaged you from your page</p>
-        </div>
+      <div>
+        <h1 className="text-2xl font-bold">Leads</h1>
+        <p className="text-sm text-muted">People who messaged you from your page or ads</p>
+      </div>
+
+      {/* Alexis: the switch, and her credits. */}
+      <div className="grid gap-3 md:grid-cols-2">
         <button
           type="button"
           role="switch"
           aria-checked={assistant}
           onClick={toggleAssistant}
-          className="flex items-center gap-3 rounded-2xl border border-border bg-surface px-3 py-2 text-left shadow-theme-xs hover:border-brand-300"
+          className="flex items-center gap-3 rounded-2xl border border-border bg-surface p-4 text-left shadow-theme-xs hover:border-brand-300"
         >
-          <span className="text-xl" aria-hidden>
+          <span className="text-3xl" aria-hidden>
             🤖
           </span>
-          <span className="min-w-0">
-            <span className="block text-sm font-semibold">Alexis covers for you</span>
-            <span className="block text-xs text-muted">Answers when nobody replies in 5 min</span>
+          <span className="min-w-0 flex-1">
+            <span className="block font-semibold">Alexis sells for you</span>
+            <span className="block text-xs text-muted">Answers at once, shows samples, books and collects by mobile money</span>
           </span>
           <span className={`relative h-6 w-11 shrink-0 rounded-full transition ${assistant ? "bg-brand-500" : "bg-gray-300 dark:bg-white/20"}`}>
             <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${assistant ? "left-[1.375rem]" : "left-0.5"}`} />
           </span>
         </button>
+        <div className={`flex items-center gap-3 rounded-2xl border bg-surface p-4 shadow-theme-xs ${low ? "border-warning-300" : "border-border"}`}>
+          <span className="text-3xl" aria-hidden>
+            ⚡
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-xs text-muted">Alexis credits</span>
+            <span className={`block text-xl font-extrabold tnum ${low ? "text-warning-600" : ""}`}>{credits ? ugx(credits.balance) : "–"}</span>
+            <span className="block text-xs text-muted">{credits ? `${ugx(credits.usedThisMonth)} used this month` : ""}</span>
+          </span>
+          {credits?.canBuy ? (
+            <button type="button" onClick={() => setBuying(true)} className="inline-flex min-h-10 shrink-0 items-center rounded-xl bg-brand-500 px-4 text-sm font-semibold text-white hover:bg-brand-600">
+              Add credits
+            </button>
+          ) : null}
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat value={leads ? month.length : "–"} label="Leads this month" />
-        <Stat value={leads ? booked : "–"} label={month.length ? `Booked · ${Math.round((booked / month.length) * 100)}%` : "Booked"} tone="text-success-600 dark:text-success-400" />
+        <Stat value={leads ? paid : "–"} label={month.length ? `Paid · ${Math.round((paid / month.length) * 100)}% converted` : "Paid"} tone="text-success-600 dark:text-success-500" />
+        <Stat value={leads ? money(collected) : "–"} label={`Collected · Alexis closed ${byAlexis}`} small />
         <Stat value={leads ? waiting : "–"} label="Waiting for you" tone={waiting ? "text-brand-600 dark:text-brand-400" : undefined} />
-        <Stat value={leads ? month.filter((l) => l.source === "ad").length : "–"} label="From ads this month" />
       </div>
 
       {all.length ? (
@@ -162,14 +196,15 @@ export function Leads() {
                   <span className="mt-0.5 flex flex-wrap items-center gap-1.5">
                     <LeadPill status={l.status} />
                     <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-muted dark:bg-white/10">{l.source === "ad" ? "📣 Ad" : "🌐 Page"}</span>
-                    {l.isNew ? <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-muted dark:bg-white/10">New client</span> : null}
+                    {l.closedByAssistant ? <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-muted dark:bg-white/10">🤖 Alexis</span> : null}
+                    {l.collected ? <span className="rounded-full bg-success-50 px-2 py-0.5 text-[11px] font-semibold text-success-700 dark:bg-success-500/15 dark:text-success-500">{money(l.collected)}</span> : null}
                   </span>
                   <span className={`mt-2 line-clamp-2 block text-sm ${l.waiting ? "font-medium text-foreground" : "text-muted"}`}>{l.lastPreview ?? ""}</span>
                 </span>
               </Link>
               <div className="mt-3 flex items-center gap-2 border-t border-border pt-3 text-sm">
                 <Link href={`/studio/messages?c=${l.chatId}`} className="inline-flex min-h-9 flex-1 items-center justify-center rounded-lg bg-brand-500 px-3 font-medium text-white hover:bg-brand-600">
-                  Reply
+                  Open chat
                 </Link>
                 {l.phone ? (
                   <a href={`tel:${l.phone}`} aria-label={`Call ${l.name}`} className="inline-flex min-h-9 items-center justify-center rounded-lg border border-border px-3 hover:bg-gray-50 dark:hover:bg-white/5">
@@ -188,15 +223,64 @@ export function Leads() {
           ))}
         </ul>
       )}
+
+      {buying && credits ? (
+        <BuyCredits
+          packs={credits.packs}
+          onClose={() => setBuying(false)}
+          onBought={() => {
+            setBuying(false);
+            void load();
+          }}
+        />
+      ) : null}
     </div>
   );
 }
 
-function Stat({ value, label, tone }: { value: number | string; label: string; tone?: string }) {
+function Stat({ value, label, tone, small }: { value: number | string; label: string; tone?: string; small?: boolean }) {
   return (
     <div className="rounded-2xl border border-border bg-surface p-4 shadow-theme-xs">
-      <p className={`text-3xl font-extrabold tnum ${tone ?? ""}`}>{value}</p>
+      <p className={`${small ? "text-xl sm:text-2xl" : "text-3xl"} truncate font-extrabold tnum ${tone ?? ""}`}>{value}</p>
       <p className="mt-1 truncate text-sm text-muted">{label}</p>
     </div>
+  );
+}
+
+function BuyCredits({ packs, onClose, onBought }: { packs: readonly number[]; onClose: () => void; onBought: () => void }) {
+  const [pick, setPick] = useState<number>(packs[1] ?? packs[0]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  async function buy() {
+    setBusy(true);
+    setError(null);
+    const res = await bizBuyCredits(pick);
+    setBusy(false);
+    if (!res.ok) return setError(res.error);
+    onBought();
+  }
+  return (
+    <FormSheet open onClose={onClose} title="Add Alexis credits">
+      <div className="space-y-4">
+        <div className="grid grid-cols-3 gap-2">
+          {packs.map((p) => (
+            <button
+              key={p}
+              type="button"
+              onClick={() => setPick(p)}
+              className={`rounded-2xl border p-3 text-center transition ${pick === p ? "border-brand-500 bg-brand-25 ring-2 ring-brand-500/20 dark:bg-brand-500/10" : "border-border hover:border-brand-300"}`}
+            >
+              <span className="block text-lg font-extrabold tnum">{(p / 1000).toLocaleString("en-UG")}k</span>
+              <span className="block text-[11px] text-muted">UGX</span>
+            </button>
+          ))}
+        </div>
+        <p className="text-sm text-muted">Paid from your Aming card. Credits don&apos;t expire.</p>
+        {error ? <p className="text-sm text-error-600">{error}</p> : null}
+        <button type="button" disabled={busy} onClick={buy} className="inline-flex min-h-12 w-full items-center justify-center rounded-xl bg-brand-500 px-4 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-50">
+          {busy ? "Paying…" : `Pay UGX ${pick.toLocaleString("en-UG")}`}
+        </button>
+      </div>
+    </FormSheet>
   );
 }

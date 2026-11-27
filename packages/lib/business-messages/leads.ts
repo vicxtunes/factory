@@ -6,22 +6,14 @@ import "server-only";
 // client, as Book now does), opens their chat in Messages (./server.ts), and
 // starts a lead the business follows in My Business → Leads.
 //
-// New / Talking / Booked follow from the chat and the client's bookings
-// (./core.ts leadStatus); Lost is the business's own word.
-//
-// While nobody on the team has answered for a few minutes, the business's
-// assistant answers from its page's facts (packages/lib/business-chat), on
-// Pro's chat allowance, at most a few times in a row.
-// Table: supabase/migrations/20270130100000_business_leads.sql.
+// New → Talking → Quoted → Booked → Paid follow from the chat, the client's
+// quotations, bookings and payments since the lead started (./core.ts
+// leadStatus); Lost is the business's own word. Alexis sells in the lead's
+// chat at once (./sales.ts).
+// Tables: supabase/migrations/20270130100000_business_leads.sql, 20270131100000_lead_sales.sql.
 
 import { z } from "zod";
 
-import { costUsd, findModel, type TokenUsage } from "@repo/lib/assistant/core/rules";
-import { hasAiKey, panelSettings } from "@repo/lib/assistant/panel/server";
-import { askModel } from "@repo/lib/assistant/server/providers";
-import { spentToday } from "@repo/lib/assistant/server/store";
-import { BUSINESS_CHAT_PROMPT, BUSINESS_DAILY, BUSINESS_MONTHLY_USD, cleanTurns, factsText, type ChatTurn } from "@repo/lib/business-chat/core";
-import { businessChatOn, businessSpend, pageFacts, tellIfLimitReached } from "@repo/lib/business-chat/server";
 import { invoices, invoiceUrl, quotations, quotationUrl } from "@repo/lib/billing/server";
 import { customers } from "@repo/lib/customers/server";
 import { parsePhone } from "@repo/lib/kernel/core/phone";
@@ -32,7 +24,7 @@ import { createAdminClient } from "@repo/lib/supabase/admin";
 import { formatAmount } from "@repo/lib/tenancy/format";
 
 import { leadStatus, type ChatDocument, type LeadRow, type LeadView } from "./core";
-import { BizChatError, messagesOn, ring, send, tell, upsertChat, type ChatRow, type Viewer } from "./server";
+import { BizChatError, messagesOn, send, upsertChat, type ChatRow, type Viewer } from "./server";
 
 const db = () => createAdminClient();
 
@@ -40,10 +32,6 @@ const db = () => createAdminClient();
 const LEADS_DAILY = 300;
 /** A lead stays the same lead while it's open this long; writing again after that starts a new one. */
 const LEAD_DAYS = 60;
-/** Minutes without an answer from the team before the assistant answers. */
-export const ASSISTANT_AFTER_MINUTES = 5;
-/** The assistant's answers in a row, with nobody from the team in between. */
-const ASSISTANT_IN_A_ROW = 4;
 const BOOKED = ["tentative", "confirmed", "completed"];
 
 // ── Starting one, from the business's page ───────────────────────────────
@@ -112,8 +100,9 @@ export async function startLead(slug: string, raw: unknown): Promise<{ session: 
 
 // ── The business's list ──────────────────────────────────────────────────
 
-type LeadDbRow = { id: string; customer_id: string; chat_id: string; source: "page" | "ad"; is_new: boolean; lost_at: string | null; created_at: string };
-const LEAD_COLUMNS = "id, customer_id, chat_id, source, is_new, lost_at, created_at";
+type LeadDbRow = { id: string; customer_id: string; chat_id: string; source: "page" | "ad"; is_new: boolean; lost_at: string | null; created_at: string; closed_by_assistant: boolean };
+const LEAD_COLUMNS = "id, customer_id, chat_id, source, is_new, lost_at, created_at, closed_by_assistant";
+type Progress = LeadView & { collected: number; closedByAssistant: boolean };
 
 /** Long id lists go in pieces: a request's address has a length limit. */
 async function inChunks<T>(ids: string[], fetch: (part: string[]) => PromiseLike<{ data: T[] | null }>): Promise<T[]> {
@@ -122,30 +111,45 @@ async function inChunks<T>(ids: string[], fetch: (part: string[]) => PromiseLike
   return out;
 }
 
-/** Each lead's status: answered by the team in its chat since it started, and booked since. */
-async function statuses(tenantId: string, leads: LeadDbRow[]): Promise<Map<string, LeadView>> {
+/** Each lead's status and what it brought in: the business's answers in its chat, and the client's quotations, bookings and payments, since it started. */
+async function statuses(tenantId: string, leads: LeadDbRow[]): Promise<Map<string, Progress>> {
   if (!leads.length) return new Map();
   const chatIds = [...new Set(leads.map((l) => l.chat_id))];
   const customerIds = [...new Set(leads.map((l) => l.customer_id))];
-  const [answers, bookings] = await Promise.all([
+  const [answers, bookings, docs] = await Promise.all([
     inChunks<{ chat_id: string; created_at: string }>(chatIds, (part) =>
-      db().from("business_chat_messages").select("chat_id, created_at").in("chat_id", part).eq("from_side", "business").eq("by_assistant", false).is("deleted_at", null).order("created_at", { ascending: false }).limit(2000),
+      db().from("business_chat_messages").select("chat_id, created_at").in("chat_id", part).eq("from_side", "business").is("deleted_at", null).order("created_at", { ascending: false }).limit(2000),
     ),
     inChunks<{ customer_id: string; created_at: string }>(customerIds, (part) => db().from("bookings").select("customer_id, created_at").eq("tenant_id", tenantId).in("customer_id", part).in("status", BOOKED)),
+    inChunks<{ id: string; kind: string; customer_id: string; created_at: string }>(customerIds, (part) => db().from("billing_documents").select("id, kind, customer_id, created_at").eq("tenant_id", tenantId).in("customer_id", part)),
   ]);
-  const lastAnswer = new Map<string, string>();
-  for (const a of answers) if (!lastAnswer.has(a.chat_id) || a.created_at > lastAnswer.get(a.chat_id)!) lastAnswer.set(a.chat_id, a.created_at);
-  const lastBooking = new Map<string, string>();
-  for (const b of bookings) if (!lastBooking.has(b.customer_id) || b.created_at > lastBooking.get(b.customer_id)!) lastBooking.set(b.customer_id, b.created_at);
+  const invoiceOwner = new Map(docs.filter((d) => d.kind === "invoice").map((d) => [d.id, d.customer_id]));
+  const payments = await inChunks<{ invoice_id: string; amount: number; created_at: string }>([...invoiceOwner.keys()], (part) =>
+    db().from("billing_payments").select("invoice_id, amount, created_at").eq("tenant_id", tenantId).in("invoice_id", part).is("voided_at", null),
+  );
+  const latest = (rows: { key: string; at: string }[]) => {
+    const m = new Map<string, string>();
+    for (const r of rows) if (!m.has(r.key) || r.at > m.get(r.key)!) m.set(r.key, r.at);
+    return m;
+  };
+  const lastAnswer = latest(answers.map((a) => ({ key: a.chat_id, at: a.created_at })));
+  const lastBooking = latest(bookings.map((b) => ({ key: b.customer_id, at: b.created_at })));
+  const lastQuote = latest(docs.filter((d) => d.kind === "quotation").map((d) => ({ key: d.customer_id, at: d.created_at })));
   return new Map(
-    leads.map((l) => [
-      l.id,
-      {
-        id: l.id,
-        source: l.source,
-        status: leadStatus({ lostAt: l.lost_at, bookedSince: (lastBooking.get(l.customer_id) ?? "") >= l.created_at, answered: (lastAnswer.get(l.chat_id) ?? "") >= l.created_at }),
-      },
-    ]),
+    leads.map((l) => {
+      const collected = payments.filter((p) => invoiceOwner.get(p.invoice_id) === l.customer_id && p.created_at >= l.created_at).reduce((sum, p) => sum + Number(p.amount), 0);
+      const since = (m: Map<string, string>, key: string) => (m.get(key) ?? "") >= l.created_at;
+      return [
+        l.id,
+        {
+          id: l.id,
+          source: l.source,
+          status: leadStatus({ lostAt: l.lost_at, paidSince: collected > 0, bookedSince: since(lastBooking, l.customer_id), quotedSince: since(lastQuote, l.customer_id), answered: since(lastAnswer, l.chat_id) }),
+          collected,
+          closedByAssistant: l.closed_by_assistant,
+        },
+      ];
+    }),
   );
 }
 
@@ -156,7 +160,12 @@ export async function leadsOfChats(tenantId: string, chatIds: string[]): Promise
   const latest = new Map<string, LeadDbRow>();
   for (const r of rows) if (!latest.has(r.chat_id)) latest.set(r.chat_id, r);
   const views = await statuses(tenantId, [...latest.values()]);
-  return new Map([...latest.values()].map((r) => [r.chat_id, views.get(r.id)!]));
+  return new Map(
+    [...latest.values()].map((r) => {
+      const { id, status, source } = views.get(r.id)!;
+      return [r.chat_id, { id, status, source }];
+    }),
+  );
 }
 
 /** The business's leads, newest first. */
@@ -207,161 +216,6 @@ export async function leadAssistantOn(tenantId: string): Promise<boolean> {
 export async function setLeadAssistant(v: Viewer & { side: "business" }, on: boolean): Promise<void> {
   const { error } = await db().from("tenants").update({ leads_assistant: on }).eq("id", v.studio.id);
   if (error) throw new Error(`leads: ${error.message}`);
-}
-
-// ── The assistant, while the team is away ────────────────────────────────
-
-const LEAD_PROMPT = `${BUSINESS_CHAT_PROMPT}
-
-Here you are answering in the business's own chat with this person, because nobody from its team has replied for a few minutes. They see your answer marked as the business's assistant. When they need something only the team can give (to confirm a date, a custom price, a discount, a change), say the team will reply here soon. Don't ask for their phone number: the business has it already.`;
-
-type MessageLite = { from_side: "business" | "customer"; body: string; attachments: { kind: string }[]; by_assistant: boolean; deleted_at: string | null };
-
-/** The chat as the model sees it: theirs as the visitor's, the business's as its own. */
-function turnsOf(rows: MessageLite[]): ChatTurn[] {
-  const turns = rows
-    .filter((r) => !r.deleted_at)
-    .map((r) => ({ role: r.from_side === "customer" ? ("user" as const) : ("assistant" as const), content: r.body.trim() || (r.attachments[0]?.kind === "audio" ? "[voice message]" : r.attachments.length ? "[a photo or file]" : "") }));
-  // Several in a row from the same side read as one.
-  const merged: ChatTurn[] = [];
-  for (const t of turns) {
-    const last = merged[merged.length - 1];
-    if (last?.role === t.role) last.content = `${last.content}\n${t.content}`.slice(-500);
-    else merged.push({ ...t });
-  }
-  return cleanTurns(merged);
-}
-
-/**
- * Every minute (apps/client/instrumentation-node.ts): leads' chats whose last
- * message is the person's, unanswered for a few minutes, get the assistant's
- * answer. Each waiting message is tried once (its run is recorded either way).
- */
-export async function runLeadAssistant(now = new Date()): Promise<void> {
-  const waitingSince = new Date(now.getTime() - ASSISTANT_AFTER_MINUTES * 60_000).toISOString();
-  const { data: waiting } = await db()
-    .from("business_chats")
-    .select("id, tenant_id, customer_id, project_id, last_message_at, last_preview, last_from, business_read_at, customer_read_at")
-    .eq("last_from", "customer")
-    .is("project_id", null)
-    .lt("last_message_at", waitingSince)
-    .gt("last_message_at", new Date(now.getTime() - 86_400_000).toISOString())
-    .order("last_message_at")
-    .limit(30)
-    .returns<ChatRow[]>();
-  if (!waiting?.length) return;
-  const { data: leads } = await db()
-    .from("business_leads")
-    .select("chat_id")
-    .in("chat_id", waiting.map((c) => c.id))
-    .is("lost_at", null)
-    .gte("created_at", new Date(now.getTime() - LEAD_DAYS * 86_400_000).toISOString())
-    .returns<{ chat_id: string }[]>();
-  const leadChats = new Set((leads ?? []).map((l) => l.chat_id));
-  for (const chat of waiting) {
-    if (!leadChats.has(chat.id)) continue;
-    try {
-      await answerLead(chat);
-    } catch (err) {
-      console.error("leads: the assistant failed on a chat:", chat.id, err);
-    }
-  }
-}
-
-async function answerLead(chat: ChatRow): Promise<void> {
-  const visitor = `lead:${chat.id}`;
-  // Tried already for this message (answered or not).
-  const { count: tried } = await db().from("assistant_runs").select("id", { count: "exact", head: true }).eq("visitor", visitor).gte("created_at", chat.last_message_at!);
-  if (tried) return;
-  if (!(await leadAssistantOn(chat.tenant_id)) || !(await messagesOn(chat.tenant_id)) || !(await businessChatOn(chat.tenant_id))) return;
-
-  const { data: recent } = await db()
-    .from("business_chat_messages")
-    .select("from_side, body, attachments, by_assistant, deleted_at")
-    .eq("chat_id", chat.id)
-    .order("created_at", { ascending: false })
-    .limit(16)
-    .returns<MessageLite[]>();
-  const rows = (recent ?? []).reverse();
-  // Not again and again: once the team has been quiet for a few answers, the person waits for them.
-  let inARow = 0;
-  for (const r of [...rows].reverse()) {
-    if (r.from_side !== "business") continue;
-    if (!r.by_assistant) break;
-    inARow++;
-  }
-  if (inARow >= ASSISTANT_IN_A_ROW) return;
-  const messages = turnsOf(rows);
-  if (!messages.length) return;
-
-  const settings = await panelSettings();
-  const model = findModel(settings.model);
-  if (!model || !hasAiKey(model.provider)) return;
-  if ((await spentToday()) >= settings.dailyCapUsd) return;
-  const spend = await businessSpend(chat.tenant_id);
-  if (spend.today >= BUSINESS_DAILY || spend.monthUsd >= BUSINESS_MONTHLY_USD) return;
-
-  const slug = await portal.currentSlug(chat.tenant_id);
-  const at = slug ? await studioAtSlug(slug) : null;
-  if (!at || !slug) return;
-  const facts = await pageFacts(at.studio, at.scope, slug);
-
-  let totals: TokenUsage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
-  let reply: string | null = null;
-  let failure: string | null = null;
-  try {
-    const answered = await askModel({
-      model,
-      system: LEAD_PROMPT,
-      context: factsText(facts),
-      tools: [],
-      messages,
-      maxTokens: 1000,
-      onUsage: (u) => {
-        totals = u;
-      },
-    });
-    reply = answered.refused || !answered.text ? null : answered.text.trim().slice(0, 2000);
-    if (!reply) failure = answered.refused ? "The AI declined to answer." : "The AI gave no reply.";
-  } catch (err) {
-    failure = err instanceof Error ? err.message : "The AI couldn't be reached.";
-  }
-  const cost = costUsd(model, totals);
-  await db().from("assistant_runs").insert({
-    reply,
-    error: failure,
-    actions: ["Lead answer"],
-    input_tokens: totals.input,
-    output_tokens: totals.output,
-    cache_read_tokens: totals.cacheRead,
-    cache_write_tokens: totals.cacheWrite,
-    cost_usd: cost,
-    payer_type: "studio",
-    payer_id: chat.tenant_id,
-    multiplier: 1,
-    // Part of Pro: Aming pays.
-    charge_usd: 0,
-    waived: true,
-    visitor,
-  });
-  await tellIfLimitReached(at.studio, spend.today + 1, spend.monthUsd, spend.monthUsd + cost);
-  if (!reply) return;
-
-  // Someone from the team answered while it was thinking: theirs stands.
-  const { data: still } = await db().from("business_chats").select("last_from, last_message_at").eq("id", chat.id).maybeSingle<{ last_from: string | null; last_message_at: string | null }>();
-  if (still?.last_from !== "customer") return;
-
-  const { data: row, error } = await db()
-    .from("business_chat_messages")
-    .insert({ chat_id: chat.id, from_side: "business", sender_name: "Alexis (assistant)", sender_client_id: null, body: reply, attachments: [], by_assistant: true })
-    .select("created_at")
-    .single<{ created_at: string }>();
-  if (error || !row) throw new Error(`leads: couldn't post the answer: ${error?.message}`);
-  // The lead stays New in Leads until someone from the team answers.
-  await db().from("business_chats").update({ last_message_at: row.created_at, last_preview: reply.slice(0, 140), last_from: "business" }).eq("id", chat.id);
-  await ring(chat);
-  const as: Viewer = { side: "business", studio: at.studio, clientId: "", name: "Alexis (assistant)" };
-  await tell(as, chat, reply.slice(0, 140));
 }
 
 // ── Quotations and invoices into the chat ────────────────────────────────

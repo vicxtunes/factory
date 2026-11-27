@@ -6,7 +6,7 @@ import { useState } from "react";
 import { Button } from "@repo/ui/Button";
 import { Field, TextArea, TextInput } from "@repo/ui/Field";
 import { FormSheet } from "@repo/ui/FormSheet";
-import { publishAlexisTerms, saveAlexisPanelSettings } from "@repo/lib/assistant/panel/actions";
+import { publishAlexisTerms, saveAlexisCreditSettings, saveAlexisPanelSettings } from "@repo/lib/assistant/panel/actions";
 import type { AssistantMode } from "@repo/lib/assistant/core/rules";
 
 const MODES: { value: AssistantMode; label: string; hint: string }[] = [
@@ -56,6 +56,39 @@ export function AlexisPanelForm({ settings }: { settings: { panelMode: Assistant
         Save
       </Button>
       {message ? <p className="text-sm text-muted">{message}</p> : null}
+    </div>
+  );
+}
+
+/** Businesses' AI credits: Alexis selling in their leads' chats uses them (packages/lib/business-messages/credits.ts). */
+export function CreditSettingsForm({ settings }: { settings: { monthlyCredits: number; ugxPerUsd: number } }) {
+  const router = useRouter();
+  const [monthly, setMonthly] = useState(String(settings.monthlyCredits));
+  const [rate, setRate] = useState(String(settings.ugxPerUsd));
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  async function save() {
+    setBusy(true);
+    setMessage(null);
+    const res = await saveAlexisCreditSettings({ monthlyCredits: Number(monthly), ugxPerUsd: Number(rate) });
+    setBusy(false);
+    setMessage(res.ok ? "Saved." : (res.error ?? "Couldn't save."));
+    if (res.ok) router.refresh();
+  }
+
+  return (
+    <div className="grid gap-4 sm:grid-cols-2">
+      <Field label="Credits each Pro business gets a month (UGX)" hint="0: none; businesses buy packs of 10,000, 25,000 or 50,000 from their Aming card.">
+        <TextInput type="number" min={0} step="1000" inputMode="numeric" value={monthly} onChange={(e) => setMonthly(e.target.value)} />
+      </Field>
+      <Field label="UGX per US$" hint="An answer uses its AI cost × the price above, in shillings.">
+        <TextInput type="number" min={100} step="10" inputMode="numeric" value={rate} onChange={(e) => setRate(e.target.value)} />
+      </Field>
+      <Button type="button" className="min-h-10 font-semibold sm:col-span-2" loading={busy} disabled={busy} onClick={save}>
+        Save
+      </Button>
+      {message ? <p className="text-sm text-muted sm:col-span-2">{message}</p> : null}
     </div>
   );
 }

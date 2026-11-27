@@ -20,6 +20,7 @@ import { CHAT_LIMITS, isAllowedAttachmentType, sanitizeWaveform } from "@repo/li
 import type { AttachmentKind, ChatAttachment, ChatMessage, UploadedAttachment } from "@repo/lib/chat/types";
 import { isPro } from "@repo/lib/pro/core";
 import { proStatus } from "@repo/lib/pro/server";
+import { photos } from "@repo/lib/photos/server";
 import { notifyActor } from "@repo/lib/push/send";
 import { ensureVapidConfigured } from "@repo/lib/push/vapid";
 import { safeStorageSegment } from "@repo/lib/storage/client";
@@ -32,6 +33,7 @@ import { team } from "@repo/lib/team/server";
 
 import { SIGNAL_EVENT, senderRef, type BizChatSummary, type BizThread, type LeadView, type Side } from "./core";
 import { leadsOfChats } from "./leads";
+import { answerSoon } from "./sales";
 
 /** A refusal whose words can be shown. */
 export class BizChatError extends Error {}
@@ -91,8 +93,11 @@ export type ChatRow = {
   last_from: Side | null;
   business_read_at: string | null;
   customer_read_at: string | null;
+  assistant_paused: boolean;
 };
-type StoredAttachment = { path: string; kind: AttachmentKind; fileName: string; mimeType: string | null; sizeBytes: number | null; width: number | null; height: number | null; durationMs: number | null; waveform: number[] | null };
+/** A sample Alexis showed from the business's public photos (./sales.ts): read through the photos module, not the chat's files. */
+export type SampleRef = { albumId: string; photoId?: string; video?: true };
+type StoredAttachment = { path: string; kind: AttachmentKind; fileName: string; mimeType: string | null; sizeBytes: number | null; width: number | null; height: number | null; durationMs: number | null; waveform: number[] | null; sample?: SampleRef };
 type MessageRow = {
   id: string;
   chat_id: string;
@@ -108,7 +113,7 @@ type MessageRow = {
   by_assistant: boolean;
 };
 
-const CHAT_COLUMNS = "id, tenant_id, customer_id, project_id, last_message_at, last_preview, last_from, business_read_at, customer_read_at";
+const CHAT_COLUMNS = "id, tenant_id, customer_id, project_id, last_message_at, last_preview, last_from, business_read_at, customer_read_at, assistant_paused";
 const MESSAGE_COLUMNS = "id, chat_id, from_side, sender_name, sender_client_id, body, reply_to_id, attachments, created_at, edited_at, deleted_at, by_assistant";
 const other = (side: Side): Side => (side === "business" ? "customer" : "business");
 const readAt = (c: ChatRow, side: Side) => (side === "business" ? c.business_read_at : c.customer_read_at);
@@ -149,6 +154,7 @@ async function summaries(v: Viewer, rows: ChatRow[]): Promise<BizChatSummary[]> 
     lastMine: r.last_from === v.side,
     unread: unread.get(r.id) ?? 0,
     lead: leads.get(r.id) ?? null,
+    assistantPaused: r.assistant_paused,
   }));
 }
 
@@ -240,7 +246,7 @@ export async function thread(v: Viewer, chatId: unknown, before?: unknown): Prom
     messages: await present(v, rows),
     nextCursor: more ? rows[0].created_at : null,
     otherReadAt: readAt(chat, other(v.side)),
-    typingChannel: channel(`typing:${chat.id}`),
+    typingChannel: typingTopic(chat.id),
   };
 }
 
@@ -251,19 +257,20 @@ async function present(v: Viewer, rows: MessageRow[]): Promise<ChatMessage[]> {
     ? await db().from("business_chat_messages").select(MESSAGE_COLUMNS).in("id", replyIds).returns<MessageRow[]>()
     : { data: [] as MessageRow[] };
   const replyOf = new Map((replies ?? []).map((r) => [r.id, r]));
-  const paths = rows.flatMap((r) => (r.deleted_at ? [] : r.attachments.map((a) => a.path)));
+  const paths = rows.flatMap((r) => (r.deleted_at ? [] : r.attachments.flatMap((a) => (a.path ? [a.path] : []))));
   const urls = new Map<string, string>();
   if (paths.length) {
     const { data } = await db().storage.from(BUCKET).createSignedUrls(paths, CHAT_LIMITS.attachmentUrlTtl);
     for (const s of data ?? []) if (s.path && s.signedUrl) urls.set(s.path, s.signedUrl);
   }
+  const samples = await sampleUrls(v, rows);
   // The business's clients see the business's name on its messages (its assistant's marked so); its team sees who wrote.
   const nameFor = (r: MessageRow) => (v.side === "customer" && r.from_side === "business" ? (r.by_assistant ? `${v.studio.name} · assistant` : v.studio.name) : r.sender_name);
   return rows.map((r) => {
     const reply = r.reply_to_id ? replyOf.get(r.reply_to_id) : null;
     const attachments: ChatAttachment[] = r.deleted_at
       ? []
-      : r.attachments.map((a, i) => ({ id: `${r.id}-${i}`, kind: a.kind, fileName: a.fileName, mimeType: a.mimeType, sizeBytes: a.sizeBytes, width: a.width, height: a.height, durationMs: a.durationMs, waveform: a.waveform, url: urls.get(a.path) ?? null }));
+      : r.attachments.map((a, i) => ({ id: `${r.id}-${i}`, kind: a.kind, fileName: a.fileName, mimeType: a.mimeType, sizeBytes: a.sizeBytes, width: a.width, height: a.height, durationMs: a.durationMs, waveform: a.waveform, url: (a.sample ? samples.get(sampleKey(a.sample)) : urls.get(a.path)) ?? null }));
     return {
       id: r.id,
       conversationId: r.chat_id,
@@ -279,6 +286,31 @@ async function present(v: Viewer, rows: MessageRow[]): Promise<ChatMessage[]> {
       deletedAt: r.deleted_at,
     };
   });
+}
+
+const sampleKey = (s: SampleRef) => `${s.albumId}:${s.photoId ?? "video"}`;
+
+/** Fresh links to the samples Alexis showed: the album's photos, or its preview video. */
+async function sampleUrls(v: Viewer, rows: MessageRow[]): Promise<Map<string, string>> {
+  const refs = rows.flatMap((r) => (r.deleted_at ? [] : r.attachments.flatMap((a) => (a.sample ? [a.sample] : []))));
+  const out = new Map<string, string>();
+  if (!refs.length) return out;
+  const scope = studioScope(v.studio);
+  for (const albumId of [...new Set(refs.map((r) => r.albumId))]) {
+    try {
+      const mine = refs.filter((r) => r.albumId === albumId);
+      if (mine.some((r) => r.photoId)) {
+        for (const p of await photos.photos(scope, albumId)) out.set(`${albumId}:${p.id}`, p.largeUrl);
+      }
+      if (mine.some((r) => r.video)) {
+        const album = await photos.album(scope, albumId);
+        if (album?.videoUrl) out.set(`${albumId}:video`, album.videoUrl);
+      }
+    } catch (err) {
+      console.error("business chats: sample links failed:", albumId, err);
+    }
+  }
+  return out;
 }
 
 const preview = (body: string, attachments: StoredAttachment[]) =>
@@ -302,9 +334,13 @@ export async function send(v: Viewer, chatId: unknown, input: { body?: unknown; 
     .single<MessageRow>();
   if (error || !row) throw new Error(`business chats: couldn't send: ${error?.message}`);
   const mineRead = v.side === "business" ? { business_read_at: row.created_at } : { customer_read_at: row.created_at };
-  await db().from("business_chats").update({ last_message_at: row.created_at, last_preview: preview(body, attachments), last_from: v.side, ...mineRead }).eq("id", chat.id);
+  // Someone from the team writes: Alexis steps back in this chat until they hand it back.
+  const takeOver = v.side === "business" && !chat.assistant_paused ? { assistant_paused: true } : {};
+  await db().from("business_chats").update({ last_message_at: row.created_at, last_preview: preview(body, attachments), last_from: v.side, ...mineRead, ...takeOver }).eq("id", chat.id);
   await ring(chat);
   await tell(v, chat, preview(body, attachments));
+  // The client wrote: Alexis answers at once in a lead's chat (./sales.ts decides whether she may).
+  if (v.side === "customer") answerSoon(chat.id);
   return (await present(v, [row]))[0];
 }
 
@@ -375,7 +411,7 @@ export async function remove(v: Viewer, messageId: unknown) {
   const { row, chat } = await ownMessage(v, messageId);
   await db().from("business_chat_messages").update({ deleted_at: new Date().toISOString() }).eq("id", row.id);
   if (chat.last_message_at === row.created_at) await db().from("business_chats").update({ last_preview: "Message deleted" }).eq("id", chat.id);
-  const paths = row.attachments.map((a) => a.path);
+  const paths = row.attachments.flatMap((a) => (a.path ? [a.path] : []));
   if (paths.length) await db().storage.from(BUCKET).remove(paths);
   await ring(chat);
 }
@@ -389,11 +425,23 @@ export async function markRead(v: Viewer, chatId: unknown) {
   await ring(chat);
 }
 
+/** The team hands a chat to Alexis, or takes it from her. */
+export async function setAssistantPaused(v: Viewer, chatId: unknown, paused: boolean): Promise<void> {
+  if (v.side !== "business") throw new BizChatError("That chat isn't here.");
+  const chat = await chatFor(v, chatId);
+  await db().from("business_chats").update({ assistant_paused: paused }).eq("id", chat.id);
+  await ring(chat);
+  if (!paused && chat.last_from === "customer") answerSoon(chat.id);
+}
+
 // ── Live updates ──────────────────────────────────────────────────────────
 
 // Doorbells, as Aming chat does (packages/lib/chat/server/signals.ts): an
 // unguessable channel per business and per client; the server rings it with
 // the chat's id only, and the browser fetches through the checks above.
+
+/** A chat's typing… channel (Alexis types too, from ./sales.ts). */
+export const typingTopic = (chatId: string) => channel(`typing:${chatId}`);
 
 function channel(label: string): string {
   const s = process.env.APP_SECRET;

@@ -16,6 +16,7 @@ import { createClient } from "@repo/lib/supabase/browser";
 
 import { LeadPill } from "./Leads";
 import { SendDocument } from "./SendDocument";
+import { bizSetAssistantPaused } from "@repo/lib/business-messages/actions";
 
 // Business messages (packages/lib/business-messages), WhatsApp-style, for both
 // sides: the business's workspace (`slug` null) and its client on the
@@ -376,6 +377,16 @@ function Thread({
           />
         ) : null}
       </header>
+      {slug === null && chat?.lead && chat.lead.status !== "lost" ? (
+        <HandOver
+          chatId={chatId}
+          paused={chat.assistantPaused}
+          onChanged={() => {
+            void load();
+            onChanged();
+          }}
+        />
+      ) : null}
 
       <div
         ref={scroller}
@@ -554,6 +565,26 @@ function NotifyMe({ slug }: { slug: string }) {
         className="shrink-0 rounded-full bg-brand-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-600 disabled:opacity-60"
       >
         Turn on
+      </button>
+    </div>
+  );
+}
+
+/** A lead's chat: Alexis is selling in it, or the team took over (and can hand it back). */
+function HandOver({ chatId, paused, onChanged }: { chatId: string; paused: boolean; onChanged: () => void }) {
+  const [busy, setBusy] = useState(false);
+  async function flip() {
+    setBusy(true);
+    const res = await bizSetAssistantPaused(chatId, !paused);
+    setBusy(false);
+    if (res.ok) onChanged();
+  }
+  return (
+    <div className={`flex items-center gap-2 border-b border-border px-3 py-2 text-xs ${paused ? "bg-gray-50 dark:bg-white/5" : "bg-brand-25 dark:bg-brand-500/10"}`}>
+      <span aria-hidden>{paused ? "🙋" : "🤖"}</span>
+      <span className="min-w-0 flex-1 truncate">{paused ? "You're handling this chat" : "Alexis is handling this chat"}</span>
+      <button type="button" disabled={busy} onClick={flip} className="shrink-0 rounded-full border border-border bg-surface px-3 py-1 font-medium hover:border-brand-300 disabled:opacity-50">
+        {paused ? "Let Alexis continue" : "Take over"}
       </button>
     </div>
   );

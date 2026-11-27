@@ -7,8 +7,10 @@
 import type { ChatMessage } from "@repo/lib/chat/types";
 
 import { setPortalCookie } from "@repo/lib/studio-portal/server";
+import { studioScope } from "@repo/lib/studios/core";
 
 import type { BizChatSummary, BizThread, ChatDocument, LeadRow } from "./core";
+import * as credits from "./credits";
 import * as leads from "./leads";
 import * as chats from "./server";
 import { BizChatError, businessViewer, customerViewer, type Viewer } from "./server";
@@ -93,10 +95,10 @@ export async function startLeadAt(slug: string, input: unknown): Promise<Res<{ c
 
 const business = businessViewer;
 
-export async function bizLeads(): Promise<Res<{ leads: LeadRow[]; assistant: boolean }>> {
+export async function bizLeads(): Promise<Res<{ leads: LeadRow[]; assistant: boolean; currency: string }>> {
   return run(business, async (v) => {
     const [rows, assistant] = await Promise.all([leads.listLeads(v), leads.leadAssistantOn(v.studio.id)]);
-    return { leads: rows, assistant };
+    return { leads: rows, assistant, currency: studioScope(v.studio).currency };
   });
 }
 
@@ -114,4 +116,24 @@ export async function bizDocuments(chatId: string): Promise<Res<{ customerId: st
 
 export async function bizSendDocument(chatId: string, kind: "quotation" | "invoice", id: string): Promise<Res<ChatMessage>> {
   return run(business, (v) => leads.sendDocument(v, chatId, kind, id));
+}
+
+/** The team hands a chat to Alexis (false) or takes it from her (true). */
+export async function bizSetAssistantPaused(chatId: string, paused: boolean): Promise<Res> {
+  return run(business, async (v) => void (await chats.setAssistantPaused(v, chatId, paused === true)));
+}
+
+// ── Alexis's credits (./credits.ts) ──────────────────────────────────────
+
+export async function bizCredits(): Promise<Res<{ balance: number; usedThisMonth: number; packs: readonly number[]; canBuy: boolean }>> {
+  return run(business, async (v) => ({ ...(await credits.creditSummary(v.studio.id)), packs: credits.CREDIT_PACKS, canBuy: v.studio.ownerClientId === v.clientId }));
+}
+
+/** The owner buys a pack of credits from their Aming card. */
+export async function bizBuyCredits(amount: number): Promise<Res> {
+  return run(business, async (v) => {
+    if (v.studio.ownerClientId !== v.clientId) throw new BizChatError("Only the owner buys credits.");
+    await credits.buyCredits(v.studio.id, Number(amount), { id: v.clientId, name: v.name });
+    return undefined;
+  });
 }

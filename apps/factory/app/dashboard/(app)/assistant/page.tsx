@@ -1,12 +1,12 @@
 import { redirect } from "next/navigation";
 
-import { currentTerms, hasAiKey, panelSettings, recentChanges, usageByPayer } from "@repo/lib/assistant/panel/server";
+import { creditSettings, currentTerms, hasAiKey, panelSettings, recentChanges, usageByPayer } from "@repo/lib/assistant/panel/server";
 import { findModel } from "@repo/lib/assistant/core/rules";
 import { monthStats, getSettings, spentToday } from "@repo/lib/assistant/server/store";
 import { getDashboardSession, sessionCan } from "@repo/lib/auth/session";
 import { SUPPORT_OWNER_EMAIL } from "@repo/lib/support/constants";
 
-import { AlexisPanelForm, PublishTermsButton } from "./alexis-panel-form";
+import { AlexisPanelForm, CreditSettingsForm, PublishTermsButton } from "./alexis-panel-form";
 import { AssistantForm } from "./assistant-form";
 
 export const dynamic = "force-dynamic";
@@ -31,7 +31,7 @@ export default async function AssistantPage() {
   const session = await getDashboardSession();
   const developer = session?.email === SUPPORT_OWNER_EMAIL;
   if (!sessionCan(session, "alexis", "manage") && !developer) redirect("/dashboard");
-  const [settings, spent, month, panel, terms, payers, changes] = await Promise.all([
+  const [settings, spent, month, panel, terms, payers, changes, credits] = await Promise.all([
     getSettings(),
     spentToday(),
     monthStats(),
@@ -39,6 +39,7 @@ export default async function AssistantPage() {
     currentTerms(),
     usageByPayer(),
     recentChanges(30),
+    creditSettings(),
   ]);
 
   return (
@@ -97,6 +98,11 @@ export default async function AssistantPage() {
               ? `Version ${terms.version}, published ${new Date(terms.publishedAt).toLocaleDateString("en-UG", { timeZone: "Africa/Kampala", dateStyle: "medium" })}.`
               : "Not published yet. Alexis stays closed until it is."}
           </p>
+        </div>
+        <div className="mt-5 border-t border-border pt-4">
+          <h3 className="text-sm font-semibold">Businesses&apos; AI credits</h3>
+          <p className="mt-1 mb-3 text-sm text-muted">Alexis selling in a business&apos;s leads&apos; chats uses its credits; it buys more from its Aming card.</p>
+          <CreditSettingsForm settings={credits} />
         </div>
       </section>
       <section className="min-w-0 lg:col-start-2 lg:row-span-2 lg:row-start-1">

@@ -78,6 +78,16 @@ export async function saveAlexisPanelSettings(input: { panelMode: AssistantMode;
   return { ok: true };
 }
 
+/** Businesses' AI credits: what each Pro business gets a month (UGX), and UGX per US$ for the AI's cost. */
+export async function saveAlexisCreditSettings(input: { monthlyCredits: number; ugxPerUsd: number }): Promise<{ ok: boolean; error?: string }> {
+  if (!(await bossOrDeveloper())) return { ok: false, error: "You don't have access to this." };
+  if (!Number.isInteger(input.monthlyCredits) || input.monthlyCredits < 0 || input.monthlyCredits > 10_000_000) return { ok: false, error: "Enter the monthly credits in whole shillings." };
+  if (!Number.isFinite(input.ugxPerUsd) || input.ugxPerUsd < 100 || input.ugxPerUsd > 100_000) return { ok: false, error: "Enter how many shillings make a US dollar." };
+  await panel.saveCreditSettings(input);
+  revalidatePath("/dashboard/assistant");
+  return { ok: true };
+}
+
 export async function publishAlexisTerms(body: string): Promise<{ ok: boolean; error?: string; version?: number }> {
   const by = await bossOrDeveloper();
   if (!by) return { ok: false, error: "You don't have access to this." };
