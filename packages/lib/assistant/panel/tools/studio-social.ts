@@ -2,11 +2,9 @@ import "server-only";
 
 import { z } from "zod";
 
-import { isPro } from "@repo/lib/pro/core";
-import { proStatus } from "@repo/lib/pro/server";
 import { savePost } from "@repo/lib/social/actions";
 import { platformName, problemFor } from "@repo/lib/social/core";
-import { accountsOf, profileOf } from "@repo/lib/social/server";
+import { accountsOf, profileOf, socialOn } from "@repo/lib/social/server";
 import { zernioReady } from "@repo/lib/social/zernio";
 
 import { changeTool, outcome, readTool, type ChangeTool } from "../toolbox";
@@ -20,7 +18,7 @@ const kampala = (iso: string) => new Date(iso).toLocaleString("en-GB", { timeZon
 
 /** For a business with Pro, to someone who manages its catalog. */
 export async function studioSocialTools(studio: { id: string; name: string }): Promise<{ read: AssistantTool[]; change: ChangeTool[]; words: string } | null> {
-  if (!zernioReady() || !isPro(await proStatus(studio.id))) return null;
+  if (!zernioReady() || !(await socialOn(studio.id))) return null;
   const pages = async () => accountsOf(await profileOf(studio.id, studio.name));
   return {
     read: [

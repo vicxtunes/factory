@@ -33,7 +33,21 @@ export async function saveSocialSettings(s: SocialSettings): Promise<void> {
   if (error) fail("save social settings", error);
 }
 
+/**
+ * While it's tried out, only these businesses have Social Media (owner,
+ * 2026-11-27: "first to Saniget and Dementa Studio only for testing"):
+ * Saniget Multimedia, Dementa Studios. Empty: every Pro business.
+ */
+const TRYING = ["7363e5a4-c8f2-4f02-9c63-9edf89f1e726", "f96d806b-1bb8-4c27-9f10-8d99c8b80a2a"];
+
+/** Whether this business has Social Media: Pro, and (while tried out) on the list above. */
+export async function socialOn(tenantId: string): Promise<boolean> {
+  if (TRYING.length && !TRYING.includes(tenantId)) return false;
+  return isPro(await proStatus(tenantId));
+}
+
 export async function requirePro(tenantId: string): Promise<void> {
+  if (TRYING.length && !TRYING.includes(tenantId)) throw new SocialError("Social Media isn't open for your business yet.");
   if (!isPro(await proStatus(tenantId))) throw new SocialError("Social posts are part of Pro. Get Pro on Pro & page look.");
 }
 
