@@ -10,11 +10,12 @@ import { FolderArt } from "./FolderArt";
 
 type Attached = { studioName: string; folders: { id: string; name: string }[]; files: { id: string; name: string; url: string }[] };
 
-// On an Aming order item, for staff: what the studio attached from its Drive
+// On an Aming order item, for staff and its designer (/graphics): what the studio attached from its Drive
 // when it ordered (linked, not copied). Folders open on their own page,
 // where staff look, download and add; files download straight. Nothing shows
 // when nothing is attached.
-export function OrderItemDrive({ itemId }: { itemId: string }) {
+/** `folderPath`: where an attached folder opens (staff's page by default; the designer's under /graphics). */
+export function OrderItemDrive({ itemId, folderPath = `/dashboard/orders/items/${itemId}/drive` }: { itemId: string; folderPath?: string }) {
   const [attached, setAttached] = useState<Attached | null>(null);
 
   useEffect(() => {
@@ -35,7 +36,7 @@ export function OrderItemDrive({ itemId }: { itemId: string }) {
         {attached.folders.map((f) => (
           <li key={f.id}>
             <Link
-              href={`/dashboard/orders/items/${itemId}/drive?folder=${f.id}`}
+              href={`${folderPath}?folder=${f.id}`}
               className="flex items-center gap-2 rounded-lg border border-border px-2 py-1.5 text-sm hover:bg-background"
             >
               <FolderArt className="h-5 w-6 shrink-0" />

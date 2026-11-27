@@ -9,7 +9,7 @@ import "server-only";
 // from the session or the link, never from what the browser claims.
 
 import { localDate } from "@repo/lib/accounting/core/period";
-import { getClientSession, getDashboardSession } from "@repo/lib/auth/session";
+import { getClientSession, getDashboardSession, getDesignerSession } from "@repo/lib/auth/session";
 import { createAdminClient } from "@repo/lib/supabase/admin";
 import { portalClient, studioAtSlug } from "@repo/lib/studio-portal/server";
 import { driveOfCaller, studios } from "@repo/lib/studios/server";
@@ -55,6 +55,20 @@ export async function orderItemDriveLinks(itemId: string): Promise<{ tenantId: s
   };
 }
 
+/** Who at Aming is opening an order item's Drive: staff, or the designer its order is given to; else null. */
+async function orderPersonName(itemId: string): Promise<string | null> {
+  const staff = await getDashboardSession();
+  if (staff) return staff.fullName ?? "Staff";
+  const designer = await getDesignerSession();
+  if (!designer) return null;
+  const { data } = await createAdminClient()
+    .from("order_items")
+    .select("order:orders!inner (assigned_designer_id)")
+    .eq("id", itemId)
+    .maybeSingle<{ order: { assigned_designer_id: string | null } }>();
+  return data?.order.assigned_designer_id === designer.designer_id ? designer.name : null;
+}
+
 /** The caller's files and rights, or a FileError when they have none here. */
 export async function filesCaller(via: Via): Promise<FilesCaller> {
   if (via.as === "vendor") {
@@ -91,16 +105,17 @@ export async function filesCaller(via: Via): Promise<FilesCaller> {
     };
   }
   if (via.as === "order") {
-    // Aming staff on an order: the folders attached to its item, to look at, download and add to (never delete).
-    const session = await getDashboardSession();
-    const links = session ? await orderItemDriveLinks(via.itemId) : null;
+    // Aming staff, or the designer the order is given to (/graphics), on an order: the folders
+    // attached to its item, to look at, download and add to (never delete).
+    const name = await orderPersonName(via.itemId);
+    const links = name ? await orderItemDriveLinks(via.itemId) : null;
     const studio = links ? await studios.get(links.tenantId) : null;
-    if (!session || !links || !studio) throw new FileError("Nothing from a Drive is attached to this order.");
+    if (!name || !links || !studio) throw new FileError("Nothing from a Drive is attached to this order.");
     return {
       drive: files,
       scope: studioScope(studio),
       access: { kind: "shared", grants: links.folderIds.map((folderId) => ({ folderId, role: "contributor" as const, canDownload: true })) },
-      who: { kind: "member", name: `${session.fullName ?? "Staff"} (Aming)` },
+      who: { kind: "member", name: `${name} (Aming)` },
       person: { kind: "guest" },
       studio: { name: studio.name, ownerClientId: studio.ownerClientId },
     };
