@@ -3,10 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 
 import { editMessage, sendMessage } from "@repo/lib/chat/actions";
-import { uploadChatAttachment } from "@repo/lib/chat/client/upload";
+import { uploadChatAttachment, type ChatUploadResult, type UploadOptions } from "@repo/lib/chat/client/upload";
 import { measureWaveform } from "@repo/lib/chat/client/waveform";
 import { CHAT_LIMITS } from "@repo/lib/chat/policy";
-import type { ChatMessage, UploadedAttachment } from "@repo/lib/chat/types";
+import type { ChatMessage, ChatResult, UploadedAttachment } from "@repo/lib/chat/types";
 
 import { formatBytes } from "./format";
 import { PaperclipIcon, SendIcon } from "./icons";
@@ -17,6 +17,13 @@ interface PendingFile {
   file: File;
   progress: number;
   error: string | null;
+}
+
+/** Where the composer sends: Aming chat by default, or another chat's own calls (business messages). */
+export interface ComposerTransport {
+  upload: (file: File, options: UploadOptions) => Promise<ChatUploadResult>;
+  send: (input: { body: string; replyToId: string | null; attachments: UploadedAttachment[] }) => Promise<ChatResult<ChatMessage>>;
+  edit: (messageId: string, body: string) => Promise<ChatResult>;
 }
 
 const ACCEPT = "image/*,video/*,audio/*,application/pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.zip";
@@ -44,6 +51,7 @@ export function Composer({
   onEdited,
   onTyping,
   onStoppedTyping,
+  transport,
 }: {
   conversationId: string;
   replyTo: ChatMessage | null;
@@ -56,7 +64,13 @@ export function Composer({
   /** Called on each keystroke (the caller throttles) — drives typing indicators. */
   onTyping?: () => void;
   onStoppedTyping?: () => void;
+  transport?: ComposerTransport;
 }) {
+  const via: ComposerTransport = transport ?? {
+    upload: (file, options) => uploadChatAttachment(conversationId, file, options),
+    send: (input) => sendMessage({ conversationId, ...input }),
+    edit: editMessage,
+  };
   const [text, setText] = useState("");
   const [files, setFiles] = useState<PendingFile[]>([]);
   const [busy, setBusy] = useState(false);
@@ -102,9 +116,9 @@ export function Composer({
     setError(null);
     try {
       const waveform = await measureWaveform(file);
-      const upload = await uploadChatAttachment(conversationId, file, { durationMs, waveform });
+      const upload = await via.upload(file, { durationMs, waveform });
       if (!upload.ok) return setError(upload.error);
-      const res = await sendMessage({ conversationId, body: "", replyToId: replyTo?.id ?? null, attachments: [upload.attachment] });
+      const res = await via.send({ body: "", replyToId: replyTo?.id ?? null, attachments: [upload.attachment] });
       if (!res.ok) return setError(res.error);
       onSent(res.data);
     } finally {
@@ -132,7 +146,7 @@ export function Composer({
 
     try {
       if (editing) {
-        const res = await editMessage(editing.id, body);
+        const res = await via.edit(editing.id, body);
         if (!res.ok) return setError(res.error);
         setText("");
         onEdited();
@@ -141,7 +155,7 @@ export function Composer({
 
       const uploaded: UploadedAttachment[] = [];
       for (const pending of files) {
-        const res = await uploadChatAttachment(conversationId, pending.file, {
+        const res = await via.upload(pending.file, {
           onProgress: (p) => setFiles((prev) => prev.map((f) => (f.key === pending.key ? { ...f, progress: p } : f))),
         });
         if (!res.ok) {
@@ -151,7 +165,7 @@ export function Composer({
         uploaded.push(res.attachment);
       }
 
-      const res = await sendMessage({ conversationId, body, replyToId: replyTo?.id ?? null, attachments: uploaded });
+      const res = await via.send({ body, replyToId: replyTo?.id ?? null, attachments: uploaded });
       if (!res.ok) return setError(res.error);
       setText("");
       setFiles([]);

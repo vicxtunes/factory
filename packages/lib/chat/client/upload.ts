@@ -35,18 +35,24 @@ function imageSize(file: File): Promise<{ width: number; height: number } | null
   });
 }
 
-export async function uploadChatAttachment(
-  conversationId: string,
-  file: File,
-  options: { durationMs?: number; waveform?: number[] | null; onProgress?: (fraction: number) => void } = {},
-): Promise<ChatUploadResult> {
+export type UploadOptions = { durationMs?: number; waveform?: number[] | null; onProgress?: (fraction: number) => void };
+
+/** Where an upload goes: a signed upload made after the server's own check. */
+export type StartUpload = (input: { fileName: string; mimeType: string; sizeBytes: number }) => Promise<{ ok: true; data: { path: string; token: string; bucket: string } } | { ok: false; error: string }>;
+
+export function uploadChatAttachment(conversationId: string, file: File, options: UploadOptions = {}): Promise<ChatUploadResult> {
+  return uploadAttachment((input) => createAttachmentUpload({ conversationId, ...input }), file, options);
+}
+
+/** Uploads a file through any chat's own upload start (Aming chat's, or business messages'). */
+export async function uploadAttachment(start: StartUpload, file: File, options: UploadOptions = {}): Promise<ChatUploadResult> {
   const mimeType = file.type || "application/octet-stream";
   if (!isAllowedAttachmentType(mimeType)) return { ok: false, error: `"${file.name}" isn't a supported file type.` };
   if (file.size > CHAT_LIMITS.maxAttachmentBytes) {
     return { ok: false, error: `"${file.name}" is larger than ${CHAT_LIMITS.maxAttachmentBytes / 1024 / 1024}MB.` };
   }
 
-  const session = await createAttachmentUpload({ conversationId, fileName: file.name, mimeType, sizeBytes: file.size });
+  const session = await start({ fileName: file.name, mimeType, sizeBytes: file.size });
   if (!session.ok) return session;
 
   const [put, size] = await Promise.all([

@@ -208,6 +208,7 @@ export function StudioShell({
   brand,
   user,
   access,
+  hide,
   switcher,
   children,
 }: {
@@ -215,11 +216,13 @@ export function StudioShell({
   user: { name: string; avatarUrl: string | null };
   /** The owner sees the whole menu; a team member what they were given. */
   access: StudioAccess;
+  /** Pages this business doesn't have, left out of the menu. */
+  hide: string[];
   /** Choosing between the businesses the account opens, when there's more than one. */
   switcher: React.ReactNode;
   children: React.ReactNode;
 }) {
-  const nav = studioNavFor(access);
+  const nav = studioNavFor(access, hide);
   const wide = BOARD_PAGES.includes(usePathname());
   return (
     // Phones: an app frame the height of the screen. The page scrolls inside
