@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { FormSheet } from "@repo/ui/FormSheet";
+import { FileText, Plus, Receipt } from "@repo/ui/social/editor/icons";
 import { bizDocuments, bizSendDocument } from "@repo/lib/business-messages/actions";
 import type { ChatDocument } from "@repo/lib/business-messages/core";
 
@@ -17,7 +18,7 @@ export function SendDocument({ chatId, onSent }: { chatId: string; onSent: () =>
   return (
     <>
       <button type="button" onClick={() => setOpen(true)} className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-border px-3 text-sm font-medium hover:bg-gray-50 dark:hover:bg-white/5">
-        <span aria-hidden>📄</span>
+        <FileText className="size-4" />
         <span className="hidden sm:inline">Send quote</span>
       </button>
       {open ? <Picker chatId={chatId} onClose={() => setOpen(false)} onSent={onSent} /> : null}
@@ -53,8 +54,8 @@ function Picker({ chatId, onClose, onSent }: { chatId: string; onClose: () => vo
             {data.documents.map((d) => (
               <li key={d.id}>
                 <button type="button" disabled={!!sending} onClick={() => send(d)} className="flex w-full items-center gap-3 px-3 py-3 text-left hover:bg-gray-50 disabled:opacity-60 dark:hover:bg-white/5">
-                  <span className="text-xl" aria-hidden>
-                    {d.kind === "quotation" ? "📝" : "🧾"}
+                  <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-300">
+                    {d.kind === "quotation" ? <FileText className="size-5" /> : <Receipt className="size-5" />}
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block font-medium">
@@ -73,7 +74,7 @@ function Picker({ chatId, onClose, onSent }: { chatId: string; onClose: () => vo
         ) : null}
         {data ? (
           <Link href={`/studio/quotations/new?client=${data.customerId}`} className="inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-brand-500 px-4 text-sm font-semibold text-white hover:bg-brand-600">
-            + New quotation
+            <Plus className="size-4" /> New quotation
           </Link>
         ) : null}
       </div>

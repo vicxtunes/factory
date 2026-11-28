@@ -2,12 +2,18 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { Button, buttonClass } from "@repo/ui/Button";
 import { FormSheet } from "@repo/ui/FormSheet";
+import { ProgressBar } from "@repo/ui/ProgressBar";
+import { Beaker, Calendar, Close, Chat, CheckCircle, Eye, LinkOut, Megaphone, Pause, Play, Plus, Pointer, Stop, Wallet } from "@repo/ui/social/editor/icons";
+import { StatCard } from "@repo/ui/StatCard";
+import { StatusGlowBadge } from "@repo/ui/StatusGlowBadge";
 import { Field, Select, TextArea, TextInput } from "@repo/ui/Field";
 import { StepForm } from "@repo/ui/StepForm";
 import { useSteps } from "@repo/ui/Stepper";
 import { adPhotoChoices, adServices, findInterests, findPlaces, myAds, pauseAd, startAd, stopAd } from "@repo/lib/ads/actions";
 import { AD_STATUS_LABEL, adPrice, isLive, type AdInterest, type AdPlace, type AdStatus, type StudioAd } from "@repo/lib/ads/core";
+import type { ProductionStatus } from "@repo/lib/types";
 
 // My Business → Social Media → Ads (packages/lib/ads): what each ad cost and
 // brought (people reached, taps, people who wrote, bookings), and a new ad in
@@ -16,15 +22,16 @@ import { AD_STATUS_LABEL, adPrice, isLive, type AdInterest, type AdPlace, type A
 const ugx = (n: number) => `UGX ${Math.round(n).toLocaleString("en-UG")}`;
 const day = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "Africa/Kampala" });
 
-const TONE: Record<AdStatus, string> = {
-  starting: "bg-gray-100 text-gray-700 dark:bg-white/10 dark:text-gray-300",
-  in_review: "bg-warning-50 text-warning-700 dark:bg-warning-500/15 dark:text-warning-500",
-  running: "bg-success-50 text-success-700 dark:bg-success-500/15 dark:text-success-500",
-  paused: "bg-gray-100 text-gray-700 dark:bg-white/10 dark:text-gray-300",
-  ended: "bg-gray-100 text-gray-700 dark:bg-white/10 dark:text-gray-300",
-  stopped: "bg-error-50 text-error-700 dark:bg-error-500/15 dark:text-error-500",
-  rejected: "bg-error-50 text-error-700 dark:bg-error-500/15 dark:text-error-500",
-  failed: "bg-error-50 text-error-700 dark:bg-error-500/15 dark:text-error-500",
+/** Each status as the app's glowing badge: running green, in review violet, paused grey, stopped/rejected red. */
+const BADGE: Record<AdStatus, { status: ProductionStatus; late: boolean }> = {
+  starting: { status: "quality_check", late: false },
+  in_review: { status: "quality_check", late: false },
+  running: { status: "ready_for_pickup", late: false },
+  paused: { status: "not_started", late: false },
+  ended: { status: "completed", late: false },
+  stopped: { status: "completed", late: true },
+  rejected: { status: "completed", late: true },
+  failed: { status: "completed", late: true },
 };
 
 type Info = { ads: StudioAd[]; canStart: boolean; balance: number | null; feePercent: number; minDaily: number; pageName: string | null; practice: boolean };
@@ -44,55 +51,58 @@ export function StudioAds() {
   const spent = ads.reduce((s, a) => s + a.spend, 0);
   const wrote = ads.reduce((s, a) => s + a.leads, 0);
   const booked = ads.reduce((s, a) => s + a.booked, 0);
+  const dash = (v: string | number) => (info ? v : "–");
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-3">
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">Ads</h1>
-          <p className="text-sm text-muted">On Facebook & Instagram · people land on your page and message you</p>
+          <p className="text-sm text-muted">Facebook and Instagram</p>
         </div>
         {info?.canStart ? (
-          <button type="button" onClick={() => setCreating(true)} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-brand-500 px-4 text-sm font-semibold text-white hover:bg-brand-600">
-            <span aria-hidden>{info.practice ? "🧪" : "📣"}</span> {info.practice ? "New practice ad" : "New ad"}
-          </button>
+          <Button onClick={() => setCreating(true)}>
+            <Plus className="size-4" />
+            {info.practice ? "New practice ad" : "New ad"}
+          </Button>
         ) : null}
       </div>
 
       {info?.practice ? (
-        <div className="flex gap-3 rounded-2xl border border-warning-100 bg-warning-25 px-4 py-3 text-sm text-warning-700 dark:border-warning-500/30 dark:bg-warning-500/10 dark:text-warning-500">
-          <span className="text-xl" aria-hidden>
-            🧪
+        <div className="flex items-start gap-3 rounded-2xl border border-border bg-surface p-4 shadow-theme-xs">
+          <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-warning-50 text-warning-600 dark:bg-warning-500/15">
+            <Beaker className="size-5" />
           </span>
-          <span>
-            <b>Practice mode.</b> Ads you make here don&apos;t go to Facebook and cost nothing. Each gets a real link to your page: open it, tap Message us, and see the lead counted on the ad. Real ads open once Aming finishes the Facebook setup.
-          </span>
+          <div className="min-w-0 text-sm">
+            <p className="font-semibold">Practice mode</p>
+            <p className="text-muted">Ads stay off Facebook and cost nothing. Open an ad&apos;s link and message your page to see the lead counted.</p>
+          </div>
         </div>
       ) : null}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat value={info ? ugx(spent) : "–"} label="Spent" small />
-        <Stat value={info ? wrote : "–"} label="People wrote" />
-        <Stat value={info ? (wrote ? ugx(spent / wrote) : "–") : "–"} label="Per message" small />
-        <Stat value={info ? booked : "–"} label="Booked" tone="text-success-600 dark:text-success-500" />
+        <StatCard icon={<Wallet className="size-9" />} label="Spent" value={dash(ugxShort(spent))} />
+        <StatCard icon={<Chat className="size-9" />} label="People wrote" value={dash(wrote)} />
+        <StatCard icon={<Pointer className="size-9" />} label="Per message" value={dash(wrote ? ugxShort(spent / wrote) : "–")} />
+        <StatCard icon={<CheckCircle className="size-9" />} label="Booked" value={dash(booked)} />
       </div>
 
       {!info ? (
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {[0, 1, 2].map((i) => (
-            <div key={i} className="h-72 animate-pulse rounded-2xl bg-gray-100 dark:bg-white/5" />
+            <div key={i} className="h-80 animate-pulse rounded-2xl bg-gray-100 dark:bg-white/5" />
           ))}
         </div>
       ) : !ads.length ? (
-        <div className="rounded-2xl border border-dashed border-border px-4 py-14 text-center">
-          <p className="text-4xl" aria-hidden>
-            📣
-          </p>
-          <p className="mt-2 font-semibold">No ads yet</p>
-          <p className="mx-auto mt-1 max-w-sm text-sm text-muted">Pick a photo, a town and a budget. If an ad spends and nobody writes, it stops by itself and the rest comes back.</p>
+        <div className="flex flex-col items-center rounded-2xl border border-dashed border-border px-4 py-14 text-center">
+          <span className="grid size-14 place-items-center rounded-2xl bg-brand-50 text-brand-600 dark:bg-brand-500/15">
+            <Megaphone className="size-7" />
+          </span>
+          <p className="mt-4 font-semibold">No ads yet</p>
+          <p className="mt-1 text-sm text-muted">Your ads and what they bring show here.</p>
         </div>
       ) : (
-        <ul className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        <ul className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {ads.map((a) => (
             <AdCard key={a.id} ad={a} onChanged={load} onError={setError} />
           ))}
@@ -113,13 +123,12 @@ export function StudioAds() {
   );
 }
 
-function Stat({ value, label, tone, small }: { value: number | string; label: string; tone?: string; small?: boolean }) {
-  return (
-    <div className="rounded-2xl border border-border bg-surface p-4 shadow-theme-xs">
-      <p className={`${small ? "text-xl sm:text-2xl" : "text-3xl"} truncate font-extrabold tnum ${tone ?? ""}`}>{value}</p>
-      <p className="mt-1 truncate text-sm text-muted">{label}</p>
-    </div>
-  );
+/** Big amounts short enough for a stat tile: UGX 1.2M, UGX 45k. */
+function ugxShort(n: number): string {
+  const v = Math.round(n);
+  if (v >= 1_000_000) return `UGX ${(v / 1_000_000).toFixed(v >= 10_000_000 ? 0 : 1)}M`;
+  if (v >= 10_000) return `UGX ${Math.round(v / 1000)}k`;
+  return `UGX ${v.toLocaleString("en-UG")}`;
 }
 
 function AdCard({ ad, onChanged, onError }: { ad: StudioAd; onChanged: () => void; onError: (e: string) => void }) {
@@ -131,7 +140,13 @@ function AdCard({ ad, onChanged, onError }: { ad: StudioAd; onChanged: () => voi
     if (!res.ok) onError(res.error ?? "It couldn't be done.");
     else onChanged();
   };
-  const used = ad.budget ? Math.min(100, Math.round((ad.spend / ad.budget) * 100)) : 0;
+  const live = isLive(ad.status);
+  const figures: [string, number, (p: { className?: string }) => React.ReactNode][] = [
+    ["Reached", ad.reach, Eye],
+    ["Taps", ad.clicks, Pointer],
+    ["Wrote", ad.leads, Chat],
+    ["Booked", ad.booked, CheckCircle],
+  ];
   return (
     <li className="flex flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-theme-xs">
       <div className="relative aspect-[16/9] bg-gray-100 dark:bg-white/5">
@@ -139,59 +154,64 @@ function AdCard({ ad, onChanged, onError }: { ad: StudioAd; onChanged: () => voi
           // eslint-disable-next-line @next/next/no-img-element -- a signed link to the business's photo
           <img src={ad.photoUrl} alt="" className="size-full object-cover" />
         ) : null}
-        <span className={`absolute top-2 left-2 rounded-full px-2.5 py-1 text-xs font-semibold ${TONE[ad.status]}`}>{AD_STATUS_LABEL[ad.status]}</span>
-        {ad.practice ? <span className="absolute top-2 right-2 rounded-full bg-gray-900/80 px-2.5 py-1 text-xs font-semibold text-white">🧪 Practice</span> : null}
+        {ad.practice ? <span className="absolute top-3 right-3 rounded-md bg-gray-900/75 px-2 py-1 text-[11px] font-semibold tracking-wide text-white uppercase backdrop-blur">Practice</span> : null}
       </div>
-      <div className="flex flex-1 flex-col gap-3 p-4">
-        <div>
-          <p className="line-clamp-1 font-semibold">{ad.title}</p>
-          <p className="text-xs text-muted">
-            {day(ad.startsAt)} – {day(ad.endsAt)} · {ad.places.map((p) => p.name.split(",")[0]).join(", ")}
+      <div className="flex flex-1 flex-col gap-4 p-4">
+        <div className="space-y-1.5">
+          <div className="flex items-start justify-between gap-3">
+            <p className="line-clamp-2 font-semibold">{ad.title}</p>
+            <span className="shrink-0">
+              <StatusGlowBadge status={BADGE[ad.status].status} isDelayed={BADGE[ad.status].late} label={AD_STATUS_LABEL[ad.status]} />
+            </span>
+          </div>
+          <p className="flex items-center gap-1.5 text-xs text-muted">
+            <Calendar className="size-3.5" />
+            {day(ad.startsAt)} – {day(ad.endsAt)}
+            <span aria-hidden>·</span>
+            <span className="truncate">{ad.places.map((p) => p.name.split(",")[0]).join(", ")}</span>
           </p>
         </div>
-        <div>
+        <div className="space-y-1.5">
           <div className="flex justify-between text-xs">
-            <span className="font-medium tnum">{ugx(ad.spend)}</span>
+            <span className="font-semibold tnum">{ugx(ad.spend)}</span>
             <span className="text-muted tnum">of {ugx(ad.budget)}</span>
           </div>
-          <div className="mt-1 h-2 overflow-hidden rounded-full bg-gray-100 dark:bg-white/10">
-            <div className="h-full rounded-full bg-brand-500" style={{ width: `${used}%` }} />
-          </div>
+          <ProgressBar value={ad.spend} max={ad.budget} label="Budget spent" />
         </div>
-        <div className="grid grid-cols-4 gap-1 text-center">
-          {[
-            ["Reached", ad.reach],
-            ["Taps", ad.clicks],
-            ["Wrote", ad.leads],
-            ["Booked", ad.booked],
-          ].map(([label, n]) => (
-            <div key={label as string} className="rounded-xl bg-background px-1 py-2">
-              <p className="text-lg font-bold tnum">{Number(n).toLocaleString("en-UG")}</p>
-              <p className="text-[11px] text-muted">{label}</p>
+        <dl className="grid grid-cols-4 divide-x divide-border rounded-xl border border-border">
+          {figures.map(([label, n, Icon]) => (
+            <div key={label} className="flex flex-col items-center gap-0.5 px-1 py-2.5">
+              <Icon className="size-4 text-gray-400" />
+              <dd className="text-base font-bold tnum">{n.toLocaleString("en-UG")}</dd>
+              <dt className="text-[11px] text-muted">{label}</dt>
             </div>
           ))}
-        </div>
-        {ad.practice && isLive(ad.status) ? (
-          <a href={ad.link} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-600 hover:underline">
-            🔗 Open the ad&apos;s link
-          </a>
-        ) : null}
-        {ad.stopReason && !isLive(ad.status) ? <p className="text-xs text-muted">{ad.stopReason}</p> : null}
-        {ad.refunded ? <p className="text-xs font-medium text-success-700 dark:text-success-500">{ugx(ad.refunded)} back on your Aming card</p> : null}
-        {isLive(ad.status) ? (
-          <div className="mt-auto flex gap-2 border-t border-border pt-3 text-sm">
-            {ad.status === "paused" ? (
-              <button type="button" disabled={busy} onClick={() => act(() => pauseAd(ad.id, false))} className="inline-flex min-h-9 flex-1 items-center justify-center rounded-lg border border-border font-medium hover:bg-gray-50 disabled:opacity-50 dark:hover:bg-white/5">
-                ▶ Resume
-              </button>
-            ) : ad.status === "running" || ad.status === "in_review" ? (
-              <button type="button" disabled={busy} onClick={() => act(() => pauseAd(ad.id, true))} className="inline-flex min-h-9 flex-1 items-center justify-center rounded-lg border border-border font-medium hover:bg-gray-50 disabled:opacity-50 dark:hover:bg-white/5">
-                ⏸ Pause
-              </button>
+        </dl>
+        {ad.stopReason && !live ? <p className="text-xs text-muted">{ad.stopReason}</p> : null}
+        {ad.refunded ? <p className="text-xs font-medium text-success-700 dark:text-success-500">{ugx(ad.refunded)} returned to your Aming card</p> : null}
+        {live ? (
+          <div className="mt-auto flex flex-wrap gap-2 border-t border-border pt-3">
+            {ad.practice ? (
+              <a href={ad.link} target="_blank" rel="noreferrer" className={buttonClass("secondary", "sm")}>
+                <LinkOut className="size-4" />
+                Open link
+              </a>
             ) : null}
-            <button type="button" disabled={busy} onClick={() => act(() => stopAd(ad.id))} className="inline-flex min-h-9 flex-1 items-center justify-center rounded-lg border border-border font-medium text-error-600 hover:bg-error-50 disabled:opacity-50 dark:hover:bg-error-500/10">
-              ■ Stop
-            </button>
+            {ad.status === "paused" ? (
+              <Button variant="secondary" size="sm" disabled={busy} onClick={() => act(() => pauseAd(ad.id, false))}>
+                <Play className="size-3.5" />
+                Resume
+              </Button>
+            ) : ad.status === "running" || ad.status === "in_review" ? (
+              <Button variant="secondary" size="sm" disabled={busy} onClick={() => act(() => pauseAd(ad.id, true))}>
+                <Pause className="size-3.5" />
+                Pause
+              </Button>
+            ) : null}
+            <Button variant="ghost" size="sm" className="ml-auto text-error-600 hover:text-error-700" disabled={busy} onClick={() => act(() => stopAd(ad.id))}>
+              <Stop className="size-3.5" />
+              Stop
+            </Button>
           </div>
         ) : null}
       </div>
@@ -275,7 +295,7 @@ function NewAd({ info, onClose, onStarted }: { info: Info; onClose: () => void; 
               ) : !albums.length ? (
                 <p className="text-sm text-muted">Add photos to a public album or a service&apos;s gallery first.</p>
               ) : (
-                <div className="max-h-72 space-y-3 overflow-y-auto pr-1">
+                <div className="max-h-72 space-y-3 overflow-y-auto pr-1" style={{ scrollbarWidth: "none" }}>
                   {albums.map((a) => (
                     <div key={a.albumId}>
                       <p className="mb-1 text-xs text-muted">{a.title}</p>
@@ -364,7 +384,7 @@ function NewAd({ info, onClose, onStarted }: { info: Info; onClose: () => void; 
                   <dt>From your Aming card</dt>
                   <dd className="tnum">{info.practice ? <s className="text-muted">{ugx(price.total)}</s> : ugx(price.total)}</dd>
                 </div>
-                {info.practice ? <p className="pt-1 text-xs font-medium text-warning-700 dark:text-warning-500">🧪 Practice: nothing is taken from your card.</p> : null}
+                {info.practice ? <p className="pt-1 text-xs font-medium text-warning-700 dark:text-warning-500">Practice: nothing is taken from your card.</p> : null}
                 {info.balance !== null && !info.practice ? <p className={`pt-1 text-xs ${short ? "text-error-600" : "text-muted"}`}>On your card: {ugx(info.balance)}{short ? " — add money with MTN or Airtel first" : ""}</p> : null}
                 <p className="pt-1 text-xs text-muted">What isn&apos;t spent comes back when it ends. No messages after a while: it stops by itself.</p>
               </dl>
@@ -438,14 +458,14 @@ function Picker<T>({
         <div className="mb-2 flex flex-wrap gap-1.5">
           {picked.map((p) => (
             <button key={keyOf(p)} type="button" onClick={() => setPicked(picked.filter((x) => keyOf(x) !== keyOf(p)))} className="inline-flex items-center gap-1 rounded-full bg-brand-50 px-3 py-1 text-xs font-medium text-brand-700 dark:bg-brand-500/15 dark:text-brand-300">
-              {nameOf(p).split(",")[0]} <span aria-hidden>✕</span>
+              {nameOf(p).split(",")[0]} <Close className="size-3" />
             </button>
           ))}
         </div>
       ) : null}
       <TextInput value={q} onChange={(e) => setQ(e.target.value)} placeholder={placeholder} aria-label={label} />
       {shown.length ? (
-        <ul className="mt-1 max-h-48 overflow-y-auto rounded-xl border border-border bg-surface">
+        <ul className="mt-1 max-h-48 overflow-y-auto rounded-xl border border-border bg-surface" style={{ scrollbarWidth: "none" }}>
           {shown.map((t) => (
             <li key={keyOf(t)}>
               <button

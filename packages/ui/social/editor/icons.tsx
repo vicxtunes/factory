@@ -41,3 +41,21 @@ export const Timer = (p: P) => <I {...p}><circle cx="12" cy="13" r="8" /><path d
 export const Replace = (p: P) => <I {...p}><path d="M4 7h13l-3-3M20 17H7l3 3" /></I>;
 export const ZoomIn = (p: P) => <I {...p}><circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3M11 8v6M8 11h6" /></I>;
 export const ZoomOut = (p: P) => <I {...p}><circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3M8 11h6" /></I>;
+
+// Business screens (Ads, Leads, Messages) use the same set.
+export const Megaphone = (p: P) => <I {...p}><path d="M3 11v2a1 1 0 0 0 1 1h2l5 4V6L6 10H4a1 1 0 0 0-1 1Z" /><path d="M15 8.5a5 5 0 0 1 0 7M18 5.5a9 9 0 0 1 0 13" /></I>;
+export const LinkOut = (p: P) => <I {...p}><path d="M14 4h6v6M20 4l-9 9" /><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" /></I>;
+export const Phone = (p: P) => <I {...p}><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a1 1 0 0 1-1 1A16 16 0 0 1 4 5a1 1 0 0 1 1-1Z" /></I>;
+export const Sparkle = (p: P) => <I {...p}><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3Z" /><path d="M19 15l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7.7-2Z" /></I>;
+export const Wallet = (p: P) => <I {...p}><rect x="3" y="6" width="18" height="14" rx="2" /><path d="M3 10h18M16 15h2M7 6V4h10v2" /></I>;
+export const Globe = (p: P) => <I {...p}><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" /></I>;
+export const UserIcon = (p: P) => <I {...p}><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></I>;
+export const Chat = (p: P) => <I {...p}><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12Z" /></I>;
+export const Beaker = (p: P) => <I {...p}><path d="M9 3h6M10 3v6L4.5 18.5A1.7 1.7 0 0 0 6 21h12a1.7 1.7 0 0 0 1.5-2.5L14 9V3" /><path d="M7 15h10" /></I>;
+export const FileText = (p: P) => <I {...p}><path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8l-5-5Z" /><path d="M14 3v5h5M9 13h6M9 17h6" /></I>;
+export const Receipt = (p: P) => <I {...p}><path d="M5 3h14v18l-3-2-2 2-2-2-2 2-2-2-3 2V3Z" /><path d="M9 8h6M9 12h6" /></I>;
+export const Stop = (p: P) => <I {...p}><rect x="6" y="6" width="12" height="12" rx="1.5" /></I>;
+export const CheckCircle = (p: P) => <I {...p}><circle cx="12" cy="12" r="9" /><path d="m8 12 3 3 5-6" /></I>;
+export const Eye = (p: P) => <I {...p}><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" /><circle cx="12" cy="12" r="3" /></I>;
+export const Pointer = (p: P) => <I {...p}><path d="m4 4 7 17 2.5-7.5L21 11 4 4Z" /></I>;
+export const Calendar = (p: P) => <I {...p}><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M3 10h18M8 3v4M16 3v4" /></I>;

@@ -504,7 +504,7 @@ async function followPrompt(p: PromptRow): Promise<void> {
       : { data: null };
     if (!(await mark(p.id, "paid"))) return;
     const { data: customer } = await db().from("customers").select("name").eq("id", chat.customer_id).maybeSingle<{ name: string }>();
-    await post(ctx, { body: `✅ Payment received: ${formatAmount(at.scope, p.amount)}. Your booking is confirmed — thank you!${receipt ? `\nReceipt ${receipt.receipt_no}: ${receiptUrl(receipt.share_token)}` : ""}` });
+    await post(ctx, { body: `Payment received: ${formatAmount(at.scope, p.amount)}. Your booking is confirmed — thank you!${receipt ? `\nReceipt ${receipt.receipt_no}: ${receiptUrl(receipt.share_token)}` : ""}` });
     await notifyActor(
       { type: "client", id: at.studio.ownerClientId },
       { title: `Alexis collected ${formatAmount(at.scope, p.amount)}`, body: `${customer?.name ?? "A lead"} paid by mobile money. It's on your Business card.`, url: `/studio/messages?c=${chat.id}` },

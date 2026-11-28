@@ -4,7 +4,10 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
 import { formatListTime } from "@repo/ui/chat/format";
+import { Button } from "@repo/ui/Button";
 import { FormSheet } from "@repo/ui/FormSheet";
+import { Chat, CheckCircle, Globe, Megaphone, Phone, Plus, Sparkle, UserIcon, Wallet } from "@repo/ui/social/editor/icons";
+import { StatCard } from "@repo/ui/StatCard";
 import { Avatar } from "@repo/ui/profile/Avatar";
 import { Tabs } from "@repo/ui/Tabs";
 import { bizBuyCredits, bizCredits, bizLeads, bizSetLeadAssistant, bizSetLeadLost } from "@repo/lib/business-messages/actions";
@@ -61,6 +64,7 @@ export function Leads() {
   if (error) return <p className="py-10 text-center text-sm text-error-600">{error}</p>;
 
   const money = (n: number) => `${currency} ${Math.round(n).toLocaleString("en-UG")}`;
+  const moneyShort = (n: number) => moneyShortOf(currency, n);
   const ugx = (n: number) => `UGX ${Math.round(n).toLocaleString("en-UG")}`;
   const all = leads ?? [];
   const monthStart = new Date();
@@ -107,20 +111,20 @@ export function Leads() {
           onClick={toggleAssistant}
           className="flex items-center gap-3 rounded-2xl border border-border bg-surface p-4 text-left shadow-theme-xs hover:border-brand-300"
         >
-          <span className="text-3xl" aria-hidden>
-            🤖
+          <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-600 dark:bg-brand-500/15">
+            <Sparkle className="size-5" />
           </span>
           <span className="min-w-0 flex-1">
             <span className="block font-semibold">Alexis sells for you</span>
-            <span className="block text-xs text-muted">Answers at once, shows samples, books and collects by mobile money</span>
+            <span className="block text-xs text-muted">Answers, books and collects payment</span>
           </span>
           <span className={`relative h-6 w-11 shrink-0 rounded-full transition ${assistant ? "bg-brand-500" : "bg-gray-300 dark:bg-white/20"}`}>
             <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${assistant ? "left-[1.375rem]" : "left-0.5"}`} />
           </span>
         </button>
         <div className={`flex items-center gap-3 rounded-2xl border bg-surface p-4 shadow-theme-xs ${low ? "border-warning-300" : "border-border"}`}>
-          <span className="text-3xl" aria-hidden>
-            ⚡
+          <span className={`grid size-11 shrink-0 place-items-center rounded-xl ${low ? "bg-warning-50 text-warning-600 dark:bg-warning-500/15" : "bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-300"}`}>
+            <Wallet className="size-5" />
           </span>
           <span className="min-w-0 flex-1">
             <span className="block text-xs text-muted">Alexis credits</span>
@@ -128,18 +132,19 @@ export function Leads() {
             <span className="block text-xs text-muted">{credits ? `${ugx(credits.usedThisMonth)} used this month` : ""}</span>
           </span>
           {credits?.canBuy ? (
-            <button type="button" onClick={() => setBuying(true)} className="inline-flex min-h-10 shrink-0 items-center rounded-xl bg-brand-500 px-4 text-sm font-semibold text-white hover:bg-brand-600">
+            <Button size="sm" onClick={() => setBuying(true)}>
+              <Plus className="size-4" />
               Add credits
-            </button>
+            </Button>
           ) : null}
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat value={leads ? month.length : "–"} label="Leads this month" />
-        <Stat value={leads ? paid : "–"} label={month.length ? `Paid · ${Math.round((paid / month.length) * 100)}% converted` : "Paid"} tone="text-success-600 dark:text-success-500" />
-        <Stat value={leads ? money(collected) : "–"} label={`Collected · Alexis closed ${byAlexis}`} small />
-        <Stat value={leads ? waiting : "–"} label="Waiting for you" tone={waiting ? "text-brand-600 dark:text-brand-400" : undefined} />
+        <StatCard icon={<UserIcon className="size-9" />} label="Leads this month" value={leads ? month.length : "–"} />
+        <StatCard icon={<CheckCircle className="size-9" />} label={month.length ? `Paid · ${Math.round((paid / month.length) * 100)}%` : "Paid"} value={leads ? paid : "–"} />
+        <StatCard icon={<Wallet className="size-9" />} label={`Collected · Alexis closed ${byAlexis}`} value={leads ? moneyShort(collected) : "–"} />
+        <StatCard icon={<Chat className="size-9" />} label="Waiting for you" value={leads ? waiting : "–"} />
       </div>
 
       {all.length ? (
@@ -172,12 +177,12 @@ export function Leads() {
           ))}
         </ul>
       ) : !shown.length ? (
-        <div className="rounded-2xl border border-dashed border-border px-4 py-12 text-center">
-          <p className="text-3xl" aria-hidden>
-            💬
-          </p>
-          <p className="mt-2 font-semibold">{all.length ? "None here" : "No leads yet"}</p>
-          <p className="mt-1 text-sm text-muted">{all.length ? "" : "Share your page: visitors tap Message us and land here."}</p>
+        <div className="flex flex-col items-center rounded-2xl border border-dashed border-border px-4 py-14 text-center">
+          <span className="grid size-14 place-items-center rounded-2xl bg-brand-50 text-brand-600 dark:bg-brand-500/15">
+            <Chat className="size-7" />
+          </span>
+          <p className="mt-4 font-semibold">{all.length ? "None here" : "No leads yet"}</p>
+          {all.length ? null : <p className="mt-1 text-sm text-muted">People who message you from your page show here.</p>}
         </div>
       ) : (
         <ul className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -195,11 +200,19 @@ export function Leads() {
                   </span>
                   <span className="mt-0.5 flex flex-wrap items-center gap-1.5">
                     <LeadPill status={l.status} />
-                    <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-muted dark:bg-white/10">{l.source === "ad" ? "📣 Ad" : "🌐 Page"}</span>
-                    {l.closedByAssistant ? <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-muted dark:bg-white/10">🤖 Alexis</span> : null}
+                    <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-muted dark:bg-white/10">
+                      {l.source === "ad" ? <Megaphone className="size-3" /> : <Globe className="size-3" />}
+                      {l.source === "ad" ? "Ad" : "Page"}
+                    </span>
+                    {l.closedByAssistant ? (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-medium text-brand-700 dark:bg-brand-500/15 dark:text-brand-300">
+                        <Sparkle className="size-3" />
+                        Alexis
+                      </span>
+                    ) : null}
                     {l.collected ? <span className="rounded-full bg-success-50 px-2 py-0.5 text-[11px] font-semibold text-success-700 dark:bg-success-500/15 dark:text-success-500">{money(l.collected)}</span> : null}
                   </span>
-                  <span className={`mt-2 line-clamp-2 block text-sm ${l.waiting ? "font-medium text-foreground" : "text-muted"}`}>{l.lastPreview ?? ""}</span>
+                  <span className={`mt-2 line-clamp-2 text-sm ${l.waiting ? "font-medium text-foreground" : "text-muted"}`}>{l.lastPreview ?? ""}</span>
                 </span>
               </Link>
               <div className="mt-3 flex items-center gap-2 border-t border-border pt-3 text-sm">
@@ -208,7 +221,7 @@ export function Leads() {
                 </Link>
                 {l.phone ? (
                   <a href={`tel:${l.phone}`} aria-label={`Call ${l.name}`} className="inline-flex min-h-9 items-center justify-center rounded-lg border border-border px-3 hover:bg-gray-50 dark:hover:bg-white/5">
-                    📞
+                    <Phone className="size-4" />
                   </a>
                 ) : null}
                 <button
@@ -238,13 +251,12 @@ export function Leads() {
   );
 }
 
-function Stat({ value, label, tone, small }: { value: number | string; label: string; tone?: string; small?: boolean }) {
-  return (
-    <div className="rounded-2xl border border-border bg-surface p-4 shadow-theme-xs">
-      <p className={`${small ? "text-xl sm:text-2xl" : "text-3xl"} truncate font-extrabold tnum ${tone ?? ""}`}>{value}</p>
-      <p className="mt-1 truncate text-sm text-muted">{label}</p>
-    </div>
-  );
+/** Money short enough for a stat tile: UGX 1.2M, UGX 45k. */
+function moneyShortOf(currency: string, n: number): string {
+  const v = Math.round(n);
+  if (v >= 1_000_000) return `${currency} ${(v / 1_000_000).toFixed(v >= 10_000_000 ? 0 : 1)}M`;
+  if (v >= 10_000) return `${currency} ${Math.round(v / 1000)}k`;
+  return `${currency} ${v.toLocaleString("en-UG")}`;
 }
 
 function BuyCredits({ packs, onClose, onBought }: { packs: readonly number[]; onClose: () => void; onBought: () => void }) {

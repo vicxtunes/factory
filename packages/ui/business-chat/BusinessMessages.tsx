@@ -16,6 +16,7 @@ import { createClient } from "@repo/lib/supabase/browser";
 
 import { LeadPill } from "./Leads";
 import { SendDocument } from "./SendDocument";
+import { Sparkle, UserIcon } from "@repo/ui/social/editor/icons";
 import { bizSetAssistantPaused } from "@repo/lib/business-messages/actions";
 
 // Business messages (packages/lib/business-messages), WhatsApp-style, for both
@@ -404,7 +405,7 @@ function Thread({
           </div>
         ) : null}
         {!thread && !error ? <p className="py-10 text-center text-sm text-muted">Loading…</p> : null}
-        {thread && !messages.length ? <p className="py-10 text-center text-sm text-muted">Say hello 👋</p> : null}
+        {thread && !messages.length ? <p className="py-10 text-center text-sm text-muted">Say hello</p> : null}
         {messages.map((m, i) => {
           const prev = messages[i - 1];
           const newDay = !prev || dayKey(prev.createdAt) !== dayKey(m.createdAt);
@@ -581,7 +582,7 @@ function HandOver({ chatId, paused, onChanged }: { chatId: string; paused: boole
   }
   return (
     <div className={`flex items-center gap-2 border-b border-border px-3 py-2 text-xs ${paused ? "bg-gray-50 dark:bg-white/5" : "bg-brand-25 dark:bg-brand-500/10"}`}>
-      <span aria-hidden>{paused ? "🙋" : "🤖"}</span>
+      {paused ? <UserIcon className="size-4 text-gray-500" /> : <Sparkle className="size-4 text-brand-600" />}
       <span className="min-w-0 flex-1 truncate">{paused ? "You're handling this chat" : "Alexis is handling this chat"}</span>
       <button type="button" disabled={busy} onClick={flip} className="shrink-0 rounded-full border border-border bg-surface px-3 py-1 font-medium hover:border-brand-300 disabled:opacity-50">
         {paused ? "Let Alexis continue" : "Take over"}

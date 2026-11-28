@@ -5,6 +5,7 @@ import { useState } from "react";
 
 import { Button } from "@repo/ui/Button";
 import { Field, TextInput } from "@repo/ui/Field";
+import { CheckCircle, Megaphone } from "@repo/ui/social/editor/icons";
 import { amingAdAccounts, chooseAdAccount, connectAmingAds, saveAdRules } from "@repo/lib/ads/actions";
 import type { AdAccountChoice, AdsSettings } from "@repo/lib/ads/server";
 
@@ -78,8 +79,8 @@ export function AdsSetup({ settings, summary }: { settings: AdsSettings; summary
       </div>
 
       <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border p-3">
-        <span className="text-2xl" aria-hidden>
-          {settings.adAccountId ? "✅" : "⚪"}
+        <span className={`grid size-10 shrink-0 place-items-center rounded-xl ${settings.adAccountId ? "bg-success-50 text-success-600 dark:bg-success-500/15" : "bg-gray-100 text-gray-500 dark:bg-white/10"}`}>
+          {settings.adAccountId ? <CheckCircle className="size-5" /> : <Megaphone className="size-5" />}
         </span>
         <div className="min-w-0 flex-1 text-sm">
           {settings.adAccountId ? (

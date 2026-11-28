@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 
 import { Field, TextArea, TextInput } from "@repo/ui/Field";
 import { PhoneInput } from "@repo/ui/PhoneInput";
+import { Chat, Close } from "@repo/ui/social/editor/icons";
 import { startLeadAt } from "@repo/lib/business-messages/actions";
 
 /**
@@ -56,9 +57,7 @@ export function MessageUs({ slug, name, logoUrl, signedIn }: { slug: string; nam
 
   const button = (
     <>
-      <svg aria-hidden viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12Z" />
-      </svg>
+      <Chat className="size-5" />
       Message us
     </>
   );
@@ -98,13 +97,13 @@ export function MessageUs({ slug, name, logoUrl, signedIn }: { slug: string; nam
               </p>
             </div>
             <button type="button" aria-label="Close" onClick={() => setOpen(false)} className="inline-flex h-11 w-11 items-center justify-center rounded-full hover:bg-background">
-              ✕
+              <Close className="size-5" />
             </button>
           </header>
 
           <form onSubmit={send} className="flex min-h-0 flex-1 flex-col">
             <div className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-background px-4 py-4">
-              <p className="max-w-[85%] rounded-2xl rounded-tl-sm bg-surface px-3 py-2 text-sm shadow-theme-xs">Hi! 👋 What would you like to ask {name}?</p>
+              <p className="max-w-[85%] rounded-2xl rounded-tl-sm bg-surface px-3 py-2 text-sm shadow-theme-xs">Hi! What would you like to ask {name}?</p>
               <TextArea value={text} onChange={(e) => setText(e.target.value)} required maxLength={1000} rows={3} placeholder="E.g. Are you free on 14 December for a wedding?" aria-label="Your message" className="text-base sm:text-sm" />
               <Field label="Your name">
                 <TextInput value={who} onChange={(e) => setWho(e.target.value)} required maxLength={80} autoComplete="name" className="text-base sm:text-sm" />
