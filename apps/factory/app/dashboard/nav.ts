@@ -28,7 +28,7 @@ export interface NavItem {
 }
 
 export interface NavGroup {
-  id: "orders" | "payments" | "accounts" | "production" | "catalog" | "people" | "help";
+  id: "orders" | "payments" | "accounts" | "production" | "catalog" | "growth" | "people" | "help";
   label: string;
   items: NavItem[];
 }
@@ -113,6 +113,18 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/dashboard/showroom", label: "Showroom", icon: "showroom", visible: everyone },
       { href: "/dashboard/marketing", label: "Carousel & discounts", icon: "marketing", visible: (v) => sees("carousel")(v) || sees("discounts")(v) },
       { href: "/dashboard/announcements", label: "Announcements", icon: "announcements", visible: canViewAnnouncements },
+    ],
+  },
+  {
+    // What Aming runs for businesses to grow: their ads on Facebook and
+    // Instagram from Aming's Page, their social posting through Zernio, and
+    // the licensed music they post with (packages/lib/ads, packages/lib/social).
+    id: "growth",
+    label: "Ads & Social",
+    items: [
+      { href: "/dashboard/ads", label: "Ads", icon: "marketing", visible: boss },
+      { href: "/dashboard/social", label: "Social media", icon: "announcements", visible: boss },
+      { href: "/dashboard/music", label: "Music library", icon: "marketing", visible: boss },
     ],
   },
   {

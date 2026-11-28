@@ -265,3 +265,25 @@ export async function runSocialRound(): Promise<void> {
 }
 
 export { PAGE as SOCIAL_PAGE };
+
+/** Businesses using Social Media, for the boss: posts this month, failed ones, last post. */
+export async function socialUsage(): Promise<{ tenantId: string; name: string; postsThisMonth: number; failed: number; lastPostAt: string | null }[]> {
+  const { data: tenants, error } = await db().from("tenants").select("id, name").not("zernio_profile_id", "is", null).returns<{ id: string; name: string }[]>();
+  if (error) fail("read businesses on social", error);
+  if (!tenants.length) return [];
+  const now = new Date(Date.now() + 3 * 3_600_000);
+  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1) - 3 * 3_600_000).toISOString();
+  const { data: posts } = await db().from("social_posts").select("tenant_id, status, created_at").in("tenant_id", tenants.map((t) => t.id)).order("created_at", { ascending: false }).limit(5000).returns<{ tenant_id: string; status: string; created_at: string }[]>();
+  return tenants
+    .map((t) => {
+      const mine = (posts ?? []).filter((p) => p.tenant_id === t.id);
+      return {
+        tenantId: t.id,
+        name: t.name,
+        postsThisMonth: mine.filter((p) => p.created_at >= start).length,
+        failed: mine.filter((p) => p.created_at >= start && p.status === "failed").length,
+        lastPostAt: mine[0]?.created_at ?? null,
+      };
+    })
+    .sort((a, b) => b.postsThisMonth - a.postsThisMonth);
+}

@@ -16,6 +16,7 @@ import {
   ProductionIcon,
   ProductsIcon,
   SupportIcon,
+  MarketingIcon,
 } from "@repo/ui/icons";
 
 import { CHAT, HOME, isCurrent, navFor, type NavGroup, type NavViewer } from "./nav";
@@ -23,6 +24,7 @@ import { CHAT, HOME, isCurrent, navFor, type NavGroup, type NavViewer } from "./
 const GROUP_ICONS: Record<NavGroup["id"], typeof DashboardIcon> = {
   orders: OrdersIcon,
   catalog: ProductsIcon,
+  growth: MarketingIcon,
   payments: PaymentIcon,
   accounts: AccountsIcon,
   production: ProductionIcon,

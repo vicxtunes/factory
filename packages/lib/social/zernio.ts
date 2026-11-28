@@ -24,6 +24,8 @@ export async function call<T>(method: string, path: string, body?: unknown, head
   const data = text ? (JSON.parse(text) as Record<string, unknown>) : {};
   if (!res.ok) {
     const message = String(data.error ?? data.message ?? res.statusText);
+    // Zernio wants a card on Aming's own account (past its free accounts): said plainly, with where to add it.
+    if (res.status === 402) throw Object.assign(new SocialError(`Zernio needs a payment method on Aming's account: ${message} Add a card at ${String(data.dashboard_url ?? "https://zernio.com/dashboard/billing")}, then try again.`), { status: res.status, data });
     // The page's own problem (bad caption, a photo it won't take) is said to the business; ours is logged.
     if (res.status === 400 || res.status === 409 || res.status === 422 || data.type === "platform_error") throw Object.assign(new SocialError(message), { status: res.status, data });
     throw Object.assign(new Error(`Zernio ${method} ${path} ${res.status}: ${message}`), { status: res.status, data });

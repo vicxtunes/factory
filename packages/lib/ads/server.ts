@@ -557,3 +557,29 @@ async function followAd(ad: AdRow, s: AdsSettings, rate: number, now: Date): Pro
       : `"${ad.title}": UGX ${spend.toLocaleString("en-UG")} spent, ${leads.leads} ${leads.leads === 1 ? "person" : "people"} wrote, ${leads.booked} booked.${back ? ` UGX ${back.toLocaleString("en-UG")} is back on your Aming card.` : ""}`,
   );
 }
+
+/** Every business's ads, newest first, for the boss (Dashboard → Ads). */
+export async function allAds(): Promise<(Pick<StudioAd, "id" | "title" | "status" | "budget" | "spend" | "fee" | "practice" | "leads" | "booked" | "startsAt" | "endsAt" | "refunded"> & { business: string; tenantId: string })[]> {
+  const { data, error } = await db().from("studio_ads").select("*, tenants(name)").order("created_at", { ascending: false }).limit(300).returns<(AdRow & { tenants: { name: string } | null })[]>();
+  if (error) throw new Error(`ads: ${error.message}`);
+  const byTenant = new Map<string, string[]>();
+  for (const a of data) byTenant.set(a.tenant_id, [...(byTenant.get(a.tenant_id) ?? []), a.id]);
+  const results = new Map<string, { leads: number; booked: number; paid: number }>();
+  for (const [tenantId, ids] of byTenant) for (const [id, r] of await leadResults(tenantId, ids)) results.set(id, r);
+  return data.map((a) => ({
+    id: a.id,
+    tenantId: a.tenant_id,
+    business: a.tenants?.name ?? "Business",
+    title: a.title,
+    status: a.status,
+    budget: Number(a.budget),
+    spend: Number(a.spend),
+    fee: Number(a.fee),
+    practice: a.practice,
+    leads: results.get(a.id)?.leads ?? 0,
+    booked: results.get(a.id)?.booked ?? 0,
+    startsAt: a.starts_at,
+    endsAt: a.ends_at,
+    refunded: a.refunded === null ? null : Number(a.refunded),
+  }));
+}
