@@ -27,7 +27,7 @@ const TONE: Record<AdStatus, string> = {
   failed: "bg-error-50 text-error-700 dark:bg-error-500/15 dark:text-error-500",
 };
 
-type Info = { ads: StudioAd[]; canStart: boolean; balance: number | null; feePercent: number; minDaily: number; pageName: string | null };
+type Info = { ads: StudioAd[]; canStart: boolean; balance: number | null; feePercent: number; minDaily: number; pageName: string | null; practice: boolean };
 
 export function StudioAds() {
   const [info, setInfo] = useState<Info | null>(null);
@@ -54,10 +54,21 @@ export function StudioAds() {
         </div>
         {info?.canStart ? (
           <button type="button" onClick={() => setCreating(true)} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-brand-500 px-4 text-sm font-semibold text-white hover:bg-brand-600">
-            <span aria-hidden>📣</span> New ad
+            <span aria-hidden>{info.practice ? "🧪" : "📣"}</span> {info.practice ? "New practice ad" : "New ad"}
           </button>
         ) : null}
       </div>
+
+      {info?.practice ? (
+        <div className="flex gap-3 rounded-2xl border border-warning-100 bg-warning-25 px-4 py-3 text-sm text-warning-700 dark:border-warning-500/30 dark:bg-warning-500/10 dark:text-warning-500">
+          <span className="text-xl" aria-hidden>
+            🧪
+          </span>
+          <span>
+            <b>Practice mode.</b> Ads you make here don&apos;t go to Facebook and cost nothing. Each gets a real link to your page: open it, tap Message us, and see the lead counted on the ad. Real ads open once Aming finishes the Facebook setup.
+          </span>
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat value={info ? ugx(spent) : "–"} label="Spent" small />
@@ -102,45 +113,6 @@ export function StudioAds() {
   );
 }
 
-/** Before Aming's ad account is connected: how ads work, and that they open soon. */
-export function AdsComingSoon() {
-  const steps = [
-    ["🖼️", "Pick a photo", "From your albums or a service, with a headline and a few words."],
-    ["📍", "Choose who sees it", "Towns, ages and interests, like weddings or parenting."],
-    ["💳", "Set a budget", "So much a day for so many days, from your Aming card. What isn't spent comes back."],
-    ["💬", "Get messages", "People tap, land on your page and message you. Alexis answers at once."],
-  ];
-  return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold">Ads</h1>
-          <p className="text-sm text-muted">On Facebook & Instagram · people land on your page and message you</p>
-        </div>
-        <span className="inline-flex min-h-11 cursor-not-allowed items-center gap-2 rounded-xl bg-gray-200 px-4 text-sm font-semibold text-gray-500 dark:bg-white/10" aria-disabled>
-          <span aria-hidden>📣</span> New ad
-        </span>
-      </div>
-      <div className="rounded-2xl border border-warning-100 bg-warning-25 px-4 py-3 text-sm text-warning-700 dark:border-warning-500/30 dark:bg-warning-500/10 dark:text-warning-500">⏳ Ads open soon. Aming is finishing the setup with Facebook.</div>
-      <ol className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {steps.map(([icon, title, text], i) => (
-          <li key={title} className="rounded-2xl border border-border bg-surface p-4 shadow-theme-xs">
-            <p className="flex items-center gap-2">
-              <span className="text-2xl" aria-hidden>
-                {icon}
-              </span>
-              <span className="text-xs font-semibold text-muted">STEP {i + 1}</span>
-            </p>
-            <p className="mt-2 font-semibold">{title}</p>
-            <p className="mt-1 text-sm text-muted">{text}</p>
-          </li>
-        ))}
-      </ol>
-      <p className="text-sm text-muted">If an ad spends and nobody writes, it stops by itself and the rest of your money comes back.</p>
-    </div>
-  );
-}
-
 function Stat({ value, label, tone, small }: { value: number | string; label: string; tone?: string; small?: boolean }) {
   return (
     <div className="rounded-2xl border border-border bg-surface p-4 shadow-theme-xs">
@@ -168,6 +140,7 @@ function AdCard({ ad, onChanged, onError }: { ad: StudioAd; onChanged: () => voi
           <img src={ad.photoUrl} alt="" className="size-full object-cover" />
         ) : null}
         <span className={`absolute top-2 left-2 rounded-full px-2.5 py-1 text-xs font-semibold ${TONE[ad.status]}`}>{AD_STATUS_LABEL[ad.status]}</span>
+        {ad.practice ? <span className="absolute top-2 right-2 rounded-full bg-gray-900/80 px-2.5 py-1 text-xs font-semibold text-white">🧪 Practice</span> : null}
       </div>
       <div className="flex flex-1 flex-col gap-3 p-4">
         <div>
@@ -198,6 +171,11 @@ function AdCard({ ad, onChanged, onError }: { ad: StudioAd; onChanged: () => voi
             </div>
           ))}
         </div>
+        {ad.practice && isLive(ad.status) ? (
+          <a href={ad.link} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-600 hover:underline">
+            🔗 Open the ad&apos;s link
+          </a>
+        ) : null}
         {ad.stopReason && !isLive(ad.status) ? <p className="text-xs text-muted">{ad.stopReason}</p> : null}
         {ad.refunded ? <p className="text-xs font-medium text-success-700 dark:text-success-500">{ugx(ad.refunded)} back on your Aming card</p> : null}
         {isLive(ad.status) ? (
@@ -250,7 +228,7 @@ function NewAd({ info, onClose, onStarted }: { info: Info; onClose: () => void; 
   }, []);
 
   const price = adPrice(daily, days, info.feePercent);
-  const short = info.balance !== null && info.balance < price.total;
+  const short = !info.practice && info.balance !== null && info.balance < price.total;
 
   function submit() {
     setError(null);
@@ -273,7 +251,7 @@ function NewAd({ info, onClose, onStarted }: { info: Info; onClose: () => void; 
         titles={STEPS}
         steps={{ ...steps, next: submit }}
         heading={steps.step === 0 ? "What people see" : steps.step === 1 ? "Who sees it" : "How much, for how long"}
-        submitLabel={`Start ad · ${ugx(price.total)}`}
+        submitLabel={info.practice ? "Start practice ad" : `Start ad · ${ugx(price.total)}`}
         pending={pending}
         error={error}
         onSubmit={submit}
@@ -384,9 +362,10 @@ function NewAd({ info, onClose, onStarted }: { info: Info; onClose: () => void; 
                 </div>
                 <div className="flex justify-between border-t border-border pt-1.5 font-bold">
                   <dt>From your Aming card</dt>
-                  <dd className="tnum">{ugx(price.total)}</dd>
+                  <dd className="tnum">{info.practice ? <s className="text-muted">{ugx(price.total)}</s> : ugx(price.total)}</dd>
                 </div>
-                {info.balance !== null ? <p className={`pt-1 text-xs ${short ? "text-error-600" : "text-muted"}`}>On your card: {ugx(info.balance)}{short ? " — add money with MTN or Airtel first" : ""}</p> : null}
+                {info.practice ? <p className="pt-1 text-xs font-medium text-warning-700 dark:text-warning-500">🧪 Practice: nothing is taken from your card.</p> : null}
+                {info.balance !== null && !info.practice ? <p className={`pt-1 text-xs ${short ? "text-error-600" : "text-muted"}`}>On your card: {ugx(info.balance)}{short ? " — add money with MTN or Airtel first" : ""}</p> : null}
                 <p className="pt-1 text-xs text-muted">What isn&apos;t spent comes back when it ends. No messages after a while: it stops by itself.</p>
               </dl>
             </div>

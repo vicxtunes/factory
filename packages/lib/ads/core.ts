@@ -56,6 +56,10 @@ export interface StudioAd {
   reach: number;
   clicks: number;
   refunded: number | null;
+  /** Made while Aming's ad account wasn't connected: it went nowhere and cost nothing. */
+  practice: boolean;
+  /** Where the ad leads: the business's page (or a service's), marked as this ad's. */
+  link: string;
   /** People who wrote from it (leads with this ad), and of them how many booked and paid. */
   leads: number;
   booked: number;

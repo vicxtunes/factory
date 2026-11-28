@@ -21,11 +21,11 @@ const PAGE = "/studio/social/ads";
 
 async function business() {
   const c = await studioOfCaller("catalog");
-  if (!(await ads.adsOn(c.studio.id))) throw new AdsError("Ads aren't open for your business yet.");
+  if (!(await ads.adsShown(c.studio.id))) throw new AdsError("Ads aren't open for your business yet.");
   return c;
 }
 
-export async function myAds(): Promise<Result<{ ads: StudioAd[]; canStart: boolean; balance: number | null; feePercent: number; minDaily: number; pageName: string | null }>> {
+export async function myAds(): Promise<Result<{ ads: StudioAd[]; canStart: boolean; balance: number | null; feePercent: number; minDaily: number; pageName: string | null; practice: boolean }>> {
   return runAction("ads", async () => {
     const c = await business();
     const s = await ads.adsSettings();
@@ -37,6 +37,8 @@ export async function myAds(): Promise<Result<{ ads: StudioAd[]; canStart: boole
       feePercent: s.feePercent,
       minDaily: s.minDailyUgx,
       pageName: s.pageName,
+      // Until Aming's ad account is connected, new ads are practice ones.
+      practice: !(await ads.adsOn(c.studio.id)),
     };
   });
 }

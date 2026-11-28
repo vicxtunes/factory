@@ -163,10 +163,16 @@ async function ugxPerUsd(): Promise<number> {
   return Number(data?.ugx_per_usd ?? 3700);
 }
 
+/** Towns for practice ads, before Meta's own list can be searched (Aming's ad account not connected). */
+const PRACTICE_TOWNS = ["Kampala", "Entebbe", "Wakiso", "Mukono", "Jinja", "Mbarara", "Gulu", "Mbale", "Masaka", "Fort Portal", "Lira", "Arua", "Hoima", "Soroti", "Kabale", "Kasese", "Tororo", "Mityana", "Mubende", "Iganga", "Nairobi", "Kigali", "Dar es Salaam"];
+const PRACTICE_INTERESTS = ["Weddings", "Engagement", "Bride", "Wedding photography", "Parenting", "Babies", "Birthday", "Graduation", "Fashion", "Photography", "Events", "Introduction ceremony", "Family", "Travel", "Business"];
+const practiceFind = (list: string[], q: string) => list.filter((n) => n.toLowerCase().includes(q.trim().toLowerCase())).slice(0, 10);
+
 /** Towns (Meta's keys) for "Who sees it". */
 export async function searchPlaces(q: string): Promise<AdPlace[]> {
   const s = await adsSettings();
-  if (!s.zernioAccountId || q.trim().length < 2) return [];
+  if (q.trim().length < 2) return [];
+  if (!s.zernioAccountId || !s.enabled) return practiceFind(PRACTICE_TOWNS, q).map((n) => ({ key: `practice:${n}`, name: n }));
   const p = new URLSearchParams({ accountId: s.zernioAccountId, q: q.trim().slice(0, 60), dimension: "geo", geoType: "city", countryCode: "UG" });
   const r = await call<{ results: { id: string; name: string; path?: string[] }[] }>("GET", `/ads/targeting/search?${p}`);
   return (r.results ?? []).slice(0, 10).map((x) => ({ key: x.id, name: x.path?.length ? x.path.join(", ") : x.name }));
@@ -175,7 +181,8 @@ export async function searchPlaces(q: string): Promise<AdPlace[]> {
 /** Interests (Meta's) for "Who sees it": weddings, parenting… */
 export async function searchInterests(q: string): Promise<AdInterest[]> {
   const s = await adsSettings();
-  if (!s.zernioAccountId || q.trim().length < 2) return [];
+  if (q.trim().length < 2) return [];
+  if (!s.zernioAccountId || !s.enabled) return practiceFind(PRACTICE_INTERESTS, q).map((n) => ({ id: `practice:${n}`, name: n }));
   const p = new URLSearchParams({ accountId: s.zernioAccountId, q: q.trim().slice(0, 60), dimension: "interest" });
   const r = await call<{ results: { id: string; name: string }[] }>("GET", `/ads/targeting/search?${p}`);
   return (r.results ?? []).slice(0, 10).map((x) => ({ id: String(x.id), name: x.name }));
@@ -194,6 +201,9 @@ export async function adPhotos(studio: Studio): Promise<{ albumId: string; title
   }
   return out;
 }
+
+/** Where an ad leads: the business's page or a service's, marked as this ad's (Message us counts the lead as its). */
+const adLink = (slug: string, serviceSlug: string | null, adId: string) => clientUrl(`/${slug}${serviceSlug ? `/s/${serviceSlug}` : ""}?via=ad&ad=${adId}`);
 
 export interface NewAd {
   serviceSlug: string | null;
@@ -221,7 +231,9 @@ export async function quote(dailyBudget: number, days: number): Promise<{ budget
  * goes to Meta (through Zernio). If Meta refuses it, the money goes back.
  */
 export async function startAd(studio: Studio, actor: { id: string; name: string }, input: NewAd): Promise<string> {
-  if (!(await adsOn(studio.id))) throw new AdsError("Ads aren't open for your business yet.");
+  if (!(await adsShown(studio.id))) throw new AdsError("Ads aren't open for your business yet.");
+  // Until Aming's ad account is connected, ads are practice: nothing goes to Meta, no money moves.
+  const practice = !(await adsOn(studio.id));
   const s = await adsSettings();
   const title = input.title.trim().slice(0, 120);
   const body = input.body.trim().slice(0, 1000);
@@ -240,7 +252,7 @@ export async function startAd(studio: Studio, actor: { id: string; name: string 
   if (!slug) throw new AdsError("Your business has no page address yet.");
 
   const price = adPrice(daily, days, s.feePercent);
-  const startsAt = new Date(Date.now() + 10 * 60_000);
+  const startsAt = new Date(Date.now() + (practice ? 0 : 10 * 60_000));
   const endsAt = new Date(startsAt.getTime() + days * 86_400_000);
   const { data: row, error } = await db()
     .from("studio_ads")
@@ -265,10 +277,13 @@ export async function startAd(studio: Studio, actor: { id: string; name: string 
       ends_at: endsAt.toISOString(),
       created_by: actor.id,
       created_by_name: actor.name,
+      practice,
+      ...(practice ? { status: "running" } : {}),
     })
     .select("id")
     .single<{ id: string }>();
   if (error || !row) throw new Error(`ads: couldn't save: ${error?.message}`);
+  if (practice) return row.id;
 
   const { error: payError } = await db().rpc("studio_ad_charge", { p_tenant: studio.id, p_amount: price.total, p_note: `Ad: ${title}`, p_actor_id: actor.id, p_actor_name: actor.name });
   if (payError) {
@@ -277,7 +292,7 @@ export async function startAd(studio: Studio, actor: { id: string; name: string 
     throw new Error(`ads: charge: ${payError.message}`);
   }
 
-  const link = clientUrl(`/${slug}${input.serviceSlug ? `/s/${input.serviceSlug}` : ""}?via=ad&ad=${row.id}`);
+  const link = adLink(slug, input.serviceSlug, row.id);
   try {
     const rate = await ugxPerUsd();
     const r = await call<{ ad: { _id: string; platformCampaignId?: string; reviewStatus?: string } }>(
@@ -346,6 +361,7 @@ type AdRow = {
   refunded: number | null;
   finished_at: string | null;
   settled_at: string | null;
+  practice: boolean;
   created_at: string;
 };
 
@@ -365,6 +381,7 @@ export async function listAds(studio: Studio): Promise<StudioAd[]> {
     }
   }
   const results = await leadResults(studio.id, data.map((a) => a.id));
+  const slug = (await portal.currentSlug(studio.id)) ?? "";
   return data.map((a) => ({
     id: a.id,
     title: a.title,
@@ -390,6 +407,8 @@ export async function listAds(studio: Studio): Promise<StudioAd[]> {
     reach: Number(a.reach),
     clicks: Number(a.clicks),
     refunded: a.refunded === null ? null : Number(a.refunded),
+    practice: a.practice,
+    link: adLink(slug, a.service_slug, a.id),
     ...(results.get(a.id) ?? { leads: 0, booked: 0, paid: 0 }),
     createdAt: a.created_at,
   }));
@@ -426,9 +445,9 @@ async function setMetaStatus(zernioAdId: string, status: "paused" | "active"): P
 
 export async function pauseAd(studio: Studio, adId: unknown, paused: boolean): Promise<void> {
   const ad = await adOf(studio, adId);
-  if (!ad.zernio_ad_id || !(paused ? ["running", "in_review"] : ["paused"]).includes(ad.status)) throw new AdsError(paused ? "Only a running ad can be paused." : "Only a paused ad can go on.");
+  if ((!ad.zernio_ad_id && !ad.practice) || !(paused ? ["running", "in_review"] : ["paused"]).includes(ad.status)) throw new AdsError(paused ? "Only a running ad can be paused." : "Only a paused ad can go on.");
   if (!paused && new Date(ad.ends_at).getTime() <= Date.now()) throw new AdsError("Its days are over.");
-  await setMetaStatus(ad.zernio_ad_id, paused ? "paused" : "active");
+  if (ad.zernio_ad_id) await setMetaStatus(ad.zernio_ad_id, paused ? "paused" : "active");
   await db().from("studio_ads").update({ status: paused ? "paused" : "running" }).eq("id", ad.id);
 }
 
@@ -476,6 +495,14 @@ export async function runAdsRound(now = new Date()): Promise<void> {
 }
 
 async function followAd(ad: AdRow, s: AdsSettings, rate: number, now: Date): Promise<void> {
+  // A practice ad went nowhere and cost nothing: it only ends on its last day.
+  if (ad.practice) {
+    const over = isLive(ad.status) && now.getTime() > new Date(ad.ends_at).getTime();
+    const done = !isLive(ad.status) || over;
+    if (over) await db().from("studio_ads").update({ status: "ended" }).eq("id", ad.id);
+    if (done) await db().from("studio_ads").update({ finished_at: ad.finished_at ?? now.toISOString(), settled_at: now.toISOString(), refunded: 0 }).eq("id", ad.id).is("settled_at", null);
+    return;
+  }
   let status = ad.status;
   let spend = Number(ad.spend);
   if (ad.zernio_ad_id) {
