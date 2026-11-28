@@ -1,5 +1,5 @@
 import { messagesOn } from "@repo/lib/business-messages/server";
-import { adsOn } from "@repo/lib/ads/server";
+import { adsShown } from "@repo/lib/ads/server";
 import { socialOn } from "@repo/lib/social/server";
 import { studioAccess } from "@repo/lib/studio-access/server";
 import { portal } from "@repo/lib/studio-portal/server";
@@ -24,7 +24,7 @@ export default async function StudioLayout({ children }: { children: React.React
     studiosOf(session.client_id),
     messagesOn(studio.id),
     socialOn(studio.id),
-    adsOn(studio.id).catch(() => false),
+    adsShown(studio.id).catch(() => false),
   ]);
   // An account that owns a business and works for others (or works for several) chooses which one this device is in.
   const options = [...(owned ? [{ value: "own", label: `${owned.name} (yours)` }] : []), ...working.map((w) => ({ value: w.studio.id, label: w.studio.name }))];

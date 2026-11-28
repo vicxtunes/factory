@@ -146,9 +146,14 @@ export async function adsSummary(): Promise<{ running: number; thisMonth: number
 
 // ── A business's ads ──────────────────────────────────────────────────────
 
-/** Whether this business can run ads: it has Social Media and Messages (its ads' visitors write to it there), and the boss switched ads on. */
+/** Whether this business sees Ads: it has Social Media and Messages (its ads' visitors write to it there). */
+export async function adsShown(tenantId: string): Promise<boolean> {
+  return zernioReady() && (await socialOn(tenantId)) && (await messagesOn(tenantId));
+}
+
+/** Whether it can start ads now: it sees them, and the boss connected Aming's ad account and switched ads on. */
 export async function adsOn(tenantId: string): Promise<boolean> {
-  if (!zernioReady() || !(await socialOn(tenantId)) || !(await messagesOn(tenantId))) return false;
+  if (!(await adsShown(tenantId))) return false;
   const s = await adsSettings();
   return s.enabled && !!s.adAccountId && !!s.zernioAccountId;
 }
